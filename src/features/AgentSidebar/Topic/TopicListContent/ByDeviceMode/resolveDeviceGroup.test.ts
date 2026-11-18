@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { findDeviceTopicDirectory, resolveDeviceGroupName } from './resolveDeviceGroup';
+import {
+  findDeviceTopicDirectory,
+  hasNamesakeDevice,
+  resolveDeviceGroupName,
+} from './resolveDeviceGroup';
 
 const directories = [
   { deviceId: 'dev-a', id: 'dir-a-plain' },
@@ -49,6 +53,15 @@ describe('findDeviceTopicDirectory', () => {
     expect(findDeviceTopicDirectory(directories, 'dev-b', 'dev-b')?.id).toBe('dir-b-instance');
   });
 
+  it("tries one machine's identities in order and starts on the first that can run", () => {
+    expect(findDeviceTopicDirectory(directories, ['dev-missing', 'dev-b', 'dev-a'])?.id).toBe(
+      'dir-b-instance',
+    );
+    expect(findDeviceTopicDirectory(directories, ['dev-a', 'dev-b'], 'dev-b')?.id).toBe(
+      'dir-b-instance',
+    );
+  });
+
   it('returns undefined for groups without a device (favorites, unknown bucket)', () => {
     expect(findDeviceTopicDirectory(directories, undefined)).toBeUndefined();
     expect(findDeviceTopicDirectory(directories)).toBeUndefined();
@@ -78,5 +91,41 @@ describe('resolveDeviceGroupName', () => {
       'macbook-test',
     );
     expect(resolveDeviceGroupName({ unknownLabel: 'Unknown device' })).toBe('Unknown device');
+  });
+});
+
+describe('hasNamesakeDevice', () => {
+  const devices = [
+    { deviceId: 'laptop', friendlyName: null, hostname: 'mocha-laptop' },
+    { deviceId: 'laptop-ws', friendlyName: null, hostname: 'mocha-laptop' },
+    { deviceId: 'studio', friendlyName: 'Studio', hostname: 'mocha-laptop' },
+  ];
+
+  it('finds another device shown under the same name', () => {
+    expect(
+      hasNamesakeDevice({ devices, directories: [], name: 'mocha-laptop', ownIds: ['laptop'] }),
+    ).toBe(true);
+  });
+
+  it("ignores this machine's own identities and devices shown under another name", () => {
+    expect(
+      hasNamesakeDevice({
+        devices,
+        directories: [],
+        name: 'mocha-laptop',
+        ownIds: ['laptop', 'laptop-ws'],
+      }),
+    ).toBe(false);
+  });
+
+  it('reads the name a project directory gives a device first', () => {
+    expect(
+      hasNamesakeDevice({
+        devices,
+        directories: [{ deviceId: 'studio', deviceName: 'mocha-laptop' }],
+        name: 'mocha-laptop',
+        ownIds: ['laptop', 'laptop-ws'],
+      }),
+    ).toBe(true);
   });
 });

@@ -24,6 +24,8 @@ const goalModelProvider = (planningProvider?: string) =>
 
 export interface GoalListParams {
   agentId?: string;
+  /** List only archived goals; omitted, archived goals are left out. */
+  archived?: boolean;
   limit?: number;
   offset?: number;
   projectId?: string;
@@ -187,6 +189,10 @@ class GoalService {
   close = async (id: string, status: 'achieved' | 'canceled') =>
     lambdaClient.goal.close.mutate({ id, status });
 
+  /** Archive (or restore) a completed or canceled goal; archived goals leave every list. */
+  archive = async (id: string, archived: boolean) =>
+    lambdaClient.goal.archive.mutate({ archived, id });
+
   /** Resolve a pending decision gate. Does not resume a paused goal by itself. */
   decide = async (params: {
     decisionId: string;
@@ -223,13 +229,14 @@ class GoalService {
   }) => lambdaClient.goal.setBudget.mutate(params);
 
   /**
-   * A batch is only ever created by decomposition, never hand-authored, so the
-   * add-node surface accepts every kind except `batch`.
+   * The kinds a person draws by hand. A batch and its recipe come only from
+   * decomposition, and marks are left by runs (`addMark`), so none of them is
+   * offered here.
    */
   addNode = async (params: {
     description?: string;
     id: string;
-    kind: Exclude<GoalNodeKind, 'batch'>;
+    kind: Extract<GoalNodeKind, 'decision' | 'experiment' | 'finding' | 'problem' | 'task'>;
     priority?: number;
     title: string;
   }) => lambdaClient.goal.addNode.mutate(params);

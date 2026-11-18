@@ -15,10 +15,28 @@ const CURRENT_USER_ID = vi.hoisted(() => 'user-1');
 
 const useDocumentTransferMenuItemMock = vi.hoisted(() => vi.fn(() => []));
 
+const favoriteMenuItemFor = vi.hoisted(
+  () => (target: unknown, _options?: unknown) =>
+    target ? { key: 'toggleFavorite', label: 'favorite.add', onClick: () => {} } : null,
+);
+
+const useFavoriteMenuItemMock = vi.hoisted(() => vi.fn(favoriteMenuItemFor));
+
 const storeMock = vi.hoisted(() => ({
   activeWorkspaceId: undefined as string | undefined,
   document: undefined as
-    { id: string; userId?: string; visibility?: 'private' | 'public' | null } | undefined,
+    | {
+        id: string;
+        metadata?: { emoji?: string };
+        title?: string;
+        userId?: string;
+        visibility?: 'private' | 'public' | null;
+      }
+    | undefined,
+}));
+
+vi.mock('@/features/Favorites', () => ({
+  useFavoriteMenuItem: useFavoriteMenuItemMock,
 }));
 
 vi.mock('antd', async (importOriginal) => ({
@@ -111,6 +129,7 @@ describe('Page list item dropdown menu', () => {
     permissionMock.edit_own_content = true;
     storeMock.activeWorkspaceId = undefined;
     storeMock.document = undefined;
+    useFavoriteMenuItemMock.mockImplementation(favoriteMenuItemFor);
   });
 
   it('labels the page transfer action as Move', () => {
@@ -242,5 +261,76 @@ describe('Page list item dropdown menu', () => {
     const items = result.current();
 
     expect(getMenuItem(items, 'publishToWorkspace')).toBeUndefined();
+  });
+
+  it('offers the same page favorite as the open page menu', () => {
+    storeMock.document = { id: 'page-1', metadata: { emoji: '📄' }, title: 'Roadmap' };
+
+    const { result } = renderHook(() =>
+      useDropdownMenu({ pageId: 'page-1', toggleEditing: vi.fn() }),
+    );
+
+    expect(useFavoriteMenuItemMock).toHaveBeenLastCalledWith(
+      {
+        icon: '📄',
+        path: '/page/page-1',
+        targetId: 'page-1',
+        title: 'Roadmap',
+        type: 'page',
+      },
+      { showHotkey: false },
+    );
+    expect(getMenuItem(result.current(), 'toggleFavorite')).toBeTruthy();
+  });
+
+  it('falls back to the untitled placeholder for a page without a title', () => {
+    storeMock.document = { id: 'page-1' };
+
+    renderHook(() => useDropdownMenu({ pageId: 'page-1', toggleEditing: vi.fn() }));
+
+    expect(useFavoriteMenuItemMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ icon: null, title: 'pageEditor.titlePlaceholder' }),
+      { showHotkey: false },
+    );
+  });
+
+  it('keeps the row click from firing when toggling the favorite', () => {
+    storeMock.document = { id: 'page-1', title: 'Roadmap' };
+    const toggle = vi.fn();
+    useFavoriteMenuItemMock.mockImplementation((target) =>
+      target ? { key: 'toggleFavorite', label: 'favorite.add', onClick: toggle } : null,
+    );
+
+    const { result } = renderHook(() =>
+      useDropdownMenu({ pageId: 'page-1', toggleEditing: vi.fn() }),
+    );
+    const favorite = getMenuItem(result.current(), 'toggleFavorite');
+    const domEvent = { stopPropagation: vi.fn() };
+
+    (favorite?.onClick as unknown as (info: { domEvent: typeof domEvent }) => void)({ domEvent });
+
+    expect(domEvent.stopPropagation).toHaveBeenCalledTimes(1);
+    expect(toggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no favorite entry until the page is loaded', () => {
+    const { result } = renderHook(() =>
+      useDropdownMenu({ pageId: 'page-1', toggleEditing: vi.fn() }),
+    );
+
+    expect(getMenuItem(result.current(), 'toggleFavorite')).toBeUndefined();
+  });
+
+  it('has no favorite entry for a page that is still being created', () => {
+    // An optimistic row's client-minted id is swapped for the server id once
+    // creation lands; a favorite saved against it would point at no page.
+    storeMock.document = { id: 'temp-page-1', title: 'Draft' };
+
+    const { result } = renderHook(() =>
+      useDropdownMenu({ pageId: 'temp-page-1', toggleEditing: vi.fn() }),
+    );
+
+    expect(useFavoriteMenuItemMock).toHaveBeenLastCalledWith(undefined, { showHotkey: false });
+    expect(getMenuItem(result.current(), 'toggleFavorite')).toBeUndefined();
   });
 });

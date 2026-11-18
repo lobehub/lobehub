@@ -1,5 +1,6 @@
 import { AcceptanceEvidenceManifest } from '@lobechat/builtin-tool-acceptance-evidence';
 import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
+import { AgentAccountManifest } from '@lobechat/builtin-tool-agent-account';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
 import {
   AgentDocumentsManifest,
@@ -36,6 +37,7 @@ import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest, resolveLobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { McpEventsManifest } from '@lobechat/builtin-tool-mcp-events';
 import { MemoryManifest, resolveMemoryRestrictedManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest, resolveMessageManifest } from '@lobechat/builtin-tool-message';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
@@ -54,19 +56,19 @@ import { VerifyToolManifest } from '@lobechat/builtin-tool-verify';
 import { VideoGenerationManifest } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
+import { WebhookManifest } from '@lobechat/builtin-tool-webhook';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
 import { type LobeBuiltinTool } from '@lobechat/types';
 
 import { resolveCloudSandboxInPageScope } from './pageScope';
 
 /**
- * Default tool IDs that will always be added to the tools list.
+ * Default candidates evaluated by the tool enable rules.
  * Shared between frontend (createAgentToolsEngine) and server (createServerAgentToolsEngine).
  */
 export const defaultToolIds = [
   LobeActivatorManifest.identifier,
   SkillsManifest.identifier,
-  SkillStoreManifest.identifier,
   WebBrowsingManifest.identifier,
   KnowledgeBaseManifest.identifier,
   AttachmentsManifest.identifier,
@@ -76,31 +78,16 @@ export const defaultToolIds = [
   CloudSandboxManifest.identifier,
   AgentDocumentsManifest.identifier,
   TaskManifest.identifier,
+  // A runtime media fallback can enable this candidate even without a user pin.
   LobeAgentManifest.identifier,
   CanvasManifest.identifier,
 ];
 
 /**
- * Tool IDs that are always enabled regardless of user selection.
- * These are core system tools that the agent needs to function properly.
- *
- * `lobe-agent` is listed first: its built-in capabilities (plan + todo management,
- * sub-agent dispatch, multimodal fallback) should be available on every agent-mode turn,
- * not gated behind explicit injection. NOTE: these rules only apply in agent mode — chat
- * mode (`enableAgentMode === false`) drops `alwaysOnToolIds` entirely. In manual
- * skill-activate mode the discovery tools in `manualModeExcludeToolIds` are still removed
- * from the defaults before the enable checker runs, so they end up disabled there.
- *
- * This list is also the source for builtin entries in the chat-input Tools popover.
- * They default to pinned but can be explicitly disabled per agent; entries represented by
- * the activation mode control itself are excluded from that menu.
+ * Builtins enabled by default in Agent mode. The activator loads other tools
+ * on demand, and Skills loads skill instructions. Manual mode omits the activator.
  */
-export const alwaysOnToolIds = [
-  LobeAgentManifest.identifier,
-  LobeActivatorManifest.identifier,
-  SkillsManifest.identifier,
-  SkillStoreManifest.identifier,
-];
+export const alwaysOnToolIds = [LobeActivatorManifest.identifier, SkillsManifest.identifier];
 
 /**
  * Runtime tools represented by the skill activation mode control itself. They remain part
@@ -113,10 +100,7 @@ export const activationModeControlledToolIds = [LobeActivatorManifest.identifier
  * These are the tool/skill discovery tools that should be disabled when user wants precise control.
  * Other default tools (sandbox, web browsing, etc.) remain available if enabled externally.
  */
-export const manualModeExcludeToolIds = [
-  LobeActivatorManifest.identifier,
-  SkillStoreManifest.identifier,
-];
+export const manualModeExcludeToolIds = [LobeActivatorManifest.identifier];
 
 /**
  * Tool IDs allowed when the agent runs in chat mode
@@ -177,14 +161,18 @@ export const groupSupervisorToolIds = [GroupManagementManifest.identifier];
  * `src/helpers/toolEngineering/index.ts`.
  */
 export const runtimeManagedToolIds = [
+  McpEventsManifest.identifier,
   AttachmentsManifest.identifier,
+  // Enabled by a runtime rule (`hasIdentityAccount`) rather than by user
+  // selection: the identity/inbox state reaches the model as context, so this
+  // tool only exists for an agent that actually owns an account.
+  AgentAccountManifest.identifier,
   BrowserManifest.identifier,
   CloudSandboxManifest.identifier,
   KnowledgeBaseManifest.identifier,
   LocalSystemManifest.identifier,
   MemoryManifest.identifier,
   RemoteDeviceManifest.identifier,
-  LobeAgentManifest.identifier,
   WebBrowsingManifest.identifier,
 ];
 
@@ -339,7 +327,6 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    hidden: true,
     identifier: SkillStoreManifest.identifier,
     manifest: SkillStoreManifest,
     type: 'builtin',
@@ -436,6 +423,30 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     identifier: CredsManifest.identifier,
     manifest: CredsManifest,
+    type: 'builtin',
+  },
+  {
+    // Runtime-managed: enabled only when the agent owns an account, so it is
+    // not a user-facing row and not an always-on tool.
+    hidden: true,
+    identifier: AgentAccountManifest.identifier,
+    manifest: AgentAccountManifest,
+    type: 'builtin',
+  },
+  {
+    hidden: true,
+    identifier: McpEventsManifest.identifier,
+    manifest: McpEventsManifest,
+    type: 'builtin',
+  },
+  {
+    // On demand: hidden from the Tools popover and absent from the defaults, but discoverable, so
+    // the activator enables it when the user asks about this agent's webhooks. The `webhook`
+    // flag removes it from the pool (`featureGates.ts`); share visitors never reach it (not in
+    // AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS: it creates entry points that run as the creator).
+    hidden: true,
+    identifier: WebhookManifest.identifier,
+    manifest: WebhookManifest,
     type: 'builtin',
   },
   {
@@ -588,7 +599,6 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    hidden: true,
     identifier: LobeAgentManifest.identifier,
     manifest: LobeAgentManifest,
     // Context-aware: hides the `callSubAgent` API inside group / sub-agent runs.

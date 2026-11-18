@@ -103,6 +103,34 @@ describe('buildStepPresentation', () => {
       expect(presentation.toolsResult).toHaveLength(2);
       expect(presentation.toolsResult?.[1].output).toBe('{"x":1}');
     });
+
+    // The final unresolvable tool names are rejected and the run stops in the
+    // same step; the log line must not read like an ordinary tool step.
+    it('appends the finish reason when the step also ended the run', () => {
+      const { summary } = buildStepPresentation(
+        {
+          events: [{ reason: 'tool_name_unresolved', type: 'done' }],
+          newState: baseState,
+          nextContext: {
+            payload: {
+              toolCount: 1,
+              toolResults: [
+                {
+                  data: 'rejected',
+                  toolCall: { apiName: 'executeCode', identifier: 'lobe-skills' },
+                },
+              ],
+            },
+            phase: 'tools_batch_result',
+          },
+        },
+        5,
+      );
+
+      expect(summary).toBe(
+        '[tools×1] lobe-skills/executeCode → [done] reason=tool_name_unresolved',
+      );
+    });
   });
 
   describe('phase=other / done event', () => {

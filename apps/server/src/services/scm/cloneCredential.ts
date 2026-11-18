@@ -60,7 +60,7 @@ export const githubRepositoryOf = (
  * and falling through to the other credential path beats minting one that
  * cannot clone.
  */
-const installationFor = (
+export const findGitHubInstallationFor = (
   installations: ScmInstallationItem[],
   repository: string,
 ): ScmInstallationItem | undefined => {
@@ -107,7 +107,7 @@ export const resolveScmCloneCredential = async (params: {
       userId: params.userId,
       workspaceId: params.workspaceId,
     });
-    const installation = installationFor(installations, repository);
+    const installation = findGitHubInstallationFor(installations, repository);
     if (!installation) {
       log('no installation in scope grants %s', repository);
       return null;

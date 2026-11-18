@@ -12,6 +12,7 @@ vi.mock('@/business/server/agent-run/notifyAgentRunCompleted', () => ({
 }));
 vi.mock('@/server/services/workRegistration', () => ({ registerWorksForOperation: vi.fn() }));
 vi.mock('@/server/services/verify', () => ({
+  releaseUndeliveredRound: vi.fn(async () => {}),
   runVerifyOnCompletion: vi.fn(async () => {}),
   settleFailedRepair: vi.fn(async () => {}),
 }));

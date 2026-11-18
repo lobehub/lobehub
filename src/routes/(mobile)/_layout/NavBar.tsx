@@ -1,6 +1,10 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- Icon renders its svg without a slot
+  createStaticStyles,
+  Icon,
+} from '@lobehub/ui';
 import { type TabBarProps } from '@lobehub/ui/mobile';
 import { TabBar } from '@lobehub/ui/mobile';
 import * as stylex from '@stylexjs/stylex';
@@ -14,8 +18,6 @@ import { useMobileNavigation } from '@/hooks/useMobileNavigation';
 import { SidebarTabKey } from '@/store/global/initialState';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-import moduleStyles from './NavBar.module.css';
-
 const styles = stylex.create({
   container: {
     position: 'fixed',
@@ -24,6 +26,14 @@ const styles = stylex.create({
     insetInline: 0,
   },
 });
+
+const fallback = createStaticStyles(({ css, cssVar }) => ({
+  active: css`
+    svg {
+      fill: color-mix(in srgb, ${cssVar.colorPrimary} 33%, transparent);
+    }
+  `,
+}));
 
 const NavBar = memo(() => {
   const { t } = useTranslation('common');
@@ -37,7 +47,7 @@ const NavBar = memo(() => {
       [
         {
           icon: (active: boolean) => (
-            <Icon className={active ? moduleStyles.active : undefined} icon={MessageSquare} />
+            <Icon className={active ? fallback.active : undefined} icon={MessageSquare} />
           ),
           key: SidebarTabKey.Chat,
           onClick: () => {
@@ -47,7 +57,7 @@ const NavBar = memo(() => {
         },
         showMarket && {
           icon: (active: boolean) => (
-            <Icon className={active ? moduleStyles.active : undefined} icon={Compass} />
+            <Icon className={active ? fallback.active : undefined} icon={Compass} />
           ),
           key: SidebarTabKey.Community,
           onClick: () => {
@@ -57,7 +67,7 @@ const NavBar = memo(() => {
         },
         {
           icon: (active: boolean) => (
-            <Icon className={active ? moduleStyles.active : undefined} icon={User} />
+            <Icon className={active ? fallback.active : undefined} icon={User} />
           ),
           key: SidebarTabKey.Me,
           onClick: () => {

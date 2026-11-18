@@ -1,7 +1,11 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox } from '@lobehub/ui';
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- the antd textarea inside a message has no slot
+  createStaticStyles,
+  Flexbox,
+} from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { type MouseEvent, type ReactNode } from 'react';
@@ -26,7 +30,6 @@ import PendingRetryTurn from './components/PendingRetryTurn';
 import TextSelectionActionLayer from './components/TextSelectionActionLayer';
 import CompressedGroupMessage from './CompressedGroup';
 import GroupTasksMessage from './GroupTasks';
-import cssModule from './index.module.css';
 import { getMessageInteractionState } from './messageInteraction';
 import TaskMessage from './Task';
 import TaskCallbackMessage from './TaskCallback';
@@ -39,6 +42,15 @@ const styles = stylex.create({
   loading: { opacity: 0.6 },
   message: { position: 'relative' },
 });
+
+const fallback = createStaticStyles(({ css }) => ({
+  message: css`
+    /* Prevent the antd textarea from growing too long. */
+    .ant-input {
+      max-height: 900px;
+    }
+  `,
+}));
 
 export interface MessageItemProps {
   className?: string;
@@ -191,7 +203,7 @@ const MessageItem = memo<MessageItemProps>(
 
         case 'supervisor': {
           // Supervisor messages render through the rich AssistantGroup component
-          // (workflow collapse / taskCompletions / signalCallbacks) — it swaps in
+          // (workflow collapse / signalCallbacks) — it swaps in
           // the group's avatar + name + 主管 badge when the message is a supervisor
           // turn. Keeps a single code path instead of a thinner duplicate.
           return (
@@ -278,8 +290,9 @@ const MessageItem = memo<MessageItemProps>(
         {enableHistoryDivider && <History />}
         <Flexbox
           {...sx(
-            [styles.message, shouldDimCreatingMessage && styles.loading],
-            [cssModule.message, className].filter(Boolean).join(' '),
+            styles.message,
+            shouldDimCreatingMessage && styles.loading,
+            [fallback.message, className].filter(Boolean).join(' '),
           )}
           data-index={index}
           onContextMenu={onContextMenu}

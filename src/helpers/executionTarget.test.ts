@@ -748,17 +748,6 @@ describe('resolveExecutionPlan', () => {
       ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' });
     });
 
-    it('treats the desktop default (unset target) as `local` but never auto-grabs a device', () => {
-      // unset → `local` on desktop; device-capable but unrouted until bound.
-      expect(
-        resolveExecutionPlan({
-          agencyConfig: undefined,
-          clientExecutionAvailable: true,
-          onlineDeviceIds: ONLINE_A,
-        }),
-      ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' });
-    });
-
     it('resolves the unset web target to none', () => {
       expect(
         resolveExecutionPlan({

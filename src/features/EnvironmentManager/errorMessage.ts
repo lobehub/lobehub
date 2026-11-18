@@ -12,6 +12,10 @@ import { isMachineErrorMessage } from '@/utils/machineErrorMessage';
  * sentence — falls back to the caller's generic line.
  */
 const CODE_KEYS: Record<string, string> = {
+  // A drive download over the size the sandbox packs in one request.
+  DOWNLOAD_TOO_LARGE: 'drive.explorer.downloadTooLarge',
+  // A deployment whose sandbox has no shell to pack a download with.
+  DOWNLOAD_UNAVAILABLE: 'drive.explorer.downloadUnavailable',
   DUPLICATE_INSTANCE_DIRECTORY: 'environments.files.folderTaken',
   ENVIRONMENT_HAS_INSTANCES: 'environments.hasInstances',
   // The execution plane calls this an instance now too. The old
@@ -30,11 +34,17 @@ const CODE_KEYS: Record<string, string> = {
   INSTANCE_REBUILD_REQUIRED: 'environments.instances.rebuildPersonalRequired',
   INSTANCE_STARTING: 'environments.instances.stopStarting',
   INSTANCE_STOP_FAILED: 'environments.instances.stopRefused',
+  // Deleting a folder that holds a private environment directory left on the public drive.
+  PATH_HOLDS_HIDDEN: 'drive.cleanup.holdsHidden',
   PATH_NOT_FOUND: 'environments.files.notFound',
   PATH_OUTSIDE_INSTANCE: 'environments.files.invalidPath',
   // Retryable on purpose: the run is still packing its snapshot, and the
   // execution plane would rather leave it running than cut the save off.
   SNAPSHOT_IN_PROGRESS: 'environments.instances.stopSnapshotPending',
+  // A storage service deployed before the drive could be analyzed.
+  storage_analysis_unavailable: 'drive.cleanup.unavailable',
+  // `regenerableOnly` asked for, and some path is not a dependency, cache or build output.
+  storage_paths_not_regenerable: 'drive.cleanup.notRegenerable',
 };
 
 /**

@@ -1,6 +1,13 @@
 // @vitest-environment node
 import { type LobeChatDatabase } from '@lobechat/database';
-import { agents, chatGroups, sessions, threads, topics } from '@lobechat/database/schemas';
+import {
+  agentOperations,
+  agents,
+  chatGroups,
+  sessions,
+  threads,
+  topics,
+} from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
@@ -48,6 +55,13 @@ vi.mock('@/server/services/deviceGateway', () => ({
   getScopedOnlineDevices: vi.fn(() => []),
 }));
 
+const { mockSettleAgentRunFee } = vi.hoisted(() => ({
+  mockSettleAgentRunFee: vi.fn(),
+}));
+vi.mock('@/business/server/agent-run/runFee', () => ({
+  settleAgentRunFee: mockSettleAgentRunFee,
+}));
+
 describe('aiAgentRouter.interruptTask', () => {
   let serverDB: LobeChatDatabase;
   let userId: string;
@@ -64,6 +78,7 @@ describe('aiAgentRouter.interruptTask', () => {
     mockInterruptOperation.mockResolvedValue(true);
     mockExecuteToolCall.mockReset();
     mockExecuteToolCall.mockResolvedValue({ content: '{}', success: true });
+    mockSettleAgentRunFee.mockReset();
 
     // Create test agent
     const [agent] = await serverDB
@@ -375,6 +390,74 @@ describe('aiAgentRouter.interruptTask', () => {
         expect(args.taskId).toBe('op-device-cancel');
       },
     );
+
+    // Regression: a stopped device CLI run never reaches CompletionLifecycle
+    // (heteroFinish skips a cancelled run), so its run fee stayed held until
+    // the hold expired instead of being charged or given back.
+    describe('run fee of a stopped device run', () => {
+      const seedRunningCodexRun = async (operationId: string) => {
+        await serverDB.insert(agentOperations).values({
+          id: operationId,
+          startedAt: new Date(Date.now() - 40_000),
+          status: 'running',
+          topicId: testTopicId,
+          userId,
+        });
+        await serverDB
+          .update(topics)
+          .set({
+            metadata: {
+              runningOperation: {
+                assistantMessageId: 'asst-fee',
+                deviceId: 'device-1',
+                heteroType: 'codex',
+                operationId,
+              },
+            },
+          })
+          .where(eq(topics.id, testTopicId));
+        mockExecuteToolCall.mockResolvedValue({ state: { exited: true }, success: true });
+      };
+
+      it('settles the fee as interrupted with the run duration once the device exits', async () => {
+        await seedRunningCodexRun('op-fee-stop');
+        const caller = aiAgentRouter.createCaller(createTestContext());
+
+        await caller.interruptTask({ operationId: 'op-fee-stop', topicId: testTopicId });
+
+        expect(mockSettleAgentRunFee).toHaveBeenCalledTimes(1);
+        const [params] = mockSettleAgentRunFee.mock.calls[0];
+        expect(params).toMatchObject({
+          operationId: 'op-fee-stop',
+          reason: 'interrupted',
+          userId,
+        });
+        expect(params.durationMs).toBeGreaterThanOrEqual(40_000);
+      });
+
+      it('does not settle the fee again when a repeated stop finds the run already settled', async () => {
+        await seedRunningCodexRun('op-fee-stop-twice');
+        const caller = aiAgentRouter.createCaller(createTestContext());
+
+        await caller.interruptTask({ operationId: 'op-fee-stop-twice', topicId: testTopicId });
+        await caller.interruptTask({ operationId: 'op-fee-stop-twice', topicId: testTopicId });
+
+        expect(mockSettleAgentRunFee).toHaveBeenCalledTimes(1);
+      });
+
+      it('keeps the stop successful when settling the fee fails', async () => {
+        await seedRunningCodexRun('op-fee-stop-fails');
+        mockSettleAgentRunFee.mockRejectedValue(new Error('billing down'));
+        const caller = aiAgentRouter.createCaller(createTestContext());
+
+        const result = await caller.interruptTask({
+          operationId: 'op-fee-stop-fails',
+          topicId: testTopicId,
+        });
+
+        expect(result.success).toBe(true);
+      });
+    });
 
     it('does not dispatch cancelHeteroTask when the operation has no deviceId', async () => {
       // runningOperation with heteroType but no deviceId — e.g. a cloud-sandbox

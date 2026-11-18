@@ -7,6 +7,8 @@ import { createContextInner } from '@/libs/trpc/lambda/context';
 import { notebookRouter } from './notebook';
 
 const mocks = vi.hoisted(() => ({
+  assertWrite: vi.fn(),
+  update: vi.fn(),
   associate: vi.fn(),
   create: vi.fn(),
   findDocumentById: vi.fn(),
@@ -18,7 +20,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn().mockResolvedValue({}) }));
 vi.mock('@/database/models/document', () => ({
   DocumentModel: vi.fn().mockImplementation(function () {
-    return { create: mocks.create, findById: mocks.findDocumentById };
+    return { create: mocks.create, findById: mocks.findDocumentById, update: mocks.update };
   }),
 }));
 vi.mock('@/database/models/topicDocument', () => ({
@@ -40,6 +42,13 @@ vi.mock('@/database/models/work', () => ({
   WorkModel: vi.fn().mockImplementation(function () {
     return { registerDocument: mocks.registerDocument };
   }),
+}));
+vi.mock('@/server/services/document/writeLimit', () => ({
+  assertDocumentWriteWithinLimit: mocks.assertWrite,
+}));
+vi.mock('@/server/services/resourcePermission', () => ({
+  assertCanEditResource: vi.fn(),
+  assertCanPerformResourceAction: vi.fn(),
 }));
 vi.mock('@/server/services/notebook', () => ({ NotebookRuntimeService: vi.fn() }));
 
@@ -178,5 +187,80 @@ describe('notebook.associateDocument', () => {
       (await caller()).associateDocument({ documentId: 'doc-1', topicId: 'topic-1' }),
     ).rejects.toThrow(/not found/);
     expect(mocks.associate).not.toHaveBeenCalled();
+  });
+});
+
+describe('notebook document character limit', () => {
+  beforeEach(() => {
+    for (const mock of Object.values(mocks)) mock.mockReset();
+    mocks.create.mockResolvedValue({ id: 'doc-1' });
+  });
+
+  const caller = async () => createCaller(await createContextInner({ userId: 'user-1' }));
+
+  it('checks a new document as a user write before creating the row', async () => {
+    await (await caller()).createDocument(input);
+
+    expect(mocks.assertWrite).toHaveBeenCalledWith({
+      charCount: input.content.length,
+      source: 'user',
+      userId: 'user-1',
+      workspaceId: undefined,
+    });
+  });
+
+  it('creates nothing when the limit refuses the write', async () => {
+    mocks.assertWrite.mockRejectedValue(new Error('Document is too long'));
+
+    await expect((await caller()).createDocument(input)).rejects.toThrow('too long');
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.associate).not.toHaveBeenCalled();
+  });
+
+  it('rejects content above the request backstop', async () => {
+    await expect(
+      (await caller()).createDocument({ ...input, content: 'a'.repeat(10_000_001) }),
+    ).rejects.toThrow();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it('checks an append against the combined length and the previous length', async () => {
+    mocks.findDocumentById.mockResolvedValue({ content: 'old' });
+
+    await (await caller()).updateDocument({ append: true, content: 'new', id: 'doc-1' });
+
+    expect(mocks.assertWrite).toHaveBeenCalledWith(
+      expect.objectContaining({ charCount: 8, previousCharCount: 3, source: 'user' }),
+    );
+    expect(mocks.update).toHaveBeenCalledWith(
+      'doc-1',
+      expect.objectContaining({ content: 'old\n\nnew' }),
+    );
+  });
+
+  it('loads the existing row to pass the previous length on a replace', async () => {
+    mocks.findDocumentById.mockResolvedValue({ content: 'a'.repeat(50) });
+
+    await (await caller()).updateDocument({ content: 'short', id: 'doc-1' });
+
+    expect(mocks.assertWrite).toHaveBeenCalledWith(
+      expect.objectContaining({ charCount: 5, previousCharCount: 50 }),
+    );
+  });
+
+  it('does not update when the limit refuses the write', async () => {
+    mocks.findDocumentById.mockResolvedValue({ content: 'old' });
+    mocks.assertWrite.mockRejectedValue(new Error('Document is too long'));
+
+    await expect(
+      (await caller()).updateDocument({ content: 'longer content', id: 'doc-1' }),
+    ).rejects.toThrow('too long');
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it('skips the check for a title-only update', async () => {
+    await (await caller()).updateDocument({ id: 'doc-1', title: 'New' });
+
+    expect(mocks.assertWrite).not.toHaveBeenCalled();
   });
 });

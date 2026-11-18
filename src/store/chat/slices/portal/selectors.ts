@@ -264,6 +264,9 @@ const taskDetailId = (s: ChatStoreState): string | undefined => {
   return view?.taskId;
 };
 
+const taskDetailWorkspace = (s: ChatStoreState) =>
+  getStackViewData(s, PortalViewType.TaskDetail)?.workspace;
+
 const taskResultId = (s: ChatStoreState): string | undefined => {
   const view = getStackViewData(s, PortalViewType.TaskResult);
   return view?.taskId;
@@ -313,6 +316,7 @@ const verifyReportRunId = (s: ChatStoreState) => getViewData(s, PortalViewType.V
 const acceptancePortalId = (s: ChatStoreState) =>
   getViewData(s, PortalViewType.Acceptance)?.acceptanceId;
 const acceptanceCheckPortal = (s: ChatStoreState) => getViewData(s, PortalViewType.AcceptanceCheck);
+const browserPortal = (s: ChatStoreState) => getViewData(s, PortalViewType.Browser);
 const isPluginUIOpen = (id: string) => (s: ChatStoreState) =>
   toolMessageId(s) === id && showPortal(s);
 
@@ -391,6 +395,7 @@ export const chatPortalSelectors = {
 
   // Task detail data
   taskDetailId,
+  taskDetailWorkspace,
   taskResultId,
 
   // Topic chat data
@@ -415,6 +420,9 @@ export const chatPortalSelectors = {
   // Acceptance data
   acceptanceCheckPortal,
   acceptancePortalId,
+
+  // Browser data
+  browserPortal,
 };
 
 export * from './selectors/thread';

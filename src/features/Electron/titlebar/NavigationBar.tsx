@@ -38,9 +38,7 @@ const navPanelSelector = (s: GlobalState) => {
   return systemStatusSelectors.leftPanelWidth(s);
 };
 
-const useNavPanelWidth = () => {
-  return useGlobalStore(navPanelSelector);
-};
+const useNavPanelWidth = () => useGlobalStore(navPanelSelector);
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   clock: css`

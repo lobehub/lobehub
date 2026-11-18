@@ -1,4 +1,4 @@
-import { and, inArray, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, type SQL, sql } from 'drizzle-orm';
 
 import { tasks } from '../schemas/task';
 import type { LobeChatDatabase } from '../type';
@@ -51,11 +51,21 @@ export class TaskArchiveModel {
    * {@link archive} for many tasks in one guarded statement. Returns only the
    * rows that were archived; a missing or blocked task is simply absent.
    */
-  async archiveMany(ids: string[], options: { onlyStatuses?: string[] } = {}) {
+  async archiveMany(
+    ids: string[],
+    options: {
+      /** The archive time to stamp instead of now — a goal archiving its Tasks shares its own. */
+      at?: SQL;
+      onlyStatuses?: string[];
+    } = {},
+  ) {
     if (ids.length === 0) return [];
     return this.db
       .update(tasks)
-      .set({ archivedAt: sql`COALESCE(${tasks.archivedAt}, now())`, updatedAt: new Date() })
+      .set({
+        archivedAt: sql`COALESCE(${tasks.archivedAt}, ${options.at ?? sql`now()`})`,
+        updatedAt: new Date(),
+      })
       .where(
         and(
           inArray(tasks.id, ids),
@@ -76,13 +86,23 @@ export class TaskArchiveModel {
     return task ?? null;
   }
 
-  /** {@link unarchive} for many tasks in one statement. */
-  async unarchiveMany(ids: string[]) {
+  /**
+   * {@link unarchive} for many tasks in one statement. `onlyArchivedAt` restores
+   * only the Tasks stamped with that archive time — the ones a goal archived
+   * with itself — and leaves any archived on their own alone.
+   */
+  async unarchiveMany(ids: string[], options: { onlyArchivedAt?: SQL } = {}) {
     if (ids.length === 0) return [];
     return this.db
       .update(tasks)
       .set({ archivedAt: null, updatedAt: new Date() })
-      .where(and(inArray(tasks.id, ids), this.ownership()))
+      .where(
+        and(
+          inArray(tasks.id, ids),
+          this.ownership(),
+          options.onlyArchivedAt ? eq(tasks.archivedAt, options.onlyArchivedAt) : undefined,
+        ),
+      )
       .returning();
   }
 }

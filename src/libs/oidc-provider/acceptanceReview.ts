@@ -1,5 +1,10 @@
 import {
-  ACCEPTANCE_REVIEW_CLIENT_ID,
+  ACCEPTANCE_CLIENT_ID,
+  ACCEPTANCE_EXTENSION_CLIENT_ID,
+  ACCEPTANCE_EXTENSION_IDS,
+  ACCEPTANCE_EXTENSION_RESOURCE,
+  ACCEPTANCE_EXTENSION_SCOPE,
+  ACCEPTANCE_EXTENSION_TOKEN_TTL_SECONDS,
   ACCEPTANCE_REVIEW_SCOPE,
   ACCEPTANCE_REVIEW_TOKEN_TTL_SECONDS,
   acceptanceIdFromReviewResource,
@@ -8,9 +13,72 @@ import {
 } from '@lobechat/const';
 
 export const isAcceptanceReviewClient = (clientId: string | undefined) =>
-  clientId === ACCEPTANCE_REVIEW_CLIENT_ID;
+  clientId === ACCEPTANCE_CLIENT_ID;
 
-// The review toolbar's token lives on third-party preview pages, so it must
+export const isAcceptanceExtensionClient = (clientId: string | undefined) =>
+  clientId === ACCEPTANCE_EXTENSION_CLIENT_ID;
+
+export const extensionResourceServer = (clientId: string | undefined, indicator: string) => {
+  if (!isAcceptanceExtensionClient(clientId)) return null;
+  if (indicator !== ACCEPTANCE_EXTENSION_RESOURCE) return 'reject' as const;
+  return {
+    accessTokenFormat: 'jwt' as const,
+    accessTokenTTL: ACCEPTANCE_EXTENSION_TOKEN_TTL_SECONDS,
+    audience: ACCEPTANCE_EXTENSION_RESOURCE,
+    scope: ACCEPTANCE_EXTENSION_SCOPE,
+  };
+};
+
+// The extension's service worker posts to the token endpoint with its own
+// chrome-extension:// Origin, which no registered redirect URI shares.
+export const extensionCorsDecision = (clientId: string | undefined, origin: string) => {
+  if (!isAcceptanceExtensionClient(clientId)) return null;
+  return ACCEPTANCE_EXTENSION_IDS.some((id) => origin === `chrome-extension://${id}`);
+};
+
+// The extension is first-party, so a reviewer with a web session signs in without the login and
+// consent pages. PKCE and the registered redirect keep web pages out, but another browser
+// extension that can read tab URLs could start this flow and redeem the code without a click;
+// that was accepted for the acceptance:extension scope only.
+export const EXTENSION_SIGN_IN_PATH = '/oidc/extension-sign-in';
+
+export const interactionPathFor = (clientId: string | undefined, prompt: string, uid: string) =>
+  isAcceptanceExtensionClient(clientId) && prompt === 'login'
+    ? `${EXTENSION_SIGN_IN_PATH}/${uid}`
+    : `/oauth/consent/${uid}`;
+
+export const extensionGrantScopes = (clientId: string | undefined) =>
+  isAcceptanceExtensionClient(clientId)
+    ? {
+        oidc: `openid profile ${ACCEPTANCE_EXTENSION_SCOPE}`,
+        resource: ACCEPTANCE_EXTENSION_RESOURCE,
+        resourceScope: ACCEPTANCE_EXTENSION_SCOPE,
+      }
+    : null;
+
+// oidc-provider drops offline_access from a request that does not prompt for consent, and with
+// it the refresh token; the extension cannot stay signed in without one.
+export const issuesRefreshToken = (
+  client: { clientId: string; grantTypeAllowed: (type: string) => boolean },
+  scopes: Set<string>,
+) =>
+  client.grantTypeAllowed('refresh_token') &&
+  (scopes.has('offline_access') || isAcceptanceExtensionClient(client.clientId));
+
+// A token issued without offline_access normally dies with the browser's provider session, which
+// would sign the extension out whenever the reviewer signs out of the web app.
+export const expiresWithSession = (source: { clientId?: string; scopes: Set<string> }) =>
+  !source.scopes.has('offline_access') && !isAcceptanceExtensionClient(source.clientId);
+
+// Without this the provider reuses whatever account its own session cookie holds, which can be a
+// different person than the one signed in to the web app.
+export const needsWebSessionLogin = (clientId: string | undefined, loggedIn: boolean) =>
+  isAcceptanceExtensionClient(clientId) && !loggedIn;
+
+export const defaultResourceFor = (clientId: string | undefined, fallback: string) =>
+  isAcceptanceExtensionClient(clientId) ? ACCEPTANCE_EXTENSION_RESOURCE : fallback;
+
+// The acceptance toolbar's token lives on third-party preview pages, so it must
 // only ever carry one acceptance's audience — never the full API audience.
 const DEVICE_ROUTES = new Set(['code_verification', 'device_authorization', 'device_resume']);
 const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code';
@@ -57,7 +125,18 @@ export const isAcceptanceReviewAudience = (aud: unknown) => isReviewResource(aud
 
 // The review client is public and reachable from any origin, so nothing it was
 // issued — access token or ID token — may ever pass as an app session.
-export const isAcceptanceReviewIssued = (payload: { aud?: unknown; client_id?: unknown }) =>
-  isAcceptanceReviewAudience(payload.aud) ||
-  isAcceptanceReviewClient(payload.client_id as string | undefined) ||
-  (Array.isArray(payload.aud) ? payload.aud : [payload.aud]).includes(ACCEPTANCE_REVIEW_CLIENT_ID);
+export const isAcceptanceReviewIssued = (payload: { aud?: unknown; client_id?: unknown }) => {
+  const audiences = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+  const clientId = payload.client_id as string | undefined;
+  return (
+    isAcceptanceReviewAudience(payload.aud) ||
+    isAcceptanceReviewClient(clientId) ||
+    isAcceptanceExtensionClient(clientId) ||
+    audiences.some(
+      (aud) =>
+        aud === ACCEPTANCE_CLIENT_ID ||
+        aud === ACCEPTANCE_EXTENSION_CLIENT_ID ||
+        aud === ACCEPTANCE_EXTENSION_RESOURCE,
+    )
+  );
+};

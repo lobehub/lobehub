@@ -22,8 +22,10 @@ import type {
   ModelRequestOptions,
   OnFinishData,
   PullModelParams,
+  RouteAttemptIdentity,
   TextToSpeechOptions,
   TextToSpeechPayload,
+  UsageReportContext,
 } from '../types';
 import { AgentRuntimeErrorType } from '../types/error';
 import type {
@@ -31,6 +33,13 @@ import type {
   CreateImageMethodOptions,
   CreateImagePayload,
 } from '../types/image';
+import type {
+  CreateMusicOptions,
+  CreateMusicPayload,
+  CreateMusicResult,
+  MusicPollingRoute,
+  PollMusicStatusOptions,
+} from '../types/music';
 import type {
   CreateVideoMethodOptions,
   CreateVideoPayload,
@@ -189,7 +198,7 @@ export interface ModelRuntimeHooks {
   ) => void | Promise<void>;
 
   onEmbeddingsFinal?: (
-    data: { latencyMs?: number; usage?: ModelUsage },
+    data: { latencyMs?: number; routeAttempt?: RouteAttemptIdentity; usage?: ModelUsage },
     context: { options?: EmbeddingsOptions; payload: EmbeddingsPayload },
   ) => void | Promise<void>;
 
@@ -218,7 +227,7 @@ export interface ModelRuntimeHooks {
   ) => void | Promise<void>;
 
   onGenerateObjectFinal?: (
-    data: { speed?: ModelPerformance; usage?: ModelUsage },
+    data: { routeAttempt?: RouteAttemptIdentity; speed?: ModelPerformance; usage?: ModelUsage },
     context: { options?: GenerateObjectOptions; payload: GenerateObjectPayload },
   ) => void | Promise<void>;
 
@@ -233,7 +242,7 @@ export interface ModelRuntimeHooks {
    * `beforeTextToSpeech`.
    */
   onTextToSpeechFinal?: (
-    data: { latencyMs: number; usage?: ModelUsage },
+    data: { latencyMs: number; routeAttempt?: RouteAttemptIdentity; usage?: ModelUsage },
     context: { options?: TextToSpeechOptions; payload: TextToSpeechPayload },
   ) => void | Promise<void>;
 
@@ -248,7 +257,7 @@ export interface ModelRuntimeHooks {
    * settle or release anything taken in `beforeTranscribe`.
    */
   onTranscribeFinal?: (
-    data: { latencyMs: number; usage?: ModelUsage },
+    data: { latencyMs: number; routeAttempt?: RouteAttemptIdentity; usage?: ModelUsage },
     context: { options?: ASROptions; payload: ASRPayload },
   ) => void | Promise<void>;
 }
@@ -497,12 +506,15 @@ export class ModelRuntime {
       const finalOptions = needsUsageCapture
         ? {
             ...hookOptions,
-            onUsage: async (usage: ModelUsage) => {
+            onUsage: async (usage: ModelUsage, context?: UsageReportContext) => {
               usageCapture = usage;
               const speed = buildGenerateObjectSpeed(runtimeStartedAt, usage);
-              await hookOptions?.onUsage?.(usage);
+              await hookOptions?.onUsage?.(usage, context);
               try {
-                await this._hooks?.onGenerateObjectFinal?.({ speed, usage }, { options, payload });
+                await this._hooks?.onGenerateObjectFinal?.(
+                  { routeAttempt: context?.routeAttempt, speed, usage },
+                  { options, payload },
+                );
               } catch (e) {
                 // Hook failures (billing, tracing) must not interfere with response completion
                 console.error('[ModelRuntime] onGenerateObjectFinal hook error:', e);
@@ -555,12 +567,41 @@ export class ModelRuntime {
     return createVideoWithCompletionMode(this._runtime, payload, finalOptions);
   }
 
+  /**
+   * Generate music with the provider runtime. Returns `undefined` when the provider has no
+   * music support. Asynchronous providers return a `pending` result with a task id unless
+   * `options.waitForCompletion` is set; poll it with {@link handlePollMusicStatus}.
+   */
+  async createMusic(
+    payload: CreateMusicPayload,
+    options?: CreateMusicOptions,
+  ): Promise<CreateMusicResult | undefined> {
+    return this._runtime.createMusic?.(payload, options);
+  }
+
+  async handlePollMusicStatus(
+    inferenceId: string,
+    model?: string,
+    route?: MusicPollingRoute,
+    options?: PollMusicStatusOptions,
+  ) {
+    return this._runtime.handlePollMusicStatus?.(inferenceId, model, route, options);
+  }
+
   async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {
     return this._runtime.handleCreateVideoWebhook?.(payload);
   }
 
   async handlePollVideoStatus(inferenceId: string, model?: string, route?: VideoPollingRoute) {
     return this._runtime.handlePollVideoStatus?.(inferenceId, model, route);
+  }
+
+  /**
+   * Verify the provider key without a chat model. `undefined` when the runtime has no
+   * credential check, so callers can fall back to a chat check.
+   */
+  async checkCredentials() {
+    return this._runtime.checkCredentials?.();
   }
 
   async models() {
@@ -574,22 +615,33 @@ export class ModelRuntime {
 
       const startTime = Date.now();
 
+      let usage: ModelUsage | undefined;
+      let routeAttempt: UsageReportContext['routeAttempt'];
       const finalOptions = this._hooks?.onEmbeddingsFinal
         ? {
             ...hookOptions,
-            onUsage: async (usage: ModelUsage) => {
-              await hookOptions?.onUsage?.(usage);
-              try {
-                const latencyMs = Date.now() - startTime;
-                await this._hooks!.onEmbeddingsFinal!({ latencyMs, usage }, { options, payload });
-              } catch (e) {
-                console.error('[ModelRuntime] onEmbeddingsFinal hook error:', e);
-              }
+            onUsage: async (reported: ModelUsage, context?: UsageReportContext) => {
+              usage = reported;
+              routeAttempt = context?.routeAttempt;
+              await hookOptions?.onUsage?.(reported, context);
             },
           }
         : hookOptions;
 
-      return await this._runtime.embeddings?.(payload, finalOptions);
+      const result = await this._runtime.embeddings?.(payload, finalOptions);
+
+      if (this._hooks?.onEmbeddingsFinal) {
+        try {
+          await this._hooks.onEmbeddingsFinal(
+            { latencyMs: Date.now() - startTime, routeAttempt, usage },
+            { options, payload },
+          );
+        } catch (e) {
+          console.error('[ModelRuntime] onEmbeddingsFinal hook error:', e);
+        }
+      }
+
+      return result;
     } catch (error) {
       if (this._hooks?.onEmbeddingsError) {
         await this._hooks.onEmbeddingsError(error as ChatCompletionErrorPayload, {
@@ -607,12 +659,14 @@ export class ModelRuntime {
 
       const startTime = Date.now();
       let usage: ModelUsage | undefined;
+      let routeAttempt: RouteAttemptIdentity | undefined;
       const finalOptions = this._hooks?.onTextToSpeechFinal
         ? {
             ...hookOptions,
-            onUsage: async (reported: ModelUsage) => {
+            onUsage: async (reported: ModelUsage, context?: UsageReportContext) => {
               usage = reported;
-              await hookOptions?.onUsage?.(reported);
+              routeAttempt = context?.routeAttempt;
+              await hookOptions?.onUsage?.(reported, context);
             },
           }
         : hookOptions;
@@ -622,7 +676,7 @@ export class ModelRuntime {
       if (this._hooks?.onTextToSpeechFinal) {
         try {
           await this._hooks.onTextToSpeechFinal(
-            { latencyMs: Date.now() - startTime, usage },
+            { latencyMs: Date.now() - startTime, routeAttempt, usage },
             { options, payload },
           );
         } catch (e) {
@@ -649,12 +703,14 @@ export class ModelRuntime {
 
       const startTime = Date.now();
       let usage: ModelUsage | undefined;
+      let routeAttempt: RouteAttemptIdentity | undefined;
       const finalOptions = this._hooks?.onTranscribeFinal
         ? {
             ...hookOptions,
-            onUsage: async (reported: ModelUsage) => {
+            onUsage: async (reported: ModelUsage, context?: UsageReportContext) => {
               usage = reported;
-              await hookOptions?.onUsage?.(reported);
+              routeAttempt = context?.routeAttempt;
+              await hookOptions?.onUsage?.(reported, context);
             },
           }
         : hookOptions;
@@ -664,7 +720,7 @@ export class ModelRuntime {
       if (this._hooks?.onTranscribeFinal) {
         try {
           await this._hooks.onTranscribeFinal(
-            { latencyMs: Date.now() - startTime, usage },
+            { latencyMs: Date.now() - startTime, routeAttempt, usage },
             { options, payload },
           );
         } catch (e) {

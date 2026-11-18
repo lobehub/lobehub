@@ -8,9 +8,7 @@ import {
 import { type LobeChatDatabase } from '@lobechat/database';
 import { type DocumentItem } from '@lobechat/database/schemas';
 import { documents, files } from '@lobechat/database/schemas';
-import { loadFile, UnsupportedFileTypeError } from '@lobechat/file-loaders';
-import { sliceHead } from '@lobechat/prompts/textWindow';
-import type { DocumentAccessScope, FileAccessScope } from '@lobechat/types';
+import type { DocumentAccessScope, DocumentWriteSource, FileAccessScope } from '@lobechat/types';
 import {
   ordinaryDocumentAccessScope,
   ordinaryFileAccessScope,
@@ -21,6 +19,7 @@ import debug from 'debug';
 import { and, eq, sql } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
+import { MAX_FILE_PARSE_SIZE } from '@/const/file';
 import { DocumentModel, type DocumentQuerySortBy } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
@@ -32,7 +31,11 @@ import { type LobeDocument } from '@/types/document';
 
 import { EditLockService } from '../editLock';
 import { FileService } from '../file';
+import { parseFileInWorker } from '../fileParse';
+import { normalizeParseFileError } from '../fileParse/normalizeError';
+import { dropPageRooms } from '../pageCollab/notify';
 import { publishResourceEvent } from '../resourceEvents';
+import { countEditorDataText } from './editorData';
 import { DocumentHistoryService } from './history';
 import type {
   CompareDocumentHistoryItemsParams,
@@ -47,75 +50,9 @@ import type {
   UpdateDocumentParams,
   UpdateDocumentResult,
 } from './types';
+import { assertDocumentWriteWithinLimit } from './writeLimit';
 
 const log = debug('lobe-chat:service:document');
-
-/**
- * Upper bound, in characters, of parsed file text stored in `documents.content`.
- *
- * Parsing raw CSV exports, logs, or sparse spreadsheets can yield 100+ MiB of text. Rows that large
- * slow every read of the document, overflow the model context when attached, and cannot be synced
- * to full-text search. The original file stays in storage for tools that process it directly.
- */
-export const PARSED_FILE_CONTENT_MAX_CHARS = 5_000_000;
-
-type ParsedFileDocument = Awaited<ReturnType<typeof loadFile>>;
-
-const PAGE_CLOSE_TAG = '\n</page>';
-
-/**
- * PDF loaders wrap each page in `<page ...>...</page>`. A cut inside a page leaves an opening tag
- * with no closing tag (or a half-written tag at the tail), which previews and `readAttachment`
- * would expose as malformed markup. Close the cut page, or drop a half-written opening tag, while
- * staying within the cap. Page tags are kept rather than stripped so page numbers survive.
- */
-const closeCutPage = (content: string): string => {
-  const open = content.lastIndexOf('<page');
-  if (open === -1 || open < content.lastIndexOf('</page>')) return content;
-
-  const openEnd = content.indexOf('>', open);
-  if (openEnd === -1) return content.slice(0, open).trimEnd();
-
-  const bodyEnd = Math.max(openEnd + 1, content.length - PAGE_CLOSE_TAG.length);
-  const body = content.slice(0, bodyEnd).replace(/<\/?(?:p(?:a(?:ge?)?)?)?$/, '');
-  return `${body}${PAGE_CLOSE_TAG}`;
-};
-
-/**
- * Truncates oversized parsed text before it is stored. `pages` repeats the full text, so it is
- * dropped for truncated documents; `metadata` records the original length.
- */
-export const capParsedFileDocument = (fileDocument: ParsedFileDocument): ParsedFileDocument => {
-  if (fileDocument.content.length <= PARSED_FILE_CONTENT_MAX_CHARS) return fileDocument;
-
-  const head = sliceHead(fileDocument.content, PARSED_FILE_CONTENT_MAX_CHARS);
-  // Only the PDF loader emits page wrappers; other text may contain a literal `<page` to keep.
-  const content = fileDocument.fileType === 'pdf' ? closeCutPage(head) : head;
-  return {
-    ...fileDocument,
-    content,
-    metadata: {
-      ...fileDocument.metadata,
-      originalCharCount: fileDocument.content.length,
-      truncated: true,
-    },
-    pages: undefined,
-    totalCharCount: content.length,
-    totalLineCount: content.split('\n').length,
-  };
-};
-
-const normalizeParseFileError = (error: unknown) => {
-  if (error instanceof UnsupportedFileTypeError) {
-    return new TRPCError({
-      cause: error,
-      code: 'BAD_REQUEST',
-      message: error.message,
-    });
-  }
-
-  return error;
-};
 
 export class DocumentService {
   userId: string;
@@ -186,6 +123,17 @@ export class DocumentService {
     return Boolean(this.workspaceId && doc?.workspaceId && doc.visibility !== 'private');
   }
 
+  async assertCanWriteBody(id: string, lockOwnerId?: string) {
+    const document = await this.documentModel.findById(id);
+    if (!this.isCollaborativeDocument(document)) return;
+    if (await this.editLockService.canWrite('document', id, lockOwnerId)) return;
+    throw new TRPCError({
+      cause: { data: { code: 'DocumentLocked' } },
+      code: 'CONFLICT',
+      message: 'Document is being edited by another user',
+    });
+  }
+
   private async deleteFileRecordAndStorage(fileId: string) {
     const file = await this.fileModel.delete(fileId);
     if (!file?.url || file.url.startsWith('internal://')) return;
@@ -207,6 +155,8 @@ export class DocumentService {
     slug?: string;
     title: string;
     visibility?: 'private' | 'public';
+    /** Who asked for the write; `system` skips the per-document character limit. Defaults to `user`. */
+    writeSource?: DocumentWriteSource;
   }): Promise<DocumentItem> {
     const {
       content,
@@ -217,6 +167,14 @@ export class DocumentService {
       slug,
       visibility,
     } = params;
+    // Refuse before any row (including the KB mirror file) is written.
+    await assertDocumentWriteWithinLimit({
+      charCount: Math.max(content?.length ?? 0, countEditorDataText(editorData)),
+      source: params.writeSource,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
+
     // Agent tool calls often fill optional ids with "" — that means "unset".
     // Passed through, it reaches the `parent_id` / `knowledge_base_id` FKs and
     // fails the insert with an opaque `Failed query` error.
@@ -348,6 +306,7 @@ export class DocumentService {
       slug?: string;
       title: string;
       visibility?: 'private' | 'public';
+      writeSource?: DocumentWriteSource;
     }>,
   ): Promise<DocumentItem[]> {
     // Create all documents in parallel for better performance
@@ -687,7 +646,9 @@ export class DocumentService {
     }
 
     // Finally delete the document itself
-    return this.documentModel.delete(id);
+    const deleted = await this.documentModel.delete(id);
+    if (document.workspaceId) dropPageRooms([id]);
+    return deleted;
   }
 
   /**
@@ -810,6 +771,26 @@ export class DocumentService {
 
       const updates: Record<string, unknown> = {};
 
+      // Checked before anything is persisted. Room projections are checked too:
+      // the room accepts browser edits without measuring them, so the
+      // projection is the only place a collaborative page's length is enforced.
+      // `restoreFromHistoryId` is not an exemption: the client
+      // sends it with a body the server does not match against the version, so
+      // only server-side restores opt out via `writeSource`. Editor data is
+      // measured too because it can arrive without `content`.
+      if (params.content !== undefined || editorDataParam !== undefined) {
+        await assertDocumentWriteWithinLimit({
+          charCount: Math.max(params.content?.length ?? 0, countEditorDataText(editorDataParam)),
+          previousCharCount: Math.max(
+            currentDocument.content?.length ?? 0,
+            countEditorDataText(currentDocument.editorData),
+          ),
+          source: params.writeSource,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        });
+      }
+
       if (params.content !== undefined) {
         updates.content = params.content;
         updates.totalCharCount = params.content.length;
@@ -896,23 +877,18 @@ export class DocumentService {
    * Parse file and create a document for page editor (without page tags)
    */
   async parseDocument(fileId: string): Promise<LobeDocument> {
-    const { filePath, file, cleanup } = await this.fileService.downloadFileToLocal(fileId);
+    const { filePath, file, cleanup } = await this.fileService.downloadFileToLocal(
+      fileId,
+      undefined,
+      { maxBytes: MAX_FILE_PARSE_SIZE },
+    );
 
     const logPrefix = `[${file.name}]`;
     log(`${logPrefix} Starting to parse file as document, path: ${filePath}`);
 
     try {
-      const loaded = await loadFile(filePath);
-      // Strip <page> wrappers before capping: a cut inside a page would leave an opening tag with
-      // no closing tag, which the strip regex can no longer match.
-      const fileDocument = capParsedFileDocument(
-        loaded.content.includes('<page')
-          ? {
-              ...loaded,
-              content: loaded.content.replaceAll(/<page[^>]*>([\S\s]*?)<\/page>/g, '$1').trim(),
-            }
-          : loaded,
-      );
+      // Strips the <page> wrappers and applies the stored-content cap inside the worker thread.
+      const fileDocument = await parseFileInWorker(filePath, { fileId, mode: 'document' });
 
       log(`${logPrefix} File parsed successfully %O`, {
         fileType: fileDocument.fileType,
@@ -947,7 +923,7 @@ export class DocumentService {
       console.error(`${logPrefix} File parsing failed:`, parseError);
       throw parseError;
     } finally {
-      cleanup();
+      await cleanup();
     }
   }
 
@@ -972,14 +948,15 @@ export class DocumentService {
     const { filePath, file, cleanup } = await this.fileService.downloadFileToLocal(
       fileId,
       accessScope,
+      { maxBytes: MAX_FILE_PARSE_SIZE },
     );
 
     const logPrefix = `[${file.name}]`;
     log(`${logPrefix} Starting to parse file, path: ${filePath}`);
 
     try {
-      // Use loadFile to load file content
-      const fileDocument = capParsedFileDocument(await loadFile(filePath));
+      // Parsed and capped on a worker thread: a heavy file must not hold this one.
+      const fileDocument = await parseFileInWorker(filePath, { fileId, mode: 'file' });
 
       log(`${logPrefix} File parsed successfully %O`, {
         fileType: fileDocument.fileType,
@@ -1043,7 +1020,7 @@ export class DocumentService {
       console.error(`${logPrefix} File parsing failed:`, parseError);
       throw parseError;
     } finally {
-      cleanup();
+      await cleanup();
     }
   }
 }

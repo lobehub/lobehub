@@ -105,6 +105,18 @@ describe('mergeLinearSyncResults', () => {
     expect(merged.skipped).toEqual([skipped('A'), skipped('B')]);
   });
 
+  it('adds up tasks archived across rounds, whichever kind of round it was', () => {
+    for (const resumed of [true, false]) {
+      expect(
+        mergeLinearSyncResults(result({ archived: 2 }), result({ archived: 3 }), { resumed })
+          .archived,
+      ).toBe(5);
+    }
+    expect(
+      mergeLinearSyncResults(result({}), result({}), { resumed: true }).archived,
+    ).toBeUndefined();
+  });
+
   it('takes what a pass from the start saw from it alone', () => {
     expect(
       mergeLinearSyncResults(
@@ -113,6 +125,33 @@ describe('mergeLinearSyncResults', () => {
         { resumed: false },
       ),
     ).toMatchObject({ closed: 3, created: 100, skippedCount: 1, unchanged: 100 });
+  });
+
+  it('adds up tasks every round labeled, resumed or not', () => {
+    expect(
+      mergeLinearSyncResults(result({ labelsSynced: 4 }), result({ labelsSynced: 1 }), {
+        resumed: false,
+      }).labelsSynced,
+    ).toBe(5);
+    expect(
+      mergeLinearSyncResults(result({ labelsSynced: 4 }), result({}), { resumed: true })
+        .labelsSynced,
+    ).toBe(4);
+  });
+
+  it('adds up comments every round copied, resumed or not', () => {
+    expect(
+      mergeLinearSyncResults(result({ commentsImported: 4 }), result({ commentsImported: 1 }), {
+        resumed: false,
+      }).commentsImported,
+    ).toBe(5);
+    expect(
+      mergeLinearSyncResults(result({ commentsImported: 4 }), result({}), { resumed: true })
+        .commentsImported,
+    ).toBe(4);
+    expect(
+      mergeLinearSyncResults(result({}), result({}), { resumed: true }).commentsImported,
+    ).toBeUndefined();
   });
 });
 

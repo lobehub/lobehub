@@ -5,28 +5,27 @@ import {
   Alert,
   Button,
   confirmModal,
-  createStaticStyles,
   Flexbox,
-  Skeleton,
   Tabs,
   Tag,
   Text,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { ArrowLeftIcon, PowerIcon, PowerOffIcon, Trash2Icon } from 'lucide-react';
-import { type FC, useEffect } from 'react';
+import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
 import OAuthAppStats from '@/business/client/OAuthAppStats';
 import AsyncError from '@/components/AsyncError';
-import { useClientDataSWR } from '@/libs/swr';
-import { authKeys } from '@/libs/swr/keys';
 import { normalizeAsyncError } from '@/libs/swr/normalizeError';
-import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
-import { type OAuthAppItem } from '@/types/oauthApp';
+import { oauthAppSelectors, useOAuthAppStore } from '@/store/oauthApp';
+import { type UpdateOAuthAppParams } from '@/types/oauthApp';
 
+import AppDetailSkeleton from '../AppDetailSkeleton';
 import { confirmDisableOAuthApp } from '../confirmDisable';
 import { showClientSecretModal } from '../SecretModal';
 import BasicInfoCard from './BasicInfoCard';
@@ -36,56 +35,39 @@ import ManualSetupCard from './ManualSetupCard';
 import RedirectUrisCard from './RedirectUrisCard';
 import SectionCard from './SectionCard';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  dangerCard: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorErrorBorder};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  dangerDesc: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  dangerRow: css`
-    display: flex;
-    gap: 16px;
-    align-items: center;
-    justify-content: space-between;
-  `,
+const styles = stylex.create({
+  dangerCard: {
+    padding: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorErrorBorder,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  dangerDesc: { fontSize: '12px', color: cssVar.colorTextSecondary },
+  dangerRow: {
+    display: 'flex',
+    gap: '16px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   // The stats slot is a business stub that renders nothing in the open-source
   // build; an empty bordered card must not be left behind.
-  statsCard: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
+  statsCard: {
+    padding: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    display: { 'default': null, ':empty': 'none' },
+  },
+  meta: { fontSize: '12px', color: cssVar.colorTextTertiary },
+});
 
-    &:empty {
-      display: none;
-    }
-  `,
-  meta: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
-
-/** The app page while it loads; also shown while the Labs flag resolves on a direct visit. */
-export const AppDetailSkeleton = () => (
-  <Flexbox gap={16}>
-    <Skeleton.Text rows={1} width={200} />
-    <div className={styles.card}>
-      <Skeleton.Text rows={4} />
-    </div>
-  </Flexbox>
-);
+export { default as AppDetailSkeleton } from '../AppDetailSkeleton';
 
 const TAB_KEYS = ['overview', 'credentials', 'advanced'] as const;
 
@@ -93,17 +75,21 @@ interface AppDetailProps {
   canEdit: boolean;
   id: string;
   onBack: () => void;
-  onChanged: () => void;
 }
 
-const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
+const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack }) => {
   const { t } = useTranslation(['auth', 'common']);
 
-  const { data, error, isLoading, isValidating, mutate } = useClientDataSWR(
-    authKeys.oauthAppById(id),
-    () => lambdaClient.oauthApp.getById.query({ id }),
+  const [useFetchAppDetail, updateApp, setAppEnabled, rotateSecret, deleteApp] = useOAuthAppStore(
+    (s) => [s.useFetchAppDetail, s.updateApp, s.setAppEnabled, s.rotateSecret, s.deleteApp],
   );
-  const detail = data as OAuthAppItem | undefined;
+  // The persisted copy paints the page on open; the network only confirms.
+  const { error, isValidating, revalidate } = useFetchAppDetail(id);
+  const detail = useOAuthAppStore(oauthAppSelectors.appById(id));
+  const notFound = useOAuthAppStore(oauthAppSelectors.isAppNotFound(id));
+
+  const [enabledPending, setEnabledPending] = useState(false);
+  const [secretPending, setSecretPending] = useState(false);
 
   // The active tab lives in the URL so a reload or shared link keeps it.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -121,39 +107,35 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
   // Only a settled "no such app" goes back to the list; a failed load stays here
   // with Retry instead of silently bouncing the user away.
   useEffect(() => {
-    if (!error && !isLoading && !detail) onBack();
-  }, [error, isLoading, detail, onBack]);
+    if (notFound) onBack();
+  }, [notFound, onBack]);
 
-  const revalidate = () => {
-    mutate();
-    onChanged();
+  const handleUpdate = async (value: UpdateOAuthAppParams) => {
+    await updateApp(id, value);
+    toast.success(t('oauthApp.detail.saveSuccess'));
   };
 
-  const updateMutation = lambdaQuery.oauthApp.update.useMutation({
-    onSuccess: () => {
-      revalidate();
-      toast.success(t('oauthApp.detail.saveSuccess'));
-    },
-  });
-  const enabledMutation = lambdaQuery.oauthApp.setEnabled.useMutation({ onSuccess: revalidate });
-  const rotateSecretMutation = lambdaQuery.oauthApp.rotateSecret.useMutation({
-    // Minting a credential must never fail silently: the user needs to know no
-    // secret is waiting for them and that they can try again.
-    onError: () => toast.error(t('oauthApp.secret.issueFailed')),
-    onSuccess: ({ clientSecret }) => {
-      revalidate();
-      showClientSecretModal({ clientSecret });
-    },
-  });
-  const deleteMutation = lambdaQuery.oauthApp.delete.useMutation({
-    onSuccess: () => {
-      onChanged();
-      onBack();
-    },
-  });
+  const setEnabled = async (enabled: boolean) => {
+    setEnabledPending(true);
+    try {
+      await setAppEnabled(id, enabled);
+    } finally {
+      setEnabledPending(false);
+    }
+  };
 
-  const handleUpdate = async (value: Parameters<typeof updateMutation.mutateAsync>[0]['value']) => {
-    await updateMutation.mutateAsync({ id, value });
+  const issueSecret = async () => {
+    setSecretPending(true);
+    try {
+      showClientSecretModal({ clientSecret: await rotateSecret(id) });
+    } catch (error) {
+      // Minting a credential must never fail silently: the user needs to know no
+      // secret is waiting for them and that they can try again.
+      toast.error(t('oauthApp.secret.issueFailed'));
+      throw error;
+    } finally {
+      setSecretPending(false);
+    }
   };
 
   const handleRotateSecret = () =>
@@ -162,9 +144,7 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
       content: t('oauthApp.secret.rotateConfirm.content'),
       okButtonProps: { danger: true },
       okText: t('oauthApp.secret.rotateConfirm.ok'),
-      onOk: async () => {
-        await rotateSecretMutation.mutateAsync({ id });
-      },
+      onOk: issueSecret,
       title: t('oauthApp.secret.rotateConfirm.title'),
     });
 
@@ -174,15 +154,18 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
       content: t('oauthApp.deleteConfirm.content'),
       okButtonProps: { danger: true },
       okText: t('oauthApp.deleteConfirm.ok'),
+      // The delete is optimistic: go back to the list, where the row is
+      // already gone and comes back if the call fails.
       onOk: async () => {
-        await deleteMutation.mutateAsync({ id });
+        onBack();
+        await deleteApp(id);
       },
       title: t('oauthApp.deleteConfirm.title'),
     });
 
-  const handleEnable = () => enabledMutation.mutate({ enabled: true, id });
-  const handleDisable = () =>
-    confirmDisableOAuthApp(() => enabledMutation.mutateAsync({ enabled: false, id }));
+  // A failed enable rolls the page back to disabled.
+  const handleEnable = () => void setEnabled(true).catch(() => {});
+  const handleDisable = () => confirmDisableOAuthApp(() => setEnabled(false));
 
   if (error && !detail)
     return (
@@ -193,7 +176,7 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
           <Flexbox horizontal gap={8}>
             <Button onClick={onBack}>{t('oauthApp.detail.back')}</Button>
             {normalizeAsyncError(error).retryable && (
-              <Button loading={isValidating} onClick={() => mutate()}>
+              <Button loading={isValidating} onClick={() => void revalidate()}>
                 {t('retry', { ns: 'common' })}
               </Button>
             )}
@@ -221,7 +204,7 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
       type={'warning'}
       action={
         canEdit && (
-          <Button loading={enabledMutation.isPending} size={'small'} onClick={handleEnable}>
+          <Button loading={enabledPending} size={'small'} onClick={handleEnable}>
             {t('oauthApp.actions.enable')}
           </Button>
         )
@@ -243,7 +226,7 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
         clientId={detail.id}
         name={detail.name}
       />
-      <div className={styles.statsCard}>
+      <div {...stylex.props(styles.statsCard)}>
         <OAuthAppStats clientId={detail.id} />
       </div>
     </>
@@ -254,8 +237,8 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
       <CredentialsCard
         canEdit={canEdit}
         detail={detail}
-        secretPending={rotateSecretMutation.isPending}
-        onGenerateSecret={() => rotateSecretMutation.mutate({ id })}
+        secretPending={secretPending}
+        onGenerateSecret={() => void issueSecret().catch(() => {})}
         onRotateSecret={handleRotateSecret}
       />
       {isWebApp && (
@@ -276,17 +259,17 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
   const advancedTab = (
     <>
       <SectionCard title={t('oauthApp.detail.status')}>
-        <div className={styles.dangerRow}>
+        <div {...stylex.props(styles.dangerRow)}>
           <Flexbox gap={2}>
             <Text>{t(isDisabled ? 'oauthApp.actions.enable' : 'oauthApp.actions.disable')}</Text>
-            <span className={styles.dangerDesc}>
+            <span {...stylex.props(styles.dangerDesc)}>
               {t(isDisabled ? 'oauthApp.detail.enableDesc' : 'oauthApp.detail.disableDesc')}
             </span>
           </Flexbox>
           <Button
             disabled={!canEdit}
             icon={isDisabled ? <PowerIcon size={16} /> : <PowerOffIcon size={16} />}
-            loading={enabledMutation.isPending}
+            loading={enabledPending}
             style={{ flex: 'none' }}
             onClick={isDisabled ? handleEnable : handleDisable}
           >
@@ -295,18 +278,17 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
         </div>
       </SectionCard>
 
-      <Flexbox className={styles.dangerCard} gap={16}>
+      <Flexbox className={stylex.props(styles.dangerCard).className} gap={16}>
         <Text weight={500}>{t('oauthApp.detail.dangerZone')}</Text>
-        <div className={styles.dangerRow}>
+        <div {...stylex.props(styles.dangerRow)}>
           <Flexbox gap={2}>
             <Text>{t('oauthApp.detail.delete')}</Text>
-            <span className={styles.dangerDesc}>{t('oauthApp.detail.deleteDesc')}</span>
+            <span {...stylex.props(styles.dangerDesc)}>{t('oauthApp.detail.deleteDesc')}</span>
           </Flexbox>
           <Button
             danger
             disabled={!canEdit}
             icon={<Trash2Icon size={16} />}
-            loading={deleteMutation.isPending}
             style={{ flex: 'none' }}
             onClick={handleDelete}
           >
@@ -336,7 +318,7 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
           </Text>
           {isDisabled && <Tag>{t('oauthApp.item.disabledTag')}</Tag>}
         </Flexbox>
-        <span className={styles.meta} style={{ paddingInlineStart: 36 }}>
+        <span className={stylex.props(styles.meta).className} style={{ paddingInlineStart: 36 }}>
           {meta}
         </span>
       </Flexbox>

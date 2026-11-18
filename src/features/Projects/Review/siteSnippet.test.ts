@@ -5,7 +5,7 @@ import { checkOrigins, originErrorFromServer, reviewLink, siteSnippet } from './
 describe('siteSnippet', () => {
   it('omits the server for LobeHub cloud', () => {
     expect(siteSnippet('psite_7f3k9q2mAbCd', 'https://app.lobehub.com')).toBe(
-      '<script src="https://web-assets.lobehub.com/review-sdk/assets/v1/lobehub-review.js" data-site="psite_7f3k9q2mAbCd"></script>',
+      '<script src="https://web-assets.lobehub.com/acceptance-sdk/assets/v1/lobehub-acceptance.js" data-site="psite_7f3k9q2mAbCd"></script>',
     );
   });
 
@@ -17,7 +17,7 @@ describe('siteSnippet', () => {
 
   it('escapes attribute values so they cannot break out of the tag', () => {
     expect(siteSnippet('a"><img src=x>', 'http://h/"&\'')).toBe(
-      '<script src="https://web-assets.lobehub.com/review-sdk/assets/v1/lobehub-review.js" data-site="a&quot;&gt;&lt;img src=x&gt;" data-server="http://h/&quot;&amp;&#39;"></script>',
+      '<script src="https://web-assets.lobehub.com/acceptance-sdk/assets/v1/lobehub-acceptance.js" data-site="a&quot;&gt;&lt;img src=x&gt;" data-server="http://h/&quot;&amp;&#39;"></script>',
     );
   });
 });

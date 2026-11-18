@@ -1,7 +1,12 @@
 import type { DeviceGitPullRequestDetail } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { type MergeDockInput, PR_KEYS, resolveMergeDock } from '../mergeDockData';
+import {
+  checkoutPublishesTo as publishesTo,
+  type MergeDockInput,
+  PR_KEYS,
+  resolveMergeDock,
+} from '../mergeDockData';
 
 const makeDetail = (
   overrides: Partial<DeviceGitPullRequestDetail> = {},
@@ -390,5 +395,21 @@ describe('resolveMergeDock', () => {
       method: 'squash',
       tone: 'success',
     });
+  });
+});
+
+describe('checkoutPublishesTo', () => {
+  it('matches the PR head by the tracking ref or the push target', () => {
+    expect(publishesTo({ upstream: 'origin/feat/x' }, 'feat/x')).toBe(true);
+    expect(publishesTo({ pushTarget: 'origin/feat/x', upstream: 'origin/canary' }, 'feat/x')).toBe(
+      true,
+    );
+  });
+
+  it('refuses a checkout that publishes another branch', () => {
+    expect(publishesTo({ pushTarget: 'origin/feat/b', upstream: 'origin/feat/b' }, 'feat/a')).toBe(
+      false,
+    );
+    expect(publishesTo({}, 'feat/a')).toBe(false);
   });
 });

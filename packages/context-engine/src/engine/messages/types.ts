@@ -1,6 +1,7 @@
 /* eslint-disable perfectionist/sort-interfaces */
 import type { AgentIdentityContext, FileContent, KnowledgeBaseInfo } from '@lobechat/prompts';
 import type {
+  AgentAccountContext,
   ExpertiseContextSnapshot,
   RuntimeAdditionalContextFragment,
   RuntimeInitialContext,
@@ -12,11 +13,16 @@ import type {
 import type { OpenAIChatMessage, UIChatMessage } from '@/types/index';
 
 import type { AgentInfo } from '../../processors/GroupRoleTransform';
+import type { RevokedDocumentReads } from '../../processors/RevokedDocumentResultFilter';
 import type { AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
-import type { AgentContextDocument } from '../../providers/AgentDocumentInjector';
+import type {
+  AgentContextDocument,
+  AgentDocumentChangesByMessage,
+} from '../../providers/AgentDocumentInjector';
 import type { AgentManagementContext } from '../../providers/AgentManagementContextInjector';
 import type { BotPlatformContext } from '../../providers/BotPlatformContextInjector';
 import type { DiscordContext } from '../../providers/DiscordContextProvider';
+import type { DocumentReferenceItem } from '../../providers/DocumentReferenceContextInjector';
 import type { EvalContext } from '../../providers/EvalContextSystemInjector';
 import type { GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
 import type { GroupMemberInfo } from '../../providers/GroupContextInjector';
@@ -221,6 +227,7 @@ export interface PlanTodoConfig {
  * MessagesEngine main parameters
  */
 export interface MessagesEngineParams {
+  enableMcpAppContext?: boolean;
   // ========== Required parameters ==========
   /** Original message list */
   messages: UIChatMessage[];
@@ -274,6 +281,12 @@ export interface MessagesEngineParams {
    * it. Ignored in group chat, where GroupContextInjector owns identity.
    */
   agentIdentity?: AgentIdentityContext;
+  /**
+   * The agent's own accounts and inbox, gathered fresh for this step. Appended
+   * to the system message so "I have these addresses and this mail" is state
+   * rather than a tool the model has to call.
+   */
+  agentAccountContext?: AgentAccountContext;
   /** Agent-materialized presentation contexts for this LLM call */
   additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   /** Immutable expertise captured when the operation started. */
@@ -290,6 +303,18 @@ export interface MessagesEngineParams {
   knowledge?: KnowledgeConfig;
   /** Agent document configuration for context injection */
   agentDocuments?: AgentContextDocument[];
+  /**
+   * Agent-document change notes keyed by the user message each belongs to.
+   * The host passes them when `agentDocuments` renders the index from a
+   * snapshot (see `resolveAgentDocumentIndex`).
+   */
+  agentDocumentChanges?: AgentDocumentChangesByMessage;
+  /**
+   * Documents deleted or disabled since earlier turns read them, per reading
+   * agent. Historical `readKnowledge` / `readDocument` results referencing
+   * them are withheld from the model.
+   */
+  revokedDocumentReads?: RevokedDocumentReads[];
 
   // ========== Skills ==========
   /** Skills configuration */
@@ -350,6 +375,10 @@ export interface MessagesEngineParams {
   /** Topic reference summaries to inject into last user message */
   topicReferences?: TopicReferenceItem[];
 
+  // ========== Document References ==========
+  /** Agent documents referenced via `<refer_document>`, injected into last user message */
+  documentReferences?: DocumentReferenceItem[];
+
   // ========== Page Editor context ==========
   /**
    * Initial context captured at operation start (frontend runtime usage)
@@ -389,6 +418,7 @@ export { type AgentBuilderContext } from '../../providers/AgentBuilderContextInj
 export { type AgentManagementContext } from '../../providers/AgentManagementContextInjector';
 export { type BotPlatformContext } from '../../providers/BotPlatformContextInjector';
 export { type DiscordContext } from '../../providers/DiscordContextProvider';
+export { type DocumentReferenceItem } from '../../providers/DocumentReferenceContextInjector';
 export { type EvalContext } from '../../providers/EvalContextSystemInjector';
 export { type GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
 export { type Plan } from '../../providers/PlanInjector';

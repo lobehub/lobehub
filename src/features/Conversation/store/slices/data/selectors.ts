@@ -8,6 +8,13 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
 import { type State } from '../../initialState';
+import {
+  findBlockInDisplayMessages,
+  findToolInList,
+  indexDbMessages,
+  indexDisplayMessages,
+  toAssistantContentBlock,
+} from './messageIndex';
 import { getPendingInterventions } from './pendingInterventions';
 import { collectSteerChains } from './steerChains';
 import { getWorkSummariesByRootOperationId } from './workSummaries';
@@ -21,7 +28,7 @@ const hasLaterMessages = (s: State) => s.hasLaterMessages;
 
 const getDisplayMessageById = (id: string) => (s: State) => {
   // First, try to find in top-level displayMessages
-  const topLevelMessage = s.displayMessages.find((m) => m.id === id);
+  const topLevelMessage = indexDisplayMessages(s.displayMessages).byId.get(id);
   if (topLevelMessage) return topLevelMessage;
 
   // If not found, search in agentCouncil members
@@ -34,9 +41,9 @@ const getDisplayMessageById = (id: string) => (s: State) => {
 
   return undefined;
 };
-const getDbMessageById = (id: string) => (s: State) => s.dbMessages.find((m) => m.id === id);
+const getDbMessageById = (id: string) => (s: State) => indexDbMessages(s.dbMessages).byId.get(id);
 const getDbMessageByToolCallId = (id: string) => (s: State) =>
-  s.dbMessages.find((m) => m.tool_call_id === id);
+  indexDbMessages(s.dbMessages).byToolCallId.get(id);
 
 /**
  * `createdAt` is typed as a number but arrives as a `Date` after a DB rehydrate
@@ -217,20 +224,6 @@ const deletableRowMessageIds = (id: string) => (s: State) => [
   ),
 ];
 
-const toAssistantContentBlock = (message: UIChatMessage): AssistantContentBlock => ({
-  content: message.content,
-  error: message.error,
-  fileList: message.fileList,
-  id: message.id,
-  imageList: message.imageList,
-  metadata: message.metadata ?? undefined,
-  performance: message.performance,
-  reasoning: message.reasoning ?? undefined,
-  tasks: message.tasks as AssistantContentBlock['tasks'],
-  tools: message.tools as ChatToolPayloadWithResult[],
-  usage: message.usage,
-});
-
 const getRowLatestMessageWithoutTools = (id: string) => (s: State) => {
   const tailId = rowMemberIds(id)(s).at(-1) ?? id;
   const tail = getDisplayMessageById(tailId)(s);
@@ -242,44 +235,16 @@ const getRowLatestMessageWithoutTools = (id: string) => (s: State) => {
 };
 
 /**
- * Walk displayMessages (including compressed groups and agentCouncil members)
- * to find an assistant content block by its id. Used to let tool subtrees
- * self-subscribe to their own data instead of receiving it as props from the
- * message-level renderer.
+ * Find an assistant content block by its id anywhere in displayMessages
+ * (including compressed groups and agentCouncil members). Used to let tool
+ * subtrees self-subscribe to their own data instead of receiving it as props
+ * from the message-level renderer. O(1) per call: the index is built once per
+ * displayMessages snapshot (see `messageIndex.ts`).
  */
 const findBlockById = (
   blockId: string,
   messages: UIChatMessage[],
-): AssistantContentBlock | undefined => {
-  for (const message of messages) {
-    if (message.role === 'assistant' && message.id === blockId) {
-      return toAssistantContentBlock(message);
-    }
-    if (message.children) {
-      const block = message.children.find((child) => child.id === blockId);
-      if (block) return block;
-    }
-    // Post-task summary blocks live in a separate field on virtual
-    // assistantGroup messages so they render AFTER `<SignalCallbacks>`
-    // (). Same lookup contract as `children` — the renderer
-    // identifies blocks by id regardless of which slot they came from.
-    if ((message as { taskCompletions?: AssistantContentBlock[] }).taskCompletions) {
-      const block = (
-        message as { taskCompletions?: AssistantContentBlock[] }
-      ).taskCompletions!.find((child) => child.id === blockId);
-      if (block) return block;
-    }
-    if (message.compressedMessages) {
-      const inCompressedMessages = findBlockById(blockId, message.compressedMessages);
-      if (inCompressedMessages) return inCompressedMessages;
-    }
-    if (message.role === 'agentCouncil' && (message as any).members) {
-      const inMembers = findBlockById(blockId, (message as any).members);
-      if (inMembers) return inMembers;
-    }
-  }
-  return undefined;
-};
+): AssistantContentBlock | undefined => findBlockInDisplayMessages(messages, blockId);
 
 const getToolsInBlock =
   (blockId: string) =>
@@ -292,7 +257,7 @@ const getToolInBlock =
   (blockId: string, toolCallId: string) =>
   (s: State): ChatToolPayloadWithResult | undefined => {
     const tools = getToolsInBlock(blockId)(s);
-    return tools?.find((t) => t.id === toolCallId);
+    return tools ? findToolInList(tools, toolCallId) : undefined;
   };
 
 const getBlockContent =

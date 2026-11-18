@@ -137,28 +137,31 @@ lh gen image <prompt> [-m <model>] [-p <provider>] [-n <n>] [--param <key=value>
 ```
 
 ```bash
-lh gen image "A cute cat" --model dall-e-3 --provider openai --json
+lh gen image "A cute cat" --json
 lh gen image "A cute cat" -m gpt-image-2.5 -p lobehub --param size=1536x1024 --param quality=high
 ```
 
+Without `-m`, the server picks the same default image model as the web image page from the user's enabled image models (`gemini-3.1-flash-image:image`, preferring the `google` provider, otherwise any enabled provider serving it, otherwise the first enabled image model; rule in `src/utils/defaultImageModel.ts`). With only `-m`, the server uses the first enabled provider serving that model. The non-JSON output prints the model that was used.
+
 Parameters are model-specific: list them with `lh gen image-params -m <model> -p <provider>`. The server rejects parameters the model does not declare (for example `width`/`height` on gpt-image models, which take `size`) and empty prompts, before the task is queued or charged.
 
-| Option                      | Description                                                    | Default    |
-| --------------------------- | -------------------------------------------------------------- | ---------- |
-| `-m, --model <model>`       | Model ID                                                       | `dall-e-3` |
-| `-p, --provider <provider>` | Provider name                                                  | `openai`   |
-| `-n, --num <n>`             | Number of images                                               | `1`        |
-| `--param <key=value>`       | Model parameter, repeatable; values parse as JSON, else string | -          |
-| `--width <px>`              | Shortcut for `--param width=<px>`                              | -          |
-| `--height <px>`             | Shortcut for `--param height=<px>`                             | -          |
-| `--steps <n>`               | Shortcut for `--param steps=<n>`                               | -          |
-| `--seed <n>`                | Shortcut for `--param seed=<n>`                                | -          |
-| `--json`                    | Output raw JSON                                                | `false`    |
+| Option                      | Description                                                    | Default                              |
+| --------------------------- | -------------------------------------------------------------- | ------------------------------------ |
+| `-m, --model <model>`       | Model ID                                                       | Web image page default (server-side) |
+| `-p, --provider <provider>` | Provider name                                                  | First enabled provider for the model |
+| `-n, --num <n>`             | Number of images                                               | `1`                                  |
+| `--param <key=value>`       | Model parameter, repeatable; values parse as JSON, else string | -                                    |
+| `--width <px>`              | Shortcut for `--param width=<px>`                              | -                                    |
+| `--height <px>`             | Shortcut for `--param height=<px>`                             | -                                    |
+| `--steps <n>`               | Shortcut for `--param steps=<n>`                               | -                                    |
+| `--seed <n>`                | Shortcut for `--param seed=<n>`                                | -                                    |
+| `--json`                    | Output raw JSON                                                | `false`                              |
 
 **Output** (non-JSON):
 
 ```
 ✓ Image generation started
+  Model: lobehub/gemini-3.1-flash-image:image
   Batch ID: gb_xxx
   1 image(s) queued
   Generation gen_xxx → Task 7ad0eb13-xxxx-xxxx-xxxx-xxxxxxxxxxxx
@@ -265,24 +268,33 @@ lh gen tts <text> [-o <file>] [--voice <voice>] [-m <model>] [-p <provider>] \
   [--sample-rate <hz>] [--instructions <text>] [--params <json>]
 ```
 
-| Option                      | Description                                                  | Default               |
-| --------------------------- | ------------------------------------------------------------ | --------------------- |
-| `-o, --output <file>`       | Output audio file path                                       | `output.<format>`     |
-| `--voice <voice>`           | Voice id from the model card's `voices`                      | model's default voice |
-| `--speed <n>`               | Speed multiplier                                             | model default         |
-| `--pitch <n>`               | Pitch adjustment (provider-specific unit)                    | model default         |
-| `--volume <n>`              | Volume adjustment (provider-specific unit)                   | model default         |
-| `--emotion <emotion>`       | Emotion, e.g. `happy`                                        | model default         |
-| `--format <format>`         | `mp3`, `opus`, `aac` (compressed only: audio returns inline) | `mp3`                 |
-| `--sample-rate <hz>`        | Output sample rate                                           | model default         |
-| `--instructions <text>`     | Style instructions (e.g. `gpt-4o-mini-tts`)                  | —                     |
-| `--params <json>`           | Standard TTS params as JSON; dedicated flags override it     | —                     |
-| `-m, --model <model>`       | Model ID (`provider/model` supported)                        | `tts-1`               |
-| `-p, --provider <provider>` | Provider (derived from model if omitted)                     | `openai`              |
+| Option                      | Description                                                  | Default             |
+| --------------------------- | ------------------------------------------------------------ | ------------------- |
+| `-o, --output <file>`       | Output audio file path                                       | `output.<format>`   |
+| `--voice <voice>`           | Voice id from the model card's `voices`                      | saved default voice |
+| `--speed <n>`               | Speed multiplier                                             | model default       |
+| `--pitch <n>`               | Pitch adjustment (provider-specific unit)                    | model default       |
+| `--volume <n>`              | Volume adjustment (provider-specific unit)                   | model default       |
+| `--emotion <emotion>`       | Emotion, e.g. `happy`                                        | model default       |
+| `--format <format>`         | `mp3`, `opus`, `aac` (compressed only: audio returns inline) | `mp3`               |
+| `--sample-rate <hz>`        | Output sample rate                                           | model default       |
+| `--instructions <text>`     | Style instructions (e.g. `gpt-4o-mini-tts`)                  | —                   |
+| `--params <json>`           | Standard TTS params as JSON; dedicated flags override it     | —                   |
+| `-m, --model <model>`       | Model ID (`provider/model` supported)                        | `tts-1`             |
+| `-p, --provider <provider>` | Provider (model prefix, else the built-in card's provider)   | card's provider     |
 
 Params are standard TTS parameters (`TTSModelParamsMetaSchema` in model-bank). The server
 rejects params the model card does not declare or values outside its range. On success the
 command prints the file size plus usage (characters, tokens, cost) when the provider reports it.
+
+Without `--voice`, the server uses the **Default Voice** saved for the model in
+Settings → AI Providers (model config dialog), then the card's default voice. Without a
+provider or a `provider/` prefix, the server takes the provider of the model's built-in card
+(`gemini-3.8-flash-tts` → `google`, `speech-2.8-hd` → `minimax`), then `openai`.
+
+Gemini TTS (`-p google`, models `gemini-3.8-flash-tts`, `gemini-3.8-flash-lite-tts`, legacy
+`gemini-2.5-flash-preview-tts` / `gemini-2.5-pro-preview-tts`): 30 prebuilt voices (default
+`Kore`), style through `--instructions`, no speed/pitch/volume/emotion, output MP3 24 kHz mono.
 
 Uses the selected provider's saved configuration through ModelRuntime, with the same
 authenticated tRPC client as `lh gen asr`.

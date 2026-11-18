@@ -2,6 +2,7 @@ import type { ModelUsage } from '@lobechat/types';
 import type { RuntimeTTSParams, TTSAudioFormat } from 'model-bank';
 
 import type { ModelPricingContext } from './pricing';
+import type { OnUsageCallback } from './routeAttempt';
 
 export interface TextToSpeechPayload {
   input: string;
@@ -16,6 +17,11 @@ export interface TextToSpeechPayload {
    */
   speed?: number;
   voice: string;
+  /**
+   * True when the caller gave no voice and `voice` is the model card default. Providers
+   * may then substitute a voice the account can use; an explicit voice is never replaced.
+   */
+  voiceIsDefault?: boolean;
 }
 
 export interface TextToSpeechOptions {
@@ -26,7 +32,7 @@ export interface TextToSpeechOptions {
    * Receives the synthesis usage (with `cost` when the model has pricing) after a
    * successful request.
    */
-  onUsage?: (usage: ModelUsage) => void | Promise<void>;
+  onUsage?: OnUsageCallback;
   pricingContext?: ModelPricingContext;
   signal?: AbortSignal;
   /**

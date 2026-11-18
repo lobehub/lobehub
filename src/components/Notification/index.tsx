@@ -77,7 +77,7 @@ const Notification = memo<NotificationProps>(
         <Flexbox
           height={height}
           width={mobile ? 'calc(100% - 16px)' : width}
-          {...sx([styles.container, mobile && styles.mobileContainer], className)}
+          {...sx(styles.container, mobile && styles.mobileContainer, className)}
           {...rest}
         >
           {showCloseIcon && (
@@ -92,7 +92,8 @@ const Notification = memo<NotificationProps>(
             gap={16}
             padding={'20px 20px 16px'}
             {...sx(
-              [styles.wrapper, isDarkMode ? styles.wrapperDark : styles.wrapperLight],
+              styles.wrapper,
+              isDarkMode ? styles.wrapperDark : styles.wrapperLight,
               wrapperClassName,
             )}
             {...restWrapper}

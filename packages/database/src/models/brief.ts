@@ -6,6 +6,7 @@ import type { BriefItem, NewBrief } from '../schemas/task';
 import { briefs, tasks } from '../schemas/task';
 import type { LobeChatDatabase } from '../type';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
+import { notTrashed } from '../utils/softDelete';
 import { buildWorkspacePayload } from '../utils/workspace';
 
 export interface UnresolvedBriefRow {
@@ -110,6 +111,9 @@ export class BriefModel {
           this.ownership(),
           isNull(briefs.resolvedAt),
           notInArray(briefs.type, HOME_FEED_EXCLUDED_BRIEF_TYPES),
+          // Briefs hide with their task while it sits in the recycle bin
+          // (a brief without a task joins NULL, which passes).
+          notTrashed(tasks.isDeleted),
         ),
       )
       .orderBy(
@@ -152,6 +156,7 @@ export class BriefModel {
         and(
           this.ownership(),
           inArray(briefs.type, NEWS_BRIEF_TYPES),
+          notTrashed(tasks.isDeleted),
           gte(briefs.createdAt, startAt),
           lt(briefs.createdAt, endAt),
         ),

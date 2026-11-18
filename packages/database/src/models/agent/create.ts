@@ -30,7 +30,7 @@ export const create = async (
   );
 
   await ctx.assertWorkspaceDeviceBinding(ctx.workspaceId ?? null, agencyConfig);
-  await ctx.assertFixedExecutionTarget(ctx.workspaceId ?? null, agencyConfig);
+  await ctx.assertFixedExecutionTarget(ctx.workspaceId ?? null, agencyConfig, config.visibility);
 
   const [result] = await ctx.db
     .insert(agents)
@@ -73,7 +73,11 @@ export const batchCreate = async (
     (config) =>
       Promise.all([
         ctx.assertWorkspaceDeviceBinding(ctx.workspaceId ?? null, config.agencyConfig),
-        ctx.assertFixedExecutionTarget(ctx.workspaceId ?? null, config.agencyConfig),
+        ctx.assertFixedExecutionTarget(
+          ctx.workspaceId ?? null,
+          config.agencyConfig,
+          config.visibility,
+        ),
       ]),
     { concurrency: 5 },
   );
@@ -147,7 +151,9 @@ export const duplicate = async (
           openingMessage: sourceAgent.openingMessage,
           openingQuestions: sourceAgent.openingQuestions,
           params: sourceAgent.params,
-          pinned: sourceAgent.pinned,
+          // In a workspace a public row's `pinned` is the owner/admin team pin, so a
+          // copy never inherits it — copying is not a way to create team pins.
+          pinned: ctx.workspaceId ? false : sourceAgent.pinned,
           // Config
           plugins: sourceAgent.plugins,
           provider: sourceAgent.provider,

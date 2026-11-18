@@ -391,6 +391,24 @@ const Home = memo(() => {
     [handleInputValueChange],
   );
 
+  // FloatingPanel portals to the app element, so where this sits in the tree
+  // doesn't affect its viewport-anchored position. Mounted in both layouts: the
+  // team board opens runs here even when the personal page is minimal.
+  const drawers = (
+    <>
+      {drawerMounted && (
+        <Suspense fallback={null}>
+          <TopicChatDrawer />
+        </Suspense>
+      )}
+      {acceptanceDrawerMounted && (
+        <Suspense fallback={null}>
+          <AcceptancePortalDrawer />
+        </Suspense>
+      )}
+    </>
+  );
+
   if (minimal)
     return (
       <Flexbox className={styles.minimal} gap={MINIMAL_STACK_GAP}>
@@ -403,6 +421,7 @@ const Home = memo(() => {
             onModeChange={setMode}
           />
         </div>
+        {drawers}
       </Flexbox>
     );
 
@@ -467,18 +486,7 @@ const Home = memo(() => {
         </aside>
       )}
 
-      {/* FloatingPanel portals to the app element, so where this sits in the
-          tree doesn't affect its viewport-anchored position. */}
-      {drawerMounted && (
-        <Suspense fallback={null}>
-          <TopicChatDrawer />
-        </Suspense>
-      )}
-      {acceptanceDrawerMounted && (
-        <Suspense fallback={null}>
-          <AcceptancePortalDrawer />
-        </Suspense>
-      )}
+      {drawers}
     </Flexbox>
   );
 });

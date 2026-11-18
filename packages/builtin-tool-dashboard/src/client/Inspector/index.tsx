@@ -1,7 +1,9 @@
 'use client';
 
 import type { BuiltinInspector, BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,33 +22,33 @@ import type {
 } from '../../types';
 import { DashboardApiName, DashboardIdentifier } from '../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    overflow: hidden;
-    flex-shrink: 1;
-
-    min-width: 0;
-    margin-inline-start: 6px;
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  failed: css`
-    color: ${cssVar.colorError};
-    background: ${cssVar.colorErrorBg};
-  `,
-  succeeded: css`
-    color: ${cssVar.colorSuccess};
-    background: ${cssVar.colorSuccessBg};
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    overflow: 'hidden',
+    flexShrink: 1,
+    minWidth: '0',
+    marginInlineStart: '6px',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  failed: {
+    color: cssVar.colorError,
+    backgroundColor: cssVar.colorErrorBg,
+    backgroundImage: 'none',
+  },
+  succeeded: {
+    color: cssVar.colorSuccess,
+    backgroundColor: cssVar.colorSuccessBg,
+    backgroundImage: 'none',
+  },
+});
 
 type Props = BuiltinInspectorProps<Record<string, any>, any>;
 
@@ -80,7 +82,7 @@ const useChip = (apiName: DashboardApiNameType, props: Props): ReactNode => {
       if (!state) return undefined;
       return (
         <span
-          className={cx(
+          {...stylex.props(
             styles.chip,
             state.status === 'succeeded' || state.status === 'partial'
               ? styles.succeeded
@@ -126,7 +128,8 @@ const createInspector = (apiName: DashboardApiNameType) => {
         >
           {t(`builtins.${DashboardIdentifier}.apiName.${apiName}`)}
         </span>
-        {chip && (typeof chip === 'string' ? <span className={styles.chip}>{chip}</span> : chip)}
+        {chip &&
+          (typeof chip === 'string' ? <span {...stylex.props(styles.chip)}>{chip}</span> : chip)}
       </div>
     );
   });

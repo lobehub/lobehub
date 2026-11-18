@@ -148,7 +148,10 @@ describe('OIDC protocol endpoints', () => {
     '/oidc/.well-known/openid-configuration',
     '/oidc/jwks',
     '/oidc/me',
-    '/oidc/review/callback?error=invalid_target&state=s',
+    '/oidc/acceptance/callback?error=invalid_target&state=s',
+    '/oauth/connector/client-metadata.json',
+    '/oidc/token/revocation',
+    '/oidc/token/introspection',
   ])('serves %s without sending an unauthenticated client to sign-in', async (path) => {
     const { getSession, response } = await callMiddleware(path);
 

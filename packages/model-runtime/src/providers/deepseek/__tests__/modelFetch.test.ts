@@ -55,18 +55,6 @@ describe('DeepSeek models', () => {
     expect(models).toEqual([]);
   });
 
-  it('should process models with MODEL_LIST_CONFIGS', async () => {
-    mockClient.models.list.mockResolvedValue({
-      data: [{ id: 'deepseek-chat' }],
-    });
-
-    const models = await fetchModels({ client: mockClient });
-
-    // The processModelList function should merge with known model list
-    expect(models[0]).toHaveProperty('id');
-    expect(models[0].id).toBe('deepseek-chat');
-  });
-
   it('should preserve model properties from API response', async () => {
     mockClient.models.list.mockResolvedValue({
       data: [

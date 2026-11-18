@@ -42,6 +42,26 @@ vi.mock('@/utils/uuid', () => ({
   uuid: () => 'mock-uuid-123',
 }));
 
+const createMessageData = (count: number) => ({
+  messages: Array.from({ length: count }).fill({ id: '1', content: 'test' }),
+  version: 1,
+});
+
+const createUploadResult = () => ({
+  success: true as const,
+  data: {
+    path: 'import_config/mock-uuid-123.json',
+    filename: 'mock-uuid-123.json',
+    dirname: 'import_config',
+    date: '2024-01-01',
+  },
+});
+
+const createImportResult = <T extends Record<string, unknown>>(results: T) => ({
+  results,
+  success: true as const,
+});
+
 describe('ImportService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -78,15 +98,12 @@ describe('ImportService', () => {
           version: 1,
         };
 
-        const mockResult = {
-          results: {
-            messages: { added: 100, errors: 0, skips: 0 },
-            sessionGroups: { added: 50, errors: 0, skips: 0 },
-            sessions: { added: 100, errors: 0, skips: 0 },
-            topics: { added: 100, errors: 0, skips: 0 },
-          },
-          success: true as const,
-        };
+        const mockResult = createImportResult({
+          messages: { added: 100, errors: 0, skips: 0 },
+          sessionGroups: { added: 50, errors: 0, skips: 0 },
+          sessions: { added: 100, errors: 0, skips: 0 },
+          topics: { added: 100, errors: 0, skips: 0 },
+        });
 
         vi.mocked(lambdaClient.importer.importByPost.mutate).mockResolvedValue(mockResult);
 
@@ -106,10 +123,7 @@ describe('ImportService', () => {
       });
 
       it('should handle error during small dataset import', async () => {
-        const mockData = {
-          messages: Array.from({ length: 100 }).fill({ id: '1', content: 'test' }),
-          version: 1,
-        };
+        const mockData = createMessageData(100);
 
         const mockError = {
           data: {
@@ -142,17 +156,11 @@ describe('ImportService', () => {
       });
 
       it('should calculate duration correctly', async () => {
-        const mockData = {
-          messages: Array.from({ length: 10 }).fill({ id: '1', content: 'test' }),
-          version: 1,
-        };
+        const mockData = createMessageData(10);
 
-        const mockResult = {
-          results: {
-            messages: { added: 10, errors: 0, skips: 0 },
-          },
-          success: true as const,
-        };
+        const mockResult = createImportResult({
+          messages: { added: 10, errors: 0, skips: 0 },
+        });
 
         let callCount = 0;
         vi.spyOn(Date, 'now').mockImplementation(() => {
@@ -174,27 +182,13 @@ describe('ImportService', () => {
 
     describe('large dataset (>= 500 items)', () => {
       it('should upload to S3 and import via file when total items >= 500', async () => {
-        const mockData = {
-          messages: Array.from({ length: 500 }).fill({ id: '1', content: 'test' }),
-          version: 1,
-        };
+        const mockData = createMessageData(500);
 
-        const mockUploadResult = {
-          success: true as const,
-          data: {
-            path: 'import_config/mock-uuid-123.json',
-            filename: 'mock-uuid-123.json',
-            dirname: 'import_config',
-            date: '2024-01-01',
-          },
-        };
+        const mockUploadResult = createUploadResult();
 
-        const mockImportResult = {
-          results: {
-            messages: { added: 500, errors: 0, skips: 0 },
-          },
-          success: true as const,
-        };
+        const mockImportResult = createImportResult({
+          messages: { added: 500, errors: 0, skips: 0 },
+        });
 
         vi.mocked(uploadService.uploadDataToS3).mockResolvedValue(mockUploadResult as any);
         vi.mocked(lambdaClient.importer.importByFile.mutate).mockResolvedValue(mockImportResult);
@@ -225,10 +219,7 @@ describe('ImportService', () => {
       });
 
       it('should handle upload error', async () => {
-        const mockData = {
-          messages: Array.from({ length: 500 }).fill({ id: '1', content: 'test' }),
-          version: 1,
-        };
+        const mockData = createMessageData(500);
 
         vi.mocked(uploadService.uploadDataToS3).mockRejectedValue(new Error('S3 upload failed'));
 
@@ -244,20 +235,9 @@ describe('ImportService', () => {
       });
 
       it('should handle import error after successful upload', async () => {
-        const mockData = {
-          messages: Array.from({ length: 500 }).fill({ id: '1', content: 'test' }),
-          version: 1,
-        };
+        const mockData = createMessageData(500);
 
-        const mockUploadResult = {
-          success: true as const,
-          data: {
-            path: 'import_config/mock-uuid-123.json',
-            filename: 'mock-uuid-123.json',
-            dirname: 'import_config',
-            date: '2024-01-01',
-          },
-        };
+        const mockUploadResult = createUploadResult();
 
         const mockError = {
           data: {
@@ -288,27 +268,13 @@ describe('ImportService', () => {
       });
 
       it('should trigger file upload progress callback', async () => {
-        const mockData = {
-          messages: Array.from({ length: 500 }).fill({ id: '1', content: 'test' }),
-          version: 1,
-        };
+        const mockData = createMessageData(500);
 
-        const mockUploadResult = {
-          success: true as const,
-          data: {
-            path: 'import_config/mock-uuid-123.json',
-            filename: 'mock-uuid-123.json',
-            dirname: 'import_config',
-            date: '2024-01-01',
-          },
-        };
+        const mockUploadResult = createUploadResult();
 
-        const mockImportResult = {
-          results: {
-            messages: { added: 500, errors: 0, skips: 0 },
-          },
-          success: true as const,
-        };
+        const mockImportResult = createImportResult({
+          messages: { added: 500, errors: 0, skips: 0 },
+        });
 
         vi.mocked(uploadService.uploadDataToS3).mockImplementation(async (_data, options: any) => {
           // Simulate progress callback
@@ -341,17 +307,11 @@ describe('ImportService', () => {
 
     describe('edge cases', () => {
       it('should handle data with exactly 499 items via POST', async () => {
-        const mockData = {
-          messages: Array.from({ length: 499 }).fill({ id: '1', content: 'test' }),
-          version: 1,
-        };
+        const mockData = createMessageData(499);
 
-        const mockResult = {
-          results: {
-            messages: { added: 499, errors: 0, skips: 0 },
-          },
-          success: true as const,
-        };
+        const mockResult = createImportResult({
+          messages: { added: 499, errors: 0, skips: 0 },
+        });
 
         vi.mocked(lambdaClient.importer.importByPost.mutate).mockResolvedValue(mockResult);
 
@@ -362,27 +322,13 @@ describe('ImportService', () => {
       });
 
       it('should handle data with exactly 500 items via file upload', async () => {
-        const mockData = {
-          messages: Array.from({ length: 500 }).fill({ id: '1', content: 'test' }),
-          version: 1,
-        };
+        const mockData = createMessageData(500);
 
-        const mockUploadResult = {
-          success: true as const,
-          data: {
-            path: 'import_config/mock-uuid-123.json',
-            filename: 'mock-uuid-123.json',
-            dirname: 'import_config',
-            date: '2024-01-01',
-          },
-        };
+        const mockUploadResult = createUploadResult();
 
-        const mockImportResult = {
-          results: {
-            messages: { added: 500, errors: 0, skips: 0 },
-          },
-          success: true as const,
-        };
+        const mockImportResult = createImportResult({
+          messages: { added: 500, errors: 0, skips: 0 },
+        });
 
         vi.mocked(uploadService.uploadDataToS3).mockResolvedValue(mockUploadResult as any);
         vi.mocked(lambdaClient.importer.importByFile.mutate).mockResolvedValue(mockImportResult);
@@ -398,10 +344,7 @@ describe('ImportService', () => {
           version: 1,
         };
 
-        const mockResult = {
-          results: {},
-          success: true as const,
-        };
+        const mockResult = createImportResult({});
 
         vi.mocked(lambdaClient.importer.importByPost.mutate).mockResolvedValue(mockResult);
 
@@ -411,17 +354,11 @@ describe('ImportService', () => {
       });
 
       it('should work without callbacks', async () => {
-        const mockData = {
-          messages: Array.from({ length: 10 }).fill({ id: '1', content: 'test' }),
-          version: 1,
-        };
+        const mockData = createMessageData(10);
 
-        const mockResult = {
-          results: {
-            messages: { added: 10, errors: 0, skips: 0 },
-          },
-          success: true as const,
-        };
+        const mockResult = createImportResult({
+          messages: { added: 10, errors: 0, skips: 0 },
+        });
 
         vi.mocked(lambdaClient.importer.importByPost.mutate).mockResolvedValue(mockResult);
 
@@ -442,13 +379,10 @@ describe('ImportService', () => {
           schemaHash: 'hash123',
         };
 
-        const mockResult = {
-          results: {
-            users: { added: 100, errors: 0, skips: 0 },
-            sessions: { added: 200, errors: 0, skips: 0 },
-          },
-          success: true as const,
-        };
+        const mockResult = createImportResult({
+          users: { added: 100, errors: 0, skips: 0 },
+          sessions: { added: 200, errors: 0, skips: 0 },
+        });
 
         vi.mocked(lambdaClient.importer.importPgByPost.mutate).mockResolvedValue(mockResult);
 
@@ -512,22 +446,11 @@ describe('ImportService', () => {
           schemaHash: 'hash123',
         };
 
-        const mockUploadResult = {
-          success: true as const,
-          data: {
-            path: 'import_config/mock-uuid-123.json',
-            filename: 'mock-uuid-123.json',
-            dirname: 'import_config',
-            date: '2024-01-01',
-          },
-        };
+        const mockUploadResult = createUploadResult();
 
-        const mockImportResult = {
-          results: {
-            messages: { added: 500, errors: 0, skips: 0 },
-          },
-          success: true as const,
-        };
+        const mockImportResult = createImportResult({
+          messages: { added: 500, errors: 0, skips: 0 },
+        });
 
         vi.mocked(uploadService.uploadDataToS3).mockResolvedValue(mockUploadResult as any);
         vi.mocked(lambdaClient.importer.importByFile.mutate).mockResolvedValue(mockImportResult);
@@ -562,24 +485,13 @@ describe('ImportService', () => {
           schemaHash: 'hash123',
         };
 
-        const mockUploadResult = {
-          success: true as const,
-          data: {
-            path: 'import_config/mock-uuid-123.json',
-            filename: 'mock-uuid-123.json',
-            dirname: 'import_config',
-            date: '2024-01-01',
-          },
-        };
+        const mockUploadResult = createUploadResult();
 
-        const mockImportResult = {
-          results: {
-            users: { added: 100, errors: 0, skips: 0 },
-            messages: { added: 300, errors: 0, skips: 0 },
-            sessions: { added: 150, errors: 0, skips: 0 },
-          },
-          success: true as const,
-        };
+        const mockImportResult = createImportResult({
+          users: { added: 100, errors: 0, skips: 0 },
+          messages: { added: 300, errors: 0, skips: 0 },
+          sessions: { added: 150, errors: 0, skips: 0 },
+        });
 
         vi.mocked(uploadService.uploadDataToS3).mockResolvedValue(mockUploadResult as any);
         vi.mocked(lambdaClient.importer.importByFile.mutate).mockResolvedValue(mockImportResult);
@@ -600,12 +512,9 @@ describe('ImportService', () => {
           schemaHash: 'hash123',
         };
 
-        const mockResult = {
-          results: {
-            users: { added: 10, errors: 0, skips: 0 },
-          },
-          success: true as const,
-        };
+        const mockResult = createImportResult({
+          users: { added: 10, errors: 0, skips: 0 },
+        });
 
         vi.mocked(lambdaClient.importer.importPgByPost.mutate).mockResolvedValue(mockResult);
 
@@ -619,10 +528,7 @@ describe('ImportService', () => {
           schemaHash: 'hash123',
         };
 
-        const mockResult = {
-          results: {},
-          success: true as const,
-        };
+        const mockResult = createImportResult({});
 
         vi.mocked(lambdaClient.importer.importPgByPost.mutate).mockResolvedValue(mockResult);
 
@@ -642,10 +548,7 @@ describe('ImportService', () => {
           schemaHash: 'hash123',
         };
 
-        const mockResult = {
-          results: {},
-          success: true as const,
-        };
+        const mockResult = createImportResult({});
 
         vi.mocked(lambdaClient.importer.importPgByPost.mutate).mockResolvedValue(mockResult);
 

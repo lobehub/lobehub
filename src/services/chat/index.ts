@@ -1,6 +1,7 @@
 import { stripAssistantReasoningForReplay } from '@lobechat/agent-runtime';
 import {
   REQUEST_AGENT_ID_HEADER,
+  REQUEST_OPERATION_ID_HEADER,
   REQUEST_TOPIC_ID_HEADER,
   REQUEST_TRIGGER_HEADER,
 } from '@lobechat/const';
@@ -12,6 +13,7 @@ import { AgentRuntimeError } from '@lobechat/model-runtime/utils/createError';
 import {
   ChatErrorType,
   type ChatMessageError,
+  getAutoPluginIds,
   getDisabledPluginIds,
   type RequestTrigger,
   type RuntimeAdditionalContextFragment,
@@ -26,6 +28,7 @@ import { ModelProvider } from 'model-bank/modelProvider';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { getSearchConfig } from '@/helpers/getSearchConfig';
+import { resolveAgentConnectorActivation } from '@/helpers/toolEngineering/connectorActivation';
 import { oneShotRelay } from '@/services/llmRelay';
 import { getAgentStoreState } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
@@ -228,7 +231,16 @@ class ChatService {
       agentId: targetAgentId,
       // `agentConfig.plugins` is the raw (pre-filter) field — `plugins` below
       // is already pinned-only (resolved upstream in agentConfigResolver).
-      disabledPluginIds: getDisabledPluginIds(agentConfig.plugins),
+      autoSkillIds: getAutoPluginIds(agentConfig.plugins),
+      // A connector the agent has not turned on is off for it, so it leaves the
+      // discovery list too; one this turn already enabled (an @-mention) stays.
+      disabledPluginIds: [
+        ...getDisabledPluginIds(agentConfig.plugins),
+        ...resolveAgentConnectorActivation(
+          { chatConfig, plugins: agentConfig.plugins },
+          enabledToolIds,
+        ).offIds,
+      ],
       // The stored mode passes through: a model without function calling is
       // not demoted to chat mode here, matching the server runtime.
       enableAgentMode: modelParams.enableAgentMode,
@@ -310,7 +322,7 @@ class ChatService {
   mapChatTrace = (trace?: TracePayload): TracePayload => this.mapTrace(trace, TraceTagMap.Chat);
 
   getChatCompletion = async (params: Partial<ChatStreamPayload>, options?: FetchOptions) => {
-    const { agentId, metadata, signal, responseAnimation, topicId } = options ?? {};
+    const { agentId, metadata, operationId, signal, responseAnimation, topicId } = options ?? {};
     const requestTrigger = metadata?.trigger;
 
     const { provider = ModelProvider.OpenAI, ...res } = params;
@@ -421,6 +433,7 @@ class ChatService {
         ...(agentId && { [REQUEST_AGENT_ID_HEADER]: agentId }),
         ...(requestTrigger && { [REQUEST_TRIGGER_HEADER]: requestTrigger }),
         ...(topicId && { [REQUEST_TOPIC_ID_HEADER]: topicId }),
+        ...(operationId && { [REQUEST_OPERATION_ID_HEADER]: operationId }),
       },
       provider,
     });

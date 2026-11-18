@@ -1,10 +1,12 @@
 import { type ReactNode, useSyncExternalStore } from 'react';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import {
   getNavPanelRegistrySnapshot,
   subscribeNavPanelRegistry,
 } from '@/features/NavPanel/registry';
-import { useActiveNavKey } from '@/features/NavPanel/useActiveNavKey';
+import { resolveNavPanelKey } from '@/features/NavPanel/routeKey';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
 
 /**
  * The sidebar the active route registered through `NavPanelPortal`, for the
@@ -12,7 +14,8 @@ import { useActiveNavKey } from '@/features/NavPanel/useActiveNavKey';
  * as its home page, so it never opens as a drawer.
  */
 export const useNavPanelDrawerContent = (): ReactNode | undefined => {
-  const navKey = useActiveNavKey();
+  const { pathname } = useActiveLocation();
+  const navKey = resolveNavPanelKey(pathname, useActiveWorkspaceSlug());
 
   const getContent = () =>
     navKey === 'home' ? undefined : getNavPanelRegistrySnapshot().get(navKey)?.node;

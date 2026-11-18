@@ -7,6 +7,7 @@ import { GoalGraphModel } from '@/database/models/goalGraph';
 import { GoalRepository } from '@/database/repositories/goal';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { assertGoalNotArchived } from './archiveGuard';
 import { GoalManagerService } from './manager';
 import {
   materializeRolloutBatch,
@@ -19,6 +20,8 @@ export interface StartGoalRolloutInput {
   probeNodeIds: string[];
   /** The one procedure every unit follows; the batch's Template. */
   recipe: string;
+  /** A short kebab-case name for the plan skill, saying what the recipe does. */
+  skillName?: string;
   /** Overrides the goal's own `config.rollout.trigger`; `off` is not a way to start a batch. */
   trigger?: 'canary' | 'full';
   /** Seeds that become roster units; every other seed when omitted. Seeds left out stay ordinary tasks. */
@@ -123,6 +126,7 @@ export class GoalStartService {
       const goalModel = new GoalRepository(db, this.userId, this.workspaceId);
       const goal = await goalModel.lockById(goalId);
       if (!goal) return refuse('Goal not found');
+      assertGoalNotArchived(goal);
       if (goal.status !== 'draft')
         refuse(`Goal is ${goal.status}; only a draft goal can be started`, 'CONFLICT');
 
@@ -296,6 +300,7 @@ export class GoalStartService {
       planSkillOwner: {
         db,
         goalTitle: goal.title,
+        skillName: rollout.skillName,
         userId: this.userId,
         workspaceId: this.workspaceId,
       },

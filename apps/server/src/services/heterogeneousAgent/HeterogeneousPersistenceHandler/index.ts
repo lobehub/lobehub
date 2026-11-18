@@ -11,6 +11,7 @@ import { createNanoId } from '@lobechat/utils';
 import debug from 'debug';
 
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
+import { consumeHeteroSteer } from '@/server/services/aiAgent/steerQueue/hetero';
 
 import { persistCodexTurnProvenance } from '../heteroProvenance';
 import { applyMainIntent, applySubagentIntent } from './applyIntents';
@@ -35,6 +36,15 @@ const generateThreadId = () => `thd_${createNanoId(16)()}`;
 /** A `newStep` carrying `externalSignal` opens a signal turn (a background task's wake-up). */
 const opensSignalTurn = (event: AgentStreamEvent): boolean =>
   event.type === 'stream_start' && !!event.data?.newStep && !!event.data?.externalSignal;
+
+/** A `user_message` replay from Claude Code (see `consumeSteer`). */
+const isSteerReplay = (
+  event: AgentStreamEvent,
+): event is AgentStreamEvent & { data: { uuid: string } } =>
+  event.type === 'step_complete' &&
+  event.data?.phase === 'user_message' &&
+  typeof event.data?.uuid === 'string' &&
+  getEventScope(event).kind === 'main';
 
 /** Subagent turns live in their thread; only main-agent step boundaries name a main assistant. */
 const isMainStreamStart = (event: AgentStreamEvent): boolean =>
@@ -156,9 +166,14 @@ export class HeterogeneousPersistenceHandler {
       // front would silently swallow event-level failures — the BatchIngester
       // would ack OK while DB state diverges from the renderer's view. Mark
       // only on success so a retry can complete the lost write.
+      const spineBefore = state.main.lastSpineMessageId;
       await this.handleEvent(state, event);
       if (isMainStreamStart(event)) {
         state.streamStartAssistantIds.set(key, state.main.currentAssistantId);
+        const steer = state.steerMessages.get(spineBefore);
+        if (steer && state.main.lastSpineMessageId !== spineBefore) {
+          state.streamStartParentMessages.set(key, steer);
+        }
       }
       state.processedKeys.add(key);
       state.lastStepIndex = Math.max(state.lastStepIndex, event.stepIndex);
@@ -197,16 +212,31 @@ export class HeterogeneousPersistenceHandler {
    * so without it a subscriber can only infer each step's row from where it
    * started. A reconnect starts from `runningOperation.assistantMessageId`,
    * the newest row, so its full replay wrote every earlier step onto that row.
+   *
+   * A `user_message` replay that delivered a steer carries that user message
+   * as `steerMessage`, so the client shows it as soon as Claude Code reads it
+   * instead of when its reply starts (the tray drops it at the same moment).
+   *
    * Without state (a retry on a cold replica) the event goes out unchanged
    * and the client falls back to its DB lookup.
    */
   publishData(operationId: string, event: AgentStreamEvent): AgentStreamEvent['data'] {
-    const assistantId = operationStates
-      .get(operationId)
-      ?.streamStartAssistantIds.get(eventKey(event));
+    const state = operationStates.get(operationId);
+    if (isSteerReplay(event)) {
+      const steerMessage = state?.steerMessages.get(event.data.uuid);
+      return steerMessage ? { ...event.data, steerMessage } : event.data;
+    }
+
+    const key = eventKey(event);
+    const assistantId = state?.streamStartAssistantIds.get(key);
     if (!assistantId) return event.data;
 
-    return { ...event.data, assistantMessage: { id: assistantId } };
+    const parentMessage = state?.streamStartParentMessages.get(key);
+    return {
+      ...event.data,
+      assistantMessage: { id: assistantId },
+      ...(parentMessage ? { parentMessage } : {}),
+    };
   }
 
   /** Latch an event as published so a batch retry skips its XADD. */
@@ -217,6 +247,7 @@ export class HeterogeneousPersistenceHandler {
     const key = eventKey(event);
     state.publishedKeys.add(key);
     state.streamStartAssistantIds.delete(key);
+    state.streamStartParentMessages.delete(key);
   }
 
   /**
@@ -316,7 +347,31 @@ export class HeterogeneousPersistenceHandler {
   // ─── Event dispatch ──────────────────────────────────────────────────────
 
   private async handleEvent(state: OperationState, event: AgentStreamEvent): Promise<void> {
+    if (isSteerReplay(event)) {
+      await this.consumeSteer(state, event.data.uuid);
+      return;
+    }
     await this.reduceAndApply(state, event);
+  }
+
+  /**
+   * Claude Code picked up a message the producer typed into its live session.
+   * Write it as a steer user message on the run's spine; the next turn opens
+   * under it. A replay that is not a delivery (the run's own prompt) is ignored.
+   */
+  private async consumeSteer(state: OperationState, messageId: string): Promise<void> {
+    const steer = await consumeHeteroSteer(this.deps.messageModel, {
+      agentId: state.agentId,
+      messageId,
+      operationId: state.operationId,
+      parentId: state.main.lastSpineMessageId,
+      threadId: state.threadId,
+      topicId: state.topicId,
+    });
+    if (!steer) return;
+
+    state.main = { ...state.main, lastSpineMessageId: steer.id };
+    state.steerMessages.set(steer.id, { ...steer, agentId: state.agentId ?? null, role: 'user' });
   }
 
   // ─── Main-agent reducer interpreter ──────────────────────────────────────

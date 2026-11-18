@@ -99,8 +99,7 @@ export const searchRouter = router({
         includeMarketplace: z.boolean().optional(),
         /**
          * Whether an untyped search also returns goals (default false). The
-         * command menu has no goal rendering yet; the CLI opts in. `type:
-         * 'goal'` always searches goals.
+         * command menu and the CLI opt in. `type: 'goal'` always searches goals.
          */
         includeGoals: z.boolean().optional(),
         limitPerType: z.number().optional(),

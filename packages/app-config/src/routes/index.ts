@@ -2,6 +2,7 @@ import { type LucideIcon } from 'lucide-react';
 import {
   BrainCircuit,
   FilePenIcon,
+  FolderKanbanIcon,
   Image,
   LayoutDashboardIcon,
   LibraryBigIcon,
@@ -108,6 +109,15 @@ export const NAVIGATION_ROUTES: NavigationRoute[] = [
     keywordsKey: 'cmdk.keywords.tasks',
     path: '/tasks',
     pathPrefix: '/tasks',
+  },
+  {
+    cmdkKey: 'tab.projects',
+    electronKey: 'navigation.projects',
+    icon: FolderKanbanIcon,
+    id: 'project',
+    keywords: ['projects', 'workspace', 'team'],
+    path: '/projects',
+    pathPrefix: '/project',
   },
   {
     cmdkKey: 'tab.goals',

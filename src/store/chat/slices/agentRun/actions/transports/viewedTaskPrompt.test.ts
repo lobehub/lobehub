@@ -38,6 +38,32 @@ describe('buildViewedTaskPrompt', () => {
   });
 });
 
+describe('buildViewedTaskPrompt for the task list', () => {
+  const listContext = { viewedTask: { type: 'list' as const } };
+
+  const viewList = (filtered: boolean) =>
+    useTaskStore.setState({
+      activeTaskListFiltered: filtered,
+      activeTaskListKey: 'list',
+      taskListMap: {
+        list: {
+          items: [{ identifier: 'T-1', name: 'Fix menu', priority: 2, status: 'running' }],
+          total: 1,
+        },
+      } as any,
+    });
+
+  it('tells the agent a filtered list is not every task', () => {
+    viewList(true);
+    expect(buildViewedTaskPrompt(listContext)).toContain('with a filter applied');
+  });
+
+  it('keeps the plain list hint without a filter', () => {
+    viewList(false);
+    expect(buildViewedTaskPrompt(listContext)).toContain('Do NOT call listTasks');
+  });
+});
+
 describe('withHeteroContext', () => {
   beforeEach(() => {
     useTaskStore.setState({ taskDetailMap: { 'T-858': taskDetail } });

@@ -77,7 +77,8 @@ export interface ReapStaleOperationsResult {
    * run was never asked to stop. Composer sends supersede the previous run, so
    * such an overlap means a start path slipped past that and both runs are
    * spending on the same conversation. An older run that already carries the
-   * interrupt sentinel is only finishing its current step and is not counted.
+   * interrupt sentinel is only finishing its current step and is not counted,
+   * nor is a run whose lease froze past the hetero silence window (dead).
    * Detection only: nothing is interrupted.
    */
   concurrentForegroundTopics: number;
@@ -175,7 +176,8 @@ export class StaleOperationReaper {
     }
 
     try {
-      result.concurrentForegroundTopics = await this.reportConcurrentForegroundRuns();
+      result.concurrentForegroundTopics =
+        await this.reportConcurrentForegroundRuns(heteroStaleBefore);
     } catch (e) {
       log('concurrent foreground patrol failed: %O', e);
     }
@@ -188,8 +190,15 @@ export class StaleOperationReaper {
    * Warn about topics where more than one foreground run is live. Top-level
    * runs only: sub-agent children (`parentOperationId`) and thread runs
    * (`threadId`) legitimately run beside the topic's main run.
+   *
+   * Only runs whose lease moved within the hetero silence window count. A
+   * `running` row frozen longer than that is dead, not spending, and the
+   * recovery above never settles a dead row past its lookback: unbounded, the
+   * same months-old topics were re-reported on every once-a-minute sweep and
+   * made up the bulk of production warn logs. Every live run refreshes its
+   * lease well inside this window (90s heartbeat, or a hetero ingest batch).
    */
-  private async reportConcurrentForegroundRuns(): Promise<number> {
+  private async reportConcurrentForegroundRuns(liveSince: Date): Promise<number> {
     const rows = await this.db
       .select({
         operationIds: sql<
@@ -204,6 +213,7 @@ export class StaleOperationReaper {
           isNotNull(agentOperations.topicId),
           isNull(agentOperations.threadId),
           isNull(agentOperations.parentOperationId),
+          gte(agentOperations.updatedAt, liveSince),
           or(
             isNull(agentOperations.trigger),
             notInArray(agentOperations.trigger, [...BACKGROUND_OPERATION_TRIGGERS]),

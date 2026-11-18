@@ -94,18 +94,6 @@ describe('BaseProvider', () => {
     },
   });
 
-  describe('constructor', () => {
-    it('should initialize with options', () => {
-      const provider = new TestProvider({ debug: true });
-      expect(provider.name).toBe('TestProvider');
-    });
-
-    it('should initialize without options', () => {
-      const provider = new TestProvider();
-      expect(provider.name).toBe('TestProvider');
-    });
-  });
-
   describe('buildContext', () => {
     it('should return null by default', async () => {
       const provider = new TestProvider();

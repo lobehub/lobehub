@@ -5,6 +5,7 @@ import {
   VERIFICATION_OUT_OF_CREDITS_ERROR,
   VERIFICATION_UNJUDGEABLE_ERROR,
 } from '@lobechat/const/goal';
+import { isCheckWaivedByDispute } from '@lobechat/const/verify';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -80,13 +81,14 @@ const MAX_REASON_CHARS = 300;
 export const describeVerifyFailure = (
   results: Pick<
     VerifyCheckResultItem,
-    'checkItemTitle' | 'required' | 'status' | 'suggestion' | 'toulmin' | 'verdict'
+    'checkItemTitle' | 'metadata' | 'required' | 'status' | 'suggestion' | 'toulmin' | 'verdict'
   >[],
   reviewFeedback?: string,
 ): string => {
   const failed = results.filter(
     (r) =>
       r.status !== 'errored' &&
+      !isCheckWaivedByDispute(r.metadata) &&
       (r.status === 'failed' || r.verdict === 'failed' || r.verdict === 'uncertain'),
   );
   // Only required checks gate the run. Optional failures stay out entirely —
@@ -365,7 +367,7 @@ export const driveTaskFromVerify = async (
               goalReview?.status === 'rejected' ? goalReview.feedback : undefined,
             )
           : outOfCredits
-            ? 'Verification could not run because the account is out of credits for the verifier model; the delivery was not evaluated. Top up credits, then retry.'
+            ? 'Verification could not run because the account is out of balance for the verifier model; the delivery was not evaluated. Top up, then retry.'
             : outcome === 'errored' || outcome === 'review_errored'
               ? 'Verification could not be completed due to an internal error; the delivery was not evaluated. Please retry or review it manually.'
               : outcome === 'unjudgeable'

@@ -35,6 +35,7 @@ import { useIsHtmlPage } from '../HtmlPageBody';
 import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
 import { selectors, usePageEditorStore } from '../store';
 import Breadcrumb from './Breadcrumb';
+import PresenceStack from './PresenceStack';
 import { useMenu } from './useMenu';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -116,6 +117,7 @@ const Header = memo(() => {
       right={
         <>
           <EditingIndicator />
+          <PresenceStack />
           {documentId && <ShareButton documentId={documentId} />}
           {/* Three-dot menu */}
           <DropdownMenu

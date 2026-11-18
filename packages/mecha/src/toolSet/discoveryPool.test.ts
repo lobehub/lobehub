@@ -6,7 +6,8 @@ import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
-import type { LobeToolManifest } from '@lobechat/context-engine';
+import { builtinTools } from '@lobechat/builtin-tools';
+import { type LobeToolManifest, ToolResolver } from '@lobechat/context-engine';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -67,6 +68,24 @@ describe('resolveInvocationToolIds', () => {
 });
 
 describe('resolveDiscoveryPool', () => {
+  it.each([
+    ['lobe-agent', 'createTodos'],
+    ['lobe-skill-store', 'searchSkill'],
+  ])('makes %s discoverable and exposes its functions on the step after activation', (id, api) => {
+    const pool = resolveDiscoveryPool(request({ builtinTools, enabledManifests: new Map() }));
+    const operation = { ...pool, enabledToolIds: [], tools: [] };
+    const resolver = new ToolResolver();
+    const cold = resolver.resolve(operation, { activatedTools: [] });
+    const manifest = pool.manifestMap[id];
+
+    expect(manifest.meta?.description).toBeTruthy();
+    expect(cold.promptManifestMap[id]).toBeUndefined();
+    const next = resolver.resolve(operation, {
+      activatedTools: [{ id, manifest, source: 'discovery' }],
+    });
+    expect(next.tools.map((tool) => tool.function.name)).toContain(`${id}____${api}`);
+  });
+
   it('seeds with the enabled manifests and appends discoverable builtins only', () => {
     const pool = resolveDiscoveryPool(request());
     expect(Object.keys(pool.manifestMap)).toEqual([

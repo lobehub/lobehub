@@ -6,6 +6,7 @@ import type { AgentOperationError } from '../../schemas/agentOperations';
 import { agentOperations } from '../../schemas/agentOperations';
 import { tasks, taskTopics } from '../../schemas/task';
 import type { LobeChatDatabase } from '../../type';
+import { notTrashed } from '../../utils/softDelete';
 
 /**
  * Operation outcomes the orphaned-run reconciliation settles.
@@ -47,6 +48,8 @@ export const getScheduledTasks = async (db: LobeChatDatabase): Promise<TaskItem[
       and(
         eq(tasks.automationMode, 'schedule'),
         isNotNull(tasks.schedulePattern),
+        // A task in the recycle bin keeps its status; its schedule must not fire.
+        notTrashed(tasks.isDeleted),
         notInArray(tasks.status, ['canceled', 'completed', 'failed', 'paused', 'running']),
       ),
     );
@@ -92,6 +95,7 @@ export const findStuckTasks = async (db: LobeChatDatabase): Promise<TaskItem[]> 
     .where(
       and(
         eq(tasks.status, 'running'),
+        notTrashed(tasks.isDeleted),
         isNotNull(tasks.lastHeartbeatAt),
         isNotNull(tasks.heartbeatTimeout),
         sql`${tasks.lastHeartbeatAt} < now() - make_interval(secs => ${tasks.heartbeatTimeout})`,

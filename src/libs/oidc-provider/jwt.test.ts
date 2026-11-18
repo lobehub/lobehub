@@ -77,7 +77,7 @@ describe('acceptance review tokens', () => {
 
   it('are refused as an app session', async () => {
     jwtVerifyMock.mockResolvedValueOnce({
-      payload: { aud: REVIEW_AUD, client_id: 'lobehub-review', sub: 'user-1' },
+      payload: { aud: REVIEW_AUD, client_id: 'lobehub-acceptance', sub: 'user-1' },
     });
     const { validateOIDCJWT } = await import('./jwt');
     await expect(validateOIDCJWT('t')).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
@@ -85,10 +85,10 @@ describe('acceptance review tokens', () => {
 
   it('refuse anything else the review client was issued, such as its ID token', async () => {
     const { validateOIDCJWT } = await import('./jwt');
-    jwtVerifyMock.mockResolvedValueOnce({ payload: { aud: 'lobehub-review', sub: 'user-1' } });
+    jwtVerifyMock.mockResolvedValueOnce({ payload: { aud: 'lobehub-acceptance', sub: 'user-1' } });
     await expect(validateOIDCJWT('t')).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
     jwtVerifyMock.mockResolvedValueOnce({
-      payload: { aud: ['urn:lobehub:chat'], client_id: 'lobehub-review', sub: 'user-1' },
+      payload: { aud: ['urn:lobehub:chat'], client_id: 'lobehub-acceptance', sub: 'user-1' },
     });
     await expect(validateOIDCJWT('t')).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
   });
@@ -103,11 +103,17 @@ describe('acceptance review tokens', () => {
 
   it('are read back as the acceptance and user they were issued for', async () => {
     jwtVerifyMock.mockResolvedValueOnce({
-      payload: { aud: REVIEW_AUD, client_id: 'lobehub-review', exp: 1_800_000_000, sub: 'user-1' },
+      payload: {
+        aud: REVIEW_AUD,
+        client_id: 'lobehub-acceptance',
+        exp: 1_800_000_000,
+        sub: 'user-1',
+      },
     });
     const { verifyAcceptanceReviewJWT } = await import('./jwt');
     await expect(verifyAcceptanceReviewJWT('t')).resolves.toEqual({
       acceptanceId: '7f0c9a7e-0000-4000-8000-000000000001',
+      clientId: 'lobehub-acceptance',
       expiresAt: 1_800_000_000,
       userId: 'user-1',
     });

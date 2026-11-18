@@ -146,6 +146,7 @@ export const agentOperations = pgTable(
     index('agent_operations_parent_operation_id_idx').on(t.parentOperationId),
     index('agent_operations_status_idx').on(t.status),
     index('agent_operations_user_id_created_at_idx').on(t.userId, t.createdAt),
+    index('agent_operations_workspace_id_created_at_idx').on(t.workspaceId, t.createdAt),
     index('agent_operations_metadata_idx').using('gin', t.metadata),
   ],
 );

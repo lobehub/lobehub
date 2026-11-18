@@ -573,6 +573,7 @@ const createMessageTranscript = (set: StoreSetter<ChatStore>, get: () => ChatSto
     forgetClientRows,
     remapClientRows,
     headResolutions,
+    isUnconfirmedClientRow: (id: string) => unconfirmedClientIds.has(id),
     keyOf,
     pendingInterventions,
     /** The entry's current value, as the replica sees it. */

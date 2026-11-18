@@ -215,6 +215,19 @@ describe('parseTopicScheduledRun', () => {
     expect(parseTopicScheduledRun(run)).toEqual(run);
   });
 
+  it('preserves the operation reservation for a first send awaiting a worktree', () => {
+    const run = {
+      createdAt: legacy.createdAt,
+      kind: 'worktree_start',
+      operationId: 'operation-1',
+      runAt: legacy.createdAt,
+      updatedAt: legacy.updatedAt,
+      userMessageId: legacy.userMessageId,
+    };
+
+    expect(parseTopicScheduledRun(run)).toEqual(run);
+  });
+
   it('upgrades a legacy rate-limit payload, deriving runAt from the reset window', () => {
     // resetsAt is epoch SECONDS — the gate is the instant the window reopens.
     expect(parseTopicScheduledRun(legacy)).toMatchObject({

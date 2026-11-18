@@ -62,10 +62,9 @@ export const useAcceptanceListFilterMenu = ({
   // Projects load the first time the submenu opens — or right away when a
   // persisted project filter needs its name for the label.
   const [projectsRequested, setProjectsRequested] = useState(false);
-  const { data: projectData, error: projectError } = useAcceptanceProjectOptions(
+  const { error: projectError, projects } = useAcceptanceProjectOptions(
     !hostProjectId && (projectsRequested || typeof facets.projectId === 'string'),
   );
-  const projects = projectData?.data;
 
   const withValue = (title: string, value?: string) => (value ? `${title} · ${value}` : title);
 

@@ -9,7 +9,6 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { captureVisibleTabPreviews } from '@/features/Electron/TabHost';
-import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useRegisterDesktopTabHotkeys } from '@/hooks/useHotkeys/desktopTabScope';
 import { usePermission } from '@/hooks/usePermission';
@@ -25,7 +24,7 @@ import { useStripWidth } from './hooks/useStripWidth';
 import { useTabDrag } from './hooks/useTabDrag';
 import { TAB_SPRING } from './motion';
 import { resolveCloseShortcut } from './resolveCloseShortcut';
-import { resolveTabScope } from './scope';
+import { resolveNewTabUrl, tabScopeKey } from './scope';
 import { useStyles } from './styles';
 import TabItem from './TabItem';
 import {
@@ -60,6 +59,10 @@ const TabBar = () => {
   const unpinTab = useElectronStore((s) => s.unpinTab);
   const closeSplitView = useElectronStore((s) => s.closeSplitView);
   const openTabInSplitView = useElectronStore((s) => s.openTabInSplitView);
+  const reopenClosedTab = useElectronStore((s) => s.reopenClosedTab);
+  const canReopenClosed = useElectronStore(
+    (s) => (s.closedTabBuckets[tabScopeKey(s.activeTabScope)]?.length ?? 0) > 0,
+  );
 
   const tabIds = useMemo(() => tabs.map((tab) => tab.tab.id), [tabs]);
   const pinnedCount = useMemo(() => tabs.filter((tab) => tab.tab.pinned).length, [tabs]);
@@ -133,12 +136,7 @@ const TabBar = () => {
     followInstantly,
   ]);
 
-  const newTabUrl = useMemo(() => {
-    const scope = resolveTabScope(location.pathname + location.search);
-    const activeSlug = scope.type === 'workspace' ? scope.slug : null;
-
-    return buildWorkspaceAwarePath(NEW_TAB_URL, activeSlug);
-  }, [location.pathname, location.search]);
+  const activeUrl = location.pathname + location.search;
 
   const handleMoveBy = useCallback(
     (id: string, delta: -1 | 1) => {
@@ -221,14 +219,16 @@ const TabBar = () => {
       if (!canCreate) return;
 
       // Always open a fresh tab, even if one with the same target already exists.
-      addNewTab(path ?? newTabUrl);
+      addNewTab(resolveNewTabUrl(path ?? NEW_TAB_URL, activeUrl));
     },
-    [canCreate, addNewTab, newTabUrl],
+    [canCreate, addNewTab, activeUrl],
   );
 
   useWatchBroadcast('createNewTab', (data) => {
     handleNewTab(data?.path);
   });
+
+  useWatchBroadcast('reopenClosedTab', reopenClosedTab);
 
   const overflowItems = useCallback((): DropdownItem[] => {
     const visible = new Set(visibleIndices);
@@ -274,6 +274,7 @@ const TabBar = () => {
 
               return (
                 <TabItem
+                  canReopenClosed={canReopenClosed}
                   drag={drag.session?.id === placement.id ? dragFollow : undefined}
                   enterWidth={settleInstantly ? placement.width : 0}
                   enterX={settleInstantly ? placement.x : previousTotal.current}
@@ -301,6 +302,7 @@ const TabBar = () => {
                   onDragStart={drag.startDrag}
                   onMoveBy={handleMoveBy}
                   onOpenInSplitView={openTabInSplitView}
+                  onReopenClosed={reopenClosedTab}
                   onTogglePin={handleTogglePin}
                 />
               );

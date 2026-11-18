@@ -287,16 +287,6 @@ describe('setupElectronApi', () => {
     expect(rendererListener).not.toHaveBeenCalled();
   });
 
-  it('should not modify the original functions', () => {
-    const originalInvoke = mockInvoke;
-    const originalOnStreamInvoke = mockOnStreamInvoke;
-
-    setupElectronApi();
-
-    expect(mockInvoke).toBe(originalInvoke);
-    expect(mockOnStreamInvoke).toBe(originalOnStreamInvoke);
-  });
-
   it('should be callable multiple times without side effects', () => {
     setupElectronApi();
     setupElectronApi();

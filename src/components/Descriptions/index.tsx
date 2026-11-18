@@ -84,19 +84,14 @@ const Descriptions = memo<DescriptionsProps>(
     return (
       <>
         {title && <h3 style={{ marginTop: 12 }}>{title}</h3>}
-        <Grid
-          gap={0}
-          maxItemWidth={450}
-          {...sx([bordered && styles.bordered], className)}
-          {...rest}
-        >
+        <Grid gap={0} maxItemWidth={450} {...sx(bordered && styles.bordered, className)} {...rest}>
           {items.map((item) => (
             <Flexbox
               horizontal
               align={wrap ? 'flex-start' : 'center'}
               flex={1}
               key={item.key}
-              {...sx([bordered && styles.cell], cx(item.className, classNames?.item))}
+              {...sx(bordered && styles.cell, cx(item.className, classNames?.item))}
               style={{
                 overflow: wrap ? undefined : 'hidden',
                 position: 'relative',
@@ -109,7 +104,7 @@ const Descriptions = memo<DescriptionsProps>(
                 align={'center'}
                 flex={'none'}
                 gap={6}
-                {...sx([bordered && styles.label])}
+                {...sx(bordered && styles.label)}
                 paddingBlock={bordered ? 12 : 4}
                 paddingInline={bordered ? 16 : 0}
                 style={{ height: '100%', position: 'relative' }}

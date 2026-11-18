@@ -1,48 +1,66 @@
 import { TRPCError } from '@trpc/server';
 
+import type { HeteroOperationCapability } from '../../utils/internalJwt';
 import { validateHeteroOperationClaims } from '../../utils/internalJwt';
 import type { OIDCAuth } from '../context';
 
+const EVIDENCE: readonly HeteroOperationCapability[] = ['acceptance:evidence'];
+const FILE_STORE: readonly HeteroOperationCapability[] = ['acceptance:evidence', 'hetero:ingest'];
+
 /**
- * Routes a Task run's operation token may call to file evidence into its own
- * verification round: what `lh acceptance run result submit --operation` and
- * `lh acceptance run ingest --operation` reach on the plan-round path.
+ * Routes a run's operation token may call, and the capability each needs.
  *
- * The round is owned by the operation's creator. On a device logged in as
- * another member the token is the only identity that can reach it, so without
- * these routes the run can produce evidence but never hand it in.
+ * A Task run (`acceptance:evidence`) files evidence into its own verification
+ * round: what `lh acceptance run result submit --operation` and
+ * `lh acceptance run ingest --operation` reach on the plan-round path. The
+ * round is owned by the operation's creator. On a device logged in as another
+ * member the token is the only identity that can reach it, so without these
+ * routes the run can produce evidence but never hand it in.
+ *
+ * Any run (`hetero:ingest`) also reaches the four file-store routes, to upload
+ * the images its tools return (Claude Code `Read` on an image file) so the
+ * ingested tool card can preview them. A device run holds no other identity
+ * for the operation's owner, so without them the card shows only an
+ * `[Image: …]` placeholder.
  *
  * The `verify.*` routes bind every read and write to `heteroOperationScope`,
  * and `submitCheckEvidence` takes evidence only: the verdict and the rest of
- * the result belong to the round's verifier. `upload.createS3PreSignedUrl`
+ * the result belong to the round's verifier. `verify.disputeCheck` files the
+ * builder's dispute of one check in that same scoped round; the ruling comes
+ * from the review panel, never from the token. `upload.createS3PreSignedUrl`
  * signs only a sized, reserved PUT under a content-addressed key.
- * `file.createFile` files what this token uploads as private acceptance
- * evidence, kept out of the creator's library, folders and knowledge bases, and
- * `user.getUserState` (the report-language check) returns only the response
- * language to it. Every other route keeps rejecting the token.
+ * `file.createFile` files what this token uploads as a private acceptance or
+ * tool-result attachment, kept out of the creator's library, folders and
+ * knowledge bases, and `user.getUserState` (the report-language check) returns
+ * only the response language to it. Every other route keeps rejecting the token.
  */
-export const HETERO_OPERATION_EVIDENCE_PATHS: ReadonlySet<string> = new Set([
-  'file.checkFileHash',
-  'file.createFile',
-  'upload.abortS3Upload',
-  'upload.createS3PreSignedUrl',
-  'user.getUserState',
-  'verify.getRun',
-  'verify.getVerifyState',
-  'verify.listResults',
-  'verify.submitCheckEvidence',
-  'verify.uploadEvidence',
+export const HETERO_OPERATION_ROUTE_CAPABILITIES: ReadonlyMap<
+  string,
+  readonly HeteroOperationCapability[]
+> = new Map([
+  ['file.checkFileHash', FILE_STORE],
+  ['file.createFile', FILE_STORE],
+  ['upload.abortS3Upload', FILE_STORE],
+  ['upload.createS3PreSignedUrl', FILE_STORE],
+  ['user.getUserState', EVIDENCE],
+  ['verify.disputeCheck', EVIDENCE],
+  ['verify.getRun', EVIDENCE],
+  ['verify.getVerifyState', EVIDENCE],
+  ['verify.listResults', EVIDENCE],
+  ['verify.submitCheckEvidence', EVIDENCE],
+  ['verify.uploadEvidence', EVIDENCE],
 ]);
 
 const reject = (message = 'hetero-operation tokens are not accepted on this endpoint') =>
   new TRPCError({ code: 'UNAUTHORIZED', message });
 
 /**
- * Let a `hetero-operation` token through to an evidence route, or throw.
+ * Let a `hetero-operation` token through to one of its routes, or throw.
  *
- * The token must carry `acceptance:evidence`, stay in the workspace it was
- * minted for, and belong to a run that is still going under a principal that
- * is still authorized — the same re-check every other operation endpoint makes.
+ * The token must carry a capability the route accepts, stay in the workspace
+ * it was minted for, and belong to a run that is still going under a principal
+ * that is still authorized — the same re-check every other operation endpoint
+ * makes.
  */
 export const authorizeHeteroOperationEvidence = async (params: {
   oidcAuth: OIDCAuth;
@@ -50,16 +68,18 @@ export const authorizeHeteroOperationEvidence = async (params: {
   workspaceId?: string | null;
 }) => {
   const { oidcAuth, path, workspaceId } = params;
-  if (!HETERO_OPERATION_EVIDENCE_PATHS.has(path)) throw reject();
+  const accepted = HETERO_OPERATION_ROUTE_CAPABILITIES.get(path);
+  if (!accepted) throw reject();
 
   const claims = validateHeteroOperationClaims(oidcAuth as Record<string, unknown>);
-  if (!claims?.capabilities.includes('acceptance:evidence')) throw reject();
+  const capability = accepted.find((item) => claims?.capabilities.includes(item));
+  if (!claims || !capability) throw reject();
   // A header naming another workspace must not move the token out of its own.
   if (workspaceId && workspaceId !== claims.workspace_id) {
     throw reject('Operation token is bound to another workspace');
   }
 
-  // Loaded only once an operation token reaches an evidence route: `oidcAuth`
+  // Loaded only once an operation token reaches one of its routes: `oidcAuth`
   // sits in front of every authed router, and a static import would pull the
   // workspace and RBAC models into each of them at module load.
   const [
@@ -72,12 +92,13 @@ export const authorizeHeteroOperationEvidence = async (params: {
 
   try {
     const principal = await resolveActiveHeteroOperationPrincipal({
-      capability: 'acceptance:evidence',
+      capability,
       claims,
       db: await getServerDB(),
       operationId: claims.operation_id,
     });
     return {
+      heteroOperationCapabilities: claims.capabilities,
       heteroOperationScope: principal.operationId,
       userId: principal.userId,
       workspaceId: principal.workspaceId,

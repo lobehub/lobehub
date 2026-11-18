@@ -181,6 +181,14 @@ export const configRouter = router({
 
           if (!canUpdatePolicies) safeValue = stripAgentPermissionPolicies(input.value);
         }
+
+        // `pinned` is the team pin in a workspace and has its own owner/admin
+        // gated route (`updateAgentPinned`); a config patch must not set it.
+        // Applied last so no earlier rewrite of `safeValue` can restore it.
+        if ('pinned' in safeValue) {
+          const { pinned: _pinned, ...rest } = safeValue as Record<string, unknown>;
+          safeValue = rest;
+        }
       }
 
       // Collaborative edit lock: reject writes to a workspace agent another

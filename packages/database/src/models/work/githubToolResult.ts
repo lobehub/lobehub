@@ -3,6 +3,7 @@ import type {
   RegisterExternalWorkParams,
   SkillToolResultWorkInput,
   WorkDisplayField,
+  WorkVersionMetadata,
 } from '@lobechat/types';
 
 import { WORK_DESCRIPTION_PREVIEW_LENGTH } from './internal';
@@ -201,6 +202,36 @@ const hasStatusSignal = (record: Record<string, unknown>) =>
   typeof record.merged === 'boolean' ||
   typeof record.draft === 'boolean';
 
+/** PR branches as version metadata; `undefined` when neither is known. */
+const branchMetadata = (
+  head: string | null,
+  base: string | null,
+): WorkVersionMetadata | undefined => {
+  if (!head && !base) return undefined;
+
+  return { ...(head && { headBranch: head }), ...(base && { baseBranch: base }) };
+};
+
+/**
+ * A PR version registered from a command that named the PR. Version metadata
+ * merges over the previous version's, so without its own marker it would
+ * inherit `pullRequestLink: 'push'` from an earlier push link.
+ */
+const pullRequestCommandMetadata = (
+  head: string | null,
+  base: string | null,
+): WorkVersionMetadata => ({ ...branchMetadata(head, base), pullRequestLink: 'command' });
+
+/**
+ * A REST pull request carries `head` / `base` as `{ ref }` objects; the
+ * `create_pull_request` arguments name them as plain strings.
+ */
+const resolveBranch = (
+  record: Record<string, unknown>,
+  args: Record<string, unknown>,
+  key: 'base' | 'head',
+): string | null => fromRecord(toRecord(record[key]) ?? {}, ['ref']) ?? fromRecord(args, [key]);
+
 const githubResourceType = (entityType: GithubWorkEntityType): GithubWorkResourceType =>
   entityType === 'issue' ? 'github_issue' : 'github_pull_request';
 
@@ -235,6 +266,13 @@ const buildParams = (
     identifier: repo && number !== null ? `${repo}#${number}` : null,
     resourceType: githubResourceType(tool.entityType),
     messageId: params.messageId ?? null,
+    metadata:
+      tool.entityType === 'pull_request'
+        ? pullRequestCommandMetadata(
+            resolveBranch(record, args, 'head'),
+            resolveBranch(record, args, 'base'),
+          )
+        : undefined,
     rootOperationId: params.rootOperationId ?? null,
     status: patch('status', hasStatusSignal(record), resolveStatus(record)),
     threadId: params.threadId ?? null,
@@ -259,6 +297,10 @@ const buildParams = (
  */
 const GH_VALUE_FLAGS = new Set([
   '--add-assignee',
+  '--author-email',
+  '--match-head-commit',
+  '--subject',
+  '-A',
   '--add-label',
   '--add-project',
   '--add-reviewer',
@@ -293,6 +335,13 @@ const GH_VALUE_FLAGS = new Set([
   '-t',
 ]);
 
+/**
+ * `gh pr merge` switches that share a short name with a value flag of
+ * create/edit (`-m` milestone, `-r` reviewer): on merge they pick the method and
+ * take no value, so the pull request number after them must not be swallowed.
+ */
+const GH_MERGE_SWITCHES = new Set(['-m', '-r']);
+
 interface GithubEntityRef {
   entityType: GithubWorkEntityType;
   number: number;
@@ -301,6 +350,26 @@ interface GithubEntityRef {
 }
 
 const GITHUB_ENTITY_URL_RE = /https?:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/(issues|pull)\/(\d+)/gi;
+
+/**
+ * `owner/repo#123` mentions. `gh pr merge` / `gh pr ready` print no URL, only a
+ * `✓ Merged pull request owner/repo#123 (title)` line — and only to a terminal,
+ * so this is a best effort on top of the command's own target.
+ */
+const GITHUB_ENTITY_REF_RE = /(?:^|[\s(])([\w.-]+)\/([\w.-]+)#(\d+)\b/g;
+
+const parseGithubEntityRefs = (
+  text: string | null,
+  entityType: GithubWorkEntityType,
+): Omit<GithubEntityRef, 'url'>[] => {
+  if (!text) return [];
+
+  return Array.from(text.matchAll(GITHUB_ENTITY_REF_RE), (match) => ({
+    entityType,
+    number: Number(match[3]),
+    repo: `${match[1]}/${match[2]}`,
+  }));
+};
 
 const parseGithubEntityUrls = (text: string | null): GithubEntityRef[] => {
   if (!text) return [];
@@ -313,27 +382,51 @@ const parseGithubEntityUrls = (text: string | null): GithubEntityRef[] => {
   }));
 };
 
+/**
+ * Pull request lifecycle commands, recognized only when the caller opts in
+ * ({@link GithubShellNormalizeOptions.pullRequestLifecycle}). `gh pr view` /
+ * `diff` / `checkout` / `review` stay out on purpose: reading or reviewing
+ * someone else's pull request must not tie it to the conversation.
+ */
+type GhLifecycleAction = 'merge' | 'ready';
+
 interface ParsedGhCommand {
-  action: 'create' | 'edit';
+  action: 'create' | 'edit' | GhLifecycleAction;
+  /** `gh pr merge --auto` only queues the merge; `--disable-auto` cancels it. */
+  autoMerge: boolean;
+  /** `--base`: set on `gh pr create`, or changed by `gh pr edit`. */
+  base: string | null;
   body: string | null;
   draft: boolean;
   entityType: GithubWorkEntityType;
+  /** `--head`, `gh pr create` only; without it gh uses the checked-out branch, which the command text does not name. */
+  head: string | null;
   repo: string | null;
   targetNumber: number | null;
   targetRef: GithubEntityRef | null;
   title: string | null;
+  /** `gh pr ready --undo` turns the pull request back into a draft. */
+  undo: boolean;
 }
 
-const parseGhSegment = (segment: string[]): ParsedGhCommand | null => {
+const isLifecycleAction = (action: string): action is GhLifecycleAction =>
+  action === 'merge' || action === 'ready';
+
+const parseGhSegment = (segment: string[], lifecycle: boolean): ParsedGhCommand | null => {
   if (segment[0] !== 'gh') return null;
 
   const noun = segment[1];
   const action = segment[2];
   if (noun !== 'issue' && noun !== 'pr') return null;
-  if (action !== 'create' && action !== 'edit') return null;
+  const isLifecycle = lifecycle && noun === 'pr' && isLifecycleAction(action);
+  if (action !== 'create' && action !== 'edit' && !isLifecycle) return null;
 
+  let autoMerge = false;
+  let undo = false;
+  let base: string | null = null;
   let body: string | null = null;
   let draft = false;
+  let head: string | null = null;
   let repoFlag: string | null = null;
   let title: string | null = null;
   const positionals: string[] = [];
@@ -353,20 +446,31 @@ const parseGhSegment = (segment: string[]): ParsedGhCommand | null => {
       continue;
     }
 
-    if (value === null && GH_VALUE_FLAGS.has(token)) {
+    const takesValue = GH_VALUE_FLAGS.has(token) && !(isLifecycle && GH_MERGE_SWITCHES.has(token));
+    if (value === null && takesValue) {
       value = segment[i + 1] ?? null;
       i++;
     }
 
     switch (token) {
+      // On `gh pr merge`, -t / -b name the merge COMMIT, not the pull request.
       case '-t':
       case '--title': {
-        title = value;
+        if (!isLifecycle) title = value;
         break;
       }
       case '-b':
       case '--body': {
-        body = value;
+        if (!isLifecycle) body = value;
+        break;
+      }
+      case '--auto':
+      case '--disable-auto': {
+        autoMerge = true;
+        break;
+      }
+      case '--undo': {
+        undo = true;
         break;
       }
       case '-R':
@@ -377,6 +481,16 @@ const parseGhSegment = (segment: string[]): ParsedGhCommand | null => {
       case '-d':
       case '--draft': {
         draft = true;
+        break;
+      }
+      case '-B':
+      case '--base': {
+        base = value;
+        break;
+      }
+      case '-H':
+      case '--head': {
+        head = value;
         break;
       }
       default: {
@@ -398,20 +512,68 @@ const parseGhSegment = (segment: string[]): ParsedGhCommand | null => {
     else if (/^\d+$/.test(positional)) targetNumber = Number(positional);
   }
 
+  // Issues have no branches; drop any stray `-B` / `-H` values.
+  const isPullRequest = noun === 'pr';
+
   return {
-    action,
+    action: action as ParsedGhCommand['action'],
+    autoMerge,
+    base: isPullRequest ? base : null,
     body,
     draft,
-    entityType: noun === 'issue' ? 'issue' : 'pull_request',
+    entityType: isPullRequest ? 'pull_request' : 'issue',
+    head: isPullRequest ? head : null,
     repo,
     targetNumber,
     targetRef,
     title,
+    undo,
   };
+};
+
+/** Options for the shell-surface gh normalizer; both are off for the github skill. */
+export interface GithubShellNormalizeOptions {
+  /**
+   * Also register `gh pr ready <n>` / `gh pr merge <n>` (Better Coding
+   * Experience): touching a pull request by number ties it to the conversation.
+   */
+  pullRequestLifecycle?: boolean;
+  /**
+   * Pull requests (`owner/repo#n`) already linked to the conversation. A
+   * lifecycle command that names only a number — gh resolves the repository
+   * from the working directory, which the command text does not carry — is
+   * matched against these; an ambiguous or unknown number registers nothing.
+   */
+  topicPullRequests?: string[];
+}
+
+/**
+ * gh's confirmation that the merge itself happened (`✓ Merged pull request …`,
+ * `Squashed and merged`, `Rebased and merged`, `… was already merged`). A
+ * repository with a merge queue only queues the PR, and gh prints nothing at
+ * all to a non-terminal — neither is proof it merged.
+ */
+const MERGE_CONFIRMED_RE = /\b(?:merged pull request|was already merged)\b/i;
+
+/** What a lifecycle command leaves the pull request in; null when it does not say. */
+const lifecycleStatus = (parsed: ParsedGhCommand, output: string | null): string | null => {
+  if (parsed.action === 'merge') {
+    return !parsed.autoMerge && output && MERGE_CONFIRMED_RE.test(output) ? 'merged' : null;
+  }
+  if (parsed.action === 'ready') return parsed.undo ? 'draft' : 'open';
+  return null;
+};
+
+const resolveRepoFromTopic = (number: number, topicPullRequests: string[] = []) => {
+  const repos = topicPullRequests
+    .filter((identifier) => identifier.endsWith(`#${number}`))
+    .map((identifier) => identifier.slice(0, identifier.lastIndexOf('#')));
+  return repos.length === 1 ? repos[0] : null;
 };
 
 const normalizeGithubCliResult = (
   params: SkillToolResultWorkInput,
+  options: GithubShellNormalizeOptions = {},
 ): ExternalToolWorkOperation | null => {
   const record = unwrapData(params.data);
   if (!record) return null;
@@ -429,26 +591,48 @@ const normalizeGithubCliResult = (
   // A chained command (`git push && gh pr create ...`) reports one combined
   // stdout; the trailing URL belongs to the last gh create/edit segment.
   const parsed = segments
-    .map(parseGhSegment)
+    .map((segment) => parseGhSegment(segment, !!options.pullRequestLifecycle))
     .findLast((segment): segment is ParsedGhCommand => !!segment);
   if (!parsed) return null;
+
+  const isLifecycle = isLifecycleAction(parsed.action);
+  // Only a NUMBERED lifecycle command counts: without one gh acts on whatever
+  // branch is checked out, which says nothing about which pull request it was.
+  if (isLifecycle && parsed.targetNumber === null && !parsed.targetRef) return null;
 
   // stdout is the source of truth for identity: `gh issue/pr create|edit`
   // prints the entity URL as its result line. Fall back to the edit target
   // in the command when stdout carries no URL.
   const output = fromRecord(record, ['output', 'stdout']);
-  const ref =
-    parseGithubEntityUrls(output).at(-1) ??
+  const targetRepo =
+    parsed.repo ??
+    (isLifecycle && parsed.targetNumber !== null
+      ? (parseGithubEntityRefs(output, parsed.entityType).find(
+          (ref) => ref.number === parsed.targetNumber,
+        )?.repo ?? resolveRepoFromTopic(parsed.targetNumber, options.topicPullRequests))
+      : null);
+  const commandRef =
     parsed.targetRef ??
-    (parsed.targetNumber !== null && parsed.repo
+    (parsed.targetNumber !== null && targetRepo
       ? {
           entityType: parsed.entityType,
           number: parsed.targetNumber,
-          repo: parsed.repo,
+          repo: targetRepo,
           url: null,
         }
       : null);
+  // A lifecycle command prints no URL of its own, so any URL in a chained
+  // command's output belongs to another segment: trust only the target.
+  const ref = isLifecycle ? commandRef : (parseGithubEntityUrls(output).at(-1) ?? commandRef);
   if (!ref) return null;
+
+  const status = isLifecycle
+    ? lifecycleStatus(parsed, output)
+    : parsed.action === 'create'
+      ? parsed.draft
+        ? 'draft'
+        : 'open'
+      : null;
 
   const identifier = `${ref.repo}#${ref.number}`;
 
@@ -472,9 +656,14 @@ const normalizeGithubCliResult = (
       resourceId: identifier,
       resourceType: githubResourceType(ref.entityType),
       messageId: params.messageId ?? null,
+      metadata:
+        ref.entityType === 'pull_request'
+          ? pullRequestCommandMetadata(parsed.head, parsed.base)
+          : undefined,
       rootOperationId: params.rootOperationId ?? null,
-      // gh only exposes --draft on create; an edit carries no status signal.
-      status: patch('status', parsed.action === 'create', parsed.draft ? 'draft' : 'open'),
+      // gh only exposes --draft on create; an edit carries no status signal,
+      // while merge / ready say what they left the pull request in.
+      status: patch('status', status !== null, status),
       threadId: params.threadId ?? null,
       title: patch('title', parsed.title !== null, stringValue(parsed.title)),
       toolCallId: params.toolCallId ?? null,
@@ -502,10 +691,11 @@ const normalizeGithubCliResult = (
  */
 export const normalizeGithubShellToolResult = (
   params: SkillToolResultWorkInput,
+  options?: GithubShellNormalizeOptions,
 ): ExternalToolWorkOperation | null => {
   if (isApplicationError(params.data)) return null;
 
-  return normalizeGithubCliResult(params);
+  return normalizeGithubCliResult(params, options);
 };
 
 export const normalizeGithubToolResult = (

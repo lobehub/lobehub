@@ -1,7 +1,9 @@
 'use client';
 
-import { Button, createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Button, Flexbox } from '@lobehub/ui';
 import { EditableMessage } from '@lobehub/ui/chat';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { PencilLine } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,19 +11,23 @@ import { useTranslation } from 'react-i18next';
 import { useStore } from '../store';
 import { selectors } from '../store/selectors';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  markdown: css`
-    border: unset;
-  `,
-  wrapper: css`
-    width: 100%;
-    padding: 8px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: calc(${cssVar.borderRadiusLG} - 1px);
-
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  markdown: {
+    borderWidth: 'unset',
+    borderStyle: 'unset',
+    borderColor: 'unset',
+  },
+  wrapper: {
+    width: '100%',
+    padding: '8px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: `calc(${cssVar.borderRadiusLG} - 1px)`,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 const OpeningMessage = memo(() => {
   const { t } = useTranslation('setting');
@@ -52,7 +58,7 @@ const OpeningMessage = memo(() => {
   );
 
   return (
-    <div className={styles.wrapper}>
+    <div {...stylex.props(styles.wrapper)}>
       <Flexbox direction={'horizontal'}>
         <EditableMessage
           editButtonSize={'small'}
@@ -63,7 +69,7 @@ const OpeningMessage = memo(() => {
           value={openingMessage ?? ''}
           variant={'borderless'}
           classNames={{
-            markdown: styles.markdown,
+            markdown: stylex.props(styles.markdown).className,
           }}
           text={{
             cancel: t('cancel', { ns: 'common' }),

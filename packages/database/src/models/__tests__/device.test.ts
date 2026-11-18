@@ -24,6 +24,43 @@ afterEach(async () => {
   await serverDB.delete(devices).where(eq(devices.userId, userId));
 });
 
+const workspaceVisibilityRows = (): (typeof devices.$inferInsert)[] => [
+  {
+    deviceId: 'pub',
+    identitySource: 'machine-id',
+    userId: otherUserId,
+    visibility: 'public',
+    workspaceId: wsId,
+  },
+  {
+    deviceId: 'mine-private',
+    identitySource: 'machine-id',
+    userId,
+    visibility: 'private',
+    workspaceId: wsId,
+  },
+  {
+    deviceId: 'theirs-private',
+    identitySource: 'machine-id',
+    userId: otherUserId,
+    visibility: 'private',
+    workspaceId: wsId,
+  },
+];
+
+const workspaceDeviceInput = (): Parameters<DeviceModel['registerWorkspaceDevice']>[0] => ({
+  deviceId: 'wdev',
+  identitySource: 'machine-id',
+  workspaceId: wsId,
+});
+
+const publicWorkspaceDeviceInput = (): Parameters<DeviceModel['registerWorkspaceDevice']>[0] => ({
+  deviceId: 'wdev',
+  identitySource: 'machine-id',
+  visibility: 'public',
+  workspaceId: wsId,
+});
+
 describe('DeviceModel', () => {
   describe('updateDeviceInfo', () => {
     it('does not create missing devices', async () => {
@@ -377,29 +414,7 @@ describe('DeviceModel', () => {
 
     describe('visibility (private workspace devices)', () => {
       it('queryWorkspaceDevices returns public rows plus only MY private rows', async () => {
-        await serverDB.insert(devices).values([
-          {
-            deviceId: 'pub',
-            identitySource: 'machine-id',
-            userId: otherUserId,
-            visibility: 'public',
-            workspaceId: wsId,
-          },
-          {
-            deviceId: 'mine-private',
-            identitySource: 'machine-id',
-            userId,
-            visibility: 'private',
-            workspaceId: wsId,
-          },
-          {
-            deviceId: 'theirs-private',
-            identitySource: 'machine-id',
-            userId: otherUserId,
-            visibility: 'private',
-            workspaceId: wsId,
-          },
-        ]);
+        await serverDB.insert(devices).values(workspaceVisibilityRows());
 
         const ids = (await new DeviceModel(serverDB, userId, wsId).queryWorkspaceDevices())
           .map((d) => d.deviceId)
@@ -408,29 +423,7 @@ describe('DeviceModel', () => {
       });
 
       it('queryWorkspaceHiddenDeviceIds returns only other members private device ids', async () => {
-        await serverDB.insert(devices).values([
-          {
-            deviceId: 'pub',
-            identitySource: 'machine-id',
-            userId: otherUserId,
-            visibility: 'public',
-            workspaceId: wsId,
-          },
-          {
-            deviceId: 'mine-private',
-            identitySource: 'machine-id',
-            userId,
-            visibility: 'private',
-            workspaceId: wsId,
-          },
-          {
-            deviceId: 'theirs-private',
-            identitySource: 'machine-id',
-            userId: otherUserId,
-            visibility: 'private',
-            workspaceId: wsId,
-          },
-        ]);
+        await serverDB.insert(devices).values(workspaceVisibilityRows());
 
         const hidden = await new DeviceModel(
           serverDB,
@@ -465,53 +458,31 @@ describe('DeviceModel', () => {
 
       it('registerWorkspaceDevice defaults to private and preserves visibility on same-member re-enroll', async () => {
         const wsModel = new DeviceModel(serverDB, userId, wsId);
-        const created = await wsModel.registerWorkspaceDevice({
-          deviceId: 'wdev',
-          identitySource: 'machine-id',
-          workspaceId: wsId,
-        });
+        const created = await wsModel.registerWorkspaceDevice(workspaceDeviceInput());
         expect(created?.visibility).toBe('private');
 
         await wsModel.setWorkspaceDeviceVisibility('wdev', 'public');
         // same member re-enrolls (e.g. reconnect) — their private/public choice
         // must survive
-        const reenrolled = await wsModel.registerWorkspaceDevice({
-          deviceId: 'wdev',
-          identitySource: 'machine-id',
-          workspaceId: wsId,
-        });
+        const reenrolled = await wsModel.registerWorkspaceDevice(workspaceDeviceInput());
         expect(reenrolled?.visibility).toBe('public');
         expect(reenrolled?.userId).toBe(userId);
       });
 
       it('registerWorkspaceDevice honors an explicit public choice on re-enroll', async () => {
         const wsModel = new DeviceModel(serverDB, userId, wsId);
-        await wsModel.registerWorkspaceDevice({
-          deviceId: 'wdev',
-          identitySource: 'machine-id',
-          workspaceId: wsId,
-        });
+        await wsModel.registerWorkspaceDevice(workspaceDeviceInput());
 
         // `lh connect --workspace … --public` on an existing private enrollment
         // must promote it — an ignored explicit flag would be a silent no-op
-        const promoted = await wsModel.registerWorkspaceDevice({
-          deviceId: 'wdev',
-          identitySource: 'machine-id',
-          visibility: 'public',
-          workspaceId: wsId,
-        });
+        const promoted = await wsModel.registerWorkspaceDevice(publicWorkspaceDeviceInput());
         expect(promoted?.visibility).toBe('public');
       });
 
       it('overwriteSharedWorkspaceDevice applies visibility and links the personal twin', async () => {
         const wsModel = new DeviceModel(serverDB, userId, wsId);
         // pre-existing direct CLI enrollment: public, no share link
-        await wsModel.registerWorkspaceDevice({
-          deviceId: 'wdev',
-          identitySource: 'machine-id',
-          visibility: 'public',
-          workspaceId: wsId,
-        });
+        await wsModel.registerWorkspaceDevice(publicWorkspaceDeviceInput());
 
         // a plain re-share upsert would preserve 'public' — the confirmed
         // overwrite must apply the explicit choice and link the personal row
@@ -526,12 +497,9 @@ describe('DeviceModel', () => {
 
       it('overwriteSharedWorkspaceDevice transfers ownership to the sharer on cross-user overwrite', async () => {
         // another member originally enrolled the machine directly via CLI
-        await new DeviceModel(serverDB, otherUserId, wsId).registerWorkspaceDevice({
-          deviceId: 'wdev',
-          identitySource: 'machine-id',
-          visibility: 'public',
-          workspaceId: wsId,
-        });
+        await new DeviceModel(serverDB, otherUserId, wsId).registerWorkspaceDevice(
+          publicWorkspaceDeviceInput(),
+        );
 
         // the sharer (e.g. a workspace owner) confirms overwriting it as a
         // share from their personal device — the row must follow the sharer,
@@ -565,11 +533,9 @@ describe('DeviceModel', () => {
         // physical machine, so the collision must not publish (or otherwise
         // mutate) the enroller's private row.
         await expect(
-          new DeviceModel(serverDB, otherUserId, wsId).registerWorkspaceDevice({
-            deviceId: 'wdev',
-            identitySource: 'machine-id',
-            workspaceId: wsId,
-          }),
+          new DeviceModel(serverDB, otherUserId, wsId).registerWorkspaceDevice(
+            workspaceDeviceInput(),
+          ),
         ).rejects.toThrow(WorkspaceDevicePrivateConflictError);
 
         // the enroller's row is untouched
@@ -579,19 +545,14 @@ describe('DeviceModel', () => {
       });
 
       it('a DIFFERENT member re-enrolling a PUBLIC machine refreshes it without demoting', async () => {
-        await new DeviceModel(serverDB, userId, wsId).registerWorkspaceDevice({
-          deviceId: 'wdev',
-          identitySource: 'machine-id',
-          visibility: 'public',
-          workspaceId: wsId,
-        });
+        await new DeviceModel(serverDB, userId, wsId).registerWorkspaceDevice(
+          publicWorkspaceDeviceInput(),
+        );
 
         // legit shared-infra flow: second member re-enrolls the shared box
-        const row = await new DeviceModel(serverDB, otherUserId, wsId).registerWorkspaceDevice({
-          deviceId: 'wdev',
-          identitySource: 'machine-id',
-          workspaceId: wsId,
-        });
+        const row = await new DeviceModel(serverDB, otherUserId, wsId).registerWorkspaceDevice(
+          workspaceDeviceInput(),
+        );
         expect(row?.visibility).toBe('public');
         // the original enroller is preserved
         expect(row?.userId).toBe(userId);
@@ -691,10 +652,40 @@ describe('DeviceModel', () => {
     it('should remove the row', async () => {
       await deviceModel.register({ deviceId: 'dev-1', identitySource: 'machine-id' });
 
-      await deviceModel.delete('dev-1');
+      const removed = await deviceModel.delete('dev-1');
 
+      expect(removed).toHaveLength(1);
+      expect(removed[0]).toMatchObject({ deviceId: 'dev-1', identitySource: 'machine-id', userId });
       const row = await deviceModel.findByDeviceId('dev-1');
       expect(row).toBeUndefined();
+    });
+
+    it('should return nothing when no row matches', async () => {
+      await expect(deviceModel.delete('missing-device')).resolves.toEqual([]);
+    });
+
+    it('should keep a workspace device the user enrolled under the same deviceId', async () => {
+      const deleteWsId = 'device-model-ws-delete';
+      await serverDB
+        .insert(workspaces)
+        .values({ id: deleteWsId, name: 'WS', primaryOwnerId: userId, slug: deleteWsId });
+      await deviceModel.register({ deviceId: 'both', identitySource: 'machine-id' });
+      await serverDB.insert(devices).values({
+        deviceId: 'both',
+        identitySource: 'machine-id',
+        userId,
+        workspaceId: deleteWsId,
+      });
+
+      const removed = await deviceModel.delete('both');
+
+      expect(removed).toHaveLength(1);
+      expect(removed[0].workspaceId).toBeNull();
+      const workspaceRows = await serverDB
+        .select()
+        .from(devices)
+        .where(eq(devices.workspaceId, deleteWsId));
+      expect(workspaceRows.map((row) => row.deviceId)).toEqual(['both']);
     });
   });
 

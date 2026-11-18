@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { BOT_WAKE_SETTING_KEYS } from '@/server/services/agentSignal/scenarios/botWake/config';
+import { schema as discordSchema } from '@/server/services/bot/platforms/discord/schema';
 import type { FieldSchema } from '@/server/services/bot/platforms/types';
+import { BOT_WAKE_SETTING_KEYS } from '@/server/services/conversationWake/config';
 
 import {
   extractSettingsDefaults,
@@ -12,6 +13,7 @@ import {
   mergeSettingsWithDefaults,
   shouldAdoptIncomingConfig,
   withHeterogeneousWakeOff,
+  withNewBotReactionOff,
 } from './formState';
 
 const slackSchema: FieldSchema[] = [
@@ -227,23 +229,23 @@ describe('bot-wake channel lists', () => {
 describe('isFieldReleased', () => {
   it('shows a field that names no rollout flag', () => {
     expect(isFieldReleased({}, undefined)).toBe(true);
-    expect(isFieldReleased({}, { enableBotWake: false })).toBe(true);
+    expect(isFieldReleased({}, { enableExampleRollout: false })).toBe(true);
   });
 
   it('shows a gated field only when its flag is explicitly on', () => {
-    const field = { featureFlag: 'enableBotWake' };
+    const field = { featureFlag: 'enableExampleRollout' };
 
-    expect(isFieldReleased(field, { enableBotWake: true })).toBe(true);
-    expect(isFieldReleased(field, { enableBotWake: false })).toBe(false);
+    expect(isFieldReleased(field, { enableExampleRollout: true })).toBe(true);
+    expect(isFieldReleased(field, { enableExampleRollout: false })).toBe(false);
   });
 
   it('hides a gated field while the flags are unset or have not loaded', () => {
-    const field = { featureFlag: 'enableBotWake' };
+    const field = { featureFlag: 'enableExampleRollout' };
 
     expect(isFieldReleased(field, undefined)).toBe(false);
     expect(isFieldReleased(field, {})).toBe(false);
-    expect(isFieldReleased(field, { enableBotWake: undefined })).toBe(false);
-    expect(isFieldReleased(field, { enableBotWake: 'yes' })).toBe(false);
+    expect(isFieldReleased(field, { enableExampleRollout: undefined })).toBe(false);
+    expect(isFieldReleased(field, { enableExampleRollout: 'yes' })).toBe(false);
   });
 });
 
@@ -349,5 +351,28 @@ describe('withHeterogeneousWakeOff', () => {
 
   it('adds nothing on a platform without the switch', () => {
     expect(withHeterogeneousWakeOff([], { charLimit: 2000 })).toEqual({ charLimit: 2000 });
+  });
+});
+
+describe('withNewBotReactionOff', () => {
+  it('starts a new bot with status reactions off, over the schema default', () => {
+    expect(
+      mergeSettingsWithDefaults(discordSchema, withNewBotReactionOff(discordSchema, {}))
+        .reactionMode,
+    ).toBe('none');
+  });
+
+  it('leaves the schema default on, which a saved bot without the field reads as', () => {
+    expect(extractSettingsDefaults(discordSchema).reactionMode).toBe('minimal');
+  });
+
+  it('keeps a mode the owner already picked', () => {
+    const settings = { reactionMode: 'full' };
+
+    expect(withNewBotReactionOff(discordSchema, settings)).toBe(settings);
+  });
+
+  it('adds nothing on a platform without status reactions', () => {
+    expect(withNewBotReactionOff(slackSchema, { charLimit: 2000 })).toEqual({ charLimit: 2000 });
   });
 });

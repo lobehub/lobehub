@@ -104,7 +104,6 @@ export const prepareFixtureDependencies = async (
   const evidence = {
     fixtureId: fixtureIds.length === 1 ? fixtureIds[0] : undefined,
     fixtureIds,
-    gateEligible: false,
     policy: 'reviewed-fixture-roots-v2',
     reasonCodes: ['FIXTURE_CAPSULE_WORKSPACE_PEER_CONTEXT_UNPROVEN'],
     roots: dependencies,

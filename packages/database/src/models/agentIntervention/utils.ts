@@ -7,14 +7,6 @@ import type {
   AgentInterventionSanitizedRequest,
 } from '@lobechat/types';
 
-import { PG_UNIQUE_VIOLATION } from './constants';
-
-export const isUniqueViolation = (error: unknown): boolean =>
-  !!error &&
-  typeof error === 'object' &&
-  (('code' in error && (error as { code?: string }).code === PG_UNIQUE_VIOLATION) ||
-    ('cause' in error && isUniqueViolation((error as { cause?: unknown }).cause)));
-
 export const asRecord = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)

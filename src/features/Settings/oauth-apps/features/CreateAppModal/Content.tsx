@@ -1,18 +1,10 @@
 'use client';
 
 import { type OAuthAppType } from '@lobechat/types';
-import {
-  Button,
-  createStaticStyles,
-  cx,
-  Flexbox,
-  Icon,
-  Input,
-  Text,
-  TextArea,
-  useModalContext,
-} from '@lobehub/ui';
+import { Button, Flexbox, Icon, Input, Text, TextArea, useModalContext } from '@lobehub/ui';
 import { Form, useForm, useWatch } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckIcon, GlobeIcon, type LucideIcon, TerminalIcon } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,66 +17,41 @@ import { AppLogoPlaceholder } from '../AppLogo';
 
 const LOGO_SIZE = 64;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  typeCard: css`
-    cursor: pointer;
-
-    position: relative;
-
-    flex: 1;
-
-    min-width: 0;
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    transition:
-      border-color 0.15s ease,
-      background 0.15s ease;
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorBorder};
-      outline-offset: 2px;
-    }
-  `,
+const styles = stylex.create({
+  typeCard: {
+    cursor: 'pointer',
+    position: 'relative',
+    flex: '1',
+    minWidth: '0',
+    padding: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    borderRadius: cssVar.borderRadiusLG,
+    transition: 'border-color 0.15s ease, background 0.15s ease',
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  },
   // LobeHub's primary is a near-black neutral, so the selection rides a
   // text-colored border alone — no fill, which read as a disabled block.
-  typeCardSelected: css`
-    border-color: ${cssVar.colorText};
-
-    &:hover {
-      border-color: ${cssVar.colorText};
-    }
-  `,
-  typeCheck: css`
-    flex: none;
-    margin-inline-start: auto;
-    color: ${cssVar.colorText};
-  `,
-  typeDesc: css`
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  typeIcon: css`
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 28px;
-    height: 28px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+  typeCardSelected: { borderColor: cssVar.colorText },
+  typeCheck: { flex: 'none', marginInlineStart: 'auto', color: cssVar.colorText },
+  typeDesc: { fontSize: '12px', lineHeight: 1.5, color: cssVar.colorTextTertiary },
+  typeIcon: {
+    display: 'inline-flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+});
 
 interface TypeOption {
   description: string;
@@ -107,7 +74,7 @@ const TypeSelect: FC<TypeSelectProps> = ({ onChange, options, value }) => (
       return (
         <Flexbox
           aria-checked={selected}
-          className={cx(styles.typeCard, selected && styles.typeCardSelected)}
+          className={stylex.props(styles.typeCard, selected && styles.typeCardSelected).className}
           gap={8}
           key={option.value}
           role={'radio'}
@@ -121,13 +88,19 @@ const TypeSelect: FC<TypeSelectProps> = ({ onChange, options, value }) => (
           }}
         >
           <Flexbox horizontal align={'center'} gap={8}>
-            <span className={styles.typeIcon}>
+            <span {...stylex.props(styles.typeIcon)}>
               <Icon icon={option.icon} size={16} />
             </span>
             <Text weight={500}>{option.title}</Text>
-            {selected && <Icon className={styles.typeCheck} icon={CheckIcon} size={16} />}
+            {selected && (
+              <Icon
+                className={stylex.props(styles.typeCheck).className}
+                icon={CheckIcon}
+                size={16}
+              />
+            )}
           </Flexbox>
-          <span className={styles.typeDesc}>{option.description}</span>
+          <span {...stylex.props(styles.typeDesc)}>{option.description}</span>
         </Flexbox>
       );
     })}

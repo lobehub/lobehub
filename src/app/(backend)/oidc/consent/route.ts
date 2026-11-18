@@ -10,8 +10,15 @@ import { OIDCService } from '@/server/services/oidc';
 
 const log = debug('lobe-oidc:consent');
 
-const canReview = async (userId: string | null | undefined, resource: unknown) =>
-  (await describeReviewTarget(await getServerDB(), userId, resource)).allowed;
+const reviewTargetOf = async (resource: unknown) => {
+  const { userId } = await getUserAuth();
+  return describeReviewTarget(await getServerDB(), userId, resource);
+};
+
+const WRONG_ORIGIN = {
+  error: 'wrong_origin',
+  error_description: 'Open this acceptance from its preview address',
+};
 
 export async function POST(request: NextRequest) {
   log('Received POST request for /oidc/consent, URL: %s', request.url);
@@ -51,8 +58,18 @@ export async function POST(request: NextRequest) {
     }
 
     const { prompt } = details;
+    const reviewTarget =
+      prompt.name === 'consent' && isAcceptanceReviewClient(details.params.client_id as string)
+        ? await reviewTargetOf(details.params.resource)
+        : undefined;
     let result;
-    if (consent === 'accept') {
+    if (
+      reviewTarget?.allowed === false &&
+      reviewTarget.kind === 'acceptance' &&
+      reviewTarget.reason === 'wrongOrigin'
+    ) {
+      result = WRONG_ORIGIN;
+    } else if (consent === 'accept') {
       log(`User accepted the request, Handling 'login' prompt`);
       const { userId } = await getUserAuth();
       log('Obtained userId: %s', userId);
@@ -67,10 +84,7 @@ export async function POST(request: NextRequest) {
         // 1. Get necessary IDs
         const clientId = details.params.client_id as string;
 
-        if (
-          isAcceptanceReviewClient(clientId) &&
-          !(await canReview(userId, details.params.resource))
-        ) {
+        if (reviewTarget?.allowed === false) {
           const denied = await oidcService.getInteractionResult(uid, {
             error: 'access_denied',
             error_description: 'No access to this acceptance',

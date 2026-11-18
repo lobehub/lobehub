@@ -4,9 +4,13 @@ import debug from 'debug';
 import { getBotFeatureAccessState } from '@/business/server/bot/featureAccess';
 import type { LobeChatDatabase } from '@/database/type';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
-import { parseBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
-import { resolveChannelKeys } from '@/server/services/agentSignal/scenarios/botWake/facts';
-import { isBotWakeEnabled } from '@/server/services/agentSignal/scenarios/botWake/gate';
+import { resolveChannelKeys } from '@/server/services/bot/wake/platformFacts';
+import { createWakeClassify } from '@/server/services/conversationWake/classify';
+import { parseBotWakeSettings } from '@/server/services/conversationWake/config';
+import { createWakeDutyJudge } from '@/server/services/conversationWake/dutyJudge';
+import { isBotWakeEnabled } from '@/server/services/conversationWake/gate';
+import { createWakeIdentityLoader } from '@/server/services/conversationWake/identity';
+import type { WakeInitiation } from '@/server/services/conversationWake/initiation';
 
 import { AgentBridgeService } from '../AgentBridgeService';
 import { buildBotContext } from '../buildBotContext';
@@ -32,9 +36,6 @@ import {
 } from '../platforms';
 import { extractDeviceAllowlist } from '../platforms/deviceAccess';
 import { renderThrownAgentError } from '../renderThrownError';
-import { createWakeClassify } from '../wake/classify';
-import { createWakeDutyJudge } from '../wake/dutyJudge';
-import { createWakeIdentityLoader } from '../wake/identity';
 import { createReplyOpener } from '../wake/opener';
 import { resolveWakeScheduler } from '../wake/scheduler';
 import type { WakeMessageLike } from '../wake/signal';
@@ -54,7 +55,6 @@ import {
 } from './utils';
 import {
   type BotWakeEntryPoint,
-  type BotWakeInitiation,
   botWakeKindFor,
   type BotWakeObservation,
   type BotWakeReason,
@@ -389,7 +389,7 @@ export function registerHandlers(
     message: WakeMessageLike,
     thread: { id: string },
     threadSubscribed = false,
-  ): Promise<BotWakeInitiation | undefined> =>
+  ): Promise<WakeInitiation | undefined> =>
     wakeRecorder.initiate(
       observationOf(entryPoint, message, thread, 'skip', 'not-addressed', threadSubscribed),
     );

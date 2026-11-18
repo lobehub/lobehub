@@ -1,5 +1,7 @@
 import type { HotkeyGroupId, HotkeyId, HotkeyRegistration, HotkeyScopeId } from '@lobechat/types';
 
+import { isDesktop } from './version';
+
 const combineKeys = (keys: string[]) => keys.join('+');
 
 export const KeyEnum = {
@@ -40,7 +42,6 @@ export const KeyEnum = {
 } as const;
 
 export const HotkeyEnum = {
-  AddUserMessage: 'addUserMessage',
   CommandPalette: 'commandPalette',
   DeleteAndRegenerateMessage: 'deleteAndRegenerateMessage',
   DeleteLastMessage: 'deleteLastMessage',
@@ -51,6 +52,7 @@ export const HotkeyEnum = {
   OpenChatSettings: 'openChatSettings',
   PrevTab: 'prevTab',
   OpenHotkeyHelper: 'openHotkeyHelper',
+  OpenTaskFilter: 'openTaskFilter',
   RegenerateMessage: 'regenerateMessage',
   SaveDocument: 'saveDocument',
   SaveTopic: 'saveTopic',
@@ -91,16 +93,22 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     keys: combineKeys([KeyEnum.Mod, 'j']),
     scopes: [HotkeyScopeEnum.Global],
   },
-  {
-    group: HotkeyGroupEnum.Essential,
-    id: HotkeyEnum.SwitchAgent,
-    keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Number]),
-    nonEditable: true,
-    scopes: [HotkeyScopeEnum.Global],
-  },
+  // Desktop's number shortcuts select titlebar tabs, not agents.
+  ...(!isDesktop
+    ? [
+        {
+          group: HotkeyGroupEnum.Essential,
+          id: HotkeyEnum.SwitchAgent,
+          keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Number]),
+          nonEditable: true,
+          scopes: [HotkeyScopeEnum.Global],
+        },
+      ]
+    : []),
   {
     group: HotkeyGroupEnum.Essential,
     id: HotkeyEnum.SwitchTab,
+    // Mod is ⌘ on macOS and Ctrl elsewhere, matching browsers' tab shortcuts.
     keys: combineKeys([KeyEnum.Mod, KeyEnum.Number]),
     nonEditable: true,
     scopes: [HotkeyScopeEnum.Global],
@@ -149,6 +157,12 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     keys: combineKeys([KeyEnum.Alt, 'f']),
     scopes: [HotkeyScopeEnum.Global],
   },
+  {
+    group: HotkeyGroupEnum.Essential,
+    id: HotkeyEnum.OpenTaskFilter,
+    keys: 'f',
+    scopes: [HotkeyScopeEnum.Global],
+  },
   // Chat
   {
     group: HotkeyGroupEnum.Conversation,
@@ -190,12 +204,6 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     group: HotkeyGroupEnum.Conversation,
     id: HotkeyEnum.SaveTopic,
     keys: combineKeys([KeyEnum.Alt, 'n']),
-    scopes: [HotkeyScopeEnum.Chat],
-  },
-  {
-    group: HotkeyGroupEnum.Conversation,
-    id: HotkeyEnum.AddUserMessage,
-    keys: combineKeys([KeyEnum.Alt, KeyEnum.Enter]),
     scopes: [HotkeyScopeEnum.Chat],
   },
   {

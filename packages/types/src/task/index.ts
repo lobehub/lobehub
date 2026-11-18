@@ -1,8 +1,11 @@
 import type { BriefArtifacts } from '../brief';
 import type { ChatFileItem } from '../message/ui/chat';
+import type { TaskLabelRef } from './label';
 
 export * from './archive';
 export * from './execution';
+export * from './label';
+export * from './listFilter';
 
 // ── Task type aliases ──
 
@@ -362,6 +365,8 @@ export interface TaskItem {
   id: string;
   identifier: string;
   instruction: string;
+  /** Labels on the task, attached by task list and detail reads. */
+  labels?: TaskLabelRef[];
   lastHeartbeatAt: Date | null;
   maxTopics: number | null;
   name: string | null;
@@ -443,6 +448,23 @@ export interface TaskDetailSubtaskRunningTopic {
   id: string;
   operationId?: string | null;
 }
+
+/**
+ * Why the server refused to move a task into or out of a project. Sent as
+ * `errorData.projectMoveRefusal` on the BAD_REQUEST, so the client can say what
+ * blocks the move instead of one generic message.
+ */
+export type TaskProjectMoveRefusal =
+  /** A dependency would link tasks in different projects. */
+  | 'external_dependency'
+  /** A subtask of the tree already belongs to a project. */
+  | 'filed_subtask'
+  /** The task already belongs to a project, so its tree cannot move as a whole. */
+  | 'filed_task'
+  /** The task is a subtask; it shares its parent's project. */
+  | 'has_parent'
+  /** Moving only this task would split it from its subtasks. */
+  | 'split_subtasks';
 
 export interface TaskDetailSubtask {
   /** ISO time the subtask was archived; null when it is not archived. */
@@ -648,9 +670,12 @@ export interface TaskDetailData {
   id?: string;
   identifier: string;
   instruction: string;
+  labels?: TaskLabelRef[];
   name?: string | null;
   parent?: { id?: string; agentId?: string | null; identifier: string; name: string | null } | null;
   priority?: number | null;
+  /** The project this task is filed under; null when it has none. */
+  projectId?: string | null;
   schedule?: {
     maxExecutions?: number | null;
     pattern?: string | null;

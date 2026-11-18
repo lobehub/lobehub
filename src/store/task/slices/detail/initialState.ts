@@ -1,4 +1,4 @@
-import type { TaskDetailData } from '@lobechat/types';
+import type { TaskDetailActivity, TaskDetailData } from '@lobechat/types';
 
 import { createReplicaState, type ReplicaState } from '@/libs/replica';
 import { type SaveStatus } from '@/types/saveState';
@@ -16,6 +16,8 @@ export interface TaskDetailSliceState {
       focuses its reply composer each time it changes, so a repeated request
       on an already-open drawer is still observable. */
   activeTopicDrawerFocusRequest?: number;
+  /** A live run opened outside a task detail, where no activity carries its stream marker. */
+  activeTopicDrawerRunningOperation?: TaskDetailActivity['runningOperation'];
   activeTopicDrawerTitle?: string;
   activeTopicDrawerTopicId?: string;
   isCreatingTask: boolean;

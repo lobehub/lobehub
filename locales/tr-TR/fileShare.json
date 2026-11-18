@@ -1,0 +1,15 @@
+{
+  "popover.copyLink": "Bağlantıyı Kopyala",
+  "popover.copyLinkSuccess": "Bağlantı kopyalandı",
+  "popover.linkHint": "Bağlantıya sahip olan herkes bu dosyayı görüntüleyebilir ve indirebilir",
+  "popover.permissionLink": "Bağlantıya sahip olan herkes",
+  "popover.permissionPrivate": "Özel",
+  "popover.privateHint": "Bu dosyayı yalnızca siz açabilirsiniz",
+  "popover.sectionViews_one": "{{count}} görüntülenme",
+  "popover.sectionViews_other": "{{count}} görüntülenme",
+  "popover.title": "Dosyayı Paylaş",
+  "popover.updateError": "Paylaşım ayarları güncellenemedi",
+  "popover.visibility": "Görünürlük",
+  "popover.visibilityUpdated": "Görünürlük güncellendi",
+  "shareButton.label": "Paylaş"
+}

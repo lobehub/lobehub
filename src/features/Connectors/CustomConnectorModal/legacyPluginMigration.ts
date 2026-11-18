@@ -115,6 +115,9 @@ export const buildConnectorPayloadFromLegacy = (legacy: LobeToolCustomPlugin): M
     credentials = { headers: extraHeaders, type: 'header' };
   }
 
+  // The choice to connect through the device carries over (HTTP only)
+  if (normalizedType === 'http' && mcp.connectVia === 'device') metadata.connectVia = 'device';
+
   return {
     ok: true,
     payload: {

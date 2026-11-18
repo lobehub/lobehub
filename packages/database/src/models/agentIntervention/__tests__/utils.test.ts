@@ -18,7 +18,6 @@ import {
   isCanonicalJsonSafe,
   isCustomExecutionResult,
   isPlainRecord,
-  isUniqueViolation,
   normalizeDtoJson,
   providerOptionIds,
   sameDtoJson,
@@ -122,13 +121,6 @@ describe('small helpers', () => {
     expect(asRecord({ a: 1 })).toEqual({ a: 1 });
     expect(asRecord([1])).toEqual({});
     expect(asRecord(null)).toEqual({});
-  });
-
-  it('detects a pg unique violation including the wrapped cause', () => {
-    expect(isUniqueViolation({ code: '23505' })).toBe(true);
-    expect(isUniqueViolation({ cause: { code: '23505' } })).toBe(true);
-    expect(isUniqueViolation({ code: '23503' })).toBe(false);
-    expect(isUniqueViolation(null)).toBe(false);
   });
 
   it('accepts only the custom execution result shape', () => {

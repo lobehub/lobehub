@@ -37,9 +37,23 @@ const log = debug('lobe-server:ai-agent-service');
 export const buildOwnershipNote = async (
   deps: ToolDiscoveryDeps,
   connectors: DecryptedConnector[],
+  anonymous = false,
 ): Promise<string | undefined> => {
   try {
-    const borrowed = collectBorrowedConnectors(connectors, deps.userId!);
+    const borrowed = collectBorrowedConnectors(
+      connectors.filter((c) => !c.links?.length),
+      deps.userId!,
+    );
+    for (const connector of connectors) {
+      for (const [index, link] of (connector.links ?? []).entries()) {
+        if (!link.userId || link.userId === deps.userId) continue;
+        borrowed.push({
+          authorizerId: link.userId,
+          identifier: connector.identifier,
+          name: `${connector.name} (${anonymous ? `Account ${index + 1}` : link.name})`,
+        });
+      }
+    }
     if (borrowed.length > 0) {
       const displayMap = await resolveUserDisplayMap(
         deps.db,
@@ -91,7 +105,12 @@ export const scheduleConnectorRefresh = (
     scheduleStaleConnectorToolsRefresh(
       [...params.connectorsMcp, ...params.discoverableConnectorsMcp],
       buildLastSyncedAtMap([...params.connectorTools, ...params.discoverableConnectorTools]),
-      { connectorModel: refreshConnectorModel, connectorToolModel: deps.connectorToolModel },
+      {
+        connectorModel: refreshConnectorModel,
+        connectorToolModel: deps.connectorToolModel,
+        // Lists under this user's mcp_apps flag, so view-only tools are found too
+        userId: deps.userId,
+      },
     );
   } catch (err) {
     log('execAgent: failed to schedule connector tool refresh (ignored): %O', err);

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { TrashModel } from '../../../models/trash';
-import { channelJobs, channelMessages, channelThreads } from '../../../schemas';
+import { channelJobs, channelMembers, channelMessages, channelThreads } from '../../../schemas';
 import { ChannelExecutionRepository, ChannelRepository } from '..';
 import { ChannelTrashRepository } from '../trash';
 import { createChannelFixture, jobsOf, lease } from './testUtils';
@@ -136,5 +136,25 @@ describe('Channel thread recycle bin', () => {
     expect(await db.select().from(channelThreads).where(eq(channelThreads.id, thread.id))).toEqual([
       expect.objectContaining({ isDeleted: true }),
     ]);
+  });
+  it('restores and purges a branch of a private workspace channel in the deleting admin’s scope', async () => {
+    const { channel, member, asMember, asOwner } = await fixture.createTeamChannel();
+    await db.update(channelMembers).set({ role: 'admin' }).where(eq(channelMembers.id, member.id));
+    const root = await asOwner.send(channel.id, {
+      content: 'Root',
+      requestKey: 'root',
+      routing: 'fallback',
+    });
+    const thread = await asOwner.createThread(channel.id, { rootMessageId: root.id });
+    // The trash handler scopes by the registry row, whose user is the deleter, not the creator.
+    const asDeleter = () => new ChannelTrashRepository(db, fixture.memberId, fixture.workspaceId);
+    await asMember.removeThread(channel.id, thread.id);
+    expect(await asDeleter().restoreThread(thread.id)).toBe('restored');
+
+    await asMember.removeThread(channel.id, thread.id);
+    expect(await asDeleter().purgeThread(thread.id)).toBe('purged');
+    expect(await db.select().from(channelThreads).where(eq(channelThreads.id, thread.id))).toEqual(
+      [],
+    );
   });
 });

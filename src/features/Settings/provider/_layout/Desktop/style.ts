@@ -1,8 +1,7 @@
-import { createStaticStyles } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css }) => ({
-  // Main container
-  mainContainer: css`
-    max-height: 100%;
-  `,
-}));
+export const styles = stylex.create({
+  mainContainer: {
+    maxHeight: '100%',
+  },
+});

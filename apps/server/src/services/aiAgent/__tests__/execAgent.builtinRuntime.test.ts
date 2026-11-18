@@ -12,6 +12,21 @@ import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 
 import { AiAgentService } from '../index';
 
+const runtimeAgentConfig = (chatConfig: Record<string, unknown>, id: string, slug: string) => ({
+  chatConfig,
+  id,
+  model: 'gpt-4',
+  plugins: [],
+  provider: 'openai',
+  slug,
+  systemRole: '',
+});
+
+const inboxRunInput = () => ({
+  agentId: 'agent-inbox',
+  prompt: 'Hello',
+});
+
 const {
   mockCreateOperation,
   mockGetAgentConfig,
@@ -440,10 +455,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       systemRole: '', // empty in DB
     });
 
-    await service.execAgent({
-      agentId: 'agent-inbox',
-      prompt: 'Hello',
-    });
+    await service.execAgent(inboxRunInput());
 
     // Verify createOperation was called with agentConfig containing the runtime systemRole
     expect(mockCreateOperation).toHaveBeenCalledTimes(1);
@@ -496,10 +508,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       systemRole: customSystemRole, // user has customized
     });
 
-    await service.execAgent({
-      agentId: 'agent-inbox',
-      prompt: 'Hello',
-    });
+    await service.execAgent(inboxRunInput());
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig.systemRole).toBe(customSystemRole);
@@ -579,20 +588,9 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
   });
 
   it('should inject self-feedback intent tool for Lobe AI when user gate is enabled', async () => {
-    mockGetAgentConfig.mockResolvedValue({
-      chatConfig: {},
-      id: 'agent-inbox',
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      slug: 'inbox',
-      systemRole: '',
-    });
+    mockGetAgentConfig.mockResolvedValue(runtimeAgentConfig({}, 'agent-inbox', 'inbox'));
 
-    await service.execAgent({
-      agentId: 'agent-inbox',
-      prompt: 'Hello',
-    });
+    await service.execAgent(inboxRunInput());
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.toolSet.enabledToolIds).toContain(SELF_FEEDBACK_INTENT_IDENTIFIER);
@@ -606,15 +604,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
    */
   it('decides the self-feedback intent tool from the preference the run already loaded', async () => {
     mockGetUserPreference.mockResolvedValue({ lab: { enableSelfLearning: true } });
-    mockGetAgentConfig.mockResolvedValue({
-      chatConfig: {},
-      id: 'agent-inbox',
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      slug: 'inbox',
-      systemRole: '',
-    });
+    mockGetAgentConfig.mockResolvedValue(runtimeAgentConfig({}, 'agent-inbox', 'inbox'));
 
     await service.execAgent({ agentId: 'agent-inbox', prompt: 'Hello' });
 
@@ -648,15 +638,9 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
 
   it('should not inject self-feedback intent tool for any agent when Labs Self-evolving is off', async () => {
     mockIsAgentSignalEnabledForUser.mockResolvedValue(false);
-    mockGetAgentConfig.mockResolvedValue({
-      chatConfig: { selfIteration: { enabled: true } },
-      id: 'agent-custom',
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      slug: 'custom-agent',
-      systemRole: '',
-    });
+    mockGetAgentConfig.mockResolvedValue(
+      runtimeAgentConfig({ selfIteration: { enabled: true } }, 'agent-custom', 'custom-agent'),
+    );
 
     await service.execAgent({ agentId: 'agent-custom', prompt: 'Hello' });
 
@@ -678,10 +662,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       systemRole: '',
     });
 
-    await service.execAgent({
-      agentId: 'agent-inbox',
-      prompt: 'Hello',
-    });
+    await service.execAgent(inboxRunInput());
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.toolSet.enabledToolIds).toContain(SELF_FEEDBACK_INTENT_IDENTIFIER);
@@ -699,10 +680,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       systemRole: '',
     });
 
-    await service.execAgent({
-      agentId: 'agent-inbox',
-      prompt: 'Hello',
-    });
+    await service.execAgent(inboxRunInput());
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.toolSet.enabledToolIds).toContain(SELF_FEEDBACK_INTENT_IDENTIFIER);
@@ -710,15 +688,9 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
   });
 
   it('should inject self-feedback intent tool for custom agents with agent self-iteration', async () => {
-    mockGetAgentConfig.mockResolvedValue({
-      chatConfig: { selfIteration: { enabled: true } },
-      id: 'agent-custom',
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      slug: 'custom-agent',
-      systemRole: '',
-    });
+    mockGetAgentConfig.mockResolvedValue(
+      runtimeAgentConfig({ selfIteration: { enabled: true } }, 'agent-custom', 'custom-agent'),
+    );
 
     await service.execAgent({
       agentId: 'agent-custom',

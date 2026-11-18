@@ -49,7 +49,11 @@ const pageEditHooks = {
     if (!documentId) return;
 
     useDocumentStore.getState().endAgentEdit(documentId);
-    await invalidateDocumentMutation({ cause: 'document-service', documentId });
+    await invalidateDocumentMutation({
+      cause: 'document-service',
+      documentId,
+      refreshResources: true,
+    });
   },
   onBeforeCall: (ctx: ToolHookContext) => {
     const documentId = resolveStoredPageEdit(ctx);

@@ -1,13 +1,14 @@
 import { Navigate, type RouteObject, useLocation, useParams } from 'react-router';
 
-import { goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
-import { tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
-import { channelRouteMeta } from '@/features/Channels/routeMeta';
-import { dashboardRouteMeta, dashboardsRouteMeta } from '@/features/Dashboard/routeMeta';
+import { channelRouteMeta, channelSettingsRouteMeta } from '@/features/Channels/routeMeta';
+import { dashboardRouteMeta } from '@/features/Dashboard/routeMeta';
 import {
   projectConversationRouteMeta,
+  projectDashboardsRouteMeta,
   projectDirectoriesRouteMeta,
+  projectGoalsRouteMeta,
   projectHomeRouteMeta,
+  projectTasksRouteMeta,
 } from '@/features/Projects/routeMeta';
 import { projectAcceptanceRoute } from '@/spa/router/projectAcceptanceRoutes';
 import { scheduledTaskListLoader } from '@/spa/router/scheduledTaskListLoader';
@@ -49,6 +50,9 @@ export const projectWorkspaceRoute: RouteObject = {
     },
     { element: <LegacyProjectConversationRedirect />, path: 'conversation/:topicId?' },
     {
+      // A thread opened as the page. The Channel page reads it from the path, so moving
+      // between the thread beside the Channel and the thread page keeps the page mounted.
+      children: [{ path: 'threads/:threadId' }],
       element: dynamicElement(
         () => import('@/routes/(main)/project/[projectId]/channels/[channelId]'),
         'Desktop > Project Channel',
@@ -59,10 +63,19 @@ export const projectWorkspaceRoute: RouteObject = {
     },
     {
       element: dynamicElement(
+        () => import('@/routes/(main)/project/[projectId]/channels/[channelId]/settings'),
+        'Desktop > Project Channel Settings',
+        { preloadId: 'channels' },
+      ),
+      handle: { meta: channelSettingsRouteMeta },
+      path: 'channels/:channelId/settings',
+    },
+    {
+      element: dynamicElement(
         () => import('@/routes/(main)/project/[projectId]/tasks'),
         'Desktop > Project Tasks',
       ),
-      handle: { meta: tasksRouteMeta },
+      handle: { meta: projectTasksRouteMeta },
       loader: scheduledTaskListLoader,
       path: 'tasks',
     },
@@ -80,7 +93,7 @@ export const projectWorkspaceRoute: RouteObject = {
         () => import('@/routes/(main)/project/[projectId]/goals'),
         'Desktop > Project Goals',
       ),
-      handle: { meta: goalsRouteMeta },
+      handle: { meta: projectGoalsRouteMeta },
       path: 'goals',
     },
     {
@@ -91,7 +104,7 @@ export const projectWorkspaceRoute: RouteObject = {
             'Desktop > Project Dashboards',
             { preloadId: 'dashboard' },
           ),
-          handle: { meta: dashboardsRouteMeta },
+          handle: { meta: projectDashboardsRouteMeta },
           index: true,
         },
         {

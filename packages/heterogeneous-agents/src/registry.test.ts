@@ -5,10 +5,11 @@ import {
   ClaudeCodeAdapter,
   CodeBuddyAdapter,
   CodexAdapter,
+  CopilotAcpAdapter,
   CursorAcpAdapter,
   CursorAdapter,
-  DroidAcpAdapter,
   DevinAcpAdapter,
+  DroidAcpAdapter,
   GrokBuildAdapter,
   KimiCodeAdapter,
   OpenCodeAdapter,
@@ -38,6 +39,10 @@ describe('registry', () => {
     it('creates a CodexAdapter for "codex"', () => {
       const adapter = createAdapter('codex');
       expect(adapter).toBeInstanceOf(CodexAdapter);
+    });
+
+    it('creates a CopilotAcpAdapter for "copilot"', () => {
+      expect(createAdapter('copilot')).toBeInstanceOf(CopilotAcpAdapter);
     });
 
     it('creates a KimiCodeAdapter for "kimi-code"', () => {

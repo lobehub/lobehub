@@ -235,6 +235,11 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     return result;
   }
 
+  /** Storage-only: clients already received the removed entries live. */
+  async deleteStreamEvents(operationId: string, eventIds: string[]): Promise<void> {
+    return this.inner.deleteStreamEvents(operationId, eventIds);
+  }
+
   async publishStreamChunk(
     operationId: string,
     stepIndex: number,
@@ -432,6 +437,39 @@ export class GatewayStreamNotifier implements IStreamEventManager {
   async sendToolExecute(operationId: string, data: ToolExecuteData): Promise<void> {
     log('sendToolExecute operation=%s toolCallId=%s', operationId, data.toolCallId);
     await this.httpPostAwait('/api/operations/tool-execute', { data, operationId });
+  }
+
+  /**
+   * Tell the gateway that this operation is parked on a deferred tool, so its
+   * inactivity watchdog stops reading the silence as a dead function.
+   *
+   * Best-effort and version-tolerant: a gateway that predates the route answers
+   * 404, which resolves `false` — the caller then falls back to its own timeout
+   * (the 30-minute watchdog is a hard ceiling there). Never throws: failing to
+   * extend a watchdog must not fail the tool call that is parking.
+   */
+  async markOperationParked(
+    operationId: string,
+    params: { parkedUntil: number; reason?: string; stepIndex?: number },
+  ): Promise<boolean> {
+    try {
+      const res = await this.httpPostResponse('/api/operations/park', {
+        operationId,
+        parkedUntil: params.parkedUntil,
+        reason: params.reason ?? 'deferred_tool',
+        stepIndex: params.stepIndex,
+      });
+      if (res.ok) return true;
+      if (res.status === 404) {
+        log('markOperationParked: gateway has no /park route (op=%s)', operationId);
+        return false;
+      }
+      log('markOperationParked failed (op=%s): %d %s', operationId, res.status, res.body);
+      return false;
+    } catch (error) {
+      log('markOperationParked failed (op=%s): %O', operationId, error);
+      return false;
+    }
   }
 
   /**

@@ -2,7 +2,6 @@ import {
   ActionIcon,
   confirmModal,
   copyToClipboard,
-  createStaticStyles,
   cssVar,
   Flexbox,
   Switch,
@@ -10,6 +9,8 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import { cssVar as sxVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { LucidePencil, TrashIcon } from 'lucide-react';
 import { type AiProviderModelListItem } from 'model-bank';
 import { AiModelSourceEnum } from 'model-bank/aiModel';
@@ -28,39 +29,17 @@ import { createModelConfigModal } from './ModelConfigModal';
 import { formatModelPricingLabels } from './pricingLabels';
 import { ProviderSettingsContext } from './ProviderSettingsContext';
 
-const styles = createStaticStyles(({ css, cx }) => {
-  return {
-    config: cx(
-      'model-item-config',
-      css`
-        opacity: 0;
-        transition: all 100ms ease-in-out;
-      `,
-    ),
-    container: css`
-      position: relative;
-      border-radius: ${cssVar.borderRadiusLG}px;
-      transition: all 200ms ease-in-out;
-
-      &:hover {
-        background-color: ${cssVar.colorFillTertiary};
-
-        .model-item-config {
-          opacity: 1;
-        }
-      }
-    `,
-    desc: css`
-      flex: 1;
-      min-width: 0;
-
-      span {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-    `,
-  };
+const styles = stylex.create({
+  config: {
+    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    transition: 'all 100ms ease-in-out',
+  },
+  container: {
+    position: 'relative',
+    borderRadius: `${sxVar.borderRadiusLG}px`,
+    transition: 'all 200ms ease-in-out',
+    backgroundColor: { 'default': null, ':hover': sxVar.colorFillTertiary },
+  },
 });
 
 interface ModelItemProps extends AiProviderModelListItem {
@@ -138,7 +117,7 @@ const ModelItem = memo<ModelItemProps>(
     const Actions =
       modelEditable &&
       ((style?: React.CSSProperties) => (
-        <Flexbox horizontal className={styles.config} style={style}>
+        <Flexbox horizontal className={stylex.props(styles.config).className} style={style}>
           <ActionIcon
             disabled={!canManageProvider}
             icon={LucidePencil}
@@ -217,7 +196,7 @@ const ModelItem = memo<ModelItemProps>(
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.container}
+        className={stylex.props(styles.container, stylex.defaultMarker()).className}
         gap={24}
         justify={'space-between'}
         padding={12}

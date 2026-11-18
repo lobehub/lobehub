@@ -62,12 +62,12 @@ const MessageRowSkeleton = ({ lines, name }: (typeof MESSAGE_ROWS)[number]) => (
  */
 export const ChannelConversationSkeleton = () => (
   <div aria-busy {...stylex.props(styles.root)}>
-    <Flexbox flex={1} paddingBlock={'16px 24px'} paddingInline={24} style={{ minHeight: 0 }}>
+    <Flexbox flex={1} paddingBlock={'16px 24px'} paddingInline={16} style={{ minHeight: 0 }}>
       {MESSAGE_ROWS.map((row, index) => (
         <MessageRowSkeleton key={index} {...row} />
       ))}
     </Flexbox>
-    <Flexbox flex={'none'} gap={4} paddingBlock={'0 12px'} paddingInline={24}>
+    <Flexbox flex={'none'} gap={4} paddingBlock={'0 12px'} paddingInline={8}>
       <Flexbox height={24} />
       <Flexbox
         horizontal

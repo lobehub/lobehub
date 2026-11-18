@@ -44,6 +44,7 @@ describe('Channel delivery key retirement', () => {
   let historicalFolder: string;
   let messageId: string;
   let originalJobs: Awaited<ReturnType<typeof jobsOf>>;
+  let laterStatements: string[];
 
   beforeAll(async () => {
     historicalFolder = await mkdtemp(path.join(tmpdir(), 'lobe-channel-delivery-key-migration-'));
@@ -51,6 +52,11 @@ describe('Channel delivery key retirement', () => {
     const last = journal.entries.findIndex(({ tag }) => tag === TAG);
     if (last < 0) throw new Error('Channel delivery key migration not found');
     const entries = journal.entries.slice(0, last);
+    // The fixture writes through today's schema, so the old database also needs every column a
+    // later migration adds. Those migrations are idempotent and replay as no-ops during the test.
+    laterStatements = readMigrationFiles({ migrationsFolder })
+      .slice(last + 1)
+      .flatMap(({ sql }) => sql);
     await Promise.all([
       writeFile(
         path.join(historicalFolder, 'meta/_journal.json'),
@@ -69,6 +75,7 @@ describe('Channel delivery key retirement', () => {
     context = createDatabase();
     const { database, db, fixture } = context;
     await migrate(db, { migrationsFolder: historicalFolder });
+    for (const statement of laterStatements) await context.client.exec(statement);
     await fixture.setup();
     team = await fixture.createTeamChannel();
     await fixture.addAgent(team.channel.id, 'Coder');

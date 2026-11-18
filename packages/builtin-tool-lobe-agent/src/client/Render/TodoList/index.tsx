@@ -2,9 +2,9 @@
 
 import { TodoPanelHeader } from '@lobechat/shared-tool-ui/components';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Block, Icon } from '@lobehub/ui';
-import { Checkbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { Block, Checkbox, cx, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CircleArrowRight } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,33 +21,20 @@ export interface TodoListRenderState {
 }
 
 // Styles matching TodoItemRow in SortableTodoList
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  itemRow: css`
-    width: 100%;
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-block-end: 1px dashed ${cssVar.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-  processingRow: css`
-    display: flex;
-    gap: 7px;
-    align-items: center;
-  `,
-  textCompleted: css`
-    color: ${cssVar.colorTextQuaternary};
-    text-decoration: line-through;
-  `,
-  textProcessing: css`
-    color: ${cssVar.colorText};
-  `,
-  textTodo: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  itemRow: {
+    width: '100%',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: { 'default': 'dashed', ':last-child': 'none' },
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  processingRow: { display: 'flex', gap: '7px', alignItems: 'center' },
+  textCompleted: { color: cssVar.colorTextQuaternary, textDecoration: 'line-through' },
+  textProcessing: { color: cssVar.colorText },
+  textTodo: { color: cssVar.colorTextSecondary },
+});
 
 interface ReadOnlyTodoItemProps {
   status: TodoStatus;
@@ -64,9 +51,9 @@ const ReadOnlyTodoItem = memo<ReadOnlyTodoItemProps>(({ text, status }) => {
   // Processing state uses CircleArrowRight icon
   if (isProcessing) {
     return (
-      <div className={cx(styles.itemRow, styles.processingRow)}>
+      <div {...stylex.props(styles.itemRow, styles.processingRow)}>
         <Icon icon={CircleArrowRight} size={17} style={{ color: cssVar.colorInfo }} />
-        <span className={styles.textProcessing}>{text}</span>
+        <span {...stylex.props(styles.textProcessing)}>{text}</span>
       </div>
     );
   }
@@ -79,8 +66,8 @@ const ReadOnlyTodoItem = memo<ReadOnlyTodoItemProps>(({ text, status }) => {
       shape={'circle'}
       style={{ borderWidth: 1.5, cursor: 'default' }}
       classNames={{
-        text: cx(styles.textTodo, isCompleted && styles.textCompleted),
-        wrapper: styles.itemRow,
+        text: cx(stylex.props(styles.textTodo, isCompleted && styles.textCompleted).className),
+        wrapper: stylex.props(styles.itemRow).className,
       }}
       textProps={{
         type: isCompleted ? 'secondary' : undefined,

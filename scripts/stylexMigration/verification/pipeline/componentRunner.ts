@@ -25,12 +25,16 @@ import { captureComponent } from '../browser/capture';
 import { compareComponents } from '../browser/compareSnapshots';
 import { collectRulesInPage } from '../browser/ruleInventory';
 import { readRuntimeCompositions } from '../browser/runtimeCompositions';
+import { captureScreenshotEvidence } from '../browser/screenshotEvidence';
+import { screenshotCaptureLimit, shouldCaptureScreenshot } from '../browser/screenshotPlan';
+import { resolveCaptureSurfacesInPage } from '../browser/surfaces';
 import { buildComponentFixture } from '../build/buildFixtures';
 import { digestFile } from '../dependencies/dependencySnapshot';
 import type { StyleFixture } from '../fixtures/fixtureRegistry';
 import { serveFixtures } from '../fixtures/fixtureServer';
+import { loadPinnedAssets } from '../fixtures/pinnedAssets';
 import { sha256, writeJson } from '../reporting/report';
-import type { GateInput } from '../types';
+import type { FixtureResult, VerificationFinding } from '../types';
 import type { FixtureProbe } from './probePlanner';
 import { planFixtureProbes } from './probePlanner';
 import type { ProbeShardBudget } from './probeShards';
@@ -64,6 +68,9 @@ interface ProbeResult {
 }
 
 const openPage = async (browser: Browser, origin: string, failures: Set<string>) => {
+  const sourceDirectory = process.env.STYLEX_VERIFIER_SOURCE_DIRECTORY;
+  if (!sourceDirectory) throw new Error('VERIFIER_SOURCE_DIRECTORY_MISSING');
+  const assets = await loadPinnedAssets(sourceDirectory);
   const context = await browser.newContext({
     colorScheme: 'light',
     deviceScaleFactor: 1,
@@ -74,7 +81,12 @@ const openPage = async (browser: Browser, origin: string, failures: Set<string>)
     viewport: { height: 900, width: 1200 },
   });
   await context.route('**/*', async (route) => {
-    if (new URL(route.request().url()).origin === origin) await route.continue();
+    if (assets.has(route.request().url()))
+      await route.fulfill({
+        body: assets.get(route.request().url())!,
+        contentType: 'image/svg+xml',
+      });
+    else if (new URL(route.request().url()).origin === origin) await route.continue();
     else {
       failures.add(`EXTERNAL_REQUEST_BLOCKED:${route.request().resourceType()}`);
       await route.abort();
@@ -135,30 +147,40 @@ const applyProbe = async (
     },
     { ...probe, settleFrames: fixture.settleFrames },
   );
+  const scope = await page.evaluate(resolveCaptureSurfacesInPage, {
+    surfaces: fixture.surfaces,
+    variant: probe.variant,
+  });
   if (probe.interaction || probe.pseudo !== 'default') {
     const selector = probe.interaction
-      ? await page.evaluate(({ key, tag }) => {
-          if (!/^root(?:\.\d+)*$/.test(key)) throw new Error('INVALID_TRIGGER_KEY');
-          let element = document.querySelector('[data-case-root]');
-          for (const index of key.split('.').slice(1).map(Number))
-            element = element
-              ? [...element.children].filter(
-                  (child) => !['LINK', 'META', 'SCRIPT', 'STYLE'].includes(child.tagName),
-                )[index]
-              : null;
-          if (!element || element.tagName !== tag)
-            throw new Error('PAIRED_TRIGGER_STRUCTURE_MISMATCH');
-          const segments: string[] = [];
-          for (
-            let current: Element | null = element;
-            current?.parentElement;
-            current = current.parentElement
-          )
-            segments.unshift(
-              `:nth-child(${[...current.parentElement.children].indexOf(current) + 1})`,
-            );
-          return [':root', ...segments].join(' > ');
-        }, probe.interaction)
+      ? await page.evaluate(
+          ({ key, tag, roots }) => {
+            const surface = roots.find((root) => key.startsWith(`${root.keyPrefix}root`));
+            if (!surface) throw new Error('INVALID_TRIGGER_SURFACE');
+            const localKey = key.slice(surface.keyPrefix.length);
+            if (!/^root(?:\.\d+)*$/.test(localKey)) throw new Error('INVALID_TRIGGER_KEY');
+            let element = document.querySelector(surface.selector);
+            for (const index of localKey.split('.').slice(1).map(Number))
+              element = element
+                ? [...element.children].filter(
+                    (child) => !['LINK', 'META', 'SCRIPT', 'STYLE'].includes(child.tagName),
+                  )[index]
+                : null;
+            if (!element || element.tagName !== tag)
+              throw new Error('PAIRED_TRIGGER_STRUCTURE_MISMATCH');
+            const segments: string[] = [];
+            for (
+              let current: Element | null = element;
+              current?.parentElement;
+              current = current.parentElement
+            )
+              segments.unshift(
+                `:nth-child(${[...current.parentElement.children].indexOf(current) + 1})`,
+              );
+            return [':root', ...segments].join(' > ');
+          },
+          { ...probe.interaction, roots: scope.roots },
+        )
       : (fixture.interactionSelectors[probe.pseudo as 'hover' | 'focus-visible'] ??
         fixture.defaultInteractionSelector);
     if (!selector) throw new Error('PSEUDO_TRIGGER_CONTRACT_MISSING');
@@ -183,6 +205,7 @@ export const runComponentFixture = async (options: {
   fixture: StyleFixture;
   output: string;
   sourceDirectory: string;
+  screenshots?: boolean;
 }) => {
   const { fixture, output } = options;
   const builds = {
@@ -202,11 +225,11 @@ export const runComponentFixture = async (options: {
     fixture,
     output,
     provenance: 'component-build',
+    screenshots: options.screenshots,
   });
   return { ...result, artifactFiles: ['fixture-builds.json', ...result.artifactFiles] };
 };
 
-/** Lower-level browser integration; callers cannot turn this into a gate approval. */
 export const runFixtureComparison = async (options: {
   browser?: string;
   bindingPlans?: { base: StyleBindingPlan; candidate: StyleBindingPlan };
@@ -217,6 +240,7 @@ export const runFixtureComparison = async (options: {
   probeBudget?: Partial<ProbeShardBudget>;
   planConditions?: boolean;
   provenance: 'component-build' | 'infrastructure-corpus';
+  screenshots?: boolean;
 }) => {
   const { builds, fixture, output } = options;
   const started = performance.now();
@@ -237,7 +261,7 @@ export const runFixtureComparison = async (options: {
   });
   let browser: Browser | undefined;
   const failures = new Set<string>();
-  const findings: GateInput['findings'] = [
+  const findings: VerificationFinding[] = [
     {
       confirmed: false,
       id: 'font-contract',
@@ -245,9 +269,14 @@ export const runFixtureComparison = async (options: {
       severity: 'review',
     },
   ];
-  const fixtureResults: GateInput['fixtures'] = [];
+  const fixtureResults: FixtureResult[] = [];
   const artifactFiles = ['probe-plan.json'];
   const results: ProbeResult[] = [];
+  const screenshots: Array<{
+    probeId: string;
+    variant: string;
+    result: Awaited<ReturnType<typeof captureScreenshotEvidence>>;
+  }> = [];
   const rulePlans: Array<{ plan: RuleWitnessPlan; side: 'base' | 'candidate'; variant: string }> =
     [];
   const ruleEvidence: RuleProbeEvidence[] = [];
@@ -380,9 +409,12 @@ export const runFixtureComparison = async (options: {
         const captureTiming: CaptureTiming[] = [{}, {}, {}];
         const [base, aa, candidate] = await shardController.runOperation(() =>
           Promise.all(
-            pages
-              .slice(0, 3)
-              .map((entry, index) => captureComponent(entry.page, entry.cdp, captureTiming[index])),
+            pages.slice(0, 3).map((entry, index) =>
+              captureComponent(entry.page, entry.cdp, captureTiming[index], {
+                surfaces: fixture.surfaces,
+                variant: probe.variant,
+              }),
+            ),
           ),
         );
         timing.capture = performance.now() - phaseStarted;
@@ -404,7 +436,10 @@ export const runFixtureComparison = async (options: {
             applyProbe(pages[3].page, pages[3].cdp, server.origin, 'candidate', probe, fixture),
           );
           const repeated = await shardController.runOperation(() =>
-            captureComponent(pages[3].page, pages[3].cdp, (confirmationCaptureTiming = {})),
+            captureComponent(pages[3].page, pages[3].cdp, (confirmationCaptureTiming = {}), {
+              surfaces: fixture.surfaces,
+              variant: probe.variant,
+            }),
           );
           confirmation = compareComponents(aa, repeated);
           evidenceRefs.push(await saveSnapshot(repeated));
@@ -412,6 +447,25 @@ export const runFixtureComparison = async (options: {
             JSON.stringify(comparison.differences) === JSON.stringify(confirmation.differences);
         }
         timing.confirmation = performance.now() - phaseStarted;
+        if (
+          options.screenshots &&
+          shouldCaptureScreenshot(
+            fixture.styleVariants.map((entry) => entry.id),
+            screenshots.map((entry) => entry.variant),
+            variant.id,
+            comparison.differences.length > 0,
+          )
+        ) {
+          const image = await shardController.runOperation(() =>
+            captureScreenshotEvidence(
+              pages.slice(0, 3).map((entry) => entry.page),
+              output,
+              `pixels-${screenshots.length}`,
+            ),
+          );
+          screenshots.push({ probeId: probe.id, variant: variant.id, result: image });
+          artifactFiles.push(...image.artifactFiles);
+        }
         phaseStarted = performance.now();
         if (comparison.differences.length)
           findings.push({
@@ -438,6 +492,7 @@ export const runFixtureComparison = async (options: {
               pages[index].page.evaluate(collectRuleWitnessesInPage, {
                 nonce: randomBytes(8).toString('hex'),
                 rules: plan.rules,
+                roots: (index === 0 ? base : candidate).scope?.roots,
               }),
             );
             ruleEvidence.push({
@@ -480,6 +535,7 @@ export const runFixtureComparison = async (options: {
               )!.observation;
               return {
                 ...(await pages[index].page.evaluate(readConditionHostInPage, {
+                  'roots': (index === 0 ? base : candidate).scope?.roots,
                   'hover': fixture.interactionSelectors.hover ?? fixture.defaultInteractionSelector,
                   'focus-visible':
                     fixture.interactionSelectors['focus-visible'] ??
@@ -549,6 +605,19 @@ export const runFixtureComparison = async (options: {
       );
     }
     const probeShards = shardController.report(probes.map((probe) => probe.id));
+    if (options.screenshots) {
+      await writeJson(output, 'screenshots.json', {
+        advisoryOnly: true,
+        captures: screenshots,
+        maxCaptures: screenshotCaptureLimit,
+        limitations: [
+          'VIEWPORT_ONLY',
+          'PIXEL_EQUALITY_DOES_NOT_OVERRIDE_STYLE_FAILURE',
+          'UNSAMPLED_STATES_NOT_PROVEN',
+        ],
+      });
+      artifactFiles.push('screenshots.json');
+    }
     await writeJson(output, 'probe-shards.json', probeShards);
     artifactFiles.push('probe-shards.json');
     for (const [index, reasonCode] of probeShards.gaps.entries())
@@ -657,7 +726,6 @@ export const runFixtureComparison = async (options: {
       ],
       fixture,
       fixtureResults,
-      gateEligible: false,
       results,
       ruleCoverageRef: ruleCoverage ? 'rule-coverage.json' : undefined,
       schemaVersion: 1,

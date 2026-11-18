@@ -3,7 +3,7 @@ import { FAVORITE_LIMIT } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { userFavorites, users, workspaces } from '../../schemas';
+import { tasks, userFavorites, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { FavoriteLimitError, FavoriteModel } from '../favorite';
 
@@ -34,6 +34,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await serverDB.delete(userFavorites);
+  await serverDB.delete(tasks);
   await serverDB.delete(users);
   await serverDB.delete(workspaces);
 });
@@ -67,6 +68,77 @@ describe('FavoriteModel', () => {
       targetId: 'tpc_1',
       title: 'New',
     });
+  });
+
+  it('carries the current status of a favorited task', async () => {
+    await serverDB.insert(tasks).values([
+      {
+        createdByUserId: userId,
+        id: 'task_personal',
+        identifier: 'T-1',
+        instruction: 'x',
+        seq: 1,
+        status: 'running',
+      },
+      {
+        createdByUserId: userId,
+        id: 'task_ws',
+        identifier: 'T-2',
+        instruction: 'x',
+        seq: 2,
+        status: 'paused',
+        workspaceId,
+      },
+      {
+        createdByUserId: otherUserId,
+        id: 'task_private',
+        identifier: 'T-3',
+        instruction: 'x',
+        seq: 3,
+        status: 'failed',
+        visibility: 'private',
+        workspaceId,
+      },
+      {
+        createdByUserId: userId,
+        id: 'task_trashed',
+        identifier: 'T-4',
+        instruction: 'x',
+        isDeleted: true,
+        seq: 4,
+        status: 'running',
+      },
+    ]);
+    const task = (id: string) => ({
+      path: `/task/${id}`,
+      targetId: id,
+      title: id,
+      type: 'task' as const,
+    });
+
+    expect(await personalModel.add(task('task_personal'))).toMatchObject({ status: 'running' });
+    await personalModel.add(topic('tpc_1'));
+    // A task from another scope, or one that no longer exists, has no status to show.
+    await personalModel.add(task('task_ws'));
+    await personalModel.add(task('task_gone'));
+    // A task in the recycle bin is not a live task either.
+    await personalModel.add(task('task_trashed'));
+    await workspaceModel.add(task('task_ws'));
+    // Another member's private task stays hidden, status included.
+    expect(await workspaceModel.add(task('task_private'))).not.toHaveProperty('status');
+
+    const items = await personalModel.query();
+    expect(items.map((item) => [item.targetId, item.status])).toEqual([
+      ['task_personal', 'running'],
+      ['tpc_1', undefined],
+      ['task_ws', undefined],
+      ['task_gone', undefined],
+      ['task_trashed', undefined],
+    ]);
+
+    await serverDB.update(tasks).set({ status: 'completed' });
+    expect((await personalModel.query())[0].status).toBe('completed');
+    expect((await workspaceModel.query())[0].status).toBe('completed');
   });
 
   it('keeps personal, workspace and other members’ favorites apart', async () => {

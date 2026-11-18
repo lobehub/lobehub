@@ -1,8 +1,11 @@
 import type { Browser } from '@playwright/test';
 
+import {
+  captureInPage,
+  compareSnapshots,
+} from '../../../../packages/style-equivalence/src/capture/snapshot';
 import { captureComponent } from '../browser/capture';
 import { createFastCapture } from '../browser/fastCapture';
-import { captureInPage, compareSnapshots } from '../browser/snapshot';
 
 /** Independent legacy enumeration. Never share the optimized name list with the
  * reference collector: doing so could hide an omitted property in both trees. */

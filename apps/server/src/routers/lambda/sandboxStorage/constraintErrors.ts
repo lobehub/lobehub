@@ -12,7 +12,7 @@ const ENVIRONMENT_NAME_CONSTRAINTS = new Set([
 const INSTANCE_DIRECTORY_CONSTRAINT = 'environment_instances_provider_path_unique';
 
 /** Postgres surfaces the driver error somewhere down the `cause` chain. */
-const getPostgresErrorField = (error: unknown, field: string): string | undefined => {
+export const getPostgresErrorField = (error: unknown, field: string): string | undefined => {
   let current: unknown = error;
 
   while (current && typeof current === 'object') {

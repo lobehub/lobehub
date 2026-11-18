@@ -118,12 +118,7 @@ const readTopicPreview = async (
   const message = page.messages.find((item) => item.id === finalId);
   if (!isFinalAnswer(message) || !message) return skipped(topic.id, 'notFinalAnswer');
 
-  const taskCompletions = tail.message.taskCompletions as AssistantContentBlock[] | undefined;
-  const workRootOperationId = findLatestWorkRootOperationId(
-    tail.message.metadata,
-    children,
-    taskCompletions,
-  );
+  const workRootOperationId = findLatestWorkRootOperationId(tail.message.metadata, children);
 
   return {
     blocks: children,

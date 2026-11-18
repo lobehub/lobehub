@@ -9,10 +9,12 @@ import { memo, useCallback, useMemo } from 'react';
 import AssistantMessageNotice from '@/business/client/components/AssistantMessageNotice';
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';
+import { selectionStyles } from '@/features/Conversation/MessageForward/selectionStyles';
 import { useMessageCommentCount } from '@/features/TopicComment/hooks';
 import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { sx } from '@/styles/sx';
 
 import { ReactionDisplay } from '../../components/Reaction';
 import ErrorMessageExtra, { useErrorContent } from '../../Error';
@@ -26,13 +28,17 @@ import {
   useSetMessageItemActionTypeContext,
 } from '../Contexts/message-action-context';
 import MessageWorks from '../MessageWorks';
+import DirectMentionProgress, { DirectMentionStatus } from './components/DirectMentionProgress';
 import InterruptedHint from './components/InterruptedHint';
 import MessageContent from './components/MessageContent';
 import ThreadExecutionSummary from './components/ThreadExecutionSummary';
 import { AssistantMessageExtra } from './Extra';
 
 const actionBarHolder = (
-  <div {...{ [MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES.assistant]: '' }} style={{ height: '28px' }} />
+  <div
+    {...{ [MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES.assistant]: '' }}
+    {...sx(selectionStyles.hidden, { height: '28px' })}
+  />
 );
 
 interface AssistantMessageProps {
@@ -62,6 +68,7 @@ const AssistantMessage = memo<AssistantMessageProps>(
       performance,
       usage,
       metadata,
+      taskDetail,
     } = item;
 
     const avatar = useAgentMeta(agentId);
@@ -120,6 +127,14 @@ const AssistantMessage = memo<AssistantMessageProps>(
       [id, index, setMessageItemActionElementPortialContext, setMessageItemActionTypeContext],
     );
 
+    // A direct @Agent reply still being written in its thread: show its live
+    // progress instead of an empty bubble until the answer lands here.
+    const processing = useConversationStore(messageStateSelectors.isMessageProcessing(id));
+    const runningThreadId =
+      processing && agentId && taskDetail?.threadId && (!content || content === LOADING_FLAT)
+        ? taskDetail.threadId
+        : undefined;
+
     const hasEmptyErrorMessage = Boolean(
       errorContent &&
       error &&
@@ -129,7 +144,7 @@ const AssistantMessage = memo<AssistantMessageProps>(
     return (
       <ChatItem
         showTitle
-        aboveMessage={<ThreadExecutionSummary messageId={id} />}
+        aboveMessage={runningThreadId ? undefined : <ThreadExecutionSummary messageId={id} />}
         // ChatItem renders this as the primary block when the message is empty,
         // or inside messageExtra (below the content) when the turn streamed
         // content before erroring — so don't gate it on empty content.
@@ -140,11 +155,10 @@ const AssistantMessage = memo<AssistantMessageProps>(
         editing={editing}
         error={errorContent && error ? errorContent : undefined}
         id={id}
-        loading={generating || isCreating}
+        loading={generating || isCreating || !!runningThreadId}
         message={message}
         placement={'left'}
-        time={createdAt}
-        titleAddon={<RefreshingIndicator messageId={id} />}
+        time={runningThreadId ? undefined : createdAt}
         actionAddon={
           reactions.length > 0 || (commentCount > 0 && commentTopicId) ? (
             <>
@@ -195,10 +209,25 @@ const AssistantMessage = memo<AssistantMessageProps>(
             {footerRender}
           </>
         }
+        titleAddon={
+          runningThreadId ? (
+            <DirectMentionStatus
+              startedAt={
+                taskDetail?.startedAt ? Date.parse(taskDetail.startedAt) : Number(createdAt)
+              }
+            />
+          ) : (
+            <RefreshingIndicator messageId={id} />
+          )
+        }
         onDoubleClick={onDoubleClick}
         onMouseEnter={onMouseEnter}
       >
-        <MessageContent {...item} />
+        {runningThreadId ? (
+          <DirectMentionProgress agentId={agentId!} messageId={id} threadId={runningThreadId} />
+        ) : (
+          <MessageContent {...item} />
+        )}
       </ChatItem>
     );
   },

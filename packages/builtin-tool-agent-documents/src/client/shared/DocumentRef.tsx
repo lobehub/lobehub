@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { FileTextIcon, FolderIcon, HomeIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,16 +10,10 @@ import { useTranslation } from 'react-i18next';
 import { describeDocumentRef } from './describeDocumentRef';
 import type { AgentDocumentLookup } from './useAgentDocumentLookup';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  icon: css`
-    flex: none;
-    color: ${cssVar.colorTextDescription};
-  `,
-  id: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-  `,
-}));
+const styles = stylex.create({
+  icon: { flex: 'none', color: cssVar.colorTextDescription },
+  id: { fontFamily: cssVar.fontFamilyCode, fontSize: '12px' },
+});
 
 interface DocumentRefProps {
   /** Title to show when the id no longer resolves (e.g. from a tool result). */
@@ -35,7 +31,7 @@ const DocumentRef = memo<DocumentRefProps>(({ fallbackTitle, lookup, refId, stro
 
   if (view.kind === 'unknown') {
     return (
-      <Text className={styles.id} type={'secondary'}>
+      <Text className={stylex.props(styles.id).className} type={'secondary'}>
         {t('builtins.lobe-agent-documents.ref.unknown', { id: view.id })}
       </Text>
     );
@@ -46,7 +42,7 @@ const DocumentRef = memo<DocumentRefProps>(({ fallbackTitle, lookup, refId, stro
 
   return (
     <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
-      <Icon className={styles.icon} icon={icon} size={14} />
+      <Icon className={stylex.props(styles.icon).className} icon={icon} size={14} />
       <Text ellipsis strong={strong}>
         {title}
       </Text>

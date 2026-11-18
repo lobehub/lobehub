@@ -12,7 +12,7 @@ import { useLocation } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
-import { RouteLoading } from '@/components/Skeleton/RouteSegment';
+import { ServiceModelFormSkeleton } from '@/components/Skeleton/Settings/tabs/ServiceModel';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { usePermission } from '@/hooks/usePermission';
@@ -139,7 +139,9 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
           onRetry={() => refreshUserState()}
         />
       );
-    return <RouteLoading />;
+    // Same model cards the route and chunk fallbacks draw; `RouteLoading` here
+    // nested a second padded container inside the settings one.
+    return <ServiceModelFormSkeleton />;
   }
 
   const skipSlots = hidePersonalPreferences ? PERSONAL_SLOTS : NO_SLOTS;

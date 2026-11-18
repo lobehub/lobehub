@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { isSameTabTarget, normalizeTabScope, resolveTabScope, tabTargetId } from './scope';
+import {
+  isSameTabTarget,
+  normalizeTabScope,
+  resolveNewTabUrl,
+  resolveTabScope,
+  tabTargetId,
+} from './scope';
 
 describe('desktop tab scope', () => {
   it('marks known top-level desktop routes as personal scope', () => {
@@ -45,5 +51,15 @@ describe('desktop tab scope', () => {
 
   it('keeps the historical recent/pinned id as the normalized URL', () => {
     expect(tabTargetId('/acme/agent/a?b=2&a=1')).toBe('/acme/agent/a?a=1&b=2');
+  });
+
+  // Regression: the macOS Preferences menu (Cmd+,) broadcasts `createNewTab`
+  // with a bare `/settings`, which resolved as personal and swapped the whole
+  // tab strip out of the workspace.
+  it('keeps new tabs in the active workspace scope', () => {
+    expect(resolveNewTabUrl('/settings', '/acme/agent/a')).toBe('/acme/settings');
+    expect(resolveNewTabUrl('/', '/acme/agent/a')).toBe('/acme/');
+    expect(resolveNewTabUrl('/settings', '/agent/a')).toBe('/settings');
+    expect(resolveNewTabUrl('/settings/llm', '/acme/agent/a')).toBe('/settings/llm');
   });
 });

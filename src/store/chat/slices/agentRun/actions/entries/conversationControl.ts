@@ -11,7 +11,6 @@ import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
-import { lambdaClient } from '@/libs/trpc/client';
 import {
   type AgentInterventionSourceAction,
   aiAgentService,
@@ -37,6 +36,7 @@ import {
   shouldUseGatewayResume as resolveGatewayResume,
 } from './gatewayResume';
 import { createInterventionProjection } from './interventionProjection';
+import { submitRemoteHeteroIntervention } from './remoteHeteroIntervention';
 
 /**
  * Actions for controlling conversation operations like cancellation and error handling
@@ -1686,14 +1686,14 @@ export class ConversationControlActionImpl {
 
     // Walk up to the assistant that owns this tool. `messageOperationMap` is a
     // most-granular pointer, so it may reference a transient child op
-    // (`reasoning`, `toolCalling`, ...), not the runtime execution that owns
-    // the AskUser bridge. This memory-only lookup is deliberately deferred
-    // until the durable path is unavailable or reports `handled: false`; it is
-    // provenance for local desktop IPC / legacy fallback, never server auth.
+    // (`reasoning`, `toolCalling`, ...), not the runtime owning the AskUser bridge.
+    // Prefer live IPC provenance; on OSS reload, the persisted op locates the
+    // remote callback. The server still authorizes the operation independently.
     const { messageOperationMap } = this.#get();
     const candidateOperationId =
       (toolMessage.parentId && messageOperationMap?.[toolMessage.parentId]) ??
-      messageOperationMap?.[toolMessageId];
+      messageOperationMap?.[toolMessageId] ??
+      originalIntervention?.operationId;
 
     if (!candidateOperationId) {
       if (await this.#get().checkQuestionSubmission(toolMessageId, effectiveContext)) {
@@ -1730,7 +1730,10 @@ export class ConversationControlActionImpl {
       optimisticContext,
     );
     if (actionType === 'submit') {
-      await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext);
+      // A share visitor cannot write the creator's rows; the tool result persists it.
+      await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext, {
+        persist: !effectiveContext.agentShareId,
+      });
     }
     if (this.#discardSettledHeteroQuestion(toolMessageId)) return;
 
@@ -1770,22 +1773,13 @@ export class ConversationControlActionImpl {
         const resolutionRequestId =
           this.#heteroResolutionRequestIds.get(resolutionKey) ?? globalThis.crypto.randomUUID();
         this.#heteroResolutionRequestIds.set(resolutionKey, resolutionRequestId);
-        await lambdaClient.aiAgent.submitHeteroIntervention.mutate(
-          actionType === 'submit'
-            ? {
-                operationId: remoteOperationId,
-                resolutionRequestId,
-                result: payload ?? {},
-                toolCallId,
-              }
-            : {
-                cancelReason: 'user_cancelled',
-                cancelled: true,
-                operationId: remoteOperationId,
-                resolutionRequestId,
-                toolCallId,
-              },
-        );
+        await submitRemoteHeteroIntervention(effectiveContext, {
+          actionType,
+          operationId: remoteOperationId,
+          payload,
+          resolutionRequestId,
+          toolCallId,
+        });
       }
     } catch (err) {
       if (this.#discardSettledHeteroQuestion(toolMessageId)) return;
@@ -1854,16 +1848,13 @@ export class ConversationControlActionImpl {
     toolMessageId: string,
     answers: Record<string, unknown>,
     context?: OptimisticUpdateContext,
+    { persist = true }: { persist?: boolean } = {},
   ): Promise<void> => {
     this.#get().internal_dispatchMessage(
-      {
-        id: toolMessageId,
-        key: 'askUserAnswers',
-        type: 'updatePluginState',
-        value: answers,
-      },
+      { id: toolMessageId, key: 'askUserAnswers', type: 'updatePluginState', value: answers },
       context,
     );
+    if (!persist) return;
     try {
       const { messageService } = await import('@/services/message');
       const ctx = this.#get().internal_getConversationContext(context);

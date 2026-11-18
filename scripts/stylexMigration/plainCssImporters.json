@@ -1,0 +1,15 @@
+[
+  "apps/auth/app/root.tsx",
+  "apps/share/app/root.tsx",
+  "apps/share/src/entry.tsx",
+  "apps/workbench/app/root.tsx",
+  "apps/workbench/src/entry.tsx",
+  "apps/workbench/src/localReport/entry.tsx",
+  "packages/canvas-runtime/src/index.tsx",
+  "packages/style-equivalence/src/report/main.tsx",
+  "packages/style-equivalence/test/fixtures/mini-project/host.tsx",
+  "scripts/stylexMigration/styleEquivalenceHost.tsx",
+  "scripts/stylexMigration/verification/fixtures/FixtureHost.tsx",
+  "src/initialize.ts",
+  "src/layout/GlobalProvider/AppTheme.tsx"
+]

@@ -8,6 +8,8 @@ import {
 } from '@lobechat/builtin-tool-web-onboarding';
 import type { ChatToolPayloadWithResult } from '@lobechat/types';
 
+import { getMcpAppFromState } from '@/libs/mcp/mcpApp';
+
 interface ToolRenderRuleTarget {
   apiName: string;
   identifier: string;
@@ -60,3 +62,45 @@ export const isImageOutputTool = (tool: ChatToolPayloadWithResult): boolean => {
  */
 export const isImageBearingTool = (tool: ChatToolPayloadWithResult): boolean =>
   isImageOutputTool(tool) || hasUploadedImages(tool.result?.state);
+
+/**
+ * Tools whose result renders an interactive MCP App view. Like a produced image,
+ * the view is what the turn delivers, so it stays on screen after the turn
+ * while the rest of the process folds.
+ */
+export const isMcpAppTool = (tool: ChatToolPayloadWithResult): boolean =>
+  !!getMcpAppFromState(tool.result?.state);
+
+/** Tools that surface on their own between collapsed workflow runs. */
+export const isBreakoutTool = (tool: ChatToolPayloadWithResult): boolean =>
+  isImageBearingTool(tool) || isMcpAppTool(tool);
+
+/**
+ * A tool that only READ an image (Claude Code `Read`, `readFile`, a browser
+ * `screenshot`) without producing one. The user setting
+ * `showImageReadPreview` decides whether these break out of the workflow
+ * collapse and open their image by default, or fold in like any other call.
+ */
+export const isImageReadTool = (tool: ChatToolPayloadWithResult): boolean =>
+  !isImageOutputTool(tool) && hasUploadedImages(tool.result?.state);
+
+export interface BreakoutToolOptions {
+  /** Runtime flag `mcp_apps`: MCP App views break out of collapsed runs too. */
+  enableMcpApps?: boolean;
+  /**
+   * User setting `showImageReadPreview`. Off folds image reads into the run;
+   * produced images and MCP App views still break out.
+   * @default true
+   */
+  showImageReads?: boolean;
+}
+
+/** Picks the breakout predicate for the current flags and user setting. */
+export const getBreakoutPredicate = ({
+  enableMcpApps,
+  showImageReads = true,
+}: BreakoutToolOptions): ((tool: ChatToolPayloadWithResult) => boolean) => {
+  const isImageBreakout = showImageReads ? isImageBearingTool : isImageOutputTool;
+
+  return enableMcpApps ? (tool) => isImageBreakout(tool) || isMcpAppTool(tool) : isImageBreakout;
+};

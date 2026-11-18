@@ -1,101 +1,61 @@
 import { type ItemType } from '@lobehub/ui';
-import {
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  SearchBar,
-  stopPropagation,
-  usePopoverContext,
-} from '@lobehub/ui';
-import { Pin, Settings, Store, Zap } from 'lucide-react';
+import { Flexbox, Icon, SearchBar, stopPropagation, usePopoverContext } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { Pin, Settings, Zap } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { buildAgentProfileTabPath } from '@/features/AgentProfileTabs/tabOptions';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
+import { useAgentId } from '../../hooks/useAgentId';
 import { ScrollSignalProvider } from './ScrollSignalContext';
 import SkillActivateMode from './SkillActivateMode';
 import ToolsList from './ToolsList';
 
-const styles = createStaticStyles(({ css }) => ({
-  footer: css`
-    display: flex;
-    gap: 14px;
-    align-items: center;
-
-    padding-block: 6px;
-    padding-inline: 12px;
-    border-block-start: 1px solid ${cssVar.colorFill};
-  `,
-  header: css`
-    padding-block: 8px;
-    padding-inline: 8px;
-    border-block-end: 1px solid ${cssVar.colorFill};
-  `,
-  iconButton: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 28px;
-    height: 28px;
-    border: 0;
-    border-radius: 6px;
-
-    color: ${cssVar.colorTextTertiary};
-
-    background: transparent;
-
-    transition:
-      color 0.2s,
-      background 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  statsItem: css`
-    display: inline-flex;
-    gap: 5px;
-    align-items: center;
-
-    font-size: 12px;
-    line-height: 18px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  storeButton: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    flex: none;
-    gap: 4px;
-    align-items: center;
-
-    height: 28px;
-    padding-inline: 8px;
-    border: 0;
-    border-radius: 6px;
-
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: transparent;
-
-    transition:
-      color 0.2s,
-      background 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  footer: {
+    display: 'flex',
+    gap: '14px',
+    alignItems: 'center',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorFill,
+  },
+  header: {
+    paddingBlock: '8px',
+    paddingInline: '8px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorFill,
+  },
+  iconButton: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
+    borderStyle: 'none',
+    borderRadius: '6px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorTextSecondary },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: 'color 0.2s, background 0.2s',
+  },
+  statsItem: {
+    display: 'inline-flex',
+    gap: '5px',
+    alignItems: 'center',
+    fontSize: '12px',
+    lineHeight: '18px',
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 const filterItems = (items: ItemType[], keyword: string): ItemType[] => {
   const lower = keyword.toLowerCase();
@@ -126,13 +86,13 @@ interface PopoverContentProps {
   autoCount: number;
   detailPopoverDisabled?: boolean;
   items: ItemType[];
-  onOpenStore: () => void;
   pinnedCount: number;
 }
 
 const PopoverContent = memo<PopoverContentProps>(
-  ({ autoCount, detailPopoverDisabled, items, onOpenStore, pinnedCount }) => {
+  ({ autoCount, detailPopoverDisabled, items, pinnedCount }) => {
     const { t } = useTranslation('setting');
+    const agentId = useAgentId();
     const navigate = useWorkspaceAwareNavigate();
     const [searchKeyword, setSearchKeyword] = useState('');
 
@@ -145,10 +105,15 @@ const PopoverContent = memo<PopoverContentProps>(
 
     return (
       <Flexbox gap={0}>
-        <Flexbox horizontal align="center" className={styles.header} gap={4}>
+        <Flexbox
+          horizontal
+          align="center"
+          className={stylex.props(styles.header).className}
+          gap={4}
+        >
           <SearchBar
             allowClear
-            placeholder={t('tools.search')}
+            placeholder={t('tools.picker.search')}
             size="small"
             style={{ flex: 1 }}
             value={searchKeyword}
@@ -166,34 +131,25 @@ const PopoverContent = memo<PopoverContentProps>(
         >
           <ToolsList detailPopoverDisabled={detailPopoverDisabled} items={filteredItems} />
         </ScrollSignalProvider>
-        <div className={styles.footer}>
-          <span className={styles.statsItem}>
+        <div {...stylex.props(styles.footer)}>
+          <span {...stylex.props(styles.statsItem)}>
             <Icon icon={Pin} size={12} />
             {pinnedCount}
           </span>
-          <span className={styles.statsItem}>
+          <span {...stylex.props(styles.statsItem)}>
             <Icon icon={Zap} size={12} />
             {autoCount}
           </span>
           <Flexbox horizontal align="center" gap={2} style={{ marginInlineStart: 'auto' }}>
             <button
-              className={styles.storeButton}
+              aria-label={t('tools.picker.management')}
+              {...stylex.props(styles.iconButton)}
+              disabled={!agentId}
               type="button"
               onClick={() => {
+                if (!agentId) return;
                 closePopover();
-                onOpenStore();
-              }}
-            >
-              <Icon icon={Store} size={14} />
-              {t('tools.addSkillOrConnector')}
-            </button>
-            <button
-              aria-label={t('tools.plugins.management')}
-              className={styles.iconButton}
-              type="button"
-              onClick={() => {
-                closePopover();
-                navigate('/settings/connector');
+                navigate(buildAgentProfileTabPath(agentId, 'tools'));
               }}
             >
               <Icon icon={Settings} size={14} />

@@ -9,7 +9,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
-import { SettingsSectionSkeleton } from '@/components/Skeleton';
+import MemorySkeleton from '@/components/Skeleton/Settings/tabs/Memory';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import LevelSlider from '@/features/ModelSwitchPanel/components/ControlsForm/LevelSlider';
 import { usePermission } from '@/hooks/usePermission';
@@ -37,14 +37,7 @@ const MemorySetting = memo(() => {
     },
   });
 
-  // One filled group: the enable switch and the effort slider (settles at ~180x44
-  // with its marks), which makes the second row taller than a plain input row.
-  if (!isUserStateInit)
-    return (
-      <SettingsSectionSkeleton
-        groups={[{ controls: { 1: { height: 44, width: 180 } }, rows: 2, titleWidth: 80 }]}
-      />
-    );
+  if (!isUserStateInit) return <MemorySkeleton.Body />;
 
   const memorySettings: FormGroupItem<UserMemorySettings> = {
     children: [

@@ -8,6 +8,7 @@ import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { ProjectRepository } from '../../repositories/project';
 import {
   agents,
   briefs,
@@ -21,7 +22,6 @@ import {
 import { taskTopics } from '../../schemas/task';
 import { works } from '../../schemas/work';
 import type { LobeChatDatabase } from '../../type';
-import { ProjectModel } from '../project';
 import { taskActivityActor, TaskModel } from '../task';
 import { WorkModel } from '../work';
 
@@ -49,14 +49,25 @@ afterEach(async () => {
   await serverDB.delete(users);
 });
 
-describe('TaskModel', () => {
-  describe('constructor', () => {
-    it('should create model with db and userId', () => {
-      const model = new TaskModel(serverDB, userId);
-      expect(model).toBeInstanceOf(TaskModel);
-    });
-  });
+const testDocumentInput = (): typeof documents.$inferInsert => ({
+  content: '',
+  fileType: 'text/plain',
+  source: 'test',
+  sourceType: 'file',
+  title: 'Test Doc',
+  totalCharCount: 0,
+  totalLineCount: 0,
+  userId,
+});
 
+const originalCommentInput = (task: { id: string }): Parameters<TaskModel['addComment']>[0] => ({
+  authorUserId: userId,
+  content: 'Original',
+  taskId: task.id,
+  userId,
+});
+
+describe('TaskModel', () => {
   describe('create', () => {
     // LLMs (notably gpt-family models) fill optional tool fields with "". An
     // empty id must mean "unassigned", never reach the FK columns as ''.
@@ -559,7 +570,7 @@ describe('TaskModel', () => {
 
     it('should filter by projectId', async () => {
       const model = new TaskModel(serverDB, userId);
-      const project = await new ProjectModel(serverDB, userId).create({
+      const project = await new ProjectRepository(serverDB, userId).create({
         identifier: 'TLIST',
         name: 'Scoped project',
       });
@@ -849,7 +860,7 @@ describe('TaskModel', () => {
 
     it('should group only tasks from the requested project', async () => {
       const model = new TaskModel(serverDB, userId);
-      const project = await new ProjectModel(serverDB, userId).create({
+      const project = await new ProjectRepository(serverDB, userId).create({
         identifier: 'TGRP',
         name: 'Scoped project',
       });
@@ -1148,19 +1159,7 @@ describe('TaskModel', () => {
       const task = await model.create({ instruction: 'Test' });
 
       // Create a test document
-      const [doc] = await serverDB
-        .insert(documents)
-        .values({
-          content: '',
-          fileType: 'text/plain',
-          source: 'test',
-          sourceType: 'file',
-          title: 'Test Doc',
-          totalCharCount: 0,
-          totalLineCount: 0,
-          userId,
-        })
-        .returning();
+      const [doc] = await serverDB.insert(documents).values(testDocumentInput()).returning();
 
       await model.pinDocument(task.id, doc.id);
 
@@ -1255,19 +1254,7 @@ describe('TaskModel', () => {
       const model = new TaskModel(serverDB, userId);
       const task = await model.create({ instruction: 'Test' });
 
-      const [doc] = await serverDB
-        .insert(documents)
-        .values({
-          content: '',
-          fileType: 'text/plain',
-          source: 'test',
-          sourceType: 'file',
-          title: 'Test Doc',
-          totalCharCount: 0,
-          totalLineCount: 0,
-          userId,
-        })
-        .returning();
+      const [doc] = await serverDB.insert(documents).values(testDocumentInput()).returning();
 
       await model.pinDocument(task.id, doc.id);
       await model.unpinDocument(task.id, doc.id);
@@ -1280,19 +1267,7 @@ describe('TaskModel', () => {
       const model = new TaskModel(serverDB, userId);
       const task = await model.create({ instruction: 'Test' });
 
-      const [doc] = await serverDB
-        .insert(documents)
-        .values({
-          content: '',
-          fileType: 'text/plain',
-          source: 'test',
-          sourceType: 'file',
-          title: 'Test Doc',
-          totalCharCount: 0,
-          totalLineCount: 0,
-          userId,
-        })
-        .returning();
+      const [doc] = await serverDB.insert(documents).values(testDocumentInput()).returning();
 
       await model.pinDocument(task.id, doc.id);
       await model.pinDocument(task.id, doc.id); // duplicate
@@ -2708,12 +2683,7 @@ describe('TaskModel', () => {
     it('should update comment content and editorData', async () => {
       const model = new TaskModel(serverDB, userId);
       const task = await model.create({ instruction: 'Test' });
-      const comment = await model.addComment({
-        authorUserId: userId,
-        content: 'Original',
-        taskId: task.id,
-        userId,
-      });
+      const comment = await model.addComment(originalCommentInput(task));
 
       const updated = await model.updateComment(comment.id, 'Edited', {
         editorData: { foo: 'bar' },
@@ -2725,12 +2695,7 @@ describe('TaskModel', () => {
     it('should update content without editorData', async () => {
       const model = new TaskModel(serverDB, userId);
       const task = await model.create({ instruction: 'Test' });
-      const comment = await model.addComment({
-        authorUserId: userId,
-        content: 'Original',
-        taskId: task.id,
-        userId,
-      });
+      const comment = await model.addComment(originalCommentInput(task));
 
       const updated = await model.updateComment(comment.id, 'Edited only');
       expect(updated!.content).toBe('Edited only');
@@ -2740,12 +2705,7 @@ describe('TaskModel', () => {
       const model1 = new TaskModel(serverDB, userId);
       const model2 = new TaskModel(serverDB, userId2);
       const task = await model1.create({ instruction: 'Test' });
-      const comment = await model1.addComment({
-        authorUserId: userId,
-        content: 'Original',
-        taskId: task.id,
-        userId,
-      });
+      const comment = await model1.addComment(originalCommentInput(task));
 
       const updated = await model2.updateComment(comment.id, 'Hacked');
       expect(updated).toBeUndefined();

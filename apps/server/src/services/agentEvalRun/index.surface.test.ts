@@ -1,8 +1,6 @@
 // @vitest-environment node
-import type { LobeChatDatabase } from '@lobechat/database';
 import { describe, expect, it } from 'vitest';
 
-import { evaluateAndFinalizeRun } from './aggregate';
 import * as runModule from './index';
 import { AgentEvalRunService, RUN_CREATE_ID_CONFLICT } from './index';
 
@@ -28,6 +26,7 @@ describe('agent eval run service public surface', () => {
       'claimRun',
       'createRun',
       'deleteRun',
+      'dispatchQueuedCases',
       'executeMultiThreadTrajectory',
       'executeResumedThreadTrajectory',
       'executeResumedTrajectory',
@@ -40,6 +39,7 @@ describe('agent eval run service public surface', () => {
       'loadTrajectoryData',
       'recordThreadCompletion',
       'recordTrajectoryCompletion',
+      'rerunUnverifiedCases',
       'resumeTrajectory',
       'retryErrorCases',
       'retrySingleCase',
@@ -48,10 +48,5 @@ describe('agent eval run service public surface', () => {
       expect(typeof AgentEvalRunService.prototype[method as keyof AgentEvalRunService]).toBe(
         'function',
       );
-  });
-
-  it('exposes evaluateAndFinalizeRun as the shared aggregate function', () => {
-    const service = new AgentEvalRunService({} as LobeChatDatabase, 'user');
-    expect(service.evaluateAndFinalizeRun).toBe(evaluateAndFinalizeRun);
   });
 });

@@ -19,7 +19,7 @@ export interface FileServiceImpl {
   /**
    * Create pre-signed upload descriptor
    */
-  createPreSignedUpload: (key: string) => Promise<PreSignedUpload>;
+  createPreSignedUpload: (key: string, options?: { private?: boolean }) => Promise<PreSignedUpload>;
 
   /**
    * Create pre-signed upload URL
@@ -77,9 +77,19 @@ export interface FileServiceImpl {
   getKeyFromFullUrl: (url: string) => Promise<string | null>;
 
   /**
+   * Up to `limit` storage keys under a prefix, in lexical order
+   */
+  listFileKeys: (prefix: string, limit?: number) => Promise<string[]>;
+
+  /**
    * Upload buffer with specified content type (for any file type)
    */
-  uploadBuffer: (key: string, buffer: Buffer, contentType: string) => Promise<{ key: string }>;
+  uploadBuffer: (
+    key: string,
+    buffer: Buffer,
+    contentType: string,
+    options?: { abortSignal?: AbortSignal; private?: boolean },
+  ) => Promise<{ key: string }>;
 
   /**
    * Upload content

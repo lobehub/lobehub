@@ -59,7 +59,7 @@ export interface CreateAcceptanceCommentParams {
    * commits, which is exactly how a flood arrives.
    */
   rateLimit?: { max: number; since: Date };
-  /** The product page the remark was made on (embedded review toolbar). */
+  /** The product page the remark was made on (embedded acceptance toolbar). */
   source?: AcceptanceCommentSource;
   workspaceId?: string | null;
 }
@@ -473,6 +473,23 @@ export class AcceptanceCommentModel {
       )
       .returning();
     return row;
+  };
+
+  resolveRoots = async (acceptanceId: string, rootIds: string[], userId: string) => {
+    if (!rootIds.length) return [];
+    return this.db
+      .update(acceptanceComments)
+      .set({ resolvedAt: new Date(), resolvedByUserId: userId, updatedAt: new Date() })
+      .where(
+        and(
+          eq(acceptanceComments.acceptanceId, acceptanceId),
+          inArray(acceptanceComments.id, rootIds),
+          isNull(acceptanceComments.parentCommentId),
+          isNull(acceptanceComments.resolvedAt),
+          isNull(acceptanceComments.deletedAt),
+        ),
+      )
+      .returning();
   };
 
   /** Mark a thread root handled (or reopen it). Replies are not resolvable. */

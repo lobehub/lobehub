@@ -1,3 +1,4 @@
+import type { DocumentWriteSource } from '@lobechat/types';
 import type { HeadlessEditor } from '@lobehub/editor/headless';
 import { TRPCError } from '@trpc/server';
 
@@ -51,6 +52,11 @@ export interface PageWriter {
   saveSource: DocumentHistorySaveSource;
   userId: string;
   workspaceId?: string;
+  /**
+   * Who asked for the write; decides whether the per-document character limit
+   * applies. `saveSource` cannot: writers default it to `system` for agent edits.
+   */
+  writeSource: DocumentWriteSource;
 }
 
 export const historyAttributionOf = (writer: PageWriter) => ({

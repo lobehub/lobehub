@@ -132,6 +132,18 @@ describe('connector OAuth popup', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('resolves with the account the callback reports storing', async () => {
+    const result = waitForConnectorOAuth(popup, 'connector-1', authorizationUrl);
+    send(popup, 'https://server.example', {
+      connectorId: 'connector-1',
+      linkId: 'lnk_b',
+      outcome: 'matchedExisting',
+      success: true,
+      type: 'lobe-connector-oauth',
+    });
+    await expect(result).resolves.toEqual({ linkId: 'lnk_b', outcome: 'matchedExisting' });
+  });
+
   it('reports navigation failure and cleans up without accepting a later callback', async () => {
     Object.defineProperty(popup.location, 'href', {
       set: () => {

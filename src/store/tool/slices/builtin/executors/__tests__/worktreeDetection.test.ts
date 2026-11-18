@@ -40,6 +40,23 @@ vi.mock('@/store/electron', () => ({
   getElectronStoreState: () => ({ gatewayDeviceInfo: { deviceId: 'device-1' } }),
 }));
 
+const previousGithubMetadata = () => ({
+  git: {
+    branch: 'canary',
+    github: {
+      pullRequest: {
+        number: 1,
+        state: 'OPEN',
+        title: 'old',
+        url: 'https://github.com/lobehub/lobehub/pull/1',
+      },
+      pullRequestStatus: 'ok',
+    },
+  },
+  path: '/repo',
+  repoType: 'github',
+});
+
 describe('parseWorktreeAddPath', () => {
   it('resolves a relative path against the source cwd', () => {
     expect(parseWorktreeAddPath('git worktree add ../wt', '/repo')).toBe('/wt');
@@ -341,22 +358,7 @@ describe('recordGitCommandEffects', () => {
     chatMocks.topics = {
       t1: {
         metadata: {
-          workingDirectoryConfig: {
-            git: {
-              branch: 'canary',
-              github: {
-                pullRequest: {
-                  number: 1,
-                  state: 'OPEN',
-                  title: 'old',
-                  url: 'https://github.com/lobehub/lobehub/pull/1',
-                },
-                pullRequestStatus: 'ok',
-              },
-            },
-            path: '/repo',
-            repoType: 'github',
-          },
+          workingDirectoryConfig: previousGithubMetadata(),
         },
       },
     };
@@ -402,22 +404,7 @@ describe('recordGitCommandEffects', () => {
     chatMocks.topics = {
       t1: {
         metadata: {
-          workingDirectoryConfig: {
-            git: {
-              branch: 'canary',
-              github: {
-                pullRequest: {
-                  number: 1,
-                  state: 'OPEN',
-                  title: 'old',
-                  url: 'https://github.com/lobehub/lobehub/pull/1',
-                },
-                pullRequestStatus: 'ok',
-              },
-            },
-            path: '/repo',
-            repoType: 'github',
-          },
+          workingDirectoryConfig: previousGithubMetadata(),
         },
       },
     };

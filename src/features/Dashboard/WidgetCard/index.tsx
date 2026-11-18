@@ -138,11 +138,12 @@ const WidgetCard = memo<WidgetCardProps>(
     // Lists and tables are the only outputs taller than their card; the rest size to it.
     const scrollable =
       bodyState === 'output' &&
+      !view?.html &&
       !view?.layout &&
       (output?.type === 'list' || output?.type === 'table');
     // A layout may paint the whole card; header and footer then follow its text color.
     const surface =
-      view?.layout && output
+      !view?.html && view?.layout && output
         ? WIDGET_SURFACE_STYLES[resolveSurface(view.surface, createLayoutScope(output))]
         : undefined;
 

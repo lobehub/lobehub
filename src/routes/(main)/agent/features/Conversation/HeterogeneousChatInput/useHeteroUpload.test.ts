@@ -24,7 +24,8 @@ vi.mock('@/features/ChatInput/hooks/useLargeFileLocalPath', () => ({
 }));
 
 vi.mock('@/features/ChatInput/store', () => ({
-  useChatInputStore: (selector: (s: any) => unknown) => selector({ editor: mocks.editor }),
+  useChatInputStore: (selector: (s: any) => unknown) =>
+    selector({ contextSelectionKey: 'main_agt_hetero_new', editor: mocks.editor }),
 }));
 
 vi.mock('@/store/file', () => ({
@@ -46,7 +47,7 @@ describe('useHeteroUpload', () => {
     expect(onPicked).toHaveBeenCalled();
     expect(mocks.editor.focus).toHaveBeenCalled();
     expect(mocks.routeLargeFiles).toHaveBeenCalledWith(files);
-    expect(mocks.upload).toHaveBeenCalledWith(files, 'agt_hetero');
+    expect(mocks.upload).toHaveBeenCalledWith('main_agt_hetero_new', files, 'agt_hetero');
   });
 
   it('skips the upload when every picked file became a local-path reference', async () => {

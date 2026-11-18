@@ -26,7 +26,6 @@ export interface UserSystemAgentConfig {
   generationTopic: SystemAgentItem;
   /** Model used to turn a persistent goal into its standing acceptance criteria. */
   goal: SystemAgentItem;
-  historyCompress: SystemAgentItem;
   inputCompletion: SystemAgentItem;
   /** Model used to turn onboarding evidence into background-safe task recommendations. */
   onboardingTaskRecommender: SystemAgentItem;

@@ -10,9 +10,9 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
+import { useChatInputUpload } from '@/features/ChatInput/hooks/useChatInputUpload';
 import { useLargeFileLocalPath } from '@/features/ChatInput/hooks/useLargeFileLocalPath';
 import { useChatInputStore } from '@/features/ChatInput/store';
-import { useFileStore } from '@/store/file';
 
 /**
  * File/image picking for the hetero `+` menu.
@@ -27,7 +27,7 @@ export const useHeteroUpload = (providerType: string | undefined, onPicked: () =
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const editor = useChatInputStore((s) => s.editor);
-  const upload = useFileStore((s) => s.uploadChatFiles);
+  const upload = useChatInputUpload();
   // On desktop, big non-media files become local-path tags the CLI reads in place.
   const routeLargeFilesToLocalPaths = useLargeFileLocalPath(agentId, editor);
 

@@ -1,11 +1,15 @@
 import type { IEditor } from '@lobehub/editor';
-import { $setSelection, type LexicalEditor, SKIP_DOM_SELECTION_TAG } from 'lexical';
+import { $setSelection, type LexicalEditor } from 'lexical';
 
 /** Exported for tests, which drive a bare Lexical editor without the kernel. */
 export const releaseEditorSelectionOnLexical = (lexicalEditor: LexicalEditor): void => {
-  // The tag keeps this update from touching the DOM selection, which already
-  // belongs to the field the user moved to.
-  lexicalEditor.update(() => $setSelection(null), { tag: SKIP_DOM_SELECTION_TAG });
+  // No update tag here. This update changes no nodes, and Lexical only clears an
+  // update's tags when nodes changed, so a tag such as `skip-dom-selection` would
+  // stick to the next content update instead: Enter in the title would then set
+  // a caret Lexical never writes to the DOM, and focus would stay in the title.
+  // Untagged is safe: with no selection, Lexical only clears a DOM selection that
+  // is still inside the editor, and the field the user moved to already owns it.
+  lexicalEditor.update(() => $setSelection(null));
 };
 
 /**

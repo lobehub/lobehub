@@ -3,6 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES } from './limits';
 import { packWorkspaceHtmlDocument } from './packWorkspaceHtmlDocument';
 
+const dotPngFile = (): Parameters<typeof packWorkspaceHtmlDocument>[0]['files'][number] => ({
+  content: globalThis.btoa(String.fromCharCode(1, 2, 3)),
+  contentType: 'image/png',
+  encoding: 'base64',
+  path: 'dot.png',
+});
+
 describe('packWorkspaceHtmlDocument', () => {
   it('inlines small local css and images as data uris and leaves remotes', () => {
     const packed = packWorkspaceHtmlDocument({
@@ -21,12 +28,7 @@ describe('packWorkspaceHtmlDocument', () => {
           encoding: 'utf8',
           path: 'app.css',
         },
-        {
-          content: globalThis.btoa(String.fromCharCode(1, 2, 3)),
-          contentType: 'image/png',
-          encoding: 'base64',
-          path: 'dot.png',
-        },
+        dotPngFile(),
       ],
     });
 
@@ -99,12 +101,7 @@ describe('packWorkspaceHtmlDocument', () => {
           encoding: 'utf8',
           path: 'app.css',
         },
-        {
-          content: globalThis.btoa(String.fromCharCode(1, 2, 3)),
-          contentType: 'image/png',
-          encoding: 'base64',
-          path: 'dot.png',
-        },
+        dotPngFile(),
       ],
     });
 
@@ -151,12 +148,7 @@ describe('packWorkspaceHtmlDocument', () => {
           encoding: 'utf8',
           path: 'index.html',
         },
-        {
-          content: globalThis.btoa(String.fromCharCode(1, 2, 3)),
-          contentType: 'image/png',
-          encoding: 'base64',
-          path: 'dot.png',
-        },
+        dotPngFile(),
       ],
     });
 

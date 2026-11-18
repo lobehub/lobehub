@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import { check, index, pgTable, text, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';
-import { timestamps } from './_helpers';
+import { timestamps, timestamptz } from './_helpers';
 import { projects } from './project';
 import { users } from './user';
 import { acceptances } from './verify';
@@ -27,6 +27,7 @@ export const projectSites = pgTable(
     name: varchar('name', { length: 255 }).notNull(),
     origins: text('origins').array().notNull(),
     acceptanceId: uuid('acceptance_id').references(() => acceptances.id, { onDelete: 'set null' }),
+    lastSeenAt: timestamptz('last_seen_at'),
 
     ...timestamps,
   },

@@ -176,11 +176,7 @@ const AssistantItem = memo<DiscoverAssistantItem>(
               </Flexbox>
               {author && (
                 <div
-                  {...sx(
-                    !!userName && styles.author,
-                    undefined,
-                    userName ? undefined : { color: 'inherit' },
-                  )}
+                  {...sx(!!userName && styles.author, userName ? undefined : { color: 'inherit' })}
                   onClick={userName ? handleAuthorClick : undefined}
                 >
                   {author}
@@ -222,9 +218,9 @@ const AssistantItem = memo<DiscoverAssistantItem>(
             <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={ClockIcon} size={14} />
               <PublishedTime
-                className={stylex.props(styles.secondaryDesc).className}
                 date={updatedAt || createdAt}
                 template={'MMM DD, YYYY'}
+                xstyle={styles.secondaryDesc}
               />
             </Flexbox>
             {t(`category.assistant.${category}` as any)}

@@ -1,7 +1,8 @@
 'use client';
 
 import type { AcceptanceCommentThread } from '@lobechat/types';
-import { Button, cx, Flexbox, Icon, Tag, toast } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Tag, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { CheckCircle2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -66,7 +67,7 @@ const CommentThread = memo<CommentThreadProps>(
     if (!open)
       return (
         <button
-          className={styles.resolvedSummary}
+          {...stylex.props(styles.resolvedSummary)}
           type={'button'}
           onClick={() => setOpenOverride(true)}
         >
@@ -89,7 +90,7 @@ const CommentThread = memo<CommentThreadProps>(
     );
 
     return (
-      <Flexbox className={cx(resolved && styles.resolvedThread)}>
+      <Flexbox {...stylex.props(resolved && styles.resolvedThread)}>
         <CommentCard
           anchored
           badges={badges}
@@ -99,13 +100,13 @@ const CommentThread = memo<CommentThreadProps>(
         />
         {replies.map((reply) => (
           // A reply link lands on the reply itself, not just its thread.
-          <div className={styles.panelReply} id={commentAnchorId(reply.id)} key={reply.id}>
+          <div id={commentAnchorId(reply.id)} key={reply.id} {...stylex.props(styles.panelReply)}>
             <CommentCard anchored comment={reply} variant={'plain'} onDelete={onDelete} />
           </div>
         ))}
         {canComment &&
           (replying ? (
-            <Flexbox className={styles.panelActions}>
+            <Flexbox {...stylex.props(styles.panelActions)}>
               <CommentComposer
                 autoFocus
                 compact
@@ -119,7 +120,7 @@ const CommentThread = memo<CommentThreadProps>(
               />
             </Flexbox>
           ) : (
-            <Flexbox horizontal className={styles.panelActions} gap={2}>
+            <Flexbox horizontal gap={2} {...stylex.props(styles.panelActions)}>
               <Button outdent size={'small'} type={'text'} onClick={() => setReplying(true)}>
                 {t('acceptance.comments.reply')}
               </Button>

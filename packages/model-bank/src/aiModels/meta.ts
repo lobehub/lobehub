@@ -18,6 +18,7 @@ const metaChatModels: AIChatModelCard[] = [
     family: 'muse',
     generation: 'muse-wonder-1.0',
     id: 'muse-wonder-1.0',
+    isOfficial: true,
     // https://dev.meta.ai/docs/pricing-rate-limits (Standard mode; no long-context premium)
     pricing: {
       units: [
@@ -48,6 +49,7 @@ const metaChatModels: AIChatModelCard[] = [
     family: 'muse',
     generation: 'muse-spark-1.3',
     id: 'muse-spark-1.3',
+    isOfficial: true,
     pricing: {
       units: [
         { name: 'textInput_cacheRead', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },

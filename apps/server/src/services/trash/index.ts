@@ -12,14 +12,18 @@ import debug from 'debug';
 import { TopicModel } from '@/database/models/topic';
 import { TrashModel } from '@/database/models/trash';
 import type { TrashItemRow } from '@/database/schemas';
-import type { LobeChatDatabase } from '@/database/type';
+import type { LobeChatDatabase, Transaction } from '@/database/type';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 import { FileService } from '@/server/services/file';
+import { removeByAgent, removeByTopics } from '@/server/services/inboundWebhook/lifecycle';
+import { scheduleWorktreeCleanup } from '@/server/services/worktreeCleanup';
 
 import {
   resolveTrashHandler,
   softDeleteAgent,
   softDeleteMessages,
+  softDeleteTasks,
+  type TaskTrashTarget,
   topicCascades,
   type TrashCascade,
   type TrashHandlerContext,
@@ -55,6 +59,33 @@ export interface TrashSweepOutcome {
   /** Roots hard-deleted this tick. */
   purged: number;
 }
+
+/**
+ * Trash tasks inside a transaction the caller already holds — the task delete
+ * paths decide under their own row locks (a run recording a topic takes the
+ * same lock) and must stamp + register before releasing them. Returns the ids
+ * actually moved to the bin; a task whose status changed since the caller
+ * decided is not among them.
+ */
+export const trashTasksInTransaction = async (
+  tx: Transaction,
+  scope: { userId: string; workspaceId?: string },
+  targets: TaskTrashTarget[],
+): Promise<string[]> => {
+  const db = tx as unknown as LobeChatDatabase;
+  const deletedAt = new Date();
+  const cascades = await softDeleteTasks(
+    { db, userId: scope.userId, workspaceId: scope.workspaceId },
+    targets,
+    { deletedAt },
+  );
+  await new TrashModel(db, scope.userId, scope.workspaceId).registerMany(
+    { cascades, deletedAt },
+    tx,
+  );
+  log('trashed %d task(s)', cascades.length);
+  return cascades.map((cascade) => cascade.root.resourceId);
+};
 
 /**
  * Recycle-bin orchestrator. Every user-facing "delete" of a trash-aware entity
@@ -111,12 +142,20 @@ export class TrashService {
     run: (ctx: TrashHandlerContext) => Promise<TrashCascade[] | TrashCascade | null>,
     deletedAt: Date,
   ): Promise<TrashItemRow[]> {
-    return this.db.transaction(async (tx) => {
+    const removedTopics: string[] = [];
+    const removedAgents: string[] = [];
+    const result = await this.db.transaction(async (tx) => {
       const db = tx as unknown as LobeChatDatabase;
       const produced = await run(this.ctx(db));
       const cascades = (Array.isArray(produced) ? produced : produced ? [produced] : []).filter(
         Boolean,
       );
+      for (const cascade of cascades) {
+        for (const entry of [cascade.root, ...cascade.children]) {
+          if (entry.resourceType === 'topic') removedTopics.push(entry.resourceId);
+          if (entry.resourceType === 'agent') removedAgents.push(entry.resourceId);
+        }
+      }
       // One chunked bulk write for the whole batch: a "clear all topics" over
       // hundreds of rows must not hold the transaction open for one registry
       // round trip per topic.
@@ -131,6 +170,27 @@ export class TrashService {
       );
       return roots;
     });
+    // Do remote teardown after commit, for the actual rows stamped (including cascades).
+    // A rollback never removes live subscriptions; a missing remote cannot undo the trash operation.
+    // The worktrees the app created for these topics go with them; the branch
+    // stays, so a restore can check it out again.
+    scheduleWorktreeCleanup({
+      db: this.db,
+      topicIds: removedTopics,
+      trigger: 'trashed',
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
+    if (removedTopics.length || removedAgents.length) {
+      try {
+        const scope = { userId: this.userId, workspaceId: this.workspaceId };
+        for (const agentId of removedAgents) await removeByAgent(this.db, scope, agentId);
+        await removeByTopics(this.db, scope, removedTopics);
+      } catch (error) {
+        console.error('[trash] Inbound webhook cleanup failed', error);
+      }
+    }
+    return result;
   }
 
   // ─────────────────────────── trash (soft delete) ───────────────────────────

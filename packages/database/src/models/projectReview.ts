@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull, lt, or, sql } from 'drizzle-orm';
 
 import type { NewProjectMember, NewProjectSite, ProjectMemberItem } from '../schemas';
 import { projectMembers, projects, projectSites, workspaceMembers } from '../schemas';
@@ -25,6 +25,23 @@ export class ProjectSiteModel {
       .where(eq(projectSites.id, id))
       .limit(1);
     return site ?? null;
+  }
+
+  async markSeen(id: string) {
+    const sites = await this.db
+      .update(projectSites)
+      .set({ lastSeenAt: new Date() })
+      .where(
+        and(
+          eq(projectSites.id, id),
+          or(
+            isNull(projectSites.lastSeenAt),
+            lt(projectSites.lastSeenAt, sql`now() - interval '1 hour'`),
+          ),
+        ),
+      )
+      .returning({ id: projectSites.id });
+    return sites.length > 0;
   }
 
   listByProject(projectId: string) {

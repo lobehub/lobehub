@@ -6,12 +6,13 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
-import { lambdaClient } from '@/libs/trpc/client';
+import { useOAuthAppStore } from '@/store/oauthApp';
 
 import { createOAuthAppModal } from './CreateAppModal';
 import { showClientSecretModal } from './SecretModal';
 
-const CreateAppButton = () => {
+/** `small` sits in the settings navigation header, like the other header actions. */
+const CreateAppButton = ({ size }: { size?: 'small' }) => {
   const { t } = useTranslation('auth');
   const { allowed: hasEditPermission, reason } = usePermission('create_content');
   const activeWorkspaceId = useActiveWorkspaceId();
@@ -20,13 +21,14 @@ const CreateAppButton = () => {
   const { allowed: canManageWorkspaceApps } = usePermission('manage_settings');
   const canEdit = hasEditPermission && (!activeWorkspaceId || canManageWorkspaceApps);
   const navigate = useWorkspaceAwareNavigate();
+  const createApp = useOAuthAppStore((s) => s.createApp);
 
   const handleCreate = () => {
     if (!canEdit) return;
     createOAuthAppModal({
       onSubmit: async (values) => {
         // The secret is generated on demand on the app page, not at creation.
-        const created = await lambdaClient.oauthApp.create.mutate({
+        const created = await createApp({
           ...values,
           issueSecret: false,
         });
@@ -41,7 +43,7 @@ const CreateAppButton = () => {
   };
 
   return (
-    <Button disabled={!canEdit} title={reason} type={'primary'} onClick={handleCreate}>
+    <Button disabled={!canEdit} size={size} title={reason} type={'primary'} onClick={handleCreate}>
       {t('oauthApp.list.actions.create')}
     </Button>
   );

@@ -15,6 +15,8 @@ import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
 export interface NavItem {
+  /** First path segment that marks this item active, when it differs from `key`. */
+  activeTab?: string;
   hidden?: boolean;
   icon: any;
   isNew?: boolean;
@@ -46,6 +48,7 @@ export const useNavLayout = (): NavLayout => {
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const enableDashboard = useServerConfigStore(serverConfigSelectors.enableDashboard);
   const enableGoals = useUserStore(labPreferSelectors.enableGoals);
+  const enableProjects = useUserStore(labPreferSelectors.enableProjects);
 
   const topNavItems = useMemo(
     () =>
@@ -77,6 +80,15 @@ export const useNavLayout = (): NavLayout => {
           url: '/goals',
         },
         {
+          // Keyed `project` to match the sidebar layout id; the page is `/projects`.
+          activeTab: 'projects',
+          hidden: !enableProjects,
+          icon: getRouteById('project')!.icon,
+          key: 'project',
+          title: t('tab.projects'),
+          url: '/projects',
+        },
+        {
           // Personal boards only for now — workspace-level boards have no UI
           // yet — and only while the `dashboard` feature flag is on.
           hidden: !!activeWorkspaceSlug || !enableDashboard,
@@ -92,7 +104,7 @@ export const useNavLayout = (): NavLayout => {
           url: '/resource',
         },
       ] as NavItem[],
-    [t, toggleCommandMenu, activeWorkspaceSlug, enableDashboard, enableGoals],
+    [t, toggleCommandMenu, activeWorkspaceSlug, enableDashboard, enableGoals, enableProjects],
   );
 
   const bottomMenuItems = useMemo(

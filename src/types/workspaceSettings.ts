@@ -11,6 +11,7 @@ export enum WorkspaceSettingsTabs {
   APIKey = 'apikey',
   Appearance = 'appearance',
   AuditLog = 'audit-log',
+  Automations = 'automations',
   Billing = 'billing',
   Budget = 'budget',
   ChatPreference = 'chat-preference',
@@ -18,7 +19,6 @@ export enum WorkspaceSettingsTabs {
   Credits = 'credits',
   Creds = 'credential',
   Devices = 'devices',
-  Drive = 'drive',
   Environments = 'environments',
   General = 'general',
   Hotkey = 'hotkey',
@@ -40,6 +40,7 @@ export enum WorkspaceSettingsTabs {
   Teams = 'teams',
   Trash = 'trash',
   Usage = 'usage',
+  Webhooks = 'webhooks',
 }
 
 export const DEFAULT_WORKSPACE_SETTINGS_TAB = WorkspaceSettingsTabs.General;

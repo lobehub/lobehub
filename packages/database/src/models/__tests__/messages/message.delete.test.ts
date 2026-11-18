@@ -20,6 +20,28 @@ import {
 import type { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
 
+const ownedMessages = () => ({
+  where: eq(messages.userId, userId),
+});
+
+const branchAMessage = (): typeof messages.$inferInsert => ({
+  content: 'branch A',
+  createdAt: new Date('2026-01-01T00:00:01.000Z'),
+  id: 'branch-a',
+  parentId: 'parent',
+  role: 'user',
+  userId,
+});
+
+const branchBMessage = (): typeof messages.$inferInsert => ({
+  content: 'branch B',
+  createdAt: new Date('2026-01-01T00:00:02.000Z'),
+  id: 'branch-b',
+  parentId: 'parent',
+  role: 'user',
+  userId,
+});
+
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'message-delete-test';
@@ -110,22 +132,8 @@ describe('MessageModel Delete Tests', () => {
           role: 'assistant',
           userId,
         },
-        {
-          content: 'branch A',
-          createdAt: new Date('2026-01-01T00:00:01.000Z'),
-          id: 'branch-a',
-          parentId: 'parent',
-          role: 'user',
-          userId,
-        },
-        {
-          content: 'branch B',
-          createdAt: new Date('2026-01-01T00:00:02.000Z'),
-          id: 'branch-b',
-          parentId: 'parent',
-          role: 'user',
-          userId,
-        },
+        branchAMessage(),
+        branchBMessage(),
       ]);
 
       await messageModel.deleteMessage('branch-b');
@@ -154,22 +162,8 @@ describe('MessageModel Delete Tests', () => {
           role: 'tool',
           userId,
         },
-        {
-          content: 'branch A',
-          createdAt: new Date('2026-01-01T00:00:01.000Z'),
-          id: 'branch-a',
-          parentId: 'parent',
-          role: 'user',
-          userId,
-        },
-        {
-          content: 'branch B',
-          createdAt: new Date('2026-01-01T00:00:02.000Z'),
-          id: 'branch-b',
-          parentId: 'parent',
-          role: 'user',
-          userId,
-        },
+        branchAMessage(),
+        branchBMessage(),
       ]);
 
       await messageModel.deleteMessage('branch-a');
@@ -300,22 +294,8 @@ describe('MessageModel Delete Tests', () => {
           role: 'assistant',
           userId,
         },
-        {
-          content: 'branch A',
-          createdAt: new Date('2026-01-01T00:00:01.000Z'),
-          id: 'branch-a',
-          parentId: 'parent',
-          role: 'user',
-          userId,
-        },
-        {
-          content: 'branch B',
-          createdAt: new Date('2026-01-01T00:00:02.000Z'),
-          id: 'branch-b',
-          parentId: 'parent',
-          role: 'user',
-          userId,
-        },
+        branchAMessage(),
+        branchBMessage(),
         {
           content: 'branch C',
           createdAt: new Date('2026-01-01T00:00:03.000Z'),
@@ -344,22 +324,8 @@ describe('MessageModel Delete Tests', () => {
           role: 'assistant',
           userId,
         },
-        {
-          content: 'branch A',
-          createdAt: new Date('2026-01-01T00:00:01.000Z'),
-          id: 'branch-a',
-          parentId: 'parent',
-          role: 'user',
-          userId,
-        },
-        {
-          content: 'branch B',
-          createdAt: new Date('2026-01-01T00:00:02.000Z'),
-          id: 'branch-b',
-          parentId: 'parent',
-          role: 'user',
-          userId,
-        },
+        branchAMessage(),
+        branchBMessage(),
       ]);
 
       await messageModel.deleteMessages(['branch-a']);
@@ -832,9 +798,7 @@ describe('MessageModel Delete Tests', () => {
 
       await messageModel.batchDeleteByAgentId('agent-del-1');
 
-      const remaining = await serverDB.query.messages.findMany({
-        where: eq(messages.userId, userId),
-      });
+      const remaining = await serverDB.query.messages.findMany(ownedMessages());
 
       expect(remaining).toHaveLength(1);
       expect(remaining[0].id).toBe('msg-keep-1');
@@ -872,9 +836,7 @@ describe('MessageModel Delete Tests', () => {
 
       await messageModel.batchDeleteByAgentId('agent-del-2');
 
-      const remaining = await serverDB.query.messages.findMany({
-        where: eq(messages.userId, userId),
-      });
+      const remaining = await serverDB.query.messages.findMany(ownedMessages());
 
       expect(remaining).toHaveLength(1);
       expect(remaining[0].id).toBe('msg-keep-2');
@@ -922,9 +884,7 @@ describe('MessageModel Delete Tests', () => {
 
       await messageModel.batchDeleteByAgentId('agent-del-mixed');
 
-      const remaining = await serverDB.query.messages.findMany({
-        where: eq(messages.userId, userId),
-      });
+      const remaining = await serverDB.query.messages.findMany(ownedMessages());
 
       expect(remaining).toHaveLength(1);
       expect(remaining[0].id).toBe('msg-keep-mixed');
@@ -958,9 +918,7 @@ describe('MessageModel Delete Tests', () => {
       await messageModel.batchDeleteByAgentId('agent-del-user');
 
       // User's message should be deleted
-      const userMessages = await serverDB.query.messages.findMany({
-        where: eq(messages.userId, userId),
-      });
+      const userMessages = await serverDB.query.messages.findMany(ownedMessages());
       expect(userMessages).toHaveLength(0);
 
       // Other user's message should remain
@@ -988,9 +946,7 @@ describe('MessageModel Delete Tests', () => {
 
       await messageModel.batchDeleteByAgentId('agent-del-empty');
 
-      const remaining = await serverDB.query.messages.findMany({
-        where: eq(messages.userId, userId),
-      });
+      const remaining = await serverDB.query.messages.findMany(ownedMessages());
 
       expect(remaining).toHaveLength(1);
       expect(remaining[0].id).toBe('msg-keep-empty');
@@ -1033,9 +989,7 @@ describe('MessageModel Delete Tests', () => {
     it('deleteAllMessages should keep visitor messages', async () => {
       await messageModel.deleteAllMessages();
 
-      const remaining = await serverDB.query.messages.findMany({
-        where: eq(messages.userId, userId),
-      });
+      const remaining = await serverDB.query.messages.findMany(ownedMessages());
 
       expect(remaining).toHaveLength(1);
       expect(remaining[0].id).toBe('visitor-msg');
@@ -1044,9 +998,7 @@ describe('MessageModel Delete Tests', () => {
     it('batchDeleteByAgentId should keep visitor messages', async () => {
       await messageModel.batchDeleteByAgentId('share-agent');
 
-      const remaining = await serverDB.query.messages.findMany({
-        where: eq(messages.userId, userId),
-      });
+      const remaining = await serverDB.query.messages.findMany(ownedMessages());
 
       expect(remaining).toHaveLength(1);
       expect(remaining[0].id).toBe('visitor-msg');
@@ -1057,9 +1009,7 @@ describe('MessageModel Delete Tests', () => {
       // export), so naming the id must not be enough to destroy it.
       await messageModel.deleteMessage('visitor-msg');
 
-      const remaining = await serverDB.query.messages.findMany({
-        where: eq(messages.userId, userId),
-      });
+      const remaining = await serverDB.query.messages.findMany(ownedMessages());
 
       expect(remaining.map((m) => m.id).sort()).toEqual(['creator-msg', 'visitor-msg']);
     });
@@ -1067,9 +1017,7 @@ describe('MessageModel Delete Tests', () => {
     it('deleteMessage should still delete the creator own message', async () => {
       await messageModel.deleteMessage('creator-msg');
 
-      const remaining = await serverDB.query.messages.findMany({
-        where: eq(messages.userId, userId),
-      });
+      const remaining = await serverDB.query.messages.findMany(ownedMessages());
 
       expect(remaining.map((m) => m.id)).toEqual(['visitor-msg']);
     });
@@ -1077,9 +1025,7 @@ describe('MessageModel Delete Tests', () => {
     it('deleteMessage should delete a visitor message when the runtime opts in', async () => {
       await messageModel.deleteMessage('visitor-msg', { includeShareVisitor: true });
 
-      const remaining = await serverDB.query.messages.findMany({
-        where: eq(messages.userId, userId),
-      });
+      const remaining = await serverDB.query.messages.findMany(ownedMessages());
 
       expect(remaining.map((m) => m.id)).toEqual(['creator-msg']);
     });
@@ -1087,9 +1033,7 @@ describe('MessageModel Delete Tests', () => {
     it('deleteMessages should drop only the non-visitor ids of a mixed batch', async () => {
       await messageModel.deleteMessages(['creator-msg', 'visitor-msg']);
 
-      const remaining = await serverDB.query.messages.findMany({
-        where: eq(messages.userId, userId),
-      });
+      const remaining = await serverDB.query.messages.findMany(ownedMessages());
 
       expect(remaining.map((m) => m.id)).toEqual(['visitor-msg']);
     });
@@ -1097,9 +1041,7 @@ describe('MessageModel Delete Tests', () => {
     it('deleteMessages should delete visitor messages when the runtime opts in', async () => {
       await messageModel.deleteMessages(['visitor-msg'], { includeShareVisitor: true });
 
-      const remaining = await serverDB.query.messages.findMany({
-        where: eq(messages.userId, userId),
-      });
+      const remaining = await serverDB.query.messages.findMany(ownedMessages());
 
       expect(remaining.map((m) => m.id)).toEqual(['creator-msg']);
     });
@@ -1110,9 +1052,7 @@ describe('MessageModel Delete Tests', () => {
       // `deleteAllMessages` sweep above.
       await messageModel.deleteMessagesBySession(undefined, 'visitor-topic');
 
-      const remaining = await serverDB.query.messages.findMany({
-        where: eq(messages.userId, userId),
-      });
+      const remaining = await serverDB.query.messages.findMany(ownedMessages());
 
       expect(remaining.map((m) => m.id).sort()).toEqual(['creator-msg', 'visitor-msg']);
     });
@@ -1122,9 +1062,7 @@ describe('MessageModel Delete Tests', () => {
         includeShareVisitor: true,
       });
 
-      const remaining = await serverDB.query.messages.findMany({
-        where: eq(messages.userId, userId),
-      });
+      const remaining = await serverDB.query.messages.findMany(ownedMessages());
 
       expect(remaining.map((m) => m.id)).toEqual(['creator-msg']);
     });
@@ -1149,9 +1087,7 @@ describe('MessageModel Delete Tests', () => {
     it('deleting the agent still cascades visitor messages away', async () => {
       await serverDB.delete(agents).where(eq(agents.id, 'share-agent'));
 
-      const remaining = await serverDB.query.messages.findMany({
-        where: eq(messages.userId, userId),
-      });
+      const remaining = await serverDB.query.messages.findMany(ownedMessages());
 
       expect(remaining).toHaveLength(0);
     });

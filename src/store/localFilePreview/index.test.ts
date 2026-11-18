@@ -151,6 +151,35 @@ describe('local file preview replica', () => {
     await waitFor(async () => expect((await storedRow(NOTES))?.data).toEqual(textPreview('# v2')));
   });
 
+  it('keeps the portal key as it was and reads an image-only target as an image', async () => {
+    // Rows the portal stored before `accept` existed must still be found.
+    expect(localFilePreviewKey(NOTES)).toBe(
+      JSON.stringify(['device', 'device-a', '/repo', '/repo/notes.md', 'workspace']),
+    );
+    const image = { ...NOTES, accept: 'image' as const, filePath: '/repo/shot.png' };
+    expect(localFilePreviewKey(image)).not.toBe(
+      localFilePreviewKey({ ...image, accept: undefined }),
+    );
+    vi.mocked(projectFileService.getLocalFilePreview).mockResolvedValue({
+      blob: new Blob(['png']),
+      contentType: 'image/png',
+      type: 'image',
+    } as never);
+
+    const { result } = renderPreview(image);
+
+    await waitFor(() => expect(result.current.preview?.type).toBe('image'));
+    expect(projectFileService.getLocalFilePreview).toHaveBeenCalledWith({
+      accept: 'image',
+      allowExternalFile: undefined,
+      deviceId: 'device-a',
+      path: '/repo/shot.png',
+      workingDirectory: '/repo',
+    });
+    // A Blob preview stays in memory: nothing to restore after a reload.
+    expect(await storedRow(image)).toBeUndefined();
+  });
+
   it('keys previews by device and working directory', async () => {
     const otherDevice = { ...NOTES, deviceId: 'device-b' };
     await seedRow(NOTES, textPreview('device a'));
@@ -167,6 +196,19 @@ describe('local file preview replica', () => {
     expect(localFilePreviewKey(NOTES)).not.toBe(
       localFilePreviewKey({ ...NOTES, workingDirectory: '/other' }),
     );
+  });
+
+  it('includes the topic in the remote file preview request and cache key', async () => {
+    const target = { ...NOTES, topicId: 'tpc_worktree' };
+    vi.mocked(projectFileService.getLocalFilePreview).mockResolvedValue(textPreview('in topic'));
+
+    const { result } = renderPreview(target);
+
+    await waitFor(() => expect(result.current.preview).toEqual(textPreview('in topic')));
+    expect(projectFileService.getLocalFilePreview).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceId: 'device-a', topicId: 'tpc_worktree' }),
+    );
+    expect(localFilePreviewKey(target)).not.toBe(localFilePreviewKey(NOTES));
   });
 
   it.each(['local', 'sandbox:build'])(

@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { GoalArchiveRepository } from '@/database/repositories/goalArchive';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { advanceGoal } from '@/server/services/goal/advanceGoal';
@@ -25,6 +26,7 @@ const startRolloutInput = z
   .object({
     probeNodeIds: z.array(z.string().min(1)).min(2).max(10),
     recipe: z.string().trim().min(1).max(8000),
+    skillName: z.string().trim().max(80).optional(),
     trigger: z.enum(['canary', 'full']).optional(),
     unitNodeIds: z.array(z.string().min(1)).max(60).optional(),
     variants: z
@@ -165,6 +167,40 @@ export const lifecycleRouter = router({
       mapGoalError(error, 'delete');
     }
   }),
+  /**
+   * Put a goal away, or bring it back. User-only, like a task's archive: no
+   * agent tool exposes it. Only a goal that is done with — completed or
+   * canceled — can be archived: archived goals leave every list, so
+   * one still waiting on a decision would wait out of sight. `status` is left
+   * untouched.
+   */
+  archive: goalWriteProcedure
+    .input(idInput.extend({ archived: z.boolean() }))
+    .mutation(async ({ ctx, input: { archived, id } }) => {
+      try {
+        // Same ownership rule as close / delete: the creator or a workspace owner.
+        const goal = await ctx.goalModel.findById(id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+
+        const model = new GoalArchiveRepository(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        );
+        // The status check is part of the UPDATE, so a resume racing it can't slip past.
+        const data = archived ? await model.archive(id) : await model.unarchive(id);
+        if (!data) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Only a completed or canceled goal can be archived',
+          });
+        }
+        return { data, message: archived ? 'Goal archived' : 'Goal restored', success: true };
+      } catch (error) {
+        mapGoalError(error, archived ? 'archive' : 'unarchive');
+      }
+    }),
   pause: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {
       return { data: await ctx.goalService.pause(input.id), message: 'Goal paused', success: true };

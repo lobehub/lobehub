@@ -1,13 +1,24 @@
+import { WORKTREE_BRANCH_PREFIX } from '@lobechat/const';
 import { deriveWorktreePath } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import debug from 'debug';
 import { z } from 'zod';
 
 import { requireWorkspaceRoleWhenScoped } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { TopicModel } from '@/database/models/topic';
 import { router } from '@/libs/trpc/lambda';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { parsePullRequestUrl } from '@/server/services/workRegistration/topicPullRequestLinks';
+import { WorktreeCleanupService } from '@/server/services/worktreeCleanup';
+import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import { assertWorkspaceRootApproved } from '../deviceWorkspaceGuard';
 import { deviceProcedure } from './procedures';
+
+const log = debug('lobe-server:device-git');
+
+/** A device's home directory rarely changes; reuse a recent system-info read. */
+const WORKTREE_HOME_MAX_AGE_MS = 10 * 60 * 1000;
 
 /**
  * A gateway read that resolved to `undefined` (gateway unconfigured, device
@@ -22,6 +33,24 @@ const requireDeviceAnswer = <T>(result: T | undefined, what: string): T => {
 };
 
 export const gitRouter = router({
+  /**
+   * A device just connected to the gateway (desktop main process, `lh
+   * connect`): run the worktree cleanups that waited for it while it was
+   * offline. They run over the gateway after the response, so the device can
+   * call this from its `connected` handler and move on.
+   */
+  drainWorktreeCleanups: deviceProcedure
+    .input(z.object({ deviceId: z.string().min(1).max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      const service = new WorktreeCleanupService(ctx.serverDB, ctx.userId, ctx.workspaceId);
+      afterUnscoped(async () => {
+        const summary = await service.runPendingForDevice(input.deviceId);
+        if (Object.keys(summary.results).length > 0)
+          log('drained worktree cleanups for %s: %o', input.deviceId, summary.results);
+      });
+      return { scheduled: true };
+    }),
+
   /**
    * Granular git reads for a directory on a remote device, each via its own
    * device RPC so the web/remote git status bar mirrors the local desktop's
@@ -46,6 +75,7 @@ export const gitRouter = router({
         deviceId: z.string(),
         path: z.string(),
         pullRequestNumber: z.number().optional(),
+        state: z.enum(['all', 'open']).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -54,6 +84,7 @@ export const gitRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         pullRequestNumber: input.pullRequestNumber,
+        state: input.state,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });
@@ -124,15 +155,36 @@ export const gitRouter = router({
       return result ?? null;
     }),
   gitAheadBehind: deviceProcedure
-    .input(z.object({ deviceId: z.string(), path: z.string() }))
+    .input(
+      z.object({
+        /** Count this local branch instead of HEAD; the device echoes it back. */
+        branch: z.string().optional(),
+        deviceId: z.string(),
+        path: z.string(),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.gitAheadBehind({
+        branch: input.branch,
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });
       return result ?? null;
+    }),
+  /**
+   * How many conversations are running in a directory on a device, so the
+   * composer can confirm before a send switches that checkout's branch. Spans
+   * every member's conversations in a workspace and returns only a count —
+   * never which topics, or whose. Reads the database, not the device, so it
+   * answers for an offline device too.
+   */
+  countRunningTopicsInDirectory: deviceProcedure
+    .input(z.object({ deviceId: z.string(), path: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const topicModel = new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+      return topicModel.countInFlightInDirectory({ deviceId: input.deviceId, path: input.path });
     }),
   /**
    * List the git worktrees attached to the same repository as a directory on a
@@ -184,6 +236,8 @@ export const gitRouter = router({
         create: z.boolean().optional(),
         deviceId: z.string(),
         path: z.string(),
+        /** With `create`, cut the new branch from this branch instead of HEAD. */
+        startPoint: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) =>
@@ -192,6 +246,7 @@ export const gitRouter = router({
         create: input.create,
         deviceId: input.deviceId,
         path: input.path,
+        startPoint: input.startPoint,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       }),
@@ -265,37 +320,82 @@ export const gitRouter = router({
    * Add a linked worktree on a fresh branch in a directory's repository on a
    * remote device, via the device's `addGitWorktree` RPC.
    *
-   * The target directory is derived here from the trusted `path` + `branch`
-   * (a `<repo>-<branch>` sibling) rather than accepted from the request, so a
-   * crafted web call can't ask the device to check out at an arbitrary absolute
-   * path — the branch is folded to `-` in the folder name, so it can't traverse.
+   * The target directory is derived here from the trusted `sourcePath` (the
+   * repo's main checkout, falling back to `path` for released clients) and
+   * `branch` — `<home>/.lobehub/worktrees/<repoKey>/<branch>`, with `<home>`
+   * from the device's reported `homePath` — rather than accepted from the
+   * request, so a crafted web call can't ask the device to check out at an
+   * arbitrary absolute path: the branch is folded to `-` in the folder name, so
+   * it can't traverse. A device that does not report its home falls back to the
+   * `<repo>-<branch>` sibling layout. The path is always absolute, so released
+   * clients that run `git worktree add` verbatim keep working.
    */
   addGitWorktree: deviceProcedure
     .input(
       z.object({
         branch: z.string(),
         deviceId: z.string(),
+        /** Creation receipt for an app-created worktree (`ownedWorktrees`). */
+        ownerToken: z.string().max(128).optional(),
         path: z.string(),
+        /** The repo's main checkout, which keys the folder; `path` may be a linked worktree. */
+        sourcePath: z.string().optional(),
+        /** Fork the worktree's branch from this branch instead of HEAD. */
+        startPoint: z.string().optional(),
+        /**
+         * Name the folder after the branch without the app's own namespace
+         * (`lobehub/x` → `…/x`). A flag rather than a prefix string: the server
+         * owns which namespace is dropped, so the request can only choose
+         * between two server-derived folders under the same root.
+         */
+        stripBranchPrefix: z.boolean().optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) =>
-      deviceGateway.addGitWorktree({
+    .mutation(async ({ ctx, input }) => {
+      const systemInfo = await deviceGateway.queryDeviceSystemInfo(
+        ctx.userId,
+        input.deviceId,
+        ctx.workspaceId,
+        { maxAgeMs: WORKTREE_HOME_MAX_AGE_MS },
+      );
+      const homeDir = systemInfo?.homePath;
+      if (!homeDir)
+        log('addGitWorktree: no homePath for deviceId=%s, using sibling layout', input.deviceId);
+      // `sourcePath` only names and hashes the central folder; the sibling
+      // fallback places the checkout next to its key, so it keeps keying on
+      // `path`, the repo git actually runs in, rather than on a client string.
+      const keyPath = homeDir ? input.sourcePath || input.path : input.path;
+
+      return deviceGateway.addGitWorktree({
         branch: input.branch,
         deviceId: input.deviceId,
+        ownerToken: input.ownerToken,
         path: input.path,
+        startPoint: input.startPoint,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
-        worktreePath: deriveWorktreePath(input.path, input.branch),
-      }),
-    ),
+        worktreePath: deriveWorktreePath(keyPath, input.branch, {
+          homeDir,
+          stripBranchPrefix: input.stripBranchPrefix ? WORKTREE_BRANCH_PREFIX : undefined,
+        }),
+      });
+    }),
   /**
    * Pull (`--ff-only`) the current branch of a directory on a remote device, via
    * the device's `pullGitBranch` RPC.
    */
   pullGitBranch: deviceProcedure
-    .input(z.object({ deviceId: z.string(), path: z.string() }))
+    .input(
+      z.object({
+        /** Sync this local branch instead of HEAD; the device echoes it back. */
+        branch: z.string().optional(),
+        deviceId: z.string(),
+        path: z.string(),
+      }),
+    )
     .mutation(async ({ ctx, input }) =>
       deviceGateway.pullGitBranch({
+        branch: input.branch,
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
@@ -307,9 +407,17 @@ export const gitRouter = router({
    * `pushGitBranch` RPC.
    */
   pushGitBranch: deviceProcedure
-    .input(z.object({ deviceId: z.string(), path: z.string() }))
+    .input(
+      z.object({
+        /** Sync this local branch instead of HEAD; the device echoes it back. */
+        branch: z.string().optional(),
+        deviceId: z.string(),
+        path: z.string(),
+      }),
+    )
     .mutation(async ({ ctx, input }) =>
       deviceGateway.pushGitBranch({
+        branch: input.branch,
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
@@ -349,20 +457,29 @@ export const gitRouter = router({
         deviceId: z.string(),
         number: z.number().int().positive(),
         path: z.string(),
+        repository: z.object({ path: z.string().min(1), url: z.string().max(2048) }).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await assertWorkspaceRootApproved(
-        ctx.deviceModel,
-        input.deviceId,
-        input.path,
-        ctx.workspaceId,
-      );
+      const { action, deviceId, number, repository } = input;
+      // Deleting the local branch must still run in the selected checkout.
+      const target = action.type === 'merge' && action.deleteBranch ? undefined : repository;
+      const pullRequest = target && parsePullRequestUrl(target.url);
+      if (target && (!pullRequest || pullRequest.number !== number)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Expected the matching GitHub PR URL',
+        });
+      }
+
+      const path = target?.path ?? input.path;
+      await assertWorkspaceRootApproved(ctx.deviceModel, deviceId, path, ctx.workspaceId);
       return deviceGateway.runGitPullRequestAction({
-        action: input.action,
-        deviceId: input.deviceId,
-        number: input.number,
-        path: input.path,
+        action,
+        deviceId,
+        number,
+        path,
+        ...(pullRequest && { url: pullRequest.url }),
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });

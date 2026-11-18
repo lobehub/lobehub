@@ -17,7 +17,8 @@ import { pickerStyles } from './pickerStyles';
 const CANDIDATE_LIMIT = 50;
 
 export interface PeopleSelection {
-  channelId: string;
+  /** Unset while creating a Channel: every workspace member except the creator. */
+  channelId?: string;
   onChange: Dispatch<SetStateAction<ChannelPersonOption[]>>;
   value: ChannelPersonOption[];
 }
@@ -28,7 +29,7 @@ export const usePersonName = () => {
 };
 
 const PersonAvatar = ({ name, person }: { name: string; person: ChannelPersonOption }) => (
-  <Avatar avatar={person.avatar || DEFAULT_USER_AVATAR} size={28} title={name} />
+  <Avatar avatar={person.avatar || DEFAULT_USER_AVATAR} shape={'circle'} size={28} title={name} />
 );
 
 /** Workspace members who are not in the Channel yet, searched on the server. */
@@ -59,7 +60,7 @@ export const PeopleOptions = ({ people, search }: { people: PeopleSelection; sea
         isLoading={isLoading}
         empty={
           <Text fontSize={12} type="secondary" {...stylex.props(pickerStyles.section)}>
-            {t(query ? 'people.noMatches' : 'people.empty')}
+            {t(query ? 'people.noMatches' : people.channelId ? 'people.empty' : 'people.noOthers')}
           </Text>
         }
         onRetry={() => void mutate()}

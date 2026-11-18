@@ -40,21 +40,30 @@ describe('agent.createAgent direct Channel', () => {
     "opens the creator's direct Channel to the new Agent in scope %s",
     async (workspaceId) => {
       const config = { name: '小满', title: 'Health Assistant' };
-      await expect(
-        caller(workspaceId).createAgent({ config, localDeviceId: 'desktop' }),
-      ).resolves.toEqual({ agentId: 'agt_new' });
+      await expect(caller(workspaceId).createAgent({ config })).resolves.toEqual({
+        agentId: 'agt_new',
+      });
 
-      // The device hint is for the Channel only; the Agent itself is created without it.
       expect(mocks.createAgent).toHaveBeenCalledWith({ config });
+      // The direct Channel binds no device, so nothing about this desktop is passed along.
       expect(mocks.createAgentDirectChannel).toHaveBeenCalledWith({
         agentId: 'agt_new',
         db: {},
-        localDeviceId: 'desktop',
         userId: 'owner',
         workspaceId,
       });
     },
   );
+
+  it('opens no Channel to a hidden (virtual) Agent', async () => {
+    // A Market agent run from an @ mention gets a hidden copy; a direct Channel
+    // to it would surface in the sidebar as an empty conversation.
+    const config = { title: 'OKR 教练', virtual: true };
+    await expect(caller('ws-1').createAgent({ config })).resolves.toEqual({ agentId: 'agt_new' });
+
+    expect(mocks.createAgent).toHaveBeenCalledWith({ config });
+    expect(mocks.createAgentDirectChannel).not.toHaveBeenCalled();
+  });
 
   it('opens nothing when the Agent was not created', async () => {
     mocks.createAgent.mockRejectedValue(new Error('A private agent cannot be created here'));

@@ -2,10 +2,13 @@ import type { SpendOrigin } from './agentRuntime';
 
 export enum AsyncTaskType {
   Chunking = 'chunk',
+  /** Full account or workspace data export built in the background (`data_export`). */
+  DataExport = 'data_export',
   Embedding = 'embedding',
   ImageGeneration = 'image_generation',
   /** One-way Linear issue → task sync run in the background (`linear_issue_sync`). */
   LinearIssueSync = 'linear_issue_sync',
+  MusicGeneration = 'music_generation',
   UserMemoryExtractionHourly = 'user_memory_extraction:hourly',
   UserMemoryExtractionWithChatTopic = 'user_memory_extraction:chat_topic',
   VideoGeneration = 'video_generation',
@@ -20,6 +23,11 @@ export enum AsyncTaskStatus {
 
 export enum AsyncTaskErrorType {
   EmbeddingError = 'EmbeddingError',
+
+  /**
+   * The plan's vector storage cannot hold this file's vectors; nothing was embedded.
+   */
+  EmbeddingQuotaExceeded = 'EmbeddingQuotaExceeded',
 
   /**
    * File exceeds the in-memory parser limit and cannot be chunked.
@@ -224,8 +232,31 @@ export interface VideoGenerationTaskMetadata {
   webhookToken?: string;
 }
 
+/** Metadata stored on each `music_generation` async task of one batch. */
+export interface MusicGenerationTaskMetadata {
+  /** Position of this generation in the batch; the provider's n-th track lands here. */
+  index?: number;
+  precharge?: unknown;
+  /** Channel that accepted an asynchronous task, so polling reaches the same channel. */
+  route?: {
+    channelId?: string;
+    channelIndex?: number;
+    model?: string;
+    routerId?: string;
+  };
+  /** Origin of the submitting request, kept for the completion charge. */
+  spendOrigin?: SpendOrigin;
+  /** One-time token the provider callback URL carries. */
+  webhookToken?: string;
+}
+
 export interface VideoGenerationRoute {
   apiType: string;
+  /**
+   * Router attempt that created the video, so the completion charge can be attributed to it.
+   * Routing ignores it: only `routerId` and `channelId` pin later polls.
+   */
+  attemptId?: string;
   channelId?: string;
   routerId?: string;
 }

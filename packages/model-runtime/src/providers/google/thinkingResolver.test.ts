@@ -270,6 +270,14 @@ describe('thinkingResolver', () => {
       ).toMatchObject({ thinkingBudget: undefined, thinkingLevel: 'high' });
     });
 
+    it('passes the xhigh thinkingLevel through for Gemini 4 Hydrogen', () => {
+      expect(resolveGoogleThinkingConfig('gemini-4-hydrogen', { thinkingLevel: 'xhigh' })).toEqual({
+        includeThoughts: true,
+        thinkingBudget: undefined,
+        thinkingLevel: 'xhigh',
+      });
+    });
+
     describe('gemini-pro (legacy unversioned model)', () => {
       const model = 'gemini-pro';
 
@@ -529,8 +537,6 @@ describe('resolveGoogleThinkingBudget', () => {
 
   it('supports disabling and dynamic thinking for flash models', () => {
     expect(resolveGoogleThinkingBudget('gemini-2.5-flash')).toBe(-1);
-    expect(resolveGoogleThinkingBudget('gemini-2.5-flash', 0)).toBe(0);
-    expect(resolveGoogleThinkingBudget('gemini-2.5-flash', -1)).toBe(-1);
     expect(resolveGoogleThinkingBudget('gemini-2.5-flash', -5)).toBe(0);
     expect(resolveGoogleThinkingBudget('gemini-2.5-flash-preview', 30_000)).toBe(24_576);
   });

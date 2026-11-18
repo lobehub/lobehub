@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { deriveAccountView, matchesKeyword, meterWindows, sortAccounts } from './accountView';
+import {
+  accountVisibilityTab,
+  deriveAccountView,
+  matchesKeyword,
+  meterWindows,
+  sortAccounts,
+} from './accountView';
 
 const NOW = Date.UTC(2026, 9, 24, 12);
 const HOUR = 60 * 60 * 1000;
@@ -14,6 +20,31 @@ const reading = (limitType: string, utilization: number, resetsAt: number | null
 });
 
 describe('deriveAccountView', () => {
+  it('bounds a used window whose provider reported no reset by one window from its capture', () => {
+    const view = deriveAccountView(
+      { enabled: true },
+      [{ ...reading('session', 100, null, NOW - HOUR), windowMinutes: 300 }],
+      NOW,
+    );
+
+    expect(view.status).toBe('exhausted');
+    expect(view.session).toEqual({
+      latestResetAt: NOW + 4 * HOUR,
+      resetsAt: null,
+      usedPercent: 100,
+    });
+  });
+
+  it('sets no bound once such a window has aged out', () => {
+    const view = deriveAccountView(
+      { enabled: true },
+      [{ ...reading('session', 100, null, NOW - 6 * HOUR), windowMinutes: 300 }],
+      NOW,
+    );
+
+    expect(view.session).toEqual({ resetsAt: null, usedPercent: 0 });
+  });
+
   it('reports both windows and the newest sync time for an available account', () => {
     const view = deriveAccountView(
       { enabled: true },
@@ -114,5 +145,24 @@ describe('matchesKeyword', () => {
   it('keeps every account for a blank keyword and drops non-matches', () => {
     expect(matchesKeyword(account, '  ')).toBe(true);
     expect(matchesKeyword(account, 'codex')).toBe(false);
+  });
+
+  it('finds a Max 20x account by the Ultra name it is shown under', () => {
+    const ultra = { planTier: 'max', rateLimitTier: 'default_claude_max_20x' };
+
+    expect(matchesKeyword(ultra, 'ultra')).toBe(true);
+    expect(matchesKeyword(ultra, 'max')).toBe(false);
+  });
+});
+
+describe('accountVisibilityTab', () => {
+  it('lists a private account under Private and a shared one under Workspace', () => {
+    expect(accountVisibilityTab({ visibility: 'private' })).toBe('private');
+    expect(accountVisibilityTab({ visibility: 'public' })).toBe('public');
+  });
+
+  it('lists an account without a stored visibility under Workspace', () => {
+    expect(accountVisibilityTab({ visibility: null })).toBe('public');
+    expect(accountVisibilityTab({})).toBe('public');
   });
 });

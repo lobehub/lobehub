@@ -69,21 +69,23 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mockNavigate,
 }));
 
-// What the shared preview/title read answers for this case (null = unresolved).
+// What the entity preview replica holds for this case (null = unresolved).
 let mockEntityPreview: {
+  acceptance?: { exceptions: number; passed: number; rounds: number; total: number };
   description?: string;
-  meta?: string;
-  secondaryMeta?: string;
   title?: string;
 } | null = null;
 
-vi.mock('@/libs/swr', () => ({
-  useClientDataSWR: (key: unknown) => {
-    if (key === null) return { data: undefined, mutate: vi.fn() };
-    if (Array.isArray(key) && key[0] === 'internal-entity-preview')
-      return { data: mockEntityPreview, mutate: vi.fn() };
-    return { data: undefined, mutate: vi.fn() };
-  },
+vi.mock('./useEntityPreview', () => ({
+  useEntityPreview: () => ({
+    error: undefined,
+    isConfirmed: true,
+    isHydrated: true,
+    isValidating: false,
+    preview: mockEntityPreview ?? undefined,
+    revalidate: vi.fn(),
+    title: mockEntityPreview?.title,
+  }),
 }));
 
 // The active agent's document-list replica, already loaded.
@@ -155,6 +157,14 @@ const renderLinkInHost = (properties: Record<string, unknown>, portal: EntityLin
       </Render>
     </EntityLinkHostProvider>,
   );
+
+/** Hover the link's preview trigger (the Popover mock), not the outer action wrapper. */
+const hoverPreview = (container: HTMLElement) =>
+  fireEvent.mouseEnter(container.querySelector('a')!.parentElement!);
+
+/** The open-in-browser action inside the hover preview card. */
+const previewBrowserAction = (container: HTMLElement) =>
+  container.querySelector<HTMLElement>('a ~ * button[aria-label="report.actions.openInBrowser"]');
 
 afterEach(() => {
   mockShowIcon = true;
@@ -242,9 +252,8 @@ describe('Link Render — message link icon toggle', () => {
 describe('Link Render — internal entities', () => {
   it('preserves preview details during dismissal and refreshes them when reopened', () => {
     mockEntityPreview = {
+      acceptance: { exceptions: 0, passed: 4, rounds: 3, total: 4 },
       description: 'Publish external workspace resources',
-      meta: '4/4 passed · 0 exceptions',
-      secondaryMeta: '3 verification rounds',
       title: 'Workspace publishing',
     };
     const { container, getByText } = render(
@@ -264,8 +273,9 @@ describe('Link Render — internal entities', () => {
 
     fireEvent.mouseLeave(container.firstElementChild!);
     expect(getByText('Publish external workspace resources')).toBeInTheDocument();
-    expect(getByText('4/4 passed · 0 exceptions')).toBeInTheDocument();
-    expect(getByText('3 verification rounds')).toBeInTheDocument();
+    // Counts are formatted at render time (the test i18n echoes the key).
+    expect(getByText('internalLink.preview.acceptanceCounts')).toBeInTheDocument();
+    expect(getByText('internalLink.preview.acceptanceRounds')).toBeInTheDocument();
 
     mockEntityPreview = { description: 'Updated requirement', title: 'Updated acceptance' };
     fireEvent.mouseEnter(container.firstElementChild!);
@@ -278,14 +288,14 @@ describe('Link Render — internal entities', () => {
     // full page as an explicit alternative, as an absolute URL so the desktop
     // system browser can resolve it.
     mockEntityPreview = { title: 'Workspace publishing' };
-    const { container, getByRole } = renderLink({
+    const { container } = renderLink({
       linkHref: '/acceptance/acceptance-1',
       linkKind: 'generic',
       linkLabel: 'Acceptance',
     });
-    fireEvent.mouseEnter(container.firstElementChild!);
+    hoverPreview(container);
 
-    fireEvent.click(getByRole('button', { name: 'report.actions.openInBrowser' }));
+    fireEvent.click(previewBrowserAction(container)!);
 
     expect(mockOpenTrustedExternalUrl).toHaveBeenCalledWith(
       'https://app.lobehub.com/acceptance/acceptance-1',
@@ -298,14 +308,14 @@ describe('Link Render — internal entities', () => {
     // `/acceptance/<id>` is the marketing site's page rather than the report.
     mockAppOrigin = 'https://lobehub.com';
     mockEntityPreview = { title: 'Workspace publishing' };
-    const { container, getByRole } = renderLink({
+    const { container } = renderLink({
       linkHref: '/acceptance/acceptance-1',
       linkKind: 'generic',
       linkLabel: 'Acceptance',
     });
-    fireEvent.mouseEnter(container.firstElementChild!);
+    hoverPreview(container);
 
-    fireEvent.click(getByRole('button', { name: 'report.actions.openInBrowser' }));
+    fireEvent.click(previewBrowserAction(container)!);
 
     expect(mockOpenTrustedExternalUrl).toHaveBeenCalledWith(
       'https://app.lobehub.com/acceptance/acceptance-1',
@@ -333,6 +343,73 @@ describe('Link Render — internal entities', () => {
     fireEvent.mouseEnter(container.firstElementChild!);
 
     expect(queryByRole('button', { name: 'report.actions.openInBrowser' })).toBeNull();
+  });
+
+  it('opens an acceptance in the browser from beside the link, without hovering', () => {
+    // The side panel a click opens can sit under another surface (a session
+    // overlay), so the browser page is one click away right next to the link.
+    const { container } = renderLink({
+      linkHref: '/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: 'Acceptance',
+    });
+
+    const action = container.querySelector<HTMLElement>('[data-acceptance-browser]')!;
+    expect(action).toHaveAttribute('aria-label', 'report.actions.openInBrowser');
+    // Outside the anchor: the desktop preload claims clicks via closest('a').
+    expect(action.closest('a')).toBeNull();
+
+    fireEvent.click(action);
+
+    expect(mockOpenTrustedExternalUrl).toHaveBeenCalledWith(
+      'https://app.lobehub.com/acceptance/acceptance-1',
+    );
+    expect(mockOpenAcceptance).not.toHaveBeenCalled();
+  });
+
+  it('keeps a workspace-qualified acceptance link scoped when opening it in the browser', () => {
+    const { container } = renderLink({
+      linkHref: '/lobe-team/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: 'Acceptance',
+    });
+
+    fireEvent.click(container.querySelector('[data-acceptance-browser]')!);
+
+    expect(mockOpenTrustedExternalUrl).toHaveBeenCalledWith(
+      'https://app.lobehub.com/lobe-team/acceptance/acceptance-1',
+    );
+  });
+
+  it('offers no inline browser action without an origin or on other entities', () => {
+    for (const linkHref of ['/task/T-198', '/verify/run-1']) {
+      const { container } = renderLink({ linkHref, linkKind: 'generic', linkLabel: 'Entity' });
+      expect(container.querySelector('[data-acceptance-browser]')).toBeNull();
+    }
+
+    mockAppOrigin = '';
+    const { container } = renderLink({
+      linkHref: '/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: 'Acceptance',
+    });
+    expect(container.querySelector('[data-acceptance-browser]')).toBeNull();
+  });
+
+  it('keeps the inline browser action off mobile, where a tap beside the link would misfire', () => {
+    vi.stubGlobal('__MOBILE__', true);
+
+    try {
+      const { container } = renderLink({
+        linkHref: '/acceptance/acceptance-1',
+        linkKind: 'generic',
+        linkLabel: 'Acceptance',
+      });
+
+      expect(container.querySelector('[data-acceptance-browser]')).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('replaces a pasted URL label with the resolved entity title', () => {
@@ -613,6 +690,36 @@ describe('Link Render — open an external link in the side browser', () => {
     );
   });
 
+  it("opens the page in the host's side browser when the host has one", () => {
+    mockConst.isDesktop = true;
+    const openInHostBrowser = vi.fn();
+
+    const { container } = render(
+      <EntityLinkHostProvider portal={['acceptance']} onOpenSideBrowser={openInHostBrowser}>
+        <Render
+          id="msg-1"
+          tagName="lobeLink"
+          type="element"
+          node={{
+            properties: {
+              linkDomain: 'localhost',
+              linkHref: 'http://localhost:3022/observability/context',
+              linkKind: 'generic',
+              linkLabel: 'http://localhost:3022/observability/context',
+            },
+          }}
+        >
+          {null}
+        </Render>
+      </EntityLinkHostProvider>,
+    );
+    fireEvent.click(container.querySelector('[data-side-browser]')!);
+
+    expect(openInHostBrowser).toHaveBeenCalledWith('http://localhost:3022/observability/context');
+    // The working sidebar is not on this page; a request left for it would pop it open later.
+    expect(mockOpenInBrowserTab).not.toHaveBeenCalled();
+  });
+
   it('keeps the action OUTSIDE the anchor, or the preload would swallow its click', () => {
     mockConst.isDesktop = true;
 
@@ -686,8 +793,8 @@ describe('Link Render — open an external link in the side browser', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/lobe-team/tasks', { escape: true });
   });
 
-  it('navigates workspace-qualified entities before opening a scoped portal', () => {
-    const { getByRole, queryByRole } = renderLink({
+  it('opens a task from another workspace beside the chat, scoped to that workspace', () => {
+    const { getByRole } = renderLink({
       linkHref: '/lobe-team/task/T-198',
       linkKind: 'generic',
       linkLabel: 'Workspace task',
@@ -695,9 +802,21 @@ describe('Link Render — open an external link in the side browser', () => {
 
     fireEvent.click(getByRole('link', { name: 'Workspace task' }));
 
-    expect(mockNavigate).toHaveBeenCalledWith('/lobe-team/task/T-198', { escape: true });
-    expect(mockOpenTaskDetail).not.toHaveBeenCalled();
-    expect(queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mockOpenTaskDetail).toHaveBeenCalledWith('T-198', { id: 'ws-1', slug: 'lobe-team' });
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('still navigates other workspace-qualified entities into their workspace', () => {
+    const { getByRole } = renderLink({
+      linkHref: '/lobe-team/agent/agt_9',
+      linkKind: 'generic',
+      linkLabel: 'Workspace agent',
+    });
+
+    fireEvent.click(getByRole('link', { name: 'Workspace agent' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/lobe-team/agent/agt_9', { escape: true });
+    expect(mockOpenAgentDetail).not.toHaveBeenCalled();
   });
 
   it('preserves a different agent context for agent-scoped document links', () => {
@@ -769,6 +888,18 @@ describe('Link Render — host portal scope', () => {
     fireEvent.click(getByRole('link', { name: 'T-198' }));
 
     expect(mockNavigate).toHaveBeenCalledWith('/task/T-198');
+    expect(mockOpenTaskDetail).not.toHaveBeenCalled();
+  });
+
+  it('navigates a task from another workspace when the host has no panel', () => {
+    const { getByRole } = renderLinkInHost(
+      { linkHref: '/lobe-team/task/T-198', linkKind: 'generic', linkLabel: 'Workspace task' },
+      false,
+    );
+
+    fireEvent.click(getByRole('link', { name: 'Workspace task' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/lobe-team/task/T-198', { escape: true });
     expect(mockOpenTaskDetail).not.toHaveBeenCalled();
   });
 

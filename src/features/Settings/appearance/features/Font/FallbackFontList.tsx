@@ -3,13 +3,14 @@
 import {
   ActionIcon,
   Button,
-  createStaticStyles,
   Flexbox,
   Select,
   type SelectOption,
   SortableList,
   Text,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { PlusIcon, XIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,11 +19,9 @@ import { MAX_FALLBACK_FONTS } from './fontStack';
 import { useFontFallbackStack } from './useFontFallbackStack';
 
 const width = { width: 320 };
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  item: css`
-    padding-inline: ${cssVar.paddingSM} ${cssVar.paddingXXS};
-  `,
-}));
+const styles = stylex.create({
+  item: { paddingInlineStart: cssVar.paddingSM, paddingInlineEnd: cssVar.paddingXXS },
+});
 
 interface FallbackFontListProps {
   ariaLabel: string;
@@ -57,7 +56,7 @@ const FallbackFontList = ({
           <SortableList.Item
             horizontal
             align={'center'}
-            className={styles.item}
+            className={stylex.props(styles.item).className}
             gap={4}
             id={item.id}
             justify={'space-between'}

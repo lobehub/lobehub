@@ -9,9 +9,15 @@ import {
 import { knowledgeBaseService } from '@/services/knowledgeBase';
 import type { KnowledgeBaseStore } from '@/store/library/store';
 import type { StoreSetter } from '@/store/types';
-import type { CreateKnowledgeBaseParams, KnowledgeBaseItem } from '@/types/knowledgeBase';
+import type {
+  AgentKnowledgeSpaceItem,
+  CreateKnowledgeBaseParams,
+  KnowledgeBaseItem,
+} from '@/types/knowledgeBase';
 
 import {
+  AGENT_SPACE_LIST_KEY,
+  agentSpaceListResource,
   KNOWLEDGE_BASE_LIST_ALL_KEY,
   knowledgeBaseItemResource,
   knowledgeBaseListResource,
@@ -38,6 +44,7 @@ export const createCrudSlice = (set: Setter, get: () => KnowledgeBaseStore, _api
  * `useFetch*` hooks only orchestrate fetching and return flags.
  */
 export class KnowledgeBaseCrudActionImpl {
+  readonly #agentSpaceList;
   readonly #get: () => KnowledgeBaseStore;
   readonly #kbEntity;
   readonly #kbItem;
@@ -76,6 +83,13 @@ export class KnowledgeBaseCrudActionImpl {
       stateKey: 'knowledgeBaseDetailReplica',
       view: recordLens<KnowledgeBaseStore, KnowledgeBaseItem>('knowledgeBaseDetailMap'),
     });
+    this.#agentSpaceList = createReplicaSlice(agentSpaceListResource, {
+      actionPrefix: 'agentSpaceList',
+      get,
+      set,
+      stateKey: 'agentSpaceListReplica',
+      view: recordLens<KnowledgeBaseStore, AgentKnowledgeSpaceItem[]>('agentSpaceListMap'),
+    });
     // The same KB lives in the list surfaces and in the by-id projection.
     this.#kbEntity = linkReplicaEntity<KnowledgeBaseItem>([this.#kbList, this.#kbItem]);
   }
@@ -111,6 +125,10 @@ export class KnowledgeBaseCrudActionImpl {
    */
   useFetchKnowledgeBaseList = (visibility?: KnowledgeBaseVisibility): ReplicaSyncResult =>
     this.#kbList.useSync({ visibility });
+
+  /** Syncs agents' dedicated libraries; pass `false` until that surface is shown. */
+  useFetchAgentSpaceList = (enabled: boolean): ReplicaSyncResult =>
+    this.#agentSpaceList.useSync(enabled ? AGENT_SPACE_LIST_KEY : null);
 
   // ---- writes ------------------------------------------------------------
 

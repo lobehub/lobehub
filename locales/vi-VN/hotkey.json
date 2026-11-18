@@ -1,6 +1,4 @@
 {
-  "addUserMessage.desc": "Thêm nội dung hiện tại dưới dạng tin nhắn người dùng mà không kích hoạt tạo phản hồi",
-  "addUserMessage.title": "Thêm Tin Nhắn Người Dùng",
   "commandPalette.desc": "Mở bảng lệnh toàn cục để truy cập nhanh các tính năng",
   "commandPalette.title": "Bảng Lệnh",
   "deleteAndRegenerateMessage.desc": "Xóa tin nhắn cuối cùng và tạo lại",
@@ -27,6 +25,8 @@
   "openChatSettings.title": "Mở Cài Đặt Trò Chuyện",
   "openHotkeyHelper.desc": "Xem hướng dẫn cho tất cả phím tắt",
   "openHotkeyHelper.title": "Mở Trợ Giúp Phím Tắt",
+  "openTaskFilter.desc": "Mở menu bộ lọc trên trang Nhiệm Vụ",
+  "openTaskFilter.title": "Lọc Nhiệm Vụ",
   "prevTab.desc": "Chuyển sang tab trước đó trong ứng dụng Desktop; quay lại tab cuối cùng khi bắt đầu",
   "prevTab.title": "Tab Trước",
   "regenerateMessage.desc": "Tạo lại tin nhắn cuối cùng",

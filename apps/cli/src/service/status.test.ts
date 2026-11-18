@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getServiceRestartCommand, readConnectServices } from './status';
+import { getServiceRestartCommand, readConnectServices, serviceRestartsAfterExit } from './status';
 
 const state = vi.hoisted(() => ({
   errorScopes: new Set<string>(),
@@ -77,6 +77,30 @@ describe('connect service discovery', () => {
       services: [],
       unavailableScopes: ['user', 'system'],
     });
+  });
+
+  it('reads whether systemd restarts the unit after a failure exit', async () => {
+    state.output = {
+      system: `${loaded}\nRestart=on-failure\nRestartPreventExitStatus=\nSuccessExitStatus=0 1 2`,
+      user: 'LoadState=not-found',
+    };
+    const [service] = (await readConnectServices()).services;
+    expect(service).toMatchObject({
+      restart: 'on-failure',
+      restartPreventExitStatus: [],
+      successExitStatus: ['0', '1', '2'],
+    });
+    expect(serviceRestartsAfterExit(service, 75)).toBe(true);
+    expect(serviceRestartsAfterExit({ ...service, restart: 'always' }, 75)).toBe(true);
+    expect(serviceRestartsAfterExit({ ...service, restart: 'no' }, 75)).toBe(false);
+    expect(serviceRestartsAfterExit({ ...service, restart: 'on-abnormal' }, 75)).toBe(false);
+    expect(serviceRestartsAfterExit({ ...service, successExitStatus: ['75'] }, 75)).toBe(false);
+    expect(
+      serviceRestartsAfterExit(
+        { ...service, restart: 'always', restartPreventExitStatus: ['75'] },
+        75,
+      ),
+    ).toBe(false);
   });
 
   it('does not invoke systemctl on other platforms', async () => {

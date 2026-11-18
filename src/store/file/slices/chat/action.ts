@@ -1,5 +1,6 @@
 import { SHARE_VISITOR_MAX_FILE_SIZE } from '@lobechat/const';
 import { type ChatContextContent } from '@lobechat/types';
+import { createNanoId } from '@lobechat/utils';
 import { COMPRESSIBLE_IMAGE_TYPES, compressImageFile } from '@lobechat/utils/compressImage';
 import { toast } from '@lobehub/ui';
 import { Buffer } from 'buffer.js';
@@ -65,6 +66,62 @@ export interface ChatUploadOptions {
   shareId?: string;
 }
 
+/**
+ * Id of a chip while its upload is pending, replaced by the file's id once it finishes.
+ * Pasted images are all named `image.png`, so the file name alone would let concurrent
+ * uploads report to each other's chips and send an image the chip does not show.
+ */
+const createPendingUploadId = (file: File) => `${file.name}#${createNanoId(8)()}`;
+
+/**
+ * Best-effort: `crypto.subtle` is missing outside a secure context (a self-hosted page over
+ * plain HTTP from a non-localhost address), where the image is uploaded without dedupe.
+ */
+const hashImageContent = async (file: File): Promise<string | undefined> => {
+  try {
+    const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+    return Buffer.from(digest).toString('hex');
+  } catch {
+    return undefined;
+  }
+};
+
+/** A failed or cancelled upload is not sent, so a new copy of its image is uploaded again. */
+const isLiveUpload = (item: UploadFileItem) =>
+  item.status !== 'error' && item.status !== 'cancelled';
+
+/**
+ * Drops newly prepared uploads whose content matches an image already in the draft (or
+ * earlier in the same batch). A second card would upload the same file again, the server
+ * keeps one copy, and the message would name an `[Image #2]` the model never receives.
+ * `repastedIds` are the draft cards that matched, so they can show the paste landed.
+ */
+const withoutDuplicateImages = (
+  current: UploadFileItem[],
+  prepared: UploadFileItem[],
+): { added: UploadFileItem[]; repastedIds: string[] } => {
+  const existing = new Map<string, string>();
+  for (const item of current) {
+    if (item.contentHash && isLiveUpload(item)) existing.set(item.contentHash, item.id);
+  }
+  const seen = new Set<string>();
+  const repastedIds = new Set<string>();
+
+  const added = prepared.filter((item) => {
+    if (!item.contentHash) return true;
+    const existingId = existing.get(item.contentHash);
+    if (existingId !== undefined || seen.has(item.contentHash)) {
+      if (existingId !== undefined) repastedIds.add(existingId);
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      return false;
+    }
+    seen.add(item.contentHash);
+    return true;
+  });
+
+  return { added, repastedIds: [...repastedIds] };
+};
+
 const formatShareUploadLimit = () => `${Math.round(SHARE_VISITOR_MAX_FILE_SIZE / 1024 / 1024)} MB`;
 
 const getUploadErrorDescription = (error: unknown): string => {
@@ -92,15 +149,45 @@ const getUploadErrorDescription = (error: unknown): string => {
     : t('upload.unknownError', { ns: 'error', reason: getErrorMessage(error) });
 };
 
+const EMPTY_CHAT_UPLOAD_FILE_LIST: UploadFileItem[] = [];
+
 export class FileActionImpl {
   readonly #get: () => FileStore;
   readonly #set: Setter;
+  /**
+   * The key each in-flight upload's chip currently lives under. A move
+   * (`moveChatUploadFileList`) updates it, so an upload keeps reporting to its
+   * own chip instead of resolving by id — a pending id is only the file name,
+   * and a same-named upload may appear under the old key later.
+   */
+  readonly #inFlightUploads = new Set<{ contextKey: string }>();
 
   constructor(set: Setter, get: () => FileStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
   }
+
+  #getChatUploadFileList = (contextKey: string): UploadFileItem[] =>
+    this.#get().chatUploadFileListByContext[contextKey] ?? EMPTY_CHAT_UPLOAD_FILE_LIST;
+
+  #setChatUploadFileList = (contextKey: string, list: UploadFileItem[], action: string): void => {
+    const currentMap = this.#get().chatUploadFileListByContext;
+
+    // Drop emptied buckets so conversations visited once don't pile up keys.
+    if (list.length === 0) {
+      if (!(contextKey in currentMap)) return;
+      const { [contextKey]: _removed, ...nextMap } = currentMap;
+      this.#set({ chatUploadFileListByContext: nextMap }, false, action);
+      return;
+    }
+
+    this.#set(
+      { chatUploadFileListByContext: { ...currentMap, [contextKey]: list } },
+      false,
+      action,
+    );
+  };
 
   addChatContextSelection = ({
     contextKey,
@@ -128,11 +215,11 @@ export class FileActionImpl {
     this.#set({ chatContextSelectionsByContext: nextMap }, false, n('clearChatContextSelections'));
   };
 
-  clearChatUploadFileList = (submittedIds?: string[]): void => {
-    const chatUploadFileList = submittedIds
-      ? this.#get().chatUploadFileList.filter((file) => !submittedIds.includes(file.id))
+  clearChatUploadFileList = (contextKey: string, submittedIds?: string[]): void => {
+    const next = submittedIds
+      ? this.#getChatUploadFileList(contextKey).filter((file) => !submittedIds.includes(file.id))
       : [];
-    this.#set({ chatUploadFileList }, false, n('clearChatUploadFileList'));
+    this.#setChatUploadFileList(contextKey, next, n('clearChatUploadFileList'));
   };
 
   /**
@@ -141,21 +228,57 @@ export class FileActionImpl {
    * up front). Items already in the list are skipped by id so a concurrent
    * draft does not end up with duplicates.
    */
-  restoreChatUploadFileList = (files: UploadFileItem[]): void => {
+  restoreChatUploadFileList = (contextKey: string, files: UploadFileItem[]): void => {
     if (files.length === 0) return;
 
-    const currentIds = new Set(this.#get().chatUploadFileList.map((file) => file.id));
+    const currentIds = new Set(this.#getChatUploadFileList(contextKey).map((file) => file.id));
     const restored = files.filter((file) => !currentIds.has(file.id));
     if (restored.length === 0) return;
 
-    this.#get().dispatchChatUploadFileList({ files: restored, type: 'addFiles' });
+    this.#get().dispatchChatUploadFileList(contextKey, { files: restored, type: 'addFiles' });
   };
 
-  dispatchChatUploadFileList = (payload: UploadFileListDispatch): void => {
-    const nextValue = uploadFileListReducer(this.#get().chatUploadFileList, payload);
-    if (nextValue === this.#get().chatUploadFileList) return;
+  dispatchChatUploadFileList = (contextKey: string, payload: UploadFileListDispatch): void => {
+    const current = this.#getChatUploadFileList(contextKey);
+    const nextValue = uploadFileListReducer(current, payload);
+    if (nextValue === current) return;
 
-    this.#set({ chatUploadFileList: nextValue }, false, `dispatchChatFileList/${payload.type}`);
+    this.#setChatUploadFileList(contextKey, nextValue, `dispatchChatFileList/${payload.type}`);
+  };
+
+  /** Upload half of `moveChatComposerAttachments`. */
+  moveChatUploadFileList = (fromContextKey: string, toContextKey: string): void => {
+    if (fromContextKey === toContextKey) return;
+
+    // Uploads still being prepared follow the composer even before their chip exists.
+    for (const upload of this.#inFlightUploads) {
+      if (upload.contextKey === fromContextKey) upload.contextKey = toContextKey;
+    }
+
+    const source = this.#getChatUploadFileList(fromContextKey);
+    if (source.length === 0) return;
+
+    const sourceIds = new Set(source.map((file) => file.id));
+    const target = this.#getChatUploadFileList(toContextKey).filter(
+      (file) => !sourceIds.has(file.id),
+    );
+    const { [fromContextKey]: _removed, ...nextMap } = this.#get().chatUploadFileListByContext;
+
+    this.#set(
+      { chatUploadFileListByContext: { ...nextMap, [toContextKey]: [...target, ...source] } },
+      false,
+      n('moveChatUploadFileList'),
+    );
+  };
+
+  /**
+   * Carry everything a composer has staged — context selections and uploads —
+   * to another key, e.g. when a blank conversation becomes a real topic
+   * mid-send, so the composer at the new key still shows them.
+   */
+  moveChatComposerAttachments = (fromContextKey: string, toContextKey: string): void => {
+    this.moveChatContextSelections(fromContextKey, toContextKey);
+    this.moveChatUploadFileList(fromContextKey, toContextKey);
   };
 
   moveChatContextSelections = (fromContextKey: string, toContextKey: string): void => {
@@ -215,14 +338,12 @@ export class FileActionImpl {
     );
   };
 
-  removeChatUploadFile = async (id: string): Promise<void> => {
-    const { chatUploadFileList, dispatchChatUploadFileList } = this.#get();
-
+  removeChatUploadFile = async (contextKey: string, id: string): Promise<void> => {
     // Restored entries reference an already-persisted file that still backs the
     // original message — only drop the draft item, never delete the file itself.
-    const item = chatUploadFileList.find((entry) => entry.id === id);
+    const item = this.#getChatUploadFileList(contextKey).find((entry) => entry.id === id);
 
-    dispatchChatUploadFileList({ id, type: 'removeFile' });
+    this.#get().dispatchChatUploadFileList(contextKey, { id, type: 'removeFile' });
 
     if (item?.skipRemoveFile) return;
 
@@ -240,13 +361,12 @@ export class FileActionImpl {
     await fileService.removeFile(id);
   };
 
-  retryChatUploadFile = async (id: string): Promise<void> => {
-    const { chatUploadFileList, dispatchChatUploadFileList } = this.#get();
-    const item = chatUploadFileList.find((file) => file.id === id);
+  retryChatUploadFile = async (contextKey: string, id: string): Promise<void> => {
+    const item = this.#getChatUploadFileList(contextKey).find((file) => file.id === id);
     if (!item?.agentId) return;
 
-    dispatchChatUploadFileList({ id, type: 'removeFile' });
-    await this.uploadChatFiles([item.file], item.agentId, { shareId: item.shareId });
+    this.#get().dispatchChatUploadFileList(contextKey, { id, type: 'removeFile' });
+    await this.uploadChatFiles(contextKey, [item.file], item.agentId, { shareId: item.shareId });
   };
 
   startAsyncTask = async (
@@ -288,12 +408,30 @@ export class FileActionImpl {
   };
 
   uploadChatFiles = async (
+    contextKey: string,
     rawFiles: File[],
     agentId: string,
     options: ChatUploadOptions = {},
   ): Promise<void> => {
-    const { dispatchChatUploadFileList } = this.#get();
     const { shareId } = options;
+    const upload = { contextKey };
+    this.#inFlightUploads.add(upload);
+    try {
+      await this.#uploadChatFilesTo(upload, rawFiles, agentId, shareId);
+    } finally {
+      this.#inFlightUploads.delete(upload);
+    }
+  };
+
+  #uploadChatFilesTo = async (
+    upload: { contextKey: string },
+    rawFiles: File[],
+    agentId: string,
+    shareId: string | undefined,
+  ): Promise<void> => {
+    // The chip may be handed to another key mid-upload; dispatch to wherever it is now.
+    const dispatchChatUploadFileList = (payload: UploadFileListDispatch) =>
+      this.#get().dispatchChatUploadFileList(upload.contextKey, payload);
     // 0. skip file in blacklist
     const filteredFiles = rawFiles.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
 
@@ -345,15 +483,22 @@ export class FileActionImpl {
 
     if (admittedFiles.length === 0) return;
 
-    // 1. compress images and add files with base64
-    const files = await Promise.all(
-      admittedFiles.map((file) =>
-        COMPRESSIBLE_IMAGE_TYPES.has(file.type) ? compressImageFile(file) : file,
-      ),
+    // 1. compress images and add files with base64. Images are hashed first, since
+    // compression re-encodes them and the same picture must hash the same every time.
+    const prepared = await Promise.all(
+      admittedFiles.map(async (rawFile) => {
+        const contentHash = rawFile.type.startsWith('image')
+          ? await hashImageContent(rawFile)
+          : undefined;
+        const file = COMPRESSIBLE_IMAGE_TYPES.has(rawFile.type)
+          ? await compressImageFile(rawFile)
+          : rawFile;
+        return { contentHash, file };
+      }),
     );
 
-    const uploadFiles: UploadFileItem[] = await Promise.all(
-      files.map(async (file) => {
+    const preparedItems: UploadFileItem[] = await Promise.all(
+      prepared.map(async ({ contentHash, file }) => {
         let previewUrl: string | undefined = undefined;
         let base64Url: string | undefined = undefined;
 
@@ -370,8 +515,9 @@ export class FileActionImpl {
         return {
           agentId,
           base64Url,
+          contentHash,
           file,
-          id: file.name,
+          id: createPendingUploadId(file),
           previewUrl,
           shareId,
           status: 'pending',
@@ -379,10 +525,25 @@ export class FileActionImpl {
       }),
     );
 
-    dispatchChatUploadFileList({ files: uploadFiles, type: 'addFiles' });
+    // Read the list and add to it in one synchronous step, so concurrent pastes of the
+    // same image see each other.
+    const { added: uploadFiles, repastedIds } = withoutDuplicateImages(
+      this.#getChatUploadFileList(upload.contextKey),
+      preparedItems,
+    );
+
+    if (uploadFiles.length > 0)
+      dispatchChatUploadFileList({ files: uploadFiles, type: 'addFiles' });
+    const repastedAt = Date.now();
+    for (const id of repastedIds)
+      dispatchChatUploadFileList({ id, type: 'updateFile', value: { repastedAt } });
+
+    const files = uploadFiles.map((item) => item.file);
+    const uploadIds = new Map(uploadFiles.map((item) => [item.file, item.id]));
 
     // upload files and process it
     const pools = files.map(async (file) => {
+      const uploadId = uploadIds.get(file)!;
       let fileResult: { id: string; url: string } | undefined;
 
       try {
@@ -391,17 +552,20 @@ export class FileActionImpl {
               file,
               onStatusUpdate: dispatchChatUploadFileList,
               shareId,
+              uploadId,
             })
           : await this.#get().uploadWithProgress({
+              conversationAgentId: agentId,
               file,
               onStatusUpdate: dispatchChatUploadFileList,
+              uploadId,
             });
       } catch (error) {
         if (getErrorMessage(error) === 'UNAUTHORIZED') {
-          dispatchChatUploadFileList({ id: file.name, type: 'removeFile' });
+          dispatchChatUploadFileList({ id: uploadId, type: 'removeFile' });
         } else {
           dispatchChatUploadFileList({
-            id: file.name,
+            id: uploadId,
             type: 'updateFile',
             value: {
               error: getUploadErrorDescription(error),

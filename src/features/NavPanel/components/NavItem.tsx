@@ -19,6 +19,15 @@ import { memo } from 'react';
 import { isModifierClick } from '@/utils/navigation';
 
 import { type LazyActions, useLazyActions } from './useLazyActions';
+import {
+  NAV_ITEM_ACTIONS_INSET_VAR,
+  NAV_ITEM_CONTENT_FADE,
+  TITLE_MARQUEE_FADE,
+  TITLE_MARQUEE_FADE_END_VAR,
+  TITLE_MARQUEE_FADE_START_VAR,
+  useTitleMarquee,
+  useTitleMarqueeAvailable,
+} from './useTitleMarquee';
 
 const ACTION_CLASS_NAME = 'nav-item-actions';
 const CONTENT_CLASS_NAME = 'nav-item-content';
@@ -29,14 +38,14 @@ const styles = createStaticStyles(({ css }) => ({
        Each extra icon adds its 24px plus the 2px gap. The focus guards and the
        aria-owns portal marker an open menu inserts beside its trigger are not
        icons, so they are not counted. */
-    --nav-item-actions-inset: 28px;
+    ${NAV_ITEM_ACTIONS_INSET_VAR}: 28px;
 
     user-select: none;
     overflow: hidden;
     min-width: 32px;
 
     &:has(.${ACTION_CLASS_NAME} > :nth-child(2 of :not([data-base-ui-focus-guard], [aria-owns]))) {
-      --nav-item-actions-inset: 54px;
+      ${NAV_ITEM_ACTIONS_INSET_VAR}: 54px;
     }
 
     /* focus-visible, not focus-within: closing a dropdown hands focus back to its
@@ -54,8 +63,8 @@ const styles = createStaticStyles(({ css }) => ({
       .${CONTENT_CLASS_NAME} {
         mask-image: linear-gradient(
           to right,
-          #000 calc(100% - var(--nav-item-actions-inset) - 28px),
-          transparent calc(100% - var(--nav-item-actions-inset))
+          black calc(100% - var(${NAV_ITEM_ACTIONS_INSET_VAR}) - ${NAV_ITEM_CONTENT_FADE}px),
+          transparent calc(100% - var(${NAV_ITEM_ACTIONS_INSET_VAR}))
         );
       }
     }
@@ -73,9 +82,34 @@ const styles = createStaticStyles(({ css }) => ({
       opacity: 0;
     }
   `,
+  marqueeText: css`
+    display: block;
+    width: max-content;
+  `,
+  /* Clipped titles fade out at the right edge instead of ending in an ellipsis,
+     which spends ~3ch of row width on punctuation. The box is as wide as the
+     row, so a title that fits never reaches the fade. While hovered, the
+     marquee animates both edge widths (see useTitleMarquee). */
+  marqueeViewport: css`
+    ${TITLE_MARQUEE_FADE_END_VAR}: ${TITLE_MARQUEE_FADE}px;
+
+    overflow: hidden;
+    display: block;
+    white-space: nowrap;
+
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black var(${TITLE_MARQUEE_FADE_START_VAR}, 0px),
+      black calc(100% - var(${TITLE_MARQUEE_FADE_END_VAR})),
+      transparent
+    );
+  `,
 }));
 
 export interface NavItemSlots {
+  /** Stacked under the leading icon, e.g. a short status label on a two-line row. */
+  iconBelow?: ReactNode;
   iconPostfix?: ReactNode;
   titlePrefix?: ReactNode;
 }
@@ -115,6 +149,15 @@ export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
    * fully emphasized regardless of active state (e.g. topic titles).
    */
   titleColor?: string;
+  /**
+   * Reveal an overflowing title by sliding it to its tail while the row is
+   * hovered, instead of showing it in a tooltip. Use for rows whose titles are
+   * long free text (topic titles); at rest a clipped title fades out at its
+   * right edge instead of ending in an ellipsis. Under reduced motion or an
+   * RTL locale the row keeps the ellipsis and tooltip, since the slide and the
+   * edge fades assume left-to-right text.
+   */
+  titleMarquee?: boolean;
 }
 
 const NavItem = memo<NavItemProps>(
@@ -128,6 +171,7 @@ const NavItem = memo<NavItemProps>(
     iconSize = 18,
     title,
     titleColor,
+    titleMarquee,
     description,
     onClick,
     disabled,
@@ -137,13 +181,28 @@ const NavItem = memo<NavItemProps>(
     style,
     onFocus,
     onPointerEnter,
+    onPointerLeave,
     ...rest
   }) => {
     const { mount: mountLazyActions, node: renderedActions } = useLazyActions(actions);
+    const marqueeAvailable = useTitleMarqueeAvailable();
+    const marquee = !!titleMarquee && marqueeAvailable;
+    const {
+      start: startTitleMarquee,
+      stop: stopTitleMarquee,
+      textRef: titleTextRef,
+      viewportRef: titleViewportRef,
+    } = useTitleMarquee(marquee, typeof title === 'string' ? title : undefined);
 
     const handlePointerEnter = (e: PointerEvent<HTMLDivElement>) => {
       mountLazyActions();
+      startTitleMarquee();
       onPointerEnter?.(e);
+    };
+
+    const handlePointerLeave = (e: PointerEvent<HTMLDivElement>) => {
+      stopTitleMarquee();
+      onPointerLeave?.(e);
     };
 
     // Focus, not just the pointer: a keyboard user reaches the row by tabbing,
@@ -158,7 +217,7 @@ const NavItem = memo<NavItemProps>(
     const textColor = titleColor ?? (active ? cssVar.colorText : cssVar.colorTextSecondary);
     const variant = active ? 'filled' : 'borderless';
 
-    const { titlePrefix, iconPostfix } = slots || {};
+    const { titlePrefix, iconBelow, iconPostfix } = slots || {};
     // Link props for cmd+click support
     const linkProps = href
       ? {
@@ -178,12 +237,47 @@ const NavItem = memo<NavItemProps>(
           }
         : undefined;
 
+    // A description stacks the title in a column, where `flex: 1` would grow it vertically.
+    const titleStyle = description ? undefined : { flex: 1 };
+    const titleNode = marquee ? (
+      <Text color={textColor} style={{ ...titleStyle, minWidth: 0 }}>
+        <span className={styles.marqueeViewport} ref={titleViewportRef}>
+          <span className={styles.marqueeText} ref={titleTextRef}>
+            {title}
+          </span>
+        </span>
+      </Text>
+    ) : (
+      <Text color={textColor} ellipsis={{ tooltipWhenOverflow: true }} style={titleStyle}>
+        {title}
+      </Text>
+    );
+
+    const iconNode = icon && (
+      <Center
+        flex={'none'}
+        // With a description the row is two lines tall; align the leading icon
+        // to the title's first line (match its line-height) instead of letting
+        // it center across both lines, which drops it into the gap.
+        height={description ? 22 : 28}
+        style={description ? { alignSelf: 'flex-start' } : undefined}
+        width={28}
+      >
+        {loading ? (
+          <Spin size={iconSize} variant="network" />
+        ) : (
+          <Icon color={iconColor} icon={icon} size={iconSize} />
+        )}
+      </Center>
+    );
+
     const Content = (
       <Block
         horizontal
         align={'center'}
         className={cx(styles.container, className)}
         clickable={!disabled}
+        data-nav-item=""
         gap={8}
         height={description ? undefined : 36}
         paddingBlock={description ? 8 : undefined}
@@ -203,23 +297,23 @@ const NavItem = memo<NavItemProps>(
         {...rest}
         onFocus={handleFocus}
         onPointerEnter={handlePointerEnter}
+        onPointerLeave={handlePointerLeave}
       >
-        {icon && (
-          <Center
+        {iconNode && iconBelow ? (
+          <Flexbox
+            align={'center'}
             flex={'none'}
-            // With a description the row is two lines tall; align the leading icon
-            // to the title's first line (match its line-height) instead of letting
-            // it center across both lines, which drops it into the gap.
-            height={description ? 22 : 28}
+            gap={2}
             style={description ? { alignSelf: 'flex-start' } : undefined}
+            // Keep the icon column width so the title does not shift; a wider
+            // label overflows evenly into the gaps around it.
             width={28}
           >
-            {loading ? (
-              <Spin size={iconSize} variant="network" />
-            ) : (
-              <Icon color={iconColor} icon={icon} size={iconSize} />
-            )}
-          </Center>
+            {iconNode}
+            {iconBelow}
+          </Flexbox>
+        ) : (
+          iconNode
         )}
 
         {iconPostfix}
@@ -227,6 +321,7 @@ const NavItem = memo<NavItemProps>(
           horizontal
           align={'center'}
           className={CONTENT_CLASS_NAME}
+          data-nav-item-content=""
           flex={1}
           gap={8}
           style={{ overflow: 'hidden' }}
@@ -234,21 +329,11 @@ const NavItem = memo<NavItemProps>(
           {titlePrefix}
           {description ? (
             <Flexbox flex={1} gap={3} style={{ overflow: 'hidden' }}>
-              <Text color={textColor} ellipsis={{ tooltipWhenOverflow: true }}>
-                {title}
-              </Text>
+              {titleNode}
               {description}
             </Flexbox>
           ) : (
-            <Text
-              color={textColor}
-              style={{ flex: 1 }}
-              ellipsis={{
-                tooltipWhenOverflow: true,
-              }}
-            >
-              {title}
-            </Text>
+            titleNode
           )}
           {extra && (
             <Flexbox

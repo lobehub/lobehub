@@ -9,11 +9,17 @@ export interface ConnectServiceStatus {
   enabled: boolean;
   fragmentPath: string | null;
   mainPid: number | null;
+  /** systemd `Restart=` policy, plus the exit statuses that override it. */
+  restart: string | null;
+  restartPreventExitStatus: string[];
   scope: ServiceScope;
   serviceName: string;
   subState: string | null;
+  successExitStatus: string[];
   user: string | null;
 }
+
+const splitStatuses = (value: string | undefined) => value?.split(/\s+/).filter(Boolean) ?? [];
 
 /** Read both managers independently: an unavailable user bus does not hide a system service. */
 export async function readConnectServices() {
@@ -30,7 +36,7 @@ export async function readConnectServices() {
             `--${scope}`,
             'show',
             CLI_CONNECT_SERVICE_NAME,
-            '--property=LoadState,ActiveState,SubState,UnitFileState,MainPID,FragmentPath,User',
+            '--property=LoadState,ActiveState,SubState,UnitFileState,MainPID,FragmentPath,User,Restart,RestartPreventExitStatus,SuccessExitStatus',
           ],
           { encoding: 'utf8', timeout: 3000 },
           (error, output) => {
@@ -57,9 +63,12 @@ export async function readConnectServices() {
         enabled: values.UnitFileState === 'enabled',
         fragmentPath: values.FragmentPath || null,
         mainPid: Number.isSafeInteger(pid) && pid > 0 ? pid : null,
+        restart: values.Restart || null,
+        restartPreventExitStatus: splitStatuses(values.RestartPreventExitStatus),
         scope,
         serviceName: CLI_CONNECT_SERVICE_NAME,
         subState: values.SubState || null,
+        successExitStatus: splitStatuses(values.SuccessExitStatus),
         user: values.User || (scope === 'system' ? 'root' : null),
       } satisfies ConnectServiceStatus;
     }),
@@ -72,6 +81,14 @@ export async function readConnectServices() {
     else if (result.value) services.push(result.value);
   });
   return { services, unavailableScopes };
+}
+
+/** Whether systemd starts the unit again after its main process exits with `code`. */
+export function serviceRestartsAfterExit(service: ConnectServiceStatus, code: number): boolean {
+  const status = String(code);
+  if (service.restartPreventExitStatus.includes(status)) return false;
+  if (service.restart === 'always') return true;
+  return service.restart === 'on-failure' && !service.successExitStatus.includes(status);
 }
 
 export function getServiceRestartCommand(service: ConnectServiceStatus): string {

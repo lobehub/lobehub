@@ -49,8 +49,6 @@ describe('useAgentMeta', () => {
     const { result } = renderHook(() => useAgentMeta());
 
     expect(result.current).toEqual(mockMeta);
-    expect(result.current.title).toBe('My Custom Agent');
-    expect(result.current.avatar).toBe('agent-avatar.png');
   });
 
   it('should preserve custom title for builtin inbox agent when set via onboarding', () => {

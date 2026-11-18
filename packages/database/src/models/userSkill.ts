@@ -1,8 +1,11 @@
-import { and, asc, eq, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
+import { FileSource } from '@lobechat/types';
+import { and, asc, eq, inArray, isNotNull, isNull, or, type SQL, sql } from 'drizzle-orm';
 
 import {
   documents,
+  files,
   SKILL_BUNDLE_FILE_TYPE,
+  SKILL_FILE_FILE_TYPE,
   SKILL_INDEX_FILE_TYPE,
   SKILL_INDEX_FILENAME,
   SKILL_SCRIPT_FILE_TYPE,
@@ -11,33 +14,74 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { FileModel } from './file';
 import { nonNull } from './utils/rows';
 
 /**
- * A user-level skill library on the `documents` table.
+ * A user-level skill library: the skill's content on the `documents` table,
+ * its published versions in `files`.
  *
  * A skill is a `skills/bundle` row owned by the user and bound to no agent, so
- * any agent or run can load it by name. Under it sit its `SKILL.md`
- * (`skills/index`), its scripts (`skills/script`, the code in `content`, the
- * language in `metadata.language`) and one `skills/version` row per version —
- * the full `SKILL.md` it read at that version. Versions are rows of their own,
- * not document history: history is trimmed, a version must stay readable.
+ * any agent or run can load it by name; its `content` is the skill's
+ * description. Under it sit its `SKILL.md`
+ * (`skills/index`) and the files beside it (`skills/file`, the path in
+ * `filename`): text in `content`, a binary file's bytes in the `files` row its
+ * `fileId` links. These are ordinary documents, edited in place.
+ *
+ * A version is a release, not an edit: every write publishes the whole package
+ * as a zip archive — a `files` row under the bundle (`parentId`, source
+ * `skill`), its number, note and origin in `metadata`. An archive never
+ * changes, so version N reads exactly the package it shipped, and it is what a
+ * sandbox or device unpacks to run the skill's scripts.
+ *
+ * Skills written before archives keep their versions as `skills/version` rows
+ * (the `SKILL.md` alone) and their files as `skills/script`; both are still read.
  *
  * Rows carry `sourceType: 'agent'` so the Page library never lists them.
  */
 
+/** File types a bundle's files are stored as: current, and before `skills/file`. */
+const FILE_TYPES = [SKILL_FILE_FILE_TYPE, SKILL_SCRIPT_FILE_TYPE];
+
+/** Source of the `files` rows a skill owns: binary files and version archives. */
+const SKILL_FILE_SOURCE = FileSource.Skill;
+
 export interface UserSkillFile {
+  /** Text of the file; empty for a binary one. */
   content: string;
+  /** A binary file: the `files` row holding its bytes. */
+  fileId?: string;
   language?: string;
   /** Path inside the bundle, e.g. `scripts/check.sh`. */
   path: string;
+}
+
+/** Files to write beside `SKILL.md` by path, and paths to drop; the rest stay. */
+export interface UserSkillFileEdits {
+  remove?: string[];
+  upsert?: UserSkillFile[];
+}
+
+/** A version's archive, once its bytes are in storage. */
+export interface UserSkillArchiveUpload {
+  fileHash: string;
+  size: number;
+  /** Storage key of the zip. */
+  url: string;
+}
+
+export interface UserSkillArchive extends UserSkillArchiveUpload {
+  fileId: string;
 }
 
 /** Where a skill or a version came from, e.g. the goal batch that wrote it. */
 export type UserSkillOrigin = Record<string, unknown>;
 
 export interface UserSkillVersion {
-  content: string;
+  /** The published package. Absent on a version from before archives. */
+  archive?: UserSkillArchive;
+  /** `SKILL.md` of a version from before archives; an archived one holds its own. */
+  content?: string;
   createdAt: Date;
   id: string;
   note?: string;
@@ -58,6 +102,8 @@ export interface UserSkillCatalogItem {
 }
 
 export interface UserSkillItem {
+  /** The latest published version's archive; absent on a skill from before archives. */
+  archive?: UserSkillArchive;
   /** The current `SKILL.md`. */
   content: string;
   createdAt: Date;
@@ -76,9 +122,25 @@ interface UserSkillMeta {
   version: number;
 }
 
-const SOURCE_TYPE = 'agent' as const;
+type DocumentRow = typeof documents.$inferSelect;
 
 const lineCount = (text: string) => (text ? text.split('\n').length : 0);
+
+const SOURCE_TYPE = 'agent' as const;
+
+const toFile = (row: DocumentRow): UserSkillFile => ({
+  content: row.content ?? '',
+  ...(row.fileId && { fileId: row.fileId }),
+  ...(row.metadata?.language && { language: row.metadata.language as string }),
+  path: row.filename ?? '',
+});
+
+const toArchive = (row: typeof files.$inferSelect): UserSkillArchive => ({
+  fileHash: row.fileHash ?? '',
+  fileId: row.id,
+  size: row.size,
+  url: row.url,
+});
 
 export class UserSkillModel {
   private db: LobeChatDatabase;
@@ -144,6 +206,7 @@ export class UserSkillModel {
   private row = (params: {
     content: string;
     description?: string | null;
+    fileId?: string;
     fileType: string;
     filename: string;
     metadata?: Record<string, unknown>;
@@ -155,6 +218,7 @@ export class UserSkillModel {
       {
         content: params.content,
         description: params.description ?? null,
+        fileId: params.fileId,
         fileType: params.fileType,
         filename: params.filename,
         metadata: params.metadata,
@@ -169,20 +233,97 @@ export class UserSkillModel {
       },
     );
 
+  /** The caller's own `files` rows: a skill's archives and binary files. */
+  private filesScope = () =>
+    and(
+      buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
+      eq(files.userId, this.userId),
+      eq(files.source, SKILL_FILE_SOURCE),
+    );
+
+  /** The archive rows under these bundles, every version. */
+  private archiveRows = (bundleIds: string[]) =>
+    this.db
+      .select()
+      .from(files)
+      .where(
+        and(
+          this.filesScope(),
+          inArray(files.parentId, bundleIds),
+          isNotNull(sql`${files.metadata} -> 'skillVersion'`),
+        ),
+      );
+
+  /** Writes files beside `SKILL.md` in place by path, and drops removed ones. */
+  private writeFiles = async (tx: Transaction, bundleId: string, edits: UserSkillFileEdits) => {
+    const atPath = (path: string) =>
+      and(
+        this.scope(),
+        eq(documents.parentId, bundleId),
+        inArray(documents.fileType, FILE_TYPES),
+        eq(documents.filename, path),
+      );
+    for (const path of edits.remove ?? []) await tx.delete(documents).where(atPath(path));
+    for (const file of edits.upsert ?? []) {
+      // A binary file's bytes live in its `files` row, not here.
+      const content = file.fileId ? '' : file.content;
+      const metadata = file.language ? { language: file.language } : undefined;
+      const [updated] = await tx
+        .update(documents)
+        .set({
+          content,
+          fileId: file.fileId ?? null,
+          // A file written as a script before is a file now.
+          fileType: SKILL_FILE_FILE_TYPE,
+          metadata,
+          totalCharCount: content.length,
+          totalLineCount: lineCount(content),
+          updatedAt: new Date(),
+        })
+        .where(atPath(file.path))
+        .returning({ id: documents.id });
+      if (updated) continue;
+      await tx.insert(documents).values(
+        this.row({
+          content,
+          fileId: file.fileId,
+          fileType: SKILL_FILE_FILE_TYPE,
+          filename: file.path,
+          metadata,
+          parentId: bundleId,
+          title: file.path,
+        }),
+      );
+    }
+  };
+
+  /** Records a published version: its archive as a `files` row under the bundle. */
   private insertVersion = async (
     tx: Transaction,
-    bundleId: string,
-    params: { content: string; note?: string; origin?: UserSkillOrigin; version: number },
+    bundle: { id: string; name: string },
+    params: {
+      archive: UserSkillArchiveUpload;
+      note?: string;
+      origin?: UserSkillOrigin;
+      version: number;
+    },
   ) => {
-    await tx.insert(documents).values(
-      this.row({
-        content: params.content,
-        fileType: SKILL_VERSION_FILE_TYPE,
-        filename: `v${params.version}`,
-        metadata: { note: params.note, origin: params.origin, version: params.version },
-        parentId: bundleId,
-        title: `v${params.version}`,
-      }),
+    await new FileModel(this.db, this.userId, this.workspaceId).create(
+      {
+        fileHash: params.archive.fileHash,
+        fileType: 'application/zip',
+        metadata: { note: params.note, origin: params.origin, skillVersion: params.version },
+        name: `${bundle.name}@${params.version}.zip`,
+        parentId: bundle.id,
+        size: params.archive.size,
+        source: SKILL_FILE_SOURCE,
+        url: params.archive.url,
+        // Owner-only, like the skill itself.
+        visibility: 'private',
+      },
+      // Registers the bytes once; the same package published again reuses them.
+      true,
+      tx,
     );
   };
 
@@ -197,10 +338,11 @@ export class UserSkillModel {
   };
 
   /**
-   * Creates a skill at version 1: its bundle, its `SKILL.md`, its scripts, and
-   * the v1 snapshot.
+   * Creates a skill at version 1: its bundle, its `SKILL.md`, its files, and
+   * v1 published as `archive` — the package as written here, already uploaded.
    */
   create = async (params: {
+    archive: UserSkillArchiveUpload;
     content: string;
     description: string;
     files?: UserSkillFile[];
@@ -214,7 +356,8 @@ export class UserSkillModel {
         .insert(documents)
         .values(
           this.row({
-            content: '',
+            // The bundle reads as the skill it holds: its description.
+            content: params.description,
             description: params.description,
             fileType: SKILL_BUNDLE_FILE_TYPE,
             filename: params.name,
@@ -235,47 +378,45 @@ export class UserSkillModel {
           title: SKILL_INDEX_FILENAME,
         }),
       );
-      for (const file of params.files ?? []) {
-        await tx.insert(documents).values(
-          this.row({
-            content: file.content,
-            fileType: SKILL_SCRIPT_FILE_TYPE,
-            filename: file.path,
-            metadata: file.language ? { language: file.language } : undefined,
-            parentId: bundle.id,
-            title: file.path,
-          }),
-        );
-      }
-      await this.insertVersion(tx, bundle.id, {
-        content: params.content,
-        note: params.note,
-        origin: params.origin,
-        version: 1,
-      });
+      await this.writeFiles(tx, bundle.id, { upsert: params.files });
+      await this.insertVersion(
+        tx,
+        { id: bundle.id, name: params.name },
+        { archive: params.archive, note: params.note, origin: params.origin, version: 1 },
+      );
       return bundle.id;
     });
     return (await this.findById(id))!;
   };
 
   /**
-   * Writes a new version: replaces the current `SKILL.md` and freezes it as the
-   * next version. Returns the new version number, or undefined when the skill
-   * is not the caller's.
+   * Writes the next version: replaces `SKILL.md`, applies the file edits, and
+   * publishes `archive` — the package as it reads after them, built from
+   * version `baseVersion`. Returns the new version number; `'stale'` when
+   * another write published since `baseVersion` (the archive would not match),
+   * and undefined when the skill is not the caller's.
    */
   revise = async (
     id: string,
-    params: { content: string; note?: string; origin?: UserSkillOrigin },
-  ): Promise<number | undefined> =>
+    params: {
+      archive: UserSkillArchiveUpload;
+      baseVersion: number;
+      content: string;
+      files?: UserSkillFileEdits;
+      note?: string;
+      origin?: UserSkillOrigin;
+    },
+  ): Promise<number | 'stale' | undefined> =>
     this.db.transaction(async (tx) => {
       const [bundle] = await tx
-        .select({ id: documents.id, metadata: documents.metadata })
+        .select({ filename: documents.filename, id: documents.id, metadata: documents.metadata })
         .from(documents)
         .where(and(this.bundleWhere(), eq(documents.id, id)))
         .for('update')
         .limit(1);
       if (!bundle) return undefined;
       const meta = (bundle.metadata?.userSkill ?? { version: 1 }) as UserSkillMeta;
+      if (meta.version !== params.baseVersion) return 'stale';
       const version = meta.version + 1;
 
       await tx
@@ -300,35 +441,36 @@ export class UserSkillModel {
           updatedAt: new Date(),
         })
         .where(and(this.bundleWhere(), eq(documents.id, id)));
-      await this.insertVersion(tx, id, {
-        content: params.content,
-        note: params.note,
-        origin: params.origin,
-        version,
-      });
+      if (params.files) await this.writeFiles(tx, id, params.files);
+      await this.insertVersion(
+        tx,
+        { id, name: bundle.filename ?? '' },
+        { archive: params.archive, note: params.note, origin: params.origin, version },
+      );
       return version;
     });
 
-  private load = async (bundles: (typeof documents.$inferSelect)[]): Promise<UserSkillItem[]> => {
+  private load = async (bundles: DocumentRow[]): Promise<UserSkillItem[]> => {
     if (!bundles.length) return [];
-    const children = await this.db
-      .select()
-      .from(documents)
-      .where(
-        and(
-          // The bundles were authorized by the caller's read; their own rows
-          // follow them.
-          this.ownerScope(),
-          inArray(
-            documents.parentId,
-            bundles.map((bundle) => bundle.id),
+    const bundleIds = bundles.map((bundle) => bundle.id);
+    const [children, archives] = await Promise.all([
+      this.db
+        .select()
+        .from(documents)
+        .where(
+          and(
+            // The bundles were authorized by the caller's read; their own rows
+            // follow them.
+            this.ownerScope(),
+            inArray(documents.parentId, bundleIds),
+            inArray(documents.fileType, [SKILL_INDEX_FILE_TYPE, ...FILE_TYPES]),
           ),
-          inArray(documents.fileType, [SKILL_INDEX_FILE_TYPE, SKILL_SCRIPT_FILE_TYPE]),
-        ),
-      )
-      .orderBy(asc(documents.filename));
+        )
+        .orderBy(asc(documents.filename)),
+      this.archiveRows(bundleIds),
+    ]);
     // One pass over the children, not one per bundle.
-    const byBundle = new Map<string, (typeof children)[number][]>();
+    const byBundle = new Map<string, DocumentRow[]>();
     for (const child of children) {
       // Children are selected by inArray(documents.parentId, …), which never matches a NULL parentId.
       const parentId = nonNull(child.parentId, 'documents.parent_id');
@@ -339,17 +481,17 @@ export class UserSkillModel {
     return bundles.map((bundle) => {
       const own = byBundle.get(bundle.id) ?? [];
       const meta = (bundle.metadata?.userSkill ?? { version: 1 }) as UserSkillMeta;
+      const archive = archives.find(
+        (row) =>
+          row.parentId === bundle.id &&
+          Number((row.metadata as Record<string, unknown>)?.skillVersion) === meta.version,
+      );
       return {
+        ...(archive && { archive: toArchive(archive) }),
         content: own.find((child) => child.fileType === SKILL_INDEX_FILE_TYPE)?.content ?? '',
         createdAt: bundle.createdAt,
         description: bundle.description ?? '',
-        files: own
-          .filter((child) => child.fileType === SKILL_SCRIPT_FILE_TYPE)
-          .map((child) => ({
-            content: child.content ?? '',
-            language: child.metadata?.language,
-            path: child.filename ?? '',
-          })),
+        files: own.filter((child) => child.fileType !== SKILL_INDEX_FILE_TYPE).map(toFile),
         id: bundle.id,
         name: bundle.filename ?? '',
         origin: meta.origin,
@@ -444,27 +586,48 @@ export class UserSkillModel {
     return this.load(bundles);
   };
 
-  /** Every version of a skill, oldest first. */
+  /**
+   * Every version of a skill, oldest first: the published archives, and the
+   * `SKILL.md` snapshots of versions from before archives.
+   */
   listVersions = async (id: string): Promise<UserSkillVersion[]> => {
-    const rows = await this.db
-      .select()
-      .from(documents)
-      .where(
-        and(
-          this.scope(),
-          eq(documents.parentId, id),
-          eq(documents.fileType, SKILL_VERSION_FILE_TYPE),
+    const [archives, legacy] = await Promise.all([
+      this.archiveRows([id]),
+      this.db
+        .select()
+        .from(documents)
+        .where(
+          and(
+            this.scope(),
+            eq(documents.parentId, id),
+            eq(documents.fileType, SKILL_VERSION_FILE_TYPE),
+          ),
         ),
-      );
-    return rows
-      .map((row) => ({
+    ]);
+    const versions = new Map<number, UserSkillVersion>();
+    for (const row of legacy) {
+      const version = Number(row.metadata?.version ?? 0);
+      versions.set(version, {
         content: row.content ?? '',
         createdAt: row.createdAt,
         id: row.id,
         note: row.metadata?.note,
         origin: row.metadata?.origin,
-        version: Number(row.metadata?.version ?? 0),
-      }))
-      .sort((a, b) => a.version - b.version);
+        version,
+      });
+    }
+    for (const row of archives) {
+      const metadata = (row.metadata ?? {}) as Record<string, any>;
+      const version = Number(metadata.skillVersion);
+      versions.set(version, {
+        archive: toArchive(row),
+        createdAt: row.createdAt,
+        id: row.id,
+        note: metadata.note,
+        origin: metadata.origin,
+        version,
+      });
+    }
+    return [...versions.values()].sort((a, b) => a.version - b.version);
   };
 }

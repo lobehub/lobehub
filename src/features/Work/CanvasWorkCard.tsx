@@ -1,11 +1,13 @@
 'use client';
 
 import type { WorkSummaryItem } from '@lobechat/types';
-import { cx, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Tag, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 const styles = stylex.create({
   bar: {
@@ -76,19 +78,18 @@ interface CanvasWorkCardProps {
   className?: string;
   item: WorkSummaryItem;
   onOpen?: () => void;
+  xstyle?: stylex.StyleXStyles;
 }
 
-const CanvasWorkCard = memo<CanvasWorkCardProps>(({ className, item, onOpen }) => {
+const CanvasWorkCard = memo<CanvasWorkCardProps>(({ className, item, onOpen, xstyle }) => {
   const { t } = useTranslation('chat');
   const version = item.event.version;
   const updatedAt = new Date(item.event.createdAt ?? item.updatedAt).toLocaleString();
-  const cardProps = stylex.props(styles.card, onOpen && styles.clickable);
 
   return (
     <Flexbox
       horizontal
-      {...cardProps}
-      className={cx(cardProps.className, className)}
+      {...sx(styles.card, onOpen && styles.clickable, xstyle, className)}
       onClick={onOpen}
     >
       <Flexbox gap={5} {...stylex.props(styles.thumb)}>

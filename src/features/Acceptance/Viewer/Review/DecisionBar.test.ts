@@ -177,3 +177,57 @@ it('a decider keeps live Reject and Accept without a reason line', () => {
   expect(screen.getByRole('button', { name: 'acceptance.actions.accept' })).toBeEnabled();
   expect(screen.queryByTestId('acceptance-decision-reason')).toBeNull();
 });
+
+describe('the docked overview', () => {
+  it('draws one strip segment per check, coloured by the reviewer decision', () => {
+    render(
+      createElement(DecisionBar, {
+        ...props,
+        acceptedCount: 2,
+        feedbackCount: 0,
+        needsFixCount: 1,
+        segments: ['accepted', 'accepted', 'needsFix', 'pending'],
+        totalCount: 4,
+      }),
+    );
+
+    const strip = screen.getByRole('img', { name: 'acceptance.bar.stripLabel' });
+    expect([...strip.children].map((node) => node.getAttribute('data-decision'))).toEqual([
+      'accepted',
+      'accepted',
+      'needsFix',
+      'pending',
+    ]);
+  });
+
+  it('spells the tally out beside the state line while a decision is open', () => {
+    render(
+      createElement(DecisionBar, {
+        ...props,
+        acceptedCount: 2,
+        feedbackCount: 0,
+        needsFixCount: 1,
+        segments: ['accepted', 'accepted', 'needsFix', 'pending'],
+        totalCount: 4,
+      }),
+    );
+
+    expect(screen.getByText('acceptance.bar.tally.accepted')).toBeVisible();
+    expect(screen.getByText('acceptance.bar.tally.needsFix')).toBeVisible();
+    expect(screen.getByText('acceptance.bar.tally.pending')).toBeVisible();
+    expect(screen.queryByText('acceptance.bar.tally.ignored')).toBeNull();
+  });
+
+  it('drops the tally once the delivery is decided', () => {
+    render(
+      createElement(DecisionBar, {
+        ...props,
+        feedbackCount: 0,
+        segments: ['accepted'],
+        state: 'accepted',
+      }),
+    );
+
+    expect(screen.queryByText('acceptance.bar.tally.accepted')).toBeNull();
+  });
+});

@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 
 import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
+import { useLocalMachineDeviceIds } from '@/hooks/useLocalMachineDeviceIds';
 import { useTopicOnlyMine } from '@/hooks/useTopicOnlyMine';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
@@ -103,6 +104,7 @@ export const useScopedSidebarTopics = (
   const reveal = useTopicListReveal();
   const visibleLimit = pageSize + (reveal?.extraRows ?? 0);
   const running = useChatStore(operationSelectors.visiblyRunningTopicIds);
+  const localDeviceIds = useLocalMachineDeviceIds();
   const directories = useProjectDirectories(scope?.projectId);
   const filter = useTopicListFilter()?.filter;
   const filtering = !!(filter?.status || filter?.device);
@@ -141,11 +143,28 @@ export const useScopedSidebarTopics = (
   );
   const coordinatorAgentId = scope?.coordinatorAgentId;
   const groups = useMemo(() => {
-    const grouped = groupSidebarTopics(visible, groupMode, sortBy, running, directories);
+    const grouped = groupSidebarTopics(
+      visible,
+      groupMode,
+      sortBy,
+      running,
+      directories,
+      localDeviceIds,
+    );
     if (groupMode !== 'byAgent') return grouped;
     const pinned = pinCoordinatorGroup(grouped, coordinatorAgentId);
     return filtering ? pinned : withCoordinatorGroup(pinned, scope);
-  }, [visible, groupMode, sortBy, running, directories, coordinatorAgentId, filtering, scope]);
+  }, [
+    visible,
+    groupMode,
+    sortBy,
+    running,
+    directories,
+    localDeviceIds,
+    coordinatorAgentId,
+    filtering,
+    scope,
+  ]);
   const hasMore =
     candidates.filtered.filter((topic) => includeCompleted || topic.status !== 'completed').length >
     visibleLimit;

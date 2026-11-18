@@ -46,13 +46,13 @@ vi.mock('../wake/scheduler', () => ({
   resolveWakeScheduler: (_platform: string, _app: string, settings: any) =>
     settings?.botWake?.scheduler?.mode === 'enforce' ? { submit: mocks.submit } : undefined,
 }));
-vi.mock('../wake/classify', () => ({
+vi.mock('@/server/services/conversationWake/classify', () => ({
   createWakeClassify: () => mocks.classify,
 }));
-vi.mock('../wake/dutyJudge', () => ({
+vi.mock('@/server/services/conversationWake/dutyJudge', () => ({
   createWakeDutyJudge: () => mocks.duty,
 }));
-vi.mock('../wake/identity', () => ({
+vi.mock('@/server/services/conversationWake/identity', () => ({
   createWakeIdentityLoader: () => async () => ({
     agentName: 'Arvin Agent',
     agentTitle: 'Release helper',

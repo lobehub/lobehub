@@ -39,7 +39,7 @@ const FormAction = memo<
     ...rest
   }) => {
     return (
-      <Center gap={gap} {...sx([styles.form], className)} {...rest}>
+      <Center gap={gap} {...sx(styles.form, className)} {...rest}>
         <Avatar
           animation={animation}
           avatar={avatar}

@@ -1,5 +1,6 @@
 import { formatPatch, structuredPatch } from 'diff';
 
+import type { InterventionAnswer } from '../askUser';
 import type {
   AgentMessageDeltaNotification,
   CodexErrorInfo,
@@ -389,6 +390,8 @@ export class CodexAppServerAdapter {
   private readonly toolStateSequence = new Map<string, number>();
   private stepToolCalls: ToolCallPayload[] = [];
   private started = false;
+  /** A steered message was read; the next visible output opens a new step. */
+  private steerStepPending = false;
   private stepIndex = 0;
   private terminal = false;
 
@@ -402,6 +405,32 @@ export class CodexAppServerAdapter {
 
   get cumulativeUsage(): UsageData | undefined {
     return this.latestCumulativeUsage ?? this.lastCumulativeUsage;
+  }
+
+  startUserInput(toolCallId: string, args: unknown): HeterogeneousAgentEvent[] {
+    const payload: ToolCallPayload = {
+      apiName: 'askUserQuestion',
+      arguments: JSON.stringify(args),
+      id: toolCallId,
+      identifier: CODEX_IDENTIFIER,
+      type: 'default',
+    };
+    this.hasToolActivity = true;
+    this.pendingTools.set(toolCallId, payload);
+    return this.startLateTool(payload);
+  }
+
+  completeUserInput(toolCallId: string, answer: InterventionAnswer): HeterogeneousAgentEvent[] {
+    if (!this.pendingTools.delete(toolCallId)) return [];
+    return [
+      this.makeEvent('tool_result', {
+        content: JSON.stringify(answer.cancelled ? { cancelled: true } : (answer.result ?? {})),
+        isError: false,
+        pluginState: answer.cancelled ? undefined : { askUserAnswers: answer.result },
+        toolCallId,
+      } satisfies ToolResultData),
+      this.makeEvent('tool_end', { isSuccess: true, toolCallId }),
+    ];
   }
 
   configureModel(model: string): HeterogeneousAgentEvent[] {
@@ -488,18 +517,40 @@ export class CodexAppServerAdapter {
   }
 
   private handleItemStarted({ item }: ItemStartedNotification): HeterogeneousAgentEvent[] {
+    if (item.type === 'userMessage') return this.handleSteeredUserMessage(item);
     if (!isToolItem(item)) return [];
+    const opening = this.openStepAfterSteer();
     this.hasToolActivity = true;
     const payload = toToolPayload(item);
     this.pendingTools.set(item.id, payload);
     this.stepToolCalls.push(payload);
     return [
+      ...opening,
       this.makeEvent('stream_chunk', {
         chunkType: 'tools_calling',
         toolsCalling: [...this.stepToolCalls],
       }),
       this.makeEvent('tool_start', { toolCallId: item.id }),
     ];
+  }
+
+  /**
+   * A message the host steered into the running turn (`turn/steer`): its
+   * `clientId` names the delivery, so the host writes it into the
+   * conversation. What the model does next answers it, in a step of its own.
+   */
+  private handleSteeredUserMessage(item: { clientId?: string | null }): HeterogeneousAgentEvent[] {
+    if (!this.started || !item.clientId) return [];
+    this.steerStepPending = true;
+    return [this.makeEvent('step_complete', { phase: 'user_message', uuid: item.clientId })];
+  }
+
+  /** Close the step a steer interrupted, so the answer to it opens a new one. */
+  private openStepAfterSteer(): HeterogeneousAgentEvent[] {
+    if (!this.steerStepPending) return [];
+    this.steerStepPending = false;
+    this.hasToolActivity = true;
+    return this.prepareVisibleContent('');
   }
 
   private handleItemCompleted({ item }: ItemCompletedNotification): HeterogeneousAgentEvent[] {
@@ -712,6 +763,7 @@ export class CodexAppServerAdapter {
   }
 
   private prepareVisibleContent(_itemId: string): HeterogeneousAgentEvent[] {
+    if (this.steerStepPending) return this.openStepAfterSteer();
     if (!this.hasToolActivity) return [];
     this.hasToolActivity = false;
     this.stepIndex += 1;

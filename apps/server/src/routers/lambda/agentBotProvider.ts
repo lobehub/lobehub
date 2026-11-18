@@ -12,7 +12,6 @@ import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { LobeChatDatabase } from '@/database/type';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
-import { flattenBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
 import {
   assertBotAccessSettings,
   assertWatchKeywordsWritable,
@@ -32,13 +31,17 @@ import {
   formatFieldFormatViolations,
   mergeWithDefaults,
   platformRegistry,
+  restrictPlatformToWebhook,
   withResolvedConcurrencySettings,
 } from '@/server/services/bot/platforms';
 import {
   beginFeishuAppRegistration,
   pollFeishuAppRegistration,
 } from '@/server/services/bot/platforms/feishu/registration';
+import { flattenBotWakeSettings } from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
+import { isMessageGatewayHostingUnavailable } from '@/server/services/gateway/nodeGatewayOnly';
+import { getReplyConnectionUnavailableReason } from '@/server/services/gateway/replyConnectionHost';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
 import {
@@ -171,13 +174,26 @@ const withFormSettings = (platform: string, settings?: Record<string, unknown>) 
 
 export const agentBotProviderRouter = router({
   listPlatforms: authedProcedure.query(async ({ ctx }) => {
+    const { useMessageGateway } = new GatewayService();
+
+    // A platform that replies over its own connection only runs where something here can hold
+    // that connection (see `resolveReplyConnectionHost`). Elsewhere it is marked, not dropped, so
+    // a bot configured before the deployment changed can still be opened and removed.
     return Promise.all(
-      platformRegistry.listSerializedPlatforms().map((platform) =>
-        withBotPlatformAccessMeta(platform, {
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId ?? undefined,
-        }),
-      ),
+      platformRegistry.listSerializedPlatforms().map((platform) => {
+        const offered =
+          useMessageGateway && isMessageGatewayHostingUnavailable(platform)
+            ? restrictPlatformToWebhook(platform)
+            : platform;
+        const unavailableReason = getReplyConnectionUnavailableReason(offered);
+        return withBotPlatformAccessMeta(
+          unavailableReason ? { ...offered, unavailableReason } : offered,
+          {
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId ?? undefined,
+          },
+        );
+      }),
     );
   }),
 
@@ -200,6 +216,14 @@ export const agentBotProviderRouter = router({
           code: 'BAD_REQUEST',
           message: 'Enter the real credential value — the masked placeholder cannot be saved.',
         });
+      }
+
+      // A bot this deployment can never connect would only fail later, on connect.
+      const unavailableReason = getReplyConnectionUnavailableReason(
+        platformRegistry.getPlatform(input.platform),
+      );
+      if (unavailableReason) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: unavailableReason });
       }
 
       await assertBotFeatureAccess({
@@ -690,6 +714,7 @@ export const agentBotProviderRouter = router({
         await invalidateBotAfterUpdate(
           {
             applicationId: existing.applicationId,
+            credentials: existing.credentials,
             platform: existing.platform,
             settings: existing.settings,
             userId: ctx.userId,

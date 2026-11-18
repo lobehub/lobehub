@@ -45,6 +45,77 @@ const invalidates = (name: string, entryKey: string) =>
     );
 
 describe('projectWorkingDirectory store', () => {
+  describe('relocateDirectory', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('relocates through the service and refreshes the project listings', async () => {
+      const relocate = vi
+        .spyOn(projectWorkingDirectoryService, 'relocate')
+        .mockResolvedValue({ data: { id: 'directory-2' }, success: true } as never);
+      const input = { deviceId: 'device-2', id: 'directory-1', path: '/work', projectId: 'p-1' };
+
+      await useProjectDirectoryStore.getState().relocateDirectory(input);
+
+      expect(relocate).toHaveBeenCalledWith(input);
+      expect(invalidates('projectTopics', 'p-1')).toBe(true);
+    });
+  });
+
+  describe('removeDirectory', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('removes through the service and refreshes the project listings', async () => {
+      const remove = vi
+        .spyOn(projectWorkingDirectoryService, 'remove')
+        .mockResolvedValue({ data: {}, success: true } as never);
+
+      await useProjectDirectoryStore.getState().removeDirectory('project-1', 'directory-1');
+
+      expect(remove).toHaveBeenCalledWith({ id: 'directory-1', projectId: 'project-1' });
+      expect(invalidates('projectTopics', 'project-1')).toBe(true);
+    });
+
+    it('rejects so the caller can report a refused removal', async () => {
+      vi.spyOn(projectWorkingDirectoryService, 'remove').mockRejectedValue(new Error('conflict'));
+
+      await expect(
+        useProjectDirectoryStore.getState().removeDirectory('project-1', 'directory-1'),
+      ).rejects.toThrow('conflict');
+    });
+  });
+
+  describe('detachEnvironment', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it("unlinks through the service and refreshes only that project's environments", async () => {
+      vi.mocked(mutate).mockClear();
+      const detach = vi
+        .spyOn(projectWorkingDirectoryService, 'detachEnvironment')
+        .mockResolvedValue({ data: {}, success: true } as never);
+
+      await useProjectDirectoryStore.getState().detachEnvironment('project-1', 'env-1');
+
+      expect(detach).toHaveBeenCalledWith('project-1', 'env-1');
+      expect(invalidates('projectEnvironments', 'project-1')).toBe(true);
+      // Its folders in the project are no longer runnable.
+      expect(invalidates('projectDirectories', 'project-1')).toBe(true);
+      expect(invalidates('projectDirectories', 'all')).toBe(true);
+      // The environment itself is untouched, so the scope-wide list stays as it is.
+      expect(invalidates('projectEnvironments', 'all')).toBe(false);
+    });
+  });
+
+  describe('refreshEnvironments', () => {
+    it('refreshes every environment and directory projection', async () => {
+      vi.mocked(mutate).mockClear();
+
+      await useProjectDirectoryStore.getState().refreshEnvironments();
+
+      expect(invalidates('projectEnvironments', 'project-1')).toBe(true);
+      expect(invalidates('projectDirectories', 'all')).toBe(true);
+    });
+  });
+
   describe('useFetchProjectTopics polling', () => {
     afterEach(() => {
       vi.restoreAllMocks();

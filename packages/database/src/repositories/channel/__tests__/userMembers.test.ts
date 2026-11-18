@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { channelMembers, workspaceMembers } from '../../../schemas';
+import { channelMembers, channels, workspaceMembers } from '../../../schemas';
 import { ChannelRepository } from '..';
 import { createChannelFixture } from './testUtils';
 
@@ -120,5 +120,80 @@ describe('Channel human membership', () => {
       code: 'NOT_FOUND',
     });
     await expect(owner.userCandidates(channel.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  describe('starting a Channel with people', () => {
+    it('lists everyone in the workspace except the creator, and adds the chosen people', async () => {
+      const owner = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+      expect(await owner.newChannelUserCandidates()).toEqual([
+        expect.objectContaining({ userId: fixture.memberId, username: 'mia' }),
+      ]);
+      expect(await owner.newChannelUserCandidates('nobody')).toEqual([]);
+
+      const { channel } = await owner.create({
+        title: 'People',
+        userIds: [fixture.memberId, fixture.memberId, fixture.ownerId],
+      });
+      expect(channel.agentId).toBeNull();
+      const members = await db
+        .select()
+        .from(channelMembers)
+        .where(eq(channelMembers.channelId, channel.id));
+      expect(members).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ role: 'owner', userId: fixture.ownerId }),
+          expect.objectContaining({ role: 'member', status: 'active', userId: fixture.memberId }),
+        ]),
+      );
+      expect(members).toHaveLength(2);
+      const member = new ChannelRepository(db, fixture.memberId, fixture.workspaceId);
+      expect(await member.list()).toEqual([expect.objectContaining({ id: channel.id })]);
+    });
+
+    it('starts a group with only its creator, who can invite people later', async () => {
+      const { owner, channel } = await create();
+      expect(channel.agentId).toBeNull();
+      expect(await owner.list()).toEqual([expect.objectContaining({ id: channel.id })]);
+      expect((await owner.detail(channel.id)).members).toEqual([
+        expect.objectContaining({ role: 'owner', userId: fixture.ownerId }),
+      ]);
+      await owner.addUser(channel.id, fixture.memberId);
+      expect((await owner.detail(channel.id)).members).toHaveLength(2);
+    });
+
+    it('creates nothing when a chosen person is outside the workspace', async () => {
+      const owner = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+      await expect(
+        owner.create({ title: 'People', userIds: [fixture.memberId, 'outside-user'] }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(
+        await db.select().from(channels).where(eq(channels.workspaceId, fixture.workspaceId)),
+      ).toEqual([]);
+    });
+
+    it('keeps people out of personal Channels and direct conversations', async () => {
+      const personal = new ChannelRepository(db, fixture.ownerId);
+      await expect(personal.newChannelUserCandidates()).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+      });
+      await expect(
+        personal.create({ title: 'Personal', userIds: [fixture.memberId] }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+      const { owner, channel } = await create();
+      const agent = await fixture.addAgent(channel.id, 'Direct');
+      await expect(
+        owner.create({ agentId: agent.agentId!, title: 'Direct', userIds: [fixture.memberId] }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
+
+    it('does not list workspace people to someone who has left the workspace', async () => {
+      await db
+        .update(workspaceMembers)
+        .set({ deletedAt: new Date() })
+        .where(eq(workspaceMembers.userId, fixture.ownerId));
+      const owner = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+      await expect(owner.newChannelUserCandidates()).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
   });
 });

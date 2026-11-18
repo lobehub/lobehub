@@ -100,7 +100,7 @@ const readEvents = async (goalService: GoalService, input: EventsInput) => {
  *
  * The capability is `hetero:ingest` rather than `goal:manage` because the token
  * a takeover planning turn holds never carries `goal:manage` — that is granted
- * only to the `/goal` message that creates a goal, so requiring it would leave
+ * only to runs the user sent and `/goal` runs, so requiring it would leave
  * the planner locked out. `hetero:ingest` is what the same token already uses to
  * submit its plan.
  *
@@ -271,6 +271,8 @@ export const readRouter = router({
     .input(
       z.object({
         agentId: z.string().optional(),
+        /** List only archived goals; omitted, archived goals are left out. */
+        archived: z.boolean().optional(),
         limit: z.number().optional(),
         offset: z.number().optional(),
         projectId: z.string().optional(),

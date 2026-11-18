@@ -84,6 +84,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface UploadStepProps {
+  archiveOnly?: boolean;
   loading: boolean;
   onFileSelect: (file: File) => void;
   preset?: DatasetPreset;
@@ -107,115 +108,126 @@ const getFieldRole = (
   }
 };
 
-const UploadStep = memo<UploadStepProps>(({ onFileSelect, loading, preset, uploadProgress }) => {
-  const { t } = useTranslation('eval');
+const UploadStep = memo<UploadStepProps>(
+  ({ archiveOnly, onFileSelect, loading, preset, uploadProgress }) => {
+    const { t } = useTranslation('eval');
 
-  const fields = useMemo(() => {
-    if (!preset) return [];
+    const fields = useMemo(() => {
+      if (!preset) return [];
 
-    const required = preset.requiredFields.map((name) => ({
-      name,
-      required: true,
-      role: getFieldRole(name, preset.fieldInference),
-    }));
+      const required = preset.requiredFields.map((name) => ({
+        name,
+        required: true,
+        role: getFieldRole(name, preset.fieldInference),
+      }));
 
-    const optional = preset.optionalFields.map((name) => ({
-      name,
-      required: false,
-      role: getFieldRole(name, preset.fieldInference),
-    }));
+      const optional = preset.optionalFields.map((name) => ({
+        name,
+        required: false,
+        role: getFieldRole(name, preset.fieldInference),
+      }));
 
-    return [...required, ...optional];
-  }, [preset]);
+      return [...required, ...optional];
+    }, [preset]);
 
-  return (
-    <Flexbox gap={16}>
-      {preset && (
-        <Flexbox className={styles.container} gap={16}>
-          {/* Identity */}
-          <Flexbox horizontal align="center" gap={12}>
-            <Center className={styles.iconCenter} flex="none" height={40} width={40}>
-              <Icon icon={preset.icon} size={20} />
-            </Center>
-            <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-              <div className={styles.presetName}>{preset.name}</div>
-              <div className={styles.presetDescription}>{preset.description}</div>
-            </Flexbox>
-          </Flexbox>
-
-          {preset.formatDescription && (
-            <div className={styles.formatDescription}>{preset.formatDescription}</div>
-          )}
-
-          {/* Field-role legend */}
-          {fields.length > 0 && (
-            <Flexbox gap={8}>
-              <span className={styles.sectionLabel}>{t('dataset.import.fieldMapping')}</span>
-              <Flexbox horizontal className={styles.fieldsWrapper} gap={8}>
-                {fields.map((field) => {
-                  const color = field.role ? ROLE_COLORS[field.role] : undefined;
-                  return (
-                    <Flexbox align="center" gap={2} key={field.name}>
-                      <Tag
-                        style={
-                          color
-                            ? {
-                                background: `color-mix(in srgb, ${color} 15%, transparent)`,
-                                borderColor: 'transparent',
-                                color,
-                              }
-                            : undefined
-                        }
-                      >
-                        {field.name}
-                        {field.required && ' *'}
-                      </Tag>
-                      {field.role && (
-                        <div className={styles.roleLabel} style={{ color: color || undefined }}>
-                          {field.role}
-                        </div>
-                      )}
-                    </Flexbox>
-                  );
-                })}
+    return (
+      <Flexbox gap={16}>
+        {preset && (
+          <Flexbox className={styles.container} gap={16}>
+            {/* Identity */}
+            <Flexbox horizontal align="center" gap={12}>
+              <Center className={styles.iconCenter} flex="none" height={40} width={40}>
+                <Icon icon={preset.icon} size={20} />
+              </Center>
+              <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
+                <div className={styles.presetName}>{preset.name}</div>
+                <div className={styles.presetDescription}>{preset.description}</div>
               </Flexbox>
             </Flexbox>
-          )}
-        </Flexbox>
-      )}
 
-      <Upload
-        dragger
-        accept=".csv,.xlsx,.xls,.json,.jsonl"
-        className={styles.dragger}
-        disabled={loading}
-        maxCount={1}
-        onFiles={([file]) => onFileSelect(file)}
-      >
-        {loading ? (
-          <Center className={styles.draggerContent} gap={16}>
-            <Icon
-              className={styles.icon}
-              icon={CloudUpload}
-              size={{ size: 44, strokeWidth: 1.5 }}
-            />
-            <p className={styles.uploadText}>{t('dataset.import.uploading')}</p>
-            {uploadProgress && (
-              <div className={styles.progressWrapper}>
-                <Progress percent={uploadProgress.progress} size="small" />
-              </div>
+            {preset.formatDescription && (
+              <div className={styles.formatDescription}>{preset.formatDescription}</div>
             )}
-          </Center>
-        ) : (
-          <Center className={styles.draggerContent} gap={12}>
-            <Icon className={styles.icon} icon={ImportIcon} size={{ size: 44, strokeWidth: 1.5 }} />
-            <p className={styles.uploadText}>{t('dataset.import.upload.text')}</p>
-            <p className={styles.hintText}>{t('dataset.import.upload.hint')}</p>
-          </Center>
+
+            {/* Field-role legend */}
+            {fields.length > 0 && (
+              <Flexbox gap={8}>
+                <span className={styles.sectionLabel}>{t('dataset.import.fieldMapping')}</span>
+                <Flexbox horizontal className={styles.fieldsWrapper} gap={8}>
+                  {fields.map((field) => {
+                    const color = field.role ? ROLE_COLORS[field.role] : undefined;
+                    return (
+                      <Flexbox align="center" gap={2} key={field.name}>
+                        <Tag
+                          style={
+                            color
+                              ? {
+                                  background: `color-mix(in srgb, ${color} 15%, transparent)`,
+                                  borderColor: 'transparent',
+                                  color,
+                                }
+                              : undefined
+                          }
+                        >
+                          {field.name}
+                          {field.required && ' *'}
+                        </Tag>
+                        {field.role && (
+                          <div className={styles.roleLabel} style={{ color: color || undefined }}>
+                            {field.role}
+                          </div>
+                        )}
+                      </Flexbox>
+                    );
+                  })}
+                </Flexbox>
+              </Flexbox>
+            )}
+          </Flexbox>
         )}
-      </Upload>
-    </Flexbox>
-  );
-});
+
+        <Upload
+          dragger
+          accept={archiveOnly ? '.zip' : '.csv,.xlsx,.xls,.json,.jsonl,.zip'}
+          className={styles.dragger}
+          disabled={loading}
+          maxCount={1}
+          onFiles={([file]) => file && onFileSelect(file)}
+        >
+          {loading ? (
+            <Center className={styles.draggerContent} gap={16}>
+              <Icon
+                className={styles.icon}
+                icon={CloudUpload}
+                size={{ size: 44, strokeWidth: 1.5 }}
+              />
+              <p className={styles.uploadText}>{t('dataset.import.uploading')}</p>
+              {uploadProgress && (
+                <div className={styles.progressWrapper}>
+                  <Progress percent={uploadProgress.progress} size="small" />
+                </div>
+              )}
+            </Center>
+          ) : (
+            <Center className={styles.draggerContent} gap={12}>
+              <Icon
+                className={styles.icon}
+                icon={ImportIcon}
+                size={{ size: 44, strokeWidth: 1.5 }}
+              />
+              <p className={styles.uploadText}>{t('dataset.import.upload.text')}</p>
+              <p className={styles.hintText}>
+                {t(archiveOnly ? 'dataset.import.package.hint' : 'dataset.import.upload.hint')}
+              </p>
+            </Center>
+          )}
+        </Upload>
+        {archiveOnly && (
+          <p className={styles.hintText}>{t('dataset.import.package.instructions')}</p>
+        )}
+      </Flexbox>
+    );
+  },
+);
 
 export default UploadStep;

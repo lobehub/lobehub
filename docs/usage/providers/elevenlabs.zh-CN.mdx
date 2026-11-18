@@ -1,0 +1,65 @@
+---
+title: 在 LobeHub 中使用 ElevenLabs API Key
+description: 在 LobeHub 中配置 ElevenLabs API Key，使用 Eleven v4、Eleven Multilingual v2、Eleven Flash v2.5 生成自然逼真的语音。
+tags:
+  - ElevenLabs
+  - 语音合成
+  - TTS
+  - API Key
+---
+
+# 在 LobeHub 中使用 ElevenLabs
+
+[ElevenLabs](https://elevenlabs.io) 是一家 AI 音频公司，其语音合成模型支持 90 多种语言，并提供丰富的音色库。在 LobeHub 中，ElevenLabs 只提供语音合成（TTS），没有对话模型。
+
+<Steps>
+  ### 步骤一：获取 ElevenLabs API Key
+
+  - 注册或登录 [ElevenLabs](https://elevenlabs.io)；
+  - 打开 [API Keys](https://elevenlabs.io/app/settings/api-keys) 页面，创建一个密钥；
+  - 复制密钥并妥善保存。
+
+  ### 步骤二：在 LobeHub 中配置 ElevenLabs
+
+  - 打开 **应用设置 → AI 服务商**，选择 **ElevenLabs**（可在服务商搜索框中输入 `Eleven` 快速定位）；
+  - 将密钥粘贴到 **API Key** 输入框。修改会自动保存，密钥在存储前会使用 AES-GCM 加密；
+  - 打开服务商名称右侧的开关；
+  - 可选：如果你的 ElevenLabs 工作区使用数据驻留（data residency）地址，可在 **API 代理地址** 中填写，例如 `https://api.eu.residency.elevenlabs.io`。留空则使用 `https://api.elevenlabs.io`。
+
+  ### 步骤三：选择模型
+
+  **模型列表** 的 **TTS** 标签下列出了 ElevenLabs 语音模型。Eleven v4、Eleven Multilingual v2、Eleven Flash v2.5 默认启用；Eleven v3、Eleven Flash v2、Eleven Turbo v2.5 可在同一列表中手动开启。
+
+  ElevenLabs 没有对话模型，因此服务商页面不显示 **检查** 按钮。可按下文方式生成一段语音来验证密钥。
+
+  <Callout type={'warning'}>
+    ElevenLabs 按合成的字符数计费。大量生成音频前，请先查看 [ElevenLabs API 定价](https://elevenlabs.io/pricing/api)。
+  </Callout>
+</Steps>
+
+## 生成语音
+
+语音合成通过 LobeHub 的语音合成接口完成，LobeHub CLI（`lh`）与兼容 OpenAI 的 `POST /api/v1/audio/speech` 接口都使用该接口：
+
+```bash
+lh generate tts "你好，LobeHub" -m elevenlabs/eleven_v4 -o hello.mp3
+```
+
+- **音色**：未指定时使用默认音色 Roger，免费档 API Key 也能使用。可用 `--voice <音色 ID>` 选择内置列表或你自己 ElevenLabs 音色库中的音色；
+- **长度**：语音以单个响应返回，每次请求最多 4096 个字符，更长的文本请拆成多次请求；
+- **格式**：`mp3`（默认）或 `opus`；
+- **语速**：Eleven Multilingual v2 以及 Flash、Turbo 系列支持 `0.7` 至 `1.2` 的语速；Eleven v3 和 v4 不支持语速设置。
+
+<Callout type={'warning'}>
+  除默认的 Roger 外，内置音色都来自 ElevenLabs 音色库（Voice Library），**免费档 API Key 无法通过 API 使用这些音色**。免费档请保留默认音色，或用 `--voice <音色 ID>` 指定你自己拥有的音色（例如通过 Voice Design 或即时声音克隆创建的音色），或升级到付费套餐。Roger 属于 ElevenLabs 的旧版默认音色，仅 2026 年 3 月前注册的账号可用，并将于 2026-12-31 停用。账号无法使用 Roger 时，LobeHub 会改用你账号中的音色（优先你自己创建的音色，其次是预置音色），这需要密钥具备 `voices_read` 权限；找不到可用音色时，请用 `--voice` 指定。
+</Callout>
+
+## 常见问题
+
+**“ElevenLabs API Key is incorrect or empty, please check your ElevenLabs API Key and try again.”**：没有找到密钥，或密钥被 ElevenLabs 拒绝。请在 **应用设置 → AI 服务商 → ElevenLabs** 中填写有效密钥，或请管理员在服务端设置 `ELEVENLABS_API_KEY`。密钥被拒绝时，括号中会附上 ElevenLabs 返回的原始信息，例如 `ElevenLabs API error (401): Invalid API key`。
+
+**“Free-tier ElevenLabs keys cannot use Voice Library voices…”**：你的密钥属于免费档，而所选音色来自音色库，见上文音色说明。
+
+**额度或限流错误**：ElevenLabs 套餐的字符额度已用完或达到并发上限，请在 ElevenLabs 控制台查看用量。
+
+自托管部署请参阅 [模型服务商环境变量](/zh/docs/self-hosting/environment-variables/model-provider#elevenlabs) 中的 `ELEVENLABS_API_KEY`。

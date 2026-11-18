@@ -64,8 +64,12 @@ run commands.
 | \`lh skill\` | Skill management (install, create, manage) | \`references/skill\` |
 | \`lh model\` | AI model management | \`references/model\` |
 | \`lh provider\` | AI provider management | \`references/provider\` |
-| \`lh plugin\` | Plugin management | \`references/plugin\` |
+| \`lh connector\` / \`lh mcp\` | MCP connectors: add an MCP server (URL or stdio), sync its tools, refresh, remove | \`references/connector\` |
+| \`lh webhook\` | Custom webhooks: URLs any system calls to wake an agent (create, rename, edit, pause, test, new key, calls, post results to a Channel) | \`references/webhook\` |
+| \`lh automation\` | Automations: MCP Events subscriptions an agent made in a conversation (list, view, rename, check, delete) | \`references/automation\` |
+| \`lh legacy-plugin\` | Legacy 1.0 plugin management | \`references/plugin\` |
 | \`lh bot\` | Bot integration management (Discord, Slack, Telegram, etc.) | \`references/bot\` |
+| \`lh quota\` | Subscription quota (5h / weekly windows) of the Claude Code / Codex / Kimi Code accounts agents run on | \`references/quota\` |
 | \`lh widget\` / \`lh dashboard\` | Monitoring widgets (sandboxed scripts) and the dashboards they sit on | \`references/dashboard\` |
 | \`lh eval\` | Evaluation workflow management | \`references/eval\` |
 | \`lh whoami\` / \`lh usage\` / \`lh user\` / \`lh notification\` / \`lh migrate\` | Account, usage, settings, notification settings and imports (top-level commands, not a \`config\` module) | \`references/config\` |
@@ -114,8 +118,8 @@ lh message search "deployment issue" --since 7d
 # Recall everything about a topic from last week (messages, topics, goals, pages)
 lh recall "replica" --since 2026-10-12 --until 2026-10-18
 
-# Generate an image
-lh gen image "a sunset over mountains" -m dall-e-3
+# Generate an image (omit -m/-p to use the same default model as the web image page)
+lh gen image "a sunset over mountains"
 
 # Run an agent
 lh agent run -a <agentId> -p "Summarize today's tasks"

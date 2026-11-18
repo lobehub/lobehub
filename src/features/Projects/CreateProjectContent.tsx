@@ -1,40 +1,24 @@
-import {
-  Button,
-  cssVar,
-  Flexbox,
-  Input,
-  ModalFooter,
-  Text,
-  toast,
-  useModalContext,
-} from '@lobehub/ui';
+import { Button, Flexbox, Input, ModalFooter, Text, toast, useModalContext } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
-import { type ProjectListItem, useProjectStore } from '@/store/project';
+import { type ProjectListItem, useLoadedProjectList, useProjectStore } from '@/store/project';
 
 import {
   buildCreateProjectRequest,
+  doesConflictApplyTo,
   getCreateProjectInput,
+  getProjectConflictField,
   getProjectFieldSuggestions,
+  isProjectIdentifierTaken,
   isProjectIdentifierValid,
   isProjectSlugValid,
+  reserveProjectIds,
 } from './createProjectForm';
+import CreateProjectMoreFields from './CreateProjectMoreFields';
 import MainAgentSection from './MainAgentSection';
-import {
-  DEDICATED_MAIN_AGENT,
-  type MainAgentMode,
-  readRememberedMainAgent,
-  resolveDefaultMainAgent,
-  resolveDefaultMainAgentMode,
-  writeRememberedMainAgent,
-} from './mainAgentStorage';
 import ProjectAvatarField from './ProjectAvatarField';
 
 export interface CreateProjectOptions {
@@ -47,17 +31,18 @@ export interface CreateProjectOptions {
 }
 
 interface CreateProjectFormState {
-  /** Emoji or uploaded image URL; a dedicated main agent takes it over too. */
+  /** Emoji or uploaded image URL; the dedicated main agent takes it over too. */
   avatar?: string;
   /** Creating now would save the project, and its agent, without the avatar on its way. */
   avatarUploading: boolean;
   identifier: string;
+  /** Set when the server rejects the identifier as already taken. */
+  identifierConflict: boolean;
   loading: boolean;
-  /** Explicit pick in this modal; otherwise the remembered agent or LobeAI. */
-  mainAgentId?: string;
-  mainAgentMode: MainAgentMode;
   name: string;
   slug: string;
+  /** Set when the server rejects the slug as already taken in this scope. */
+  slugConflict: boolean;
   slugEdited: boolean;
 }
 
@@ -72,31 +57,32 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
   const { close } = useModalContext();
   const navigate = useWorkspaceAwareNavigate();
   const createProject = useProjectStore((s) => s.createProject);
-  const [remembered] = useState(() => readRememberedMainAgent(getActiveWorkspaceId()));
-  const [form, setForm] = useState<CreateProjectFormState>(() => ({
+  const loadedProjects = useLoadedProjectList();
+  const [form, setForm] = useState<CreateProjectFormState>({
     avatarUploading: false,
     identifier: '',
+    identifierConflict: false,
     loading: false,
-    mainAgentMode: resolveDefaultMainAgentMode(remembered),
     name: '',
     slug: '',
+    slugConflict: false,
     slugEdited: false,
-  }));
-  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const defaultMainAgentId = useHomeStore((s) =>
-    resolveDefaultMainAgent({
-      // New projects are shared, so a private agent is not a valid default.
-      agentExists: (id) => homeAgentListSelectors.sharedAgents(s).some((agent) => agent.id === id),
-      inboxAgentId,
-      listLoaded: homeAgentListSelectors.isAgentListInit(s),
-      remembered,
-    }),
-  );
-  const mainAgentId = form.mainAgentId ?? defaultMainAgentId;
+  });
+  // Taken once per open modal: both generated avatars are seeded by these ids.
+  const [reservedIds] = useState(reserveProjectIds);
   const createInput = getCreateProjectInput(form);
   const identifierInvalid =
     Boolean(form.identifier.trim()) && !isProjectIdentifierValid(form.identifier);
+  // Identifiers are unique per scope, so a name whose derived prefix is already
+  // taken (two projects starting with "lobe…") would otherwise only fail after
+  // submit, as an opaque "operation failed".
+  const identifierTaken =
+    form.identifierConflict ||
+    (loadedProjects ? isProjectIdentifierTaken(form.identifier, loadedProjects) : false);
   const slugValid = isProjectSlugValid(form.slug);
+  // Slugs are unique per scope too, so a name that derives an already-used slug
+  // ("LobeHub" twice) must report it on the slug field, not on the identifier.
+  const slugTaken = form.slugConflict;
 
   const updateForm = (patch: Partial<CreateProjectFormState>) => {
     setForm((current) => ({ ...current, ...patch }));
@@ -108,33 +94,52 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
       ...current,
       name,
       slug: current.slugEdited ? current.slug : suggestions.slug,
+      // A derived slug changes with the name, so a conflict reported for the
+      // previous one no longer applies. A slug typed by hand stays put.
+      slugConflict: current.slugEdited ? current.slugConflict : false,
     }));
   };
 
   const handleCreate = async () => {
-    if (!createInput || form.loading || form.avatarUploading) return;
+    if (!createInput || identifierTaken || slugTaken || form.loading || form.avatarUploading)
+      return;
+    const submittedIdentifier = createInput.identifier ?? '';
+    const submittedSlug = createInput.slug ?? '';
     updateForm({ loading: true });
     try {
       const project = await createProject(
-        buildCreateProjectRequest(createInput, {
-          avatar: form.avatar,
-          mainAgentId,
-          mainAgentMode: form.mainAgentMode,
-        }),
+        buildCreateProjectRequest(createInput, { avatar: form.avatar, ids: reservedIds }),
       );
-      const rememberedChoice =
-        form.mainAgentMode === 'dedicated' ? DEDICATED_MAIN_AGENT : mainAgentId;
-      if (rememberedChoice) writeRememberedMainAgent(rememberedChoice, getActiveWorkspaceId());
-      if (form.mainAgentMode === 'dedicated') {
-        // The project created an agent and maybe the Project label; show both.
-        const { refreshAgentLabels, refreshAgentList } = useHomeStore.getState();
-        void Promise.all([refreshAgentList(), refreshAgentLabels()]);
-      }
+      // The project created an agent and maybe the Project label; show both.
+      const { refreshAgentLabels, refreshAgentList } = useHomeStore.getState();
+      void Promise.all([refreshAgentList(), refreshAgentLabels()]);
       close();
       if (onCreated) onCreated(project);
       else navigate(`/project/${project.slug ?? project.id}`);
     } catch (error) {
       console.error('Failed to create project', error);
+      // The unique index stays the final authority: a concurrent create, or a
+      // private project by another member that the loaded list cannot see, can
+      // still collide after the inline check. The server names the field it
+      // rejected, so the error lands on that input instead of a generic toast.
+      const conflict = getProjectConflictField(error);
+      if (conflict === 'identifier') {
+        setForm((current) => ({
+          ...current,
+          // Only the identifier that was submitted is known to be taken. The
+          // field stays editable while the request is in flight, so a value
+          // typed meanwhile must not inherit that verdict.
+          identifierConflict: doesConflictApplyTo(submittedIdentifier, current.identifier),
+        }));
+        return;
+      }
+      if (conflict === 'slug') {
+        setForm((current) => ({
+          ...current,
+          slugConflict: doesConflictApplyTo(submittedSlug, current.slug),
+        }));
+        return;
+      }
       toast.error(t('operationFailed', { ns: 'common' }));
     } finally {
       updateForm({ loading: false });
@@ -151,6 +156,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
           <ProjectAvatarField
             avatar={form.avatar}
             disabled={form.loading}
+            id={reservedIds.projectId}
             name={form.name}
             onChange={(avatar) => updateForm({ avatar })}
             onUploadingChange={(avatarUploading) => updateForm({ avatarUploading })}
@@ -165,56 +171,30 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
             />
           </ProjectAvatarField>
         </Flexbox>
-        <Flexbox gap={6}>
-          <Text fontSize={13} weight={500}>
-            {t('create.identifierLabel')}
-          </Text>
-          <Input
-            aria-invalid={identifierInvalid}
-            maxLength={6}
-            placeholder={t('create.identifierPlaceholder')}
-            style={identifierInvalid ? { borderColor: cssVar.colorError } : undefined}
-            value={form.identifier}
-            onChange={(event) => updateForm({ identifier: event.target.value.toUpperCase() })}
-            onPressEnter={handleCreate}
-          />
-          <Text fontSize={12} type={identifierInvalid ? 'danger' : 'secondary'}>
-            {t(identifierInvalid ? 'create.identifierInvalid' : 'create.identifierDescription')}
-          </Text>
-        </Flexbox>
-        <Flexbox gap={6}>
-          <Text fontSize={13} weight={500}>
-            {t('create.slugLabel')}
-          </Text>
-          <Input
-            aria-invalid={!slugValid}
-            maxLength={100}
-            placeholder={t('create.slugPlaceholder')}
-            style={slugValid ? undefined : { borderColor: cssVar.colorError }}
-            value={form.slug}
-            onPressEnter={handleCreate}
-            onChange={(event) =>
-              updateForm({ slug: event.target.value.toLowerCase(), slugEdited: true })
-            }
-          />
-          <Text fontSize={12} type={slugValid ? 'secondary' : 'danger'}>
-            {t(slugValid ? 'create.slugDescription' : 'create.slugInvalid')}
-          </Text>
-        </Flexbox>
         <MainAgentSection
-          agentId={mainAgentId}
-          disabled={form.loading}
-          mode={form.mainAgentMode}
+          dedicatedAgentId={reservedIds.agentId}
           projectAvatar={form.avatar}
           projectName={form.name}
-          onAgentChange={(id) => updateForm({ mainAgentId: id })}
-          onModeChange={(mainAgentMode) => updateForm({ mainAgentMode })}
         />
+        <CreateProjectMoreFields
+          identifier={form.identifier}
+          identifierInvalid={identifierInvalid}
+          identifierTaken={identifierTaken}
+          slug={form.slug}
+          slugTaken={slugTaken}
+          slugValid={slugValid}
+          onIdentifierChange={(identifier) => updateForm({ identifier, identifierConflict: false })}
+          onSlugChange={(slug) => updateForm({ slug, slugConflict: false, slugEdited: true })}
+          onSubmit={handleCreate}
+        />
+        <Text fontSize={12} type="secondary">
+          {t('create.afterCreateHint')}
+        </Text>
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>
         <Button
-          disabled={!createInput || form.avatarUploading}
+          disabled={!createInput || identifierTaken || slugTaken || form.avatarUploading}
           loading={form.loading}
           type="primary"
           onClick={handleCreate}

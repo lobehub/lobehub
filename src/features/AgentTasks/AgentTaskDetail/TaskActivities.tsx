@@ -4,7 +4,17 @@ import type {
   TaskDetailActivity,
   TaskDetailActivityAuthor,
 } from '@lobechat/types';
-import { Avatar, Block, Collapsible, cssVar, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
+import {
+  Avatar,
+  Block,
+  Button,
+  Collapsible,
+  cssVar,
+  Empty,
+  Flexbox,
+  Icon,
+  Text,
+} from '@lobehub/ui';
 import type { TFunction } from 'i18next';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -22,6 +32,7 @@ import { Trans, useTranslation } from 'react-i18next';
 
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import type { BriefItem } from '@/features/DailyBrief/types';
+import MemberProfilePopup from '@/features/MemberProfileCard/MemberProfilePopup';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useTaskStore } from '@/store/task';
 import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
@@ -29,12 +40,14 @@ import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selecto
 import { PRIORITY_META } from '../features/TaskPriorityTag';
 import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 import { styles } from '../shared/style';
+import ActivityAuthorProfile from './ActivityAuthorProfile';
 import { resolveAssignmentActivityCopy } from './assignmentActivityCopy';
 import CommentCard from './CommentCard';
 import CommentInput from './CommentInput';
 import TaskBriefCard from './TaskBriefCard';
 import TaskRunReport from './TaskRunReport';
 import TopicCard from './TopicCard';
+import { useActivityPaging } from './useActivityPaging';
 
 const PRIORITY_NAME: Record<number, 'high' | 'low' | 'none' | 'normal' | 'urgent'> = {
   0: 'none',
@@ -119,7 +132,13 @@ const ActivityAuthor = memo<{
     : fallbackName;
 
   if (!name) return null;
-  if (!isAgent || !author?.id) return <span>{name}</span>;
+  if (!author?.id) return <span>{name}</span>;
+  if (!isAgent)
+    return (
+      <MemberProfilePopup fallback={<span>{name}</span>} userId={author.id}>
+        <span className={styles.profileAuthorName}>{name}</span>
+      </MemberProfilePopup>
+    );
 
   return (
     <AgentProfilePopup
@@ -127,7 +146,7 @@ const ActivityAuthor = memo<{
       agentId={author.id}
       trigger={'hover'}
     >
-      <span className={styles.agentAuthorName}>{name}</span>
+      <span className={styles.profileAuthorName}>{name}</span>
     </AgentProfilePopup>
   );
 });
@@ -171,7 +190,9 @@ const RowMark = ({
   icon: LucideIcon;
 }) =>
   author?.avatar ? (
-    <Avatar avatar={author.avatar} size={16} />
+    <ActivityAuthorProfile author={author}>
+      <Avatar avatar={author.avatar} size={16} />
+    </ActivityAuthorProfile>
   ) : (
     <Icon color={cssVar.colorTextTertiary} icon={icon} size={14} />
   );
@@ -239,6 +260,9 @@ const AssignmentRow = memo<{ activity: TaskDetailActivity }>(({ activity }) => {
     </FeedLine>
   );
 });
+
+/** Activity types the result panel renders; everything else is lifecycle bookkeeping. */
+const RESULT_ACTIVITY_TYPES = new Set<TaskDetailActivity['type']>(['brief', 'comment', 'topic']);
 
 interface TaskActivitiesProps {
   /** Result review leads with run output and leaves the reply composer after the evidence. */
@@ -402,11 +426,47 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
     [activities],
   );
 
-  const commentInput = activeTaskId ? <CommentInput taskId={activeTaskId} /> : null;
-
   // A goal loop can produce many rounds; only the newest run opens by default so
   // the latest result is not buried under older ones.
-  const firstTopicKey = items.find(({ activity }) => activity.type === 'topic')?.key;
+  const firstTopicIndex = items.findIndex(({ activity }) => activity.type === 'topic');
+  const firstTopicKey = firstTopicIndex === -1 ? undefined : items[firstTopicIndex].key;
+
+  // The result panel drops lifecycle bookkeeping, so page over what it shows —
+  // otherwise a page of status flips would render as an empty page. Its newest
+  // run is the report the panel exists for, so it is pinned outside the pager
+  // rather than paged away behind a burst of newer comments.
+  const resultReport =
+    variant === 'result' && firstTopicIndex !== -1 ? items[firstTopicIndex] : null;
+  const pageableItems = useMemo(
+    () =>
+      variant === 'result'
+        ? items.filter(
+            ({ activity, key }) =>
+              RESULT_ACTIVITY_TYPES.has(activity.type) && key !== firstTopicKey,
+          )
+        : items,
+    [items, variant, firstTopicKey],
+  );
+  // The result panel's verdict and artifacts sit below the feed, so it pages
+  // on demand only — auto-loading would push them away as the reader scrolls
+  // toward them. The detail page's feed is its last section.
+  const {
+    autoLoad,
+    loadMore,
+    remaining,
+    sentinelRef,
+    visible: page,
+  } = useActivityPaging(pageableItems, activeTaskId, { autoLoad: variant !== 'result' });
+  // Put the pinned report back in timeline order among what is loaded: after
+  // the newer entries on screen, before older ones once they are loaded.
+  const visible = useMemo(() => {
+    if (!resultReport) return page;
+    const order = new Map(items.map(({ key }, i) => [key, i]));
+    return [...page, resultReport].sort((a, b) => order.get(a.key)! - order.get(b.key)!);
+  }, [page, resultReport, items]);
+
+  const commentInput = activeTaskId ? <CommentInput taskId={activeTaskId} /> : null;
+
   // Compact lines that sit next to each other share one rail, so the marks
   // read as a timeline; a card (comment, run, brief) breaks the rail.
   const withRail = (nodes: ReactNode[]): ReactNode[] => {
@@ -440,7 +500,7 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
   const rows =
     items.length > 0 ? (
       withRail(
-        items.map(({ activity, brief, key }) => {
+        visible.map(({ activity, brief, key }) => {
           if (brief) {
             return (
               <TaskBriefCard
@@ -485,6 +545,23 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
       />
     );
 
+  const loadMoreFooter =
+    remaining > 0 ? (
+      <>
+        {autoLoad && (
+          <div
+            aria-hidden
+            data-testid={'activity-sentinel'}
+            ref={sentinelRef}
+            style={{ height: 1 }}
+          />
+        )}
+        <Button size={'small'} style={{ alignSelf: 'center' }} type={'text'} onClick={loadMore}>
+          {t('taskDetail.activitiesLoadMore', { count: remaining })}
+        </Button>
+      </>
+    ) : null;
+
   // The Portal header already names the task and the report is the only thing
   // in this section, so a collapsible "运行结果" band above it labels a section
   // of one and eats the top of the reading surface.
@@ -492,7 +569,13 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
   // Leaving a note for the next run is one of the report's own actions, which
   // opens the editor on demand instead of parking an empty box under every
   // report.
-  if (variant === 'result') return <Flexbox gap={12}>{rows}</Flexbox>;
+  if (variant === 'result')
+    return (
+      <Flexbox gap={12}>
+        {rows}
+        {loadMoreFooter}
+      </Flexbox>
+    );
 
   return (
     <Flexbox gap={8}>
@@ -503,7 +586,7 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
         gap={8}
         paddingBlock={4}
         paddingInline={8}
-        style={{ cursor: 'pointer', width: 'fit-content' }}
+        style={{ cursor: 'pointer', marginInlineStart: -8, width: 'fit-content' }}
         variant="borderless"
         onClick={() => setIsExpanded((prev) => !prev)}
       >
@@ -514,9 +597,10 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
         <AccordionArrowIcon isOpen={isExpanded} style={{ color: cssVar.colorTextDescription }} />
       </Block>
       <Collapsible open={isExpanded}>
-        <Flexbox gap={12} paddingBlock={4} paddingInline={12}>
+        <Flexbox gap={12} paddingBlock={4}>
           {commentInput}
           {rows}
+          {loadMoreFooter}
         </Flexbox>
       </Collapsible>
     </Flexbox>

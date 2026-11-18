@@ -1,3 +1,4 @@
+import * as businessDefaults from '@lobechat/business-const';
 import {
   DEFAULT_ASR_MODEL,
   DEFAULT_ASR_PROVIDER,
@@ -7,7 +8,6 @@ import {
   DEFAULT_VERIFY_MODEL,
   DEFAULT_VERIFY_PROVIDER,
 } from '@lobechat/business-const';
-import * as businessDefaults from '@lobechat/business-const';
 import type {
   PromptRewriteSystemAgent,
   ServiceModelTier,
@@ -96,7 +96,6 @@ export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
   followUpAction: DEFAULT_FOLLOW_UP_ACTION_SYSTEM_AGENT_ITEM,
   generationTopic: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   goal: DEFAULT_SYSTEM_AGENT_ITEM,
-  historyCompress: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   inputCompletion: DEFAULT_INPUT_COMPLETION_SYSTEM_AGENT_ITEM,
   memoryAnalysisAgentConfig: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   onboardingTaskRecommender: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
@@ -125,7 +124,6 @@ export const SERVICE_MODEL_TIER_SLOTS: Record<ServiceModelTier, UserServiceModel
     'thread',
     'generationTopic',
     'translation',
-    'historyCompress',
     'promptRewrite',
     'memoryAnalysisAgentConfig',
     'userMemoryPersonaWriter',

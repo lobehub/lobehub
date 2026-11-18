@@ -36,7 +36,10 @@ export const buildReadFileState = ({
   if (!filePath) return;
 
   const canUseContentFallback =
-    identifier === 'opencode' || identifier === 'pi' || identifier === 'devin';
+    identifier === 'copilot' ||
+    identifier === 'opencode' ||
+    identifier === 'pi' ||
+    identifier === 'devin';
   // ACP agents (Devin) park the raw session update in pluginState, whose
   // `content` is a content-block array — never the read text — so only a
   // string value counts as reported content.

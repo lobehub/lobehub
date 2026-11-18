@@ -2,12 +2,13 @@ import type { ChatResponse } from 'ollama/browser';
 
 import type { ChatStreamCallbacks } from '../../types';
 import { nanoid } from '../../utils/uuid';
-import type { StreamContext, StreamProtocolChunk } from './protocol';
 import {
-  createCallbacksTransformer,
-  createSSEProtocolTransformer,
-  generateToolCallId,
-} from './protocol';
+  createEventCallbacksTransformer,
+  createModelEventTransformer,
+  createSSEEncoder,
+} from './events';
+import type { StreamContext, StreamProtocolChunk } from './protocol';
+import { generateToolCallId } from './protocol';
 
 const transformOllamaStream = (chunk: ChatResponse, stack: StreamContext): StreamProtocolChunk => {
   if (chunk.message.thinking) {
@@ -57,6 +58,7 @@ export const OllamaStream = (
   const streamStack: StreamContext = { id: 'chat_' + nanoid() };
 
   return res
-    .pipeThrough(createSSEProtocolTransformer(transformOllamaStream, streamStack))
-    .pipeThrough(createCallbacksTransformer(cb));
+    .pipeThrough(createModelEventTransformer(transformOllamaStream, streamStack))
+    .pipeThrough(createEventCallbacksTransformer(cb))
+    .pipeThrough(createSSEEncoder());
 };

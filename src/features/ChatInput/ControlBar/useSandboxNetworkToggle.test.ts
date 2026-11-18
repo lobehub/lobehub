@@ -38,6 +38,9 @@ vi.mock('@/store/agent/selectors', () => ({
     getAgencyConfigById:
       (id: string) => (s: { agentMap: Record<string, { agencyConfig?: unknown }> }) =>
         s.agentMap[id]?.agencyConfig,
+    getAgentModelById:
+      (id: string) => (s: { agentMap: Record<string, { model?: string }> }) =>
+        s.agentMap[id]?.model ?? '',
     getAgentById: (id: string) => (s: { agentMap: Record<string, unknown> }) => s.agentMap[id],
   },
 }));

@@ -1,5 +1,5 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, cssVar, Flexbox, Icon } from '@lobehub/ui';
+import { Avatar, Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import isEqual from 'fast-deep-equal';
 import { Bot, Lock, MessageSquareText, Users, Wrench } from 'lucide-react';
@@ -7,24 +7,56 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { SidebarAgentItem } from '@/database/repositories/home';
+import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import { useDiscoverStore } from '@/store/discover';
+import { assistantSelectors, skillSelectors } from '@/store/discover/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { useToolStore } from '@/store/tool';
+import { AssistantSorts, SkillSorts } from '@/types/discover';
 
 import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputStore } from '../store';
 import { useInstalledSkillsAndTools } from './ActionTag/useInstalledSkillsAndTools';
+import type { MarketInstallVisibility } from './marketMention';
+import {
+  MARKET_MENTION_FETCH_SIZE,
+  mentionLabel,
+  toMarketAgentItem,
+  toMarketSkillItem,
+} from './marketMentionItems';
 import MentionItemIcon from './MentionItemIcon';
 import type { MentionCategory } from './MentionMenu/types';
+import { AGENT_CATEGORY_IDS, mergeIntoCategory, SKILL_PRECEDING_IDS } from './mentionMenuSections';
 
 const MAX_AGENT_ITEMS = 20;
 const MAX_TOPIC_LABEL = 50;
 type MenuOptionWithMetadata = { key: string; metadata?: Record<string, unknown> };
 
-export const useMentionCategories = (): MentionCategory[] => {
+/** What the menu needs to turn a Market search into installable entries. */
+export interface MarketMentionScope {
+  /** Section uninstalled agents join (where they land once installed); absent in group chats. */
+  agentCategory?: Omit<MentionCategory, 'items'>;
+  agents: boolean;
+  agentVisibility: MarketInstallVisibility;
+  /** Market identifiers the caller already has as a mentionable agent here. */
+  installedAgentSources: ReadonlySet<string>;
+  installedSkills: ReadonlySet<string>;
+  /** Section uninstalled skills join. */
+  skillCategory: Omit<MentionCategory, 'items'>;
+  skills: boolean;
+}
+
+export interface MentionSource {
+  categories: MentionCategory[];
+  market: MarketMentionScope;
+}
+
+export const useMentionCategories = (): MentionSource => {
   const { t } = useTranslation('chat');
   const currentAgentId = useAgentId();
   const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents, isEqual);
@@ -45,10 +77,34 @@ export const useMentionCategories = (): MentionCategory[] => {
   const externalMentionItems = useChatInputStore((s) => s.mentionItems);
   const isGroupChat = !!externalMentionItems;
 
+  // The installed-skill list is otherwise only fetched by skill settings pages;
+  // without it here, a Market skill installed from this menu (or anywhere
+  // else) would keep being offered as not installed after a reload.
+  const useFetchAgentSkills = useToolStore((s) => s.useFetchAgentSkills);
+  useFetchAgentSkills(true);
   const enabledSkills = useInstalledSkillsAndTools();
 
+  // Market entries install on send, which creates content in the active scope.
+  const { allowed: canInstall } = usePermission('create_content');
+  const useAssistantList = useDiscoverStore((s) => s.useFetchAssistantList);
+  const useSkillList = useDiscoverStore((s) => s.useFetchSkillList);
+  const marketAgentsEnabled = canInstall && !isGroupChat;
+  const { queryKey: marketAgentKey } = useAssistantList(
+    { page: 1, pageSize: MARKET_MENTION_FETCH_SIZE, sort: AssistantSorts.Recommended },
+    { enabled: marketAgentsEnabled },
+  );
+  const { queryKey: marketSkillKey } = useSkillList(
+    { page: 1, pageSize: MARKET_MENTION_FETCH_SIZE, sort: SkillSorts.InstallCount },
+    { enabled: canInstall },
+  );
+  const marketAgents = useDiscoverStore(assistantSelectors.assistantList(marketAgentKey))?.items;
+  const marketSkills = useDiscoverStore(skillSelectors.skillList(marketSkillKey))?.items;
+
   return useMemo(() => {
-    const categories: MentionCategory[] = [];
+    let categories: MentionCategory[] = [];
+    let agentCategory: Omit<MentionCategory, 'items'> | undefined;
+    const installedAgentSources = new Set<string>();
+    let agentVisibility: MarketInstallVisibility = 'public';
 
     const toItem = (agent: SidebarAgentItem) => {
       const name = agent.name?.trim();
@@ -69,24 +125,7 @@ export const useMentionCategories = (): MentionCategory[] => {
           />
         ),
         key: `agent-${agent.id}`,
-        label: secondary ? (
-          <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0, overflow: 'hidden' }}>
-            <span style={{ flex: 'none' }}>{displayName}</span>
-            <span
-              style={{
-                color: cssVar.colorTextDescription,
-                fontSize: 12,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {secondary}
-            </span>
-          </Flexbox>
-        ) : (
-          displayName
-        ),
+        label: mentionLabel(displayName, secondary),
         metadata: {
           id: agent.id,
           // The rendered label is a ReactNode; keep the plain-text identity here
@@ -146,6 +185,32 @@ export const useMentionCategories = (): MentionCategory[] => {
       // effectively invisible to the rest of the workspace and the private
       // invariant holds.
       const isCurrentContextPrivate = !!currentAgentId && privateAgentIds.has(currentAgentId);
+      // A Market agent installed from here lands where it can be mentioned
+      // again: private beside a private agent, shared otherwise.
+      agentVisibility = isCurrentContextPrivate ? 'private' : 'public';
+
+      // Market agents already installed and mentionable here (or the current
+      // agent itself) are not offered again from the Market.
+      const mentionableHere = [
+        ...pinnedAgents,
+        ...workspaceGroups.flatMap((g) => g.items),
+        ...workspaceUngrouped,
+        ...(isCurrentContextPrivate
+          ? [...privatePinned, ...privateGroups.flatMap((g) => g.items), ...privateUngrouped]
+          : []),
+      ];
+      for (const agent of mentionableHere) {
+        if (agent.forkedFromIdentifier) installedAgentSources.add(agent.forkedFromIdentifier);
+      }
+      const currentAgent = [
+        ...mentionableHere,
+        ...privatePinned,
+        ...privateGroups.flatMap((g) => g.items),
+        ...privateUngrouped,
+      ].find((agent) => agent.id === currentAgentId);
+      if (currentAgent?.forkedFromIdentifier) {
+        installedAgentSources.add(currentAgent.forkedFromIdentifier);
+      }
 
       // Quota stays at MAX_AGENT_ITEMS total. When the user has private agents
       // we reserve up to half for them so they don't get drowned out by a long
@@ -179,6 +244,36 @@ export const useMentionCategories = (): MentionCategory[] => {
           items: workspaceItems,
           label,
         });
+      }
+
+      // Uninstalled entries sit in the same section as installed ones — where
+      // they will land once installed on send — so the user never sees a
+      // difference between the two.
+      agentCategory = isCurrentContextPrivate
+        ? {
+            icon: <Icon icon={Lock} size={16} />,
+            id: 'agent-private',
+            label: t('mention.category.privateAgents'),
+          }
+        : {
+            icon: <Icon icon={Bot} size={16} />,
+            id: privateItems.length > 0 ? 'agent-workspace' : 'agent',
+            label:
+              privateItems.length > 0
+                ? t('mention.category.workspaceAgents')
+                : t('mention.category.agents'),
+          };
+      if (marketAgentsEnabled) {
+        categories = mergeIntoCategory(
+          categories,
+          {
+            ...agentCategory,
+            items: (marketAgents ?? [])
+              .filter((agent) => !installedAgentSources.has(agent.identifier))
+              .map((agent) => toMarketAgentItem(agent, agentVisibility)),
+          },
+          AGENT_CATEGORY_IDS,
+        );
       }
     }
 
@@ -254,6 +349,25 @@ export const useMentionCategories = (): MentionCategory[] => {
       });
     }
 
+    const installedSkills = new Set(skillItems.map((item) => item.type));
+    const skillCategory: Omit<MentionCategory, 'items'> = {
+      icon: <Icon icon={SkillsIcon} size={16} />,
+      id: 'skill',
+      label: t('mention.category.skills'),
+    };
+    if (canInstall) {
+      categories = mergeIntoCategory(
+        categories,
+        {
+          ...skillCategory,
+          items: (marketSkills ?? [])
+            .filter((skill) => !installedSkills.has(skill.identifier))
+            .map(toMarketSkillItem),
+        },
+        SKILL_PRECEDING_IDS,
+      );
+    }
+
     // --- Tools ---
     const toolItems = enabledSkills.filter((s) => s.category === 'tool');
     if (toolItems.length > 0) {
@@ -276,7 +390,18 @@ export const useMentionCategories = (): MentionCategory[] => {
       });
     }
 
-    return categories;
+    return {
+      categories,
+      market: {
+        agentCategory,
+        agentVisibility,
+        agents: marketAgentsEnabled,
+        installedAgentSources,
+        installedSkills,
+        skillCategory,
+        skills: canInstall,
+      },
+    };
   }, [
     pinnedAgents,
     workspaceGroups,
@@ -290,6 +415,10 @@ export const useMentionCategories = (): MentionCategory[] => {
     isGroupChat,
     externalMentionItems,
     enabledSkills,
+    canInstall,
+    marketAgentsEnabled,
+    marketAgents,
+    marketSkills,
     t,
   ]);
 };

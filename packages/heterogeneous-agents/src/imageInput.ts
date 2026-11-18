@@ -13,6 +13,7 @@ const IMAGE_INPUT_AGENT_TYPES = new Set<string>([
   'claude-code',
   'codebuddy',
   'codex',
+  'copilot',
   'grok-build',
   'kimi-code',
   'opencode',

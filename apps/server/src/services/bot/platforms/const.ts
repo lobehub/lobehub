@@ -12,6 +12,24 @@ export const displayToolCallsField: FieldSchema = {
 };
 
 /**
+ * Whether the bot posts a short "working on it" message before the agent starts. Off by default:
+ * on platforms that cannot edit a sent message (QQ, WeChat) it stays in the chat as its own
+ * message, which breaks immersion for role-play bots. On editable platforms the same message is
+ * where tool-call progress is edited in, so `displayToolCalls` needs it on.
+ */
+export const processingMessageField: FieldSchema = {
+  key: 'processingMessage',
+  default: false,
+  description: 'channel.processingMessageHint',
+  label: 'channel.processingMessage',
+  type: 'boolean',
+};
+
+/** Only an explicit `true` posts the message; rows saved before the field existed skip it. */
+export const shouldPostProcessingMessage = (settings?: Record<string, unknown>): boolean =>
+  settings?.processingMessage === true;
+
+/**
  * Per-platform "how to find this ID" tooltip keys. Each platform paints a
  * different path to the value the operator has to paste — Discord wants
  * Developer Mode + right-click, Telegram wants @userinfobot, Slack uses
@@ -22,6 +40,7 @@ export const displayToolCallsField: FieldSchema = {
  * Platforms not listed render no tooltip — only the generic description.
  */
 const USER_ID_TOOLTIP_BY_PLATFORM: Record<string, string> = {
+  dingtalk: 'channel.userIdHint.dingtalk',
   discord: 'channel.userIdHint.discord',
   // Feishu and Lark share `sharedSchema`, which always passes 'feishu' — the
   // tooltip copy mentions both products so it reads naturally for either.
@@ -78,13 +97,14 @@ export function makeUserIdField(platform?: string): FieldSchema {
  * itself emits.
  *
  * Picked per-platform since each platform has a primary audience: Chinese
- * platforms (Feishu / QQ / WeChat) ship Chinese strings, the rest ship
+ * platforms (DingTalk / Feishu / QQ / WeChat) ship Chinese strings, the rest ship
  * English. Languages without an entry in the system-string dictionary
  * gracefully fall back to `DEFAULT_LANG` ('en-US') at render time.
  */
 export type BotReplyLocale = Locales;
 
 const PLATFORM_REPLY_LOCALES: Record<string, BotReplyLocale> = {
+  dingtalk: 'zh-CN',
   discord: 'en-US',
   feishu: 'zh-CN',
   imessage: 'en-US',
@@ -94,6 +114,7 @@ const PLATFORM_REPLY_LOCALES: Record<string, BotReplyLocale> = {
   slack: 'en-US',
   telegram: 'en-US',
   wechat: 'zh-CN',
+  wecom: 'zh-CN',
 };
 
 export function getBotReplyLocale(platform: string | undefined): BotReplyLocale {
@@ -955,6 +976,14 @@ export type BotReactionMode = 'full' | 'minimal' | 'none';
 export const BOT_REACTION_MODES: readonly BotReactionMode[] = ['minimal', 'full', 'none'];
 
 export const DEFAULT_BOT_REACTION_MODE: BotReactionMode = 'minimal';
+
+/**
+ * The mode a bot is created with. A new bot starts with status reactions off, so it does not ping
+ * anyone until its owner turns them on. {@link DEFAULT_BOT_REACTION_MODE} stays the schema default
+ * and the runtime fallback, because rows saved before the field existed carry no `reactionMode`
+ * and must keep reacting as they always have; only a bot being created gets this mode.
+ */
+export const NEW_BOT_REACTION_MODE: BotReactionMode = 'none';
 
 export const reactionModeField: FieldSchema = {
   key: 'reactionMode',

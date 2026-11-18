@@ -164,8 +164,8 @@ describe('MultipleProvidersModelItem', () => {
     render(
       <MultipleProvidersModelItem
         activeKey="anthropic/claude-opus-4-7"
+        getRestrictedLabel={() => 'pro'}
         newLabel="new"
-        proLabel="pro"
         data={{
           displayName: 'Claude Opus 4.7',
           model: {

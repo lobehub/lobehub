@@ -120,6 +120,29 @@ describe('GoalGraphModel.findGoalsByTaskIds', () => {
     expect(goals.get(leaf.id)?.id).toBe(nearer.id);
   });
 
+  it('keeps the goal it already resolved when a carrier reaches the same root again', async () => {
+    const task = await taskModel.create({ instruction: 'self-carried' });
+
+    // Bound to the task and carried by it at once: the row is considered twice
+    // for the same root, at the same depth and the same timestamp. The second
+    // look must not replace the first.
+    const goal = await goalModel.create({
+      subjectId: task.id,
+      subjectType: 'task',
+      title: 'Bound and carried',
+    });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Bound' });
+    await graphModel.bindTask(goal.id, node!.id, task.id);
+
+    const goals = await graphModel.findGoalsByTaskIds([task.id]);
+
+    expect(goals.get(task.id)).toEqual({
+      id: goal.id,
+      status: goal.status,
+      title: 'Bound and carried',
+    });
+  });
+
   it('ignores a goal carried by a task outside the walked chain', async () => {
     const task = await taskModel.create({ instruction: 'bound' });
     const elsewhere = await taskModel.create({ instruction: 'carrier outside the chain' });

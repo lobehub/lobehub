@@ -114,6 +114,16 @@ describe('sendMessage: the gateway persists the user message a client-runtime se
         metadata: { contextSelections: [quote('queued')], steer: true },
       },
     ],
+    [
+      'a follow-up an MCP App view posted',
+      {
+        context,
+        contextSelections: [quote('view')],
+        editorData,
+        message: 'What should I wear in Paris?',
+        metadata: { mcpAppSource: { identifier: 'weather-demo' } },
+      },
+    ],
   ])('%s', async (_label, params) => {
     const clientRow = await sendThroughClientRuntime(params);
     vi.restoreAllMocks();

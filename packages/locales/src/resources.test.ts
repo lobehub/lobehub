@@ -61,3 +61,11 @@ describe('matchLocale', () => {
     expect(matchLocale('ar-EG')).toBe('ar');
   });
 });
+
+describe('matchLocale case handling', () => {
+  it('matches a tag whatever its case', () => {
+    expect(matchLocale('zh-cn')).toBe('zh-CN');
+    expect(matchLocale('PT-br')).toBe('pt-BR');
+    expect(matchLocale('EN')).toBe('en-US');
+  });
+});

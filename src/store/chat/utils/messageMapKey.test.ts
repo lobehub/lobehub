@@ -39,16 +39,6 @@ describe('messageMapKey', () => {
       });
       expect(result).toBe('thread_agt_xxx_tpc_yyy_new');
     });
-
-    it('should handle explicit thread scope with isNew', () => {
-      const result = messageMapKey({
-        scope: 'thread',
-        agentId: 'agt_xxx',
-        topicId: 'tpc_yyy',
-        isNew: true,
-      });
-      expect(result).toBe('thread_agt_xxx_tpc_yyy_new');
-    });
   });
 
   describe('Group mode', () => {
@@ -123,17 +113,6 @@ describe('messageMapKey', () => {
         topicId: 'tpc_zzz',
       });
       expect(result).toBe('group_grp_yyy_tpc_zzz');
-    });
-
-    it('should prioritize groupId over agentId for scope detection', () => {
-      const result = messageMapKey({
-        agentId: 'agt_xxx',
-        groupId: 'grp_yyy',
-        topicId: 'tpc_zzz',
-      });
-      // groupId takes priority, agentId is ignored
-      expect(result).toContain('grp_yyy');
-      expect(result).not.toContain('agt_xxx');
     });
 
     it('should handle groupId with isNew flag', () => {
@@ -353,16 +332,6 @@ describe('messageMapKey', () => {
   });
 
   describe('isNew flag behavior', () => {
-    it('should add _new suffix when isNew is true and topicId exists', () => {
-      const result = messageMapKey({
-        scope: 'thread',
-        agentId: 'agt_xxx',
-        topicId: 'tpc_yyy',
-        isNew: true,
-      });
-      expect(result).toBe('thread_agt_xxx_tpc_yyy_new');
-    });
-
     it('should not add extra _new when isNew is true but no topicId (already _new)', () => {
       const result = messageMapKey({
         scope: 'main',

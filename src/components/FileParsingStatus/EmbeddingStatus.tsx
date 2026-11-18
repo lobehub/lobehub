@@ -6,7 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type FileParsingTask } from '@/types/asyncTask';
-import { AsyncTaskStatus } from '@/types/asyncTask';
+import { AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 
 const styles = stylex.create({
   errorReason: {
@@ -54,27 +54,39 @@ const EmbeddingStatus = memo<EmbeddingStatusProps>(
       }
 
       case AsyncTaskStatus.Error: {
+        // A full vector quota is not a failure retrying can fix by itself: name the quota
+        // and how to free it instead of showing the raw error as a generic failure.
+        const isQuotaExceeded = embeddingError?.name === AsyncTaskErrorType.EmbeddingQuotaExceeded;
+
         return (
           <Tooltip
             styles={{
               root: { maxWidth: 340, pointerEvents: 'none' },
             }}
             title={
-              <Flexbox gap={4}>
-                {t('FileParsingStatus.chunks.embeddingStatus.errorResult')}
-                {embeddingError && (
-                  <Flexbox className={stylex.props(styles.errorReason).className}>
-                    [{embeddingError.name}]:{' '}
-                    {embeddingError.body && typeof embeddingError.body !== 'string'
-                      ? embeddingError.body.detail
-                      : embeddingError.body}
-                  </Flexbox>
-                )}
-              </Flexbox>
+              isQuotaExceeded ? (
+                t('FileParsingStatus.chunks.embeddingStatus.quotaExceededResult')
+              ) : (
+                <Flexbox gap={4}>
+                  {t('FileParsingStatus.chunks.embeddingStatus.errorResult')}
+                  {embeddingError && (
+                    <Flexbox className={stylex.props(styles.errorReason).className}>
+                      [{embeddingError.name}]:{' '}
+                      {embeddingError.body && typeof embeddingError.body !== 'string'
+                        ? embeddingError.body.detail
+                        : embeddingError.body}
+                    </Flexbox>
+                  )}
+                </Flexbox>
+              )
             }
           >
             <Tag className={className} color={'error'} variant={'filled'}>
-              {t('FileParsingStatus.chunks.embeddingStatus.error')}{' '}
+              {t(
+                isQuotaExceeded
+                  ? 'FileParsingStatus.chunks.embeddingStatus.quotaExceeded'
+                  : 'FileParsingStatus.chunks.embeddingStatus.error',
+              )}{' '}
               <Icon
                 icon={RotateCwIcon}
                 style={{ cursor: 'pointer' }}

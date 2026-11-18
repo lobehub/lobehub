@@ -2,6 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { DeviceListItem } from '@lobechat/types';
+import { isManagedCloudDevice } from '@lobechat/types';
 import {
   ActionIcon,
   Button,
@@ -44,6 +45,12 @@ import { refreshDeviceList } from './const';
 import DeviceOverview from './DeviceOverview';
 import FieldLabel from './FieldLabel';
 import { getDeviceIcon } from './getDeviceIcon';
+import ManagedDeviceBadge from './ManagedDeviceBadge';
+import {
+  getManagedDeviceStatus,
+  managedStatusLabelKey,
+  presenceDotColor,
+} from './managedDeviceStatus';
 import { useCanEditDevice, useCanOperateDevice } from './useCanEditDevice';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -171,6 +178,7 @@ const DeviceDetail = memo<DeviceDetailProps>(({ device, isConfirmed, isCurrent, 
   const channels = device.channels ?? [];
   const online = channels.length > 0;
   const presenceUnknown = !!device.onlineUnknown;
+  const managedStatus = getManagedDeviceStatus(device);
 
   // Every edit persists immediately — there is no Save button. Name and the
   // default cwd commit on blur; recent-dir add / remove / reorder commit on the
@@ -290,13 +298,15 @@ const DeviceDetail = memo<DeviceDetailProps>(({ device, isConfirmed, isCurrent, 
           {getDeviceIcon(device.platform, 26)}
           <span
             className={styles.presence}
-            style={{ background: online ? cssVar.colorSuccess : cssVar.colorTextQuaternary }}
+            style={{ background: presenceDotColor(managedStatus, online) }}
             title={
-              presenceUnknown
-                ? t('devices.status.checking')
-                : online
-                  ? t('devices.status.onlineConnections', { count: channels.length })
-                  : t('devices.status.offline')
+              managedStatus
+                ? t(managedStatusLabelKey[managedStatus])
+                : presenceUnknown
+                  ? t('devices.status.checking')
+                  : online
+                    ? t('devices.status.onlineConnections', { count: channels.length })
+                    : t('devices.status.offline')
             }
           />
         </span>
@@ -337,6 +347,7 @@ const DeviceDetail = memo<DeviceDetailProps>(({ device, isConfirmed, isCurrent, 
               </span>
               <CopyButton content={device.deviceId} size={'small'} />
             </Flexbox>
+            {isManagedCloudDevice(device) && <ManagedDeviceBadge />}
             {isCurrent && <Tag size={'small'}>{t('devices.currentBadge')}</Tag>}
             {device.scope === 'workspace' && device.visibility === 'private' && (
               <Tag icon={<Icon icon={LockIcon} />} size={'small'}>

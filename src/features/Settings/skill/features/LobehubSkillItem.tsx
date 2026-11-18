@@ -12,6 +12,7 @@ import {
   Icon,
   Tooltip,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +27,7 @@ import { toConnectorActionError } from '@/utils/connectorActionError';
 
 import { renderConnectorRowDescription } from './ConnectorRowFeedback';
 import { isSettledByConnection } from './connectorRowState';
+import { RowAddAction, RowMoreMenu } from './RowActions';
 import SkillListRow, { ConnectedStatus, useSkillListVariant } from './SkillListRow';
 import { styles } from './style';
 
@@ -233,7 +235,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     const renderStatus = () => {
       if (!server) {
         return (
-          <span className={styles.disconnected}>
+          <span {...stylex.props(styles.disconnected)}>
             {t('tools.lobehubSkill.disconnected', { defaultValue: 'Disconnected' })}
           </span>
         );
@@ -242,17 +244,17 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
       switch (server.status) {
         case LobehubSkillStatus.CONNECTED: {
           return (
-            <span className={styles.connected}>
+            <span {...stylex.props(styles.connected)}>
               {t('tools.lobehubSkill.connected', { defaultValue: 'Connected' })}
             </span>
           );
         }
         case LobehubSkillStatus.ERROR: {
-          return <span className={styles.error}>{t('tools.lobehubSkill.error')}</span>;
+          return <span {...stylex.props(styles.error)}>{t('tools.lobehubSkill.error')}</span>;
         }
         default: {
           return (
-            <span className={styles.disconnected}>
+            <span {...stylex.props(styles.disconnected)}>
               {t('tools.lobehubSkill.disconnected', { defaultValue: 'Disconnected' })}
             </span>
           );
@@ -318,7 +320,38 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     // ChatInput skills dropdown UX: connected → green check; otherwise a Connect
     // button that opens the OAuth flow inline, so users can tell what is connected
     // and aren't left staring at a blank detail panel wondering if it's a bug.
+    // Page row: a quiet `+` connects in place; once connected the row's state
+    // reads from its position (Installed) and the action becomes the manage menu.
+    const renderPageExtra = () => {
+      if (isConnected)
+        return (
+          <RowMoreMenu
+            items={[
+              {
+                danger: true,
+                disabled: !canEdit,
+                icon: <Icon icon={Unplug} />,
+                key: 'disconnect',
+                label: t('tools.lobehubSkill.disconnect', { defaultValue: 'Disconnect' }),
+                onClick: handleDisconnect,
+              },
+            ]}
+            onOpenDetail={onSelect}
+          />
+        );
+      return (
+        <RowAddAction
+          disabled={!canCreate || !canEdit}
+          disabledReason={!canCreate ? createReason : editReason}
+          label={t('connectorMarket.action.connect')}
+          loading={isConnecting || isWaitingAuth}
+          onClick={handleConnect}
+        />
+      );
+    };
+
     const renderNavExtra = () => {
+      if (isPage) return renderPageExtra();
       if (isConnecting || isWaitingAuth) {
         return <Button disabled loading size="small" type="text" />;
       }
@@ -374,7 +407,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
       <Flexbox
         horizontal
         align="center"
-        className={styles.container}
+        className={stylex.props(styles.container).className}
         gap={8}
         justify="space-between"
         style={{
@@ -395,10 +428,10 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
                 : () => createLobehubSkillDetailModal({ identifier: provider.id })
             }
           >
-            <div className={`${styles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
+            <div {...stylex.props(styles.icon, !isConnected && styles.disconnectedIcon)}>
               {renderIcon()}
             </div>
-            <span className={`${styles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}>
+            <span {...stylex.props(styles.title, !isConnected && styles.disconnectedTitle)}>
               {provider.label}
             </span>
           </Flexbox>

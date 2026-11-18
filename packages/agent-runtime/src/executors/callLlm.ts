@@ -5,6 +5,7 @@ import type {
   LLMRetryPolicy,
   LLMTrace,
   LLMTransport,
+  RuntimeMessageRef,
 } from '../transport';
 import type {
   AgentEvent,
@@ -101,6 +102,7 @@ const executePreparedCall = async (
         return await finalizeCallLlmTurn({
           assistantMessageId: prepared.assistantMessageId,
           attempts: attemptsMade,
+          contextAccounting: prepared.context.contextAccounting,
           events,
           host,
           model: prepared.model,
@@ -153,6 +155,7 @@ const executePreparedCall = async (
       if (interrupted) {
         await persistInterruptedCallLlmResult({
           assistantMessageId: prepared.assistantMessageId,
+          contextAccounting: prepared.context.contextAccounting,
           host,
           output: execution.output,
         });
@@ -180,6 +183,7 @@ const executePreparedCall = async (
       if (interrupted && lastOutput) {
         await persistInterruptedCallLlmResult({
           assistantMessageId: prepared.assistantMessageId,
+          contextAccounting: prepared.context.contextAccounting,
           host,
           output: lastOutput,
         });
@@ -246,6 +250,14 @@ const pickSeedField = (source: object, key: string) => {
   return value === undefined ? undefined : value;
 };
 
+/** Epoch ms of a stored creation time; JSON events carry numbers, not `Date`s. */
+const toSeedTime = (value: unknown): number | undefined => {
+  if (value === null || value === undefined) return;
+  const time =
+    value instanceof Date ? value.getTime() : new Date(value as number | string).getTime();
+  return Number.isFinite(time) ? time : undefined;
+};
+
 const buildAssistantMessageSeed = (
   assistantMessage: { id: string },
   seed: object = assistantMessage,
@@ -253,6 +265,9 @@ const buildAssistantMessageSeed = (
   id: assistantMessage.id,
   ...(pickSeedField(seed, 'agentId') !== undefined && {
     agentId: pickSeedField(seed, 'agentId'),
+  }),
+  ...(toSeedTime(pickSeedField(seed, 'createdAt')) !== undefined && {
+    createdAt: toSeedTime(pickSeedField(seed, 'createdAt')),
   }),
   ...(pickSeedField(seed, 'groupId') !== undefined && {
     groupId: pickSeedField(seed, 'groupId'),
@@ -272,6 +287,27 @@ const buildAssistantMessageSeed = (
     topicId: pickSeedField(seed, 'topicId'),
   }),
 });
+
+/**
+ * A steer message the server joined into the running turn is created after
+ * the step's `step_start` snapshot, so the client has no copy of it. Ship it
+ * with `stream_start` (the preflight read already loaded it) so the client
+ * shows it above this step's reply instead of only after the step ends.
+ */
+const buildSteerParentSeed = (parent: RuntimeMessageRef | undefined) => {
+  if (parent?.role !== 'user' || !parent.metadata?.steer) return;
+
+  const createdAt = toSeedTime(parent.createdAt);
+
+  return {
+    content: parent.content ?? '',
+    ...(createdAt !== undefined && { createdAt }),
+    id: parent.id,
+    metadata: parent.metadata,
+    parentId: parent.parentId ?? null,
+    role: 'user' as const,
+  };
+};
 
 /**
  * Package-owned `call_llm` executor entry point.
@@ -299,9 +335,10 @@ export const callLlm =
     }
 
     const parentId = llmPayload.parentId || llmPayload.parentMessageId;
+    let parentMessage: RuntimeMessageRef | undefined;
     if (parentId) {
-      const parentExists = await transports.messages.findById(parentId);
-      if (!parentExists) {
+      parentMessage = await transports.messages.findById(parentId);
+      if (!parentMessage) {
         const error = createConversationParentMissingError(parentId);
         await transports.stream.publishEvent({
           data: formatErrorEventData(error, 'parent_message_preflight'),
@@ -359,11 +396,13 @@ export const callLlm =
       ? ((await transports.messages.findById(existingAssistantMessageId)) ?? assistantMessage)
       : assistantMessage;
     const stepLabel = (instruction as { stepLabel?: string }).stepLabel;
+    const steerParentSeed = buildSteerParentSeed(parentMessage);
 
     await transports.stream.publishEvent({
       data: {
         assistantMessage: buildAssistantMessageSeed(assistantMessage, assistantMessageSeed),
         model,
+        ...(steerParentSeed && { parentMessage: steerParentSeed }),
         provider,
         ...(stepLabel && { stepLabel }),
       },

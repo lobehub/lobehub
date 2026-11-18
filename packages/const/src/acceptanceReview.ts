@@ -1,7 +1,19 @@
-export const ACCEPTANCE_REVIEW_CLIENT_ID = 'lobehub-review';
+export const ACCEPTANCE_CLIENT_ID = 'lobehub-acceptance';
+
+export const ACCEPTANCE_EXTENSION_CLIENT_ID = 'lobehub-acceptance-extension';
+
+export const ACCEPTANCE_EXTENSION_RESOURCE = 'urn:lobehub:acceptance-extension';
+
+export const ACCEPTANCE_EXTENSION_SCOPE = 'acceptance:extension';
+
+export const ACCEPTANCE_EXTENSION_TOKEN_TTL_SECONDS = 60 * 60;
+
+// Pinned by the `key` in the extension manifest; the Chrome Web Store ID joins
+// once the listing exists.
+export const ACCEPTANCE_EXTENSION_IDS = ['fjgpjfdackkmgdldjiebkhkdacbibhnb'];
 
 /**
- * URL parameter that activates the review toolbar (`@lobehub/review-sdk`). A
+ * URL parameter that activates the acceptance toolbar (`@lobehub/acceptance-sdk`). A
  * page mounts the toolbar only when its URL carries this parameter; the SDK
  * persists the value in sessionStorage and strips the parameter afterwards.
  */
@@ -13,12 +25,27 @@ export const ACCEPTANCE_REVIEW_RESOURCE_PREFIX = 'urn:lobehub:acceptance:';
 
 export const ACCEPTANCE_REVIEW_TOKEN_TTL_SECONDS = 8 * 60 * 60;
 
-const RESOURCE_PATTERN = /^urn:lobehub:acceptance:([\w-]{1,64})$/;
+const RESOURCE_PATTERN = /^urn:lobehub:acceptance:([\w-]{1,64})(?::([^:]+))?$/;
 
-export const acceptanceIdFromReviewResource = (resource: unknown): string | undefined => {
+export const acceptanceReviewResource = (acceptanceId: string, origin: string) =>
+  `${ACCEPTANCE_REVIEW_RESOURCE_PREFIX}${acceptanceId}:${encodeURIComponent(origin)}`;
+
+export const acceptanceReviewFromResource = (
+  resource: unknown,
+): { acceptanceId: string; origin?: string } | undefined => {
   if (typeof resource !== 'string') return undefined;
-  return RESOURCE_PATTERN.exec(resource)?.[1];
+  const match = RESOURCE_PATTERN.exec(resource);
+  if (!match) return undefined;
+  if (!match[2]) return { acceptanceId: match[1] };
+  try {
+    return { acceptanceId: match[1], origin: decodeURIComponent(match[2]) };
+  } catch {
+    return undefined;
+  }
 };
+
+export const acceptanceIdFromReviewResource = (resource: unknown): string | undefined =>
+  acceptanceReviewFromResource(resource)?.acceptanceId;
 
 export const SITE_REVIEW_RESOURCE_PREFIX = 'urn:lobehub:site:';
 

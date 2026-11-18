@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import { PassThrough } from 'node:stream';
 
+import type { AskUserBridge } from '../askUser';
 import type { AgentPromptInput } from '../protocol';
 import { createEventQueue } from '../spawn/agentEventQueue';
 import { buildCodexLobeHubContextArgs, createCodexJwtFile } from '../spawn/codexShellEnv';
@@ -18,6 +20,7 @@ import { pickCodexRunProvenance } from './environment';
 export interface CodexAgentHandleOptions {
   /** Existing provider arguments; unsupported policies are rejected, never weakened. */
   args: string[];
+  askUserBridge?: AskUserBridge;
   /** Caller version sent in the native initialize handshake. */
   clientVersion: string;
   /** Resolved, validated Codex executable path. */
@@ -88,6 +91,13 @@ export const createCodexAgentHandle = async (
   // The session ends a turn lost to a transport crash with an interrupted runtime end and
   // resolves; without a Stop from this operation that is a truncated run, not a success.
   let nativeTurnInterrupted = false;
+  // `turn/steer` names the turn `turn/start` answered: a follow-up arriving before
+  // that waits for it, and one arriving after the run ended is left for the next run.
+  let markTurnStarted!: () => void;
+  const turnStarted = new Promise<void>((resolve) => {
+    markTurnStarted = resolve;
+  });
+  let runEnded = false;
   const provenance = pickCodexRunProvenance({
     ...options.env,
     LOBEHUB_OPERATION_ID: options.operationId,
@@ -128,7 +138,9 @@ export const createCodexAgentHandle = async (
       }
       events.push(batch);
     },
-    onRuntimeStatus: () => {},
+    onRuntimeStatus: (status) => {
+      if (status.state === 'running') markTurnStarted();
+    },
     onSessionId: (id) => {
       nativeSessionId = id;
     },
@@ -145,6 +157,7 @@ export const createCodexAgentHandle = async (
   };
   options.onStartupControl?.({ cancel });
   const turnOptions = {
+    askUserBridge: options.askUserBridge,
     // Keep the already materialized user input and attachment paths unchanged.
     input: buildCodexAppServerInput(input),
     onRawMessage: (line: string) => options.onRawStdout?.(Buffer.from(line)),
@@ -168,6 +181,7 @@ export const createCodexAgentHandle = async (
       },
     )
     .finally(() => {
+      runEnded = true;
       // Each CLI operation owns its app-server process; closing it leaves the native history on disk.
       session.close();
       client.close();
@@ -186,9 +200,26 @@ export const createCodexAgentHandle = async (
       });
     },
     pid: undefined,
+    /**
+     * Add a follow-up to the running turn (`turn/steer`). The app-server echoes it
+     * as a user message carrying `uuid`, which confirms the delivery. Resolves
+     * false when the turn takes no input (it ended, or a review or compaction
+     * turn), so the caller sends the message as the next run instead.
+     */
+    sendUserMessage: async (prompt: AgentPromptInput, sendOptions?: { uuid?: string }) => {
+      const started = await Promise.race([turnStarted.then(() => true), exit.then(() => false)]);
+      if (!started || runEnded) return false;
+      const plan = await buildAgentInput('codex', prompt);
+      const outcome = await session.steer(
+        buildCodexAppServerInput(plan),
+        sendOptions?.uuid ?? randomUUID(),
+      );
+      return outcome === 'accepted';
+    },
     get sessionId() {
       return nativeSessionId;
     },
     stderr,
+    supportsSteerImageAttachments: true,
   };
 };

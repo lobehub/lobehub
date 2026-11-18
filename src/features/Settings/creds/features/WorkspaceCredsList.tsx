@@ -7,7 +7,7 @@ import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import ListSkeleton from '@/components/ListSkeleton';
+import { CredsListSkeleton } from '@/components/Skeleton/Settings/tabs/Creds';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
@@ -102,7 +102,7 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({ credsApi, visibility 
       errorVariant={'block'}
       isEmpty={credentials.length === 0}
       isLoading={isLoading}
-      loading={<ListSkeleton paddingInline={0} />}
+      loading={<CredsListSkeleton />}
       empty={
         <Empty
           description={t(visibility === 'private' ? 'creds.privateSection.empty' : 'creds.empty')}

@@ -27,6 +27,7 @@ export const pageSandboxWrapper = (
         saveSource: 'llm_call',
         userId,
         workspaceId,
+        writeSource: 'agent',
       }),
     });
 };

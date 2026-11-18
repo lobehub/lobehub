@@ -50,8 +50,13 @@ export class ToolActionImpl {
       editedArguments && toolCallId
         ? {
             ...options,
+            // The card already shows the approval; the server's rows would bring
+            // it back as `pending` until the resume claims it, and a second
+            // approval on that card fails the claim and ends the resumed run.
             onLegacyEditFallback: () =>
-              this.#get().updatePluginArguments(toolCallId, editedArguments, true),
+              this.#get().updatePluginArguments(toolCallId, editedArguments, true, {
+                refresh: false,
+              }),
           }
         : options;
     if (chatOptions) {

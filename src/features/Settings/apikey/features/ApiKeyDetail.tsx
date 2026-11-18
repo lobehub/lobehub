@@ -1,14 +1,8 @@
 'use client';
 
-import {
-  Button,
-  confirmModal,
-  createStaticStyles,
-  Drawer,
-  Flexbox,
-  Switch,
-  Text,
-} from '@lobehub/ui';
+import { Button, confirmModal, Drawer, Flexbox, Switch, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Pencil, Trash } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,36 +17,19 @@ import { type ApiKeyItem, type UpdateApiKeyParams } from '@/types/apiKey';
 import ScopeSelector, { ScopeOverview } from './ApiKeyModal/ScopeSelector';
 import { ApiKeyDisplay, EditableCell } from './index';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  fullAccessCard: css`
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  label: css`
-    flex: none;
-    width: 96px;
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  metaRow: css`
-    display: flex;
-    gap: 16px;
-    align-items: center;
-    min-height: 28px;
-  `,
-  sectionTitle: css`
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  value: css`
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    font-size: 13px;
-  `,
-}));
+const styles = stylex.create({
+  fullAccessCard: {
+    padding: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+  },
+  label: { flex: 'none', width: '96px', fontSize: '12px', color: cssVar.colorTextSecondary },
+  metaRow: { display: 'flex', gap: '16px', alignItems: 'center', minHeight: '28px' },
+  sectionTitle: { fontSize: '13px', fontWeight: 500, color: cssVar.colorTextSecondary },
+  value: { overflow: 'hidden', display: 'flex', alignItems: 'center', fontSize: '13px' },
+});
 
 export interface ApiKeyDetailProps {
   apiKey?: ApiKeyItem;
@@ -131,7 +108,7 @@ const ApiKeyScopeEditor: FC<ApiKeyScopeEditorProps> = ({ apiKey, canEdit, onUpda
   return (
     <Flexbox gap={8}>
       {initialFullAccess ? (
-        <Flexbox className={styles.fullAccessCard} gap={2}>
+        <Flexbox className={stylex.props(styles.fullAccessCard).className} gap={2}>
           <Text style={{ fontSize: 14 }}>{t('apikey.scopes.fullAccess')}</Text>
           <Text style={{ fontSize: 12 }} type={'secondary'}>
             {t('apikey.form.fields.scopes.fullAccessDescription')}
@@ -181,9 +158,9 @@ const ApiKeyDetail: FC<ApiKeyDetailProps> = ({
       {apiKey && (
         <Flexbox gap={24}>
           <Flexbox gap={4}>
-            <div className={styles.metaRow}>
-              <span className={styles.label}>{t('apikey.list.columns.name')}</span>
-              <span className={styles.value}>
+            <div {...stylex.props(styles.metaRow)}>
+              <span {...stylex.props(styles.label)}>{t('apikey.list.columns.name')}</span>
+              <span {...stylex.props(styles.value)}>
                 <EditableCell
                   disabled={!canEdit}
                   placeholder={t('apikey.display.enterPlaceholder')}
@@ -197,9 +174,9 @@ const ApiKeyDetail: FC<ApiKeyDetailProps> = ({
               </span>
             </div>
 
-            <div className={styles.metaRow}>
-              <span className={styles.label}>{t('apikey.list.columns.key')}</span>
-              <span className={styles.value}>
+            <div {...stylex.props(styles.metaRow)}>
+              <span {...stylex.props(styles.label)}>{t('apikey.list.columns.key')}</span>
+              <span {...stylex.props(styles.value)}>
                 {apiKey.isMine === false ? (
                   <span style={{ opacity: 0.5 }}>{`sk-lh-${'*'.repeat(12)}`}</span>
                 ) : apiKey.keyDecryptionFailed ? (
@@ -213,27 +190,27 @@ const ApiKeyDetail: FC<ApiKeyDetailProps> = ({
             </div>
 
             {apiKey.creator && (
-              <div className={styles.metaRow}>
-                <span className={styles.label}>{t('apikey.list.columns.creator')}</span>
-                <span className={styles.value}>{apiKey.creator}</span>
+              <div {...stylex.props(styles.metaRow)}>
+                <span {...stylex.props(styles.label)}>{t('apikey.list.columns.creator')}</span>
+                <span {...stylex.props(styles.value)}>{apiKey.creator}</span>
               </div>
             )}
 
-            <div className={styles.metaRow}>
-              <span className={styles.label}>{t('apikey.detail.createdAt')}</span>
-              <span className={styles.value}>{apiKey.createdAt.toLocaleString()}</span>
+            <div {...stylex.props(styles.metaRow)}>
+              <span {...stylex.props(styles.label)}>{t('apikey.detail.createdAt')}</span>
+              <span {...stylex.props(styles.value)}>{apiKey.createdAt.toLocaleString()}</span>
             </div>
 
-            <div className={styles.metaRow}>
-              <span className={styles.label}>{t('apikey.list.columns.lastUsedAt')}</span>
-              <span className={styles.value}>
+            <div {...stylex.props(styles.metaRow)}>
+              <span {...stylex.props(styles.label)}>{t('apikey.list.columns.lastUsedAt')}</span>
+              <span {...stylex.props(styles.value)}>
                 {apiKey.lastUsedAt?.toLocaleString() || t('apikey.display.neverUsed')}
               </span>
             </div>
 
-            <div className={styles.metaRow}>
-              <span className={styles.label}>{t('apikey.list.columns.expiresAt')}</span>
-              <span className={styles.value}>
+            <div {...stylex.props(styles.metaRow)}>
+              <span {...stylex.props(styles.label)}>{t('apikey.list.columns.expiresAt')}</span>
+              <span {...stylex.props(styles.value)}>
                 <EditableCell
                   disabled={!canEdit}
                   placeholder={t('apikey.display.neverExpires')}
@@ -249,9 +226,9 @@ const ApiKeyDetail: FC<ApiKeyDetailProps> = ({
               </span>
             </div>
 
-            <div className={styles.metaRow}>
-              <span className={styles.label}>{t('apikey.list.columns.status')}</span>
-              <span className={styles.value} title={canEdit ? undefined : manageTooltip}>
+            <div {...stylex.props(styles.metaRow)}>
+              <span {...stylex.props(styles.label)}>{t('apikey.list.columns.status')}</span>
+              <span {...stylex.props(styles.value)} title={canEdit ? undefined : manageTooltip}>
                 <Switch
                   checked={!!apiKey.enabled}
                   disabled={!canEdit}
@@ -265,7 +242,9 @@ const ApiKeyDetail: FC<ApiKeyDetailProps> = ({
           </Flexbox>
 
           <Flexbox gap={8}>
-            <span className={styles.sectionTitle}>{t('apikey.form.fields.scopes.label')}</span>
+            <span {...stylex.props(styles.sectionTitle)}>
+              {t('apikey.form.fields.scopes.label')}
+            </span>
             <ApiKeyScopeEditor
               apiKey={apiKey}
               canEdit={canEdit}

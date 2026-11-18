@@ -52,6 +52,7 @@ import {
   shouldAdoptIncomingConfig,
   WAKE_MASTER_KEY,
   withHeterogeneousWakeOff,
+  withNewBotReactionOff,
 } from './formState';
 import { type ChannelPostSave, ChannelPostSaveContext } from './postSaveContext';
 import { QuickView } from './QuickView';
@@ -156,10 +157,15 @@ const getFormValues = (
 ): ChannelFormValues => {
   const values = config ? getChannelFormValues(config) : { credentials: {}, settings: {} };
   const stored = omitUndefinedValues(values.settings);
-  const settings = mergeSettingsWithDefaults(
-    schema,
-    config || !heterogeneous ? stored : withHeterogeneousWakeOff(schema, stored),
-  );
+  // A bot being created starts with status reactions off (and, for a heterogeneous agent, bot wake
+  // off); a saved bot shows what it stored.
+  const seeded = config
+    ? stored
+    : withNewBotReactionOff(
+        schema,
+        heterogeneous ? withHeterogeneousWakeOff(schema, stored) : stored,
+      );
+  const settings = mergeSettingsWithDefaults(schema, seeded);
   return { ...values, settings: settings as Record<string, {} | undefined> };
 };
 

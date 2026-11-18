@@ -33,16 +33,12 @@ const workflowSegment = (id: string): AssistantGroupWorkflowSegment => ({
   kind: 'workflow',
 });
 
-const group = (
-  children: AssistantContentBlock[],
-  taskCompletions?: AssistantContentBlock[],
-): UIChatMessage => ({
+const group = (children: AssistantContentBlock[]): UIChatMessage => ({
   children,
   content: '',
   createdAt: 0,
   id: 'assistant-group',
   role: 'assistantGroup',
-  taskCompletions,
   updatedAt: 0,
 });
 
@@ -68,28 +64,128 @@ describe('isAssistantGroupStatusText', () => {
 });
 
 describe('partitionAssistantGroupBlocks', () => {
-  it('keeps a single-tool mixed block in workflow and the earlier answer final', () => {
-    const answer = block('answer', 'This is the visible final answer.');
-    const mixedTool = block(
-      'mixed-tool',
-      'This long tool narration has multiple sentences. It remains workflow content.',
-      { tools: [tool('only-tool')] },
-    );
-    const { segments } = partitionAssistantGroupBlocks([answer, mixedTool], {
-      isGenerating: false,
-    });
+  const narration = [
+    '正在读 0.7 版和 cc-switch 的额度查询实现，对照出 Claude、Codex、OpenCode 三家各自的取数接口，然后定实现方案。',
+    '代码结构已摸清，正在核对 OpenCode 凭据的存放形式，随后把实现拆成工作包交给 Weaver 派发。',
+  ];
+  const realSteps = () => [
+    block('step-1', '', { tools: [tool('a'), tool('b'), tool('c')] }),
+    block('step-2', '', { tools: [tool('d'), tool('e')] }),
+    block('step-3', narration[0]!, { tools: [tool('f'), tool('g')] }),
+    block('step-4', '', { tools: [tool('h'), tool('i')] }),
+    block('step-5', narration[1]!, { tools: [tool('j')] }),
+  ];
 
-    expect(segments.map(({ kind }) => kind)).toEqual(['answer', 'workflow']);
-    expect(segments[1]).toMatchObject({
-      blocks: [{ content: mixedTool.content, id: mixedTool.id }],
-      kind: 'workflow',
-    });
-    expect(splitAssistantGroupFinalAnswer(segments).finalSegments).toEqual([
-      { block: answer, kind: 'answer' },
-    ]);
+  it.each([true, false])(
+    'splits real tool narration into answers (generating=%s)',
+    (isGenerating) => {
+      const final = block(
+        'step-6',
+        '## 实现完成\n\n已接入三家额度接口。\n\n- Claude\n- Codex\n- OpenCode',
+      );
+      const { segments } = partitionAssistantGroupBlocks([...realSteps(), final], {
+        isGenerating,
+        toolsPhaseComplete: true,
+      });
+      expect(segments.map(({ kind }) => kind)).toEqual([
+        'workflow',
+        'answer',
+        'workflow',
+        'answer',
+        'workflow',
+        'answer',
+      ]);
+      expect(
+        segments.flatMap((segment) =>
+          segment.kind === 'workflow'
+            ? [segment.blocks.reduce((sum, entry) => sum + (entry.tools?.length ?? 0), 0)]
+            : [],
+        ),
+      ).toEqual([5, 4, 1]);
+      expect(
+        segments.flatMap((segment) => (segment.kind === 'answer' ? [segment.block.content] : [])),
+      ).toEqual([...narration, final.content]);
+    },
+  );
+
+  it.each([true, false])(
+    'uses the last narration as final when a turn ends on tools (generating=%s)',
+    (isGenerating) => {
+      const { postToolTailPromoted, segments } = partitionAssistantGroupBlocks(realSteps(), {
+        isGenerating,
+        toolsPhaseComplete: true,
+      });
+      expect(postToolTailPromoted).toBe(false);
+      expect(segments.map(({ kind }) => kind)).toEqual([
+        'workflow',
+        'answer',
+        'workflow',
+        'answer',
+        'workflow',
+      ]);
+      expect(splitAssistantGroupFinalAnswer(segments).finalSegments).toEqual([
+        expect.objectContaining({
+          block: expect.objectContaining({ content: narration[1] }),
+          kind: 'answer',
+        }),
+      ]);
+    },
+  );
+
+  it.each([true, false])(
+    'promotes long pure prose between tools without an empty workflow (generating=%s)',
+    (isGenerating) => {
+      const prose =
+        'The implementation has been inspected. '.repeat(5) + '\n\nNext, verify the credentials.';
+      const { segments } = partitionAssistantGroupBlocks(
+        [
+          block('first', '', { tools: [tool('a')] }),
+          block('prose', prose, { reasoning: { content: 'Inspecting credentials' } }),
+          block('last', '', { tools: [tool('b')] }),
+        ],
+        { isGenerating },
+      );
+      expect(segments.map(({ kind }) => kind)).toEqual(['workflow', 'answer', 'workflow']);
+      expect(segments[1]).toMatchObject({
+        block: { content: prose, tools: undefined, error: undefined },
+      });
+      expect(segments[2]).toMatchObject({ blocks: [{ id: 'last' }] });
+    },
+  );
+
+  it.each(['', '...', '   '])('does not promote a placeholder %j', (content) => {
+    const { segments } = partitionAssistantGroupBlocks(
+      [block('first', content, { tools: [tool('a'), tool('b')] })],
+      { isGenerating: true },
+    );
+    expect(segments.map(({ kind }) => kind)).toEqual(['workflow']);
   });
 
-  it('projects answer-like mixed content out of a multi-tool workflow', () => {
+  it.each([true, false])(
+    'keeps a single-tool mixed block in workflow and the earlier answer final (generating=%s)',
+    (isGenerating) => {
+      const answer = block('answer', 'This is the visible final answer.');
+      const mixedTool = block(
+        'mixed-tool',
+        'This long tool narration has multiple sentences. It remains workflow content.',
+        { tools: [tool('only-tool')] },
+      );
+      const { segments } = partitionAssistantGroupBlocks([answer, mixedTool], {
+        isGenerating,
+      });
+
+      expect(segments.map(({ kind }) => kind)).toEqual(['answer', 'workflow']);
+      expect(segments[1]).toMatchObject({
+        blocks: [{ content: mixedTool.content, id: mixedTool.id }],
+        kind: 'workflow',
+      });
+      expect(splitAssistantGroupFinalAnswer(segments).finalSegments).toEqual([
+        { block: answer, kind: 'answer' },
+      ]);
+    },
+  );
+
+  it('projects short narration and answer-like mixed content out of a multi-tool workflow', () => {
     const detailedAnswer =
       'The migration is complete. All affected paths now share the same invariant.';
     const { segments } = partitionAssistantGroupBlocks(
@@ -100,8 +196,12 @@ describe('partitionAssistantGroupBlocks', () => {
       { isGenerating: false },
     );
 
-    expect(segments.map(({ kind }) => kind)).toEqual(['workflow', 'answer', 'workflow']);
-    expect(segments[1]).toMatchObject({
+    expect(segments.map(({ kind }) => kind)).toEqual(['answer', 'workflow', 'answer', 'workflow']);
+    expect(segments[0]).toMatchObject({
+      block: { content: 'I will inspect the code.', tools: undefined },
+      kind: 'answer',
+    });
+    expect(segments[2]).toMatchObject({
       block: {
         content: detailedAnswer,
         id: 'answer-with-tool',
@@ -110,7 +210,7 @@ describe('partitionAssistantGroupBlocks', () => {
       },
       kind: 'answer',
     });
-    expect(segments[2]).toMatchObject({
+    expect(segments[3]).toMatchObject({
       blocks: [
         {
           content: '',
@@ -150,21 +250,43 @@ describe('partitionAssistantGroupBlocks', () => {
       { isBreakoutTool, isGenerating: false },
     );
 
-    expect(segments.map(({ kind }) => kind)).toEqual(['workflow', 'workflow', 'workflow']);
+    expect(segments.map(({ kind }) => kind)).toEqual([
+      'answer',
+      'workflow',
+      'answer',
+      'workflow',
+      'workflow',
+      'workflow',
+    ]);
     expect(segments[0]).toMatchObject({
+      block: { content: 'Looking.', tools: undefined },
+      kind: 'answer',
+    });
+    expect(segments[1]).toMatchObject({
+      blocks: [{ id: 'step-1', content: '' }],
+      kind: 'workflow',
+    });
+    expect(segments[2]).toMatchObject({
+      block: {
+        content: 'Checking the screenshot.',
+        reasoning: { content: 'thinking' },
+        tools: undefined,
+      },
+      kind: 'answer',
+    });
+    expect(segments[3]).toMatchObject({
       blocks: [
-        { id: 'step-1' },
         {
-          content: 'Checking the screenshot.',
+          content: '',
           id: 'step-2',
           projection: 'workflow',
-          reasoning: { content: 'thinking' },
+          reasoning: undefined,
           tools: [expect.objectContaining({ id: 'bash-2' })],
         },
       ],
       kind: 'workflow',
     });
-    expect(segments[1]).toMatchObject({
+    expect(segments[4]).toMatchObject({
       blocks: [
         {
           content: '',
@@ -177,7 +299,7 @@ describe('partitionAssistantGroupBlocks', () => {
       kind: 'workflow',
       standalone: true,
     });
-    expect(segments[2]).toMatchObject({
+    expect(segments[5]).toMatchObject({
       blocks: [
         {
           content: '',
@@ -227,17 +349,37 @@ describe('partitionAssistantGroupBlocks', () => {
     ]);
   });
 
-  it('keeps a short post-tool status in workflow while generating', () => {
+  it('keeps short post-tool status inside a single-tool workflow while generating', () => {
     const { postToolTailPromoted, segments } = partitionAssistantGroupBlocks(
       [
-        block('tool-step', 'Searching.', { tools: [tool('search-call')] }),
+        block('tool', 'Searching.', { tools: [tool('search')] }),
+        block('status', 'Now I will summarize the results.'),
+      ],
+      { isGenerating: true, toolsPhaseComplete: true },
+    );
+    expect(postToolTailPromoted).toBe(false);
+    expect(segments).toEqual([
+      {
+        kind: 'workflow',
+        blocks: [
+          block('tool', 'Searching.', { tools: [tool('search')] }),
+          block('status', 'Now I will summarize the results.'),
+        ],
+      },
+    ]);
+  });
+
+  it('shows short post-tool narration without marking the final answer promoted while generating', () => {
+    const { postToolTailPromoted, segments } = partitionAssistantGroupBlocks(
+      [
+        block('tool-step', '', { tools: [tool('search-call'), tool('read-call')] }),
         block('status', 'Now I will summarize the results.'),
       ],
       { isGenerating: true, toolsPhaseComplete: true },
     );
 
     expect(postToolTailPromoted).toBe(false);
-    expect(segments.map(({ kind }) => kind)).toEqual(['workflow']);
+    expect(segments.map(({ kind }) => kind)).toEqual(['workflow', 'answer']);
   });
 });
 
@@ -341,15 +483,6 @@ describe('resolveAssistantGroupFinalContent', () => {
     ]);
 
     expect(resolveAssistantGroupFinalContent(message)).toBe(detailedAnswer);
-  });
-
-  it('prefers the last post-task summary over the main assistant chain', () => {
-    const message = group(
-      [block('main-answer', 'Initial answer')],
-      [block('summary-1', 'First task summary'), block('summary-2', 'Final task summary')],
-    );
-
-    expect(resolveAssistantGroupFinalContent(message)).toBe('Final task summary');
   });
 
   it('falls back to the latest authored status for a status-only group', () => {

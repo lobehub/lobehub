@@ -1,5 +1,6 @@
 'use client';
 
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { Center, cx, Divider, Flexbox } from '@lobehub/ui';
 import { type FC, type PropsWithChildren } from 'react';
 
@@ -21,7 +22,7 @@ const AuthContainer: FC<PropsWithChildren> = ({ children }) => {
         width={'100%'}
       >
         <Flexbox horizontal align={'center'} padding={16} width={'100%'}>
-          <a aria-label={'LobeHub'} href={'/'} style={{ display: 'inline-flex' }}>
+          <a aria-label={BRANDING_NAME} href={'/'} style={{ display: 'inline-flex' }}>
             <ProductLogo size={40} />
           </a>
         </Flexbox>

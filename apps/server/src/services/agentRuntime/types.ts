@@ -13,11 +13,15 @@ import type {
   ToolSource,
 } from '@lobechat/context-engine';
 import type {
+  AgentRunInitRequest,
   AgentShareVisitorContext,
   ChatTopicBotContext,
+  EvalConnectorSnapshots,
+  EvalMemoryReference,
   EvalToolForwardingConfig,
   ExpertiseContextSnapshot,
   FrozenCredentialFacts,
+  UIChatMessage,
   UserInterventionConfig,
 } from '@lobechat/types';
 import type { SearchDecision } from 'model-bank';
@@ -140,6 +144,23 @@ export type StepCompletionReason =
 
 // ==================== Execution Params ====================
 
+/**
+ * The protocol v2 message patch of a step that continues inline, left
+ * unpublished so the next step's entry read can be its "after" side. Lives
+ * only in the invocation's memory; whoever ends up holding it must publish it
+ * before the client hears of the next step.
+ */
+export interface DeferredMessagePatch {
+  /** The step's entry read: the patch's "before" side. */
+  before: UIChatMessage[];
+  /** Conversation the step read; see `stepMessagesScopeKey`. */
+  scopeKey: string;
+  /** State the step ended with, to read the "after" side when no entry read takes over. */
+  state: AgentState;
+  /** Step the patch belongs to. */
+  stepIndex: number;
+}
+
 export interface AgentExecutionParams {
   approvedToolCall?: any;
   /**
@@ -155,6 +176,11 @@ export interface AgentExecutionParams {
    */
   clientLlmWaitExpired?: string;
   context?: AgentRuntimeContext;
+  /**
+   * The previous inline step's message patch. This step publishes it from its
+   * own entry read, before `step_start`. Set only by the inline step loop.
+   */
+  deferredMessagePatch?: DeferredMessagePatch;
   externalRetryCount?: number;
   /**
    * Finish (rather than resume) a `waiting_for_async_tool` supervisor op after
@@ -260,6 +286,12 @@ export interface AgentExecutionResult {
    * inline loop can simply stop when it is missing.
    */
   continuation?: AgentStepContinuation;
+  /**
+   * This step's unpublished message patch, present only alongside
+   * `continuation`. The inline loop passes it to the next step, or to
+   * `scheduleContinuation` when it hands the step back to the queue.
+   */
+  deferredMessagePatch?: DeferredMessagePatch;
   /**
    * When true, the step was already being executed by another instance (lock conflict).
    * Stale duplicates are handled before returning this; callers should keep
@@ -517,6 +549,8 @@ export interface OperationCreationParams {
      */
     userAgent?: string;
   };
+  /** Library skills the agent set to `auto`, kept on `state.world` for the skill pool. */
+  autoSkillIds?: string[];
   autoStart?: boolean;
   /**
    * Sender/owner identity for bot-originated runs. Forwarded into
@@ -613,6 +647,12 @@ export interface OperationCreationParams {
    * sub-tree back to its root.
    */
   parentOperationId?: string;
+  /**
+   * Create the operation without its init: the step-0 worker runs it from this
+   * request. The init's own fields (`toolSet`, `initialMessages`, …) are then
+   * ignored and `initialContext` is only the placeholder step 0 is queued with.
+   */
+  pendingInitRequest?: AgentRunInitRequest;
   /**
    * A project's root instruction files, collected once during operation prep.
    * Run context for the context engine to inject — see `expertise`.
@@ -724,6 +764,24 @@ export interface StartExecutionResult {
   success: boolean;
 }
 export interface EvalRuntimeContext {
+  /**
+   * The only tool identifiers an attempt may see or call: what the case
+   * declares (its connectors, mocked services and forwarded tools) plus the
+   * runtime's own infrastructure tools. Absent when the case does not declare
+   * an environment of its own (an Evaluation Lab run on a real Agent keeps the
+   * Agent's tools). Enforced twice: the operation's tool set is pruned to it
+   * before the first step, and a `beforeToolCall` hook refuses anything else.
+   */
+  allowedTools?: string[];
+  /**
+   * The eval attempt this run serves: one case run, or one pass@k thread of
+   * it, including the sub-agents it forks. Mocks key their session on it.
+   */
+  attemptId?: string;
   caseId?: string;
+  /** Exact connection references plus target/tool fingerprints; no credentials. */
+  connectorSnapshots?: EvalConnectorSnapshots;
+  /** Server-created isolated Memory scope of this trial; never taken from user input. */
+  memory?: EvalMemoryReference;
   toolForwarding?: EvalToolForwardingConfig;
 }

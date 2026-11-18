@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PipelineContext } from '../../types';
-import { HYDRATED_TOOL_RESULTS, PlaceholderVariablesProcessor } from '../PlaceholderVariables';
+import { PlaceholderVariablesProcessor } from '../PlaceholderVariables';
 
 /**
  * Regression for the prompt-cache break caused by rewriting tool results.
@@ -172,14 +172,5 @@ describe('PlaceholderVariablesProcessor — tool result passthrough', () => {
     expect(result.messages[0].content).toBe('topic tpc_abc');
     // Not in the supplied allowlist — the default no longer applies.
     expect(result.messages[1].content).toBe('topic {{topic_id}}');
-  });
-
-  it('covers the activation surface ActivationResultTrimProcessor recognises', () => {
-    // Both processors must agree on which tool results are platform-authored
-    // documents; a skill activated but not injected keeps its tool result as the
-    // only channel for a SKILL.md body that references {{agent_id}}.
-    expect(HYDRATED_TOOL_RESULTS['lobe-activator']).toContain('activateTools');
-    expect(HYDRATED_TOOL_RESULTS['lobe-activator']).toContain('activateSkill');
-    expect(HYDRATED_TOOL_RESULTS['lobe-skills']).toContain('activateSkill');
   });
 });

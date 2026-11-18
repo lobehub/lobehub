@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { MarketService } from '@/server/services/market';
 
+import { buildDriveDownloadCommand } from '../driveDownload';
 import { MarketSandboxProvider, redactSandboxParams } from './market';
 
 describe('MarketSandboxProvider', () => {
@@ -209,6 +210,21 @@ describe('MarketSandboxProvider', () => {
       };
 
       expect(redactSandboxParams(params).command).not.toContain('c2VjcmV0');
+    });
+
+    it("redacts a drive download's payload, which carries a presigned upload URL", () => {
+      const command = buildDriveDownloadCommand({
+        hidden: [],
+        maxBytes: 1,
+        maxFiles: 1,
+        path: 'project',
+        uploadUrl: 'https://bucket.example.com/key?X-Amz-Signature=secret',
+      });
+      const payload = /LOBE_DRIVE_DOWNLOAD='([^']+)'/.exec(command)![1];
+
+      const redacted = redactSandboxParams({ command }).command as string;
+      expect(redacted).not.toContain(payload);
+      expect(redacted).toContain('LOBE_DRIVE_DOWNLOAD=[redacted] python3 -');
     });
 
     it('fully redacts a command that writes into ~/.creds/env, regardless of the credential names it carries', () => {

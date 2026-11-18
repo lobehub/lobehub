@@ -4,7 +4,7 @@ import type { BuiltinToolManifest } from '@lobechat/types';
 import { systemPrompt } from './systemRole';
 import { MessageApiName, MessageToolIdentifier, MESSENGER_PUSH_CONTENT_MAX_LENGTH } from './types';
 
-const platformEnum = ['discord', 'telegram', 'slack', 'feishu', 'lark', 'qq', 'wechat'];
+const platformEnum = ['discord', 'telegram', 'slack', 'feishu', 'lark', 'qq', 'wechat', 'dingtalk'];
 
 /**
  * Shared schema fragment for the outbound `attachments` array on message-

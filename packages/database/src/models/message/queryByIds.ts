@@ -33,6 +33,7 @@ import {
   FILE_URL_POST_PROCESS_CONCURRENCY,
   fileDocumentColumns,
   fileDocumentsOrder,
+  groupMessageFilesByKind,
   materializeChatAudioItem,
   toFileDocumentsMap,
 } from './attachments';
@@ -265,15 +266,7 @@ export class MessageByIdsQueries extends MessageScope {
       documentsMap = toFileDocumentsMap(documentsList);
     }
 
-    const imageList = relatedFileList.filter((i) => (i.fileType || '').startsWith('image'));
-    const videoList = relatedFileList.filter((i) => (i.fileType || '').startsWith('video'));
-    const audioList = relatedFileList.filter((i) => (i.fileType || '').startsWith('audio'));
-    const fileList = relatedFileList.filter(
-      (i) =>
-        !(i.fileType || '').startsWith('image') &&
-        !(i.fileType || '').startsWith('video') &&
-        !(i.fileType || '').startsWith('audio'),
-    );
+    const { audioList, fileList, imageList, videoList } = groupMessageFilesByKind(relatedFileList);
 
     // 4. Build thread map
     const threadMap = new Map(

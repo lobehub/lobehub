@@ -30,21 +30,23 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AgentAvatar from '@/components/AgentAvatar';
+import { type SidebarAgentItem } from '@/database/repositories/home';
 import { styles } from '@/features/CommandMenu/styles';
-import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { usePermission } from '@/hooks/usePermission';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
+import { pickRecentAssignees } from '../../features/assigneeAgentSections';
 import { PRIORITY_META } from '../../features/TaskPriorityTag';
 import { STATUS_META } from '../../features/taskStatusMeta';
+import { useAssigneeAgentScopes } from '../../features/useAssigneeAgentScopes';
 import { hasWorkspaceMemberDirectory } from '../../shared/memberAssigneeMode';
+import BulkAssignPrivateConfirmContent from './BulkAssignPrivateConfirmContent';
 import BulkDeleteConfirmContent from './BulkDeleteConfirmContent';
+import { privatizeTasks } from './privatizeTasks';
 import { useTaskSelectionStore } from './store';
-import { countTasksCreatedByOthers } from './taskSelectionModel';
+import { countTasksCreatedByOthers, pickTasksToPrivatize } from './taskSelectionModel';
 import { type TaskBatchStatus, useTaskBatchActions } from './useTaskBatchActions';
 
 const BATCH_STATUSES: TaskBatchStatus[] = ['backlog', 'paused', 'completed', 'canceled'];
@@ -87,7 +89,7 @@ const Item = ({
  * one batch request for the whole selection (see `useTaskBatchActions`).
  */
 const TaskBulkActionsPanel = memo<TaskBulkActionsPanelProps>(({ onClose, tasks }) => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'common', 'topic']);
   const selectedIds = useTaskSelectionStore((s) => s.selectedIds);
   const { run, running } = useTaskBatchActions();
   const { allowed: canEdit } = usePermission('create_content');
@@ -96,16 +98,34 @@ const TaskBulkActionsPanel = memo<TaskBulkActionsPanelProps>(({ onClose, tasks }
   const [page, setPage] = useState<Page>();
   const [search, setSearch] = useState('');
 
-  useFetchAgentList();
-  const allAgents = useHomeStore(homeAgentListSelectors.allAgents);
-  const agents = useMemo(() => {
-    const seen = new Set<string>();
-    return allAgents.filter((item) => {
-      if (item.type !== 'agent' || seen.has(item.id)) return false;
-      seen.add(item.id);
-      return true;
+  // The same agents, in the same groups, as the single-task picker. Private
+  // agents get their own scope; picking one makes the selection's public
+  // tasks private first, behind a confirmation (see `assignAgent`).
+  const { inboxAgent, privateAgentIds, recentIds, rememberAssignee, scopes } =
+    useAssigneeAgentScopes({
+      offerPrivate: true,
+      privateTitle: t('taskManager.agentSelector.privateGroup', { ns: 'topic' }),
     });
-  }, [allAgents]);
+  const recentAgents = useMemo(
+    () =>
+      pickRecentAssignees(
+        recentIds,
+        scopes.flatMap((scope) => scope.sections.flatMap((section) => section.agents)),
+      ),
+    [recentIds, scopes],
+  );
+  const agentGroups = useMemo(
+    () =>
+      scopes.flatMap((scope) =>
+        scope.sections.map((section) => ({
+          agents: section.agents,
+          // cmdk groups do not nest, so a section names its scope too.
+          heading: [scope.title, section.title].filter(Boolean).join(' · ') || undefined,
+          id: section.id,
+        })),
+      ),
+    [scopes],
+  );
 
   const selectedTasks = useMemo(() => {
     const ids = new Set(selectedIds);
@@ -138,6 +158,66 @@ const TaskBulkActionsPanel = memo<TaskBulkActionsPanelProps>(({ onClose, tasks }
       onOk: () => run({ kind: 'delete' }),
       title: t('taskList.bulk.deleteConfirm.title', { count: selectedIds.length }),
     });
+  };
+
+  const assignAgent = (agent: SidebarAgentItem) => {
+    const action = { kind: 'update', patch: { assigneeAgentId: agent.id } } as const;
+    const targets = privateAgentIds.has(agent.id)
+      ? pickTasksToPrivatize(selectedTasks, userId)
+      : [];
+    if (targets.length === 0) {
+      rememberAssignee(agent.id);
+      act(action);
+      return;
+    }
+
+    onClose();
+    // A public task only takes a private agent once it is private itself. The
+    // single-task picker asks before doing that; so does the batch, instead of
+    // letting the server skip every public task.
+    const takeOverCount = targets.filter((target) => target.takeOwnership).length;
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: (
+        <BulkAssignPrivateConfirmContent count={targets.length} takeOverCount={takeOverCount} />
+      ),
+      okButtonProps: { danger: true },
+      okText: t('taskList.bulk.assignPrivate.ok'),
+      onOk: () => {
+        // Recent records what was assigned, so a cancelled pick leaves it alone.
+        rememberAssignee(agent.id);
+        void run(action, {
+          prepare: (ids) => {
+            const selected = new Set(ids);
+            return privatizeTasks(targets.filter((target) => selected.has(target.id)));
+          },
+        });
+      },
+      title: t('taskList.bulk.assignPrivate.title', { count: selectedIds.length }),
+    });
+  };
+
+  const renderAgent = (agent: SidebarAgentItem, sectionId: string) => {
+    const name = agentDisplayName(agent) ?? agent.id;
+    return (
+      <Item
+        disabled={disabled}
+        key={`${sectionId}:${agent.id}`}
+        label={name}
+        // An agent can be listed under Recent and its group; values stay unique.
+        value={`agent ${sectionId} ${agent.id} ${name}`}
+        icon={
+          <AgentAvatar
+            agentId={agent.id}
+            avatar={typeof agent.avatar === 'string' ? agent.avatar : undefined}
+            name={name}
+            shape={'square'}
+            size={20}
+          />
+        }
+        onSelect={() => assignAgent(agent)}
+      />
+    );
   };
 
   const copyIds = async () => {
@@ -319,36 +399,31 @@ const TaskBulkActionsPanel = memo<TaskBulkActionsPanelProps>(({ onClose, tasks }
             )}
 
             {page === 'agent' && (
-              <Command.Group>
-                <Item
-                  disabled={disabled}
-                  icon={<Icon className={styles.icon} icon={UserRoundXIcon} />}
-                  label={t('taskList.bulk.unassignAgent')}
-                  value={'unassigned none'}
-                  onSelect={() => act({ kind: 'update', patch: { assigneeAgentId: null } })}
-                />
-                {agents.map((agent) => {
-                  const name = agentDisplayName(agent) ?? agent.id;
-                  return (
-                    <Item
-                      disabled={disabled}
-                      key={agent.id}
-                      label={name}
-                      value={`agent ${agent.id} ${name}`}
-                      icon={
-                        <AgentAvatar
-                          agentId={agent.id}
-                          avatar={typeof agent.avatar === 'string' ? agent.avatar : undefined}
-                          name={name}
-                          shape={'square'}
-                          size={20}
-                        />
-                      }
-                      onSelect={() => act({ kind: 'update', patch: { assigneeAgentId: agent.id } })}
-                    />
-                  );
-                })}
-              </Command.Group>
+              <>
+                <Command.Group>
+                  <Item
+                    disabled={disabled}
+                    icon={<Icon className={styles.icon} icon={UserRoundXIcon} />}
+                    label={t('taskList.bulk.unassignAgent')}
+                    value={'unassigned none'}
+                    onSelect={() => act({ kind: 'update', patch: { assigneeAgentId: null } })}
+                  />
+                  {inboxAgent && renderAgent(inboxAgent, 'inbox')}
+                </Command.Group>
+                {/* Recent only helps before typing; a search lists each match once. */}
+                {!search && recentAgents.length > 0 && (
+                  <Command.Group
+                    heading={t('taskManager.agentSelector.recentGroup', { ns: 'topic' })}
+                  >
+                    {recentAgents.map((agent) => renderAgent(agent, 'recent'))}
+                  </Command.Group>
+                )}
+                {agentGroups.map((group) => (
+                  <Command.Group heading={group.heading} key={group.id}>
+                    {group.agents.map((agent) => renderAgent(agent, group.id))}
+                  </Command.Group>
+                ))}
+              </>
             )}
           </Command.List>
         </Command>

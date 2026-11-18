@@ -1,8 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckCircle2, CircleAlert } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -38,30 +39,18 @@ const getIntentLabelKey = (data?: Partial<DeclareSelfFeedbackIntentParams>) => {
   return 'builtins.lobe-self-feedback-intent.apiName.declareSelfFeedbackIntent';
 };
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  iconAccepted: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorSuccess};
-  `,
-  iconRejected: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorWarning};
-  `,
-  meta: css`
-    flex-shrink: 0;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  summary: css`
-    overflow: hidden;
-
-    min-width: 0;
-    max-width: 320px;
-
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  iconAccepted: { flexShrink: 0, color: cssVar.colorSuccess },
+  iconRejected: { flexShrink: 0, color: cssVar.colorWarning },
+  meta: { flexShrink: 0, fontSize: '12px', color: cssVar.colorTextTertiary },
+  summary: {
+    overflow: 'hidden',
+    minWidth: '0',
+    maxWidth: '320px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 export const DeclareSelfFeedbackIntentInspector = memo<
   BuiltinInspectorProps<DeclareSelfFeedbackIntentParams, DeclareSelfFeedbackIntentState>
@@ -89,16 +78,26 @@ export const DeclareSelfFeedbackIntentInspector = memo<
         {title}
       </span>
       {summary && (
-        <span className={cx(highlightTextStyles.primary, styles.summary)}>{summary}</span>
+        <span className={cx(stylex.props(styles.summary).className, highlightTextStyles.primary)}>
+          {summary}
+        </span>
       )}
       {isSettled &&
         pluginState &&
         (pluginState.accepted ? (
-          <Icon className={styles.iconAccepted} icon={CheckCircle2} size={14} />
+          <Icon
+            className={stylex.props(styles.iconAccepted).className}
+            icon={CheckCircle2}
+            size={14}
+          />
         ) : (
           <>
-            <Icon className={styles.iconRejected} icon={CircleAlert} size={14} />
-            <span className={styles.meta}>
+            <Icon
+              className={stylex.props(styles.iconRejected).className}
+              icon={CircleAlert}
+              size={14}
+            />
+            <span {...stylex.props(styles.meta)}>
               {t('builtins.lobe-self-feedback-intent.inspector.rejected')}
             </span>
           </>

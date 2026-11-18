@@ -116,12 +116,19 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
 
   useLayoutEffect(retainSkeleton, []);
 
+  const brand = (
+    <div {...stylex.props(styles.contentBrand)}>
+      <div {...stylex.props(styles.brand)}>
+        <LobeHub size={40} type={'text'} />
+        {hint && <LoadingHint enter={hint === 'enter'} />}
+      </div>
+    </div>
+  );
+
   return (
     <div aria-hidden id={id} {...sx(styles.root, CSS_VAR_CLASS)}>
       {isDesktop && (
-        <div
-          {...sx([styles.dragRegion], electronStylish.draggable, { height: TITLE_BAR_HEIGHT })}
-        />
+        <div {...sx(styles.dragRegion, electronStylish.draggable, { height: TITLE_BAR_HEIGHT })} />
       )}
       <Flexbox
         horizontal
@@ -151,12 +158,7 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
             style={getInnerCssVariables({ isDark })}
             width={'100%'}
           >
-            <div {...stylex.props(styles.contentBrand)}>
-              <div {...stylex.props(styles.brand)}>
-                <LobeHub size={40} type={'text'} />
-                {hint && <LoadingHint enter={hint === 'enter'} />}
-              </div>
-            </div>
+            {brand}
           </Flexbox>
         </Flexbox>
       </Flexbox>

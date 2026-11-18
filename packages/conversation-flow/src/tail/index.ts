@@ -25,12 +25,9 @@ export const getOperationFinalRootId = (
 export const findLatestWorkRootOperationId = (
   metadata?: { work?: { rootOperationId?: unknown } } | null,
   children?: AssistantContentBlock[],
-  taskCompletions?: AssistantContentBlock[],
 ) => {
-  const blocks = [...(children ?? []), ...(taskCompletions ?? [])];
-
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const rootOperationId = getOperationFinalRootId(blocks[index]?.metadata);
+  for (let index = (children?.length ?? 0) - 1; index >= 0; index -= 1) {
+    const rootOperationId = getOperationFinalRootId(children?.[index]?.metadata);
     if (rootOperationId) return rootOperationId;
   }
 

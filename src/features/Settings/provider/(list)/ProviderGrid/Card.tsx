@@ -1,5 +1,6 @@
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { Avatar, cssVar, cx, Divider, Flexbox, Skeleton, Tag, Text } from '@lobehub/ui';
+import { Avatar, cssVar, Divider, Flexbox, Skeleton, Tag, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,9 +18,10 @@ const isCodingPlanProvider = (id: string) => id.endsWith('codingplan');
  * ChatGPT is an OpenAI subscription, so its icon config points at the OpenAI
  * mark — ProviderCombine renders the OpenAI wordmark and the card reads as a
  * duplicate of the OpenAI one right beside it. Name these providers after the
- * plan instead, the way the detail page header does.
+ * plan instead, the way the detail page header does. Doubao Speech borrows the Doubao
+ * mark, whose wordmark reads 豆包大模型 (the Ark models), so it is named too.
  */
-const sharesVendorMark = (id: string) => id === 'chatgpt';
+const sharesVendorMark = (id: string) => id === 'chatgpt' || id === 'doubaospeech';
 
 interface ProviderCardProps extends AiProviderListItem {
   loading?: boolean;
@@ -33,9 +35,11 @@ const ProviderCard = memo<ProviderCardProps>(
     if (loading)
       return (
         <Flexbox
-          className={cx(isDarkMode ? styles.containerDark : styles.containerLight)}
           gap={24}
           padding={16}
+          className={
+            stylex.props(isDarkMode ? styles.containerDark : styles.containerLight).className
+          }
         >
           <Skeleton />
         </Flexbox>
@@ -46,7 +50,12 @@ const ProviderCard = memo<ProviderCardProps>(
     }
 
     return (
-      <Flexbox className={cx(isDarkMode ? styles.containerDark : styles.containerLight)} gap={24}>
+      <Flexbox
+        gap={24}
+        className={
+          stylex.props(isDarkMode ? styles.containerDark : styles.containerLight).className
+        }
+      >
         <Flexbox gap={12} padding={16} width={'100%'}>
           <div
             style={{ cursor: 'pointer' }}
@@ -95,7 +104,7 @@ const ProviderCard = memo<ProviderCardProps>(
                 )}
               </Flexbox>
               <Text
-                className={styles.desc}
+                className={stylex.props(styles.desc).className}
                 ellipsis={{
                   rows: 2,
                 }}

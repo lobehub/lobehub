@@ -79,7 +79,12 @@ export interface EnvironmentConfiguration {
   sources?: EnvironmentSource[];
 }
 
-/** Remote hosts connected through lh are devices too. Clusters are controlled through rc. */
+/**
+ * Remote hosts connected through lh are devices too. A cluster instance runs
+ * on infrastructure a cluster provider manages; a managed cloud device is one
+ * (`provider: MANAGED_CLOUD_CLUSTER_PROVIDER_V1`, `providerScope`: region,
+ * `providerResourceId`: managed device id — see `../managedDevice`).
+ */
 export type EnvironmentInstanceKind = 'device' | 'sandbox' | 'cluster';
 
 export type EnvironmentInstanceStatus = 'pending' | 'ready' | 'stopped' | 'error';

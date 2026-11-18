@@ -116,7 +116,6 @@ describe('MarketWidgetSandboxRunner', () => {
     [503, { error: 'sandbox_not_configured' }, 'SANDBOX_NOT_CONFIGURED'],
     [401, { error: 'invalid_token' }, 'SANDBOX_UNAUTHORIZED'],
     [403, { error: 'forbidden_client' }, 'SANDBOX_UNAUTHORIZED'],
-    [400, { error: 'invalid_request', error_description: 'bad host' }, 'SANDBOX_BAD_REQUEST'],
     [422, { error: 'secret_unusable' }, 'SANDBOX_BAD_REQUEST'],
     [429, { error: 'rate_limited' }, 'SANDBOX_BUSY'],
     [429, { error: 'concurrency_limited' }, 'SANDBOX_BUSY'],
@@ -137,7 +136,9 @@ describe('MarketWidgetSandboxRunner', () => {
     });
 
     await expect(runner.run(request)).rejects.toMatchObject({
+      code: 'SANDBOX_BAD_REQUEST',
       message: expect.stringContaining('invalid_request: bad host'),
+      name: 'WidgetSandboxError',
     });
   });
 

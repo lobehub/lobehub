@@ -33,10 +33,12 @@ import { useTopicSearch } from './useTopicSearch';
 const SEARCH_DEBOUNCE_MS = 250;
 
 // `::highlight()` is a document-level pseudo-element, so it cannot be a scoped
-// StyleX rule. React hoists and dedupes this sheet by its `href`.
+// StyleX rule. React hoists and dedupes this sheet by its `href`. It sets the
+// text color with the fill so matches stay readable whatever color the message
+// text has.
 const HIGHLIGHT_SHEET = `
-::highlight(${TOPIC_SEARCH_HIGHLIGHT.all}) { background-color: ${lobeCssVar.colorWarningBgHover}; }
-::highlight(${TOPIC_SEARCH_HIGHLIGHT.active}) { background-color: ${lobeCssVar.colorWarningBorder}; }
+::highlight(${TOPIC_SEARCH_HIGHLIGHT.all}) { background-color: ${lobeCssVar.colorWarningBgHover}; color: ${lobeCssVar.colorText}; }
+::highlight(${TOPIC_SEARCH_HIGHLIGHT.active}) { background-color: ${lobeCssVar.colorWarningBorder}; color: ${lobeCssVar.colorText}; }
 `;
 
 const styles = stylex.create({
@@ -73,7 +75,7 @@ const styles = stylex.create({
   mark: {
     backgroundColor: cssVar.colorWarningBgHover,
     borderRadius: 2,
-    color: 'inherit',
+    color: cssVar.colorText,
   },
   meta: {
     color: cssVar.colorTextTertiary,

@@ -1,6 +1,10 @@
 import { llmRelayChannelScope } from '@lobechat/agent-gateway-client';
 import type { SubAgentExecutionResult, SubAgentTransport } from '@lobechat/agent-runtime';
-import type { ExecSubAgentParams, ExecVirtualSubAgentParams } from '@lobechat/types';
+import type {
+  ExecSubAgentParams,
+  ExecSubAgentResult,
+  ExecVirtualSubAgentParams,
+} from '@lobechat/types';
 
 import { getBusinessTrpcHeaders } from '@/business/client/trpc-headers';
 import type { ExecSubAgentTaskParams } from '@/services/aiAgent';
@@ -39,6 +43,10 @@ export class ClientSubAgentTransport implements SubAgentTransport {
   constructor(
     private readonly get: () => ChatStore,
     private readonly operationId: string,
+    private readonly options: {
+      /** The server accepted the child; called before waiting on it. */
+      onDispatched?: (dispatch: ExecSubAgentResult) => void;
+    } = {},
   ) {}
 
   execSubAgent(params: ExecSubAgentParams): Promise<SubAgentExecutionResult> {
@@ -117,6 +125,8 @@ export class ClientSubAgentTransport implements SubAgentTransport {
 
       const operation = this.get().operations[this.operationId];
       if (!operation) throw new Error(`Operation not found: ${this.operationId}`);
+
+      this.options.onDispatched?.(dispatchResult);
 
       const signal = operation.abortController.signal;
       const timeoutMs = params.timeout ?? DEFAULT_TIMEOUT_MS;

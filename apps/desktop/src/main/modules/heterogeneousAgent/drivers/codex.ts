@@ -2,9 +2,11 @@ import path from 'node:path';
 
 import {
   buildCodexLobeHubContextArgs,
+  buildCodexShellEnvSetArgs,
   CODEX_DEFAULT_EXECUTION_ARGS,
   CODEX_EXECUTION_MODE_FLAGS,
   CODEX_REQUIRED_ARGS,
+  LOBEHUB_JWT_FILE_ENV,
 } from '@lobechat/heterogeneous-agents/spawn';
 import type {
   CodexReasoningEffort,
@@ -237,11 +239,11 @@ const buildServerDefaultModelCatalog = (
 /**
  * Prefix a Codex session's args with `shell_environment_policy.set.*`
  * overrides for the LobeHub run context in its env (agent/operation/topic/
- * workspace ids) plus the bundled `lh` path, so `lh` inside Codex's shell sees
- * them even when the user's config sets `inherit = "core"`. Both the
- * `codex exec` plan and the app-server thread config
- * (`buildCodexAppServerThreadParams`) read these args. Other agent types are
- * returned unchanged.
+ * workspace ids), the bundled `lh` path and the app's sign-in file, so `lh`
+ * inside Codex's shell sees them even when the user's config sets
+ * `inherit = "core"`. Both the `codex exec` plan and the app-server thread
+ * config (`buildCodexAppServerThreadParams`) read these args. Other agent types
+ * are returned unchanged.
  */
 export const withCodexContextArgs = (
   agentType: string,
@@ -251,6 +253,10 @@ export const withCodexContextArgs = (
   agentType === 'codex' && env
     ? [
         ...buildCodexLobeHubContextArgs({ [LOBEHUB_CLI_ENV]: getEmbeddedCliPath(), ...env }),
+        // Only the path: the token itself would be readable in argv.
+        ...(env[LOBEHUB_JWT_FILE_ENV]
+          ? buildCodexShellEnvSetArgs(LOBEHUB_JWT_FILE_ENV, env[LOBEHUB_JWT_FILE_ENV])
+          : []),
         ...args,
       ]
     : args;

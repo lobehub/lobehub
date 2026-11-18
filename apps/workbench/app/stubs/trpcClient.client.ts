@@ -15,6 +15,7 @@ export const lambdaClient = createTRPCClient<LambdaRouter>({
   ],
 });
 
+export const createWorkspaceLambdaClient = reject('createWorkspaceLambdaClient');
 export const asyncClient = reject('asyncClient');
 export const toolsClient = reject('toolsClient');
 export const lambdaQuery = reject('lambdaQuery');

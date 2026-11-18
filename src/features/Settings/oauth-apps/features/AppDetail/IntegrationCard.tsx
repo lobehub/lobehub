@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, createStaticStyles, Flexbox, Text, toast } from '@lobehub/ui';
+import { Button, Flexbox, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CopyIcon } from 'lucide-react';
 import { type FC, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,27 +15,22 @@ import { getIntegrationEndpoints, resolveIssuer } from '../../integrationEndpoin
 import { integrationPromptKey, integrationPromptValues } from '../../integrationPrompt';
 import SectionCard from './SectionCard';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  prompt: css`
-    overflow: auto;
-
-    max-height: 180px;
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-    white-space: pre-wrap;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  subTitle: css`
-    font-size: 13px;
-    font-weight: 500;
-  `,
-}));
+const styles = stylex.create({
+  prompt: {
+    overflow: 'auto',
+    maxHeight: '180px',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadius,
+    fontSize: '13px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'pre-wrap',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  subTitle: { fontSize: '13px', fontWeight: 500 },
+});
 
 interface IntegrationCardProps {
   applicationType?: string | null;
@@ -84,7 +81,7 @@ const IntegrationCard: FC<IntegrationCardProps> = ({ applicationType, clientId, 
       <Flexbox gap={12}>
         <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
           <Flexbox gap={2}>
-            <span className={styles.subTitle}>{t('oauthApp.integration.oneClick')}</span>
+            <span {...stylex.props(styles.subTitle)}>{t('oauthApp.integration.oneClick')}</span>
             <Text style={{ fontSize: 12 }} type={'secondary'}>
               {t('oauthApp.integration.oneClickDesc')}
             </Text>
@@ -98,7 +95,7 @@ const IntegrationCard: FC<IntegrationCardProps> = ({ applicationType, clientId, 
             {t('oauthApp.integration.copyPrompt')}
           </Button>
         </Flexbox>
-        <div className={styles.prompt}>{prompt}</div>
+        <div {...stylex.props(styles.prompt)}>{prompt}</div>
       </Flexbox>
     </SectionCard>
   );

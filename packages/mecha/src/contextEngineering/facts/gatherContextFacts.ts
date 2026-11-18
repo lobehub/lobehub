@@ -1,5 +1,7 @@
 import { extractTodosFromMessages, normalizeTodosState } from '@lobechat/agent-runtime';
+import { AgentAccountIdentifier } from '@lobechat/builtin-tool-agent-account';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
+import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import {
   CloudSandboxIdentifier,
@@ -23,9 +25,13 @@ import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import {
   type AgentBuilderContext,
   type AgentManagementContext,
+  collectDocumentReads,
+  type DocumentReferenceItem,
   type GroupAgentBuilderContext,
   type PlanTodoConfig,
+  resolveDocumentReferences,
   resolveTopicReferences,
+  type RevokedDocumentReads,
   type TopicReferenceItem,
   type WorkspaceContext,
 } from '@lobechat/context-engine';
@@ -120,6 +126,93 @@ const gatherTopicReferences = async (
 };
 
 /**
+ * Resolve `<refer_document>` tags against the executing agent's documents. A
+ * share visitor never reads the creator's documents through a typed tag.
+ */
+const gatherDocumentReferences = async (
+  request: ContextFactRequest,
+  providers: ContextFactProviders,
+): Promise<DocumentReferenceItem[] | undefined> => {
+  // Client-side preprocessing may already have injected the references.
+  if (contains(request.messages, ['document_reference_context'])) return undefined;
+  if (!contains(request.messages, ['refer_document', 'refer\\_document'])) return undefined;
+  const agentId = request.agentId;
+  const { findAgentDocument } = providers;
+  if (request.shareVisitor || !agentId || !findAgentDocument) return undefined;
+
+  return attempt('documentReferences', () =>
+    resolveDocumentReferences(
+      request.messages as Array<{ content: string | unknown; role?: string }>,
+      (documentId) => findAgentDocument(agentId, documentId),
+      // Without the documents tool the agent cannot read an earlier-turn
+      // reference on demand, so keep inlining those too.
+      { inlineEarlierTurns: !request.enabledToolIds.includes(AgentDocumentsIdentifier) },
+    ),
+  );
+};
+
+/**
+ * Documents that earlier turns read and that have since been deleted or
+ * disabled. Injection already follows the live bindings; this covers the
+ * read results persisted in the conversation. Checked against the agent whose
+ * documents the model reads (the edited agent in the agent builder), only when
+ * the history holds a document read, and never for a share visitor.
+ */
+const gatherRevokedDocumentReads = async (
+  request: ContextFactRequest,
+  providers: ContextFactProviders,
+  agentId: string | undefined,
+): Promise<RevokedDocumentReads[] | undefined> => {
+  const { findRevokedDocumentReads } = providers;
+  if (request.shareVisitor || !agentId || !findRevokedDocumentReads) return undefined;
+
+  // In a group topic, other members' reads are judged against their own
+  // bindings; everything else against the agent whose documents the model reads.
+  const idsByMember = new Map<string | undefined, Set<string>>();
+  for (const read of collectDocumentReads(request.messages)) {
+    const member =
+      read.agentId && read.agentId !== request.agentId && read.agentId !== agentId
+        ? read.agentId
+        : undefined;
+    const ids = idsByMember.get(member) ?? new Set<string>();
+    ids.add(read.documentId);
+    idsByMember.set(member, ids);
+  }
+  if (idsByMember.size === 0) return undefined;
+
+  const sets = await Promise.all(
+    [...idsByMember].map(async ([member, ids]): Promise<RevokedDocumentReads> => {
+      const sortedIds = [...ids].sort();
+      let found: Awaited<ReturnType<typeof findRevokedDocumentReads>>;
+      try {
+        found = await findRevokedDocumentReads(member ?? agentId, sortedIds);
+      } catch (error) {
+        log('revokedDocumentReads failed, withholding unverified reads: %O', error);
+      }
+      // Fail closed: without an answer, a deleted document's old body must not
+      // slip through, so every read is withheld until the model reads it again.
+      if (!found) {
+        return { ...(member && { agentId: member }), documentIds: [], unverifiedIds: sortedIds };
+      }
+      // Sorted so the filtered prefix stays stable whatever order the host returns.
+      return {
+        ...(member && { agentId: member }),
+        agentDocumentReadIds: [...(found.agentDocumentReadIds ?? [])].sort(),
+        documentIds: [...(found.documentIds ?? [])].sort(),
+      };
+    }),
+  );
+
+  const hasRevocations = sets.some(
+    (set) =>
+      set.documentIds.length > 0 ||
+      (set.agentDocumentReadIds?.length ?? 0) > 0 ||
+      (set.unverifiedIds?.length ?? 0) > 0,
+  );
+  return hasRevocations ? sets : undefined;
+};
+
+/**
  * The agent whose documents the model reads: the one being edited while the
  * agent builder is active, otherwise the executing agent. Never for a share
  * visitor — the share config has no setting that could grant file access.
@@ -183,7 +276,8 @@ const gatherPlanTodo = async (
   // document is a best-effort mirror the run keeps with `lobe-agent`.
   const messageTodos = extractTodosFromMessages(request.messages);
   const canReadPlan =
-    request.enabledToolIds.includes(LobeAgentIdentifier) &&
+    (request.enabledToolIds.includes(LobeAgentIdentifier) ||
+      request.discoverableTools?.some((tool) => tool.identifier === LobeAgentIdentifier)) &&
     !!request.topicId &&
     !!providers.getPlanDocument;
   const planDoc = canReadPlan
@@ -238,8 +332,13 @@ const gatherComposioServices = async (
   // Disabled services are dropped from both lists — neither "connected, use
   // directly" nor "available to connect" — the agent isn't meant to see them.
   const disabledIdSet = new Set(request.disabledPluginIds ?? []);
+  // A connector is opt-in per agent: a service that is connected but that this
+  // agent has not turned on cannot be reached, so it is not listed as usable.
+  const optedIn = request.optedInPluginIds && new Set(request.optedInPluginIds);
   const connected: ComposioServiceSummary[] = excludeDisabledComposioServices(
-    COMPOSIO_APP_TYPES.filter((tool) => connectedIds.has(tool.identifier)),
+    COMPOSIO_APP_TYPES.filter(
+      (tool) => connectedIds.has(tool.identifier) && (!optedIn || optedIn.has(tool.identifier)),
+    ),
     disabledIdSet,
   ).map((tool) => ({ identifier: tool.identifier, name: tool.label }));
   const available = resolveAvailableComposioServices(
@@ -470,13 +569,32 @@ export const gatherContextFacts = async (
       attempt('agentDocuments', () =>
         docsAgentId ? providers.listAgentDocuments?.(docsAgentId) : undefined,
       ),
+    () =>
+      attempt('agentDocumentChanges', () =>
+        docsAgentId ? providers.listAgentDocumentChanges?.(docsAgentId) : undefined,
+      ),
+    () =>
+      attempt('agentAccountContext', async () => {
+        const context = await providers.listAgentAccountContext?.(request.agentId);
+        // Whether this step can actually read or answer mail is decided by the
+        // final tool set (custom / goal / chat modes can exclude the account
+        // tool), so the identity block must not promise a tool that is absent.
+        return context
+          ? {
+              ...context,
+              toolAvailable: request.enabledToolIds.includes(AgentAccountIdentifier),
+            }
+          : context;
+      }),
     () => gatherAgentBuilderContext(request, providers),
     () => gatherAgentManagementContext(request, providers),
     () => gatherComposioServices(request, providers),
     () => gatherCredentials(request, providers),
+    () => gatherDocumentReferences(request, providers),
     () => gatherGroupAgentBuilderContext(request, providers),
     () => gatherOnboardingContext(request, providers),
     () => gatherPlanTodo(request, providers),
+    () => gatherRevokedDocumentReads(request, providers, docsAgentId),
     () =>
       attempt('sandboxFiles', () =>
         sandboxEnabled && request.topicId
@@ -498,13 +616,17 @@ export const gatherContextFacts = async (
 
   const [
     agentDocuments,
+    agentDocumentChanges,
+    agentAccountContext,
     agentBuilderContext,
     agentManagementContext,
     composioServicesList,
     credentials,
+    documentReferences,
     groupAgentBuilderContext,
     onboardingContext,
     planTodo,
+    revokedDocumentReads,
     sandboxFiles,
     sandboxPersistence,
     topic,
@@ -514,10 +636,14 @@ export const gatherContextFacts = async (
   ] = await tupleSettled(tasks);
 
   return {
+    agentDocumentChanges,
     agentDocuments: agentDocuments?.length ? agentDocuments : undefined,
+    revokedDocumentReads,
     step: {
+      agentAccountContext,
       agentBuilderContext,
       agentManagementContext,
+      documentReferences,
       groupAgentBuilderContext,
       onboardingContext,
       planTodo,

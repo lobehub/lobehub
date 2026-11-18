@@ -5,7 +5,30 @@ import type {
 } from '@/services/message';
 
 export const HETERO_MESSAGE_WRITE_BATCH_IDLE_MS = 5_000;
+/**
+ * Upper bound of ONE `batchMutate` request, not just the auto-flush trigger. The
+ * lambda router rejects a request over 200 operations as a whole (400), so a
+ * backlog sent in one piece lost every create in it.
+ */
 export const HETERO_MESSAGE_WRITE_BATCH_MAX_OPS = 50;
+/**
+ * Serialized-payload budget of one `batchMutate` request. Vercel rejects request
+ * bodies over 4.5 MB (413) and tRPC may batch other procedures into the same HTTP
+ * request, so stay well below it. A single larger operation is still sent alone.
+ */
+export const HETERO_MESSAGE_WRITE_BATCH_MAX_BYTES = 2 * 1024 * 1024;
+
+const textEncoder = new TextEncoder();
+
+/** Byte size of the fields `messageService.batchMutate` actually sends. */
+const estimateOperationBytes = (operation: QueuedMessageWriteOperation) =>
+  textEncoder.encode(
+    JSON.stringify(
+      operation.type === 'createMessage'
+        ? { message: operation.message, type: operation.type }
+        : { id: operation.id, type: operation.type, value: operation.value },
+    ),
+  ).length;
 
 type MessageUpdateOperation = Extract<MessageBatchOperation, { type: 'updateMessage' }>;
 export type ToolMessageUpdateOperation = Extract<
@@ -57,13 +80,19 @@ const mergeMessageUpdateValue = (
  */
 export const createMessageWriteBatcher = (deps: {
   batchMutate?: (operations: MessageBatchOperation[]) => Promise<any>;
+  /**
+   * Runs before each batch is sent. The executor uses it to retry creates that
+   * just failed, so the next batch's children find their FK parent instead of
+   * failing one after another until the run's terminal replay.
+   */
+  beforeBatch?: () => Promise<void>;
   createMessage: typeof messageService.createMessage;
   /** Ids of rows whose create the server acknowledged. */
   onCreated?: (ids: string[]) => void;
   updateMessage: typeof messageService.updateMessage;
   updateToolMessage: typeof messageService.updateToolMessage;
 }) => {
-  let operations: QueuedMessageWriteOperation[] = [];
+  const operations: QueuedMessageWriteOperation[] = [];
   let flushChain: Promise<void> = Promise.resolve();
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -137,13 +166,38 @@ export const createMessageWriteBatcher = (deps: {
     }
   };
 
+  /**
+   * Take the next request's worth of operations off the queue. While a request is
+   * in flight the queue keeps growing, so the backlog must be split here rather
+   * than relying on the max-ops auto-flush to keep it small.
+   */
+  const takeBatch = () => {
+    let bytes = 0;
+    let count = 0;
+    for (const operation of operations) {
+      if (count >= HETERO_MESSAGE_WRITE_BATCH_MAX_OPS) break;
+      const size = estimateOperationBytes(operation);
+      if (count > 0 && bytes + size > HETERO_MESSAGE_WRITE_BATCH_MAX_BYTES) break;
+      bytes += size;
+      count += 1;
+    }
+    return operations.splice(0, count);
+  };
+
+  const runBeforeBatch = async () => {
+    try {
+      await deps.beforeBatch?.();
+    } catch (err) {
+      console.error('[HeterogeneousAgent] beforeBatch hook failed:', err);
+    }
+  };
+
   const flush = async (_reason: string) => {
     clearIdleTimer();
     flushChain = flushChain.then(async () => {
       while (operations.length > 0) {
-        const batch = operations;
-        operations = [];
-        await runBatch(batch);
+        await runBeforeBatch();
+        await runBatch(takeBatch());
       }
     });
     await flushChain;

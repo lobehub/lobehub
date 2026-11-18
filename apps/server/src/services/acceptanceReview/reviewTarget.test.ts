@@ -1,6 +1,9 @@
 // @vitest-environment node
-import { siteReviewResource } from '@lobechat/const';
+import { randomUUID } from 'node:crypto';
+
+import { acceptanceReviewResource, siteReviewResource } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
+import { acceptances, verifyRuns } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -81,5 +84,67 @@ describe('describeReviewTarget for sites', () => {
     expect(
       await describeReviewTarget(db, null, siteReviewResource(siteId, 'https://fieldnotes.app')),
     ).toEqual({ allowed: false, kind: 'site', reason: 'noAccess' });
+  });
+});
+
+describe('describeReviewTarget for acceptances bound to a preview origin', () => {
+  let db: LobeChatDatabase;
+  let ownerId: string;
+  let acceptanceId: string;
+
+  beforeEach(async () => {
+    db = await getTestDB();
+    ownerId = await createTestUser(db);
+    const [row] = await db
+      .insert(acceptances)
+      .values({
+        metadata: { title: 'Pricing page' },
+        status: 'repairing',
+        subjectId: randomUUID(),
+        subjectType: 'standalone',
+        userId: ownerId,
+        visibility: 'private',
+      })
+      .returning();
+    acceptanceId = row.id;
+    await db.insert(verifyRuns).values([
+      {
+        acceptanceId,
+        metadata: { previewUrl: 'https://pr-12.preview.app/pricing' },
+        roundIndex: 1,
+        userId: ownerId,
+      },
+      { acceptanceId, metadata: {}, roundIndex: 2, userId: ownerId },
+    ]);
+  });
+
+  afterEach(async () => {
+    await cleanupTestUser(db, ownerId);
+  });
+
+  it('allows the origin of the most recent round that has a preview', async () => {
+    expect(
+      await describeReviewTarget(
+        db,
+        ownerId,
+        acceptanceReviewResource(acceptanceId, 'https://pr-12.preview.app'),
+      ),
+    ).toEqual({ allowed: true, kind: 'acceptance', title: 'Pricing page' });
+  });
+
+  it('refuses any other origin', async () => {
+    expect(
+      await describeReviewTarget(
+        db,
+        ownerId,
+        acceptanceReviewResource(acceptanceId, 'https://evil.example'),
+      ),
+    ).toEqual({ allowed: false, kind: 'acceptance', reason: 'wrongOrigin' });
+  });
+
+  it('keeps allowing the legacy resource that carries no origin', async () => {
+    expect(
+      await describeReviewTarget(db, ownerId, `urn:lobehub:acceptance:${acceptanceId}`),
+    ).toMatchObject({ allowed: true, kind: 'acceptance' });
   });
 });

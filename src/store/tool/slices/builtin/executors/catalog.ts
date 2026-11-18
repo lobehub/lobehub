@@ -19,9 +19,11 @@ import { videoGenerationExecutor } from '@lobechat/builtin-tool-video-generation
 import type { IBuiltinToolExecutor } from '../types';
 import {
   ampExecutor,
+  antigravityExecutor,
   claudeCodeExecutor,
   codeBuddyExecutor,
   codexExecutor,
+  copilotExecutor,
   cursorExecutor,
   devinExecutor,
   droidExecutor,
@@ -50,9 +52,11 @@ export const builtinToolExecutors = [
   // Hook-only executors for heterogeneous CLI agents —
   // observe their shell tool results via `onAfterCall` (never invoked).
   ampExecutor,
+  antigravityExecutor,
   claudeCodeExecutor,
   codeBuddyExecutor,
   codexExecutor,
+  copilotExecutor,
   cursorExecutor,
   droidExecutor,
   devinExecutor,

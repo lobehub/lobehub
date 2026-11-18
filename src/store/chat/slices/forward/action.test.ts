@@ -18,6 +18,7 @@ describe('ChatForwardAction', () => {
       async (id) => ({ id }) as never,
     );
     vi.spyOn(messageService, 'getMessages').mockResolvedValue([]);
+    vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -27,7 +28,10 @@ describe('ChatForwardAction', () => {
   it('does not start a target when the dispatcher already owns the source', async () => {
     vi.spyOn(topicService, 'cancelRateLimitContinuation').mockRejectedValue(new Error('claimed'));
     const sendMessage = vi.fn();
-    const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
+    const action = new ChatForwardActionImpl(
+      vi.fn() as never,
+      () => ({ sendMessage, topicDataMap: {} }) as never,
+    );
 
     await expect(
       action.forwardTopic({
@@ -60,6 +64,7 @@ describe('ChatForwardAction', () => {
           ({
             internal_dispatchTopic: vi.fn(),
             sendMessage,
+            topicDataMap: {},
           }) as never,
       );
 
@@ -81,7 +86,10 @@ describe('ChatForwardAction', () => {
     vi.mocked(messageService.getMessages).mockRejectedValue(new Error('history unavailable'));
     const cancel = vi.spyOn(topicService, 'cancelRateLimitContinuation');
     const sendMessage = vi.fn();
-    const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
+    const action = new ChatForwardActionImpl(
+      vi.fn() as never,
+      () => ({ sendMessage, topicDataMap: {} }) as never,
+    );
     const result = await action.forwardTopic({
       cancelSourceContinuation: true,
       header: 'Forwarded',
@@ -104,7 +112,10 @@ describe('ChatForwardAction', () => {
         return { createdTopicId: 'topic-a' };
       })
       .mockRejectedValueOnce(new Error('failed'));
-    const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
+    const action = new ChatForwardActionImpl(
+      vi.fn() as never,
+      () => ({ sendMessage, topicDataMap: {} }) as never,
+    );
 
     const result = await action.forwardMessages({
       header: 'Forwarded',
@@ -132,7 +143,10 @@ describe('ChatForwardAction', () => {
 
   it('treats a send without a created topic as a failure', async () => {
     const sendMessage = vi.fn().mockResolvedValue(undefined);
-    const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
+    const action = new ChatForwardActionImpl(
+      vi.fn() as never,
+      () => ({ sendMessage, topicDataMap: {} }) as never,
+    );
 
     const result = await action.forwardMessages({
       header: 'Forwarded',
@@ -148,7 +162,10 @@ describe('ChatForwardAction', () => {
   it('treats a missing target agent as a failure without sending', async () => {
     vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce(null);
     const sendMessage = vi.fn();
-    const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
+    const action = new ChatForwardActionImpl(
+      vi.fn() as never,
+      () => ({ sendMessage, topicDataMap: {} }) as never,
+    );
 
     const result = await action.forwardMessages({
       header: 'Forwarded',
@@ -178,7 +195,10 @@ describe('ChatForwardAction', () => {
       notify('new-topic');
       return { createdTopicId: 'new-topic' };
     });
-    const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
+    const action = new ChatForwardActionImpl(
+      vi.fn() as never,
+      () => ({ sendMessage, topicDataMap: {} }) as never,
+    );
 
     const result = await action.forwardTopic({
       header: 'Forwarded topic',
@@ -205,6 +225,34 @@ describe('ChatForwardAction', () => {
     expect(sendMessage.mock.calls[0][0].message).not.toContain('private tool output');
   });
 
+  it('hands the source topic to the target so it continues in the same directory', async () => {
+    const sourceTopic = {
+      id: 'source-topic',
+      metadata: { workingDirectory: '/repo/source' },
+      projectWorkingDirectoryId: 'dir-1',
+    };
+    vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue(sourceTopic as never);
+    const sendMessage = vi.fn().mockResolvedValue({ createdTopicId: 'new-topic' });
+    const action = new ChatForwardActionImpl(
+      vi.fn() as never,
+      () => ({ sendMessage, topicDataMap: {} }) as never,
+    );
+
+    await action.forwardTopic({
+      header: 'Forwarded topic',
+      roleLabel: (role) => role,
+      sourceAgentId: 'source-agent',
+      targets: [{ id: 'agent-a' }, { id: 'agent-b' }],
+      topicId: 'source-topic',
+    });
+
+    expect(topicService.getTopicDetail).toHaveBeenCalledTimes(1);
+    expect(sendMessage.mock.calls.map(([params]) => params.sourceTopic)).toEqual([
+      sourceTopic,
+      sourceTopic,
+    ]);
+  });
+
   it('keeps transcript context when the target agent cannot use the LobeHub CLI', async () => {
     vi.mocked(messageService.getMessages).mockResolvedValueOnce([
       message('user', 'question'),
@@ -214,7 +262,10 @@ describe('ChatForwardAction', () => {
       notify('new-topic');
       return { createdTopicId: 'new-topic' };
     });
-    const action = new ChatForwardActionImpl(vi.fn() as never, () => ({ sendMessage }) as never);
+    const action = new ChatForwardActionImpl(
+      vi.fn() as never,
+      () => ({ sendMessage, topicDataMap: {} }) as never,
+    );
 
     await action.forwardTopic({
       header: 'Forwarded topic',

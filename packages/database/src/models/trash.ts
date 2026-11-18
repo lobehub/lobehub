@@ -21,6 +21,7 @@ import {
   dashboards,
   messages,
   projects,
+  tasks,
   topics,
   trashItems,
   widgets,
@@ -64,6 +65,7 @@ const ROOT_TABLES: Record<TrashResourceType, { id: any; isDeleted: any; table: a
   },
   dashboard: { id: dashboards.id, isDeleted: dashboards.isDeleted, table: dashboards },
   message: { id: messages.id, isDeleted: messages.isDeleted, table: messages },
+  task: { id: tasks.id, isDeleted: tasks.isDeleted, table: tasks },
   topic: { id: topics.id, isDeleted: topics.isDeleted, table: topics },
   widget: { id: widgets.id, isDeleted: widgets.isDeleted, table: widgets },
 };
@@ -125,6 +127,11 @@ const livePrivateWhere = (): SQL =>
     and(
       eq(trashItems.resourceType, 'message'),
       sql`EXISTS (SELECT 1 FROM ${messages} WHERE ${messages.id} = ${trashItems.resourceId} AND (${privateAgent(messages.agentId)} OR ${privateGroup(messages.groupId)} OR ${privateTopic(messages.topicId)}))`,
+    ),
+    // A task is private on its own (`visibility`), or under a private project.
+    and(
+      eq(trashItems.resourceType, 'task'),
+      sql`EXISTS (SELECT 1 FROM ${tasks} WHERE ${tasks.id} = ${trashItems.resourceId} AND (${tasks.visibility} = 'private' OR ${privateProject(tasks.projectId)}))`,
     ),
     and(
       eq(trashItems.resourceType, 'widget'),
@@ -513,6 +520,25 @@ export class TrashModel {
         this.ownership(),
       ),
     });
+  };
+
+  /** The roots (not cascaded children) registered for these resources of one kind. */
+  findRootsByResources = async (
+    resourceType: TrashResourceType,
+    resourceIds: string[],
+  ): Promise<TrashItemRow[]> => {
+    if (resourceIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(trashItems)
+      .where(
+        and(
+          eq(trashItems.resourceType, resourceType),
+          inArray(trashItems.resourceId, resourceIds),
+          isNull(trashItems.rootId),
+          this.ownership(),
+        ),
+      );
   };
 
   /** Registry rows cascaded under a root (any type). */

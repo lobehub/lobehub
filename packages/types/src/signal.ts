@@ -40,6 +40,54 @@ export interface SignalMetadata {
   extra?: Record<string, unknown>;
 }
 
+/** One `signals` row; checked against the table in the schema package. */
+export interface SignalItem {
+  accessedAt: Date;
+  accountId: string | null;
+  agentId: string | null;
+  attempts: number;
+  createdAt: Date;
+  error: string | null;
+  externalId: string;
+  id: string;
+  metadata: SignalMetadata;
+  occurredAt: Date | null;
+  payload: Record<string, unknown>;
+  payloadPurgedAt: Date | null;
+  processedAt: Date | null;
+  scopeKey: string | null;
+  source: string;
+  status: SignalStatus;
+  type: string;
+  updatedAt: Date;
+  userId: string;
+  workspaceId: string | null;
+}
+
+/** What inserting a `signals` row takes; columns with a default are optional. */
+export interface SignalItemInsert {
+  accessedAt?: Date;
+  accountId?: string | null;
+  agentId?: string | null;
+  attempts?: number;
+  createdAt?: Date;
+  error?: string | null;
+  externalId: string;
+  id?: string;
+  metadata?: SignalMetadata;
+  occurredAt?: Date | null;
+  payload?: Record<string, unknown>;
+  payloadPurgedAt?: Date | null;
+  processedAt?: Date | null;
+  scopeKey?: string | null;
+  source: string;
+  status?: SignalStatus;
+  type: string;
+  updatedAt?: Date;
+  userId: string;
+  workspaceId?: string | null;
+}
+
 /** What a pipeline decided to do with one signal. */
 export const SIGNAL_DECISION_OUTCOMES = ['wake', 'skip', 'defer'] as const;
 export type SignalDecisionOutcome = (typeof SIGNAL_DECISION_OUTCOMES)[number];
@@ -138,7 +186,11 @@ export const BOT_WAKE_USER_LABELS_BY_OUTCOME: Record<
 };
 
 /** Which model scored a wake decision: is the message for the bot, or within its duties. */
-export type BotWakeJudgeKind = 'addressed' | 'duty';
+/**
+ * Which model scored a wake: the addressed classifier, the duty judge, or (Channel) the routing
+ * decision model choosing among members.
+ */
+export type BotWakeJudgeKind = 'addressed' | 'duty' | 'routing';
 
 /** The model score behind a wake decision, as the owner sees it next to the decision. */
 export interface BotWakeJudgeScore {

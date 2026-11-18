@@ -13,6 +13,24 @@ import {
 const stubDir = import.meta.dirname;
 
 describe('workbench stub surface', () => {
+  it.each(['trpcClient.ts', 'trpcClient.client.ts', '../../../share/app/stubs/trpcClient.ts'])(
+    'covers the device service imports in %s',
+    (stubFile) => {
+      const source = readFileSync(
+        path.resolve(stubDir, '../../../../src/services/device.ts'),
+        'utf8',
+      );
+      const stub = readFileSync(path.resolve(stubDir, stubFile), 'utf8');
+
+      expect(
+        reportStubSurfaceGaps(
+          [{ rel: 'src/services/device.ts', source }],
+          [{ source: stub, specifier: '@/libs/trpc/client' }],
+        ),
+      ).toEqual([]);
+    },
+  );
+
   it('treats reject() and createTRPCClient() as open members', () => {
     const surface = parseStubSurface(
       readFileSync(path.join(stubDir, 'trpcClient.client.ts'), 'utf8'),
@@ -20,6 +38,7 @@ describe('workbench stub surface', () => {
 
     expect([...surface.exports].sort()).toEqual([
       'asyncClient',
+      'createWorkspaceLambdaClient',
       'lambdaClient',
       'lambdaQuery',
       'toolsClient',
@@ -31,13 +50,13 @@ describe('workbench stub surface', () => {
       stubUsageGaps(
         surface,
         collectStubUsage(
-          `import { lambdaClient, createWorkspaceLambdaClient } from '@/libs/trpc/client';
+          `import { lambdaClient, unavailableWorkspaceClient } from '@/libs/trpc/client';
            void lambdaClient.verify.getBundle.query();
-           void createWorkspaceLambdaClient('ws');`,
+           void unavailableWorkspaceClient('ws');`,
           '@/libs/trpc/client',
         )!,
       ),
-    ).toEqual(['createWorkspaceLambdaClient']);
+    ).toEqual(['unavailableWorkspaceClient']);
   });
 
   it('reports a store method the simplified stub does not implement', () => {

@@ -236,3 +236,9 @@ export const isShareToolApiGranted = (
   if (!grant) return false;
   return grant === 'all' || grant.has(apiName);
 };
+
+/**
+ * Upper bound on `AgentShareConfig.deviceAllowUserIds`. Device access hands
+ * over the creator's machine, so it is meant for a handful of trusted people.
+ */
+export const AGENT_SHARE_DEVICE_ALLOW_USERS_LIMIT = 100;

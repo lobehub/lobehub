@@ -11,6 +11,7 @@ import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtim
 import {
   type ChatToolPayload,
   type LobeAgentConfig,
+  RequestTrigger,
   type WorkAccessScope,
   type WorkRegistrationIntent,
 } from '@lobechat/types';
@@ -266,8 +267,23 @@ export const buildServerVirtualSubAgentRunner = (
   // `callAgent` target only takes it as its `local` device, keeping its own
   // execution target.
   const parentDeviceId = resolveRunActiveDeviceId(state);
+  // A child forked inside an eval attempt stays inside that attempt's sandbox:
+  // same session clock, same tool forwarding and Memory scope, same step cap.
+  const parentEval =
+    state.origin?.trigger === RequestTrigger.Eval
+      ? {
+          ...(state.world?.eval && { context: state.world.eval }),
+          ...(state.maxSteps && { maxSteps: state.maxSteps }),
+          ...(state.plan?.eval && { runtime: state.plan.eval }),
+        }
+      : undefined;
+
+  const cancelVirtualSubAgent = ctx.cancelVirtualSubAgent;
 
   return {
+    ...(cancelVirtualSubAgent && {
+      cancel: ({ subAgentId }) => cancelVirtualSubAgent({ agentId, threadId: subAgentId, topicId }),
+    }),
     run: async ({
       agentId: targetAgentId,
       background,
@@ -338,6 +354,7 @@ export const buildServerVirtualSubAgentRunner = (
         background,
         chatConfig: subAgentChatConfig,
         deviceId: targetAgentId ? undefined : parentDeviceId,
+        ...(parentEval && { eval: parentEval }),
         groupId: state.origin?.groupId ?? undefined,
         instruction,
         localDeviceId: parentDeviceId,
@@ -352,7 +369,14 @@ export const buildServerVirtualSubAgentRunner = (
         title: description,
         topicId,
       })) as
-        { error?: string; operationId?: string; success?: boolean; threadId?: string } | undefined;
+        | {
+            error?: string;
+            operationId?: string;
+            steered?: boolean;
+            success?: boolean;
+            threadId?: string;
+          }
+        | undefined;
 
       // 3. If the child op never started, no completion bridge will fire — parking
       //    the parent on it would hang forever. Drop the placeholder and signal
@@ -385,6 +409,34 @@ export const buildServerVirtualSubAgentRunner = (
           started: false,
           subOperationId: result?.operationId,
           threadId: '',
+        };
+      }
+
+      // The instruction steered the still-running sub-agent: this call's row
+      // only holds the receipt. It must not read as a running background call
+      // (those count against the limit and wait for delivery) — the running
+      // call's own row reports the result.
+      if (result.steered) {
+        await ctx.messageModel
+          .updatePluginState(placeholder.id, {
+            background: false,
+            status: 'completed',
+            steered: true,
+            threadId: result.threadId,
+          })
+          .catch((error: unknown) =>
+            log(
+              'buildServerVirtualSubAgentRunner: failed to settle steer receipt %s: %O',
+              placeholder.id,
+              error,
+            ),
+          );
+        return {
+          started: true,
+          steered: true,
+          subOperationId: result.operationId,
+          threadId: result.threadId ?? '',
+          toolMessageId: placeholder.id,
         };
       }
 
@@ -526,6 +578,8 @@ export const buildServerAgentMemberRunner = (
             agentId,
             content: '',
             groupId,
+            // Lets the reader hide the anchor and the tool card show this member's progress.
+            metadata: { groupMemberAnchor: { agentId: resolvedMembers[i].agentId, index: i } },
             parentId: groupTool.id,
             plugin: { ...(chatToolPayload as any), id: memberToolCallId },
             pluginState: { status: 'pending' },
@@ -566,6 +620,19 @@ export const buildServerAgentMemberRunner = (
             });
             if (result?.started) {
               startedCount += 1;
+              // The tool card follows an isolated member's progress by polling
+              // its thread, which it can only find through the anchor until the
+              // member finishes. Best-effort: the run proceeds either way.
+              if (result.threadId) {
+                await ctx.messageModel
+                  .updatePluginState(anchorMessageId, { threadId: result.threadId })
+                  .catch((error) =>
+                    log(
+                      'buildServerAgentMemberRunner: failed to stamp thread on anchor: %O',
+                      error,
+                    ),
+                  );
+              }
               return;
             }
             if (result?.error) startErrors.push(result.error);

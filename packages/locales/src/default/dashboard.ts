@@ -139,6 +139,9 @@ export default {
   'version.status.archived': 'Archived',
   'version.status.draft': 'Draft',
   'version.status.published': 'Live',
+  'widget.fullscreen.enter': 'Full screen',
+  'widget.fullscreen.exit': 'Exit full screen',
+  'widget.html.blocked': 'This card tried to leave its sandbox, so it was stopped.',
   'widget.lastAttemptAt': 'Last attempt {{time}}',
   'widget.refresh.action': 'Refresh now',
   'widget.refresh.failed':

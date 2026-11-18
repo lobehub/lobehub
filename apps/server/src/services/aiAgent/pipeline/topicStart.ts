@@ -3,6 +3,7 @@ import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
 import { deriveAgentInterventionContinuationOperationId } from '@/business/server/agent-run/agentInterventionIdentity';
+import { releaseAgentRunSlot } from '@/business/server/agent-run/runConcurrency';
 import type { AgentOperationModel } from '@/database/models/agentOperation';
 import type { TopicModel } from '@/database/models/topic';
 import type { AgentRuntimeService } from '@/server/services/agentRuntime';
@@ -81,7 +82,7 @@ export const resolveReplacedOperationId = async (
  * - a parked run (`waiting_for_human` etc.) — the send may be its answer;
  * - a background producer's run (task, cron, bot, …), see
  *   `isComposerSupersedableTrigger` in `agentRuntime/foregroundOperation`.
- *   An Agent Signal run on the main spine (task-result wakeup) is retired
+ *   A task-result wakeup or an Agent Signal run on the main spine is retired
  *   like a foreground run: the client never tracks it, so it cannot queue;
  * - a device-hosted Claude Code / Codex run: cancelling it waits up to 10s
  *   for the device, far past the reservation's ~3s retry budget, so a
@@ -152,6 +153,9 @@ export const supersedeRunningForegroundOperation = async (
   if (!interrupted.success) {
     console.warn('[execAgent] supersede of %s was not confirmed', holderId, { topicId });
   }
+  // The interrupted run settles at its next step boundary; free its slot now
+  // so the send that replaces it is not refused for the run it just stopped.
+  await releaseAgentRunSlot(deps.userId, holderId);
   return { holderId, kind };
 };
 
@@ -298,6 +302,7 @@ export const runWithTopicStart = async (
     if (interruption.deviceCancellationConfirmed === false) {
       throw new Error('Replaced heterogeneous agent process did not confirm termination');
     }
+    await releaseAgentRunSlot(deps.userId, replacesOperationId);
   }
   const reserved = await acquireTopicStartReservation({
     allowSameReservationReentry: !params.approvalResolutionRequestId,

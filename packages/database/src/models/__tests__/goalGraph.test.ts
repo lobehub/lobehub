@@ -4,8 +4,18 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, goalNodes, goals, tasks, topics, users, workspaces } from '../../schemas';
+import {
+  acceptances,
+  agents,
+  goalNodes,
+  goals,
+  tasks,
+  topics,
+  users,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { AcceptanceModel } from '../acceptance';
 import { GoalModel } from '../goal';
 import { GoalGraphModel } from '../goalGraph';
 import { TaskModel } from '../task';
@@ -269,6 +279,129 @@ describe('GoalGraphModel', () => {
 
     expect(await graphModel.updateNodeStatus(goal.id, node!.id, 'resolved')).toBeUndefined();
     expect(await graphModel.getNodeStatus(goal.id, node!.id)).toBe('retired');
+  });
+
+  it('closes the acceptance a retired node was still waiting on', async () => {
+    // A retired node's delivery is discarded; left `delivered`, its acceptance
+    // kept asking the owner to sign off on work the Goal had already dropped.
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'Retire sign-off' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Replaced' });
+    const verifying = await graphModel.createNode(goal.id, { kind: 'task', title: 'Judging' });
+    const taskModel = new TaskModel(serverDB, userId);
+    const task = await taskModel.create({ instruction: 'Delivered work' });
+    const judged = await taskModel.create({ instruction: 'Still judged' });
+    await graphModel.bindTask(goal.id, node!.id, task.id);
+    await graphModel.bindTask(goal.id, verifying!.id, judged.id);
+    const [delivered, inFlight] = await serverDB
+      .insert(acceptances)
+      .values([
+        { status: 'delivered', subjectId: task.id, subjectType: 'task', userId },
+        { status: 'verifying', subjectId: judged.id, subjectType: 'task', userId },
+      ])
+      .returning();
+
+    await graphModel.updateNodeStatus(goal.id, node!.id, 'retired', 'replaced by a new plan');
+    await graphModel.updateNodeStatus(goal.id, verifying!.id, 'retired');
+
+    const rows = await serverDB.select().from(acceptances);
+    const statusOf = (id: string) => rows.find((row) => row.id === id);
+    expect(statusOf(delivered.id)).toMatchObject({ status: 'closed' });
+    expect(statusOf(delivered.id)?.completedAt).toBeInstanceOf(Date);
+    // A round still running is left to land; only a settled wait is closed.
+    expect(statusOf(inFlight.id)).toMatchObject({ status: 'verifying' });
+  });
+
+  it.each(['pending', 'planned', 'rejected'] as const)(
+    'closes a %s acceptance when its node is retired before delivering',
+    async (status) => {
+      // Dispatch files the acceptance as `pending` before any round exists; a
+      // node retired then has no round left to settle, so retirement is the
+      // only chance to take it off the active list.
+      const goal = await goalModel.create({ subjectType: 'standalone', title: 'Early retire' });
+      const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Dropped early' });
+      const task = await new TaskModel(serverDB, userId).create({ instruction: 'Not yet run' });
+      await graphModel.bindTask(goal.id, node!.id, task.id);
+      const [acceptance] = await serverDB
+        .insert(acceptances)
+        .values({ status, subjectId: task.id, subjectType: 'task', userId })
+        .returning();
+
+      await graphModel.updateNodeStatus(goal.id, node!.id, 'retired');
+
+      const [row] = await serverDB
+        .select()
+        .from(acceptances)
+        .where(eq(acceptances.id, acceptance.id));
+      expect(row).toMatchObject({ status: 'closed' });
+      expect(row.completedAt).toBeInstanceOf(Date);
+    },
+  );
+
+  it('settles a task acceptance closed once its goal node is retired', async () => {
+    // A round still verifying at retirement lands afterwards: the settle closes
+    // it under the row lock retirement also takes, while a live step still
+    // moves to `delivered` and a user's decision is never overwritten.
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'Late settle' });
+    const retired = await graphModel.createNode(goal.id, { kind: 'task', title: 'Dropped' });
+    const live = await graphModel.createNode(goal.id, { kind: 'task', title: 'Live' });
+    const taskModel = new TaskModel(serverDB, userId);
+    const dropped = await taskModel.create({ instruction: 'Dropped work' });
+    const running = await taskModel.create({ instruction: 'Live work' });
+    const decided = await taskModel.create({ instruction: 'Accepted work' });
+    await graphModel.bindTask(goal.id, retired!.id, dropped.id);
+    await graphModel.bindTask(goal.id, live!.id, running.id);
+    const [late, onLive, accepted] = await serverDB
+      .insert(acceptances)
+      .values([
+        { status: 'verifying', subjectId: dropped.id, subjectType: 'task', userId },
+        { status: 'verifying', subjectId: running.id, subjectType: 'task', userId },
+        { status: 'accepted', subjectId: decided.id, subjectType: 'task', userId },
+      ])
+      .returning();
+    await graphModel.updateNodeStatus(goal.id, retired!.id, 'retired');
+
+    const acceptanceModel = new AcceptanceModel(serverDB, userId);
+    expect(await acceptanceModel.settleTaskPolicyStatus(late.id, 'delivered')).toBe('closed');
+    expect(await acceptanceModel.settleTaskPolicyStatus(onLive.id, 'delivered')).toBe('delivered');
+    expect(await acceptanceModel.settleTaskPolicyStatus(accepted.id, 'delivered')).toBe('accepted');
+
+    const rows = await serverDB.select().from(acceptances);
+    const rowOf = (id: string) => rows.find((row) => row.id === id);
+    expect(rowOf(late.id)).toMatchObject({ status: 'closed' });
+    expect(rowOf(late.id)?.completedAt).toBeInstanceOf(Date);
+    expect(rowOf(onLive.id)).toMatchObject({ completedAt: null, status: 'delivered' });
+    expect(rowOf(accepted.id)).toMatchObject({ status: 'accepted' });
+  });
+
+  it('skips the write when the settled status already matches, and settles nothing outside its scope', async () => {
+    // `verifying` is not closed by retirement, so the settle just writes the
+    // status it was handed. When the row already holds it there is no update
+    // and no `completedAt`; a row outside the caller's scope is not seen at all.
+    const task = await new TaskModel(serverDB, userId).create({ instruction: 'Settle no-op' });
+    const [waiting] = await serverDB
+      .insert(acceptances)
+      .values({ status: 'verifying', subjectId: task.id, subjectType: 'task', userId })
+      .returning();
+
+    const acceptanceModel = new AcceptanceModel(serverDB, userId);
+    expect(await acceptanceModel.settleTaskPolicyStatus(waiting.id, 'verifying')).toBe('verifying');
+
+    const [row] = await serverDB.select().from(acceptances).where(eq(acceptances.id, waiting.id));
+    expect(row).toMatchObject({ completedAt: null, status: 'verifying' });
+
+    // Unknown id and another user's row both resolve to undefined.
+    expect(
+      await acceptanceModel.settleTaskPolicyStatus(
+        '00000000-0000-4000-8000-000000000000',
+        'delivered',
+      ),
+    ).toBeUndefined();
+    expect(
+      await new AcceptanceModel(serverDB, otherUserId).settleTaskPolicyStatus(
+        waiting.id,
+        'delivered',
+      ),
+    ).toBeUndefined();
   });
 
   it('treats a same-status write as a no-op instead of churning the graph', async () => {

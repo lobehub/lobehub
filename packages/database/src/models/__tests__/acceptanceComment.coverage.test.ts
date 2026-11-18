@@ -116,4 +116,36 @@ describe('AcceptanceCommentModel coverage', () => {
       expect(await rowById(root.id)).toBeUndefined();
     });
   });
+  describe('resolveRoots', () => {
+    it('returns an empty list without a query when no roots are given', async () => {
+      expect(await model.resolveRoots(acceptanceId, [], reviewer)).toEqual([]);
+    });
+
+    it('resolves only the given unresolved roots of this acceptance', async () => {
+      const { comment: first } = await comment(owner, 'resolve-root-1');
+      const { comment: second } = await comment(owner, 'resolve-root-2');
+      const { comment: reply } = await comment(reviewer, 'resolve-reply', first.id);
+
+      const resolved = await model.resolveRoots(
+        acceptanceId,
+        [first.id, second.id, reply.id],
+        reviewer,
+      );
+
+      expect(resolved.map((row) => row.id).sort()).toEqual([first.id, second.id].sort());
+      expect(await rowById(first.id)).toMatchObject({ resolvedByUserId: reviewer });
+      expect((await rowById(first.id))?.resolvedAt).toBeInstanceOf(Date);
+      expect(await rowById(second.id)).toMatchObject({ resolvedByUserId: reviewer });
+      // Replies are not resolvable through the root path.
+      expect((await rowById(reply.id))?.resolvedAt).toBeNull();
+    });
+
+    it('leaves roots that are already resolved untouched', async () => {
+      const { comment: root } = await comment(owner, 'already-resolved');
+
+      expect((await model.resolveRoots(acceptanceId, [root.id], owner)).length).toBe(1);
+      expect(await model.resolveRoots(acceptanceId, [root.id], reviewer)).toEqual([]);
+      expect(await rowById(root.id)).toMatchObject({ resolvedByUserId: owner });
+    });
+  });
 });

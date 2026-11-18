@@ -9,6 +9,7 @@ import type OpenAI from 'openai';
 import type { ComputeChatCostOptions } from '../core/usageConverters/utils/computeChatCost';
 import type { ModelPricingContext } from './pricing';
 import type { ModelRuntimeDiagnostics } from './providerDiagnostics';
+import type { RouteAttemptIdentity } from './routeAttempt';
 import type { MessageToolCall, MessageToolCallChunk } from './toolsCalling';
 
 export type LLMRoleType = 'user' | 'system' | 'assistant' | 'function' | 'tool';
@@ -195,7 +196,7 @@ export interface ChatStreamPayload {
   /**
    * Thinking level for Gemini models (e.g., gemini-3.0-pro)
    */
-  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
+  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
   tool_choice?: string;
   tools?: ChatCompletionTool[];
   /**
@@ -290,13 +291,8 @@ export interface OnFinishData {
   providerReportedCost?: number;
   reasoning?: ModelReasoning;
   /** Stable identities and terminal outcome for the provider attempt producing this result. */
-  routeAttempt?: {
-    attemptId: string;
-    /** Router channel that served the attempt. */
-    channelId?: string;
+  routeAttempt?: RouteAttemptIdentity & {
     outcome?: 'completed' | 'empty' | 'interrupted' | 'cancelled' | 'failed';
-    requestId: string;
-    routerId?: string;
   };
   speed?: ModelPerformance;
   text: string;

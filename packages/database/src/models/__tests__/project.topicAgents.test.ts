@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { ProjectRepository } from '../../repositories/project';
 import { agents, projectAgents, projects, topics, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
@@ -14,8 +15,8 @@ const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'project-topic-agents-user';
 let projectIdentifierSequence = 0;
 
-const createProject = (projectModel: ProjectModel, input: Omit<CreateProjectInput, 'identifier'>) =>
-  projectModel.create({
+const createProject = (repo: ProjectRepository, input: Omit<CreateProjectInput, 'identifier'>) =>
+  repo.create({
     ...input,
     identifier: `T${String(++projectIdentifierSequence).padStart(5, '0')}`,
   });
@@ -25,6 +26,7 @@ const memberIds = async (model: ProjectModel, projectId: string) =>
 
 describe('project members from project topics', () => {
   const model = new ProjectModel(serverDB, userId);
+  const repo = new ProjectRepository(serverDB, userId);
   const topicModel = new TopicModel(serverDB, userId);
 
   beforeEach(async () => {
@@ -37,7 +39,7 @@ describe('project members from project topics', () => {
   });
 
   it('adds the agent of a topic created in the project', async () => {
-    const project = await createProject(model, { name: 'Build' });
+    const project = await createProject(repo, { name: 'Build' });
     const agent = await new AgentModel(serverDB, userId).create({ title: 'Codex' });
 
     await topicModel.create({ agentId: agent.id, projectId: project.id, title: 'Plan' });
@@ -46,7 +48,7 @@ describe('project members from project topics', () => {
   });
 
   it('adds the agent when an existing topic moves into the project', async () => {
-    const project = await createProject(model, { name: 'Build' });
+    const project = await createProject(repo, { name: 'Build' });
     const agent = await new AgentModel(serverDB, userId).create({ title: 'Claude Code' });
     const topic = await topicModel.create({ agentId: agent.id, title: 'Loose' });
     expect(await memberIds(model, project.id)).not.toContain(agent.id);
@@ -57,7 +59,7 @@ describe('project members from project topics', () => {
   });
 
   it('keeps an existing member binding untouched', async () => {
-    const project = await createProject(model, { name: 'Build' });
+    const project = await createProject(repo, { name: 'Build' });
     const agent = await new AgentModel(serverDB, userId).create({ title: 'Reviewer' });
     await model.addAgent(project.id, { agentId: agent.id, enabled: false, role: 'reviewer' });
 
@@ -71,7 +73,7 @@ describe('project members from project topics', () => {
   });
 
   it('never adds the project coordinator as a regular member', async () => {
-    const project = await createProject(model, { name: 'Build' });
+    const project = await createProject(repo, { name: 'Build' });
     const before = await serverDB
       .select()
       .from(projectAgents)
@@ -90,7 +92,7 @@ describe('project members from project topics', () => {
 
   /** @example Review: a project whose main agent was cleared is led by LobeAI. */
   it('never adds LobeAI as a member when it leads a project with a cleared main agent', async () => {
-    const project = await createProject(model, { name: 'Cleared' });
+    const project = await createProject(repo, { name: 'Cleared' });
     await serverDB
       .update(projects)
       .set({ coordinatorAgentId: null })
@@ -115,7 +117,8 @@ describe('project members from project topics', () => {
       slug: workspaceId,
     });
     const creator = new ProjectModel(serverDB, userId, workspaceId);
-    const sharedProject = await createProject(creator, { name: 'Shared' });
+    const creatorRepo = new ProjectRepository(serverDB, userId, workspaceId);
+    const sharedProject = await createProject(creatorRepo, { name: 'Shared' });
     const [privateAgent] = await serverDB
       .insert(agents)
       .values({ title: 'Private agent', userId, visibility: 'private', workspaceId })
@@ -132,7 +135,7 @@ describe('project members from project topics', () => {
 
   // TODO(2026-12-31): remove with `ProjectModel.joinTopicAgents`.
   it('backfills agents of topics filed before members were added on write', async () => {
-    const project = await createProject(model, { name: 'Legacy' });
+    const project = await createProject(repo, { name: 'Legacy' });
     const agent = await new AgentModel(serverDB, userId).create({ title: 'Architect' });
     await serverDB
       .insert(topics)
@@ -146,7 +149,7 @@ describe('project members from project topics', () => {
 
   // TODO(2026-12-31): remove with `ProjectModel.joinTopicAgents`.
   it('leaves members alone when a read-only viewer opens the project', async () => {
-    const project = await createProject(model, { name: 'Legacy' });
+    const project = await createProject(repo, { name: 'Legacy' });
     const agent = await new AgentModel(serverDB, userId).create({ title: 'Architect' });
     await serverDB
       .insert(topics)

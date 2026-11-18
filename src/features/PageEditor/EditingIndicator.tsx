@@ -45,7 +45,8 @@ const EditingIndicator = memo(() => {
     documentId ? editorSelectors.isAgentEditing(documentId)(s) : false,
   );
 
-  if (isAgentEditing) {
+  // In a live room the agent shows up in the presence stack instead.
+  if (isAgentEditing && !collabStatus) {
     return (
       <Flexbox horizontal align={'center'} gap={4} style={{ color: cssVar.colorTextTertiary }}>
         <Spin size="small" />
@@ -83,7 +84,7 @@ const EditingIndicator = memo(() => {
       </Flexbox>
     );
   }
-  if (collabStatus || !isWorkspacePage) return null;
+  if (!isWorkspacePage || (collabStatus && !isLockedByOther)) return null;
 
   const locked = isLockedByOther || isLockedBySelf || saveBlockedByLock;
 

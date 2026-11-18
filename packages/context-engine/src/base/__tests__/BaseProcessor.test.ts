@@ -73,18 +73,6 @@ describe('BaseProcessor', () => {
     },
   });
 
-  describe('constructor', () => {
-    it('should initialize with options', () => {
-      const processor = new TestProcessor({ debug: true });
-      expect(processor.name).toBe('TestProcessor');
-    });
-
-    it('should initialize without options', () => {
-      const processor = new TestProcessor();
-      expect(processor.name).toBe('TestProcessor');
-    });
-  });
-
   describe('process', () => {
     it('should process valid context', async () => {
       const processor = new TestProcessor();

@@ -14,7 +14,7 @@ export interface OidcInteractionDetailsResponse {
     kind: 'acceptance' | 'site';
     origin?: string;
     projectName?: string;
-    reason?: 'noAccess' | 'unregistered';
+    reason?: 'noAccess' | 'unregistered' | 'wrongOrigin';
     role?: ProjectMemberRole | null;
     siteName?: string;
     title?: string;

@@ -105,6 +105,8 @@ const GoalSignOffReport = ({
   useFetchGoalGraph(goalId);
   const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
   const graph = useMemo(() => (snapshot ? buildGoalGraphView(snapshot) : undefined), [snapshot]);
+  // An archived goal stays put, so the server refuses a change request on it.
+  const archived = !!snapshot?.goal.archivedAt;
 
   const { accept, pending, requestChanges } = useGoalSignOff({
     acceptanceId,
@@ -158,8 +160,9 @@ const GoalSignOffReport = ({
           {t('goalProcess.signOff.description')}
         </Text>
         <Button
-          disabled={!!pending}
+          disabled={!!pending || archived}
           loading={pending === 'changes'}
+          title={archived ? t('goalProcess.signOff.archivedBlocked') : undefined}
           onClick={() => openRequestChangesModal({ onConfirm: requestChanges })}
         >
           {t('goalProcess.signOff.requestChanges')}

@@ -1,3 +1,4 @@
+import { deriveWorktreePath } from '@lobechat/types';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +9,8 @@ const commitMock = vi.hoisted(() => vi.fn());
 const confirmModalMock = vi.hoisted(() => vi.fn());
 const messageErrorMock = vi.hoisted(() => vi.fn());
 const messageSuccessMock = vi.hoisted(() => vi.fn());
+const addGitWorktreeMock = vi.hoisted(() => vi.fn());
+const openCreateWorktreeModalMock = vi.hoisted(() => vi.fn());
 const removeGitWorktreeMock = vi.hoisted(() => vi.fn());
 const toastLoadingCloseMock = vi.hoisted(() => vi.fn());
 const toastLoadingMock = vi.hoisted(() =>
@@ -20,8 +23,17 @@ vi.mock('../useCommitWorkingDirectory', () => ({
 
 vi.mock('@/services/git', () => ({
   gitService: {
+    addGitWorktree: addGitWorktreeMock,
     removeGitWorktree: removeGitWorktreeMock,
   },
+}));
+
+vi.mock('../CreateWorktreeModal', () => ({
+  openCreateWorktreeModal: openCreateWorktreeModalMock,
+}));
+
+vi.mock('../useWorktreeHomeDir', () => ({
+  useWorktreeHomeDir: () => async () => '/Users/me',
 }));
 
 vi.mock('@lobehub/ui', async (importOriginal) => {
@@ -99,6 +111,20 @@ const triggerIconName = () =>
 /** Text of the worktree row owning `el` — rows render as `<button>` (mocked DropdownMenuItem). */
 const rowTextOf = (el: HTMLElement) => el.closest('button')?.textContent ?? '';
 
+const canaryWorktreeEntry = () => ({
+  branch: 'canary',
+  current: false,
+  path: '/repo-canary',
+  status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+});
+
+const currentWorktreeEntry = () => ({
+  branch: 'feat/current',
+  current: true,
+  path: '/repo',
+  status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+});
+
 describe('WorktreeSwitcher', () => {
   it('keeps the dropdown trigger anchored to a stable DOM wrapper', () => {
     render(
@@ -108,20 +134,7 @@ describe('WorktreeSwitcher', () => {
         currentBranch="feat/current"
         path="/repo"
         sourcePath="/repo"
-        worktrees={[
-          {
-            branch: 'feat/current',
-            current: true,
-            path: '/repo',
-            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
-          },
-          {
-            branch: 'canary',
-            current: false,
-            path: '/repo-canary',
-            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
-          },
-        ]}
+        worktrees={[currentWorktreeEntry(), canaryWorktreeEntry()]}
       />,
     );
 
@@ -139,14 +152,7 @@ describe('WorktreeSwitcher', () => {
         currentBranch="feat/current"
         path="/repo"
         sourcePath="/repo"
-        worktrees={[
-          {
-            branch: 'feat/current',
-            current: true,
-            path: '/repo',
-            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
-          },
-        ]}
+        worktrees={[currentWorktreeEntry()]}
       />,
     );
 
@@ -227,12 +233,7 @@ describe('WorktreeSwitcher', () => {
             path: '/repo',
             status: { added: 2, clean: false, deleted: 1, modified: 3, total: 6 },
           },
-          {
-            branch: 'canary',
-            current: false,
-            path: '/repo-canary',
-            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
-          },
+          canaryWorktreeEntry(),
         ]}
       />,
     );
@@ -320,12 +321,7 @@ describe('WorktreeSwitcher', () => {
         path="/repo"
         sourcePath="/repo"
         worktrees={[
-          {
-            branch: 'feat/current',
-            current: true,
-            path: '/repo',
-            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
-          },
+          currentWorktreeEntry(),
           {
             current: false,
             detached: true,
@@ -333,12 +329,7 @@ describe('WorktreeSwitcher', () => {
             path: '/repo-detached',
             status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
           },
-          {
-            branch: 'canary',
-            current: false,
-            path: '/repo-canary',
-            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
-          },
+          canaryWorktreeEntry(),
         ]}
         onWorktreesChange={onWorktreesChange}
       />,
@@ -391,20 +382,7 @@ describe('WorktreeSwitcher', () => {
         deviceId="device-1"
         path="/repo"
         sourcePath="/repo"
-        worktrees={[
-          {
-            branch: 'feat/current',
-            current: true,
-            path: '/repo',
-            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
-          },
-          {
-            branch: 'canary',
-            current: false,
-            path: '/repo-canary',
-            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
-          },
-        ]}
+        worktrees={[currentWorktreeEntry(), canaryWorktreeEntry()]}
         onWorktreesChange={onWorktreesChange}
       />,
     );
@@ -478,12 +456,7 @@ describe('WorktreeSwitcher', () => {
             path: '/repo',
             status: { added: 1, clean: false, deleted: 0, modified: 0, total: 1 },
           },
-          {
-            branch: 'canary',
-            current: false,
-            path: '/repo-canary',
-            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
-          },
+          canaryWorktreeEntry(),
         ]}
       />,
     );
@@ -525,5 +498,53 @@ describe('WorktreeSwitcher', () => {
     fireEvent.click(screen.getByTitle('/repo'));
 
     expect(commitMock).toHaveBeenCalledWith({ path: '/repo', repoType: 'git' });
+  });
+
+  // From inside a linked worktree `path` is that worktree, but the folder is
+  // keyed on the repo's main checkout, which the server receives as `sourcePath`.
+  it('creates new worktrees under the central root of the repo owner home', async () => {
+    addGitWorktreeMock.mockResolvedValue({ success: false, error: 'boom' });
+    render(
+      <WorktreeSwitcher
+        isGithub
+        agentId="agent-1"
+        currentBranch="feat/current"
+        deviceId="device-1"
+        path="/Users/me/.lobehub/worktrees/lobehub-0000beef/feat-current"
+        sourcePath="/code/lobehub"
+        worktrees={[
+          {
+            branch: 'main',
+            current: false,
+            path: '/code/lobehub',
+            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+          },
+          {
+            branch: 'feat/current',
+            current: true,
+            path: '/Users/me/.lobehub/worktrees/lobehub-0000beef/feat-current',
+            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('workingDirectory.createWorktreeAction'));
+
+    await waitFor(() => expect(openCreateWorktreeModalMock).toHaveBeenCalledTimes(1));
+    const options = openCreateWorktreeModalMock.mock.calls[0][0];
+    const preview = options.resolvePath('feat/x');
+    expect(preview).toBe(deriveWorktreePath('/code/lobehub', 'feat/x', { homeDir: '/Users/me' }));
+
+    // A failed create is reported back to the modal instead of switching.
+    await expect(options.onSubmit('feat/x')).resolves.toBe('boom');
+    expect(addGitWorktreeMock).toHaveBeenCalledWith({
+      branch: 'feat/x',
+      deviceId: 'device-1',
+      path: '/Users/me/.lobehub/worktrees/lobehub-0000beef/feat-current',
+      sourcePath: '/code/lobehub',
+      worktreePath: preview,
+    });
+    expect(commitMock).not.toHaveBeenCalled();
   });
 });

@@ -4,13 +4,18 @@ import {
   type UpdaterState,
   useWatchBroadcast,
 } from '@lobechat/electron-client-ipc';
-import { Block, Button, createStaticStyles, Flexbox, Tag, Tooltip } from '@lobehub/ui';
+import { Block, Button, Flexbox, Tag, toast, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
 import { CHANGELOG_URL, DOWNLOAD_URL, MANUAL_UPGRADE_URL, OFFICIAL_SITE } from '@/const/url';
 import { CURRENT_VERSION } from '@/const/version';
+import { applyCoreUpdate } from '@/features/Electron/updater/applyCoreUpdate';
+import { formatCoreVersion } from '@/features/Electron/updater/coreVersion';
+import { useStagedCoreUpdate } from '@/features/Electron/updater/useStagedCoreUpdate';
 import { useNewVersion } from '@/features/User/UserPanel/useNewVersion';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
 import { rendererOtaService } from '@/services/electron/rendererOta';
@@ -47,11 +52,7 @@ const OtaVersionTag = memo(() => {
 
 OtaVersionTag.displayName = 'OtaVersionTag';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  logo: css`
-    border-radius: calc(${cssVar.borderRadiusLG} * 2);
-  `,
-}));
+const styles = stylex.create({ logo: { borderRadius: `calc(${cssVar.borderRadiusLG} * 2)` } });
 
 const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
   const hasNewVersion = useNewVersion();
@@ -62,7 +63,7 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
       s.useCheckServerVersion,
       s.useCheckLatestVersion,
     ]);
-  const { t } = useTranslation(['common', 'setting']);
+  const { t } = useTranslation(['common', 'setting', 'electron']);
 
   useCheckServerVersion();
 
@@ -83,6 +84,8 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
 
   const [updaterState, setUpdaterState] = useState<UpdaterState>({ stage: 'idle' });
   const [buildChannel, setBuildChannel] = useState<string | null>(null);
+  const stagedCoreUpdate = useStagedCoreUpdate(isDesktop);
+  const [isApplyingCoreUpdate, setIsApplyingCoreUpdate] = useState(false);
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -97,6 +100,17 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
   useWatchBroadcast('updaterStateChanged', (state: UpdaterState) => {
     setUpdaterState(state);
   });
+
+  useWatchBroadcast('coreUpdateDeferred', () => setIsApplyingCoreUpdate(false));
+
+  const applyStagedCoreUpdate = async () => {
+    setIsApplyingCoreUpdate(true);
+    // On success the app relaunches or the window reloads, so keep the loading state.
+    const applied = await applyCoreUpdate(() =>
+      toast.error(t('updater.rendererUpdateError', { ns: 'electron' })),
+    );
+    if (!applied) setIsApplyingCoreUpdate(false);
+  };
 
   const devDockGestureEnabled = import.meta.env.PROD && canAccessDevDock;
 
@@ -131,6 +145,30 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
     }
 
     const { stage, progress } = updaterState;
+
+    // The shell updater only knows full app releases: once it settles on
+    // "up to date" (or fails, or cannot self-update), a downloaded core OTA
+    // update is still pending and must not be hidden behind "Already Up to Date".
+    // An in-flight or downloaded app release still takes precedence.
+    if (
+      stagedCoreUpdate &&
+      stage !== 'checking' &&
+      stage !== 'downloading' &&
+      stage !== 'downloaded'
+    ) {
+      return (
+        <Button
+          block={mobile}
+          loading={isApplyingCoreUpdate}
+          type="primary"
+          onClick={() => void applyStagedCoreUpdate()}
+        >
+          {stagedCoreUpdate.applyMode === 'relaunch'
+            ? t('restartToUpdate')
+            : t('updater.upgradeNow', { ns: 'electron' })}
+        </Button>
+      );
+    }
 
     switch (stage) {
       case 'checking': {
@@ -196,7 +234,7 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
           <Block
             clickable
             align={'center'}
-            className={styles.logo}
+            className={stylex.props(styles.logo).className}
             height={64}
             justify={'center'}
             width={64}
@@ -229,6 +267,13 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
             {hasNewVersion && (
               <Tag color={'info'}>
                 {t('upgradeVersion.newVersion', { version: `v${latestVersion}` })}
+              </Tag>
+            )}
+            {stagedCoreUpdate && (
+              <Tag color={'info'}>
+                {t('upgradeVersion.newVersion', {
+                  version: formatCoreVersion(stagedCoreUpdate.version),
+                })}
               </Tag>
             )}
           </Flexbox>

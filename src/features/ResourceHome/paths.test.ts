@@ -82,6 +82,8 @@ describe('resolveDocsSection', () => {
     ['/resource/library', 'library'],
     ['/resource/library/kb-1/folder', 'library'],
     ['/resource/works', 'works'],
+    ['/resource/sandbox-storage', 'sandboxStorage'],
+    ['/team/resource/sandbox-storage', 'sandboxStorage'],
   ])('maps %s to %s', (pathname, section) => {
     expect(resolveDocsSection(pathname)).toBe(section);
   });

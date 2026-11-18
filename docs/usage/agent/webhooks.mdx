@@ -1,0 +1,91 @@
+---
+title: Webhooks
+description: Give an agent a URL that any system can call. Calls wake the agent with what was sent, in a new topic or in the topic of their thread.
+tags:
+  - LobeHub
+  - Webhooks
+  - Automations
+  - Agent
+---
+
+# Webhooks
+
+A webhook gives an agent a URL. When another system sends a request to it, such as a CI failure, a monitoring alert, a form submission or a script, the agent runs with what was sent. There is no signing step and no required format: give the other system the URL and its key, and you are done.
+
+## Create a webhook
+
+1. Open the agent, then **Agent Profile → Webhook**.
+2. Click **Create webhook**. Every field is optional:
+   - **Name**: how the webhook appears in its calls and in the conversation.
+   - **What should the agent do?**: a task sent with every call, for example "Summarize the failure and open an issue if it is new". The agent treats the request itself as data, never as instructions.
+   - **Topic**: **New topic** starts a topic for each run; calls that arrive while others are waiting are handled together in that one run. **One shared topic** keeps every call in one topic, so the agent sees the earlier ones. With one shared topic you can pick one of your existing topics with this agent to continue, or leave it to the webhook's own topic.
+   - **Auto-approve tool calls**: see [Approvals](#approvals).
+3. Copy the URL and the key from the confirmation and give both to the system that should call the agent.
+
+The key is shown only this once: LobeHub stores it encrypted and cannot show it again. The URL never changes and can be copied from the webhook at any time. Anyone with the key can wake the agent, so keep it private. If you lose it or it leaks, use **Generate new key**: the old key stops working at once, and the URL stays the same.
+
+## Call it
+
+The simplest call:
+
+```bash
+curl -X POST 'https://your-lobehub/api/webhooks/inbound/<id>' \
+  -H 'Authorization: Bearer <key>' \
+  -d 'Disk almost full on web-1'
+```
+
+- **Any body**: JSON, a form or plain text, up to 256 KB. Query parameters are passed to the agent too.
+- **Key**: always send it as `Authorization: Bearer <key>`. The URL holds no key.
+- **Threads**: add `?thread=<key>` (or the `X-Thread-Key` header). Calls with the same key continue the same topic, which is useful for one ticket or one pull request.
+- **Retries**: send an `Idempotency-Key` header. A retry with the same key is acknowledged without running the agent again.
+
+A successful call returns `202 {"id": "...", "status": "accepted"}` right away; the agent runs in the background. Other answers:
+
+| Status | Meaning                                                                 |
+| ------ | ----------------------------------------------------------------------- |
+| `401`  | The key is missing or wrong, or was replaced by a new one.              |
+| `409`  | The webhook is paused.                                                  |
+| `410`  | The webhook was deleted.                                                |
+| `413`  | The body is larger than 256 KB.                                         |
+| `415`  | File uploads (`multipart/form-data`) are not supported.                 |
+| `429`  | Too many calls this minute in the workspace; retry after `Retry-After`. |
+
+## Follow what happened
+
+Topics started by a webhook stay out of the main topic list. A running one shows in your Inbox, and a finished one is marked unread. In the topic manager, filter by **Webhook** to see all of them.
+
+On the webhook, **Recent calls** lists each call: when it arrived, whether the agent ran, what was sent, and the topic it ran in. **Send test** makes a sample call through the same path a real caller uses.
+
+Each run uses credits. Calls waiting together are handled in one run, up to 20 at a time (calls of different threads run separately); whatever is left runs right after. Limits:
+
+- **Calls**: 120 a minute for each member of the workspace (one, in a personal space), across all its webhooks and event subscriptions. Calls beyond that get `429` and are not recorded.
+- **Runs**: a webhook runs the agent at most 30 times in 10 minutes; calls beyond that are recorded and skipped.
+- **Webhooks**: each member can have up to 50 webhooks and event subscriptions in a workspace (or in a personal space), and a workspace up to 50 for each member.
+
+## Approvals
+
+By default, a webhook run follows your tool approval settings, exactly like a message you send: a tool that needs approval waits in the topic until you answer.
+
+Turn on **Auto-approve tool calls** to let a webhook's runs use tools without waiting. Only do this for a webhook whose key you trust: anyone holding it can then make the agent act. Tools marked to always ask for confirmation still wait.
+
+## Pause or delete
+
+Use the switch on a webhook to pause it: calls are refused with `409` until you resume it. **Delete** removes it, its URL and its key for good. **Settings → Webhooks** lists every agent's webhooks and manages them the same way; new ones are created from the agent's page.
+
+A webhook's name is for people and can be renamed at any time. The agent knows it by its **identifier**, made from the name when the webhook is created and never changed after (shown on the webhook, for example `ci-alerts`), so renaming it does not change what the agent's instructions refer to.
+
+## Post results to a Channel
+
+A webhook can post each run's answer to a Channel, or to one thread in it, as the agent's message, instead of leaving it in a topic you have to open. The run still works in its own topic; only its final answer reaches the Channel. If there is nothing worth saying, the agent posts nothing.
+
+Set this up from the [`lh` CLI](#manage-from-the-cli-or-in-chat) (`--channel <channel id>`, plus `--thread <thread id>` for a thread) or by asking the agent in that Channel or thread. Both you and the agent must be members of the Channel. Nobody can approve a tool call in a Channel, so these runs never wait for approval, and posting to a Channel requires **Auto-approve tool calls**; tools marked to always ask for confirmation are skipped.
+
+On the web, such a webhook shows where it posts and can be deleted, but is changed only from the CLI or in chat. If a post is refused, for example because the agent left the Channel, the webhook shows why.
+
+Connector event subscriptions (Automations) can post to Channels too: ask the agent to subscribe from a message in a Channel or thread, and each event's result is posted back there (in a thread, you can ask for the Channel's main timeline instead).
+
+## Manage from the CLI or in chat
+
+Everything the webhook page does is also available from the `lh` CLI: `lh webhook list`, `view`, `create`, `edit`, `pause`, `resume`, `rotate-key`, `test`, `calls` and `delete`. Connector event subscriptions are automations, not webhooks, and have their own commands: `lh automation list`, `view`, `rename`, `check` and `delete`. `create` and `rotate-key` print the key once, so a script can wire the webhook into another system.
+
+In a conversation, the agent can list, create, change, test and delete its own webhooks; its event subscriptions are managed with its connector events tools. Changes follow your approval settings. The agent never sees a key: a webhook it creates shows a **Generate key** button in the conversation, which shows the key to you once.

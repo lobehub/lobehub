@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, createStaticStyles, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Button, Flexbox, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,21 +11,16 @@ import { type OAuthAppItem } from '@/types/oauthApp';
 import ClientIdDisplay from '../ClientIdDisplay';
 import SectionCard from './SectionCard';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  label: css`
-    flex: none;
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  row: css`
-    display: flex;
-    gap: 16px;
-    align-items: center;
-    justify-content: space-between;
-
-    min-width: 0;
-  `,
-}));
+const styles = stylex.create({
+  label: { flex: 'none', fontSize: '12px', color: cssVar.colorTextSecondary },
+  row: {
+    display: 'flex',
+    gap: '16px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minWidth: '0',
+  },
+});
 
 interface CredentialsCardProps {
   canEdit: boolean;
@@ -77,19 +74,19 @@ const CredentialsCard: FC<CredentialsCardProps> = ({
   return (
     <SectionCard title={t('oauthApp.detail.credentials')}>
       <Flexbox gap={16}>
-        <div className={styles.row}>
-          <span className={styles.label}>{t('oauthApp.detail.clientId')}</span>
+        <div {...stylex.props(styles.row)}>
+          <span {...stylex.props(styles.label)}>{t('oauthApp.detail.clientId')}</span>
           <ClientIdDisplay clientId={detail.id} />
         </div>
 
-        <div className={styles.row}>
-          <span className={styles.label}>{t('oauthApp.detail.type')}</span>
+        <div {...stylex.props(styles.row)}>
+          <span {...stylex.props(styles.label)}>{t('oauthApp.detail.type')}</span>
           <Tag>{t(isWebApp ? 'oauthApp.type.webBadge' : 'oauthApp.type.badge')}</Tag>
         </div>
 
         {isWebApp && (
-          <div className={styles.row}>
-            <span className={styles.label}>{t('oauthApp.detail.clientSecret')}</span>
+          <div {...stylex.props(styles.row)}>
+            <span {...stylex.props(styles.label)}>{t('oauthApp.detail.clientSecret')}</span>
             {renderSecretAction()}
           </div>
         )}

@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { heteroAgentSupportsImageInput } from './imageInput';
 
 describe('heteroAgentSupportsImageInput', () => {
-  it.each(['claude-code', 'codex', 'grok-build', 'opencode'])('accepts images for %s', (type) => {
-    expect(heteroAgentSupportsImageInput(type)).toBe(true);
-  });
+  it.each(['claude-code', 'codex', 'copilot', 'grok-build', 'opencode'])(
+    'accepts images for %s',
+    (type) => {
+      expect(heteroAgentSupportsImageInput(type)).toBe(true);
+    },
+  );
 
   it.each(['cursor', 'droid', 'devin', 'trae', 'deepseek-harness', 'openclaw', 'hermes'])(
     'rejects images for text-only %s',

@@ -33,6 +33,8 @@ vi.mock('@/server/services/redis', () => ({
   redisService: { steerQueue: { boundOperations, drain, restore, settle } },
 }));
 vi.mock('./liveRuns', () => ({ findOwnLiveRuns, isRunAlive }));
+const { readFollowUpMode } = vi.hoisted(() => ({ readFollowUpMode: vi.fn() }));
+vi.mock('./followUpMode', () => ({ readFollowUpMode }));
 const { findMessageById } = vi.hoisted(() => ({ findMessageById: vi.fn() }));
 vi.mock('@/database/models/message', () => ({
   MessageModel: class {
@@ -104,6 +106,21 @@ describe('mergeQueuedFollowUps', () => {
     ).toEqual({ editorData: doc('only') });
   });
 
+  it('names the MCP App view only when every merged follow-up came from it', () => {
+    const fromView = (id: string, createdAt: number, identifier: string) =>
+      followUp(id, createdAt, { userMessage: { metadata: { mcpAppSource: { identifier } } } });
+
+    expect(
+      mergeQueuedFollowUps([fromView('a', 1, 'weather'), fromView('b', 2, 'weather')]).userMessage,
+    ).toEqual({ metadata: { mcpAppSource: { identifier: 'weather' } } });
+    expect(
+      mergeQueuedFollowUps([fromView('a', 1, 'weather'), followUp('b', 2, {})]).userMessage,
+    ).toBeUndefined();
+    expect(
+      mergeQueuedFollowUps([fromView('a', 1, 'weather'), fromView('b', 2, 'maps')]).userMessage,
+    ).toBeUndefined();
+  });
+
   it('runs with the newest settings and drops per-send client ids once merged', () => {
     const merged = mergeQueuedFollowUps([
       followUp('a', 1, { clientIds: { userMessageId: 'u-a' } as any, deviceId: 'old' }),
@@ -162,6 +179,24 @@ describe('startQueuedFollowUp', () => {
     assertCanUseAgentRunConversation.mockResolvedValue(undefined);
     startComposerRun.mockResolvedValue({ operationId: 'op-2' });
     findMessageById.mockResolvedValue(undefined);
+    readFollowUpMode.mockResolvedValue('legacy');
+  });
+
+  it('starts only the oldest follow-up in Queue mode; the rest wait for that turn to end', async () => {
+    readFollowUpMode.mockResolvedValue('queue');
+    drain.mockResolvedValue([followUp('b', 2, {}), followUp('a', 1, {})]);
+
+    await expect(startQueuedFollowUp(ctx, finished({ topicId: 'tpc-1' }))).resolves.toEqual({
+      operationId: 'op-2',
+    });
+
+    expect(startComposerRun.mock.calls[0][1].prompt).toBe('a');
+    // `b` goes back to the head of the queue, unbound, for the run just started.
+    expect(settle).toHaveBeenCalledWith(
+      expect.objectContaining({ topicId: 'tpc-1' }),
+      expect.any(String),
+      ['b'],
+    );
   });
 
   it('starts the drained follow-ups as their own turn on the same surface', async () => {

@@ -9,7 +9,8 @@ import { isAbortError } from '@/server/services/agentRuntime/abort';
 
 import type { ExecRunContext, InternalExecAgentParams } from '../types';
 import type { ApprovalClaimState } from './approvalResume';
-import { resolveOperationInitSlots } from './operationInitSlots';
+import type { OperationInitRequest } from './operationInit';
+import { buildPendingInitSlots, resolveOperationInitSlots } from './operationInitSlots';
 import type { OperationPrepResult } from './operationPrep';
 import { traceStartStage } from './sendTracing';
 import type { ToolDiscoveryResult } from './toolDiscovery';
@@ -26,6 +27,16 @@ export interface StartOperationDeps {
   workspaceId?: string;
 }
 
+/** What the init produced, or the request the step-0 worker will run it from. */
+export type StartOperationInit =
+  | {
+      discovery: ToolDiscoveryResult;
+      /** Final runtime context — base prep context with 16b/16c overrides applied. */
+      initialContext: OperationPrepResult['initialContext'];
+      prep: OperationPrepResult;
+    }
+  | { pendingRequest: OperationInitRequest };
+
 export interface StartOperationInput {
   /** See {@link InternalExecAgentParams.acceptsFileWorks}. */
   acceptsFileWorks?: boolean;
@@ -34,6 +45,8 @@ export interface StartOperationInput {
   approvalClaim: ApprovalClaimState;
   approvalSourceOperationId?: string;
   approvalSourceToolMessageIds: string[];
+  /** Library skills the agent set to `auto`, kept on the world slot for the skill pool. */
+  autoSkillIds?: string[];
   autoStart: boolean;
   botContext?: InternalExecAgentParams['botContext'];
   botPlatformContext?: InternalExecAgentParams['botPlatformContext'];
@@ -43,24 +56,29 @@ export interface StartOperationInput {
   /** Tri-state disabled plugin identifiers, kept on the world slot for the context rules. */
   disabledPluginIds?: string[];
   discordContext?: any;
-  discovery: ToolDiscoveryResult;
   enableExpertise: boolean;
   evalContext?: InternalExecAgentParams['evalContext'];
   evalRuntime?: InternalExecAgentParams['evalRuntime'];
   hooks?: InternalExecAgentParams['hooks'];
   includeFinalState?: boolean;
-  /** Final runtime context — base prep context with 16b/16c overrides applied. */
-  initialContext: OperationPrepResult['initialContext'];
+  init: StartOperationInit;
   initialLlmCalls?: number;
   initialStepCount?: number;
   /** Relay executor the calling client declared; lands on `state.host.llmExecutor`. */
   llmExecutor?: InternalExecAgentParams['llmExecutor'];
+  /** See InternalExecAgentParams.markTopicRunning. */
+  markTopicRunning?: boolean;
   maxSteps?: number;
   onOperationCreated?: InternalExecAgentParams['onOperationCreated'];
+  /**
+   * Called once the first step is queued. A later startup failure (a marker
+   * write) still returns `success: false` while the run executes, so ownership
+   * that follows the run (its concurrency slot) must transfer here.
+   */
+  onScheduled?: () => void;
   operationId: string;
   operationTaskId?: string;
   parentOperationId?: string;
-  prep: OperationPrepResult;
   providedApprovalResolutionRequestId?: string;
   queueRetries?: number;
   queueRetryDelay?: string;
@@ -111,25 +129,24 @@ export const startOperation = async (
     approvalClaim,
     approvalSourceOperationId,
     approvalSourceToolMessageIds,
+    autoSkillIds,
     autoStart,
     botContext,
     botPlatformContext,
     clientIp,
     disabledPluginIds,
     discordContext,
-    discovery,
     enableExpertise,
     evalContext,
     evalRuntime,
     hooks,
-    initialContext,
+    init,
     initialLlmCalls,
     initialStepCount,
     maxSteps,
     operationId,
     operationTaskId,
     parentOperationId,
-    prep,
     providedApprovalResolutionRequestId,
     queueRetries,
     queueRetryDelay,
@@ -142,6 +159,28 @@ export const startOperation = async (
     userInterventionConfig,
     userTimezone,
   } = input;
+  const ownsRootTopic =
+    !appContext?.isolationThread && !appContext?.threadId && !topicStartOwnerOperationId;
+  const markTopicRunning = input.markTopicRunning === true && autoStart && ownsRootTopic;
+  const onOperationCreated = markTopicRunning
+    ? async (createdOperationId: string) => {
+        const updated = await deps.topicModel.updateMetadata(
+          topicId,
+          {
+            runningOperation: {
+              assistantMessageId,
+              heteroType: null,
+              operationId: createdOperationId,
+              scope: appContext?.scope ?? undefined,
+              startedAt: new Date().toISOString(),
+            },
+          },
+          { status: 'running' },
+        );
+        if (!updated.length) throw new Error('Topic no longer available for this operation');
+        await input.onOperationCreated?.(createdOperationId);
+      }
+    : input.onOperationCreated;
   // A builder topic continued from another surface (scope `main`, an approval
   // resume) arrives without the group it edits; the group the topic was opened
   // on stands in, so the run still knows its target.
@@ -149,14 +188,8 @@ export const startOperation = async (
     (appContext?.scope === 'group_agent_builder' ? appContext.editingGroupId : undefined) ||
     topicEditingGroupId;
 
-  log(
-    'execAgent: creating operation %s — agentDocuments=%d, knowledgeBases=%s, tools=%d, skills=%d',
-    operationId,
-    discovery.hasAgentDocuments ? 'yes' : 0,
-    discovery.hasEnabledKnowledgeBases,
-    discovery.tools?.length ?? 0,
-    prep.operationSkillSet?.skills?.length ?? 0,
-  );
+  const pendingInitRequest = 'pendingRequest' in init ? init.pendingRequest : undefined;
+  log('execAgent: creating operation %s (deferred init: %s)', operationId, !!pendingInitRequest);
 
   // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
   // If createOperation fails, we still have valid messages that need error info
@@ -193,13 +226,17 @@ export const startOperation = async (
     const inheritedEditingGroupId = approvalSourceOperationId
       ? await deps.agentRuntimeService.getOperationEditingGroupId(approvalSourceOperationId)
       : undefined;
-    const { modelCapabilities, ...initSlots } = await resolveOperationInitSlots({
-      discovery,
-      initialContext,
-      prep,
-    });
+    const { modelCapabilities, ...initSlots } =
+      'pendingRequest' in init
+        ? buildPendingInitSlots({
+            assistantMessageId,
+            operationId,
+            parentMessageId: userMessageId ?? parentMessageId ?? '',
+          })
+        : await resolveOperationInitSlots(init);
     const result = await deps.agentRuntimeService.createOperation({
       ...initSlots,
+      pendingInitRequest,
       acceptsFileWorks: fileWorksAccepted,
       acceptsMemberRuntimeEnd: memberRuntimeEndAccepted,
       clientProtocol: input.clientProtocol,
@@ -214,6 +251,9 @@ export const startOperation = async (
             // actual chokepoint) via `isShareBlockedDataToolCall` — see
             // `shareGate/dispatch.ts`.
             allowReadMemory: shareGate.shareConfig.allowReadMemory,
+            // Re-applied at dispatch by the device-builtin and device-only MCP
+            // gates, so they decide exactly as the assembled tool set did.
+            canUseDevice: shareGate.canUseDevice,
             // Mirrors `shareConfig.toolGrants` so tool runtimes resolved
             // outside `toolManifestMap` (e.g. `activateSkill`, which queries
             // builtin/DB skills by name) can enforce the same allowlist.
@@ -246,6 +286,7 @@ export const startOperation = async (
             visitorUserId: shareGate.visitorUserId,
           }
         : undefined,
+      autoSkillIds,
       disabledPluginIds,
       userTimezone,
       appContext: {
@@ -308,7 +349,7 @@ export const startOperation = async (
         trigger,
       },
       autoStart,
-      onOperationCreated: input.onOperationCreated,
+      onOperationCreated,
       botContext,
       botPlatformContext,
       deviceAccessPolicy: { canUseDevice, reason: deviceAccessReason },
@@ -349,6 +390,7 @@ export const startOperation = async (
       workspaceId: deps.workspaceId,
     });
     approvalClaim.continuationStarted = true;
+    if (result.autoStarted) input.onScheduled?.();
 
     // The approval continuation is a fresh operation. Legacy direct callers
     // retire the old parked runtime here, only after createOperation has
@@ -374,7 +416,7 @@ export const startOperation = async (
     // `appContext.subAgentProgress`.
     // `orchestrationRole` is public rendering metadata. Only the internally
     // propagated parent operation id proves child ownership of this topic.
-    if (!appContext?.isolationThread && !appContext?.threadId && !topicStartOwnerOperationId) {
+    if (ownsRootTopic && !markTopicRunning) {
       await deps.topicModel.updateMetadata(topicId, {
         runningOperation: {
           assistantMessageId,
@@ -387,6 +429,12 @@ export const startOperation = async (
           threadId: appContext?.threadId ?? undefined,
         },
       });
+    }
+
+    // An explicit auto-start request can still return an unstarted operation
+    // (no queue implementation); it must not leave an unattended topic spinning.
+    if (markTopicRunning && !result.autoStarted) {
+      await deps.topicModel.settleRunningOperation(topicId, operationId, 'active');
     }
 
     // Generate a short-lived JWT for Gateway WebSocket authentication.
@@ -423,6 +471,15 @@ export const startOperation = async (
       userMessageId: userMessageId ?? parentMessageId ?? '',
     };
   } catch (error) {
+    if (markTopicRunning) {
+      // Compare-and-settle preserves a newer run and never drops a marker
+      // separately from its state, including aborts and errors after preparation.
+      try {
+        await deps.topicModel.settleRunningOperation(topicId, operationId, 'active');
+      } catch (cleanupError) {
+        console.error('[startOperation] Failed to settle an opted-in startup', cleanupError);
+      }
+    }
     if (topicStartOwnerOperationId) {
       await deps.topicModel.removeRunningOperationChild(topicId, operationId).catch(() => false);
     }

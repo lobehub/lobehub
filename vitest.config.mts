@@ -281,6 +281,8 @@ export default defineConfig({
         ],
       },
     },
+    // Migrates PGlite once per run so each DB test file restores a snapshot.
+    globalSetup: join(__dirname, './packages/database/tests/pgliteSnapshot.globalSetup.ts'),
     setupFiles: join(__dirname, './tests/setup.ts'),
   },
 });

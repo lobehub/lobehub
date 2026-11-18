@@ -19,6 +19,36 @@ export const addComment = async (
   return comment;
 };
 
+/** Rows per insert: well under Postgres' bind-parameter limit. */
+const COMMENT_INSERT_CHUNK = 500;
+
+/**
+ * Add many comments to one task: its visibility is read once and the rows go
+ * in as batched inserts, so a long imported history is a few round trips.
+ */
+export const addComments = async (
+  ctx: TaskModelContext,
+  taskId: string,
+  rows: Omit<NewTaskComment, 'id' | 'taskId'>[],
+): Promise<TaskCommentItem[]> => {
+  if (rows.length === 0) return [];
+  const visibility = await getTaskVisibility(ctx, taskId);
+  const added: TaskCommentItem[] = [];
+  for (let start = 0; start < rows.length; start += COMMENT_INSERT_CHUNK) {
+    added.push(
+      ...(await ctx.db
+        .insert(taskComments)
+        .values(
+          rows
+            .slice(start, start + COMMENT_INSERT_CHUNK)
+            .map((row) => ({ ...row, taskId, visibility, workspaceId: ctx.workspaceId ?? null })),
+        )
+        .returning()),
+    );
+  }
+  return added;
+};
+
 export const findCommentById = async (
   ctx: TaskModelContext,
   id: string,

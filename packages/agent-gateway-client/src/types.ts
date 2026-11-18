@@ -39,6 +39,12 @@ export type AgentStreamEventType =
   | 'tool_end'
   | 'tool_execute'
   /**
+   * Snapshot of one background task a heterogeneous agent's tool started
+   * (Claude Code `run_in_background` Bash, Monitor). Persisted on that tool
+   * message's `pluginState.backgroundTask`.
+   */
+  | 'background_task'
+  /**
    * Server → executor client: run one LLM attempt for a model provider only
    * the user's device can reach, and upload its protocol chunks back over
    * HTTP (`/api/agent/llm-relay/:callId/chunks`). See {@link LlmExecuteData}.
@@ -180,6 +186,8 @@ export interface ToolStateChunkData {
  */
 export interface StreamStartAssistantMessage {
   agentId?: string | null;
+  /** Server creation time (epoch ms). Absent from older servers. */
+  createdAt?: number;
   groupId?: string | null;
   id: string;
   model?: string | null;
@@ -190,9 +198,30 @@ export interface StreamStartAssistantMessage {
   topicId?: string | null;
 }
 
+/**
+ * A follow-up the server joined into the running turn: the user message this
+ * step's assistant row hangs off. It is created mid-run, after the
+ * `step_start` snapshot, so without it the client has no copy until the step
+ * ends and the queued message vanishes from both the tray and the chat.
+ */
+export interface StreamStartParentMessage {
+  /** Agent the row was persisted under (the executing agent). Absent from older servers. */
+  agentId?: string | null;
+  content: string;
+  /** Server creation time (epoch ms). Absent from older servers. */
+  createdAt?: number;
+  id: string;
+  imageList?: UIChatMessage['imageList'];
+  metadata?: Record<string, unknown> | null;
+  parentId?: string | null;
+  role: 'user';
+}
+
 export interface StreamStartData {
   assistantMessage: StreamStartAssistantMessage;
   model?: string;
+  /** Sent only when the parent is a steer user message. */
+  parentMessage?: StreamStartParentMessage;
   provider?: string;
 }
 
@@ -219,6 +248,12 @@ export interface StepCompleteData {
   phase: string;
   reason?: string;
   reasonDetail?: string;
+  /**
+   * On `phase: 'user_message'`: the steer user message a heterogeneous run
+   * just read from its live session. Shown at once, ahead of the reply it
+   * opens. Absent from older servers and for replays that delivered nothing.
+   */
+  steerMessage?: StreamStartParentMessage;
 }
 
 /**
@@ -262,7 +297,7 @@ export type AgentInterventionInteractionKind = 'permission' | 'plan' | 'question
 
 /** Producer that owns the blocked interaction. */
 export type AgentInterventionProvider =
-  'claude-code' | 'cursor' | 'devin' | 'droid' | 'opencode' | 'qoder';
+  'claude-code' | 'codex' | 'copilot' | 'cursor' | 'devin' | 'droid' | 'opencode' | 'qoder';
 
 /** Whitelisted option surface that may be persisted for cold-start review. */
 export interface AgentInterventionRenderOption {

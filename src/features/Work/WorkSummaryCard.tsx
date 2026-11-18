@@ -3,7 +3,7 @@
 import type { WorkSummaryItem } from '@lobechat/types';
 import { formatUsageValue } from '@lobechat/utils';
 import { Center, createStaticStyles, cx, Flexbox, Icon as LobeIcon, Text } from '@lobehub/ui';
-import { CircleDollarSignIcon, CoinsIcon } from 'lucide-react';
+import { CircleDollarSignIcon, CoinsIcon, GitBranchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,7 +12,8 @@ import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
 import CanvasWorkCard from './CanvasWorkCard';
-import { getWorkTypeDescriptor, isSafeExternalUrl } from './descriptors';
+import { getWorkTypeDescriptor, type WorkBranch, type WorkIcon } from './descriptors';
+import { openExternalWork } from './openExternalWork';
 import { useResourceDeletedPrompt } from './useResourceDeletedPrompt';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -34,6 +35,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorFillQuaternary};
     }
   `,
+  branch: css`
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
   cost: css`
     flex-shrink: 0;
     font-family: ${cssVar.fontFamilyCode};
@@ -41,12 +48,28 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   description: css`
+    flex: 1 1 0;
     min-width: 0;
+    font-size: 12px;
     color: ${cssVar.colorTextTertiary};
   `,
-  identifier: css`
+  dot: css`
     flex-shrink: 0;
+    font-size: 12px;
+    color: ${cssVar.colorTextQuaternary};
+  `,
+  identifier: css`
+    /* The short resource key keeps its width; the branch / description truncates first. */
+    flex: 0 0 auto;
+
+    max-width: 60%;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
     color: ${cssVar.colorTextTertiary};
+  `,
+  identifierIcon: css`
+    flex-shrink: 0;
   `,
   icon: css`
     flex-shrink: 0;
@@ -58,6 +81,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextSecondary};
 
     background: ${cssVar.colorFillTertiary};
+  `,
+  inlineBranch: css`
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 11px;
+    color: ${cssVar.colorTextTertiary};
   `,
   inline: css`
     overflow: hidden;
@@ -103,8 +132,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 11px;
     color: ${cssVar.colorTextTertiary};
   `,
-  inlineMeta: css`
+  meta: css`
     min-width: 0;
+  `,
+  /** Monospace text inside an identifier / branch group, truncating within it. */
+  metaText: css`
+    min-width: 0;
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: inherit;
+    color: inherit;
   `,
   inlineIcon: css`
     flex-shrink: 0;
@@ -121,6 +157,79 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 500;
   `,
 }));
+
+interface WorkMetaLineProps {
+  branch: WorkBranch | null;
+  description: string | null;
+  /** `null` when the title already fell back to it. */
+  identifier: string | null;
+  /** Brand mark before the identifier (GitHub), see `getIdentifierIcon`. */
+  identifierIcon: WorkIcon | null;
+  variant: 'card' | 'inline';
+}
+
+/**
+ * The second line of both variants: the resource key, then the PR's head
+ * branch, or the description when no branch is known. Keeping the key here
+ * leaves the first line to the title, so a long `owner/repo#n` can't squeeze it.
+ */
+const WorkMetaLine = ({
+  branch,
+  description,
+  identifier,
+  identifierIcon: IdentifierIcon,
+  variant,
+}: WorkMetaLineProps) => {
+  const inline = variant === 'inline';
+  const detail = branch ? branch.head : description;
+  if (!identifier && !detail) return null;
+
+  return (
+    <Flexbox horizontal align={'center'} className={styles.meta} gap={4}>
+      {identifier && (
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={inline ? styles.inlineIdentifier : styles.identifier}
+          gap={3}
+          title={identifier}
+        >
+          {IdentifierIcon && (
+            <IdentifierIcon className={styles.identifierIcon} size={inline ? 11 : 12} />
+          )}
+          <Text ellipsis className={styles.metaText}>
+            {identifier}
+          </Text>
+        </Flexbox>
+      )}
+      {identifier && detail && <span className={inline ? styles.inlineDot : styles.dot}>·</span>}
+      {branch ? (
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={inline ? styles.inlineBranch : styles.branch}
+          gap={3}
+          title={branch.base ? `${branch.head} → ${branch.base}` : branch.head}
+        >
+          <LobeIcon icon={GitBranchIcon} size={inline ? 11 : 12} />
+          <Text ellipsis className={styles.metaText}>
+            {branch.head}
+          </Text>
+        </Flexbox>
+      ) : (
+        description && (
+          <Text
+            ellipsis
+            className={inline ? styles.inlineDescription : styles.description}
+            title={description}
+          >
+            {description}
+          </Text>
+        )
+      )}
+    </Flexbox>
+  );
+};
 
 interface WorkSummaryCardProps {
   className?: string;
@@ -146,6 +255,7 @@ interface WorkSummaryCardProps {
 const WorkSummaryCard = memo<WorkSummaryCardProps>(
   ({ className, item, onOpen, variant = 'card' }) => {
     const { t } = useTranslation('chat');
+    const { t: tTopic } = useTranslation('topic');
     const openCanvas = useChatStore((s) => s.openCanvas);
     const openDocument = useChatStore((s) => s.openDocument);
     const openFilePreview = useChatStore((s) => s.openFilePreview);
@@ -166,6 +276,8 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
 
     const descriptor = getWorkTypeDescriptor(item);
     const Icon = descriptor.getIcon(item);
+    const stateLabelKey = descriptor.getStateLabelKey?.(item);
+    const stateLabel = stateLabelKey ? tTopic(stateLabelKey) : undefined;
     const title =
       descriptor.getTitle(item)?.trim() ||
       descriptor.getIdentifier(item) ||
@@ -175,7 +287,9 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
     // (e.g. `QA-1989`, `owner/repo#2`) on the card itself, unless the title
     // already fell back to it.
     const identifier = descriptor.getIdentifier(item);
-    const showIdentifier = !!identifier && identifier !== title;
+    const metaIdentifier = identifier && identifier !== title ? identifier : null;
+    const identifierIcon = descriptor.getIdentifierIcon?.(item) ?? null;
+    const branch = descriptor.getBranch?.(item) ?? null;
     const description = descriptor.getDescription(item);
     const openTarget = descriptor.getOpenTarget(item);
     // The backing resource (task / document) was deleted outside the tool path:
@@ -206,9 +320,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
           return;
         }
         case 'external': {
-          // Defense in depth: only ever hand http(s) to shell.openExternal.
-          if (isSafeExternalUrl(openTarget.url))
-            window.open(openTarget.url, '_blank', 'noopener,noreferrer');
+          openExternalWork(openTarget.url);
           return;
         }
         case 'filePreview': {
@@ -240,10 +352,9 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
           gap={10}
           onClick={clickable ? handleOpen : undefined}
         >
-          <Icon className={styles.inlineIcon} size={17} />
-          {/* The sidebar is narrow: the title owns the first line (sharing it only
-              with the short usage badge), and the identifier drops to the meta line
-              with the description so a long `owner/repo#n` can't squeeze the title. */}
+          <Center className={styles.inlineIcon} title={stateLabel}>
+            <Icon size={17} />
+          </Center>
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
             <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
               <Text ellipsis className={styles.inlineTitle} style={{ flex: 1 }} title={title}>
@@ -256,21 +367,13 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
                 </Center>
               )}
             </Flexbox>
-            {(showIdentifier || description) && (
-              <Flexbox horizontal align={'center'} className={styles.inlineMeta} gap={4}>
-                {showIdentifier && (
-                  <Text ellipsis className={styles.inlineIdentifier} title={identifier}>
-                    {identifier}
-                  </Text>
-                )}
-                {showIdentifier && description && <span className={styles.inlineDot}>·</span>}
-                {description && (
-                  <Text ellipsis className={styles.inlineDescription} title={description}>
-                    {description}
-                  </Text>
-                )}
-              </Flexbox>
-            )}
+            <WorkMetaLine
+              branch={branch}
+              description={description}
+              identifier={metaIdentifier}
+              identifierIcon={identifierIcon}
+              variant={'inline'}
+            />
           </Flexbox>
         </Flexbox>
       );
@@ -284,21 +387,14 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
         gap={12}
         onClick={clickable ? handleOpen : undefined}
       >
-        <Flexbox align={'center'} className={styles.icon} justify={'center'}>
+        <Flexbox align={'center'} className={styles.icon} justify={'center'} title={stateLabel}>
           <Icon size={18} />
         </Flexbox>
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-          <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-            <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-              <Text ellipsis className={styles.title}>
-                {title}
-              </Text>
-              {showIdentifier && (
-                <Text code className={styles.identifier} fontSize={12}>
-                  {identifier}
-                </Text>
-              )}
-            </Flexbox>
+          <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+            <Text ellipsis className={styles.title} style={{ flex: 1 }} title={title}>
+              {title}
+            </Text>
             {usage && (
               <Center horizontal className={styles.cost} gap={2} title={usageTitle}>
                 <LobeIcon icon={usage.icon} />
@@ -306,11 +402,13 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
               </Center>
             )}
           </Flexbox>
-          {description && (
-            <Text ellipsis className={styles.description} fontSize={12}>
-              {description}
-            </Text>
-          )}
+          <WorkMetaLine
+            branch={branch}
+            description={description}
+            identifier={metaIdentifier}
+            identifierIcon={identifierIcon}
+            variant={'card'}
+          />
         </Flexbox>
       </Flexbox>
     );

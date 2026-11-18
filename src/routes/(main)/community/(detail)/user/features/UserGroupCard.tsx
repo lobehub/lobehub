@@ -308,10 +308,7 @@ const UserGroupCard = memo<UserGroupCardProps>(
           >
             <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={ClockIcon} size={14} />
-              <PublishedTime
-                className={stylex.props(styles.secondaryDesc).className}
-                date={createdAt}
-              />
+              <PublishedTime date={createdAt} xstyle={styles.secondaryDesc} />
             </Flexbox>
             {category && t(`category.groupAgent.${category}` as any, { defaultValue: category })}
           </Flexbox>

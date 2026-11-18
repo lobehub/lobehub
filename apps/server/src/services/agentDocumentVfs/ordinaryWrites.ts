@@ -1,3 +1,5 @@
+import type { DocumentWriteSource } from '@lobechat/types';
+
 import { buildDocumentFilename } from '@/database/models/agentDocuments';
 import { DOCUMENT_FOLDER_TYPE } from '@/database/schemas';
 
@@ -27,6 +29,7 @@ export async function writeOrdinaryDocument(
   ctx: AgentDocumentVfsContext,
   createMode: NonNullable<AgentDocumentWriteOptions['createMode']>,
   contentFormat: NonNullable<AgentDocumentWriteOptions['contentFormat']>,
+  source: DocumentWriteSource = 'user',
 ): Promise<AgentDocumentStats> {
   if (path === './' || path === LOBE_PATH || path.startsWith(`${LOBE_PATH}/`)) {
     throw new AgentDocumentVfsError(`Cannot write reserved path: ${path}`, 'BAD_REQUEST');
@@ -46,6 +49,11 @@ export async function writeOrdinaryDocument(
     }
 
     if (contentFormat === 'raw') {
+      await deps.assertWithinCharLimit({
+        charCount: content.length,
+        previousCharCount: existing.content?.length ?? 0,
+        source,
+      });
       await deps.agentDocumentModel.update(existing.id, {
         content,
         editorData: null,
@@ -53,11 +61,19 @@ export async function writeOrdinaryDocument(
       });
     } else {
       const snapshot = await createAgentMarkdownSnapshot(content);
-      const inRoom = await deps.writeThroughRoom(existing.documentId, {
-        editorData: snapshot.editorData,
-        markdown: snapshot.content,
-      });
+      // A live room checks the limit against its own body, which may be ahead of
+      // the row; the row's length is the baseline only without a room.
+      const inRoom = await deps.writeThroughRoom(
+        existing.documentId,
+        { editorData: snapshot.editorData, markdown: snapshot.content },
+        source,
+      );
       if (!inRoom) {
+        await deps.assertWithinCharLimit({
+          charCount: snapshot.content.length,
+          previousCharCount: existing.content?.length ?? 0,
+          source,
+        });
         await deps.agentDocumentModel.update(existing.id, {
           content: snapshot.content,
           editorData: snapshot.editorData,
@@ -102,6 +118,7 @@ export async function writeOrdinaryDocument(
 
   const normalizedFilename = buildDocumentFilename(filename);
   if (contentFormat === 'raw') {
+    await deps.assertWithinCharLimit({ charCount: content.length, source });
     const created = await deps.agentDocumentModel.create(ctx.agentId, normalizedFilename, content, {
       fileType: RAW_TEXT_DOCUMENT_FILE_TYPE,
       parentId: parentNode?.documentId ?? null,
@@ -112,6 +129,7 @@ export async function writeOrdinaryDocument(
   }
 
   const snapshot = await createAgentMarkdownSnapshot(content);
+  await deps.assertWithinCharLimit({ charCount: snapshot.content.length, source });
   const created = await deps.agentDocumentModel.create(
     ctx.agentId,
     normalizedFilename,

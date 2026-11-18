@@ -127,12 +127,28 @@ export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefine
   type !== 'trae';
 
 /**
+ * Whether an agent with no stored `executionTarget` takes the `auto` default
+ * (desktop and web alike, wherever a device-gateway can route). Heterogeneous
+ * agents keep their own local/sandbox runtime — `auto` is not offered for
+ * them — and a leftover `boundDeviceId` keeps routing to that device.
+ */
+export const defaultsToAuto = (
+  agencyConfig: LobeAgentAgencyConfig | undefined,
+  isHetero: boolean | undefined,
+): boolean =>
+  agencyConfig?.executionTarget === undefined &&
+  !agencyConfig?.boundDeviceId &&
+  !isHetero &&
+  !agencyConfig?.heterogeneousProvider;
+
+/**
  * Single source of truth for where an agent executes — one global
  * `agencyConfig.executionTarget` drives both desktop and web.
  *
  * - `none`    → no execution environment (plain chat)
- * - `auto`    → auto-pick a device (opt-in; the only mode that activates a
- *               device the user did not explicitly select)
+ * - `auto`    → auto-pick an online device (the only mode that activates a
+ *               device the user did not explicitly select; also the default,
+ *               see below)
  * - `local`   → this machine (in-process; desktop only)
  * - `sandbox` → server cloud sandbox
  * - `device`  → remote device (dispatched to `boundDeviceId`)
@@ -144,7 +160,11 @@ export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefine
  * to use is the user's observability/latency trade-off — never auto-collapse
  * `device(currentDeviceId)` into the in-process path.
  *
- * Defaults: desktop → `local`, web → `none`. On web `local` isn't available
+ * Defaults: `auto` whenever a device-gateway can route
+ * (`deviceRoutingAvailable`); without one, desktop → `local` and web →
+ * `none`. Heterogeneous agents and configs that already carry a
+ * `boundDeviceId` skip the `auto` default (see `defaultsToAuto`) and keep the
+ * gateway-less fallback. On web `local` isn't available
  * (no local filesystem). A desktop `local` pick pins that desktop's own
  * `deviceId` as `boundDeviceId` (see `useSelectExecutionTarget`), and the
  * server routes such a config to that bound device — so on web we resolve it
@@ -198,7 +218,13 @@ export const resolveExecutionTarget = (
   ) {
     return 'device';
   }
-  let effective = stored ?? (clientAvailable ? 'local' : 'none');
+  let effective =
+    stored ??
+    (deviceRoutingAvailable && defaultsToAuto(agencyConfig, isHetero)
+      ? 'auto'
+      : clientAvailable
+        ? 'local'
+        : 'none');
   if (
     !clientAvailable &&
     (isHetero || deviceRoutingAvailable) &&
@@ -334,6 +360,10 @@ export interface TopicDeviceBindingResult {
  * default in turnSetup.
  *
  * The binding is this member's own run history, so it lifts `workspaceScoped`.
+ *
+ * `isHetero` flags a legacy agent identified only by `model: '<cli-type>'`
+ * (no stored provider yet): it never takes the `auto` default, so its topic
+ * keeps its machine.
  */
 export const applyTopicDeviceBinding = (
   {
@@ -342,12 +372,17 @@ export const applyTopicDeviceBinding = (
   }: { agencyConfig: LobeAgentAgencyConfig | undefined; workspaceScoped: boolean },
   topicDeviceId: string | undefined,
   currentDeviceId: string | undefined,
+  { isHetero }: { isHetero?: boolean } = {},
 ): TopicDeviceBindingResult => {
   const unchanged = { agencyConfig, workspaceScoped };
   const target = agencyConfig?.executionTarget;
   if (
     !topicDeviceId ||
+    // `auto` picks a fresh device every run, so its own earlier pick never pins
+    // the conversation. An unset target takes that same `auto` default (see
+    // `defaultsToAuto`), so it must not be converted into a concrete pin either.
     target === 'auto' ||
+    defaultsToAuto(agencyConfig, isHetero) ||
     agencyConfig?.executionTargetSelectionPolicy === 'fixed'
   )
     return unchanged;
@@ -389,7 +424,8 @@ export const resolveRuntimeMode = (
 
 export type { ExecutionPlan, ExecutionPlanUnroutedReason } from '@lobechat/types';
 
-export type ExecutionManifestEnvironment = ExecutionPlan['kind'] | 'local';
+export type ExecutionManifestEnvironment =
+  Exclude<ExecutionPlan['kind'], 'device-wakeable'> | 'local';
 
 /**
  * Preserve the desktop-local capability signal after the server resolves that
@@ -401,10 +437,21 @@ export type ExecutionManifestEnvironment = ExecutionPlan['kind'] | 'local';
 export const executionPlanToManifestExecutionEnv = (
   plan: ExecutionPlan,
   localDeviceId?: string,
-): ExecutionManifestEnvironment =>
-  plan.kind === 'device' && plan.target === 'local' && plan.deviceId === localDeviceId
-    ? 'local'
-    : plan.kind;
+): ExecutionManifestEnvironment => {
+  switch (plan.kind) {
+    case 'device': {
+      return plan.target === 'local' && plan.deviceId === localDeviceId ? 'local' : 'device';
+    }
+    // A waking managed device is where commands run once it is online; until
+    // then its tools answer `DEVICE_WAKING` instead of falling back elsewhere.
+    case 'device-wakeable': {
+      return 'device';
+    }
+    default: {
+      return plan.kind;
+    }
+  }
+};
 
 export interface ResolveExecutionPlanParams {
   agencyConfig: LobeAgentAgencyConfig | undefined;
@@ -462,6 +509,15 @@ export interface ResolveExecutionPlanParams {
    * `resolveExecutionPlan`.
    */
   trigger?: RequestTrigger;
+  /**
+   * Managed cloud devices this run could wake: devices that are not online
+   * now but that the managed device provider can start. A bound or requested
+   * device in this list resolves to `device-wakeable` instead of
+   * `bound-device-offline` (or, without online info, instead of a `device`
+   * dispatch that would fail at the gateway). Server callers compute it; it is
+   * empty when the deployment has no managed devices.
+   */
+  wakeableDeviceIds?: string[];
   /** See {@link ResolveExecutionTargetOptions.workspaceScoped}. */
   workspaceScoped?: boolean;
 }
@@ -483,6 +539,9 @@ export interface ResolveExecutionPlanParams {
  *    run auto-activates ONLY in the opt-in `auto` mode (single device → use it;
  *    several → stay unrouted so the model picks one). `local` / `device` never
  *    silently grab a device — they stay unrouted until one is bound/requested.
+ * 5. A bound device that is not online but is listed in `wakeableDeviceIds`
+ *    (a managed cloud device) resolves to `device-wakeable`: the caller wakes
+ *    it and the run stays on it.
  * Bot triggers coerce a `local` target to `auto` upstream in
  * `resolveExecutionTarget` (not here) — by the time the plan resolves, a bot
  * run already carries `target: 'auto'` and follows the auto-activation rules
@@ -501,6 +560,7 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
     sandboxExecutionAvailable,
     sandboxFallback,
     trigger,
+    wakeableDeviceIds,
     workspaceScoped,
   } = params;
 
@@ -511,7 +571,14 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
   // agents always need a runtime, so they never take this path.
   if (resolveToolMode(chatConfig) === 'chat' && !isHetero) return { kind: 'none', target: 'none' };
 
-  const target = resolveExecutionTarget(agencyConfig, {
+  // Server callers signal a gateway through `clientExecutionAvailable`, which
+  // would resolve an unset target as `local`; give it the same `auto` default
+  // the picker shows on every client.
+  const planAgencyConfig: LobeAgentAgencyConfig | undefined =
+    clientExecutionAvailable && defaultsToAuto(agencyConfig, isHetero)
+      ? { ...agencyConfig, executionTarget: 'auto' }
+      : agencyConfig;
+  const target = resolveExecutionTarget(planAgencyConfig, {
     isHetero,
     clientExecutionAvailable,
     sandboxExecutionAvailable,
@@ -562,6 +629,11 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
   // requestedDeviceId may force device routing over a non-device stored target;
   // keep `auto` / `local` distinct, everything else collapses to `device`.
   const effectiveTarget = target === 'local' ? 'local' : target === 'auto' ? 'auto' : 'device';
+
+  const isOnline = (deviceId: string) => !!onlineDeviceIds?.includes(deviceId);
+  if (boundDeviceId && !isOnline(boundDeviceId) && wakeableDeviceIds?.includes(boundDeviceId)) {
+    return { deviceId: boundDeviceId, kind: 'device-wakeable', target: effectiveTarget };
+  }
 
   // No online info: trust the binding (the gateway errors on dispatch if the
   // device is offline). No auto-activation without visibility.

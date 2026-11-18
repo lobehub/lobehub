@@ -22,7 +22,6 @@ import { partitionSelfMember } from './assigneeMemberOptions';
 interface AssigneeMemberSelectorProps {
   children: ReactNode;
   currentUserId?: string | null;
-  disabled?: boolean;
   fullWidth?: boolean;
   onChange?: (userId: string | null) => void;
   taskCreatorId?: string | null;
@@ -96,7 +95,6 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
   ({
     children,
     currentUserId,
-    disabled,
     fullWidth,
     onChange,
     taskCreatorId,
@@ -261,10 +259,13 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
       );
     };
 
-    const blocked = disabled || !canEditTask;
+    // Only permission blocks this picker. The member assignee is the person who
+    // owns the outcome, not the executor, so a running task can still change
+    // hands — unlike the agent assignee, which stays locked while a run is live.
+    const blocked = !canEditTask;
     const currentTriggerStyle = fullWidth ? { ...triggerStyle, width: '100%' } : triggerStyle;
     const trigger = blocked ? (
-      <Tooltip title={disabled ? t('taskDetail.reassignDisabled') : reason}>
+      <Tooltip title={reason}>
         <div
           style={{ ...currentTriggerStyle, cursor: 'not-allowed', opacity: 0.5 }}
           onClick={(event) => event.stopPropagation()}

@@ -3,7 +3,7 @@
 import type { UIChatMessage } from '@lobechat/types';
 import { Flexbox, ScrollArea } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import type { RefObject } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { memo, useMemo } from 'react';
 
 import { resolveAssistantGroupFromMessages } from '../utils/resolveAssistantGroupFromMessages';
@@ -26,6 +26,8 @@ const styles = stylex.create({
 
 interface ContentBlocksScrollBaseProps {
   disableEditing?: boolean;
+  /** Rendered above the first block, inside the scroll area (e.g. a "show earlier" control). */
+  leading?: ReactNode;
   onScroll?: () => void;
   scroll?: boolean;
   scrollRef?: RefObject<HTMLDivElement | null>;
@@ -48,7 +50,7 @@ export type ContentBlocksScrollProps =
   ContentBlocksScrollFromBlocks | ContentBlocksScrollFromMessages;
 
 const ContentBlocksScroll = memo<ContentBlocksScrollProps>((props) => {
-  const { disableEditing, onScroll, scroll = true, scrollRef, variant } = props;
+  const { disableEditing, leading, onScroll, scroll = true, scrollRef, variant } = props;
 
   const messagesList = 'messages' in props ? props.messages : undefined;
   const assistantIdFromProps = 'messages' in props ? undefined : props.assistantId;
@@ -69,6 +71,7 @@ const ContentBlocksScroll = memo<ContentBlocksScrollProps>((props) => {
 
   const list = (
     <Flexbox gap={variant === 'workflow' ? 8 : undefined}>
+      {leading}
       {blocks.map((block) => (
         <ContentBlock
           key={block.renderKey ?? block.id}

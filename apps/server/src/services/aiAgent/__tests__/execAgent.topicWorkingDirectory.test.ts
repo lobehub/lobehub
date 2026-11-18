@@ -5,6 +5,18 @@ import type * as RedisLib from '@/server/modules/Redis';
 
 import { AiAgentService } from '../index';
 
+const staleWorkspaceEntry = (workspaceScannedAt: number) => ({
+  path: '/repo/default',
+  workspace: { instructions: [], skills: [] },
+  workspaceScannedAt,
+});
+
+const topicRunInput = () => ({
+  agentId: 'agent-1',
+  appContext: { topicId: 'topic-1' },
+  prompt: 'Hello',
+});
+
 /**
  * A device-bound run resolves its working directory server-side (for
  * `{{workingDirectory}}`, the tool cwd, and the workspace scan) — but the topic
@@ -89,6 +101,33 @@ vi.mock('@/server/services/agent', () => ({
   AgentService: vi.fn().mockImplementation(function () {
     return {
       getAgentConfig: mockGetAgentConfig,
+    };
+  }),
+}));
+
+vi.mock('@/database/models/agentSkill', () => ({
+  AgentSkillModel: vi.fn().mockImplementation(function () {
+    return {
+      findAll: vi.fn().mockResolvedValue({ data: [], total: 0 }),
+      findByIds: vi.fn().mockResolvedValue([]),
+    };
+  }),
+}));
+
+vi.mock('@/server/services/agentDocuments', () => ({
+  AgentDocumentsService: vi.fn().mockImplementation(function () {
+    return {
+      getAgentSkills: vi.fn().mockResolvedValue([]),
+      hasDocuments: vi.fn().mockResolvedValue(false),
+    };
+  }),
+}));
+
+vi.mock('@/server/services/userSkill', () => ({
+  UserSkillService: vi.fn().mockImplementation(function () {
+    return {
+      listCatalog: vi.fn().mockResolvedValue([]),
+      loadRuntimeSkills: vi.fn().mockResolvedValue([]),
     };
   }),
 }));
@@ -328,13 +367,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     mockFindByDeviceId.mockResolvedValue({
       defaultCwd: '/repo/default',
       deviceId: DEVICE_ID,
-      workingDirs: [
-        {
-          path: '/repo/default',
-          workspace: { instructions: [], skills: [] },
-          workspaceScannedAt: Date.now() - 2 * 60 * 60 * 1000,
-        },
-      ],
+      workingDirs: [staleWorkspaceEntry(Date.now() - 2 * 60 * 60 * 1000)],
     });
     mockGetAgentConfig.mockResolvedValue(
       createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
@@ -356,13 +389,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     mockFindByDeviceId.mockResolvedValue({
       defaultCwd: '/repo/default',
       deviceId: DEVICE_ID,
-      workingDirs: [
-        {
-          path: '/repo/default',
-          workspace: { instructions: [], skills: [] },
-          workspaceScannedAt: Date.now() - 2 * 60 * 60 * 1000,
-        },
-      ],
+      workingDirs: [staleWorkspaceEntry(Date.now() - 2 * 60 * 60 * 1000)],
     });
     mockGetAgentConfig.mockResolvedValue(
       createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
@@ -381,11 +408,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
   });
 
   it('merges a directory the user added mid-scan instead of overwriting it', async () => {
-    const staleEntry = {
-      path: '/repo/default',
-      workspace: { instructions: [], skills: [] },
-      workspaceScannedAt: Date.now() - 2 * 60 * 60 * 1000,
-    };
+    const staleEntry = staleWorkspaceEntry(Date.now() - 2 * 60 * 60 * 1000);
 
     // The scan takes up to 30s; land a concurrent directory edit while it is
     // in flight so the write-back has a newer list to merge into.
@@ -422,11 +445,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
   });
 
   it('does not resurrect a directory the user removed mid-scan', async () => {
-    const staleEntry = {
-      path: '/repo/default',
-      workspace: { instructions: [], skills: [] },
-      workspaceScannedAt: Date.now() - 2 * 60 * 60 * 1000,
-    };
+    const staleEntry = staleWorkspaceEntry(Date.now() - 2 * 60 * 60 * 1000);
 
     let scanStarted = false;
     mockInitWorkspace.mockImplementation(async () => {
@@ -457,13 +476,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     mockFindByDeviceId.mockResolvedValue({
       defaultCwd: '/repo/default',
       deviceId: DEVICE_ID,
-      workingDirs: [
-        {
-          path: '/repo/default',
-          workspace: { instructions: [], skills: [] },
-          workspaceScannedAt: Date.now() - 2 * 60 * 60 * 1000,
-        },
-      ],
+      workingDirs: [staleWorkspaceEntry(Date.now() - 2 * 60 * 60 * 1000)],
     });
     mockGetAgentConfig.mockResolvedValue(
       createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
@@ -503,11 +516,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
       }),
     );
 
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-1' },
-      prompt: 'Hello',
-    });
+    await service.execAgent(topicRunInput());
 
     expect(mockUpdateTopicMetadata).not.toHaveBeenCalledWith(
       'topic-1',
@@ -558,11 +567,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
       }),
     );
 
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-1' },
-      prompt: 'Hello',
-    });
+    await service.execAgent(topicRunInput());
 
     expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', {
       workingDirectory: '/repo/two',
@@ -582,11 +587,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
       createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
     );
 
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-1' },
-      prompt: 'Hello',
-    });
+    await service.execAgent(topicRunInput());
 
     expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', { boundDeviceId: DEVICE_ID });
   });
@@ -597,13 +598,72 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
       createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
     );
 
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-1' },
-      prompt: 'Hello',
-    });
+    await service.execAgent(topicRunInput());
 
     expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', { boundDeviceId: DEVICE_ID });
+  });
+
+  it('lists device skills in a directory-less run without binding a directory or loading project rules', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+      // Like project skills, device skills remain discoverable in manual mode.
+      chatConfig: { skillActivateMode: 'manual' },
+    });
+    mockInitWorkspace.mockResolvedValue({
+      instructions: [],
+      skills: [
+        {
+          description: 'Device writing guidance',
+          name: 'writing',
+          path: '/home/user/.agents/skills/writing/SKILL.md',
+          scope: 'device',
+        },
+      ],
+    });
+
+    await service.execAgent(topicRunInput());
+
+    const operation = mockCreateOperation.mock.calls[0][0];
+    expect(operation.operationSkillSet?.skills).toEqual([
+      {
+        description: 'Device writing guidance',
+        identifier: 'device:writing',
+        location: '/home/user/.agents/skills/writing/SKILL.md',
+        name: 'writing',
+        source: 'device',
+      },
+    ]);
+    expect(operation.deviceSystemInfo?.workingDirectory).toBeUndefined();
+    expect(operation.projectInstructions).toBeUndefined();
+    expect(mockUpdateDevice).not.toHaveBeenCalled();
+    expect(mockUpdateTopicMetadata).not.toHaveBeenCalledWith(
+      'topic-1',
+      expect.objectContaining({ workingDirectory: expect.anything() }),
+    );
+  });
+
+  it('continues without device skills when a directory-less device scan is unavailable', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+      chatConfig: { skillActivateMode: 'manual' },
+    });
+    mockInitWorkspace.mockResolvedValue(undefined);
+
+    await service.execAgent(topicRunInput());
+
+    expect(mockInitWorkspace).toHaveBeenCalledOnce();
+    const operation = mockCreateOperation.mock.calls[0][0];
+    expect(operation.operationSkillSet?.skills).toEqual([]);
+    expect(operation.projectInstructions).toBeUndefined();
+    expect(operation.deviceSystemInfo?.workingDirectory).toBeUndefined();
+  });
+
+  it('does not scan device skills for a cloud-only run', async () => {
+    mockGetAgentConfig.mockResolvedValue(createAgentConfig({ executionTarget: 'cloud' }));
+
+    await service.execAgent(topicRunInput());
+
+    expect(mockInitWorkspace).not.toHaveBeenCalled();
   });
 
   it('leaves the topic unbound when neither the agent nor the device has a directory', async () => {

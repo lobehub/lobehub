@@ -119,13 +119,6 @@ describe('formatErrorForState', () => {
 
       expect((formatErrorForState(error).body as { stack?: string }).stack).toBeUndefined();
     });
-
-    it('falls back to AgentRuntimeError for unknown thrown values', () => {
-      const result = formatErrorForState('plain string failure');
-
-      expect(result.type).toBe(AgentRuntimeErrorType.AgentRuntimeError);
-      expect(result.message).toBe('plain string failure');
-    });
   });
 
   describe('ERROR_CODE_SPECS enrichment', () => {

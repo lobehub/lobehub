@@ -76,13 +76,15 @@ const messages: Message[] = [
   },
 ] as Message[];
 
-describe('FlatListBuilder — task-completion blocks', () => {
-  it('carries each wake-up turn’s signal lineage on its block', () => {
+describe('FlatListBuilder — task-completion turns', () => {
+  it('renders each wake-up as a step of the reply, carrying its own signal lineage', () => {
     const { flatList } = parse(messages);
 
     expect(flatList.map((m) => m.role)).toEqual(['user', 'assistantGroup']);
     const group = flatList[1] as any;
-    expect(group.taskCompletions.map((b: any) => [b.id, b.metadata?.signal])).toEqual([
+    expect(group.children.map((b: any) => [b.id, b.metadata?.signal])).toEqual([
+      ['a1', undefined],
+      ['a2', undefined],
       ['w1', { sourceToolCallId: 'call-srv', sourceToolName: 'Agent', type: 'task-completion' }],
       ['w2', { sourceToolCallId: 'call-fe', sourceToolName: 'Agent', type: 'task-completion' }],
     ]);

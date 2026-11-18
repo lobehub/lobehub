@@ -1,5 +1,4 @@
 export type HotkeyId =
-  | 'addUserMessage'
   | 'commandPalette'
   | 'deleteAndRegenerateMessage'
   | 'deleteLastMessage'
@@ -10,6 +9,7 @@ export type HotkeyId =
   | 'openChatSettings'
   | 'prevTab'
   | 'openHotkeyHelper'
+  | 'openTaskFilter'
   | 'regenerateMessage'
   | 'saveDocument'
   | 'saveTopic'
