@@ -1,55 +1,16 @@
-import { resolveConnectorLinkParam } from '@lobechat/mecha';
-import type { SendMessageParams } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
-import { isRecord } from '@lobechat/utils/object';
 import type { AppBridge } from '@modelcontextprotocol/ext-apps/app-bridge';
-import type { TFunction } from 'i18next';
 
-import { mcpService } from '@/services/mcp';
-import { getToolStoreState } from '@/store/tool';
-import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
-
-import { anySignal } from './abortSignal';
-import { mcpAppNameSelector } from './appName';
-import type { AppDisplayContext, McpAppBridgeHost } from './bridge';
+import type { McpAppBridgeHost } from './bridge';
 import { buildHostContext, connectMcpAppBridge } from './bridge';
-import { confirmAppMessage, confirmAppOpenLink, confirmAppToolCall } from './confirm';
 import { isAppFrameNavigatedNotice } from './frameDocument';
-import { sendAppMessage } from './sendAppMessage';
-import { getAppToolCallPolicy } from './toolCallPolicy';
 import { toCallToolResult } from './utils';
+import { type AppViewContext, createAppViewActions } from './viewActions';
 import { withoutStoredMedia } from './viewToolResult';
 
+export { type AppViewContext, getMcpAppLinkId, MAX_PENDING_TOOL_APPROVALS } from './viewActions';
+
 export const MAX_APP_VIEW_HEIGHT = 2000;
-// Tool calls from one view that may wait for approval at once; more are refused as busy
-export const MAX_PENDING_TOOL_APPROVALS = 3;
-
-/** What the view's session reads when a request arrives: the latest render's values. */
-export interface AppViewContext {
-  agentId?: string;
-  /** Raw JSON arguments of the tool call. */
-  args?: string;
-  /**
-   * The conversation surface takes new messages: its composer is writable. A
-   * read-only one (a thread a tool started) keeps the view from posting too.
-   */
-  canSendMessage: boolean;
-  display?: AppDisplayContext;
-  identifier: string;
-  isDark: boolean;
-  lifecycle?: McpAppBridgeHost['lifecycle'];
-  /** The account the view acts as, when its arguments cannot name one (an entrypoint's `{}`). */
-  linkId?: string;
-  /** This desktop's own MCP process produced the result; the view's calls run there. */
-  onThisDevice: boolean;
-  /** Tool call result envelope (`{ content, state, success }`). */
-  result: { content: string; state?: any };
-  sendMessage: (params: SendMessageParams) => Promise<void>;
-  /** The MCP server the view came from; its tool calls reach no other. */
-  server?: string;
-  t: TFunction<'plugin'> | ((key: string, options?: Record<string, unknown>) => string);
-}
-
 export interface ConnectAppViewOptions {
   getContext: () => AppViewContext;
   onHeight: (height: number) => void;
@@ -62,9 +23,6 @@ export interface ConnectAppViewOptions {
   target: Window;
   toolCallId: string;
 }
-
-const getAppName = (identifier: string, agentId?: string) =>
-  mcpAppNameSelector(identifier, agentId)(getToolStoreState());
 
 /**
  * Connect LobeHub to one MCP App view: the bridge session plus what LobeHub
@@ -107,36 +65,7 @@ export const connectAppView = ({
   };
   window.addEventListener('message', handleFrameNotice);
 
-  // One message at a time, so a view can't line up runs behind a pending one
-  let sending = false;
-  // One link prompt at a time, so a view can't stack them up
-  let linking = false;
-  // Approvals queue up and open one at a time; a few per view, so a view
-  // can't bury the user under modals
-  let pendingToolApprovals = 0;
-  // Drops this view's approvals, waiting or shown, once it goes away (or
-  // starts to): nobody can see a prompt for a view being removed
-  const approvals = new AbortController();
-  // Ends what the view started, once it is gone. Later than `approvals` during
-  // a teardown: the view may still save its edits through a tool call then.
-  const session = new AbortController();
-  // The view can't see the modal its request waits for, possibly behind
-  // another view's, so say under it that it's waiting rather than hung
-  const awaitApproval = async (
-    request: AbortSignal,
-    ask: (signal: AbortSignal) => Promise<boolean>,
-  ) => {
-    // An approval also lapses once the view stops waiting for its request (it
-    // timed out behind other modals): answering it would run work nobody reads
-    const { dispose, signal } = anySignal([approvals.signal, request]);
-    onWaitingApprovalsChange(1);
-    try {
-      return await ask(signal);
-    } finally {
-      dispose();
-      onWaitingApprovalsChange(-1);
-    }
-  };
+  const actions = createAppViewActions({ getContext, onWaitingApprovalsChange, toolCallId });
 
   // Set once the view starts leaving; see `AppViewSession.retire`
   let retiring = false;
@@ -153,124 +82,12 @@ export const connectAppView = ({
         },
       } satisfies NonNullable<McpAppBridgeHost['lifecycle']>,
     }),
-    // Views may only call tools on the server that rendered them, and
-    // under the same approval rules as the conversation.
-    callTool: async (name, toolArgs, request) => {
-      const {
-        agentId,
-        identifier,
-        onThisDevice,
-        server,
-        t,
-        args: initiatingArgs,
-        linkId: viewLinkId,
-      } = getContext();
-      const linkId = viewLinkId ?? getMcpAppLinkId(identifier, agentId, initiatingArgs);
-      const policy = await getAppToolCallPolicy(identifier, name, { agentId, toolArgs });
-      let allowed = policy === 'allow';
-      if (policy === 'confirm') {
-        if (pendingToolApprovals >= MAX_PENDING_TOOL_APPROVALS) {
-          return {
-            content: [{ text: t('mcpApp.toolCall.busy', { tool: name }), type: 'text' }],
-            isError: true,
-          };
-        }
-
-        pendingToolApprovals += 1;
-        try {
-          allowed = await awaitApproval(request, (signal) =>
-            confirmAppToolCall({
-              appName: getAppName(identifier, agentId),
-              args: toolArgs,
-              signal,
-              tool: name,
-            }),
-          );
-        } finally {
-          pendingToolApprovals -= 1;
-        }
-      }
-
-      if (!allowed) {
-        return {
-          content: [{ text: t('mcpApp.toolCall.rejected', { tool: name }), type: 'text' }],
-          isError: true,
-        };
-      }
-
-      // The view may have gone, or stopped waiting, while the policy loaded
-      // or an approval was open: nobody would read the result, so don't run it.
-      const { dispose: disposeCall, signal } = anySignal([session.signal, request]);
-      try {
-        if (signal.aborted) throw new DOMException('The view stopped waiting', 'AbortError');
-
-        return toCallToolResult(
-          await mcpService.invokeMcpToolCall(
-            {
-              apiName: name,
-              arguments: JSON.stringify(toolArgs),
-              id: `${toolCallId}:${name}`,
-              identifier,
-              type: 'mcp',
-            },
-            // The view's HTML came from this machine for a local server, so its calls do too
-            { agentId, fromMcpApp: true, onThisDevice, server, signal, linkId },
-          ),
-        );
-      } finally {
-        disposeCall();
-      }
-    },
+    callTool: actions.callTool,
     hostContext: buildHostContext(getContext().isDark, getContext().display),
     getHostContext: () => buildHostContext(getContext().isDark, getContext().display),
     onSizeChange: (nextHeight) => onHeight(Math.min(nextHeight, MAX_APP_VIEW_HEIGHT)),
-    // A view can ask without a gesture and carry data in the URL, so the
-    // user sees the link before it opens
-    openLink: async (url, request) => {
-      if (linking) return false;
-      linking = true;
-      try {
-        const { agentId, identifier } = getContext();
-        const allowed = await awaitApproval(request, (signal) =>
-          confirmAppOpenLink({ appName: getAppName(identifier, agentId), signal, url }),
-        );
-        if (allowed) window.open(url, '_blank', 'noopener,noreferrer');
-
-        return allowed;
-      } finally {
-        linking = false;
-      }
-    },
-    // A message starts a billed run. Parent activation and iframe focus
-    // cannot prove which opaque-origin view the user acted in, so every
-    // message needs consent in the host.
-    sendMessage: async (text, request) => {
-      if (sending || !getContext().canSendMessage) return false;
-      sending = true;
-      try {
-        const { agentId, identifier } = getContext();
-        if (
-          !(await awaitApproval(request, (signal) =>
-            confirmAppMessage({ appName: getAppName(identifier, agentId), signal, text }),
-          ))
-        ) {
-          return false;
-        }
-
-        // Until the conversation accepts it, the view going away or giving up
-        // on the request cancels the send rather than starting a reply
-        // Its lifetime is the prompts', not the session's: a view being removed
-        // may still save its edits, but never starts a reply
-        const { dispose: disposeSend, signal } = anySignal([approvals.signal, request]);
-        try {
-          return await sendAppMessage(getContext().sendMessage, text, identifier, signal);
-        } finally {
-          disposeSend();
-        }
-      } finally {
-        sending = false;
-      }
-    },
+    openLink: actions.openLink,
+    sendMessage: actions.sendMessage,
     toolInput: () => safeParseJSON(getContext().args || '{}') ?? {},
     // The chat stored this result's media as uploads; the view reads base64
     toolResult: () => {
@@ -281,8 +98,7 @@ export const connectAppView = ({
 
   const end = () => {
     window.removeEventListener('message', handleFrameNotice);
-    approvals.abort();
-    session.abort();
+    actions.end();
   };
 
   return {
@@ -298,7 +114,7 @@ export const connectAppView = ({
     },
     teardown: async () => {
       retiring = true;
-      approvals.abort();
+      actions.dropApprovals();
       try {
         await teardown(APP_VIEW_TEARDOWN_TIMEOUT_MS);
       } finally {
@@ -327,19 +143,4 @@ export const getAppViewPhase = ({
   if (isLoading) return 'loading';
   if (!srcDoc || navigated) return 'fallback';
   return 'view';
-};
-
-/** Bind a view to the account of the tool call that created it. */
-export const getMcpAppLinkId = (
-  identifier: string,
-  agentId?: string,
-  args?: string,
-): string | undefined => {
-  const connector = connectorSelectors.connectorByIdentifierForAgent(
-    identifier,
-    agentId,
-  )(getToolStoreState());
-  const param = resolveConnectorLinkParam(connector?.tools.map((tool) => tool.inputSchema) ?? []);
-  const input: unknown = safeParseJSON(args ?? '{}');
-  return isRecord(input) && typeof input[param] === 'string' ? (input[param] as string) : undefined;
 };

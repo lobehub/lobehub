@@ -2,6 +2,7 @@ import { isDesktop } from '@lobechat/const';
 import {
   getMcpAppEntrypoints,
   getMcpServerFingerprint,
+  hasMcpUiResource,
   isMcpThreadEntrypoint,
   lacksUiResourceMeta,
   partitionMcpToolsForViews,
@@ -31,6 +32,7 @@ import {
   type McpPrompt,
   type McpResource,
   type McpTool,
+  type McpUiToolState,
   type StdioMCPParams,
 } from '@/libs/mcp';
 import { MCPClient } from '@/libs/mcp';
@@ -71,6 +73,7 @@ export interface MCPToolCallProcessedResult {
     content: any[];
     isError?: boolean;
     mcpApp?: McpAppToolState;
+    mcpUi?: McpUiToolState;
   };
   success: boolean;
 }
@@ -432,6 +435,10 @@ export class MCPService {
             ...(preferredModelDisplayMode && { preferredModelDisplayMode }),
             server: await getMcpServerFingerprint(clientParams),
           };
+        } else if (mcpApps && !result.isError && !fromApp && hasMcpUiResource(result.content)) {
+          // MCP-UI: the result embeds its own `ui://` view (no resource to read
+          // back); its calls reach this server only
+          processedResult.state.mcpUi = { server: await getMcpServerFingerprint(clientParams) };
         }
 
         log('MCP tool call completed: %O', {

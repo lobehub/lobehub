@@ -113,7 +113,8 @@ export const toCallToolResult = (
     | (Pick<MCPToolCallResult, 'content' | 'success'> & { state?: MCPToolCallResult['state'] })
     | undefined,
 ): CallToolResult => {
-  const state = result?.state as (CallToolResult & { mcpApp?: unknown }) | undefined;
+  const state = result?.state as
+    (CallToolResult & { mcpApp?: unknown; mcpUi?: unknown }) | undefined;
 
   if (!state || !Array.isArray(state.content)) {
     return {
@@ -122,8 +123,9 @@ export const toCallToolResult = (
     };
   }
 
-  const { mcpApp: _mcpApp, ...rest } = state;
+  const { mcpApp: _mcpApp, mcpUi: _mcpUi, ...rest } = state;
   void _mcpApp;
+  void _mcpUi;
 
   return rest;
 };

@@ -707,6 +707,65 @@ describe('MCPService', () => {
       expect(result.state.mcpApp).toBeUndefined();
     });
 
+    describe('MCP-UI embedded views', () => {
+      const card = {
+        resource: { mimeType: 'text/html', text: '<button>Refresh</button>', uri: 'ui://card/1' },
+        type: 'resource',
+      };
+
+      it('marks a result that embeds a ui:// view, and keeps its HTML out of the model text', async () => {
+        mockClient.getToolUiResourceUri.mockResolvedValue(undefined);
+        mockClient.callTool.mockResolvedValue({
+          content: [{ text: 'Card ready', type: 'text' }, card],
+          isError: false,
+        });
+
+        const result = await mcpService.callTool({
+          argsStr: '{}',
+          clientParams: mockParams,
+          mcpApps: true,
+          toolName: 'show_card',
+        });
+
+        expect(result.state.mcpUi).toEqual({ server: await getMcpServerFingerprint(mockParams) });
+        expect(result.state.mcpApp).toBeUndefined();
+        expect(result.state.content).toContainEqual(card);
+        expect(result.content).toContain('<resource type="ui" uri="ui://card/1"');
+        expect(result.content).not.toContain('<button>');
+      });
+
+      it.each([
+        ['the mcp_apps flag is off', { mcpApps: false }],
+        ["a view's own call", { fromApp: true, mcpApps: true }],
+      ])('does not mark it when %s', async (_, options) => {
+        mockClient.getToolUiResourceUri.mockResolvedValue(undefined);
+        mockClient.callTool.mockResolvedValue({ content: [card], isError: false });
+
+        const result = await mcpService.callTool({
+          argsStr: '{}',
+          clientParams: mockParams,
+          toolName: 'show_card',
+          ...options,
+        });
+
+        expect(result.state.mcpUi).toBeUndefined();
+      });
+
+      it('does not mark an error result', async () => {
+        mockClient.getToolUiResourceUri.mockResolvedValue(undefined);
+        mockClient.callTool.mockResolvedValue({ content: [card], isError: true });
+
+        const result = await mcpService.callTool({
+          argsStr: '{}',
+          clientParams: mockParams,
+          mcpApps: true,
+          toolName: 'show_card',
+        });
+
+        expect(result.state.mcpUi).toBeUndefined();
+      });
+    });
+
     it('should not attach the MCP App resource to error results', async () => {
       mockClient.getToolUiResourceUri.mockResolvedValue('ui://weather/view.html');
       mockClient.callTool.mockResolvedValue({

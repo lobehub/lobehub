@@ -1,3 +1,4 @@
+import { describeMcpUiResourceBlock } from '@lobechat/const/mcpApp';
 import debug from 'debug';
 import mime from 'mime';
 import pMap from 'p-map';
@@ -177,7 +178,11 @@ export const contentBlocksToString = (blocks: ToolCallContent[] | null | undefin
         }
 
         case 'resource': {
-          return `<resource type="${item.type}">${JSON.stringify(item.resource)}</resource>`;
+          // An embedded `ui://` view is for the user: the model reads which one, not its HTML
+          return (
+            describeMcpUiResourceBlock(item) ??
+            `<resource type="${item.type}">${JSON.stringify(item.resource)}</resource>`
+          );
         }
 
         default: {

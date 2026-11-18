@@ -11,6 +11,8 @@ const RESOURCE_MIME_TYPE = 'text/html;profile=mcp-app';
 const DEFAULT_PORT = 39742;
 const MCP_ENDPOINT = '/mcp';
 const FIXTURE_HTML = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
+const MCP_UI_HTML = readFileSync(new URL('./mcp-ui.html', import.meta.url), 'utf8');
+const MCP_UI_EXTERNAL_PATH = '/__fixture/mcp-ui-external';
 const appendFileAsync = promisify(appendFile);
 const mkdirAsync = promisify(mkdir);
 const writeFileAsync = promisify(writeFile);
@@ -301,6 +303,80 @@ const registerFixtureTools = (server: McpServer) => {
   );
 };
 
+/**
+ * MCP-UI: tools whose results embed their own `ui://` view as a resource
+ * content block (no `_meta.ui.resourceUri`): an HTML card, and an external
+ * page (`text/uri-list`) this fixture serves itself.
+ */
+const registerMcpUiFixtureTools = (server: McpServer, port: number) => {
+  const record = async (name: string, args: Record<string, unknown>) => {
+    const call = { args, calledAt: new Date().toISOString(), id: randomUUID(), name };
+    fixtureToolCalls.push(call);
+    await appendFileAsync(callLogPath, `${JSON.stringify(call)}\n`);
+  };
+
+  server.registerTool(
+    'fixture_mcp_ui_card',
+    {
+      description: 'Show the MCP-UI fixture card (an embedded ui:// text/html resource).',
+      inputSchema: {},
+      title: 'fixture_mcp_ui_card',
+    },
+    async (args) => {
+      await record('fixture_mcp_ui_card', args);
+      return {
+        content: [
+          { text: 'MCP-UI fixture card is shown to the user.', type: 'text' },
+          {
+            resource: { mimeType: 'text/html', text: MCP_UI_HTML, uri: 'ui://mcp-ui-fixture/card' },
+            type: 'resource',
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerTool(
+    'fixture_mcp_ui_external',
+    {
+      description: 'Show the MCP-UI fixture external page (an embedded ui:// text/uri-list).',
+      inputSchema: {},
+      title: 'fixture_mcp_ui_external',
+    },
+    async (args) => {
+      await record('fixture_mcp_ui_external', args);
+      return {
+        content: [
+          { text: 'MCP-UI fixture external page is shown to the user.', type: 'text' },
+          {
+            resource: {
+              mimeType: 'text/uri-list',
+              text: `http://localhost:${port}${MCP_UI_EXTERNAL_PATH}`,
+              uri: 'ui://mcp-ui-fixture/external',
+            },
+            type: 'resource',
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerTool(
+    'fixture_mcp_ui_refresh',
+    {
+      description: 'Called by the MCP-UI fixture card; answers with the count it was sent.',
+      inputSchema: {},
+      title: 'fixture_mcp_ui_refresh',
+    },
+    async (args) => {
+      await record('fixture_mcp_ui_refresh', args);
+      return {
+        content: [{ text: `refreshed at ${new Date().toISOString().slice(11, 19)}`, type: 'text' }],
+      };
+    },
+  );
+};
+
 const addCorsHeaders = (headers: Headers) => {
   headers.set('Access-Control-Allow-Origin', '*');
   headers.set('Access-Control-Allow-Methods', 'POST, GET, DELETE, OPTIONS');
@@ -372,6 +448,7 @@ export const createMcpAppsFixtureServer = async (port = DEFAULT_PORT) => {
     });
     registerFixtureResources(server);
     registerFixtureTools(server);
+    registerMcpUiFixtureTools(server, port);
     await server.connect(transport);
     return { server, transport };
   };
@@ -399,6 +476,12 @@ export const createMcpAppsFixtureServer = async (port = DEFAULT_PORT) => {
     if (path === '/__fixture/sessions' && request.method === 'GET') {
       response.writeHead(200, addCorsHeaders(new Headers({ 'Content-Type': 'application/json' })));
       response.end(JSON.stringify({ count: sessions.size, sessionIds: [...sessions.keys()] }));
+      return;
+    }
+
+    if (path === MCP_UI_EXTERNAL_PATH && request.method === 'GET') {
+      response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      response.end(MCP_UI_HTML.replace('MCP-UI fixture card', 'MCP-UI fixture external page'));
       return;
     }
 

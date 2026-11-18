@@ -1,0 +1,175 @@
+---
+title: 开发带 UI 的 MCP 工具（MCP Apps / MCP-UI）
+description: 为 MCP 工具附带交互界面：声明 ui:// 资源，LobeHub 会在工具卡片里用沙箱 iframe 渲染它，并通过 postMessage 与之通信。
+tags:
+  - MCP
+  - MCP Apps
+  - MCP-UI
+  - 工具 UI
+  - 插件开发
+---
+
+# 开发带 UI 的 MCP 工具（MCP Apps / MCP-UI）
+
+MCP 工具可以自带交互界面。对话中不再只显示纯文本结果，而是在工具卡片里展示你的 HTML；界面还能调用工具、发送消息、弹出提示并自适应高度。
+
+LobeHub 支持两种工具 UI，都用 `ui://` URI 标识：
+
+| 类型                     | 工具如何声明                                                             | 协议                                                |
+| ---------------------- | ------------------------------------------------------------------ | ------------------------------------------------- |
+| **MCP-UI**（内嵌）         | 工具**结果**里包含 `uri` 以 `ui://` 开头的 `resource` 内容块                     | MCP-UI postMessage 消息（`tool`、`intent`、`notify` 等） |
+| **MCP Apps**（SEP-1865） | 工具**定义**设置 `_meta.ui.resourceUri`，LobeHub 通过 `resources/read` 读取资源 | MCP Apps JSON-RPC（`ui/initialize`、`tools/call` 等） |
+
+两者运行在同一套沙箱里，遵循同样的审批规则。本文重点介绍 MCP-UI 内嵌资源；MCP Apps 请参考 [MCP Apps 规范](https://github.com/modelcontextprotocol/ext-apps) 及其 SDK（`@modelcontextprotocol/ext-apps`）。
+
+<Callout type={'info'}>
+  工具 UI 受 `mcp_apps` 功能开关控制（默认关闭）。自部署时设置 `FEATURE_FLAGS="+mcp_apps"` 并重启。开关关闭时，同样的结果按普通工具结果显示。
+</Callout>
+
+## MCP-UI：在工具结果中内嵌 `ui://` 资源
+
+在文本旁边返回一个 `resource` 内容块。支持两种形态：
+
+| `mimeType`      | 内容（`text`，或 base64 的 `blob`）           | 渲染方式                                 |
+| --------------- | -------------------------------------- | ------------------------------------ |
+| `text/html`     | 完整的 HTML 文档                            | 带严格 CSP 的 `srcdoc` iframe（`rawHtml`） |
+| `text/uri-list` | 每行一个 URL，取第一个 `http(s)` URL（`#` 开头为注释） | 加载该页面的 iframe（`externalUrl`）         |
+
+其他 MCP-UI 类型（如 `application/vnd.mcp-ui.remote-dom`）不渲染，回退为普通结果。
+
+### 服务端示例（TypeScript SDK）
+
+```ts
+import { McpServer } from '@modelcontextprotocol/server';
+
+const server = new McpServer({ name: 'weather-card', version: '1.0.0' });
+
+const html = `<!doctype html>
+<html>
+  <body>
+    <h3 id="title">Weather</h3>
+    <button id="refresh">Refresh</button>
+    <button id="notify">Notify</button>
+    <script>
+      const post = (type, payload) => {
+        const messageId = crypto.randomUUID();
+        window.parent.postMessage({ type, payload, messageId }, '*');
+        return messageId;
+      };
+
+      window.addEventListener('message', (event) => {
+        const { type, payload } = event.data || {};
+        if (type === 'ui-lifecycle-iframe-render-data') {
+          document.body.dataset.theme = payload.renderData.theme;
+        }
+        if (type === 'ui-message-response' && payload.response?.content) {
+          document.getElementById('title').textContent = payload.response.content[0].text;
+        }
+      });
+
+      document.getElementById('refresh').onclick = () =>
+        post('tool', { toolName: 'get_weather', params: { city: 'Paris' } });
+      document.getElementById('notify').onclick = () =>
+        post('notify', { message: 'Saved to favorites' });
+
+      // 上报内容高度，让卡片随内容伸缩
+      new ResizeObserver(() => {
+        const height = Math.ceil(document.documentElement.getBoundingClientRect().height);
+        window.parent.postMessage({ type: 'ui-size-change', payload: { height } }, '*');
+      }).observe(document.documentElement);
+
+      window.parent.postMessage({ type: 'ui-lifecycle-iframe-ready' }, '*');
+    </script>
+  </body>
+</html>`;
+
+server.registerTool(
+  'show_weather_card',
+  { description: 'Show an interactive weather card', inputSchema: {} },
+  async () => ({
+    content: [
+      // 给模型看的
+      { type: 'text', text: 'Showed the weather card for Paris.' },
+      // 给用户看的
+      { type: 'resource', resource: { uri: 'ui://weather/card', mimeType: 'text/html', text: html } },
+    ],
+  }),
+);
+
+server.registerTool(
+  'get_weather',
+  { description: 'Current weather for a city', inputSchema: {} },
+  async () => ({ content: [{ type: 'text', text: 'Paris: 21°C, sunny' }] }),
+);
+```
+
+使用 `@mcp-ui/server` 时，`createUIResource({ uri: 'ui://…', content: { type: 'rawHtml', htmlString }, encoding: 'text' })` 生成的就是同样的内容块。
+
+外部页面写法：
+
+```ts
+{
+  type: 'resource',
+  resource: { uri: 'ui://weather/page', mimeType: 'text/uri-list', text: 'https://widgets.example.com/weather?city=Paris' },
+}
+```
+
+模型不会收到 HTML：在模型看到的结果副本中，`ui://` 内容块会被替换为 `<resource type="ui" uri="ui://weather/card" mimeType="text/html" />`。需要让模型知道的信息请放在 `text` 内容块里。
+
+### postMessage 协议
+
+消息是普通对象，用 `window.parent.postMessage(message, '*')` 发送。请求可以带 `messageId`，宿主会先确认收到，再返回结果。
+
+**UI → LobeHub**
+
+| `type`                      | `payload`              | LobeHub 的处理                                | `response`            |
+| --------------------------- | ---------------------- | ------------------------------------------ | --------------------- |
+| `tool`                      | `{ toolName, params }` | 在**同一个 MCP 服务器**上调用 `toolName`，遵循用户的工具审批设置 | MCP `CallToolResult`  |
+| `prompt`                    | `{ prompt }`           | 征得用户同意后，把 `prompt` 作为消息发到会话                | `{ sent: boolean }`   |
+| `intent`                    | `{ intent, params? }`  | 征得用户同意后，把意图（名称 + JSON 参数）作为消息发送            | `{ sent: boolean }`   |
+| `notify`                    | `{ message }`          | 以工具名为标题弹出提示（不超过 300 字符，每 2 秒最多一条）          | `{ shown: boolean }`  |
+| `link`                      | `{ url }`              | 征得用户同意后，在新标签页打开 `http(s)` 链接               | `{ opened: boolean }` |
+| `ui-size-change`            | `{ height }`           | 设置 iframe 高度（默认 320 px，最高 2000 px）         | —                     |
+| `ui-lifecycle-iframe-ready` | —                      | 发送渲染数据                                     | —                     |
+| `ui-request-render-data`    | —                      | 发送渲染数据（带上你的 `messageId`）                   | —                     |
+
+**LobeHub → UI**
+
+| `type`                            | `payload`                                                   |
+| --------------------------------- | ----------------------------------------------------------- |
+| `ui-message-received`             | `{ messageId }`：请求已收到                                       |
+| `ui-message-response`             | `{ messageId, response }` 或 `{ messageId, error }`          |
+| `ui-lifecycle-iframe-render-data` | `{ renderData: { theme, locale, toolInput, toolOutput? } }` |
+
+`toolInput` 是生成该 UI 的那次工具调用的参数；`toolOutput` 是该结果的 `structuredContent`（如有）。用户切换明暗主题时会重新发送渲染数据。
+
+UI 发起的工具调用只会到达渲染它的那个服务器，且只能调用允许视图调用的工具（MCP Apps 中 `_meta.ui.visibility` 不含 `"app"` 的工具会被拒绝）。会话里需要审批的调用，在这里同样会询问用户；被拒绝时返回 `isError` 结果。
+
+## 沙箱与限制
+
+你的 UI 运行在两层嵌套 iframe 中：外层是 LobeHub 的包装文档，内层是你的文档。两层都使用 `sandbox="allow-scripts allow-forms"`，**不含** `allow-same-origin`：
+
+- 文档运行在不透明源（opaque origin）上：访问 `document.cookie`、`localStorage` 会抛错，也无法访问 `window.top` / `window.parent.document`。与 LobeHub 通信的唯一途径是 postMessage。
+- 不能弹窗、导航顶层页面、下载或使用 `alert` / `confirm`；请改用 `link` 与 `notify` 消息。
+- 摄像头、麦克风、定位和剪贴板写入均关闭（`allow="camera 'none'; …"`）。
+- **`text/html`** 文档会在你的第一个字节之前注入如下 CSP：`default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'`。所有脚本、样式需内联，图片用 `data:`；`fetch` 与外部资源都会被拦截。需要数据请调用工具。
+- HTML 视图一旦离开自己的文档（发生导航），就会从卡片中移除。
+- **`text/uri-list`** 页面使用其服务器自己的响应头，同样运行在不透明源沙箱中，且不发送 referrer。包装文档的 `frame-src` 把 iframe 限制在该页面的源内，链接只能在同源页面之间跳转。URL 必须是 `https`（或 `localhost` / `127.0.0.1` 上的 `http`），不能带凭据，也不能指向 LobeHub 自身的源。
+- 超过 2 MB 的内嵌文档不渲染。
+
+由于 iframe 是不透明源，LobeHub 只能对该 iframe 自己的 window 调用 `postMessage(message, '*')`，并且只接受 `event.source` 是该 window 的消息。你的 UI 同样只应信任来自 `window.parent` 的消息。
+
+## 本地试用
+
+仓库内置了带 MCP-UI 工具（`fixture_mcp_ui_card`、`fixture_mcp_ui_external`、`fixture_mcp_ui_refresh`）的 fixture 服务器：
+
+```bash
+bun e2e/fixtures/mcpApps/server.mts        # MCP 端点 http://localhost:39742/mcp
+bun e2e/fixtures/mcpApps/model-server.mts  # 可选：确定性模型
+```
+
+把 `http://localhost:39742/mcp` 添加为 Streamable HTTP MCP 服务器（自部署服务访问本机 MCP 服务器需设置 `SSRF_ALLOW_IP_ADDRESS_LIST=127.0.0.1`），在助手中启用该插件，然后让它调用 `fixture_mcp_ui_card`。详见 `e2e/fixtures/mcpApps/README.md`。
+
+## 旧版插件清单
+
+旧插件清单字段 `ui: { url, mode, width, height }` 已不再读取，并已从 LobeHub 的 `ToolManifest` 类型中移除。请改为通过带 `ui://` 资源的 MCP 服务器提供工具 UI。

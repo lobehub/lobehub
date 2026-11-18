@@ -1,5 +1,6 @@
 import {
   getMcpServerFingerprint,
+  hasMcpUiResource,
   isMcpThreadEntrypoint,
   lacksUiResourceMeta,
   withListingUiMeta,
@@ -498,6 +499,15 @@ export class DeviceMcpRuntime {
             ...(preferredModelDisplayMode && { preferredModelDisplayMode }),
             server: await getMcpServerFingerprint(params),
           },
+        }),
+      // MCP-UI: the result embeds its own `ui://` view; its calls reach this server only
+      ...(mcpApps &&
+        !uiResourceUri &&
+        !raw.isError &&
+        !fromApp &&
+        !fromEntrypoint &&
+        hasMcpUiResource(raw.content) && {
+          mcpUi: { server: await getMcpServerFingerprint(params) },
         }),
     };
     return {

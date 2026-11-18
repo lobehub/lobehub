@@ -4,7 +4,7 @@ import { Accordion, Divider, Flexbox, Skeleton } from '@lobehub/ui';
 import { memo, useState } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
-import { getMcpAppFromState } from '@/libs/mcp/mcpApp';
+import { hasMcpViewInState } from '@/libs/mcp/mcpApp';
 import dynamic from '@/libs/next/dynamic';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
@@ -61,9 +61,9 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
   const renderDisplayControl = useToolStore(
     toolSelectors.getRenderDisplayControl(identifier, apiName, result?.state),
   );
-  // MCP Apps results open by default so their interactive view is visible
+  // MCP Apps / MCP-UI results open by default so their interactive view is visible
   const isMcpApp = useServerConfigStore(
-    (s) => serverConfigSelectors.enableMcpApps(s) && !!getMcpAppFromState(result?.state),
+    (s) => serverConfigSelectors.enableMcpApps(s) && hasMcpViewInState(result?.state),
   );
   // With `showImageReadPreview` off, a call that only read an image stays
   // collapsed like any other call; the user can still click it open.

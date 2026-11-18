@@ -131,12 +131,6 @@ const installedPluginMetaList = (s: ToolStoreState) =>
 const installedCustomPluginMetaList = (s: ToolStoreState) =>
   installedPluginMetaList(s).filter((p) => p.type === 'customPlugin');
 
-const isPluginHasUI = (id: string) => (s: ToolStoreState) => {
-  const plugin = getToolManifestById(id)(s);
-
-  return !!plugin?.ui;
-};
-
 export const pluginSelectors = {
   confirmedInstalledPlugins,
   getCustomPluginById,
@@ -150,7 +144,6 @@ export const pluginSelectors = {
   installedPlugins,
   isInstalledPluginsCacheOnly,
   isInstalledPluginsServerConfirmed,
-  isPluginHasUI,
   isPluginInstalled,
   storeAndInstallPluginsIdList,
 };
