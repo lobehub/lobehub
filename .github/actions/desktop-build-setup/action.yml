@@ -121,15 +121,14 @@ runs:
         echo "CLOUD_DESKTOP=1" >> "$GITHUB_ENV"
         echo "✅ Cloud repository $resolved_cloud_ref overlaid at $cloud_root"
 
-    # Shared with the isolated desktop install below. The overlay root has no
-    # lockfile, so the lockfiles here only signal "dependencies changed"; the store
-    # is content-addressed and a stale restore can only miss, never install a wrong
-    # version.
+    # Shared with the isolated desktop install below. The root `pnpm-lock.yaml` is
+    # gitignored, so hash the tracked dependency declarations — hashing an absent
+    # file would pin one key forever and stop the store from ever taking new tarballs.
     - name: Cache pnpm store
       uses: actions/cache@v4
       with:
         path: ${{ runner.temp }}/pnpm-store
-        key: pnpm-store-${{ runner.os }}-v1-${{ hashFiles('pnpm-lock.yaml', 'apps/desktop/pnpm-lock.yaml') }}
+        key: pnpm-store-${{ runner.os }}-v1-${{ hashFiles('package.json', 'pnpm-workspace.yaml', 'apps/*/package.json', 'packages/*/package.json', 'patches/*.patch', 'apps/desktop/pnpm-lock.yaml') }}
         restore-keys: |
           pnpm-store-${{ runner.os }}-v1-
 

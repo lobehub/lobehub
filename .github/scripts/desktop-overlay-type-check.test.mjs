@@ -1,10 +1,24 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { parse } from 'yaml';
 
 const load = async (path) => parse(await readFile(new URL(path, import.meta.url), 'utf8'));
+
+const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
+
+/** CI only checks out tracked files, so a gitignored file hashes to nothing there. */
+const isIgnored = (file) => {
+  try {
+    execFileSync('git', ['check-ignore', '--quiet', file], { cwd: repoRoot });
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const needsOf = (job) => [job.needs ?? []].flat();
 
@@ -107,5 +121,18 @@ for (const path of [
     // The overlay root has no lockfile, so the store path must be passed explicitly.
     assert.match(String(install.run), /--store-dir "\$RUNNER_TEMP\/pnpm-store"/);
     assert.match(String(install.run), /--prefer-offline/);
+
+    const hashed = String(cache.with.key)
+      .match(/hashFiles\(([^)]*)\)/)[1]
+      .split(',')
+      .map((entry) => entry.trim().replaceAll("'", ''));
+
+    assert.ok(
+      hashed.some((entry) => entry.includes('package.json')),
+      'the key follows dependency declarations',
+    );
+    for (const file of hashed.filter((entry) => !entry.includes('*'))) {
+      assert.ok(!isIgnored(file), `${file} is gitignored, so CI would hash nothing`);
+    }
   });
 }
