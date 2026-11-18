@@ -1,6 +1,7 @@
 export * from './agent.controller';
 export * from './agent-group.controller';
 export * from './api-key.controller';
+export * from './bot.controller';
 export * from './chat.controller';
 export * from './chat-group.controller';
 export * from './eval.controller';

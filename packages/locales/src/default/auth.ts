@@ -72,6 +72,7 @@ export default {
   'apikey.scopes.fullAccess': 'Full access',
   'apikey.scopes.grantJoin': ': ',
   'apikey.scopes.groups.agent': 'Agents',
+  'apikey.scopes.groups.bot': 'Bots',
   'apikey.scopes.groups.chat': 'Chat',
   'apikey.scopes.groups.file': 'Files',
   'apikey.scopes.groups.knowledge': 'Knowledge',

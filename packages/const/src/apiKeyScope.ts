@@ -71,6 +71,14 @@ export const API_KEY_SCOPES = [
    */
   'webhook:read',
   'webhook:write',
+  /**
+   * Agent bots over the public REST API (`/api/v1/bots`): reading the bots
+   * wired to agents in the space (credentials always masked), and managing
+   * them — create, update, delete, enable / disable, test the connection, and
+   * send a message as the bot.
+   */
+  'bot:read',
+  'bot:write',
 ] as const;
 
 export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
