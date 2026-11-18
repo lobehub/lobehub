@@ -1039,6 +1039,16 @@ describe('AgentService', () => {
       expect(agent.provider).toBe('claude-code');
     });
 
+    it('keeps the driver type when a shared Claude Code agent edits only its env', async () => {
+      agent.agencyConfig = { heterogeneousProvider: { command: 'claude', type: 'claude-code' } };
+      agent.provider = 'claude-code';
+      await expect(
+        service.updateAgentConfig('agent-1', {
+          agencyConfig: { heterogeneousProvider: { env: { FOO: 'bar' } } },
+        } as any),
+      ).resolves.toMatchObject({ success: true });
+    });
+
     it('rejects saving a third-party model next to a shared Claude Code driver', async () => {
       agent.agencyConfig = { heterogeneousProvider: { type: 'claude-code' } };
       agent.provider = 'claude-code';

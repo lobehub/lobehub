@@ -32,6 +32,7 @@ import {
   RedisKeys,
 } from '@/server/modules/Redis';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
+import { merge } from '@/utils/merge';
 
 import { type UpdateAgentResult } from './type';
 
@@ -139,12 +140,13 @@ export class AgentService {
     const agent = await this.agentModel.getAgentConfigById(agentId);
     if (!agent) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
 
-    // `agencyConfig: null` clears the whole block, so it must not fall back to the stored driver.
+    // Same deep merge as `AgentModel.updateConfig`, so a partial driver edit (`env` only) keeps
+    // the stored `type`. `agencyConfig: null` clears the whole block and must not fall back to it.
     const effectiveAgencyConfig =
       'agencyConfig' in patch
         ? patch.agencyConfig === null
           ? null
-          : { ...agent.agencyConfig, ...patch.agencyConfig }
+          : merge(agent.agencyConfig ?? {}, patch.agencyConfig)
         : agent.agencyConfig;
     const provider = 'provider' in patch ? patch.provider : agent.provider;
     if (
