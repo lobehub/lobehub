@@ -5350,7 +5350,7 @@ When I am ___, I need ___
   'automations.empty.title': 'No automations yet',
   'automations.empty.desc':
     'Ask an agent to keep an eye on a connector for you, like "Tell me when CI fails on this PR". Subscriptions you approve show up here.',
-  'tab.webhook': 'Webhooks',
+  'tab.webhook': 'Developer webhooks',
   'settingsSearch.tabKeywords.webhook':
     'webhook, webhooks, callback, event, events, signing secret',
   'webhook.list.title': 'Webhooks',
