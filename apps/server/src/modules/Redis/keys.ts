@@ -16,6 +16,11 @@
  */
 export const RedisKeyNamespace = {
   /**
+   * Whether Agents can take work: device presence per principal pool and quota load per
+   * provider account, read by the dispatch layer and the contact card's status.
+   */
+  AGENT_AVAILABILITY: 'agent-availability',
+  /**
    * Agent Signal keys — the same `agent-signal` keyspace the Agent Signal runtime
    * stores (receipts, dedupe, policy state) already use.
    */
@@ -96,6 +101,19 @@ export const RedisKeyNamespace = {
  * ```
  */
 export const RedisKeys = {
+  /** Agent availability scope — see {@link RedisKeyNamespace.AGENT_AVAILABILITY}. */
+  agentAvailability: {
+    /**
+     * One device's presence (connected, managed phase) as one principal pool sees it.
+     * Full key: agent-availability:device:v1:{pool}:{deviceId}
+     */
+    device: (pool: string, deviceId: string): string => `device:v1:${pool}:${deviceId}`,
+    /**
+     * One provider account's quota load.
+     * Full key: agent-availability:account:v1:{accountId}
+     */
+    account: (accountId: string): string => `account:v1:${accountId}`,
+  },
   inboundWebhook: {
     wake: (id: string) => `wake:v1:${id}`,
     check: (id: string) => `check:v1:${id}`,
@@ -398,6 +416,7 @@ export const RedisKeys = {
  * land under another scope's prefix. Every scope must be mapped.
  */
 export const RedisKeyScopeNamespace = {
+  agentAvailability: RedisKeyNamespace.AGENT_AVAILABILITY,
   inboundWebhook: RedisKeyNamespace.INBOUND_WEBHOOK,
   agentIdentity: RedisKeyNamespace.AGENT_IDENTITY,
   agentRun: RedisKeyNamespace.AGENT_RUN,

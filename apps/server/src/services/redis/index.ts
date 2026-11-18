@@ -1,3 +1,4 @@
+import { agentAvailability } from './agentAvailability';
 import { agentDocumentIndex } from './agentDocumentIndex';
 import { agentIdentity } from './agentIdentity';
 import { agentRunSlots } from './agentRunSlots';
@@ -21,6 +22,7 @@ import { workspaceRescan } from './workspaceRescan';
 
 /** Business Redis API. Providers, keys and expiry policy stay inside each domain. */
 export const redisService = {
+  agentAvailability,
   agentDocumentIndex,
   agentIdentity,
   agentRunSlots,
