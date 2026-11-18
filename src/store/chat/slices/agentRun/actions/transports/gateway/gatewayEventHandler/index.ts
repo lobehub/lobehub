@@ -47,6 +47,7 @@ import { resolveStepSideEvent } from '../stepSideEvent';
 import { insertStreamStartSeeds, streamStartOperationMetadata } from '../streamStartSeed';
 import type { RuntimeEndData } from './runtimeEndMessages';
 import { reconcileRuntimeEndMessages } from './runtimeEndMessages';
+import { createTopicRefreshGate } from './topicRefreshGate';
 
 // Lazy-loaded to break the import cycle:
 //   gateway.ts → gatewayEventHandler/index.ts → executors/index.ts (which pulls in
@@ -99,11 +100,6 @@ const fetchAndReplaceMessages = async (
   get().replaceMessages(messages, { context, preserveWorks: skipWorks });
   return messages;
 };
-
-const shouldSkipMessageFetch = (
-  event: AgentStreamEvent,
-  runtimeType: 'gateway' | 'hetero',
-): boolean => runtimeType === 'hetero' && event.data?.skipMessageFetch === true;
 
 const getToolId = (tool: unknown): string | undefined =>
   isRecord(tool) ? pickNonEmptyString(tool.id) : undefined;
@@ -366,6 +362,7 @@ export const createGatewayEventHandler = (
   let lastMessagePatchRevision = 0;
   // Set even when the step_start read fails, so Stop can tell which step it landed in.
   let lastStepStartRevision = 0;
+  const refreshGate = createTopicRefreshGate(runtimeType);
   const latestToolStateByCallId = new Map<string, ToolStateChunkData & { operationId: string }>();
   const toolStateBootstrapPromiseByCallId = new Map<string, Promise<void>>();
   const lastAppliedToolStateSeqByCallId = new Map<string, number>();
@@ -1031,6 +1028,7 @@ export const createGatewayEventHandler = (
         };
 
         if (typeof data?.messageRevision === 'number') lastStepStartRevision = data.messageRevision;
+        if (typeof data?.messageRevision === 'number') refreshGate.markRevisionSeen();
         if (
           typeof data?.messageRevision === 'number' &&
           data.messageRevision !== lastMessagePatchRevision
@@ -1074,6 +1072,7 @@ export const createGatewayEventHandler = (
 
       case 'message_patch': {
         const patch = event.data as MessagePatchData;
+        refreshGate.markRevisionSeen();
         if (patch.revision <= lastMessagePatchRevision) break;
 
         const current = get().dbMessagesMap[messageMapKey(context)] ?? [];
@@ -1148,10 +1147,11 @@ export const createGatewayEventHandler = (
           completedToolStateCallIds.add(completedToolCallId);
           latestToolStateByCallId.delete(completedToolCallId);
         }
+        const toolEndNeedsRefresh = refreshGate.toolEnd(event);
         enqueue(async () => {
-          const maybeRefresh = shouldSkipMessageFetch(event, runtimeType)
-            ? Promise.resolve()
-            : refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
+          const maybeRefresh = toolEndNeedsRefresh()
+            ? refreshMessagesFromDb({ skipWorks: true }).catch(console.error)
+            : Promise.resolve();
           const payload = unwrapToolPayload(data?.payload);
           const result = data?.result as
             { state?: unknown; workRegistration?: unknown } | undefined;
@@ -1189,7 +1189,7 @@ export const createGatewayEventHandler = (
 
         applyStepMetrics(get().updateOperationMetadata, operationId, undefined, data?.llmCalls);
 
-        // Refresh on execution_complete to ensure final step state is consistent
+        // Refresh on execution_complete unless message revisions settle the run
         if (data?.phase === 'execution_complete') {
           enqueue(async () => {
             void emitAgentSignal({
@@ -1202,7 +1202,7 @@ export const createGatewayEventHandler = (
               sourceId: `${operationId}:gateway:step_complete:${event.stepIndex}`,
               sourceType: 'client.gateway.step_complete',
             });
-            if (!shouldSkipMessageFetch(event, runtimeType)) {
+            if (refreshGate.completionNeedsRefresh(event)) {
               await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
             }
           });
