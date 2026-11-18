@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { errorInitFromException, renderApiError } from '../common/errors';
 import {
   OPENAPI_WORKSPACE_HEADER,
   requireWorkspaceRoleWhenScoped,
@@ -296,5 +297,47 @@ describe('OpenAPI workspace middleware', () => {
     it('passes through personal (non-workspace) requests', async () => {
       expect((await roleApp(undefined, undefined).request('/guarded')).status).toBe(200);
     });
+  });
+});
+
+describe('OpenAPI workspace middleware error codes', () => {
+  beforeEach(() => {
+    mockCanUseWorkspaceApiKeys.mockResolvedValue(true);
+    mockGetServerDB.mockResolvedValue({
+      query: {
+        workspaceMembers: { findFirst: mockWorkspaceMembersFindFirst },
+        workspaces: { findFirst: mockWorkspacesFindFirst },
+      },
+    });
+    mockWorkspacesFindFirst.mockResolvedValue({ id: 'workspace-1' });
+    mockWorkspaceMembersFindFirst.mockResolvedValue(null);
+  });
+
+  const codeOf = async (context: TestAuthContext, workspaceId: string) => {
+    const app = createApp(context);
+    app.onError((error, c) =>
+      error instanceof HTTPException
+        ? renderApiError(c, errorInitFromException(error))
+        : c.text(error.message, 500),
+    );
+    const response = await app.request('/workspace', {
+      headers: { [OPENAPI_WORKSPACE_HEADER]: workspaceId },
+    });
+    expect(response.status).toBe(403);
+    return ((await response.json()) as { code: string }).code;
+  };
+
+  it.each([
+    [
+      'a personal API Key sends a workspace header',
+      { apiKeyWorkspaceId: null, authType: 'apikey' },
+    ],
+    [
+      'a workspace API Key targets another workspace',
+      { apiKeyWorkspaceId: 'workspace-2', authType: 'apikey' },
+    ],
+    ['the caller is not a member', { authType: 'oidc' }],
+  ])('answers workspace_mismatch when %s', async (_, context) => {
+    expect(await codeOf(context as TestAuthContext, 'workspace-1')).toBe('workspace_mismatch');
   });
 });

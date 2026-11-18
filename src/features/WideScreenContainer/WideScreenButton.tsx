@@ -5,11 +5,12 @@ import { PanelLeftRightDashedIcon, SquareChartGanttIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 
 const WideScreenButton = memo(() => {
+  const headerActionSize = useHeaderActionSize(true);
   const { t } = useTranslation('chat');
 
   const [wideScreen, toggleWideScreen] = useGlobalStore((s) => [
@@ -20,7 +21,7 @@ const WideScreenButton = memo(() => {
   return (
     <ActionIcon
       icon={wideScreen ? SquareChartGanttIcon : PanelLeftRightDashedIcon}
-      size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+      size={headerActionSize}
       title={t(wideScreen ? 'toggleWideScreen.off' : 'toggleWideScreen.on')}
       tooltipProps={{
         placement: 'bottom',

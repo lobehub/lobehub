@@ -1,5 +1,7 @@
 import { Center, Checkbox, cssVar, Flexbox, Skeleton } from '@lobehub/ui';
 
+import { useDensityTokens } from '@/styles/density';
+
 import { FILE_DATE_WIDTH, FILE_SIZE_WIDTH, getListViewMinWidth } from './ListItem/constants';
 
 interface ListViewSkeletonProps {
@@ -18,6 +20,7 @@ const ListViewSkeleton = ({
   count = 6,
   showUploader = true,
 }: ListViewSkeletonProps) => {
+  const { listRowHeight } = useDensityTokens();
   // Calculate opacity gradient from 100% to 20%
   const getOpacity = (index: number) => 1 - (index / (count - 1)) * 0.8;
 
@@ -27,7 +30,7 @@ const ListViewSkeleton = ({
         <Flexbox
           horizontal
           align={'center'}
-          height={48}
+          height={listRowHeight}
           key={index}
           paddingInline={8}
           style={{

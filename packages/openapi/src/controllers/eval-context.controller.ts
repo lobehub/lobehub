@@ -13,7 +13,11 @@ export class EvalContextController extends BaseController {
         this.getUserId(c)!,
         this.getWorkspaceId(c),
       );
-      return this.success(c, await service.listThreads(topicId, this.getQuery<EvalPagination>(c)));
+      return this.list(
+        c,
+        'threads',
+        await service.listThreads(topicId, this.getQuery<EvalPagination>(c)),
+      );
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -25,7 +29,7 @@ export class EvalContextController extends BaseController {
         this.getUserId(c)!,
         this.getWorkspaceId(c),
       );
-      return this.success(c, await service.listPlugins(this.getQuery<EvalPagination>(c)));
+      return this.list(c, 'plugins', await service.listPlugins(this.getQuery<EvalPagination>(c)));
     } catch (error) {
       return this.handleError(c, error);
     }

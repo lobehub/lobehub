@@ -48,7 +48,6 @@ const RecentListItem = memo<RecentItem>((item) => {
     <Flexbox style={{ position: 'relative' }}>
       <NavItem
         contextMenuItems={dropdownMenu}
-        height={32}
         title={title}
         actions={
           <DropdownMenu items={dropdownMenu()}>

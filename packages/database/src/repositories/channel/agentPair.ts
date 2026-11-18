@@ -56,8 +56,7 @@ export const openAgentPair = async (
     })
     .returning();
   const agents = [];
-  for (const agent of params.agents)
-    agents.push(await addAgentMember(tx, channel, scope.userId, agent));
+  for (const agent of params.agents) agents.push(await addAgentMember(tx, channel, member, agent));
   return { agents, channel, member };
 };
 

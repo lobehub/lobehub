@@ -6,7 +6,6 @@ import { type PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useBackButtonProps } from '@/features/NavPanel/backOrigin';
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
@@ -15,6 +14,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useChatStore } from '@/store/chat';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { useHeaderActionSize } from '@/styles/density';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import Agent from './Agent';
@@ -29,6 +29,7 @@ const HeaderInfo = (_props: PropsWithChildren) => {
   const { allowed: canEditContent } = usePermission('edit_own_content');
   const { canEditResource } = useResourceAccess('agent', agentId);
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
+  const headerActionSmallSize = useHeaderActionSize(true);
   // Keep the entry while resource access is loading; only a confirmed denial
   // hides it. The profile page still enforces ResourceConfigAccessGate.
   const showProfile = !!agentId && !!isAgentEditable && canEditContent && canEditResource;
@@ -48,7 +49,7 @@ const HeaderInfo = (_props: PropsWithChildren) => {
             <ActionIcon
               aria-label={t('tab.profile')}
               icon={SettingsIcon}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              size={headerActionSmallSize}
               onClick={openProfile}
             />
           ) : undefined

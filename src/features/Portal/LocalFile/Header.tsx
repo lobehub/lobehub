@@ -1,6 +1,6 @@
 'use client';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE, isDesktop } from '@lobechat/const';
+import { isDesktop } from '@lobechat/const';
 import { ActionIcon } from '@lobehub/ui';
 import { FolderOpen } from 'lucide-react';
 import { memo, useCallback } from 'react';
@@ -10,10 +10,12 @@ import PortalHeader from '@/features/Portal/components/Header';
 import { localFileService } from '@/services/electron/localFileService';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 
 import TabStrip from './TabStrip';
 
 const Header = memo<{ onClose?: () => void }>(({ onClose }) => {
+  const headerActionSize = useHeaderActionSize(true);
   const { t } = useTranslation('chat');
   const activeLocalFilePath = useChatStore(chatPortalSelectors.activeLocalFilePath);
   // Remote device and sandbox paths cannot be revealed in the local filesystem.
@@ -37,7 +39,7 @@ const Header = memo<{ onClose?: () => void }>(({ onClose }) => {
           <ActionIcon
             aria-label={t('workingPanel.files.showInSystem')}
             icon={FolderOpen}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={headerActionSize}
             title={t('workingPanel.files.showInSystem')}
             onClick={handleOpenFileFolder}
           />
