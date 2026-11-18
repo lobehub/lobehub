@@ -312,4 +312,13 @@ describe('boardFileUrl', () => {
       boardFileUrl(buildBoardModel(item, '/artboard-files/tok/'), board('x', { source: null })),
     ).toBeUndefined();
   });
+
+  it('has no URL for a board whose file does not exist yet', () => {
+    expect(
+      boardFileUrl(
+        buildBoardModel(item, '/artboard-files/tok/'),
+        board('x', { source: { hash: null, kind: 'file', path: 'pages/a.html' } }),
+      ),
+    ).toBeUndefined();
+  });
 });

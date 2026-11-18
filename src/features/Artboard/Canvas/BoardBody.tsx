@@ -1,6 +1,6 @@
 import type { ArtboardBoardView } from '@lobechat/types';
 import * as stylex from '@stylexjs/stylex';
-import { ImageOffIcon } from 'lucide-react';
+import { FilePenLineIcon, FileXIcon, ImageOffIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -42,6 +42,7 @@ interface BoardBodyProps {
 
 const BoardBody = ({ board, imageUrl, k = 1, live, screenshotUrl }: BoardBodyProps) => {
   const { t } = useTranslation('project');
+  const { agentRunning } = useBoardCapabilities();
   if (screenshotUrl)
     return (
       <img
@@ -55,6 +56,23 @@ const BoardBody = ({ board, imageUrl, k = 1, live, screenshotUrl }: BoardBodyPro
   const { source } = board;
   if (board.type === 'decision')
     return <DecisionPill height={board.rect.h} k={k} title={board.title} width={board.rect.w} />;
+  // The board points at a file that is not written yet (or was deleted).
+  if (source && !source.hash)
+    return agentRunning ? (
+      <BoardPlaceholder
+        icon={FilePenLineIcon}
+        k={k}
+        status={t('artboard.board.generating')}
+        title={board.title}
+      />
+    ) : (
+      <BoardPlaceholder
+        icon={FileXIcon}
+        k={k}
+        status={t('artboard.board.fileMissing', { path: source.path })}
+        title={board.title}
+      />
+    );
   if (!source || (board.type === 'image' && !imageUrl))
     return (
       <BoardPlaceholder

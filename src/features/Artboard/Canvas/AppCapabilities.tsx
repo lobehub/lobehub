@@ -3,6 +3,7 @@ import { type ReactNode, useMemo } from 'react';
 
 import { useBoard } from '../BoardContext';
 import { chooseOption } from '../data/actions';
+import { useAgentRunningInTopic } from '../data/agentRunning';
 import { boardFileUrl } from '../model';
 import { useJourneyView } from '../Verify/useJourneyView';
 import { type BoardCapabilities, BoardCapabilitiesProvider } from '../Viewport/capabilities';
@@ -13,8 +14,10 @@ const AppBoardCapabilities = ({ children }: { children: ReactNode }) => {
   const journey = useJourneyView();
   const artboardId = board.artboard.id;
   const { fileBaseUrl } = board;
+  const agentRunning = useAgentRunningInTopic(board.artboard.topicId);
   const value = useMemo<BoardCapabilities>(
     () => ({
+      agentRunning,
       journey,
       onPick: (roundId, boardId) =>
         void chooseOption(artboardId, roundId, boardId).catch((error) =>
@@ -25,7 +28,7 @@ const AppBoardCapabilities = ({ children }: { children: ReactNode }) => {
         return src ? <BoardFrame src={src} title={item.title} /> : null;
       },
     }),
-    [artboardId, fileBaseUrl, journey],
+    [agentRunning, artboardId, fileBaseUrl, journey],
   );
   return <BoardCapabilitiesProvider value={value}>{children}</BoardCapabilitiesProvider>;
 };

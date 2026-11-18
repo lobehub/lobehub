@@ -1,26 +1,18 @@
 import type { ArtboardItem } from '@lobechat/types';
 import { useEffect, useRef } from 'react';
 
-import { useChatStore } from '@/store/chat';
-import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
-
 import { artboardActions, useArtboardStore } from '../store';
+import { useAgentRunningInTopic } from './agentRunning';
 import { checkArtboardRevision } from './revisionWatch';
 
-const runningInTopic = (topicId: string | null) => (s: ReturnType<typeof useChatStore.getState>) =>
-  !!topicId &&
-  Object.values(s.operations).some(
-    (op) =>
-      op.context.topicId === topicId &&
-      op.status === 'running' &&
-      AI_RUNTIME_OPERATION_TYPES.includes(op.type),
-  );
+/** While an agent runs, files land one by one (CLI writes); poll so boards fill in as they do. */
+const RUNNING_POLL_INTERVAL = 2000;
 
 export const useArtboardRevisionWatch = (
   artboard: Pick<ArtboardItem, 'id' | 'revision' | 'topicId' | 'updatedAt'>,
 ) => {
   const { id, revision, topicId, updatedAt } = artboard;
-  const running = useChatStore(runningInTopic(topicId));
+  const running = useAgentRunningInTopic(topicId);
   const stale = useArtboardStore((s) => s.staleRevision);
   const shown = useRef({ revision, updatedAt });
   shown.current = { revision, updatedAt };
@@ -40,5 +32,23 @@ export const useArtboardRevisionWatch = (
     if (wasRunning.current && !running)
       void checkArtboardRevision(id, shown.current).catch(() => {});
     wasRunning.current = running;
+  }, [id, running]);
+
+  useEffect(() => {
+    if (!running) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    // Chained, not an interval: a slow check never overlaps the next one.
+    const schedule = () => {
+      timer = setTimeout(async () => {
+        await checkArtboardRevision(id, shown.current).catch(() => {});
+        if (!stopped) schedule();
+      }, RUNNING_POLL_INTERVAL);
+    };
+    schedule();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
   }, [id, running]);
 };

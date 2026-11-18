@@ -4,6 +4,8 @@ import { createContext, type ReactNode, use } from 'react';
 import type { JourneyView } from '../Verify/flow';
 
 export interface BoardCapabilities {
+  /** An agent is running in the artboard's topic, so boards without a file are still being written. */
+  agentRunning?: boolean;
   journey?: JourneyView;
   onPick?: (roundId: string, boardId: string) => void;
   renderCanvas: (board: ArtboardBoardView) => ReactNode;

@@ -212,7 +212,7 @@ export const boardFileUrl = (
   model: Pick<BoardModel, 'fileBaseUrl'>,
   board: Pick<ArtboardBoardView, 'source'>,
 ): string | undefined =>
-  model.fileBaseUrl && board.source
+  model.fileBaseUrl && board.source?.hash
     ? `${model.fileBaseUrl}${board.source.path.split('/').map(encodeURIComponent).join('/')}?v=${board.source.hash.slice(0, 12)}`
     : undefined;
 

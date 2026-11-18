@@ -31,6 +31,8 @@
   "acceptance.success.start": "项目已启动",
   "acceptance.title": "验收",
   "artboard.board.decision": "分支判断",
+  "artboard.board.fileMissing": "文件不存在：{{path}}",
+  "artboard.board.generating": "正在生成…",
   "artboard.board.image": "图片",
   "artboard.board.locked": "已定稿",
   "artboard.board.recommended": "推荐",

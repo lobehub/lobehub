@@ -31,6 +31,8 @@
   "acceptance.success.start": "Project started",
   "acceptance.title": "Acceptance",
   "artboard.board.decision": "Decision",
+  "artboard.board.fileMissing": "File not found: {{path}}",
+  "artboard.board.generating": "Writing this board…",
   "artboard.board.image": "Image",
   "artboard.board.locked": "Finalized",
   "artboard.board.recommended": "Recommended",

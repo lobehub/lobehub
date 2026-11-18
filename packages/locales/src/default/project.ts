@@ -546,6 +546,8 @@ export default {
   'artboard.finalize.success': 'Finalized. {{count}} acceptance checks generated.',
   'artboard.finalize.title': 'Finalize the board',
   'artboard.board.decision': 'Decision',
+  'artboard.board.fileMissing': 'File not found: {{path}}',
+  'artboard.board.generating': 'Writing this board…',
   'artboard.board.image': 'Image',
   'artboard.board.locked': 'Finalized',
   'artboard.board.sourceMissing': 'Source unavailable',
