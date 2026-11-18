@@ -12,11 +12,13 @@ import {
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { EnvironmentConfiguration } from '@lobechat/types';
+import { hasTfsGitSource } from '@lobechat/utils/tfs';
 import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
 import { EnvironmentModel } from '@/database/models/environment';
 import { EnvironmentInstanceModel } from '@/database/models/environmentInstance';
+import { ProjectModel } from '@/database/models/project';
 import { TopicModel } from '@/database/models/topic';
 import {
   resolveScmCloneCredential,
@@ -412,13 +414,16 @@ const resolvePlacement = async ({
  * none, picked one the caller cannot read (deleted, or another member's
  * private one), or one that asks for nothing.
  */
-const resolveInitialization = async ({
+export const resolveSandboxInitialization = async ({
   serverDB,
   topicId,
   userId,
   workspaceId,
   sharedDrive,
-}: { sharedDrive: boolean } & Required<Pick<SandboxSessionConfigInput, 'serverDB' | 'topicId'>> &
+  useProjectDefault = false,
+}: { sharedDrive: boolean; useProjectDefault?: boolean } & Required<
+  Pick<SandboxSessionConfigInput, 'serverDB' | 'topicId'>
+> &
   Pick<SandboxSessionConfigInput, 'userId' | 'workspaceId'>): Promise<
   SandboxInitialization | undefined
 > => {
@@ -426,7 +431,19 @@ const resolveInitialization = async ({
     const topic = await new TopicModel(serverDB, userId, workspaceId ?? undefined).findById(
       topicId,
     );
-    const environmentId = topic?.metadata?.sandboxEnvironmentId;
+    if (!topic || topic.senderId) return undefined;
+    let environmentId = topic.metadata?.sandboxEnvironmentId;
+    if (!environmentId && useProjectDefault && topic.projectId) {
+      const linked = await new ProjectModel(
+        serverDB,
+        userId,
+        workspaceId ?? undefined,
+      ).listEnvironments(topic.projectId);
+      const tfs = linked.filter((environment) =>
+        hasTfsGitSource(environment.configuration ?? undefined),
+      );
+      if (tfs.length === 1) environmentId = tfs[0].id;
+    }
     if (!environmentId) return undefined;
 
     const environment = await new EnvironmentModel(
@@ -500,7 +517,7 @@ export const resolveSandboxSessionConfig = async (
   const { serverDB, topicId } = input;
   if (!serverDB || !topicId || config.mode === 'persistent') return config;
 
-  const initialization = await resolveInitialization({
+  const initialization = await resolveSandboxInitialization({
     ...input,
     serverDB,
     topicId,

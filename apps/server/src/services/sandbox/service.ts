@@ -148,7 +148,13 @@ export class SandboxMiddlewareService implements SandboxService {
         result.success,
       );
 
-      return environmentInitReport(stdout) || undefined;
+      const secret =
+        init.cloneCredential && 'tfs' in init.cloneCredential
+          ? init.cloneCredential.tfs.secret
+          : undefined;
+      const stderr = (result.result as { stderr?: string } | null | undefined)?.stderr;
+      const report = [environmentInitReport(stdout), stderr].filter(Boolean).join('\n');
+      return (secret ? report.split(secret).join('[redacted]') : report) || undefined;
     } catch (error) {
       log('Environment init failed for topic %s: %O', this.options.topicId, error);
 

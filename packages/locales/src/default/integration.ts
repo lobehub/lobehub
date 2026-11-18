@@ -18,6 +18,8 @@ export default {
   'tfs.firstPage': 'First page',
   'tfs.invalidUrl': 'Enter a Git repository URL from the configured TFS collection.',
   'tfs.loading': 'Loading…',
+  'tfs.loadMoreBranches': 'Load more branches',
+  'tfs.loadMoreProjects': 'Load more TFS projects',
   'tfs.nextPage': 'Next page',
   'tfs.notConfigured':
     'Ask an administrator to configure TFS_COLLECTION_URL and the encryption key on this deployment.',

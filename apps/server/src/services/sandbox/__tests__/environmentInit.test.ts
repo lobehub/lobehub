@@ -206,6 +206,24 @@ describe('buildSandboxEnvironmentInitCommand', () => {
     expect(existsSync(join(work, 'setup.txt'))).toBe(false);
   });
 
+  it('retries a failed TFS checkout on the next turn after authorization or connectivity is repaired', () => {
+    const command = buildSandboxEnvironmentInitCommand(
+      init({
+        cloneCredential: {
+          tfs: { authType: 'ntlm', username: 'DOMAIN\\user', secret: 'test-only' },
+          urlPrefix: 'https://tfs.example.com/Collection/',
+        },
+      }),
+    );
+    run(
+      buildSandboxEnvironmentInitCommand(init({ sources: [{ url: `file://${root}/missing` }] })),
+      work,
+    );
+    const retry = run(command, work);
+    expect(environmentInitReport(retry.stdout)).toContain('Initialized from the environment');
+    expect(readFileSync(join(work, 'README.md'), 'utf8')).toBe('hello');
+  });
+
   // A project checkout removed while its sandbox lived on is made again empty;
   // the record of the first clone used to keep it empty for good.
   it('clones again into a checkout folder that was emptied after it was initialized', () => {
@@ -277,7 +295,8 @@ describe('buildSandboxEnvironmentInitCommand', () => {
     mkdirSync(failing);
     run(buildSandboxEnvironmentInitCommand(init({ bootstrapCommand: 'exit 3' })), failing);
 
-    expect(readdirSync(sandbox.tmp)).toEqual([]);
+    // Apple Git may create its own xcrun cache beside our staging directory.
+    expect(readdirSync(sandbox.tmp).filter((name) => !name.startsWith('xcrun_'))).toEqual([]);
   });
 
   it('gives git the clone credential for the clones alone, and keeps it out of the checkout', () => {

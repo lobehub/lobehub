@@ -15,6 +15,7 @@ import {
   wakeManagedDevice,
 } from '@/server/services/deviceGateway/managedDeviceWake';
 import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousAgent/remoteDeviceHeteroContext';
+import { initializeTfsDeviceCheckout } from '@/server/services/tfs/deviceCheckout';
 import { restoreOwnedWorktreeBeforeServerRun } from '@/server/services/worktreeCleanup';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
@@ -272,12 +273,29 @@ export const dispatchToCliDevice = async (
     ),
   ]);
 
+  const checkoutReport =
+    !authorizationError && deviceCwd
+      ? await initializeTfsDeviceCheckout({
+          cwd: deviceCwd,
+          db: deps.db,
+          deviceId: dispatchDeviceId,
+          deviceWorkspaceId: dispatchWorkspaceId,
+          operationId,
+          topicId,
+          userId: deps.userId,
+          workspaceId: deps.workspaceId,
+        })
+      : undefined;
+  const initializedSystemContext = [agentSystemContext, checkoutReport]
+    .filter(Boolean)
+    .join('\n\n');
+
   // Build only device-relevant context instead of reusing the cloud-sandbox one
   // (which describes an ephemeral /workspace + pre-cloned repos and would mislead
   // the agent). The spawned CLI already receives deviceCwd as its actual cwd.
   const deviceSystemContext = buildRemoteDeviceHeteroContext({
     ...worktreeContext,
-    agentSystemContext,
+    agentSystemContext: initializedSystemContext,
     conversationHistory: resumeSessionId ? undefined : conversationHistory,
     unansweredUserTurns,
   });
@@ -285,7 +303,7 @@ export const dispatchToCliDevice = async (
     resumeSessionId && conversationHistory
       ? buildRemoteDeviceHeteroContext({
           ...worktreeContext,
-          agentSystemContext,
+          agentSystemContext: initializedSystemContext,
           conversationHistory,
         })
       : undefined;

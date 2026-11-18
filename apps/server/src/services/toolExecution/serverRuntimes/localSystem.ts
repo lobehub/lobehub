@@ -92,6 +92,8 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
       (contentWorkspaceIdPromise ??= resolveContentWorkspaceId(context));
 
     const proxy: Record<string, (args: any) => Promise<any>> = {};
+    let checkout: Promise<string | undefined> | undefined;
+    let checkoutReported = false;
 
     for (const api of LocalSystemManifest.api) {
       const workingDirArg = WORKING_DIR_ARG[api.name];
@@ -173,6 +175,22 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
         }
 
         const deviceWorkspaceId = await getDeviceWorkspaceId();
+        const checkoutReport =
+          context.serverDB && context.topicId && context.workingDirectory
+            ? await (checkout ??= import('@/server/services/tfs/deviceCheckout').then(
+                async ({ initializeTfsDeviceCheckout }) =>
+                  initializeTfsDeviceCheckout({
+                    cwd: context.workingDirectory,
+                    db: context.serverDB!,
+                    deviceId: context.activeDeviceId!,
+                    deviceWorkspaceId,
+                    operationId: context.operationId,
+                    topicId: context.topicId!,
+                    userId: context.userId!,
+                    workspaceId: await getContentWorkspaceId(),
+                  }),
+              ))
+            : undefined;
         // Only a command can outlive its call. The device may keep watching it
         // and report the final result later, which lets the transport park the
         // run instead of the model polling.
@@ -215,6 +233,10 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
           else if (managed) return withoutDeviceReplay(managed);
         }
 
+        if (checkoutReport && !checkoutReported) {
+          checkoutReported = true;
+          result = { ...result, content: `${checkoutReport}\n\n${result.content}` };
+        }
         return withoutDeviceReplay(result);
       };
     }

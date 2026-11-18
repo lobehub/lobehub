@@ -228,6 +228,8 @@
   "tfs.error.TFS_TRANSPORT_FAILED": "Could not reach TFS. Check connectivity and try again.",
   "tfs.firstPage": "First page",
   "tfs.invalidUrl": "Enter a Git repository URL from the configured TFS collection.",
+  "tfs.loadMoreBranches": "Load more branches",
+  "tfs.loadMoreProjects": "Load more TFS projects",
   "tfs.loading": "Loading…",
   "tfs.logs": "Read log",
   "tfs.moreLog": "Next 100 lines",

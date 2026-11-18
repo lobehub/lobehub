@@ -1,6 +1,6 @@
 // Real Git smart HTTP server: exercises authentication and repository effects, not shell strings.
 import { execFile, spawn } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { buildTfsGitCommand, isTfsGitBranch } from './gitCommand';
+import { buildTfsDeviceCheckout } from './deviceCheckoutCommand';
 
 const exec = promisify(execFile);
 const secret = "test-only-pat'with-quote";
@@ -120,6 +121,48 @@ afterEach(async () => {
 });
 
 describe('controlled TFS Git operations', () => {
+  it('initializes a device folder over authenticated HTTP without putting credentials in its command or Git config', async () => {
+    const deviceFolder = path.join(root, 'device');
+    await mkdir(deviceFolder);
+    const init = buildTfsDeviceCheckout({
+      credential: {
+        tfs: { authType: 'pat', username: '', secret },
+        urlPrefix: new URL('/Collection/', url).href,
+      },
+      sources: [{ url, ref: 'refs/heads/main' }],
+    });
+    expect(init.command).not.toContain(secret);
+    const execute = () =>
+      exec('sh', ['-c', init.command], {
+        cwd: deviceFolder,
+        env: { ...process.env, ...init.env },
+      });
+    await execute();
+    expect(await readFile(path.join(deviceFolder, 'file.txt'), 'utf8')).toBe('initial');
+    expect(await readFile(path.join(deviceFolder, '.git/config'), 'utf8')).not.toContain(secret);
+    const requests = authenticated;
+    await writeFile(path.join(deviceFolder, 'file.txt'), 'local changes');
+    await execute();
+    expect(authenticated).toBe(requests);
+    expect(await readFile(path.join(deviceFolder, 'file.txt'), 'utf8')).toBe('local changes');
+  });
+
+  it('preserves unrelated files in a device folder instead of mixing in a checkout', async () => {
+    const init = buildTfsDeviceCheckout({
+      credential: {
+        tfs: { authType: 'pat', username: '', secret },
+        urlPrefix: new URL('/Collection/', url).href,
+      },
+      sources: [{ url }],
+    });
+    await git(checkout, 'remote', 'set-url', 'origin', 'https://other.example.com/repo');
+    await expect(
+      exec('sh', ['-c', init.command], { cwd: checkout, env: { ...process.env, ...init.env } }),
+    ).rejects.toThrow('empty working folder');
+    expect(await readFile(path.join(checkout, 'file.txt'), 'utf8')).toBe('initial');
+    expect(authenticated).toBe(0);
+  });
+
   it('authenticates a later push without persisting the personal credential', async () => {
     await writeFile(path.join(checkout, 'file.txt'), 'changed');
     await git(checkout, 'commit', '-am', 'change');

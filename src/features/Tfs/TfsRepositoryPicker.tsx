@@ -12,6 +12,7 @@ import { tfsService } from '@/services/tfs';
 import { useTfsData } from '@/store/tfs/action';
 
 import { useTfsConnection } from './useTfsConnection';
+import { useTfsPickerPages } from './useTfsPickerPages';
 
 export const TfsRepositoryPicker = ({
   onSelect,
@@ -28,21 +29,19 @@ export const TfsRepositoryPicker = ({
   const binding = status.connection?.identity?.updatedAt;
   const connected = Boolean(binding);
   const [project, setProject] = useState('');
-  const [projectCursor, setProjectCursor] = useState<string>();
   const [repository, setRepository] = useState('');
   const [manual, setManual] = useState<TfsRepository>();
   const [branch, setBranch] = useState<string>();
-  const [branchCursor, setBranchCursor] = useState<string>();
   const [url, setUrl] = useState('');
   const [error, setError] = useState<Error>();
   const [busy, setBusy] = useState(false);
-  const projects = useTfsData({ binding, cursor: projectCursor, kind: 'projects' }, connected);
+  const projects = useTfsPickerPages({ binding, kind: 'projects' }, connected);
   const repos = useTfsData(
     { binding, kind: 'repositories', project },
     connected && Boolean(project),
   );
-  const branches = useTfsData(
-    { binding, cursor: branchCursor, kind: 'branches', project, repository },
+  const branches = useTfsPickerPages(
+    { binding, kind: 'branches', project, repository },
     connected && Boolean(repository),
   );
   const selected = manual ?? repos.data?.repositories?.items.find((r) => r.id === repository);
@@ -59,7 +58,6 @@ export const TfsRepositoryPicker = ({
       setProject(repo.project.name);
       setRepository(repo.id);
       setBranch(repo.defaultBranch);
-      setBranchCursor(undefined);
       onSelect(repo);
     } catch {
       setError(new Error(t('tfs.resolveFailed')));
@@ -111,21 +109,23 @@ export const TfsRepositoryPicker = ({
             loading={projects.isValidating}
             placeholder={t('tfs.project')}
             value={project || undefined}
-            options={
-              projects.data?.projects?.items.map((p) => ({ label: p.name, value: p.name })) ?? []
-            }
+            options={projects.items.map((p) => ({ label: p.name, value: p.name }))}
             onChange={(value) => {
               onClear();
               setManual(undefined);
               setProject(String(value ?? ''));
               setRepository('');
               setBranch(undefined);
-              setBranchCursor(undefined);
             }}
           />
-          {projects.data?.projects?.next && (
-            <Button size="small" onClick={() => setProjectCursor(projects.data!.projects!.next)}>
-              {t('tfs.nextPage')}
+          {projects.next && (
+            <Button
+              size="small"
+              loading={projects.isValidating}
+              disabled={busy}
+              onClick={projects.loadMore}
+            >
+              {t('tfs.loadMoreProjects')}
             </Button>
           )}
           {(projects.data?.projects?.items.length === 0 ||
@@ -148,7 +148,6 @@ export const TfsRepositoryPicker = ({
                 setManual(undefined);
                 setRepository(String(value ?? ''));
                 setBranch(repo?.defaultBranch);
-                setBranchCursor(undefined);
                 if (repo) onSelect(repo);
                 else onClear();
               }}
@@ -162,18 +161,27 @@ export const TfsRepositoryPicker = ({
               loading={branches.isValidating}
               placeholder={t('tfs.branch')}
               value={branch ?? selected.defaultBranch}
-              options={
-                branches.data?.branches?.items.map((b) => ({ label: b.name, value: b.name })) ?? []
-              }
+              options={[
+                ...new Set(
+                  [branch ?? selected.defaultBranch, ...branches.items.map((b) => b.name)].filter(
+                    (name): name is string => !!name,
+                  ),
+                ),
+              ].map((name) => ({ label: name, value: name }))}
               onChange={(value) => {
                 setBranch(String(value));
                 onSelect({ ...selected, defaultBranch: String(value) });
               }}
             />
           )}
-          {branches.data?.branches?.next && (
-            <Button size="small" onClick={() => setBranchCursor(branches.data!.branches!.next)}>
-              {t('tfs.nextPage')}
+          {selected && branches.next && (
+            <Button
+              size="small"
+              loading={branches.isValidating}
+              disabled={busy}
+              onClick={branches.loadMore}
+            >
+              {t('tfs.loadMoreBranches')}
             </Button>
           )}
           {selected && (
@@ -198,7 +206,6 @@ export const TfsRepositoryPicker = ({
                 setManual(undefined);
                 setRepository('');
                 setBranch(undefined);
-                setBranchCursor(undefined);
                 setUrl(e.target.value);
               }}
             />

@@ -226,10 +226,13 @@ export const buildSandboxEnvironmentInitCommand = (init: SandboxInitialization):
   // `done` record beside an empty folder is stale: the folder was emptied or
   // made again — a project checkout recreated after someone removed it — while
   // the sandbox lived on. That folder is initialized again. A failed run's
-  // record still holds, so a broken clone is not retried on every call, and a
-  // setup with nothing to clone keeps relying on its record alone.
-  const staleWhenEmpty =
-    clones.length > 0 ? ` || [ "$(cat "$__lobe_state" 2>/dev/null)" = done ]` : '';
+  // record still holds, so a broken clone is not retried on every call. TFS
+  // credentials can be repaired between calls, so that path intentionally retries.
+  const staleWhenEmpty = personalTfs
+    ? ' || true'
+    : clones.length > 0
+      ? ` || [ "$(cat "$__lobe_state" 2>/dev/null)" = done ]`
+      : '';
 
   return [
     `__lobe_state=${record}/${key}`,

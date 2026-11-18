@@ -228,6 +228,8 @@
   "tfs.error.TFS_TRANSPORT_FAILED": "无法连接 TFS，请检查网络后重试。",
   "tfs.firstPage": "第一页",
   "tfs.invalidUrl": "请输入部署所配置的 TFS Collection 下的 Git 仓库地址。",
+  "tfs.loadMoreBranches": "加载更多分支",
+  "tfs.loadMoreProjects": "加载更多 TFS 项目",
   "tfs.loading": "加载中…",
   "tfs.logs": "读取日志",
   "tfs.moreLog": "后 100 行",
