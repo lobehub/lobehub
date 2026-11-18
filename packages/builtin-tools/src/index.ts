@@ -1,7 +1,10 @@
 import { AcceptanceEvidenceManifest } from '@lobechat/builtin-tool-acceptance-evidence';
 import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
 import { AgentAccountManifest } from '@lobechat/builtin-tool-agent-account';
-import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
+import {
+  AgentBuilderManifest,
+  resolveAgentBuilderManifest,
+} from '@lobechat/builtin-tool-agent-builder';
 import {
   AgentDocumentsManifest,
   resolveAgentDocumentsRestrictedManifest,
@@ -499,6 +502,7 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: AgentBuilderManifest.identifier,
     manifest: AgentBuilderManifest,
+    resolveManifest: resolveAgentBuilderManifest,
     type: 'builtin',
   },
   {

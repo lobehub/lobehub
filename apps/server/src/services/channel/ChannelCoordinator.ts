@@ -1,3 +1,4 @@
+import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { ChannelIdentifier } from '@lobechat/builtin-tool-channel';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { buildChannelPrompt, CHANNEL_INSTRUCTIONS } from '@lobechat/prompts';
@@ -9,6 +10,7 @@ import { groupBy } from 'es-toolkit';
 import pMap from 'p-map';
 
 import { checkAgentShareSpendAllowance } from '@/business/server/agent-share/spendGate';
+import { resolveChannelRunPreset } from '@/business/server/channel/runPreset';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { AgentShareModel } from '@/database/models/agentShare';
@@ -301,12 +303,26 @@ export class ChannelCoordinator {
               'Device cannot track Native operation lifetime; update its client',
           );
       }
-      const [input, context, primaryReply, opening, coAddressed] = await Promise.all([
+      const [input, context, primaryReply, opening, coAddressed, preset] = await Promise.all([
         this.executions.input(job.channelId, job.id),
         this.executions.recentContext(job.channelId, job.id),
         this.executions.primaryReply(job.channelId, job.id),
         this.executions.openingReply(job.channelId, job.id),
         this.executions.coAddressed(job.channelId, job.id),
+        // A shared Agent runs under its owner's account: a visitor's run is never adjusted.
+        share
+          ? undefined
+          : resolveChannelRunPreset({
+              agentId: member.agentId,
+              db: this.db,
+              executionConfig: config,
+              userId: topic.userId,
+              workspaceId: workspaceId ?? undefined,
+            }).catch((error) => {
+              // The preset only guides the run; without it the run proceeds as usual.
+              console.error('[channel:runPreset]', error);
+              return undefined;
+            }),
       ]);
       const shareGate =
         share && topic.senderId
@@ -321,17 +337,27 @@ export class ChannelCoordinator {
       // here; one that already passed it can only consume the still-idle reservation.
       if (!(await this.executions.heartbeat(job.id, lease)))
         throw new Error('The Channel dispatch lease expired before submission');
+      const selfConfiguration = !!preset?.selfConfiguration;
       const result = await this.service(topic.userId, workspaceId, !!share).execAgent({
-        additionalPluginIds: [ChannelIdentifier],
+        additionalPluginIds: selfConfiguration
+          ? [ChannelIdentifier, AgentBuilderIdentifier]
+          : [ChannelIdentifier],
         agentId: member.agentId,
         agentConfigSnapshot: config,
         // No device picked in the Channel: the requester's own device for this Agent applies.
         snapshotFollowsCallerDevice: !config.deviceId,
-        appContext: { ...(projectId ? { projectId } : {}), topicId: topic.id },
+        appContext: {
+          // The builder tools write to `editingAgentId`: the answering Agent itself.
+          ...(selfConfiguration ? { editingAgentId: member.agentId } : {}),
+          ...(projectId ? { projectId } : {}),
+          topicId: topic.id,
+        },
         deviceId: config.deviceId,
         ...attachments,
         hooks: [completion],
-        instructions: CHANNEL_INSTRUCTIONS,
+        instructions: preset?.instructions
+          ? `${CHANNEL_INSTRUCTIONS}\n\n${preset.instructions}`
+          : CHANNEL_INSTRUCTIONS,
         maxSteps: 32,
         prompt: buildChannelPrompt(job.manifest, input, {
           context: context.messages,

@@ -368,6 +368,13 @@ export interface BuiltinToolResolveContext {
   executionEnvUnroutedReason?:
     'ambiguous-online-devices' | 'bound-device-offline' | 'no-bound-device' | 'no-online-device';
   /**
+   * True when the run edits its own configuration: the agent the builder tools
+   * write to (`editingAgentId`) is the agent executing the run. The builder then
+   * talks to the agent about itself instead of casting it as a separate
+   * configuration assistant.
+   */
+  isSelfConfiguration?: boolean;
+  /**
    * True when running inside a sub-agent execution. A nested sub-agent must not
    * be able to dispatch further sub-agents.
    */

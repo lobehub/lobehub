@@ -6,6 +6,11 @@
  * ownership note, turn-scoped builtins, device routing and the fixed-device
  * failure, group-supervisor authorization, and the credential snapshot.
  */
+import {
+  AgentBuilderApiName,
+  AgentBuilderIdentifier,
+  selfConfigurationSystemPrompt,
+} from '@lobechat/builtin-tool-agent-builder';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -451,6 +456,27 @@ describe('discoverTools — turn-scoped builtins', () => {
     });
     expect(lastEngineOptions().isBotConversation).toBe(true);
     expect(lastEngineOptions().manifestContext.botPlatform.id).toBe('discord');
+  });
+
+  it('gives an agent that edits itself the self-configuration builder', async () => {
+    const result = await run({
+      appContext: { editingAgentId: 'agent-1' },
+      input: { additionalPluginIds: [AgentBuilderIdentifier] },
+    }).promise;
+
+    expect(lastEngineOptions().manifestContext.isSelfConfiguration).toBe(true);
+    expect(result.toolsResult.enabledToolIds).toContain(AgentBuilderIdentifier);
+    const builder = result.toolManifestMap[AgentBuilderIdentifier];
+    expect(builder.systemRole).toBe(selfConfigurationSystemPrompt);
+    expect(builder.api.map((api: { name: string }) => api.name)).not.toContain(
+      AgentBuilderApiName.installPlugin,
+    );
+  });
+
+  it('keeps the configuration assistant when the run edits another agent', async () => {
+    await run({ appContext: { editingAgentId: 'agent-2', scope: 'agent_builder' } }).promise;
+
+    expect(lastEngineOptions().manifestContext.isSelfConfiguration).toBe(false);
   });
 
   it('adds multimodal understanding when the model cannot see an attached image', async () => {
