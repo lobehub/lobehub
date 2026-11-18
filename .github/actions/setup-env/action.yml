@@ -6,10 +6,6 @@ inputs:
     description: Node.js version
     required: false
     default: '24.11.1'
-  package-manager-cache:
-    description: Pass-through to actions/setup-node package-manager-cache
-    required: false
-    default: 'false'
   bun-version:
     description: Bun version
     required: false
@@ -28,8 +24,19 @@ runs:
       with:
         bun-version: ${{ inputs.bun-version }}
 
+    # setup-node only caches pnpm when `cache` is set explicitly; its automatic
+    # caching covers npm alone. The root `pnpm-lock.yaml` is gitignored, so the
+    # dependency path has to name the tracked declarations — a missing file makes
+    # the action fail rather than cache nothing.
     - name: Setup Node.js
       uses: actions/setup-node@v6
       with:
+        cache: pnpm
+        cache-dependency-path: |
+          package.json
+          pnpm-workspace.yaml
+          apps/*/package.json
+          packages/*/package.json
+          patches/*.patch
+          apps/desktop/pnpm-lock.yaml
         node-version: ${{ inputs.node-version }}
-        package-manager-cache: ${{ inputs.package-manager-cache }}
