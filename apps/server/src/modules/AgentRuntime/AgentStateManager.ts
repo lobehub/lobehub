@@ -93,17 +93,7 @@ const writeToolSetCache = (operationId: string, json: string, ttlSeconds: number
 };
 
 /**
- * Whether a persisted blob leaves its tool set out.
- *
- * The immutable per-operation tool set is written once to its own key and
- * re-attached on load instead of riding along in the blob rewritten at every
- * step. This is always on; `AGENT_RUNTIME_STRIP_OPERATION_TOOLSET=0` is the
- * kill switch that restores the inline blob. Flipping it either way is safe for
- * operations already in flight: the load path re-attaches an external tool set
- * unconditionally and leaves an inline one alone, so a blob written under
- * either setting loads the same.
- *
- * Whether a persisted blob may also leave out the copies `slimStateForPersist`
+ * Whether a persisted blob may leave out the copies `slimStateForPersist`
  * drops (see `slimAgentState.ts`): runtime flag `agent_runtime_slim_state`,
  * overridden by `AGENT_RUNTIME_SLIM_STATE` (`0` kill switch, `1` force on).
  * The load path restores them unconditionally, so flipping it either way is
@@ -117,11 +107,6 @@ const writeToolSetCache = (operationId: string, json: string, ttlSeconds: number
  */
 const SLIM_FLAG_CACHE_TTL_MS = 5000;
 const SLIM_FLAG_CACHE_MAX = 1024;
-
-interface PersistOptions {
-  slim: boolean;
-  stripToolSet: boolean;
-}
 
 const envOverride = (name: string): boolean | undefined => {
   const value = process.env[name];
@@ -176,15 +161,8 @@ const resolveSlimFlag = async (userId?: string): Promise<boolean> => {
   }
 };
 
-const resolvePersistOptions = async (userId?: string): Promise<PersistOptions> => {
-  const stripToolSet = process.env.AGENT_RUNTIME_STRIP_OPERATION_TOOLSET !== '0';
-  // The tool set kill switch restores the fully inline blob, so it turns
-  // slimming off too unless that is forced on separately.
-  const slimOverride =
-    envOverride('AGENT_RUNTIME_SLIM_STATE') ?? (stripToolSet ? undefined : false);
-  const slim = slimOverride ?? (await resolveSlimFlag(userId));
-  return { slim, stripToolSet };
-};
+const resolveSlim = async (userId?: string): Promise<boolean> =>
+  envOverride('AGENT_RUNTIME_SLIM_STATE') ?? (await resolveSlimFlag(userId));
 
 export interface StepResult {
   events?: AgentEvent[];
@@ -284,26 +262,19 @@ export class AgentStateManager {
    * (group-member supervisor turns); the size win is forgone to avoid losing
    * the prompt.
    */
-  private serializeStateForPersist(state: AgentState, options: PersistOptions): string {
-    const { slim, stripToolSet } = options;
+  private serializeStateForPersist(state: AgentState, slim: boolean): string {
     // Copies of the tool set are dropped against the full state, before the tool
     // set itself leaves the blob; `restoreSlimState` rebuilds them after it is
     // re-attached on load.
     const source = slim ? slimStateForPersist(state) : state;
     // `operationToolSet` is externalized to its own key (see
     // `externalizeToolSet`) and re-attached on load, so it never travels in the
-    // blob — once stripping is enabled. Until then the blob keeps its inline
-    // copy so a previous-build worker can still execute the operation (see
-    // `resolvePersistOptions`). It is immutable after creation, so a single
-    // write per operation replaces re-serializing ~300–400 KB of tool schemas
-    // at every step.
+    // blob. It is immutable after creation, so a single write per operation
+    // replaces re-serializing ~300–400 KB of tool schemas at every step.
     const { operationToolSet: _toolSet, ...withoutToolSet } = source as AgentState & {
       operationToolSet?: unknown;
     };
-    const persistable = (stripToolSet ? withoutToolSet : source) as AgentState & {
-      messages?: unknown;
-      operationToolSet?: unknown;
-    };
+    const persistable = withoutToolSet as AgentState & { messages?: unknown };
     if (
       !state.origin?.agentId ||
       !state.origin.topicId ||
@@ -365,17 +336,16 @@ export class AgentStateManager {
     const stateKey = `${this.STATE_PREFIX}:${operationId}`;
 
     try {
-      const persistOptions = await resolvePersistOptions(state.origin?.userId);
-      const { stripToolSet } = persistOptions;
-      if (stripToolSet) await this.externalizeToolSet(operationId, state);
-      const serializedState = this.serializeStateForPersist(state, persistOptions);
+      const slim = await resolveSlim(state.origin?.userId);
+      await this.externalizeToolSet(operationId, state);
+      const serializedState = this.serializeStateForPersist(state, slim);
       // One MULTI, like `saveStepResult`: `loadAgentStatus` reads the status
       // from the metadata hash, so it must never disagree with the blob.
       const pipeline = this.redis.multi();
       pipeline.setex(stateKey, this.DEFAULT_TTL, serializedState);
       // Keep the externalized tool set alive in lockstep with the blob so a
       // long run never loads a stripped blob whose tool set has expired.
-      if (stripToolSet) pipeline.expire(this.toolSetKey(operationId), this.DEFAULT_TTL);
+      pipeline.expire(this.toolSetKey(operationId), this.DEFAULT_TTL);
       const metaKey = `${this.METADATA_PREFIX}:${operationId}`;
       const metadata: Partial<AgentOperationMetadata> = {
         lastActiveAt: new Date().toISOString(),
@@ -478,9 +448,8 @@ export class AgentStateManager {
     try {
       // Write-once before opening the pipeline; the inline loop warms the cache
       // on its first step and every later step skips the tool-set write.
-      const persistOptions = await resolvePersistOptions(stepResult.newState.origin?.userId);
-      const { stripToolSet } = persistOptions;
-      if (stripToolSet) await this.externalizeToolSet(operationId, stepResult.newState);
+      const slim = await resolveSlim(stepResult.newState.origin?.userId);
+      await this.externalizeToolSet(operationId, stepResult.newState);
 
       const pipeline = this.redis.multi();
 
@@ -489,10 +458,10 @@ export class AgentStateManager {
       pipeline.setex(
         stateKey,
         this.DEFAULT_TTL,
-        this.serializeStateForPersist(stepResult.newState, persistOptions),
+        this.serializeStateForPersist(stepResult.newState, slim),
       );
       // Refresh the externalized tool set's TTL alongside the blob.
-      if (stripToolSet) pipeline.expire(this.toolSetKey(operationId), this.DEFAULT_TTL);
+      pipeline.expire(this.toolSetKey(operationId), this.DEFAULT_TTL);
 
       // Save step history
       const stepsKey = `${this.STEPS_PREFIX}:${operationId}`;

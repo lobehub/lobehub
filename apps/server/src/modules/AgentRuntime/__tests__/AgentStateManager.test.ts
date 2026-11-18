@@ -291,18 +291,6 @@ describe('AgentStateManager', () => {
   describe('operationToolSet externalization', () => {
     const toolSet = { enabledToolIds: ['foo'], manifestMap: { foo: { api: [] } }, tools: [{}] };
 
-    const STRIP_FLAG = 'AGENT_RUNTIME_STRIP_OPERATION_TOOLSET';
-    const originalFlag = process.env[STRIP_FLAG];
-
-    beforeEach(() => {
-      delete process.env[STRIP_FLAG];
-    });
-
-    afterAll(() => {
-      if (originalFlag === undefined) delete process.env[STRIP_FLAG];
-      else process.env[STRIP_FLAG] = originalFlag;
-    });
-
     it('writes the tool set to its own key and strips it from the state blob', async () => {
       await stateManager.saveAgentState('op-ots-strip', {
         operationToolSet: toolSet,
@@ -383,63 +371,6 @@ describe('AgentStateManager', () => {
     });
   });
 
-  // `AGENT_RUNTIME_STRIP_OPERATION_TOOLSET=0` restores the self-contained blob.
-  describe('operationToolSet externalization · kill switch', () => {
-    const STRIP_FLAG = 'AGENT_RUNTIME_STRIP_OPERATION_TOOLSET';
-    const originalFlag = process.env[STRIP_FLAG];
-
-    beforeEach(() => {
-      process.env[STRIP_FLAG] = '0';
-    });
-
-    afterAll(() => {
-      if (originalFlag === undefined) delete process.env[STRIP_FLAG];
-      else process.env[STRIP_FLAG] = originalFlag;
-    });
-
-    it('keeps both blobs byte-for-byte inline and writes no external key', async () => {
-      const op = 'op-ots-kill';
-      const toolSet = { enabledToolIds: ['kill'], manifestMap: { bar: {} }, tools: [{}] };
-      const state = { operationToolSet: toolSet, status: 'running', stepCount: 1 };
-
-      await stateManager.saveAgentState(op, state as any);
-      await stateManager.saveStepResult(op, {
-        executionTime: 1,
-        newState: state,
-        stepIndex: 1,
-      } as any);
-
-      // Both saves write the blob through a MULTI: saveAgentState first.
-      const [saveBlob, stepBlob] = pipelineMock.setex.mock.calls.filter(
-        (c) => c[0] === `agent_runtime_state:${op}`,
-      );
-      expect(saveBlob![2]).toBe(JSON.stringify(state));
-      expect(stepBlob![2]).toBe(JSON.stringify(state));
-      expect(redisMock.setex.mock.calls.some((c) => c[0] === `agent_runtime_toolset:${op}`)).toBe(
-        false,
-      );
-      expect(pipelineMock.expire).not.toHaveBeenCalledWith(
-        `agent_runtime_toolset:${op}`,
-        expect.anything(),
-      );
-    });
-
-    it('still rehydrates a stripped blob from its external key', async () => {
-      const op = 'op-ots-kill-rehydrate';
-      const toolSet = { enabledToolIds: ['kill'], manifestMap: {}, tools: [] };
-      redisMock.get.mockImplementation((key: string) =>
-        key === `agent_runtime_state:${op}`
-          ? JSON.stringify({ status: 'running', stepCount: 3 })
-          : key === `agent_runtime_toolset:${op}`
-            ? JSON.stringify(toolSet)
-            : null,
-      );
-
-      const loaded = await stateManager.loadAgentState(op);
-      expect(loaded?.operationToolSet).toEqual(toolSet);
-    });
-  });
-
   describe('slim state (agent_runtime_slim_state)', () => {
     const manifest = { api: [{ name: 'x' }], identifier: 'x' };
     const toolSet = {
@@ -460,7 +391,6 @@ describe('AgentStateManager', () => {
       stepCount: 2,
       world: { expertise },
     });
-    const ENVS = ['AGENT_RUNTIME_STRIP_OPERATION_TOOLSET', 'AGENT_RUNTIME_SLIM_STATE'];
 
     const stepBlob = (op: string) =>
       JSON.parse(
@@ -468,11 +398,11 @@ describe('AgentStateManager', () => {
       );
 
     beforeEach(() => {
-      for (const name of ENVS) delete process.env[name];
+      delete process.env.AGENT_RUNTIME_SLIM_STATE;
     });
 
     afterAll(() => {
-      for (const name of ENVS) delete process.env[name];
+      delete process.env.AGENT_RUNTIME_SLIM_STATE;
     });
 
     it('leaves the copies out of the step blob when the flag is on', async () => {
@@ -514,25 +444,6 @@ describe('AgentStateManager', () => {
       expect((loaded as any).__slim).toBeUndefined();
     });
 
-    it('slims with the tool set kept inline too', async () => {
-      process.env.AGENT_RUNTIME_STRIP_OPERATION_TOOLSET = '0';
-      process.env.AGENT_RUNTIME_SLIM_STATE = '1';
-      const op = 'op-slim-inline-toolset';
-
-      await stateManager.saveStepResult(op, {
-        executionTime: 1,
-        newState: buildState(),
-        stepIndex: 2,
-      } as any);
-
-      const blob = stepBlob(op);
-      expect(blob.operationToolSet).toEqual(toolSet);
-      expect(blob.initialContext.payload.tools).toBeUndefined();
-      redisMock.get.mockResolvedValueOnce(JSON.stringify(blob));
-      const loaded = await stateManager.loadAgentState(op);
-      expect((loaded as any).initialContext.payload.tools).toEqual(toolSet.tools);
-    });
-
     it('keeps the blob unchanged when the flag is off', async () => {
       mockSlimFlag(false);
       const op = 'op-slim-off';
@@ -545,21 +456,6 @@ describe('AgentStateManager', () => {
       } as any);
 
       expect(stepBlob(op)).toEqual(JSON.parse(JSON.stringify(expected)));
-    });
-
-    it('the tool set kill switch turns slimming off without consulting the provider', async () => {
-      process.env.AGENT_RUNTIME_STRIP_OPERATION_TOOLSET = '0';
-      mockSlimFlag(true);
-      const op = 'op-slim-kill';
-
-      await stateManager.saveStepResult(op, {
-        executionTime: 1,
-        newState: buildState(),
-        stepIndex: 2,
-      } as any);
-
-      expect(getServerFeatureFlagsStateFromRuntimeConfig).not.toHaveBeenCalled();
-      expect(stepBlob(op)).toEqual(JSON.parse(JSON.stringify(buildState())));
     });
 
     it("AGENT_RUNTIME_SLIM_STATE='0' overrides an enabled flag", async () => {
