@@ -1,0 +1,77 @@
+name: Python SDK
+
+on:
+  push:
+    branches:
+      - canary
+    paths:
+      - packages/sdk-python/**
+      # The SDK is generated from the spec: a spec change must regenerate it.
+      - packages/openapi/openapi.yml
+      - .github/workflows/sdk-python.yml
+  pull_request:
+    paths:
+      - packages/sdk-python/**
+      - packages/openapi/openapi.yml
+      - .github/workflows/sdk-python.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: packages/sdk-python
+
+jobs:
+  check:
+    name: Generated code, lint and types
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Check generated SDK is in sync with openapi.yml
+        run: uv run python scripts/generate.py --check
+
+      - name: Lint
+        run: uv run ruff check . && uv run ruff format --check .
+
+      - name: Type check
+        run: uv run mypy
+
+      - name: Build package
+        run: uv build
+
+  test:
+    name: Test (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.9', '3.13']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Test
+        run: uv run pytest -q
