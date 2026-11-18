@@ -8,6 +8,7 @@ import {
   cssVar,
   cx,
   DropdownMenu,
+  type DropdownMenuProps,
   Flexbox,
   Icon,
   Text,
@@ -16,7 +17,7 @@ import {
 } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { EyeOffIcon, GlobeIcon, MoreHorizontalIcon, Trash2Icon } from 'lucide-react';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import UserAvatar from '@/components/UserAvatar';
@@ -108,6 +109,17 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface EnvironmentItemProps {
   environment: SandboxEnvironment;
+  /**
+   * What the place listing the row adds to it, before the creator — a project
+   * shows how many of its folders come from the environment.
+   */
+  extra?: ReactNode;
+  /**
+   * The menu, when the place listing the row acts on something other than the
+   * environment itself — a project unlinks it rather than deleting it.
+   * Replaces the environment's own items; an empty list hides the menu.
+   */
+  menuItems?: DropdownMenuProps['items'];
   onSelect: () => void;
   selected?: boolean;
 }
@@ -121,7 +133,8 @@ interface EnvironmentItemProps {
  * detail of one environment rather than a way to tell environments apart, so it
  * lives in the panel this row opens.
  */
-const EnvironmentItem = memo<EnvironmentItemProps>(({ environment, onSelect, selected }) => {
+const EnvironmentItem = memo<EnvironmentItemProps>((props) => {
+  const { environment, extra, menuItems, onSelect, selected } = props;
   const { t } = useTranslation('setting');
   const { t: tCommon } = useTranslation('common');
   const actions = useEnvironmentActions();
@@ -192,6 +205,23 @@ const EnvironmentItem = memo<EnvironmentItemProps>(({ environment, onSelect, sel
   const confirmRemoveEnvironment = useConfirmRemoveEnvironment();
   const confirmRemove = () => confirmRemoveEnvironment(environment);
 
+  // Nothing here acts on an environment you only have the use of, so the menu
+  // goes away rather than offering items that would be refused.
+  const items =
+    menuItems ??
+    (canEdit
+      ? [
+          ...visibilityItems,
+          {
+            danger: true,
+            icon: <Icon icon={Trash2Icon} />,
+            key: 'remove',
+            label: t('environments.remove'),
+            onClick: confirmRemove,
+          },
+        ]
+      : []);
+
   return (
     <Flexbox
       horizontal
@@ -202,7 +232,9 @@ const EnvironmentItem = memo<EnvironmentItemProps>(({ environment, onSelect, sel
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={(event) => {
-        // Mirror native button keyboard semantics for the div-as-button row.
+        // Mirror native button keyboard semantics for the div-as-button row —
+        // for the row itself only, so a control inside it keeps its own keys.
+        if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           onSelect();
@@ -260,6 +292,7 @@ const EnvironmentItem = memo<EnvironmentItemProps>(({ environment, onSelect, sel
       </Flexbox>
 
       <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
+        {extra && <span onClick={(event) => event.stopPropagation()}>{extra}</span>}
         {environment.creator && (
           // Who put this here, at a glance — the same answer the device list
           // gives with the enroller's avatar.
@@ -269,25 +302,10 @@ const EnvironmentItem = memo<EnvironmentItemProps>(({ environment, onSelect, sel
             </span>
           </Tooltip>
         )}
-        {/* Nothing here acts on an environment you only have the use of, so
-              the menu goes away rather than offering items that would be
-              refused. */}
-        {canEdit && (
+        {items.length > 0 && (
           <span onClick={(event) => event.stopPropagation()}>
-            <DropdownMenu
-              placement={'bottomRight'}
-              items={[
-                ...visibilityItems,
-                {
-                  danger: true,
-                  icon: <Icon icon={Trash2Icon} />,
-                  key: 'remove',
-                  label: t('environments.remove'),
-                  onClick: confirmRemove,
-                },
-              ]}
-            >
-              <Button icon={MoreHorizontalIcon} />
+            <DropdownMenu items={items} placement={'bottomRight'}>
+              <Button aria-label={tCommon('more')} icon={MoreHorizontalIcon} />
             </DropdownMenu>
           </span>
         )}

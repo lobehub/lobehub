@@ -5,6 +5,7 @@ import { FILE_PREVIEW_CHARS, isOversizedFileContent } from '@lobechat/prompts';
 import type { FrozenCredentialFacts } from '@lobechat/types';
 import { agentShareFileAccessScope, ordinaryFileAccessScope } from '@lobechat/types';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { AgentAccountModel } from '@/database/models/agentAccount';
 import { ConnectorModel, type DecryptedConnector } from '@/database/models/connector';
@@ -13,12 +14,23 @@ import { FileModel } from '@/database/models/file';
 import type { UserConnectorToolItem } from '@/database/schemas';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { refreshExpiredConnectorTokens } from '@/server/services/connector/tokens';
+import {
+  loadConnectorLinksMap,
+  pickPrimaryLink,
+  withLinkCredentials,
+} from '@/server/services/connector/links';
+import {
+  refreshExpiredConnectorTokens,
+  refreshExpiredLinkTokens,
+} from '@/server/services/connector/tokens';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
+import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import type { ExecRunContext } from '../../types';
 import { markDegradedStage, traceDiscoveryStage } from '../discoveryTracing';
+import { hasSupportedEventConnector } from './eventConnectors';
 import { readProjectToolScope } from './projectScope';
 import type { ToolDiscoveryDeps } from './types';
 
@@ -49,6 +61,13 @@ export interface ToolReadsContext {
   candidateIds: string[];
   exclusivePluginIds?: string[];
   isGoalTurn: boolean;
+  /**
+   * The identifiers the agent turned on. A connector is opt-in per agent, so
+   * only these are resolved as discoverable; an off connector never has its
+   * credentials decrypted. `undefined` = no opt-in cut (an exact toolset, or a
+   * share run, which reads `shareGrantedExtensionIds` instead).
+   */
+  optedInExtensionIds?: Set<string>;
   /** Project the run belongs to (`appContext.projectId`). */
   projectId?: string;
   requestedDeviceId?: string;
@@ -98,6 +117,9 @@ export const readCredentialFacts = async (
   }
 };
 
+/** Connectors refreshed at once; each refresh may call its authorization server. */
+const CONNECTOR_REFRESH_CONCURRENCY = 5;
+
 /**
  * Manifests carry each connector's access token for the whole run, so refresh
  * expired OAuth tokens first. Rotated credentials are persisted encrypted,
@@ -108,12 +130,30 @@ const refreshConnectorTokens = async (
   gateKeeper: KeyVaultsGateKeeper | undefined,
   connectors: DecryptedConnector[],
   onTimeout: () => void,
+  anonymous = false,
 ): Promise<DecryptedConnector[]> => {
   if (!gateKeeper || connectors.length === 0) return connectors;
-  return refreshExpiredConnectorTokens(
+  const model = new ConnectorModel(deps.db, deps.userId, deps.workspaceId, gateKeeper);
+  const linksContext = { connectorModel: model };
+  const map = await loadConnectorLinksMap(connectors, linksContext);
+  return pMap(
     connectors,
-    new ConnectorModel(deps.db, deps.userId, deps.workspaceId, gateKeeper),
-    { onTimeout },
+    async (connector) => {
+      const links = map.get(connector.id) ?? [];
+      const choices = links.map(({ id, name, userId }, index) => ({
+        id,
+        name: anonymous ? `Account ${index + 1}` : name,
+        userId,
+      }));
+      if (links.length > 1) return { ...connector, credentials: null, links: choices };
+      const primary = pickPrimaryLink(links);
+      if (primary) {
+        const [fresh] = await refreshExpiredLinkTokens(connector, [primary], model, { onTimeout });
+        return { ...withLinkCredentials(connector, fresh), links: choices };
+      }
+      return (await refreshExpiredConnectorTokens([connector], model, { onTimeout }))[0];
+    },
+    { concurrency: CONNECTOR_REFRESH_CONCURRENCY },
   );
 };
 
@@ -144,6 +184,16 @@ const readConnectors = async (
     const onRefreshTimeout = () => {
       refreshTimeouts += 1;
     };
+    // Started with the read below, not after it: a connector that is on is
+    // resolved here, so this is the common path and must not queue behind the
+    // invocation set's own resolution. Never rejects.
+    const discoverableRead = readDiscoverableConnectors(
+      deps,
+      ctx,
+      connectorGateKeeper,
+      onRefreshTimeout,
+      installedPluginIds,
+    );
     const [resolved, installedIds] = await Promise.all([
       candidateIds.length > 0
         ? deps.connectorModel.resolveByIdentifiers(
@@ -167,6 +217,7 @@ const readConnectors = async (
       connectorGateKeeper,
       connectors.filter(hasCallableMcpEndpoint),
       onRefreshTimeout,
+      !!ctx.shareGate,
     );
 
     // Fetch ALL tools for all real-MCP connectors (including disabled tools) so that
@@ -177,19 +228,17 @@ const readConnectors = async (
         ? await deps.connectorToolModel.queryAllByConnectorIds(connectorsMcp.map((c) => c.id))
         : [];
 
-    const discoverable = await readDiscoverableConnectors(
-      deps,
-      ctx,
-      connectorGateKeeper,
-      onRefreshTimeout,
-      installedIds,
-    );
+    const discoverable = await discoverableRead;
     markDegradedStage(span, refreshTimeouts, 'connector token refreshes');
 
     return {
       connectorGateKeeper,
       connectors,
       connectorsMcp,
+      hasEventConnector:
+        !ctx.shareGate &&
+        hasSupportedEventConnector([...connectorsMcp, ...discoverable.connectorsMcp]) &&
+        (await isWebhookEnabled(deps.userId)),
       connectorTools,
       discoverableConnectorManifests: discoverable.manifests,
       discoverableConnectorsMcp: discoverable.connectorsMcp,
@@ -199,12 +248,13 @@ const readConnectors = async (
 };
 
 /**
- * Connectors the agent has not pinned — `auto` in the three-state plugin
- * config, which is simply "absent from `plugins`". A custom MCP is stored as
- * a connector, so without this source an unpinned one is resolvable only on
- * the turn that @-mentions it: the next turn's activator answers
- * "Not found" and the model's direct call is rejected as an unknown name.
- * Like installed plugins they are discoverable but never enabled.
+ * Connectors the agent turned on. A connector is two-state: on means the model
+ * finds it through the activator, so it is resolved here rather than into the
+ * invocation set. A custom MCP is stored as a connector, so without this
+ * source one that is on is resolvable only on the turn that @-mentions it: the
+ * next turn's activator answers "Not found" and the model's direct call is
+ * rejected as an unknown name. Like installed plugins they are discoverable
+ * but never enabled.
  *
  * A share run resolves only the connectors the share grants, by identifier:
  * `resolveAll` would decrypt every creator connector for a visitor turn.
@@ -215,7 +265,7 @@ const readDiscoverableConnectors = async (
   ctx: ToolReadsContext,
   gateKeeper: KeyVaultsGateKeeper | undefined,
   onRefreshTimeout: () => void,
-  installedIds: Set<string>,
+  installedPluginIds: Promise<Set<string>>,
 ): Promise<{
   connectorsMcp: DecryptedConnector[];
   manifests: LobeToolManifest[];
@@ -225,20 +275,19 @@ const readDiscoverableConnectors = async (
   if (ctx.exclusivePluginIds || ctx.isGoalTurn) return none;
   try {
     const candidates = new Set(ctx.candidateIds);
-    let resolved: DecryptedConnector[];
-    if (ctx.shareGrantedExtensionIds) {
-      const grantedUnpinnedIds = [...ctx.shareGrantedExtensionIds].filter(
-        (identifier) => !candidates.has(identifier),
-      );
-      if (grantedUnpinnedIds.length === 0) return none;
-      resolved = await deps.connectorModel.resolveByIdentifiers(
-        grantedUnpinnedIds,
-        ctx.resolvedAgentId,
-        gateKeeper,
-      );
-    } else {
-      resolved = await deps.connectorModel.resolveAll(ctx.resolvedAgentId, gateKeeper);
-    }
+    // Both cuts name what the run may discover: a share's grants, or the
+    // connectors the agent turned on.
+    const discoverableIds = ctx.shareGrantedExtensionIds ?? ctx.optedInExtensionIds;
+    const unresolvedIds = discoverableIds
+      ? [...discoverableIds].filter((identifier) => !candidates.has(identifier))
+      : undefined;
+    if (unresolvedIds?.length === 0) return none;
+    const [resolved, installedIds] = await Promise.all([
+      unresolvedIds
+        ? deps.connectorModel.resolveByIdentifiers(unresolvedIds, ctx.resolvedAgentId, gateKeeper)
+        : deps.connectorModel.resolveAll(ctx.resolvedAgentId, gateKeeper),
+      installedPluginIds,
+    ]);
     const connectorsMcp = filterInstalledMarketplaceConnectors(resolved, installedIds).filter(
       (c) => !candidates.has(c.identifier) && hasCallableMcpEndpoint(c),
     );
@@ -252,10 +301,15 @@ const readDiscoverableConnectors = async (
       gateKeeper,
       connectorsMcp,
       onRefreshTimeout,
+      !!ctx.shareGate,
     );
     return {
       connectorsMcp: refreshed,
-      manifests: buildConnectorManifests(refreshed, tools) as LobeToolManifest[],
+      manifests: buildConnectorManifests(
+        refreshed,
+        tools,
+        await isMcpAppsEnabled(deps.userId),
+      ) as LobeToolManifest[],
       tools,
     };
   } catch (error) {

@@ -28,7 +28,7 @@ export default {
   'settings.directoryListDescription':
     'Device folders this project works in. Agents read and change files in them on that device.',
   'settings.environmentDescription':
-    'Keep repository sources together in an environment, then add a folder on your device to start working.',
+    'Link environments configured in Settings → Environments, then add a folder on your device to start working.',
   'settings.allEnvironments': 'All environments',
   'settings.viewDirectories': 'View folders ({{count}})',
   'directories.noEnvironment': 'No environment linked',
@@ -190,11 +190,7 @@ export default {
     'Creates an agent named after the project, with its avatar and the Project label. It stays in your agents list.',
   'create.mainAgentDedicatedPlaceholder': 'Named after the project',
   'create.mainAgentDedicatedTag': 'New',
-  'create.mainAgentDescription': 'Manages this project’s conversations, tasks, and goals.',
   'create.mainAgentLabel': 'Main agent',
-  'create.mainAgentMode.dedicated': 'Create a dedicated agent',
-  'create.mainAgentMode.existing': 'Use an existing agent',
-  'create.mainAgentPlaceholder': 'Select an agent',
   'create.nameLabel': 'Project name',
   'create.namePlaceholder': 'What are you working on?',
   'create.slugDescription': 'Used for the project URL and generated from the project name.',
@@ -319,6 +315,13 @@ export default {
   'environment.add.noPublished':
     'No published environments to add. A shared project only uses published environments.',
   'environment.add.title': 'Add environment',
+  'environment.create': 'New environment',
+  'environment.link': 'Link environment',
+  'environment.unlink': 'Unlink from project',
+  'environment.unlinkConfirm.desc':
+    "The environment stays in Settings → Environments. This project's folders that use it are kept, but can't run conversations until it is linked again.",
+  'environment.unlinkConfirm.title': 'Unlink "{{name}}" from this project?',
+  'environment.unlinkFailed': "Couldn't unlink the environment from this project",
   'environment.privateInShared': 'Private',
   'environment.privateInSharedTooltip':
     "This project is shared, so its conversations only use published environments. This private environment won't be checked out.",
@@ -460,7 +463,7 @@ export default {
   'members.noResponsibility': 'No responsibility set yet',
   'members.remove': 'Remove from project',
   'members.removeConfirmDescription':
-    'Its existing tasks and topics in this project stay as they are.',
+    'Its existing tasks and topics in the project are not affected. It also leaves the project’s channels.',
   'members.removeConfirmTitle': 'Remove {{name}} from this project?',
   'members.removeFailed': 'Could not remove the agent',
   'members.replaceCoordinator': 'Change main agent',

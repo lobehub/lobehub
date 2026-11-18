@@ -5,11 +5,12 @@ import { TopicModel } from '@/database/models/topic';
 import type { TrashRegisterEntry } from '@/database/models/trash';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 
-import { topicEntry } from './topic';
+import { hasWaitingWorktreeCleanup, topicEntry, WORKTREE_CLEANUP_WAITING_MESSAGE } from './topic';
 import {
   type TrashCascade,
   type TrashHandler,
   type TrashHandlerContext,
+  TrashPurgeBlockedError,
   TrashRestoreError,
 } from './types';
 
@@ -76,6 +77,19 @@ export const taskHandler: TrashHandler = {
    * a restore that won the race (nothing left stamped) keeps both.
    */
   purge: async (ctx, root, children) => {
+    // Its topics go with it: hold while any still has a worktree cleanup
+    // waiting on its device (see `./topic`).
+    const childTopicIds = children
+      .filter((child) => child.resourceType === 'topic')
+      .map((child) => child.resourceId);
+    const childTopics = await new TopicModel(
+      ctx.db,
+      ctx.userId,
+      ctx.workspaceId,
+    ).findOwnedWorktreeTopics(childTopicIds);
+    if (hasWaitingWorktreeCleanup(childTopics))
+      throw new TrashPurgeBlockedError(WORKTREE_CLEANUP_WAITING_MESSAGE);
+
     await ctx.db.transaction(async (tx) => {
       const db = tx as unknown as typeof ctx.db;
       // FK cascades take dependencies, comments, documents and `task_topics`;

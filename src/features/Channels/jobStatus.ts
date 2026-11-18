@@ -61,6 +61,13 @@ export const unresolvedFailures = <T extends ChannelReplyJob>(jobs: T[]) => {
   });
 };
 
+/**
+ * The header's failures: the main conversation's own. Its view also carries replies still at
+ * work in threads, and one of those must not hide, then bring back, a main-timeline failure.
+ */
+export const mainTimelineFailures = <T extends ChannelReplyJob>(jobs: T[]) =>
+  unresolvedFailures(jobs.filter((job) => !job.threadId));
+
 /** What a member is busy with now: a running reply first, then the next queued one. */
 export const memberCurrentJob = <T extends ChannelReplyJob>(jobs: T[], memberId: string) => {
   const own = jobs.filter((job) => job.memberId === memberId);

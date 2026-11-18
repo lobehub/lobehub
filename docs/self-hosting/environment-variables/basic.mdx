@@ -207,6 +207,8 @@ LobeHub performs SSRF security checks in the following scenarios:
 
 3. **Proxy Requests**: When proxying external API requests.
 
+4. **HTTP MCP Servers and Connectors**: When the server connects to a Streamable HTTP MCP server or connector, including its OAuth discovery and token requests. The check uses the IP address the host actually resolves to, on every request and redirect. A self-hosted deployment without a device gateway that runs MCP servers on its own network must allow them with `SSRF_ALLOW_PRIVATE_IP_ADDRESS` or `SSRF_ALLOW_IP_ADDRESS_LIST`; MCP servers that run through the desktop app on the user's machine are not affected.
+
 **Configuration Examples**:
 
 ```bash

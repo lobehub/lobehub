@@ -111,6 +111,46 @@ describe('DeviceGateway', () => {
       );
     });
 
+    it('supports a device-only scan without inventing a working directory', async () => {
+      configure();
+      mockClient.invokeRpc.mockResolvedValue({
+        data: {
+          instructions: [],
+          skills: [
+            {
+              description: 'Device writing guidance',
+              name: 'writing',
+              path: '/home/user/.agents/skills/writing/SKILL.md',
+              scope: 'device',
+            },
+          ],
+        },
+        success: true,
+      });
+
+      const result = await new DeviceGateway().initWorkspace({
+        deviceId: 'dev-1',
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+      });
+
+      expect(result).toEqual({
+        instructions: [],
+        skills: [
+          {
+            description: 'Device writing guidance',
+            name: 'writing',
+            path: '/home/user/.agents/skills/writing/SKILL.md',
+            scope: 'device',
+          },
+        ],
+      });
+      expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+        { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1', workspaceId: 'workspace-1' },
+        { method: 'initWorkspace', params: { scope: undefined } },
+      );
+    });
+
     it('defaults instructions and skills to empty arrays when absent', async () => {
       configure();
       mockClient.invokeRpc.mockResolvedValue({ data: {}, success: true });

@@ -1,5 +1,24 @@
-import { channelMessageReceipt, channelMessageVia } from '@lobechat/types';
-import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, lt, sql } from 'drizzle-orm';
+import {
+  channelMessageDeletedAt,
+  channelMessageEditedAt,
+  channelMessageReceipt,
+  channelMessageVia,
+} from '@lobechat/types';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
 
 import {
   agentOperations,
@@ -7,7 +26,9 @@ import {
   channelJobs,
   channelMembers,
   channelMessages,
+  channels,
   channelThreads,
+  devices,
   files as fileTable,
   topics,
   users,
@@ -15,11 +36,12 @@ import {
 import type { Transaction } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
 import { fileIdsByMessage } from './attachments';
+import { isAgentAuthored } from './author';
 import { activeMembers } from './delivery';
 import { ChannelError } from './error';
 import { externalWorksByMessage } from './works';
 
-const publicMessageColumns = {
+export const publicMessageColumns = {
   ...getTableColumns(channelMessages),
   senderAgentAvatar: agents.avatar,
   senderAgentName: agents.name,
@@ -38,7 +60,7 @@ type MessageRow = typeof channelMessages.$inferSelect & {
   senderUsername: string | null;
 };
 
-const publicMessage = (row: MessageRow, fileIds: string[]) => {
+export const publicMessage = (row: MessageRow, fileIds: string[]) => {
   const {
     senderAgentAvatar,
     senderAgentName,
@@ -48,7 +70,7 @@ const publicMessage = (row: MessageRow, fileIds: string[]) => {
     senderUsername,
     ...message
   } = row;
-  const isAgent = message.routingStatus === 'reply';
+  const isAgent = isAgentAuthored(message);
   return {
     ...message,
     fileIds,
@@ -58,7 +80,15 @@ const publicMessage = (row: MessageRow, fileIds: string[]) => {
       name: isAgent ? senderAgentName || senderAgentTitle : senderUserName || senderUsername,
       type: isAgent ? ('agent' as const) : ('user' as const),
     },
-    receipt: isAgent ? null : (channelMessageReceipt(message.metadata) ?? null),
+    deletedAt: channelMessageDeletedAt(message.metadata),
+    editedAt: channelMessageEditedAt(message.metadata),
+    // On an Agent's message, the exchange between Agents it reports from.
+    receipt: (() => {
+      const receipt = channelMessageReceipt(message.metadata);
+      if (!receipt) return null;
+      const { agent, ...rest } = receipt;
+      return { ...rest, agent: agent && { ...agent, avatar: null as string | null } };
+    })(),
     via: isAgent
       ? null
       : (() => {
@@ -69,15 +99,17 @@ const publicMessage = (row: MessageRow, fileIds: string[]) => {
 };
 
 /**
- * Avatars of the Agents named in `via`, which usually are not members of this Channel. An Agent
- * deleted since keeps the name the message recorded, without an avatar.
+ * Avatars of the Agents named in `via` or in a report's `receipt.agent`, which usually are not
+ * members of this Channel. An Agent deleted since keeps the name the message recorded, without
+ * an avatar.
  */
 const relayAgentAvatars = async (tx: Transaction, rows: MessageRow[]) => {
   const ids = [
     ...new Set(
       rows.flatMap((row) => {
         const via = row.routingStatus === 'reply' ? undefined : channelMessageVia(row.metadata);
-        return via ? [via.agentId] : [];
+        const reported = channelMessageReceipt(row.metadata)?.agent;
+        return [...(via ? [via.agentId] : []), ...(reported ? [reported.agentId] : [])];
       }),
     ),
   ];
@@ -89,13 +121,28 @@ const relayAgentAvatars = async (tx: Transaction, rows: MessageRow[]) => {
   return new Map(found.map(({ avatar, id }) => [id, avatar] as const));
 };
 
-const withRelayAvatar = <T extends { via?: { agentId: string; avatar: string | null } | null }>(
+type AvatarAgent = { agentId: string; avatar: string | null };
+const withRelayAvatar = <
+  T extends {
+    receipt?: { agent?: AvatarAgent } | null;
+    via?: AvatarAgent | null;
+  },
+>(
   message: T,
   avatars: Map<string, string | null>,
-): T =>
-  message.via
-    ? { ...message, via: { ...message.via, avatar: avatars.get(message.via.agentId) ?? null } }
-    : message;
+): T => {
+  const avatarOf = <A extends AvatarAgent>(agent: A): A => ({
+    ...agent,
+    avatar: avatars.get(agent.agentId) ?? null,
+  });
+  return {
+    ...message,
+    ...(message.via && { via: avatarOf(message.via) }),
+    ...(message.receipt?.agent && {
+      receipt: { ...message.receipt, agent: avatarOf(message.receipt.agent) },
+    }),
+  };
+};
 
 /** Public projection only. Execution settings, drafts and internal messages never leave this boundary. */
 /**
@@ -172,6 +219,123 @@ const threadSummaries = async (tx: Transaction, channelId: string, threadIds: st
   );
 };
 
+/**
+ * A job as the public view shows it. The repository drops `requesterMemberId`, and keeps
+ * `topicId` only for the viewer who owns that topic (`topicOwnerId`), as replies keep
+ * `sourceTopicId`: the topic belongs to the requester, so other members never learn its id.
+ */
+const publicJobColumns = {
+  id: channelJobs.id,
+  memberId: channelJobs.memberId,
+  messageId: channelJobs.messageId,
+  requesterMemberId: channelJobs.requesterMemberId,
+  threadId: channelJobs.threadId,
+  status: channelJobs.status,
+  blockedCode: channelJobs.blockedCode,
+  // Only a bounded diagnostic message crosses the public boundary, never the raw error.
+  errorMessage: sql<string | null>`CASE WHEN ${channelJobs.status} = 'failed'
+      THEN left(${agentOperations.error}->>'message', 2000) ELSE NULL END`,
+  // The error's category, so a client can explain a known failure in the viewer's language.
+  errorType: sql<string | null>`CASE WHEN ${channelJobs.status} = 'failed'
+      THEN ${agentOperations.error}->>'type' ELSE NULL END`,
+  // The device the reply runs on, waits for, or failed to reach: the claimed device, the
+  // one a failed dispatch was routed to, or the Agent's own bound device.
+  deviceId: sql<string | null>`COALESCE(
+      ${channelJobs.deviceId},
+      ${agentOperations.error}->'deviceRoute'->>'deviceId',
+      ${channelJobs.executionConfig}->'agencyConfig'->>'boundDeviceId'
+    )`,
+  writerHeld: channelJobs.writerHeld,
+  topicId: channelJobs.topicId,
+  // A trashed topic has no owner here, so its link goes with it.
+  topicOwnerId: sql<string | null>`CASE WHEN ${notTrashed(topics.isDeleted)}
+      THEN ${topics.userId} ELSE NULL END`,
+  worktreeBranch: sql<string | null>`${channelJobs.executionConfig}->>'worktreeBranch'`,
+  operationStatus: agentOperations.status,
+  createdAt: channelJobs.createdAt,
+  publicationRevoked: channelJobs.publicationRevoked,
+};
+
+/** At most this many of a main view's threads' jobs still at work ride along with its own. */
+const THREAD_ACTIVE_JOB_LIMIT = 50;
+
+const readJobs = (tx: Transaction, where: SQL | undefined, limit: number) =>
+  tx
+    .select(publicJobColumns)
+    .from(channelJobs)
+    .leftJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
+    .leftJoin(topics, eq(topics.id, channelJobs.topicId))
+    .where(where)
+    .orderBy(desc(channelJobs.createdAt))
+    .limit(limit);
+
+interface MemberDevice {
+  agentId: string | null;
+  deviceId: string | null;
+  deviceOwnerId: string | null;
+}
+
+/**
+ * Display names for the devices Agent members run on, keyed by member id. A device id is unique
+ * only within its principal, so each one resolves the way execution does: the Channel's workspace
+ * device first, else the personal device of the member who owns it.
+ */
+const memberDeviceNames = async (tx: Transaction, channelId: string, members: MemberDevice[]) => {
+  const configured = members.filter(
+    (member): member is MemberDevice & { deviceId: string } =>
+      !!member.agentId && !!member.deviceId,
+  );
+  const names = new Map<MemberDevice, string>();
+  if (!configured.length) return names;
+
+  const [channel] = await tx
+    .select({ workspaceId: channels.workspaceId })
+    .from(channels)
+    .where(eq(channels.id, channelId));
+  const owners = [
+    ...new Set(
+      configured.flatMap((member) => (member.deviceOwnerId ? [member.deviceOwnerId] : [])),
+    ),
+  ];
+  const scopes = [
+    channel?.workspaceId ? eq(devices.workspaceId, channel.workspaceId) : undefined,
+    owners.length ? and(isNull(devices.workspaceId), inArray(devices.userId, owners)) : undefined,
+  ].filter((scope): scope is SQL => !!scope);
+  if (!scopes.length) return names;
+
+  const rows = await tx
+    .select({
+      deviceId: devices.deviceId,
+      friendlyName: devices.friendlyName,
+      hostname: devices.hostname,
+      userId: devices.userId,
+      workspaceId: devices.workspaceId,
+    })
+    .from(devices)
+    .where(
+      and(
+        inArray(
+          devices.deviceId,
+          configured.map((member) => member.deviceId),
+        ),
+        or(...scopes),
+      ),
+    );
+  for (const member of configured) {
+    const row =
+      rows.find((entry) => entry.deviceId === member.deviceId && entry.workspaceId) ??
+      rows.find(
+        (entry) =>
+          entry.deviceId === member.deviceId &&
+          !entry.workspaceId &&
+          entry.userId === member.deviceOwnerId,
+      );
+    const name = row?.friendlyName || row?.hostname;
+    if (name) names.set(member, name);
+  }
+  return names;
+};
+
 export const readChannelView = async (
   tx: Transaction,
   channelId: string,
@@ -179,7 +343,7 @@ export const readChannelView = async (
   viewerUserId?: string,
 ) => {
   const limit = Math.max(1, Math.min(options.limit ?? 100, 100));
-  const [members, reversed, threads, jobs] = await Promise.all([
+  const [members, reversed, threads, ownJobs, threadJobs] = await Promise.all([
     tx
       .select({
         actorType: channelMembers.actorType,
@@ -190,6 +354,7 @@ export const readChannelView = async (
           string | null
         >`coalesce(nullif(${channelMembers.description}, ''), ${agents.description})`,
         id: channelMembers.id,
+        muted: sql<boolean>`coalesce((${channelMembers.config}->>'muted')::boolean, false)`,
         name: channelMembers.name,
         role: channelMembers.role,
         status: channelMembers.status,
@@ -199,6 +364,9 @@ export const readChannelView = async (
         userAvatar: users.avatar,
         lastReadSequence: channelMembers.lastReadSequence,
         joinedAt: channelMembers.createdAt,
+        deviceId: sql<string | null>`${channelMembers.config}->>'deviceId'`,
+        deviceOwnerId: sql<string | null>`${channelMembers.config}->>'deviceOwnerId'`,
+        workingDirectory: sql<string | null>`${channelMembers.config}->>'workingDirectory'`,
       })
       .from(channelMembers)
       .leftJoin(users, eq(users.id, channelMembers.userId))
@@ -226,37 +394,38 @@ export const readChannelView = async (
       .from(channelThreads)
       .where(and(eq(channelThreads.channelId, channelId), notTrashed(channelThreads.isDeleted)))
       .orderBy(asc(channelThreads.createdAt)),
-    tx
-      .select({
-        id: channelJobs.id,
-        memberId: channelJobs.memberId,
-        messageId: channelJobs.messageId,
-        requesterMemberId: channelJobs.requesterMemberId,
-        threadId: channelJobs.threadId,
-        status: channelJobs.status,
-        blockedCode: channelJobs.blockedCode,
-        // Only a bounded diagnostic message crosses the public boundary, never the raw error.
-        errorMessage: sql<string | null>`CASE WHEN ${channelJobs.status} = 'failed'
-          THEN left(${agentOperations.error}->>'message', 2000) ELSE NULL END`,
-        writerHeld: channelJobs.writerHeld,
-        worktreeBranch: sql<string | null>`${channelJobs.executionConfig}->>'worktreeBranch'`,
-        operationStatus: agentOperations.status,
-        createdAt: channelJobs.createdAt,
-        publicationRevoked: channelJobs.publicationRevoked,
-      })
-      .from(channelJobs)
-      .leftJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
-      .where(
-        and(
-          eq(channelJobs.channelId, channelId),
-          options.threadId
-            ? eq(channelJobs.threadId, options.threadId)
-            : isNull(channelJobs.threadId),
+    readJobs(
+      tx,
+      and(
+        eq(channelJobs.channelId, channelId),
+        options.threadId
+          ? eq(channelJobs.threadId, options.threadId)
+          : isNull(channelJobs.threadId),
+      ),
+      200,
+    ),
+    // The main timeline also carries its threads' replies still at work, so a thread card and
+    // the header can show an Agent working without loading every thread. Bounded on its own,
+    // so busy threads never push the main conversation's own jobs out of its limit.
+    options.threadId
+      ? []
+      : readJobs(
+          tx,
+          and(
+            eq(channelJobs.channelId, channelId),
+            isNotNull(channelJobs.threadId),
+            or(
+              inArray(channelJobs.status, ['queued', 'running']),
+              eq(channelJobs.writerHeld, true),
+            ),
+          ),
+          THREAD_ACTIVE_JOB_LIMIT,
         ),
-      )
-      .orderBy(desc(channelJobs.createdAt))
-      .limit(200),
   ]);
+  const deviceNames = await memberDeviceNames(tx, channelId, members);
+  const jobs = [...ownJobs, ...threadJobs].sort(
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+  );
   if (options.threadId && !threads.some((thread) => thread.id === options.threadId))
     throw new ChannelError('NOT_FOUND', 'Thread not found');
   const thread = threads.find((entry) => entry.id === options.threadId);
@@ -297,8 +466,11 @@ export const readChannelView = async (
     : [];
   const quotes = new Map(
     quoted.map((row) => {
-      const { author, content, id, sequence, threadId } = publicMessage(row, []);
-      return [id, { author, content: content.slice(0, 240), id, sequence, threadId }] as const;
+      const { author, content, deletedAt, id, sequence, threadId } = publicMessage(row, []);
+      return [
+        id,
+        { author, content: content.slice(0, 240), deletedAt, id, sequence, threadId },
+      ] as const;
     }),
   );
   const files = await fileIdsByMessage(tx, [
@@ -330,7 +502,16 @@ export const readChannelView = async (
     attachments,
     hasMore: reversed.length > limit,
     jobs,
-    members,
+    members: members.map((row) => {
+      const { deviceId, deviceOwnerId: _deviceOwnerId, workingDirectory, ...member } = row;
+      return {
+        ...member,
+        environment:
+          member.agentId && (deviceId || workingDirectory)
+            ? { deviceId, deviceName: deviceNames.get(row) ?? null, workingDirectory }
+            : null,
+      };
+    }),
     threads: threads.map((entry) => {
       const title = entry.metadata?.title;
       const named = typeof title === 'string' && title ? { ...entry, title } : entry;

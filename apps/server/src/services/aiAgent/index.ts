@@ -1,6 +1,7 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { SandboxStorageClaim } from '@lobechat/builtin-tool-cloud-sandbox';
+import { LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
   AgentRunInitRequest,
@@ -47,9 +48,15 @@ import type {
   AgentExecutionResult,
   AgentRuntimeServiceOptions,
   AgentStepContinuation,
+  DeferredMessagePatch,
   SubAgentBridgeParams,
 } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
+import {
+  completeDeferredShell,
+  type CompleteDeferredShellOutcome,
+  type CompleteDeferredShellParams,
+} from '@/server/services/agentRuntime/AgentRuntimeService/asyncShellResult';
 import type {
   ExecGroupMemberParams,
   ExecGroupMemberResult,
@@ -59,6 +66,7 @@ import { ComposioService } from '@/server/services/composio';
 import { DocumentService } from '@/server/services/document';
 import { MarketService } from '@/server/services/market';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
+import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 
 import {
   type BackgroundSubAgentResult,
@@ -380,9 +388,15 @@ export class AiAgentService {
     return this.agentRuntimeService.createOperationLockOwner(operationId);
   }
 
-  /** Publish a step that an inline loop deferred instead of running. */
-  scheduleContinuation(continuation: AgentStepContinuation): Promise<void> {
-    return this.agentRuntimeService.scheduleContinuation(continuation);
+  /**
+   * Publish a step that an inline loop deferred instead of running, after the
+   * message patch its previous step left unpublished.
+   */
+  scheduleContinuation(
+    continuation: AgentStepContinuation,
+    deferredMessagePatch?: DeferredMessagePatch,
+  ): Promise<void> {
+    return this.agentRuntimeService.scheduleContinuation(continuation, deferredMessagePatch);
   }
 
   /** Release a lock retained across an inline step loop. */
@@ -401,6 +415,42 @@ export class AiAgentService {
    */
   completeSubAgentBridge(params: SubAgentBridgeParams): Promise<boolean> {
     return this.agentRuntimeService.completeSubAgentBridge(params);
+  }
+
+  /**
+   * Finish a shell command that outlived its tool call.
+   *
+   * Driven by `/api/agent/tool-result` when the gateway forwards a device's
+   * late `deferred` result. Routed through the AiAgentService like the other
+   * bridges so the placeholder backfill and the resume barrier stay
+   * workspace-scoped.
+   */
+  completeDeferredShell(
+    params: CompleteDeferredShellParams,
+  ): Promise<CompleteDeferredShellOutcome> {
+    return completeDeferredShell(
+      {
+        archiveResult: async ({ maxLength, ...input }) =>
+          (
+            await archiveToolResultIfNeeded({
+              ...input,
+              identifier: LocalSystemIdentifier,
+              limit: maxLength,
+              serverDB: this.db,
+              userId: this.userId,
+            })
+          ).content,
+        // The parked step never returned through `ServerToolTransport`, so this
+        // is the only place an `afterToolCall` policy can see its answer.
+        controlCompletedToolResult: (input) =>
+          this.agentRuntimeService.controlCompletedToolResult(input),
+        messageModel: this.messageModel,
+        serverDB: this.db,
+        tryResumeParentFromAsyncTool: (resumeParams, options) =>
+          this.agentRuntimeService.tryResumeParentFromAsyncTool(resumeParams, options),
+      },
+      params,
+    );
   }
 
   /**

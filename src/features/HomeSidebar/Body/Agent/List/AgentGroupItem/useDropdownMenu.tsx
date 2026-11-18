@@ -1,7 +1,15 @@
 import type { SidebarVisibility } from '@lobechat/types';
 import { type DropdownItem } from '@lobehub/ui';
 import { confirmModal, Icon, toast } from '@lobehub/ui';
-import { LucideCopy, Pen, PictureInPicture2Icon, Pin, PinOff, Trash } from 'lucide-react';
+import {
+  EyeOffIcon,
+  LucideCopy,
+  Pen,
+  PictureInPicture2Icon,
+  Pin,
+  PinOff,
+  Trash,
+} from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,6 +24,7 @@ import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 
+import { useSidebarItemVisibility } from '../../useSidebarItemVisibility';
 import { useSidebarPinMenuItems } from '../../useSidebarPinMenuItems';
 
 interface UseGroupDropdownMenuParams {
@@ -72,30 +81,58 @@ export const useGroupDropdownMenu = ({
   const activeWorkspaceId = useActiveWorkspaceId();
   // Workspace: personal pin for every member + owner/admin team pin on public
   // groups. Personal mode keeps the single column-backed pin.
-  const { menuItems: workspacePinItems } = useSidebarPinMenuItems({
+  const { isTeamPinned, menuItems: workspacePinItems } = useSidebarPinMenuItems({
     id,
     pinned,
     type: 'group',
     visibility,
   });
 
+  // Same per-member show/hide as Agent rows: the sidebar filters agents and
+  // groups through one membership predicate keyed by row id, so hiding a
+  // group only needs the menu entry. Restore it from the Agents page.
+  const { isSidebarItemVisible, setSidebarItemVisible } = useSidebarItemVisibility();
+  const isShownInSidebar = isSidebarItemVisible({ id, type: 'group', userId });
+
   return useMemo(
     () => () =>
       [
-        ...(activeWorkspaceId ? workspacePinItems : []),
+        ...(activeWorkspaceId
+          ? workspacePinItems
+          : canConfigure
+            ? [
+                {
+                  icon: <Icon icon={pinned ? PinOff : Pin} />,
+                  key: 'pin',
+                  label: t(pinned ? 'pinOff' : 'pin'),
+                  onClick: () => pinAgentGroup(id, !pinned),
+                  sfSymbol: pinned ? 'pin.slash' : 'pin',
+                },
+              ]
+            : []),
+        // Team-pinned rows are the fixed section every member sees; hiding
+        // them would do nothing there.
+        ...(isShownInSidebar && !isTeamPinned
+          ? [
+              {
+                icon: <Icon icon={EyeOffIcon} />,
+                key: 'hideFromSidebar',
+                label: t('agentViewAll.removeFromSidebar', { ns: 'common' }),
+                onClick: async ({ domEvent }: any) => {
+                  domEvent?.stopPropagation();
+                  try {
+                    await setSidebarItemVisible(id, false);
+                  } catch (error) {
+                    console.error('Failed to hide group from sidebar:', error);
+                    toast.error(t('operationFailed', { ns: 'common' }));
+                  }
+                },
+                sfSymbol: 'sidebar.left',
+              },
+            ]
+          : []),
         ...(canConfigure
           ? [
-              ...(activeWorkspaceId
-                ? []
-                : [
-                    {
-                      icon: <Icon icon={pinned ? PinOff : Pin} />,
-                      key: 'pin',
-                      label: t(pinned ? 'pinOff' : 'pin'),
-                      onClick: () => pinAgentGroup(id, !pinned),
-                      sfSymbol: pinned ? 'pin.slash' : 'pin',
-                    },
-                  ]),
               {
                 icon: <Icon icon={Pen} />,
                 key: 'rename',
@@ -179,6 +216,9 @@ export const useGroupDropdownMenu = ({
     [
       activeWorkspaceId,
       workspacePinItems,
+      isShownInSidebar,
+      isTeamPinned,
+      setSidebarItemVisible,
       anchor,
       avatar,
       backgroundColor,

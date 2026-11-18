@@ -3,11 +3,13 @@ import {
   FAVORITE_LIMIT,
   type FavoriteItem,
   type FavoriteType,
+  type TaskStatus,
 } from '@lobechat/types';
-import { and, asc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
 
-import { userFavorites } from '../schemas';
+import { tasks, userFavorites } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { notTrashed } from '../utils/softDelete';
 import { normalizeWorkspaceId } from '../utils/workspace';
 
 /** Adding another favorite would exceed {@link FAVORITE_LIMIT}. */
@@ -24,10 +26,14 @@ export interface UpdateFavoriteParams {
   title?: string;
 }
 
-const toFavoriteItem = (row: typeof userFavorites.$inferSelect): FavoriteItem => ({
+const toFavoriteItem = (
+  row: typeof userFavorites.$inferSelect,
+  status?: string | null,
+): FavoriteItem => ({
   icon: row.icon,
   id: row.id,
   path: row.path,
+  ...(row.type === 'task' && status ? { status: status as TaskStatus } : {}),
   targetId: row.targetId,
   title: row.title,
   type: row.type,
@@ -57,14 +63,34 @@ export class FavoriteModel {
         : isNull(userFavorites.workspaceId),
     ) as SQL;
 
+  /**
+   * Joins a task favorite to its task, in the same scope the favorite lives
+   * in and only while the member can still see it, so the sidebar can show
+   * the task's current status instead of a snapshot. A deleted, trashed,
+   * moved or since-hidden task simply has no status.
+   */
+  private taskJoin = (): SQL =>
+    and(
+      eq(userFavorites.type, 'task'),
+      eq(tasks.id, userFavorites.targetId),
+      notTrashed(tasks.isDeleted),
+      this.workspaceId
+        ? and(
+            eq(tasks.workspaceId, this.workspaceId),
+            or(eq(tasks.visibility, 'public'), eq(tasks.createdByUserId, this.userId)),
+          )
+        : and(isNull(tasks.workspaceId), eq(tasks.createdByUserId, this.userId)),
+    ) as SQL;
+
   query = async (): Promise<FavoriteItem[]> => {
     const rows = await this.db
-      .select()
+      .select({ favorite: userFavorites, status: tasks.status })
       .from(userFavorites)
+      .leftJoin(tasks, this.taskJoin())
       .where(this.scope())
       .orderBy(asc(userFavorites.sortOrder), asc(userFavorites.createdAt));
 
-    return rows.map(toFavoriteItem);
+    return rows.map((row) => toFavoriteItem(row.favorite, row.status));
   };
 
   /**
@@ -129,7 +155,16 @@ export class FavoriteModel {
         })
         .returning();
 
-      return toFavoriteItem(row);
+      if (row.type !== 'task') return toFavoriteItem(row);
+
+      const [task] = await tx
+        .select({ status: tasks.status })
+        .from(userFavorites)
+        .innerJoin(tasks, this.taskJoin())
+        .where(eq(userFavorites.id, row.id))
+        .limit(1);
+
+      return toFavoriteItem(row, task?.status);
     });
 
   remove = async (id: string): Promise<void> => {

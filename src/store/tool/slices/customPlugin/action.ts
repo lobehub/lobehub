@@ -132,6 +132,7 @@ export class CustomPluginActionImpl {
       updateInstallLoadingState(id, true);
       const manifest = await mcpService.getStreamableMcpServerManifest({
         auth: plugin.customParams.mcp.auth,
+        connectVia: plugin.customParams.mcp.connectVia,
         headers: plugin.customParams.mcp.headers,
         identifier: plugin.identifier,
         metadata: {

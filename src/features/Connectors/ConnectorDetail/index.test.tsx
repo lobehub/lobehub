@@ -18,8 +18,10 @@ const mocks = vi.hoisted(() => ({
       updateTools: [],
     },
     connectors: [] as Array<{
+      authKind?: string;
       authorizedByName?: string;
       id: string;
+      links?: Array<{ id: string; name: string }>;
       identifier: string;
       isEnabled?: boolean;
       metadata?: { description?: string };
@@ -32,6 +34,7 @@ const mocks = vi.hoisted(() => ({
     deleteConnector: vi.fn(),
     disconnectConnector: vi.fn(),
     fetchConnectors: vi.fn(),
+    installBuiltinTool: vi.fn(),
     resetConnectorPermissions: vi.fn(),
     syncBuiltinTool: vi.fn(),
     syncConnectorTools: vi.fn(),
@@ -40,6 +43,7 @@ const mocks = vi.hoisted(() => ({
     uninstallBuiltinTool: vi.fn(),
     uninstalledBuiltinTools: [] as string[],
     uninstallMCPPlugin: vi.fn(),
+    useFetchUninstalledBuiltinTools: vi.fn(),
     updateToolPermission: vi.fn(),
   },
   manageable: {
@@ -99,6 +103,12 @@ vi.mock('@/store/tool/slices/connector', () => ({
 
 vi.mock('../CustomConnectorModal', () => ({
   default: () => <div data-testid="custom-connector-modal" />,
+}));
+
+vi.mock('./ConnectorAccounts', () => ({
+  default: ({ connector }: { connector: { links?: unknown[] } }) => (
+    <div data-testid="connector-accounts">{connector.links?.length ?? 0}</div>
+  ),
 }));
 
 vi.mock('./ToolPermissionGroup', () => ({
@@ -224,7 +234,7 @@ describe('ConnectorDetail', () => {
     expect(screen.getByRole('button', { name: 'Uninstall' })).toBeInTheDocument();
   });
 
-  it('keeps authorization and identity in Overview and moves permissions to Tools', () => {
+  it('shows authorization, identity and tool permissions on one page', () => {
     mocks.toolState.connectors[0] = {
       ...mocks.toolState.connectors[0],
       authorizedByName: 'Avery',
@@ -237,18 +247,15 @@ describe('ConnectorDetail', () => {
 
     render(<ConnectorDetail connectorId="connector-1" />);
 
-    // Overview: connection status, identity and lifecycle actions; no permission matrix.
+    // One page: status and identity, the lifecycle actions in the header, then
+    // the Tools section with its permission groups and reset.
     expect(screen.getByText('connector.connected')).toBeInTheDocument();
     expect(screen.getByText('Avery')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Uninstall' })).toBeInTheDocument();
-    expect(screen.queryByTestId('permission-group')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: /connector\.tab\.tools/ }));
-
-    // Tools: the permission groups and reset, without the lifecycle actions.
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(screen.getByText('connectorMarket.detail.tools')).toBeInTheDocument();
     expect(screen.getAllByTestId('permission-group')).toHaveLength(4);
     expect(screen.getByRole('button', { name: 'Reset permissions' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Uninstall' })).not.toBeInTheDocument();
   });
 
   it('reports an authorization error instead of "not connected"', () => {
@@ -312,5 +319,91 @@ describe('ConnectorDetail', () => {
     render(<ConnectorDetail connectorId="connector-1" />);
 
     expect(screen.getByText('connector.enabled')).toBeInTheDocument();
+  });
+
+  it('offers Install instead of Uninstall for an uninstalled built-in tool', () => {
+    mocks.toolState.connectors[0] = {
+      id: 'connector-1',
+      identifier: 'lobe-web-browsing',
+      name: 'Web Browsing',
+      sourceType: ConnectorSourceType.builtin,
+    };
+    mocks.toolState.uninstalledBuiltinTools = ['lobe-web-browsing'];
+
+    render(<ConnectorDetail connectorId="connector-1" />);
+
+    expect(screen.queryByRole('button', { name: 'Uninstall' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'connectorMarket.action.install' }));
+    expect(mocks.toolState.installBuiltinTool).toHaveBeenCalledWith('lobe-web-browsing');
+  });
+
+  it('does not name an authorizer for an uninstalled built-in', () => {
+    mocks.toolState.connectors[0] = {
+      authorizedByName: 'Avery',
+      id: 'connector-1',
+      identifier: 'lobe-web-browsing',
+      name: 'Web Browsing',
+      sourceType: ConnectorSourceType.builtin,
+    };
+    mocks.toolState.uninstalledBuiltinTools = ['lobe-web-browsing'];
+
+    const { unmount } = render(<ConnectorDetail connectorId="connector-1" />);
+    expect(screen.queryByText('connector.overview.authorizedBy')).not.toBeInTheDocument();
+    expect(screen.queryByText('Avery')).not.toBeInTheDocument();
+    unmount();
+
+    // Once installed, the built-in keeps its authorizer.
+    mocks.toolState.uninstalledBuiltinTools = [];
+    render(<ConnectorDetail connectorId="connector-1" />);
+    expect(screen.getByText('connector.overview.authorizedBy')).toBeInTheDocument();
+    expect(screen.getByText('Avery')).toBeInTheDocument();
+  });
+
+  it('loads the built-in install state when the detail is opened without the list', () => {
+    mocks.toolState.connectors[0] = {
+      id: 'connector-1',
+      identifier: 'lobe-web-browsing',
+      name: 'Web Browsing',
+      sourceType: ConnectorSourceType.builtin,
+    };
+
+    render(<ConnectorDetail connectorId="connector-1" />);
+
+    expect(mocks.toolState.useFetchUninstalledBuiltinTools).toHaveBeenCalledWith(true);
+  });
+
+  it('shows accounts only for an OAuth connector, each naming its own authorizer', () => {
+    mocks.toolState.connectors[0] = {
+      ...mocks.toolState.connectors[0],
+      authorizedByName: 'Avery',
+      sourceType: ConnectorSourceType.custom,
+      status: 'connected',
+    };
+
+    const { unmount } = render(<ConnectorDetail connectorId="connector-1" />);
+    // A static credential has no accounts; its one authorizer stays on the connector.
+    expect(screen.queryByTestId('connector-accounts')).not.toBeInTheDocument();
+    expect(screen.getByText('Avery')).toBeInTheDocument();
+    unmount();
+
+    // Before any account is connected nobody has authorized it yet either.
+    mocks.toolState.connectors[0] = { ...mocks.toolState.connectors[0], authKind: 'oauth2' };
+    const { unmount: unmountEmpty } = render(<ConnectorDetail connectorId="connector-1" />);
+    expect(screen.getByTestId('connector-accounts')).toHaveTextContent('0');
+    expect(screen.queryByText('Avery')).not.toBeInTheDocument();
+    unmountEmpty();
+
+    mocks.toolState.connectors[0] = {
+      ...mocks.toolState.connectors[0],
+      links: [
+        { id: 'lnk_1', name: 'work@acme.com' },
+        { id: 'lnk_2', name: 'Personal' },
+      ],
+    };
+    render(<ConnectorDetail connectorId="connector-1" />);
+
+    expect(screen.getByTestId('connector-accounts')).toHaveTextContent('2');
+    expect(screen.queryByText('connector.overview.authorizedBy')).not.toBeInTheDocument();
+    expect(screen.queryByText('Avery')).not.toBeInTheDocument();
   });
 });

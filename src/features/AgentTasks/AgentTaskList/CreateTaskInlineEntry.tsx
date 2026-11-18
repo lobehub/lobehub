@@ -53,6 +53,7 @@ import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
 import { useTaskProjectChoice } from '../features/useTaskProjectChoice';
 import { resolveMemberAssignee } from '../shared/memberAssigneeMode';
 import { taskDetailPath } from '../shared/taskDetailPath';
+import { useTaskListOriginState } from '../shared/taskListOrigin';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useAgentVisibility } from '../shared/useAgentVisibility';
 import { useDefaultMemberAssignee } from '../shared/useDefaultMemberAssignee';
@@ -124,6 +125,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const { assignableMemberIds, defaultMemberAssignee, isDefaultMemberPending, isMembersLoading } =
     useDefaultMemberAssignee();
   const navigate = useWorkspaceAwareNavigate();
+  const taskListOriginState = useTaskListOriginState();
   const [priority, setPriority] = useState(0);
   const [labels, setLabels] = useState<TaskLabelRef[]>([]);
   const isLabelsInit = useTaskStore(taskLabelSelectors.isLabelsInit);
@@ -516,6 +518,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                         result.assigneeAgentId ?? undefined,
                         result.name || draft.name,
                       ),
+                      { state: taskListOriginState },
                     )
                   }
                 >
@@ -558,6 +561,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       onCreated,
       parentTaskId,
       priority,
+      taskListOriginState,
       resetComposer,
       visibility,
     ],

@@ -67,6 +67,11 @@ export type SettingsSectionSkeleton =
       columns?: number;
       /** Table rows below the header row. */
       rows?: number;
+      /**
+       * A row of this many compact label + figure columns above the table,
+       * split from it by a divider.
+       */
+      stats?: number;
       /** A filter / search bar above the table. */
       toolbar?: boolean;
       /** A tab strip above the table. */
@@ -135,7 +140,10 @@ export type SettingsSectionSkeleton =
       variant: 'cards';
     })
   | {
-      /** An outlined block with an avatar and two text lines. */
+      /**
+       * A filled lead block above the groups: a large title, a description, a
+       * full-width input with a trailing button, and a short line under it.
+       */
       variant: 'banner';
     };
 
@@ -162,9 +170,7 @@ export type SettingsSectionsFrame = 'container' | 'header' | 'none';
 
 const styles = stylex.create({
   banner: {
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
     borderRadius: cssVar.borderRadiusLG,
   },
   card: {
@@ -633,17 +639,19 @@ const Section = ({ section }: { section: SettingsSectionSkeleton }) => {
   switch (section.variant) {
     case 'banner': {
       return (
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={stylex.props(styles.banner).className}
-          gap={16}
-          padding={18}
-        >
-          <SkeletonBar height={48} radius={'50%'} width={48} />
-          <Flexbox gap={10}>
-            <SkeletonBar height={18} width={240} />
-            <SkeletonBar height={12} width={360} />
+        <Flexbox className={stylex.props(styles.banner).className} gap={20} padding={24}>
+          <Flexbox gap={16}>
+            <SkeletonBar height={24} width={320} />
+            <SkeletonBar height={14} width={440} />
+          </Flexbox>
+          <Flexbox gap={12}>
+            <Flexbox horizontal align={'center'} gap={8}>
+              <Flexbox flex={1}>
+                <SkeletonBar height={40} />
+              </Flexbox>
+              <SkeletonBar height={40} width={136} />
+            </Flexbox>
+            <SkeletonBar height={22} width={176} />
           </Flexbox>
         </Flexbox>
       );
@@ -727,6 +735,14 @@ const Section = ({ section }: { section: SettingsSectionSkeleton }) => {
     case 'table': {
       return (
         <Group {...section} flush>
+          {section.stats && (
+            <>
+              <Flexbox padding={16}>
+                <InsetTiles columns={section.stats} tileHeight={50} tiles={section.stats} />
+              </Flexbox>
+              <div {...stylex.props(styles.divider)} />
+            </>
+          )}
           <TableBody
             columns={section.columns}
             rows={section.rows ?? 3}

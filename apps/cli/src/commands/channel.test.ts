@@ -14,17 +14,22 @@ const historyMessage = {
   truncated: false,
 };
 
-const { listChannels, readMessages, readMessage, sendMessage, output } = vi.hoisted(() => ({
-  listChannels: vi.fn(),
-  readMessages: vi.fn(),
-  readMessage: vi.fn(),
-  sendMessage: vi.fn(),
-  output: vi.fn(),
-}));
+const { listChannels, listPeople, messagePerson, readMessages, readMessage, sendMessage, output } =
+  vi.hoisted(() => ({
+    listChannels: vi.fn(),
+    listPeople: vi.fn(),
+    messagePerson: vi.fn(),
+    readMessages: vi.fn(),
+    readMessage: vi.fn(),
+    sendMessage: vi.fn(),
+    output: vi.fn(),
+  }));
 vi.mock('../api/client', () => ({
   getTrpcClient: async () => ({
     channel: {
       listChannels: { query: listChannels },
+      listPeople: { query: listPeople },
+      messagePerson: { mutate: messagePerson },
       readMessages: { query: readMessages },
       readMessage: { query: readMessage },
       sendMessage: { mutate: sendMessage },
@@ -107,5 +112,23 @@ describe('Channel CLI', () => {
     });
     await run(['channel', 'send', 'channel-1', '--agent', 'agent-1', '-c', 'Hi']);
     expect(sendMessage.mock.calls[1][0].requestKey).toMatch(/^[\da-f-]{36}$/);
+  });
+  it('lists the people the requester can message', async () => {
+    const page = { hasMore: false, people: [] };
+    listPeople.mockResolvedValue(page);
+    await run(['channel', 'people', '--query', 'alice', '--limit', '3', '--json']);
+    expect(listPeople).toHaveBeenCalledWith({ limit: 3, query: 'alice' });
+    expect(output).toHaveBeenCalledWith(page);
+  });
+  it('messages one person with a retry key', async () => {
+    messagePerson.mockResolvedValue({ messageId: 'message-sent' });
+    await run(['channel', 'dm', 'user-alice', '-c', 'T-1 is done', '--request-key', 'retry-1']);
+    expect(messagePerson).toHaveBeenCalledWith({
+      content: 'T-1 is done',
+      requestKey: 'retry-1',
+      userId: 'user-alice',
+    });
+    await run(['channel', 'dm', 'user-alice', '-c', 'Hi']);
+    expect(messagePerson.mock.calls[1][0].requestKey).toMatch(/^[\da-f-]{36}$/);
   });
 });

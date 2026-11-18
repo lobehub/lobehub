@@ -216,11 +216,8 @@ const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
   // Only workspace accounts carry a visibility; personal ones have no team to hide from.
   const isPrivate = !!account.workspaceId && account.visibility === 'private';
   // With a label set, the email moves to the subtitle so the account stays identifiable.
-  const subtitle = [
-    meta.name,
-    account.label ? account.email : undefined,
-    isPrivate ? t('subscriptionAccounts.visibility.private') : undefined,
-  ]
+  // Private or shared is the page's tab, so the row does not repeat it.
+  const subtitle = [meta.name, account.label ? account.email : undefined]
     .filter(Boolean)
     .join(' · ');
 
@@ -256,7 +253,9 @@ const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
       okButtonProps: visibility === 'private' ? { danger: true } : undefined,
       okText: t(`subscriptionAccounts.visibility.${visibility}Action`),
       onOk: async () => {
-        await run(() => setQuotaAccountVisibility(account.id, visibility));
+        // The account leaves this tab, so say where it went.
+        if (await run(() => setQuotaAccountVisibility(account.id, visibility)))
+          toast.success(t(`subscriptionAccounts.visibility.${visibility}Done`));
       },
       title: t(`subscriptionAccounts.visibility.${visibility}Confirm.title`),
     });

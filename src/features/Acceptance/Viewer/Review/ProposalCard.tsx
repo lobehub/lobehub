@@ -11,8 +11,8 @@ import type { CheckProposal } from './proposal';
 
 const styles = stylex.create({
   card: {
-    paddingBlock: '8px',
-    paddingInline: '10px',
+    paddingBlock: '12px',
+    paddingInline: '12px',
     borderWidth: '1px',
     borderStyle: 'dashed',
     borderColor: cssVar.colorBorder,
@@ -27,15 +27,21 @@ const styles = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  muted: { fontSize: '11px', color: cssVar.colorTextQuaternary },
+  muted: { fontSize: '12px', color: cssVar.colorTextTertiary },
+  actions: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    paddingBlockStart: '4px',
+  },
   regionIndex: {
     flex: 'none',
-    width: '16px',
-    height: '16px',
+    width: '20px',
+    height: '20px',
     borderRadius: '50%',
-    fontSize: '10px',
+    fontSize: '12px',
     fontWeight: 600,
-    lineHeight: '16px',
+    lineHeight: '20px',
     color: '#fff',
     textAlign: 'center',
     backgroundColor: cssVar.colorError,
@@ -94,8 +100,8 @@ const ProposalCard = memo<ProposalCardProps>(
           gap={6}
           onClick={() => onToggle(!open)}
         >
-          <Icon icon={open ? ChevronDown : ChevronRight} size={12} />
-          <Icon icon={Sparkles} size={12} />
+          <Icon icon={open ? ChevronDown : ChevronRight} size={14} />
+          <Icon icon={Sparkles} size={14} />
           <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
             {t('acceptance.proposal.title')}
           </Text>
@@ -119,25 +125,21 @@ const ProposalCard = memo<ProposalCardProps>(
 
         {open && (
           <>
-            {proposal.comment && <Text fontSize={12}>{proposal.comment}</Text>}
+            {proposal.comment && <Text fontSize={14}>{proposal.comment}</Text>}
 
             {/* Numbers match the badges now drawn on the evidence image below. */}
             {regions.map((region, index) => (
-              <Flexbox horizontal align={'flex-start'} gap={6} key={index}>
-                <span
-                  className={stylex.props(styles.regionIndex).className}
-                  style={{ marginBlockStart: 2 }}
-                >
-                  {index + 1}
-                </span>
-                <Text fontSize={12} type={'secondary'}>
+              <Flexbox horizontal align={'flex-start'} gap={8} key={index}>
+                <span className={stylex.props(styles.regionIndex).className}>{index + 1}</span>
+                <Text fontSize={14} type={'secondary'}>
                   {region.comment || t('acceptance.proposal.regionUnnamed')}
                 </Text>
               </Flexbox>
             ))}
 
-            <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+            <div {...stylex.props(styles.actions)}>
               <Button
+                block
                 disabled={pending || Boolean(busy)}
                 size={'small'}
                 type={'primary'}
@@ -146,6 +148,7 @@ const ProposalCard = memo<ProposalCardProps>(
                 {t('acceptance.proposal.confirm')}
               </Button>
               <Button
+                block
                 disabled={pending || Boolean(busy)}
                 loading={busy === 'not-an-issue'}
                 size={'small'}
@@ -154,6 +157,7 @@ const ProposalCard = memo<ProposalCardProps>(
                 {t('acceptance.proposal.notAnIssue')}
               </Button>
               <Button
+                block
                 disabled={pending || Boolean(busy)}
                 loading={busy === 'misidentified'}
                 size={'small'}
@@ -162,7 +166,7 @@ const ProposalCard = memo<ProposalCardProps>(
               >
                 {t('acceptance.proposal.misidentified')}
               </Button>
-            </Flexbox>
+            </div>
           </>
         )}
       </Flexbox>

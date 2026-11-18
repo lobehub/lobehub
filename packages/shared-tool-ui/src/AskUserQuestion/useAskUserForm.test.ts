@@ -351,6 +351,7 @@ describe('useAskUserForm additional notes', () => {
       }),
     );
 
+    expect(hook.result.current.autoSubmitOnTimeout).toBe(true);
     act(() => hook.result.current.handleToggle(twoQuestionArgs.questions[0], 'Full'));
     act(() => hook.result.current.setSupplementMode(true));
     act(() => hook.result.current.handleSupplementTextChange('Keep this timeout note.'));
@@ -395,6 +396,7 @@ describe('useAskUserForm additional notes', () => {
       }),
     );
 
+    expect(hook.result.current.autoSubmitOnTimeout).toBe(false);
     act(() => vi.advanceTimersByTime(1000));
 
     expect(onInteractionAction).not.toHaveBeenCalled();

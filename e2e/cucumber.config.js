@@ -6,8 +6,11 @@ const parsedParallel = Number(process.env.E2E_PARALLEL || process.env.CUCUMBER_P
 const requestedParallel = Number.isFinite(parsedParallel) ? parsedParallel : 1;
 const canRunInParallel = Boolean(process.env.BASE_URL);
 // `@perf` scenarios need a `LOBE_REACT_PROFILING=1` build and run on their own
-// (`bun run test:perf`), so the ordinary suite skips them.
-const perfRun = process.env.E2E_PERF === '1';
+// (`bun run test:perf`, also the CI `Render Budget` job). `@perf-local` scenarios
+// are local-only measuring tools (`bun run test:perf:local`) kept out of CI to save
+// runner time. The ordinary suite skips both.
+const perfTags = { 1: '@perf', local: '@perf-local' }[process.env.E2E_PERF ?? ''];
+const perfRun = Boolean(perfTags);
 
 export default {
   format: reportsEnabled
@@ -23,6 +26,6 @@ export default {
   require: ['src/steps/**/!(*.test).ts', 'src/support/**/*.ts'],
   requireModule: ['tsx/cjs'],
   retry: 0,
-  tags: perfRun ? '@perf and not @skip' : 'not @skip and not @perf',
+  tags: perfRun ? `${perfTags} and not @skip` : 'not @skip and not @perf and not @perf-local',
   timeout: 30_000,
 };

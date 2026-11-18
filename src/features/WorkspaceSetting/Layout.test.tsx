@@ -92,9 +92,10 @@ describe('WorkspaceSettingsContentLayout', () => {
     expect(html).toContain('<div>Page content</div></main>');
   });
 
-  it('spans the full pane on the devices tab and keeps the 1024 column elsewhere', () => {
-    expect(renderLayout('devices')).toContain('<main data-max-width="100%">');
+  it('keeps the devices tab in the shared 1024 column and spans only the account list', () => {
+    expect(renderLayout('devices')).toContain('<main data-max-width="1024">');
     expect(renderLayout('members')).toContain('<main data-max-width="1024">');
+    expect(renderLayout('subscription-accounts')).toContain('<main data-max-width="100%">');
   });
 
   it.each(['audit-log', 'advanced'])('keeps the %s tab on the content-only layout', (tab) => {

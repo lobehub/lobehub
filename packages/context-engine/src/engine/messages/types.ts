@@ -13,6 +13,7 @@ import type {
 import type { OpenAIChatMessage, UIChatMessage } from '@/types/index';
 
 import type { AgentInfo } from '../../processors/GroupRoleTransform';
+import type { RevokedDocumentReads } from '../../processors/RevokedDocumentResultFilter';
 import type { AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
 import type {
   AgentContextDocument,
@@ -226,6 +227,7 @@ export interface PlanTodoConfig {
  * MessagesEngine main parameters
  */
 export interface MessagesEngineParams {
+  enableMcpAppContext?: boolean;
   // ========== Required parameters ==========
   /** Original message list */
   messages: UIChatMessage[];
@@ -307,6 +309,12 @@ export interface MessagesEngineParams {
    * snapshot (see `resolveAgentDocumentIndex`).
    */
   agentDocumentChanges?: AgentDocumentChangesByMessage;
+  /**
+   * Documents deleted or disabled since earlier turns read them, per reading
+   * agent. Historical `readKnowledge` / `readDocument` results referencing
+   * them are withheld from the model.
+   */
+  revokedDocumentReads?: RevokedDocumentReads[];
 
   // ========== Skills ==========
   /** Skills configuration */

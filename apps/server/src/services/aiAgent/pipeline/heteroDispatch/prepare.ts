@@ -8,6 +8,7 @@ import {
   resolveDispatchedClaudeCodeEntrypoint,
 } from '@lobechat/heterogeneous-agents';
 import {
+  BOT_CHANNEL_MESSAGING_INSTRUCTIONS,
   CHANNEL_INSTRUCTIONS,
   formatContextSelections,
   formatPageSelections,
@@ -22,6 +23,7 @@ import pMap from 'p-map';
 
 import { signHeteroOperationJWT } from '@/libs/trpc/utils/internalJwt';
 import { FileService } from '@/server/services/file';
+import { resolveInlineImages } from '@/server/services/file/inlineImages';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { buildCloudHeteroContext } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
@@ -56,6 +58,7 @@ export const prepareHeteroRun = async (
     | 'agentConfig'
     | 'appContext'
     | 'assistantMessageId'
+    | 'botContext'
     | 'prompt'
     | 'shareGate'
     | 'topicId'
@@ -90,6 +93,10 @@ export const prepareHeteroRun = async (
     workspaceId: deps.workspaceId,
   });
   const isChannelOperation = ctx.trigger === 'channel' && input.reservedOperationId === operationId;
+  // The bot's owner messaging their own Agent (e.g. on Telegram) may have it post into their
+  // Channels. `isOwner` is decided once, fail-closed, in `buildBotContext`.
+  const isOwnerBotOperation =
+    ctx.trigger === RequestTrigger.Bot && ctx.botContext?.isOwner === true;
 
   // Sign an operation-scoped JWT so the CLI can authenticate against
   // heteroIngest / heteroFinish without full user credentials.
@@ -102,6 +109,7 @@ export const prepareHeteroRun = async (
         // `acceptance:evidence` for its own verification round.
         capabilities: heteroOperationCapabilities(prompt, {
           channel: isChannelOperation,
+          ownerBotTurn: isOwnerBotOperation,
           taskId: operationTaskId,
           // A scheduled run replays the user's own message off history, so it has
           // no fresh user row; server-started `chat` deliveries have none either.
@@ -251,6 +259,7 @@ export const prepareHeteroRun = async (
     { conversationHistory, unansweredUserTurns },
     sandbox,
     [viewedTaskContext, projectContext],
+    inlineImages,
   ] = await settleInOrder([
     githubTokenPromise,
     buildRecoveryHistory(),
@@ -271,6 +280,19 @@ export const prepareHeteroRun = async (
         buildHeteroProjectContext(deps, appContext?.projectId, agentConfig.id),
       ]),
     ),
+    // Images pasted into the message body ride in the markdown as file links,
+    // which the CLI reads as plain text: hand them over as images too. Not for
+    // a share visitor, whose prompt must not resolve the owner's files.
+    ctx.shareGate
+      ? Promise.resolve([])
+      : resolveInlineImages(
+          deps,
+          prompt,
+          (runAttachments.imageList ?? []).map((image) => image.id),
+        ).catch((error) => {
+          log('execAgent: failed to resolve inline images for hetero run: %O', error);
+          return [];
+        }),
   ]);
   const sandboxPlacement = sandbox && { cwd: sandbox.cwd, mode: sandbox.mode };
 
@@ -288,7 +310,11 @@ export const prepareHeteroRun = async (
       projectContext,
       viewedTaskContext,
       selectionContext,
-      isChannelOperation ? CHANNEL_INSTRUCTIONS : undefined,
+      isChannelOperation
+        ? CHANNEL_INSTRUCTIONS
+        : isOwnerBotOperation
+          ? BOT_CHANNEL_MESSAGING_INSTRUCTIONS
+          : undefined,
     ),
     prompt,
   );
@@ -315,10 +341,11 @@ export const prepareHeteroRun = async (
   // mirrors the local-mode path, where the client feeds the persisted
   // message's imageList into `sendPrompt`. Reuses the shared resolution above
   // so bot/IM and SPA gateway attachments are handled identically.
-  const heteroImageList =
-    runAttachments.imageList && runAttachments.imageList.length > 0
-      ? runAttachments.imageList.map((image) => ({ id: image.id, url: image.url }))
-      : undefined;
+  const heteroImages = [
+    ...(runAttachments.imageList ?? []).map((image) => ({ id: image.id, url: image.url })),
+    ...inlineImages,
+  ];
+  const heteroImageList = heteroImages.length > 0 ? heteroImages : undefined;
   // Protocol runtimes (DeepSeek Harness) also launch through `lh hetero exec`
   // and need the selector flags (e.g. `--model <tuple>`) built for it, even
   // though they are not local-CLI descriptor agents.

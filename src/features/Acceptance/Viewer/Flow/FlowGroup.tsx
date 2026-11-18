@@ -53,11 +53,11 @@ const styles = stylex.create({
     display: '-webkit-box',
     WebkitBoxOrient: 'vertical',
     WebkitLineClamp: '2',
-    fontSize: '13px',
+    fontSize: '14px',
     fontWeight: 500,
     lineHeight: 1.4,
   },
-  summary: { fontSize: '11px', lineHeight: '16px', color: cssVar.colorTextTertiary },
+  summary: { fontSize: '12px', lineHeight: '16px', color: cssVar.colorTextTertiary },
   handle: {
     width: '1px',
     minWidth: '0',
@@ -70,12 +70,12 @@ const styles = stylex.create({
 
 export function FlowGroup({ data }: { data: FlowGraphData }) {
   const { t } = useTranslation('verify');
-  const anchor = use(FlowAnchorContext);
+  const markAnchor = use(FlowAnchorContext);
   const nodeId = useNodeId();
   // Name this group as the one to follow once the new layout lands.
   const toggle = (event: { stopPropagation: () => void }) => {
     event.stopPropagation();
-    anchor.current = nodeId;
+    markAnchor(nodeId);
     data.onToggle?.();
   };
   const statusIcon =
@@ -174,7 +174,7 @@ export function FlowGroup({ data }: { data: FlowGraphData }) {
               </Button>
             )}
             <Icon icon={statusIcon} size={18} style={{ color: flowStateColor(data.state) }} />
-            <Text ellipsis fontSize={13} style={{ flex: 1 }}>
+            <Text ellipsis fontSize={14} style={{ flex: 1 }}>
               {data.title}
             </Text>
             <Text fontSize={12} type="secondary">

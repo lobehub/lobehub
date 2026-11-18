@@ -231,6 +231,28 @@ describe('uploadRouter', () => {
     expect(routerMocks.model.markCompleted).toHaveBeenCalledWith(upload.id);
   });
 
+  it('answers a conflict when storage holds neither the multipart upload nor the object', async () => {
+    const partSize = 32 * 1024 * 1024;
+    const upload = createUpload({
+      multipartPartSize: partSize,
+      multipartUploadId: 'multipart-1',
+      size: partSize + 5,
+    });
+    routerMocks.fileUploadService.touchActive.mockResolvedValue(upload);
+    routerMocks.completeMultipartUpload.mockRejectedValue(
+      Object.assign(new Error('The specified upload does not exist.'), { name: 'NoSuchUpload' }),
+    );
+
+    await expect(
+      caller.completeS3MultipartUpload({
+        partCount: 2,
+        pathname: 'files/test.bin',
+        uploadId: 'multipart-1',
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(routerMocks.model.markCompleted).not.toHaveBeenCalled();
+  });
+
   it('rejects multipart operations for a different upload id', async () => {
     routerMocks.fileUploadService.touchActive.mockResolvedValue(
       createUpload({ multipartPartSize: 32 * 1024 * 1024, multipartUploadId: 'multipart-1' }),

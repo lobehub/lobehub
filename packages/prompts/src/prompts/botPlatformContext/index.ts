@@ -90,6 +90,12 @@ export interface BotPlatformInfo {
   /** How the bot talks in this conversation, as the owner wrote it (the channel's or the default). */
   replyStyle?: string;
   /**
+   * This is a group where the platform delivers only the messages that address the bot (WeCom AI
+   * bots): what members say to each other never reaches it and cannot be fetched. The agent is
+   * told so, instead of hunting for a history it cannot have.
+   */
+  seesOnlyAddressedMessages?: boolean;
+  /**
    * The agent may step back from this conversation when people say it is interfering: it ends its
    * reply with `STAND_DOWN`, and for a while only an @-mention or a reply wakes it here.
    */
@@ -132,6 +138,7 @@ export const formatBotPlatformContext = ({
   recentChannelHistory,
   replyEmojis,
   replyStyle,
+  seesOnlyAddressedMessages,
   standDown,
   supportsMarkdown,
   wakeKind,
@@ -152,9 +159,14 @@ export const formatBotPlatformContext = ({
           '- When the user\'s message references prior context you don\'t have (e.g. "what do you think?", "summarize this", "look at that"), use `readMessages` IMMEDIATELY to fetch recent chat history before responding. Never ask the user to repeat what was already said in the channel.',
           '- When you lack enough context to give a useful answer, silently read more history rather than asking clarifying questions — the answer is usually already in the chat.',
         ]
-      : [
-          '- When the user references prior context you don\'t have, use the `recent_topics` below (if present). This platform has no history-read API, so do NOT claim you "can\'t read history" — work from what you have and ask a brief clarifying question only if the topics block is absent or insufficient.',
-        ]),
+      : seesOnlyAddressedMessages
+        ? [
+            '- In this group you only receive messages that @-mention you. What members say to each other is never delivered to you and cannot be fetched by any tool or command — do not try.',
+            '- When asked about the group\'s discussion (e.g. "summarize what everyone said"), say in one sentence that you only see messages addressed to you, then work from what you do have: your own earlier exchanges here (`recent_topics` below, if present) and anything quoted in the message. Ask them to paste the rest if that is not enough.',
+          ]
+        : [
+            '- When the user references prior context you don\'t have, use the `recent_topics` below (if present). This platform has no history-read API, so do NOT claim you "can\'t read history" — work from what you have and ask a brief clarifying question only if the topics block is absent or insufficient.',
+          ]),
     '- Keep responses concise and conversational — IM platforms have character limits and small viewports. Avoid long preambles or formal structure unless the question demands it.',
     '- Do NOT reference UI elements from other environments (e.g. "check the sidebar", "click the button above").',
     '</behavior>',

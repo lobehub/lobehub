@@ -1,6 +1,7 @@
 import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
+import { cacheScope } from '@/libs/replica';
 import { agentService } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
 import { homeService } from '@/services/home';
@@ -33,6 +34,7 @@ export const createSidebarUISlice = (set: Setter, get: () => HomeStore, _api?: u
 export class SidebarUIActionImpl {
   readonly #get: () => HomeStore;
   readonly #set: Setter;
+  #myPinnedQueue: Promise<unknown> = Promise.resolve();
 
   constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
     void _api;
@@ -123,6 +125,39 @@ export class SidebarUIActionImpl {
       await userStore.updateWorkspaceUserPreference({ sidebarPinnedItemIds: nextIds });
     }
     if (isPrivate && !!item.pinned !== pinned) await writeColumn(pinned);
+  };
+
+  /**
+   * Reorder the member's own pins in the merged workspace Agents section.
+   * `ids` is the new order of the rows the sidebar shows; ids in the stored
+   * list that are not shown right now (hidden or dangling) keep their place
+   * after them, so a reorder never unpins anything.
+   */
+  reorderMyPinned = async (ids: string[]): Promise<void> => {
+    // The server merges each preference write into what it reads, so two quick
+    // drags sent at once could land out of order and the older one would win.
+    // Each reorder waits for the previous one and builds on its result. One
+    // still queued when the cache scope changes (another account or workspace)
+    // is dropped, since the write would land in the new session's preference.
+    const scope = cacheScope.get();
+    const operation = this.#myPinnedQueue
+      .catch(() => undefined)
+      .then(async () => {
+        if (cacheScope.get() !== scope) return;
+        const userStore = getUserStoreState();
+        const current = userStore.workspaceUserPreference.sidebarPinnedItemIds ?? [];
+        const shown = new Set(ids);
+        const nextIds = [...ids, ...current.filter((id) => !shown.has(id))].slice(
+          0,
+          MAX_SIDEBAR_PINNED_ITEMS,
+        );
+        if (nextIds.length === current.length && nextIds.every((id, i) => id === current[i]))
+          return;
+
+        await userStore.updateWorkspaceUserPreference({ sidebarPinnedItemIds: nextIds });
+      });
+    this.#myPinnedQueue = operation;
+    await operation;
   };
 
   removeAgent = async (agentId: string): Promise<void> => {

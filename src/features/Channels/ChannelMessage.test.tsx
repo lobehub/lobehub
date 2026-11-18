@@ -53,6 +53,14 @@ vi.mock('@/features/AgentProfileCard/AgentProfilePopup', () => ({
       children,
     ),
 }));
+vi.mock('@/components/AgentAvatar', () => ({
+  default: ({ agentId, size }: { agentId?: string; size?: number }) =>
+    createElement('span', {
+      'data-agent-id': agentId,
+      'data-size': size,
+      'data-testid': 'agent-avatar',
+    }),
+}));
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   DropdownMenu: ({ items }: { items: { key: string; label: string; onClick: () => void }[] }) =>
@@ -276,6 +284,11 @@ describe('ChannelMessage thread card', () => {
     expect(card.querySelector('.lucide-git-branch')).toBeNull();
     expect(screen.getByText('Nasa')).toBeTruthy();
     expect(screen.getByText('PR is up')).toBeTruthy();
+    // An Agent without an avatar of its own shows the character generated from its id, as the
+    // thread does, not the generic fallback.
+    expect(
+      replyRow.querySelector('[data-testid="agent-avatar"]')?.getAttribute('data-agent-id'),
+    ).toBe('agt_1');
 
     fireEvent.click(screen.getByRole('button', { name: /Topic header is unclickable/ }));
     expect(onOpenThread).toHaveBeenCalledWith('cht_1');

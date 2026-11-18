@@ -5,6 +5,25 @@ export default {
   'directMention.progress.usingTool': 'Using {{name}}…',
   'directMention.progress.viewFullRecord': 'View full record',
   'sharePage.app.linkCopied': 'Link copied',
+  'heteroAgent.antigravityQuota.title': 'Antigravity quota',
+  'heteroAgent.antigravityQuota.tooltip': 'View Antigravity model quotas',
+  'heteroAgent.antigravityQuota.fiveHour': '5 hours',
+  'heteroAgent.antigravityQuota.remainingAmount': '{{amount}} remaining',
+  'heteroAgent.antigravityQuota.unknown': 'Unknown',
+  'heteroAgent.antigravityQuota.disabled': 'Unavailable',
+  'heteroAgent.antigravityQuota.resetUnconfirmed':
+    'Reset time reached. Refresh to check the latest quota.',
+  'heteroAgent.antigravityQuota.stale': 'Showing the last query. Refresh to confirm current quota.',
+  'heteroAgent.antigravityQuota.authRequired': 'Run agy in a terminal to sign in, then refresh.',
+  'heteroAgent.antigravityQuota.cliNotFound':
+    'Antigravity CLI was not found on this device. Install agy, then refresh.',
+  'heteroAgent.antigravityQuota.unsupported':
+    'Update agy to a version that supports structured quota queries, then refresh.',
+  'heteroAgent.antigravityQuota.timeout':
+    'The quota query timed out. Check the device connection and try again.',
+  'heteroAgent.antigravityQuota.error':
+    'Could not query Antigravity quota. Check the device and try again.',
+
   'sharePage.app.open': 'Open app',
   'sharePage.app.help': 'Trouble opening the app?',
   'sharePage.app.helpDescription':
@@ -26,6 +45,7 @@ export default {
   'sharePage.app.fallback.download': 'Get the app',
   'sharePage.app.fallback.title': 'App didn’t open?',
 
+  'newAntigravityAgent': 'Add Antigravity',
   'backgroundActivity.alertDesc': '{{name}} is using {{memory}} of memory and {{cpu}} CPU.',
   'backgroundActivity.cpu': 'CPU',
   'backgroundActivity.details': 'View details',
@@ -308,6 +328,8 @@ export default {
   'permission.configAccess.groupRoleRestricted':
     'Your workspace role cannot configure Agent Groups. You were returned to chat.',
   'agentNotFound.title': 'Agent Unavailable',
+  'agentSkillModal.frontmatterInvalid':
+    "This skill's SKILL.md has malformed frontmatter, so its name and description come from the last saved version. Open the document to fix it.",
   'agentSkillModal.loadFailed': "Couldn't load this skill",
   'agentSkillModal.notFound': 'This skill no longer exists. It may have been deleted.',
   'agentSkillModal.openDocument': 'Open in documents',
@@ -910,7 +932,6 @@ export default {
   'heteroAgent.executionTarget.sandboxUnsupported':
     '{{name}} currently runs only on a local or connected device',
   'heteroAgent.executionTarget.auto': 'Auto',
-  'heteroAgent.executionTarget.builtinGroup': 'Built-in',
   'heteroAgent.executionTarget.autoDesc':
     'Use an online device automatically, picking one when several are available',
   'heteroAgent.executionTarget.fixedTip':
@@ -953,7 +974,17 @@ export default {
   'heteroAgent.executionTarget.personalGroup': 'Private Devices',
   'heteroAgent.executionTarget.sandbox': 'Cloud Sandbox',
   'heteroAgent.executionTarget.sandboxDesc': 'Runs in the cloud, no machine needed',
+  'heteroAgent.executionTarget.persistentSandbox': 'Persistent Sandbox',
+  'heteroAgent.executionTarget.persistentSandboxDesc':
+    'Keeps results and work on your drive, for everyday tasks',
+  'heteroAgent.executionTarget.temporarySandbox': 'Temporary Sandbox',
+  'heteroAgent.executionTarget.temporarySandboxDesc':
+    'Discarded after use, for coding and one-off data processing',
   'heteroAgent.executionTarget.workspaceGroup': 'Workspace Devices',
+  'heteroAgent.executionTarget.deviceGroupSummary': '{{online}} online · {{total}} total',
+  'heteroAgent.executionTarget.myDevicesGroup': 'My devices',
+  'heteroAgent.executionTarget.sandboxGroup': 'Sandboxes',
+  'heteroAgent.executionTarget.sandboxGroupDesc': 'Run in an isolated environment',
   'heteroAgent.executionTarget.downloadDesktop': 'Get Desktop App',
   'heteroAgent.executionTarget.downloadDesktopDesc': 'Run agents with access to your computer',
   'heteroAgent.executionTarget.downloadDesktopTitle': 'Get the desktop app',
@@ -977,10 +1008,6 @@ export default {
   'inactive': 'Inactive',
   'inbox.desc': 'Collaborate in one Workspace and move ideas into outcomes.',
   'inbox.title': 'Lobe AI',
-  'input.addAi': 'Add an AI message',
-  'input.addAiPrefillUnsupported':
-    'The current model doesn’t support ending the conversation with an assistant message. Follow it with a user message before sending.',
-  'input.addUser': 'Add a user message',
   'input.agentModeUnsupportedModel':
     'The current model doesn’t support agentic tool calling. Switch to a model with agent capability for the best experience.',
   'input.agentRunFeeUnfunded.desc':
@@ -1040,7 +1067,12 @@ export default {
   'input.send': 'Send',
   'input.sendWithCmdEnter': 'Press <key/> to send',
   'input.sendWithEnter': 'Press <key/> to send',
+  'input.running': 'Agent is running',
   'input.stop': 'Stop',
+  'input.uploadFailedNotSent_one':
+    '{{count}} attachment failed to upload and was not sent. It stays in the input to retry or remove.',
+  'input.uploadFailedNotSent_other':
+    '{{count}} attachments failed to upload and were not sent. They stay in the input to retry or remove.',
   'input.warp': 'New Line',
   'input.warpWithKey': 'Press <key/> to insert a line break',
   'inputQueue.delete': 'Delete',
@@ -1051,6 +1083,15 @@ export default {
   'inputQueue.queuedMergeHint': 'Merged and sent when the current step finishes',
   'inputQueue.queuedRunEndHint': 'Sends when the current run finishes',
   'inputQueue.queuedRunEndMergeHint': 'Merged and sent when the current run finishes',
+  'inputQueue.queuedOneByOneHint': 'Sent one at a time after the current run finishes',
+  'inputQueue.steerDeliveryUnknownHint':
+    'Couldn’t confirm the agent got this. Send it again or delete it',
+  'inputQueue.steerHint': 'Joins the current run',
+  'inputQueue.steerMergeHint': 'Joins the current run as one message',
+  'inputQueue.steerUnsupportedHint':
+    'This agent can’t take messages mid-run. Queued until the run finishes',
+  'inputQueue.steerUnsupportedMergeHint':
+    'This agent can’t take messages mid-run. Queued, merged and sent when the run finishes',
   'inputQueue.sendNow': 'Send now (interrupts current run)',
   'inputQueue.sendNowFailed': 'Couldn’t interrupt the current run. Try again.',
   'inputQueue.alreadyDelivered': 'Already sent to the agent',
@@ -1261,6 +1302,16 @@ export default {
     "Skill wasn't added. Retry, or create an Agent anyway.",
   'createModal.skillSuggestion.title': 'A Skill may fit better',
   'createModal.title': 'What should this Agent do?',
+  'antigravityInstallGuide.actions.openDocs': 'Open Install Guide',
+  'antigravityInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'antigravityInstallGuide.afterInstall':
+    'After installing, run `agy` and sign in with your Google account, then retry your message or click Re-detect in System Tools.',
+  'antigravityInstallGuide.desc':
+    'Antigravity needs the native agy CLI with stream-json support. Follow the install guide for your operating system and make sure the `agy` command is available.',
+  'antigravityInstallGuide.menuNotification.title': 'Antigravity CLI not found',
+  'antigravityInstallGuide.reason': 'LobeHub could not start Antigravity: {{message}}',
+  'antigravityInstallGuide.title': 'Install Antigravity CLI',
+  'connectAgent.providerDesc.antigravity': 'Google coding agent CLI',
   'ampInstallGuide.actions.openDocs': 'Open Install Guide',
   'ampInstallGuide.actions.openSystemTools': 'Open System Tools',
   'ampInstallGuide.afterInstall':
@@ -1649,9 +1700,9 @@ export default {
   'pageCopilot.title': 'Page Agent',
   'pageSelection.lines': 'Lines {{start}}-{{end}}',
   'pageSelection.reference': 'Selected Text',
-  'textSelection.added': 'Added to conversation context',
-  'textSelection.addToConversation': 'Add to conversation',
-  'textSelection.title': 'Message selection',
+  'textSelection.copied': 'Copied',
+  'textSelection.copy': 'Copy',
+  'textSelection.quote': 'Quote',
   'pin': 'Pin',
   'pinOff': 'Unpin',
   'pinForTeam': 'Pin for team',
@@ -1761,9 +1812,8 @@ export default {
   'plus.search.off': 'Off',
   'plus.search.offDesc': '',
   'plus.addAttachments': 'Attachments',
-  'plus.addSkills': 'Add Skills...',
   'plus.title': 'Add',
-  'plus.tooltip': 'Add files, skills, and more context...',
+  'plus.contextTooltip': 'Add files, tools, and more context…',
   'chatMode.agentCap.env': 'Runtime env',
   'chatMode.agentCap.files': 'File access',
   'chatMode.agentCap.memory': 'Memory',
@@ -2000,7 +2050,9 @@ export default {
   'tab.knowledge': 'Knowledge Base',
   'tab.tools': 'Tools & Connectors',
   'tab.integration': 'IM Bots',
+  'tab.automations': 'Automations',
   'tab.mail': 'Mail',
+  'tab.webhook': 'Webhook',
   'tab.profile': 'Agent Profile',
   'tab.profileBasic': 'Profile',
   'tab.skills': 'Skills',
@@ -2998,6 +3050,11 @@ export default {
   'goalProcess.kind.finding': 'Finding',
   'goalProcess.kind.decision': 'Decision',
   'goalProcess.kind.batch': 'Batch',
+  'goalProcess.kind.pattern': 'Pattern',
+  'goalProcess.kind.tool': 'Tool',
+  'goalProcess.kind.hazard': 'Hazard',
+  'goalProcess.kind.dead_end': 'Dead end',
+  'goalProcess.kind.template': 'Recipe',
   'goalProcess.node.running': 'Running',
   'goalProcess.node.stopped': 'Stopped',
   'goalProcess.node.done': 'Done',
@@ -3036,6 +3093,11 @@ export default {
   'goalProcess.lifecycle.kind.goal': 'goal',
   'goalProcess.lifecycle.kind.problem': 'question',
   'goalProcess.lifecycle.kind.task': 'task',
+  'goalProcess.lifecycle.kind.pattern': 'pattern',
+  'goalProcess.lifecycle.kind.tool': 'tool',
+  'goalProcess.lifecycle.kind.hazard': 'hazard',
+  'goalProcess.lifecycle.kind.dead_end': 'dead end',
+  'goalProcess.lifecycle.kind.template': 'recipe',
   'goalProcess.lifecycle.note.budgetExhausted': 'The goal or the main Agent ran out of turns',
   'goalProcess.lifecycle.note.mainAgent': 'Main Agent: {{text}}',
   'goalProcess.lifecycle.note.recoveredAbandoned':
@@ -3151,6 +3213,11 @@ export default {
   'goalPage.metrics.delivered': 'Needs you',
   'goalPage.metrics.pursuing': 'Others',
   'goalPage.metrics.total': 'Total goals',
+  'goalPage.searchEmptyDescription': 'Try another keyword or switch tabs.',
+  'goalPage.searchEmptyTitle': 'No goals match “{{keyword}}”',
+  'goalPage.searchPartial':
+    'Only the newest {{loaded}} of {{total}} goals were searched here. Use global search to find older ones.',
+  'goalPage.searchPlaceholder': 'Search goals',
   'goalPage.title': 'Overview',
   'goalPage.view.card': 'Cards',
   'goalPage.view.list': 'List',
@@ -3430,11 +3497,19 @@ export default {
   'toggleWideScreen.off': 'Turn off widescreen mode',
   'toggleWideScreen.on': 'Turn on widescreen mode',
   'tokenDetails.chats': 'Chat Messages',
+  'tokenDetails.estimated': 'Estimated',
+  'tokenDetails.estimatedTooltip':
+    'Counted with a generic tokenizer over the request body. Each model uses its own tokenizer, so the input it bills can differ.',
+  'tokenDetails.fileContext': 'Attachments',
   'tokenDetails.historySummary': 'History Summary',
+  'tokenDetails.lastRequestInput': 'Last request input (reported by model)',
+  'tokenDetails.reasoning': 'Reasoning',
   'tokenDetails.rest': 'Remaining',
   'tokenDetails.supervisor': 'Orchestrator',
+  'tokenDetails.system': 'System Prompt',
   'tokenDetails.systemRole': 'Role Settings',
   'tokenDetails.title': 'Context Details',
+  'tokenDetails.toolCalls': 'Tool Calls',
   'tokenDetails.tools': 'Skill Settings',
   'tokenDetails.total': 'Total Available',
   'tokenDetails.used': 'Total Used',
@@ -3534,7 +3609,6 @@ export default {
   'topicComment.notFound': 'This comment no longer exists',
   'topicComment.openMessageComments': 'Open {{count}} message comments',
   'topicComment.placeholder': 'Add a comment…',
-  'topicComment.repliesTitle': 'Replies',
   'topicComment.replies_one': '{{count}} reply',
   'topicComment.replies_other': '{{count}} replies',
   'topicComment.reply': 'Reply',
@@ -3577,6 +3651,9 @@ export default {
     'File uploads are not supported in browser mode; only images are allowed.',
   'upload.clientMode.visionNotSupported':
     'The current model does not support visual recognition. Please switch to a different model to use this feature.',
+  'upload.image.label': 'Image {{number}}',
+  'upload.image.preview': 'Preview {{name}}',
+  'upload.image.remove': 'Remove {{name}}',
   'upload.localPathReference':
     'Large files are referenced by their local path instead of uploaded, so the agent reads the original file directly.',
   'upload.preview.prepareTasks': 'Preparing chunks...',
@@ -3673,6 +3750,7 @@ export default {
   'viewSwitcher.page': 'Page',
   'viewSwitcher.task': 'Task',
   'workflow.failedSuffix': '(failed)',
+  'workflow.showEarlierSteps': 'Show earlier steps ({{count}})',
   'workflow.summaryCallsTotal_one': '{{count}} call',
   'workflow.summaryCallsTotal_other': '{{count}} calls',
   'workflow.summaryFailed': '{{count}} failed',
@@ -3815,10 +3893,55 @@ export default {
   'workingPanel.openMenu.title': 'Open workspace panel',
   'workingPanel.openMenu.tools': 'Tools',
   'workingPanel.openMenu.workspace': 'Workspace',
+  'workingPanel.overview.backgroundTasks.collapse': 'Show less',
+  'workingPanel.overview.backgroundTasks.locate': 'Show in conversation',
+  'workingPanel.overview.backgroundTasks.showAll': 'Show all ({{count}})',
+  'workingPanel.overview.backgroundTasks.status.completed': 'Done',
+  'workingPanel.overview.backgroundTasks.status.failed': 'Failed',
+  'workingPanel.overview.backgroundTasks.status.interrupted': 'Interrupted',
+  'workingPanel.overview.backgroundTasks.status.running': 'Running',
+  'workingPanel.overview.backgroundTasks.status.stopped': 'Stopped',
+  'workingPanel.overview.backgroundTasks.stop': 'Stop',
+  'workingPanel.overview.backgroundTasks.stopFailed': "Couldn't stop the task",
+  'workingPanel.overview.backgroundTasks.stopNoAnswer':
+    "The device hasn't answered yet. Try again in a moment.",
+  'workingPanel.overview.backgroundTasks.stopUpgradeLh':
+    'Update lh on the device to stop background tasks',
+  'workingPanel.overview.backgroundTasks.stopping': 'Stopping…',
+  'workingPanel.overview.backgroundTasks.title': 'Background tasks',
+  'workingPanel.overview.backgroundTasks.viewOutput': 'View output',
   'workingPanel.overview.branch.detached': 'Detached HEAD',
   'workingPanel.overview.changes': 'Changes',
   'workingPanel.overview.changes.none': 'No changes',
   'workingPanel.overview.ci.failure': 'Failed',
+  'workingPanel.overview.pr.autoFix': 'Auto-fix',
+  'workingPanel.overview.pr.autoFix.capped':
+    'Notified the agent {{count}}/{{max}} times, the limit. Turn it off and on again to allow more',
+  'workingPanel.overview.pr.autoFix.desc': 'Notify the agent on CI failures and review feedback',
+  'workingPanel.overview.pr.autoFix.disableFailed': "Couldn't turn off Auto-fix for {{name}}",
+  'workingPanel.overview.pr.autoFix.enableFailed': "Couldn't turn on Auto-fix for {{name}}",
+  'workingPanel.overview.pr.autoFix.noApp':
+    'Install the LobeHub GitHub App on this repository to use Auto-fix',
+  'workingPanel.overview.pr.autoFix.openOwner': 'Go to that topic',
+  'workingPanel.overview.pr.autoFix.otherTopic': 'Notifies the agent in the topic "{{title}}"',
+  'workingPanel.overview.pr.autoFix.otherTopicHidden': 'Notifies the agent in another topic',
+  'workingPanel.overview.pr.autoFix.resetOnEnable':
+    'Notified the agent {{count}}/{{max}} times. Turning it on starts the count over',
+  'workingPanel.overview.pr.autoFix.unlinked': 'No topic is linked for it to notify',
+  'workingPanel.overview.pr.autoFix.woken': 'Notified the agent {{count}}/{{max}} times',
+  'workingPanel.overview.pr.dismiss': 'Remove from this topic',
+  'workingPanel.overview.pr.dismissFailed': "Couldn't remove {{name}} from this topic",
+  'workingPanel.overview.pr.dismissed': 'Removed {{name}} from this topic',
+  'workingPanel.overview.pr.link': 'Link a pull request',
+  'workingPanel.overview.pr.linkAction': 'Link',
+  'workingPanel.overview.pr.linkFailed': "Couldn't link the pull request",
+  'workingPanel.overview.pr.linkInvalid':
+    'Paste a GitHub pull request link, like https://github.com/owner/repo/pull/123',
+  'workingPanel.overview.pr.linkPlaceholder': 'Paste a GitHub pull request link',
+  'workingPanel.overview.pr.linked': 'Linked {{name}} to this topic',
+  'workingPanel.overview.pr.menu': 'More actions',
+  'workingPanel.overview.pr.unvouched':
+    "Can't confirm this PR comes from this topic's branch, so merging and closing are locked",
   'workingPanel.overview.ci.pending': 'Running',
   'workingPanel.overview.empty':
     'Workspace activity and outputs will appear here as the agent works.',
@@ -3828,6 +3951,30 @@ export default {
   'workingPanel.overview.execution.device': 'Connected device',
   'workingPanel.overview.execution.local': 'This device',
   'workingPanel.overview.files': 'Files',
+  'workingPanel.overview.keptWorktree.details': 'Details',
+  'workingPanel.overview.keptWorktree.discard': 'Discard changes and delete',
+  'workingPanel.overview.keptWorktree.discardConfirm':
+    "This deletes the worktree and everything uncommitted in it, including ignored files. This can't be undone. Commits on its branch are kept.",
+  'workingPanel.overview.keptWorktree.discardConfirmTitle':
+    'Discard changes and delete the worktree?',
+  'workingPanel.overview.keptWorktree.discardFailed': 'Could not delete the worktree',
+  'workingPanel.overview.keptWorktree.discardPending':
+    "The device is offline. The worktree will be deleted when it's back online.",
+  'workingPanel.overview.keptWorktree.discarded': 'Worktree deleted. Its branch was kept.',
+  'workingPanel.overview.keptWorktree.discarding': 'Deleting the worktree…',
+  'workingPanel.overview.keptWorktree.failedTitle': "Worktree couldn't be cleaned up",
+  'workingPanel.overview.keptWorktree.hideDetails': 'Hide details',
+  'workingPanel.overview.keptWorktree.keep': 'Keep',
+  'workingPanel.overview.keptWorktree.keepFailed': 'Could not keep the worktree',
+  'workingPanel.overview.keptWorktree.keptToast':
+    "Worktree kept. It won't be cleaned up automatically.",
+  'workingPanel.overview.keptWorktree.removed': 'Worktree cleaned up · branch {{branch}} kept',
+  'workingPanel.overview.keptWorktree.removedHint':
+    'It was removed when this topic was archived or moved to the recycle bin. Sending a message checks the branch out again at the same path.',
+  'workingPanel.overview.keptWorktree.submoduleTitle':
+    'Worktree kept: a submodule has commits no remote holds',
+  'workingPanel.overview.keptWorktree.title_one': 'Worktree kept: {{count}} uncommitted file',
+  'workingPanel.overview.keptWorktree.title_other': 'Worktree kept: {{count}} uncommitted files',
   'workingPanel.overview.outputs': 'Outputs',
   'workingPanel.overview.ports.copied': 'Link copied',
   'workingPanel.overview.ports.copy': 'Copy link',
@@ -4036,10 +4183,6 @@ export default {
   'workingPanel.localFile.publish.version': 'Publish this version',
   'workingPanel.localFile.tooLarge': 'File too large to preview',
   'workingPanel.localFile.truncated': 'File preview truncated to {{limit}} characters',
-  'workingPanel.skills.actions.comingSoon': 'Coming soon',
-  'workingPanel.skills.actions.delete': 'Delete',
-  'workingPanel.skills.actions.rename': 'Rename',
-  'workingPanel.skills.actions.view': 'View',
   'workingPanel.skills.convert.action': 'Convert',
   'workingPanel.skills.convert.descriptionLabel': 'Description',
   'workingPanel.skills.convert.descriptionPlaceholder':
@@ -4058,25 +4201,26 @@ export default {
   'workingPanel.skills.convert.title': 'Convert document to skill',
   'workingPanel.skills.convert.titleLabel': 'Title',
   'workingPanel.skills.convert.titlePlaceholder': 'e.g. Weekly Report',
-  'workingPanel.skills.delete.agentConfirm':
-    'Remove the skill “{{name}}” from this agent? This cannot be undone.',
-  'workingPanel.skills.delete.error': 'Failed to delete skill',
-  'workingPanel.skills.delete.success': 'Skill deleted',
-  'workingPanel.skills.delete.title': 'Delete skill?',
-  'workingPanel.skills.delete.userConfirm':
-    'Uninstall the skill “{{name}}”? This cannot be undone.',
   'workingPanel.skills.detail.title': 'Skill details',
   'workingPanel.skills.empty': 'No skills available',
+  'workingPanel.skills.manualOnly': 'Manual only',
   'workingPanel.skills.noSearchResults': 'No matching skills',
-  'workingPanel.skills.rename.action': 'Rename',
-  'workingPanel.skills.rename.error': 'Failed to rename skill',
-  'workingPanel.skills.rename.placeholder': 'Skill name',
-  'workingPanel.skills.rename.title': 'Rename skill',
   'workingPanel.skills.searchPlaceholder': 'Filter skills...',
   'workingPanel.skills.section.agent': 'Agent skills',
   'workingPanel.skills.section.device': 'Device skills',
   'workingPanel.skills.section.project': 'Project skills',
   'workingPanel.skills.section.user': 'User skills',
+  'workingPanel.skills.manage.noneEnabled':
+    'No skills selected. Use the settings icon to choose skills.',
+  'workingPanel.skills.manage.noPermission':
+    'You do not have permission to change skills for this agent.',
+  'workingPanel.skills.manage.save': 'Save',
+  'workingPanel.skills.manage.saveFailed':
+    'Could not save changes. Your selections are kept; try saving again.',
+  'workingPanel.skills.manage.selected': 'Selected skills: {{count}}',
+  'workingPanel.skills.manage.selectResults': 'Select all results ({{count}})',
+  'workingPanel.skills.manage.title': 'Choose the skills this agent can use',
+  'workingPanel.skills.manage.unsaved': 'Unsaved changes',
   'workingPanel.skills.title': 'Skills',
   'workingPanel.files.openNeedsTopic':
     'Send a message first — this environment’s files open once the conversation has a session.',
@@ -4386,9 +4530,17 @@ export default {
   'userFeedbackCard.count_one': '{{count}} comment',
   'userFeedbackCard.count_other': '{{count}} comments',
   'userFeedbackCard.title': 'User feedback',
+  'worktreeRestore.branchMissing': "Can't restore the worktree",
+  'worktreeRestore.branchMissingDesc':
+    'The branch {{branch}} no longer exists, so this conversation continues in the source repository.',
+  'worktreeRestore.failed': "Couldn't restore the worktree",
+  'worktreeRestore.stillCleaning':
+    'The worktree is still being cleaned up. Try sending again in a moment.',
+  'worktreeRestore.waiting': 'Waiting for the worktree cleanup to finish before restoring it…',
   'you': 'You',
   'sandboxDrive.manageEnvironments': 'Settings',
   'sandboxDrive.openStorage': 'Sandbox Storage',
+  'sandboxEnvironment.none': 'No repository',
   'sandboxEnvironment.missing': 'Environment unavailable',
   'sandboxEnvironment.loading': 'Loading environment…',
   'sandboxDrive.pickerTitle': 'Work location',
@@ -4435,8 +4587,19 @@ export default {
   'taskProject.inheritedFromParent': "A subtask stays in its parent's project",
   'taskProject.label': 'Project',
   'taskProject.loadFailed': 'Failed to load projects',
-  'taskProject.moveRefused':
-    "Can't move this task while its parent, subtasks or dependencies stay in the current project. Move or detach them first.",
+  'taskProject.moveFailed': "Can't move this task to the project.",
+  'taskProject.moveRefusedDependency':
+    'Tasks here depend on tasks outside this task tree. Remove those dependencies first.',
+  'taskProject.moveRefusedFiledSubtask':
+    "Some subtasks already belong to a project, so the task tree can't move together.",
+  'taskProject.moveRefusedHasParent':
+    "A subtask stays in its parent's project. Move the top-level task instead.",
+  'taskProject.moveRefusedSplitSubtasks':
+    "This task's subtasks can't be left behind. Only a task tree without a project can move into one together.",
+  'taskProject.moveTree.content':
+    'This task and all of its subtasks ({{count}}) will move to “{{project}}”.',
+  'taskProject.moveTree.ok': 'Move all',
+  'taskProject.moveTree.title': 'Move with subtasks?',
   'taskProject.noMatch': 'No matching project',
   'taskProject.none': 'No project',
   'taskProject.searchPlaceholder': 'Search projects…',

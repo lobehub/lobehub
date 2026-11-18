@@ -357,7 +357,7 @@ export function Composer({
                       label: String(option.label),
                       metadata: option.metadata,
                     });
-                    // Choosing someone outside the Channel brings them in right away.
+                    // Choosing someone outside the Channel asks, then brings them in right away.
                     if (option.metadata?.type === 'channel-invite')
                       invites.invite(option.metadata as ChannelMentionInvite);
                     // Leave the decorator's cursor node before the next @ is typed.

@@ -70,11 +70,13 @@ interface AgentProfilePopupProps extends PropsWithChildren {
   agentId: string;
   /** When set, enables group-specific actions (settings nav + model change). */
   groupId?: string;
+  /** Where the card opens; defaults to above a hover trigger and beside a click one. */
+  placement?: 'top' | 'right' | 'bottom' | 'left';
   trigger?: 'click' | 'hover';
 }
 
 const AgentProfilePopup = memo<AgentProfilePopupProps>(
-  ({ agent, agentId, groupId, children, trigger = 'click' }) => {
+  ({ agent, agentId, groupId, children, placement, trigger = 'click' }) => {
     const { t } = useTranslation('chat');
     const navigate = useWorkspaceAwareNavigate();
     const [open, setOpen] = useState(false);
@@ -267,7 +269,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
         classNames={trigger === 'click' ? { trigger: styles.trigger } : undefined}
         nativeButton={false}
         open={open}
-        placement={trigger === 'hover' ? 'top' : 'right'}
+        placement={placement ?? (trigger === 'hover' ? 'top' : 'right')}
         trigger={trigger}
         content={
           <div role="presentation" onClick={stopCardClick}>

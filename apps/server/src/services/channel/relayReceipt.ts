@@ -24,6 +24,7 @@ export const deliverRelayReceipt = async (
     .select({
       channelTitle: channels.title,
       job: channelJobs,
+      requestAgentId: channelMessages.agentId,
       requestMetadata: channelMessages.metadata,
       requesterUserId: channelMembers.userId,
       workspaceId: channels.workspaceId,
@@ -36,7 +37,9 @@ export const deliverRelayReceipt = async (
     .limit(1);
   const relay = row && channelMessageVia(row.requestMetadata);
   const origin = row && channelRelayOrigin(row.requestMetadata);
-  if (!row || !relay || !origin || !row.requesterUserId || !row.job.manifest) return;
+  // An Agent's own request is answered between the Agents (`deliverAnswerToAsker`).
+  if (!row || row.requestAgentId || !relay || !origin || !row.requesterUserId || !row.job.manifest)
+    return;
 
   const [reply] = await db
     .select({ content: channelMessages.content })

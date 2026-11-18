@@ -5,8 +5,11 @@ import type {
   ChannelDirectoryPage,
   ChannelHistoryMessageDetail,
   ChannelHistoryPage,
+  ChannelMessagePersonParams,
+  ChannelPeoplePage,
   ChannelSendMessageParams,
   ChannelSentMessage,
+  ChannelSentPersonMessage,
 } from '@lobechat/types';
 import { cx } from '@lobehub/ui';
 import { memo } from 'react';
@@ -76,8 +79,42 @@ const SendMessageInspector = memo<
 });
 SendMessageInspector.displayName = 'ChannelSendMessageInspector';
 
+const ListPeopleInspector = memo<BuiltinInspectorProps<unknown, ChannelPeoplePage>>(
+  ({ isArgumentsStreaming, isLoading, pluginState }) => {
+    const { t } = useTranslation('plugin');
+    const loading = isArgumentsStreaming || isLoading;
+    return (
+      <div className={cx(inspectorTextStyles.root, loading && shinyTextStyles.shinyText)}>
+        <span>{t('builtins.lobe-channel.apiName.listPeople')}</span>
+        {!loading && pluginState && (
+          <span>
+            {t('builtins.lobe-channel.peopleCount', { count: pluginState.people.length })}
+          </span>
+        )}
+      </div>
+    );
+  },
+);
+ListPeopleInspector.displayName = 'ChannelListPeopleInspector';
+
+const MessagePersonInspector = memo<
+  BuiltinInspectorProps<ChannelMessagePersonParams, ChannelSentPersonMessage>
+>(({ isArgumentsStreaming, isLoading, pluginState }) => {
+  const { t } = useTranslation('plugin');
+  const loading = isArgumentsStreaming || isLoading;
+  return (
+    <div className={cx(inspectorTextStyles.root, loading && shinyTextStyles.shinyText)}>
+      <span>{t('builtins.lobe-channel.apiName.messagePerson')}</span>
+      {!loading && pluginState && <span>{pluginState.person.name}</span>}
+    </div>
+  );
+});
+MessagePersonInspector.displayName = 'ChannelMessagePersonInspector';
+
 export const ChannelInspectors = {
   [ChannelApiName.listChannels]: ListChannelsInspector,
+  [ChannelApiName.listPeople]: ListPeopleInspector,
+  [ChannelApiName.messagePerson]: MessagePersonInspector,
   [ChannelApiName.readMessage]: ChannelInspector,
   [ChannelApiName.readMessages]: ChannelInspector,
   [ChannelApiName.sendMessage]: SendMessageInspector,

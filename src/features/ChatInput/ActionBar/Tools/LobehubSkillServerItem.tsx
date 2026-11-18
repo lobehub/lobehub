@@ -1,3 +1,4 @@
+import { getConnectorMode, upsertConnectorEnabled, upsertPluginMode } from '@lobechat/types';
 import { Checkbox, Flexbox, Icon, Spin, stopPropagation } from '@lobehub/ui';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -153,20 +154,20 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
     );
 
     const pluginId = server ? server.identifier : '';
-    const plugins =
-      useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId))?.plugins || [];
-    const checked = plugins.includes(pluginId);
+    const plugins = useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId))?.plugins;
+    // A connector is two-state: on is any entry that is not disabled.
+    const checked = getConnectorMode(plugins, pluginId) === 'auto';
     const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
     // Toggle plugin for the effective agent
     const togglePlugin = useCallback(
       async (pluginIdToToggle: string) => {
         if (!effectiveAgentId) return;
-        const currentPlugins = plugins;
-        const hasPlugin = currentPlugins.includes(pluginIdToToggle);
-        const newPlugins = hasPlugin
-          ? currentPlugins.filter((id) => id !== pluginIdToToggle)
-          : [...currentPlugins, pluginIdToToggle];
+        // Turning it on writes the explicit entry; turning it off here takes it off the agent.
+        const isOn = getConnectorMode(plugins, pluginIdToToggle) === 'auto';
+        const newPlugins = isOn
+          ? upsertPluginMode(plugins, pluginIdToToggle, 'auto')
+          : upsertConnectorEnabled(plugins, pluginIdToToggle, true);
         await updateAgentConfigById(effectiveAgentId, { plugins: newPlugins });
       },
       [effectiveAgentId, plugins, updateAgentConfigById],
@@ -197,10 +198,10 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
             .lobehubSkillServers?.find((s) => s.identifier === provider);
           if (latestServer?.status === LobehubSkillStatus.CONNECTED) {
             const newPluginId = latestServer.identifier;
-            const currentAgentPlugins =
-              agentSelectors.getAgentConfigById(effectiveAgentId)(useAgentStore.getState())
-                ?.plugins || [];
-            const isAlreadyEnabled = currentAgentPlugins.includes(newPluginId);
+            const currentAgentPlugins = agentSelectors.getAgentConfigById(effectiveAgentId)(
+              useAgentStore.getState(),
+            )?.plugins;
+            const isAlreadyEnabled = getConnectorMode(currentAgentPlugins, newPluginId) === 'auto';
             if (canEdit && !isAlreadyEnabled) {
               console.info('[LobehubSkill] Auto-enabling plugin:', newPluginId);
               togglePlugin(newPluginId);

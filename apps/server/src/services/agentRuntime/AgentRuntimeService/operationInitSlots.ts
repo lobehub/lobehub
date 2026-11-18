@@ -53,6 +53,7 @@ export const buildPreInitState = (
     agentConfig,
     agentShareVisitor,
     appContext,
+    autoSkillIds,
     botContext,
     botPlatformContext,
     deviceAccessPolicy,
@@ -166,6 +167,7 @@ export const buildPreInitState = (
     // the context engine reads it on every step.
     world: {
       agent: agentConfig,
+      ...(autoSkillIds?.length && { autoSkillIds }),
       ...((botPlatformContext || discordContext) && {
         channel: { botPlatform: botPlatformContext, discord: discordContext },
       }),

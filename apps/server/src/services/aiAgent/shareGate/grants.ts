@@ -10,6 +10,7 @@ import {
 } from '@lobechat/const';
 
 import { isGovernedByBuiltinAllowlist } from './allowlist';
+import { isShareDeviceBuiltin } from './deviceAccess';
 import type { AgentShareGate, ShareDataToolPermissions } from './types';
 
 /**
@@ -25,7 +26,11 @@ import type { AgentShareGate, ShareDataToolPermissions } from './types';
 export const filterPluginsByShareGate = (pluginIds: string[], gate: AgentShareGate): string[] => {
   const grants = resolveShareToolGrants(gate.shareConfig.toolGrants);
 
-  return pluginIds.filter((id) => hasShareToolGrant(grants, id));
+  // Device builtins (a pinned Computer Use, say) follow the device grant, not
+  // the tool picker, exactly as `applyShareGateToToolSet` decides them.
+  return pluginIds.filter((id) =>
+    isShareDeviceBuiltin(id) ? !!gate.canUseDevice : hasShareToolGrant(grants, id),
+  );
 };
 
 /**
@@ -128,7 +133,9 @@ export const hasShareSkillAuthorization = (permissions: ShareDataToolPermissions
  *   (`'all'`) on purpose: narrowing the Skills tool down to its two
  *   visitor-safe APIs is {@link DATA_TOOL_ACCESS_RULES}' job, and expressing it
  *   twice would let the two lists drift.
- * - `lobe-activator`, implied by ANY tool grant: it is a runtime capability,
+ * - `lobe-activator`, implied by ANY tool grant or by the device grant
+ *   (`canUseDevice`): Computer Use is discoverable, not enabled by default,
+ *   so a device-only share needs it to turn that tool on. It is a runtime capability,
  *   not a tool the owner picks, and it can only surface manifests the gated
  *   tool set already holds. Whether a run actually keeps it (only while a
  *   granted tool is left to activate) is decided at assembly in
@@ -145,7 +152,7 @@ export const resolveEffectiveShareToolGrants = (
   const grants = resolveShareToolGrants(permissions.toolGrants);
 
   grants.delete(LobeActivatorIdentifier);
-  if (grants.size > 0) {
+  if (grants.size > 0 || permissions.canUseDevice) {
     grants.set(LobeActivatorIdentifier, new Set([ActivatorApiName.activateTools]));
   }
 

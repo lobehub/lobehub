@@ -1,8 +1,15 @@
 import { isDesktop } from '@lobechat/const';
-import { isLocalOrPrivateUrl } from '@lobechat/utils';
+import {
+  connectorDeviceBinding,
+  connectorMcpEndpoint,
+  isDeviceOnlyMcpEndpoint,
+} from '@lobechat/utils/mcpEndpoint';
 import type { SWRResponse } from 'swr';
 
 import type { ConnectorToolPermission } from '@/database/schemas';
+import { runsOnAnotherDevice } from '@/helpers/mcpDeviceBinding';
+import { buildCloudMcpManifest, cloudManifestTools } from '@/libs/mcp/cloudManifest';
+import { resolveLocalConnectorHttpParams } from '@/libs/mcp/localConnector';
 import {
   cacheScope,
   createReplicaSlice,
@@ -15,9 +22,9 @@ import { lambdaClient } from '@/libs/trpc/client';
 import { discoverService } from '@/services/discover';
 import { type LocalMcpTool, mcpService } from '@/services/mcp';
 import type { StoreSetter } from '@/store/types';
+import { ConnectorOAuthError, waitForConnectorOAuth } from '@/utils/connectorOAuth';
 
 import type { ToolStore } from '../../store';
-import { buildCloudMcpManifest, cloudManifestTools } from '../mcpStore/cloudManifest';
 import {
   agentBoundConnectorsEntity,
   agentBoundConnectorsResource,
@@ -28,7 +35,12 @@ import {
   withoutConnectorSecrets,
 } from './projection';
 import { connectorSelectors } from './selectors';
-import type { AgentBoundConnector, ConnectorWithTools } from './types';
+import type {
+  AgentBoundConnector,
+  ConnectorAccountFlowOptions,
+  ConnectorAccountFlowResult,
+  ConnectorWithTools,
+} from './types';
 
 type Setter = StoreSetter<ToolStore>;
 
@@ -412,6 +424,115 @@ export class ConnectorActionImpl {
     }
   };
 
+  /** Connect an additional account and refresh all connector lists after authorization. */
+  connectConnectorAccount = (
+    connectorId: string,
+    options?: ConnectorAccountFlowOptions,
+  ): Promise<ConnectorAccountFlowResult> =>
+    this.#authorizeAccount(connectorId, { mode: 'add' }, options);
+
+  /** Reauthorize the selected account and return the actual server-resolved outcome. */
+  reauthorizeConnectorAccount = (
+    connectorId: string,
+    linkId: string,
+    options?: ConnectorAccountFlowOptions,
+  ): Promise<ConnectorAccountFlowResult> =>
+    this.#authorizeAccount(connectorId, { mode: 'reauthorize', linkId }, options);
+
+  #authorizeAccount = async (
+    connectorId: string,
+    link: { mode: 'add' } | { mode: 'reauthorize'; linkId: string },
+    options: ConnectorAccountFlowOptions = {},
+  ): Promise<ConnectorAccountFlowResult> => {
+    const linksOf = () =>
+      [
+        ...(this.#get().connectors ?? []),
+        ...(this.#get().agentBoundConnectors ?? []),
+        ...Object.values(this.#get().agentConnectors ?? {}).flat(),
+      ].find((c) => c.id === connectorId)?.links ?? [];
+    const before = linksOf();
+    let flowId: string | undefined;
+    try {
+      options.signal?.throwIfAborted();
+      const started = await lambdaClient.connector.startOAuth.mutate(
+        {
+          id: connectorId,
+          link,
+        },
+        { signal: options.signal },
+      );
+      flowId = started.flowId;
+      const reported = await waitForConnectorOAuth(
+        options.popup,
+        connectorId,
+        started.authorizationUrl,
+        options.signal,
+        link.mode === 'add',
+      );
+      await this.#refreshConnectorLists();
+      // The callback's own report, else the server's record of the flow (the
+      // native window reports success alone), else the lists' difference: the
+      // record is a fallback whose absence never fails a stored authorization
+      if (reported) return reported;
+      const recorded = flowId
+        ? await lambdaClient.connector.oauthResult.query({ flowId }).catch(() => undefined)
+        : undefined;
+      if (recorded) return recorded;
+      const created = linksOf().find((item) => !before.some((old) => old.id === item.id));
+      return created
+        ? { outcome: 'created', linkId: created.id }
+        : {
+            outcome: link.mode === 'add' ? 'matchedExisting' : 'reauthorized',
+            linkId: link.mode === 'reauthorize' ? link.linkId : undefined,
+          };
+    } catch (error) {
+      if (options.signal?.aborted) throw new ConnectorOAuthError('dismissed');
+      // Providers whose COOP policy severs `window.opener` lose the callback's
+      // message: the window then reads as closed or never reporting back,
+      // although the callback stored the account. The server recorded how the
+      // flow ended, so ask it before calling the authorization lost.
+      const recovered = await this.#recoverAccountAuthorization(error, flowId);
+      if (recovered) return recovered;
+      // Server rejections (a 403, an OAuth server that refuses registration)
+      // carry the reason the caller shows; only the window flow is an OAuth error.
+      throw error;
+    } finally {
+      options.popup?.close();
+    }
+  };
+
+  #recoverAccountAuthorization = async (
+    error: unknown,
+    flowId: string | undefined,
+  ): Promise<ConnectorAccountFlowResult | undefined> => {
+    if (!flowId || !(error instanceof ConnectorOAuthError)) return;
+    if (error.reason !== 'dismissed' && error.reason !== 'timeout') return;
+    let result: ConnectorAccountFlowResult;
+    try {
+      result = await lambdaClient.connector.oauthResult.query({ flowId });
+    } catch {
+      return; // no completion recorded: the authorization did not finish
+    }
+    await this.#refreshConnectorLists();
+    return result;
+  };
+
+  /** Rename an account and refresh every loaded connector list. */
+  renameConnectorAccount = async (
+    connectorId: string,
+    linkId: string,
+    name: string,
+  ): Promise<void> => {
+    await lambdaClient.connector.renameLink.mutate({ id: connectorId, linkId, name });
+    await this.#refreshConnectorLists();
+  };
+
+  /** Remove an account and refresh its connector, including last-account disconnection. */
+  removeConnectorAccount = async (connectorId: string, linkId: string): Promise<void> => {
+    await lambdaClient.connector.deleteLink.mutate({ id: connectorId, linkId });
+    await this.#refreshConnectorLists();
+  };
+
   /**
    * Begin the OAuth authorization-code flow for a custom connector and return
    * the authorize URL for the caller to open in a popup. Resolves the client
@@ -516,8 +637,8 @@ export class ConnectorActionImpl {
 
   /**
    * Desktop-only install/refresh path for connectors the cloud server cannot
-   * reach itself: stdio MCP (must spawn on this machine) and local/private
-   * network HTTP endpoints. The server-side `syncTools` would try to connect
+   * reach itself: stdio MCP (must spawn on this machine), local/private
+   * network HTTP endpoints, and HTTP set to connect through the device. The server-side `syncTools` would try to connect
    * FROM the cloud and fail with "Failed to start MCP service process" /
    * "fetch failed" (#16533), so the client lists the tools locally (via the
    * Electron main process, same path Test Connection uses) and reports them
@@ -533,13 +654,16 @@ export class ConnectorActionImpl {
     if (!isDesktop) return false;
 
     // `getForEdit` returns the decrypted user-set credentials (bearer/apikey/
-    // header) needed to connect locally. OAuth2 tokens are machine-managed and
-    // never leave the server — but OAuth against a localhost endpoint would be
-    // server-unreachable anyway, so that combination stays on the server path.
+    // header) needed to connect locally; an OAuth connector's access token is
+    // fetched on its own (`resolveLocalConnectorHttpParams`).
     const detail = await lambdaClient.connector.getForEdit.query({ id });
     const isStdio = detail.mcpConnectionType === 'stdio';
-    const isLocalHttp = !!detail.mcpServerUrl && isLocalOrPrivateUrl(detail.mcpServerUrl);
+    // A localhost / LAN address, or one the user set to connect through the device
+    const isLocalHttp =
+      !!detail.mcpServerUrl && isDeviceOnlyMcpEndpoint(connectorMcpEndpoint(detail));
     if (!isStdio && !isLocalHttp) return false;
+    // Bound to another device: the server lists it there, where its calls run
+    if (runsOnAnotherDevice(connectorDeviceBinding(detail)?.deviceId)) return false;
 
     // The full tool list, not a manifest: a manifest leaves out view-only
     // tools, yet a view's call must find its tool synced.
@@ -555,23 +679,11 @@ export class ConnectorActionImpl {
         },
       });
     } else {
-      const credentials = detail.credentials;
-      const auth =
-        credentials?.type === 'bearer'
-          ? { token: credentials.token, type: 'bearer' as const }
-          : credentials?.type === 'apikey'
-            ? { token: credentials.apiKey, type: 'bearer' as const }
-            : undefined;
-      // Custom headers live in metadata.customHeaders; legacy rows stored them
-      // as a 'header' credential — merge both, mirroring the server-side
-      // buildConnectorMcpParams.
-      const headerCreds = credentials?.type === 'header' ? credentials.headers : undefined;
-      const customHeaders = detail.metadata?.customHeaders as Record<string, string> | undefined;
-      const headers =
-        headerCreds || customHeaders ? { ...headerCreds, ...customHeaders } : undefined;
-      tools = await mcpService.listLocalMcpTools({
-        http: { auth, headers, name: detail.identifier, url: detail.mcpServerUrl! },
-      });
+      // The same credentials and headers its tool calls send
+      const http = await resolveLocalConnectorHttpParams(detail, (connectorId) =>
+        lambdaClient.connector.getLocalCallToken.mutate({ id: connectorId }),
+      );
+      tools = await mcpService.listLocalMcpTools({ http });
     }
 
     await lambdaClient.connector.syncToolsFromClientById.mutate({
@@ -582,6 +694,7 @@ export class ConnectorActionImpl {
         inputSchema: tool.inputSchema,
         toolName: tool.name,
         visibility: tool.visibility,
+        ...(tool.mcpAppMeta && { mcpAppMeta: tool.mcpAppMeta }),
       })),
     });
     return true;

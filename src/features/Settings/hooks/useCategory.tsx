@@ -16,6 +16,7 @@ import {
   EllipsisIcon,
   EthernetPort,
   FlaskConical,
+  GaugeIcon,
   Gift,
   Info,
   KeyboardIcon,
@@ -30,7 +31,9 @@ import {
   TagIcon,
   TerminalSquare,
   Trash2,
+  WebhookIcon,
   Wrench,
+  ZapIcon,
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -85,6 +88,7 @@ export const useCategory = () => {
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
+  const enableWebhook = useServerConfigStore(serverConfigSelectors.enableWebhook);
 
   const avatarUrl = useMemo(() => {
     if (!avatar) return undefined;
@@ -143,7 +147,7 @@ export const useCategory = () => {
         {
           icon: ChartPieIcon,
           key: SettingsTabs.Usage,
-          label: tSubscription('tab.usageAndBalance'),
+          label: tSubscription('tab.usage'),
         },
         { icon: CreditCard, key: SettingsTabs.Billing, label: tSubscription('tab.billing') },
         { icon: Gift, key: SettingsTabs.Referral, label: tSubscription('tab.referral') },
@@ -218,6 +222,19 @@ export const useCategory = () => {
         key: SettingsTabs.Connector,
         label: t('tab.connector'),
       },
+      // What connectors fire on their own: the event subscriptions agents made
+      // through them. Next to the connectors they come from.
+      enableWebhook && {
+        icon: ZapIcon,
+        key: SettingsTabs.Automations,
+        label: t('tab.automations'),
+      },
+      // URLs outside systems call to wake an agent; made on each agent's page, managed here too.
+      enableWebhook && {
+        icon: WebhookIcon,
+        key: SettingsTabs.Webhooks,
+        label: t('tab.webhooks'),
+      },
       {
         icon: KeyRound,
         key: SettingsTabs.Creds,
@@ -237,6 +254,13 @@ export const useCategory = () => {
         icon: MonitorSmartphoneIcon,
         key: SettingsTabs.Devices,
         label: t('tab.devices'),
+      },
+      // The coding-agent subscriptions this member's devices signed in to:
+      // the capacity their agents are balanced onto.
+      {
+        icon: GaugeIcon,
+        key: SettingsTabs.SubscriptionAccounts,
+        label: t('tab.subscriptionAccounts'),
       },
       // Always there: a code environment is a definition, written down before
       // anything runs it, and useful with or without a drive to run it on.
@@ -322,6 +346,7 @@ export const useCategory = () => {
     showProvider,
     isDevMode,
     enableOAuthApps,
+    enableWebhook,
     avatarUrl,
     username,
   ]);

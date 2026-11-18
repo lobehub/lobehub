@@ -11,6 +11,7 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 import TaskStatusIcon from '../features/TaskStatusIcon';
 import TaskSubtaskProgressTag from '../features/TaskSubtaskProgressTag';
 import { taskDetailPath } from '../shared/taskDetailPath';
+import { useTaskListOriginState } from '../shared/taskListOrigin';
 
 const TASK_STATUS_SET = new Set([
   'backlog',
@@ -29,6 +30,7 @@ const toTaskStatus = (status?: string): TaskStatus =>
 const TaskParentBar = memo(() => {
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
+  const taskListOriginState = useTaskListOriginState();
   const parent = useTaskStore(taskDetailSelectors.activeTaskParent);
   const currentIdentifier = useTaskStore(taskDetailSelectors.activeTaskDetail)?.identifier;
 
@@ -84,7 +86,9 @@ const TaskParentBar = memo(() => {
         style={{ maxWidth: '100%', minWidth: 0 }}
         type={'text'}
         onClick={() =>
-          navigate(taskDetailPath(parent.identifier, parentAgentId ?? undefined, parent.name))
+          navigate(taskDetailPath(parent.identifier, parentAgentId ?? undefined, parent.name), {
+            state: taskListOriginState,
+          })
         }
       >
         <Text ellipsis style={{ minWidth: 0 }} weight={500}>
@@ -97,7 +101,9 @@ const TaskParentBar = memo(() => {
             currentIdentifier={currentIdentifier}
             subtasks={parentSubtasks}
             onSubtaskClick={(identifier, assigneeAgentId, name) =>
-              navigate(taskDetailPath(identifier, assigneeAgentId, name))
+              navigate(taskDetailPath(identifier, assigneeAgentId, name), {
+                state: taskListOriginState,
+              })
             }
           />
         </span>

@@ -49,28 +49,16 @@ export interface AgentDirectChannelParams {
   /** The Agent its creator just made. */
   agentId: string;
   db: LobeChatDatabase;
-  /** The creator's own desktop, where an Agent that runs locally answers; checked before use. */
-  localDeviceId?: string;
   userId: string;
   workspaceId?: string;
 }
 
 /**
  * Opens the direct conversation between a person and the Agent they just created, named after the
- * Agent and on the device and directory a new Channel would give it; see
- * `ChannelService.createDirect`.
+ * Agent and bound to no device; see `ChannelService.createDirect`.
  */
-export const createAgentDirectChannel = async ({
-  db,
-  localDeviceId,
-  ...context
-}: AgentDirectChannelParams) =>
+export const createAgentDirectChannel = async ({ db, ...context }: AgentDirectChannelParams) =>
   openForCreator('the direct channel of a new agent', context, async () => {
     if (!(await isChannelEnabled(context.userId))) return;
-    await new ChannelService(db, context.userId, context.workspaceId).createDirect(
-      context.agentId,
-      {
-        localDeviceId,
-      },
-    );
+    await new ChannelService(db, context.userId, context.workspaceId).createDirect(context.agentId);
   });

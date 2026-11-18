@@ -16,6 +16,7 @@ import type {
   OnboardingContext,
   PlanTodoConfig,
   ProjectInstructionFile,
+  RevokedDocumentReads,
   SkillMeta,
   ToolDiscoveryConfig,
   TopicReferenceItem,
@@ -56,6 +57,8 @@ export interface ContextAgentSnapshot {
   inputTemplate?: string;
   /** Files and knowledge bases attached to the agent. */
   knowledge?: KnowledgeConfig;
+  /** Documents deleted or disabled since earlier turns read them, per reading agent. */
+  revokedDocumentReads?: RevokedDocumentReads[];
   systemRole?: string;
 }
 
@@ -82,6 +85,7 @@ export interface ContextRunSnapshot {
    */
   enableAgentMode?: boolean;
   enableExpertise?: boolean;
+  enableMcpAppContext?: boolean;
   expertise?: ExpertiseContextSnapshot;
   /** maxSteps exceeded: tools are stripped and a summary prompt is injected. */
   forceFinish?: boolean;

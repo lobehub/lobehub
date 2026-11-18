@@ -117,7 +117,7 @@ const ReadCheck = ({
           </Text>
         ) : check.result?.toulmin?.reasoning ? (
           <Flexbox gap={4} paddingBlock={8} paddingInline={10}>
-            <Text fontSize={11} type={'secondary'}>
+            <Text fontSize={12} type={'secondary'}>
               {t('acceptance.checks.judgeReason')}
             </Text>
             <Text fontSize={12} style={{ whiteSpace: 'pre-wrap' }}>

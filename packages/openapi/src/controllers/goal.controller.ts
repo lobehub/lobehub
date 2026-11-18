@@ -80,8 +80,7 @@ export class GoalController extends BaseController {
     try {
       const { id } = this.getParams<GoalIdParam>(c);
       const service = await this.service(c);
-      await service.deleteGoal(id);
-      return this.success(c, undefined, 'Goal deleted');
+      return this.success(c, await service.deleteGoal(id), 'Goal deleted');
     } catch (error) {
       return this.handleError(c, error);
     }

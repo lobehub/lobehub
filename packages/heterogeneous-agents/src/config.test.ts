@@ -85,6 +85,7 @@ describe('heterogeneous agent config', () => {
   });
 
   it('resolves display labels with safe fallbacks', () => {
+    expect(getHeterogeneousTypeLabel('antigravity')).toBe('Antigravity');
     expect(getHeterogeneousTypeLabel('codebuddy')).toBe('CodeBuddy');
     expect(getHeterogeneousTypeLabel('copilot')).toBe('GitHub Copilot');
     expect(getHeterogeneousTypeLabel('hermes')).toBe('Hermes');

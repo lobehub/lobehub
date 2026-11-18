@@ -1,6 +1,8 @@
 import { BRANDING_URL } from '@lobechat/business-const';
 import { ChatErrorType, Plans } from '@lobechat/types';
-import { Avatar, Button, Center, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { Avatar, Button, Center, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,6 +17,7 @@ import {
 /** Plans with a `plans.plan.<id>.title` locale key */
 const PLAN_TITLE_KEYS = {
   [Plans.Free]: 'plans.plan.free.title',
+  [Plans.Basic]: 'plans.plan.basic.title',
   [Plans.Hobby]: 'plans.plan.hobby.title',
   [Plans.Max]: 'plans.plan.max.title',
   [Plans.Plus]: 'plans.plan.plus.title',
@@ -24,53 +27,32 @@ const PLAN_TITLE_KEYS = {
   [Plans.Ultimate]: 'plans.plan.ultimate.title',
 } as const satisfies Record<Plans, string>;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  centered: css`
-    text-align: center;
-
-    /* even line lengths: a wrapped sentence never leaves a lone character on the last line */
-    text-wrap: balance;
-  `,
-  fact: css`
-    display: flex;
-    gap: 12px;
-    justify-content: space-between;
-
-    width: 100%;
-
-    font-size: 13px;
-    line-height: 1.4;
-  `,
-  factLabel: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-  factValue: css`
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorText};
-    text-align: end;
-    white-space: nowrap;
-  `,
-  factWarningValue: css`
-    font-weight: 700;
-    color: ${cssVar.colorError};
-  `,
-  facts: css`
-    width: 100%;
-  `,
-  form: css`
-    width: 100%;
-    max-width: 360px;
-
-    @media (width <= 768px) {
-      max-width: 90%;
-    }
-  `,
-  title: css`
-    font-size: 16px;
-    font-weight: bold;
-  `,
-}));
+const styles = stylex.create({
+  centered: { textAlign: 'center', textWrap: 'balance' },
+  fact: {
+    display: 'flex',
+    gap: '12px',
+    justifyContent: 'space-between',
+    width: '100%',
+    fontSize: '13px',
+    lineHeight: 1.4,
+  },
+  factLabel: { color: cssVar.colorTextSecondary },
+  factValue: {
+    fontWeight: 600,
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorText,
+    textAlign: 'end',
+    whiteSpace: 'nowrap',
+  },
+  factWarningValue: { fontWeight: 700, color: cssVar.colorError },
+  facts: { width: '100%' },
+  form: {
+    width: '100%',
+    maxWidth: { 'default': '360px', '@media (width <= 768px)': '90%' },
+  },
+  title: { fontSize: '16px', fontWeight: 'bold' },
+});
 
 const getBudgetDescriptionKey = (pricingBasis?: PlanLimitPricingBasis) => {
   switch (pricingBasis) {
@@ -139,27 +121,31 @@ const PlanLimitCard = memo<PlanLimitCardProps>(({ errorBody, errorType, onRetry 
 
   return (
     <Center paddingBlock={12} width={'100%'}>
-      <Flexbox className={styles.form} gap={16}>
+      <Flexbox className={stylex.props(styles.form).className} gap={16}>
         <Center gap={8}>
           <Avatar animation avatar={'💰'} background={'transparent'} size={40} />
           <Center gap={4}>
-            <Text className={styles.title}>{title}</Text>
-            <Text className={styles.centered} fontSize={13} type={'secondary'}>
+            <Text className={stylex.props(styles.title).className}>{title}</Text>
+            <Text
+              className={stylex.props(styles.centered).className}
+              fontSize={13}
+              type={'secondary'}
+            >
               {description}
             </Text>
           </Center>
         </Center>
 
         {facts.length > 0 && (
-          <Flexbox className={styles.facts} gap={8}>
+          <Flexbox className={stylex.props(styles.facts).className} gap={8}>
             {facts.map((fact) => (
-              <div className={styles.fact} key={fact.label}>
-                <span className={styles.factLabel}>{fact.label}</span>
+              <div {...stylex.props(styles.fact)} key={fact.label}>
+                <span {...stylex.props(styles.factLabel)}>{fact.label}</span>
                 <span
                   className={
                     fact.warning
-                      ? `${styles.factValue} ${styles.factWarningValue}`
-                      : styles.factValue
+                      ? stylex.props(styles.factValue, styles.factWarningValue).className
+                      : stylex.props(styles.factValue).className
                   }
                 >
                   {formatCreditAmount(fact.value!)}

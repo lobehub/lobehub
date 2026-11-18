@@ -70,12 +70,6 @@ interface UseAgentDropdownMenuParams {
   name?: string | null;
   openCreateGroupModal: () => void;
   pinned: boolean;
-  /**
-   * Offer "Remove from sidebar". Off for lists that ignore the sidebar
-   * visibility preference (the `im_layout` Messages list), where it would
-   * change nothing visible. Defaults to on.
-   */
-  sidebarVisibilityEnabled?: boolean;
   slug?: string | null;
   title: string;
   userId?: string | null;
@@ -92,7 +86,6 @@ export const useAgentDropdownMenu = ({
   name,
   openCreateGroupModal,
   pinned,
-  sidebarVisibilityEnabled = true,
   slug,
   title,
   userId,
@@ -151,8 +144,7 @@ export const useAgentDropdownMenu = ({
   const currentUserId = useUserStore(userProfileSelectors.userId);
   const { isSidebarItemVisible, setSidebarItemVisible } = useSidebarItemVisibility();
   const refreshWorkspaceUserPreference = useUserStore((s) => s.refreshWorkspaceUserPreference);
-  const isShownInSidebar =
-    sidebarVisibilityEnabled && isSidebarItemVisible({ id, slug, type: 'agent', userId });
+  const isShownInSidebar = isSidebarItemVisible({ id, slug, type: 'agent', userId });
   const isPrivate = visibility === 'private';
   const isBuiltin = !!slug && BUILTIN_SLUGS.has(slug);
   const showPublishAction = Boolean(activeWorkspaceId) && isPrivate;

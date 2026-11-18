@@ -241,6 +241,7 @@ describe('useFileTreeActions — create', () => {
     expect(service.createProjectDirectory).toHaveBeenCalledWith({
       deviceId: 'dev_1',
       path: '/repo/docs',
+      topicId: 'tpc_1',
       workingDirectory: '/repo',
     });
     expect(service.refreshProjectFiles).toHaveBeenCalledWith('dev_1', '/repo');

@@ -39,7 +39,9 @@ const operationProcedure = (capability: HeteroOperationCapability) =>
       const result = await next({
         ctx: {
           channelHistory: new ChannelHistoryService(...args),
-          channelMessaging: new ChannelMessagingService(...args),
+          // The token was checked for this capability above; an owner's bot run carries
+          // `channel:message` without a Channel of its own.
+          channelMessaging: new ChannelMessagingService(...args, { allowBotRun: true }),
         },
       });
       if (!result.ok && result.error.cause instanceof ChannelError)
@@ -92,12 +94,36 @@ export const channelHistoryProcedures = {
         .strict(),
     )
     .query(({ ctx, input }) => ctx.channelMessaging.listChannels(input)),
+  listPeople: messagingProcedure
+    .input(
+      z
+        .object({
+          limit: z.number().int().min(1).max(20).optional(),
+          query: z.string().max(200).optional(),
+        })
+        .strict(),
+    )
+    .query(({ ctx, input }) => ctx.channelMessaging.listPeople(input)),
+  messagePerson: messagingProcedure
+    .input(
+      z
+        .object({
+          content: z.string().min(1),
+          /** Repeat it to retry without posting twice. */
+          requestKey: z.string().min(1).max(100),
+          userId: z.string().min(1),
+        })
+        .strict(),
+    )
+    .mutation(({ ctx, input: { requestKey, ...params } }) =>
+      ctx.channelMessaging.messagePerson(params, `cli:${requestKey}`),
+    ),
   sendMessage: messagingProcedure
     .input(
       z
         .object({
           agentIds: z.array(z.string().min(1)).min(1).max(5),
-          channelId: z.string().min(1),
+          channelId: z.string().min(1).optional(),
           content: z.string().min(1),
           /** Repeat it to retry without posting twice. */
           requestKey: z.string().min(1).max(100),

@@ -1,4 +1,4 @@
-import type { GroupedTopic } from '@lobechat/types';
+import type { ChannelListItem, GroupedTopic } from '@lobechat/types';
 import {
   getTopicWorkingDirectoryEffectivePath,
   getTopicWorkingDirectorySourcePath,
@@ -78,9 +78,12 @@ export const matchesBotChannel = (topic: ChatTopic, botChannels: BotChannelFilte
   return !!platform && botChannels.includes(platform);
 };
 
-export const matchesTimeRange = (topic: ChatTopic, range: TimeRangeFilter): boolean => {
+export const matchesTimeRange = (
+  item: { updatedAt?: Date | number | string | null },
+  range: TimeRangeFilter,
+): boolean => {
   if (range === 'all') return true;
-  const updated = topic.updatedAt ? new Date(topic.updatedAt).getTime() : 0;
+  const updated = item.updatedAt ? new Date(item.updatedAt).getTime() : 0;
   if (!updated) return false;
   const now = Date.now();
   const diff = now - updated;
@@ -98,6 +101,56 @@ export const matchesTimeRange = (topic: ChatTopic, range: TimeRangeFilter): bool
       return true;
     }
   }
+};
+
+/**
+ * A Channel's status as the topic status tabs read it: archived Channels sit under the
+ * Archived (`completed`) tab, and one with a reply under way also counts as running.
+ */
+export const matchesChannelStatus = (channel: ChannelListItem, status: StatusFilter): boolean => {
+  switch (status) {
+    case 'all': {
+      return true;
+    }
+    case 'archived':
+    case 'completed': {
+      return channel.status === 'archived';
+    }
+    case 'running': {
+      return (
+        channel.status !== 'archived' &&
+        !!channel.replyJobs?.some((job) => job.status === 'running')
+      );
+    }
+    default: {
+      return channel.status !== 'archived';
+    }
+  }
+};
+
+/**
+ * Group Channels the Agent is an active member of. Its run topics there stay hidden from
+ * topic lists (they carry other members' messages), so the page lists the Channels instead.
+ * Direct conversations open from the Agent itself and are left out.
+ */
+export const agentGroupChannels = (
+  channels: ChannelListItem[] | undefined,
+  agentId: string,
+): ChannelListItem[] =>
+  channels?.filter((channel) => !channel.agentId && !!channel.agentIds?.includes(agentId)) ?? [];
+
+export const matchesChannelSearch = (channel: ChannelListItem, search: string): boolean => {
+  const keyword = search.trim().toLowerCase();
+  return !keyword || channel.title.toLowerCase().includes(keyword);
+};
+
+export const sortChannelsBy = (channels: ChannelListItem[], sortBy: SortBy): ChannelListItem[] => {
+  const time = (value: Date | string | undefined) => (value ? new Date(value).getTime() : 0);
+  return [...channels].sort((a, b) => {
+    if (sortBy === 'title') return a.title.localeCompare(b.title);
+    if (sortBy === 'createdAt') return time(b.createdAt) - time(a.createdAt);
+    return time(b.updatedAt ?? b.createdAt) - time(a.updatedAt ?? a.createdAt);
+  });
 };
 
 export const sortTopics = (topics: ChatTopic[], sortBy: SortBy): ChatTopic[] => {
@@ -158,6 +211,7 @@ export const getProjectLabel = (topic: ChatTopic): string | undefined => {
 
 /** Client-side platform display names (server `PlatformDefinition.name`). */
 const PLATFORM_DISPLAY_NAMES: Record<string, string> = {
+  dingtalk: 'DingTalk',
   discord: 'Discord',
   feishu: 'Feishu',
   googlechat: 'Google Chat',
@@ -227,4 +281,18 @@ export const getProjectGroupTitle = (group: GroupedTopic, t: LooseT): string => 
   const label = withPath ? getProjectFilterLabel(withPath) : undefined;
   if (label) return label;
   return group.id.replace(/^(project-id|project-directory|project):/, '');
+};
+
+/**
+ * Whether the Channel list is still loading or failed. A failed first fetch leaves no list
+ * behind, so it must surface as an error instead of loading forever; a failed refresh keeps
+ * showing the list already loaded.
+ */
+export const channelListState = (
+  enabled: boolean,
+  channels: readonly unknown[] | undefined,
+  error: unknown,
+): { error: unknown; loading: boolean } => {
+  if (!enabled || channels) return { error: undefined, loading: false };
+  return error ? { error, loading: false } : { error: undefined, loading: true };
 };

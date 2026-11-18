@@ -39,12 +39,6 @@ export type IFeatureFlagsState = {
   enableDashboard: boolean | undefined;
   enableDevDock: boolean | undefined;
   /**
-   * Rail layout trial (`im_layout`): icon rail, IM-style Messages list,
-   * Contacts, Tasks scope list and the agent profile side panel. Off keeps the
-   * current sidebar layout.
-   */
-  enableImLayout: boolean | undefined;
-  /**
    * @deprecated The new subscription tiers are always on. Kept as a constant
    * `true` because released desktop clients still read it and fall back to the
    * retired plans when it is missing. Remove once those clients are no longer
@@ -88,6 +82,8 @@ export type IFeatureFlagsState = {
    * that declare a `ui://` view render as plain results.
    */
   enableMcpApps: boolean | undefined;
+  /** Inbound webhooks wake Agents (`webhook`): MCP Events, generic webhooks, Automations. Off by default. */
+  enableWebhook: boolean | undefined;
   /**
    * Agent documents move into a dedicated knowledge base at runtime
    * (`agent_knowledge_space`). Off by default.
@@ -102,6 +98,13 @@ export type IFeatureFlagsState = {
    * only; `AGENT_RUNTIME_STRIP_OPERATION_TOOLSET` (`0` / `1`) overrides it.
    */
   enableStripOperationToolset: boolean | undefined;
+  /**
+   * Leave copies of the operation tool set (and the deprecated top-level
+   * `expertise` mirror) out of the persisted agent state blob and restore them
+   * on load (`agent_runtime_slim_state`). Server only;
+   * `AGENT_RUNTIME_SLIM_STATE` (`0` / `1`) overrides it.
+   */
+  enableSlimAgentState: boolean | undefined;
   /** Hover previews of a topic's final answer (`topic_preview`). */
   enableTopicPreview: boolean | undefined;
   /**

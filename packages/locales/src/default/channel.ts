@@ -25,7 +25,7 @@ export default {
   'create.onlyYou': 'Only you for now. Create it and invite members whenever you like.',
   'agents': 'Agents',
   'otherAgents': 'Other Agents',
-  'projectAgents': 'Project members',
+  'projectAgents': 'Project Agents',
   'searchAgents': 'Search Agents',
   'unnamedAgent': 'Unnamed Agent',
   'person': 'Person',
@@ -35,14 +35,13 @@ export default {
   'environment.agentUnavailable':
     'This Agent is no longer available. Remove it and choose another.',
   'environment.checkingDevice': 'Checking status',
-  'environment.chooseDevice': 'Choose a device',
+  'environment.followAgent': "Use the Agent's own settings",
   'environment.configurationFailed': 'Could not load this Agent’s settings. Try again.',
   'environment.configurationLoading': 'Loading this Agent’s settings…',
   'environment.connectorUpgradeRequired':
     'This device’s LobeHub connector needs an update. Update LobeHub Desktop or the LobeHub CLI on that device, then reconnect and try again.',
   'environment.deviceLabel': 'Device for {{name}}',
   'environment.deviceOffline': 'This device is offline. Reconnect it or choose another device.',
-  'environment.deviceRequired': 'Choose an online device for this coding Agent.',
   'environment.deviceUnreachable':
     'Could not connect to the device to check the working directory. Check the device connection and try again.',
   'environment.deviceUnavailable':
@@ -56,8 +55,6 @@ export default {
   'environment.directoryRequired': 'Choose a working directory on this device.',
   'environment.inherited.deviceOffline':
     'This Agent’s device is offline. Reconnect the device, or remove the Agent.',
-  'environment.inherited.deviceRequired':
-    'This coding Agent has no default device. Choose one in its settings, or remove the Agent.',
   'environment.inherited.deviceUnavailable':
     'This Agent’s device is unavailable in the current space. Change it in the Agent’s settings, or remove the Agent.',
   'environment.directoryUnavailable':
@@ -74,7 +71,6 @@ export default {
   'environment.unsupportedRuntime': 'This Agent cannot run in a channel yet. Choose another Agent.',
   'directoryRequired': 'Choose a working directory for each device.',
   'deviceRequired': 'Choose an online device and a working directory for each coding Agent.',
-  'noDevice': 'No device',
   'chooseDevice': 'Choose a device',
   'noDevices': 'No device is connected. Connect one, then choose it here.',
   'offline': 'Offline',
@@ -95,8 +91,10 @@ export default {
   'members.show': 'Show member list',
   'members.hide': 'Hide member list',
   'membersCount': 'Members · {{count}}',
+  'members.agents': 'Agents · {{count}}',
   'openAgent': 'Open Agent',
   'openAgentNamed': 'Open {{name}}',
+  'memberActionsNamed': 'Actions for {{name}}',
   'profile.about': 'About',
   'profile.hide': 'Hide Agent profile',
   'profile.noDescription': 'No description yet',
@@ -117,6 +115,7 @@ export default {
   'outgoing.retry': 'Retry',
   'outgoing.sending': 'Sending…',
   'composer': 'Message #{{name}}',
+  'composerToJoin': 'Message #{{name}} to join',
   'directComposer': 'Message {{name}}',
   'threadComposer': 'Reply in thread',
   'composer.actions': 'More actions',
@@ -140,7 +139,7 @@ export default {
     'Mention Agents to choose who replies. Without a mention, every Agent here replies.',
   'mentionInvite.failed': "Couldn't add {{name}} to the channel. Try again.",
   'mentionInvite.failedReason': "Couldn't add {{name}} to the channel: {{reason}}",
-  'mentionInvite.section': 'Not in this channel · mention to add',
+  'mentionInvite.section': 'Not in this channel · mention to invite',
   'attachments.upload': 'Attach files',
   'date.yesterday': 'Yesterday',
   'attachments.failed': 'Upload failed. Try again.',
@@ -299,4 +298,45 @@ export default {
   'settings.reply.instructionsHint':
     'Tell Agents who to answer and what to leave alone. It guides them and is not a hard rule.',
   'settings.reply.instructionsContent': 'Instructions',
+  'browse.empty': 'No public channels to join yet.',
+  'browse.join': 'Join',
+  'browse.joinFailed': 'Could not join the channel. Try again.',
+  'browse.memberCount': 'Members · {{count}}',
+  'browse.noMatches': 'No matching public channels',
+  'browse.search': 'Search public channels',
+  'browse.title': 'Browse channels',
+  'settings.visibility.privateHint':
+    'Only invited members can see this channel. Turn it on to let everyone in the workspace find and join it.',
+  'settings.visibility.publicHint': 'Everyone in the workspace can find and join this channel.',
+  'settings.visibility.title': 'Public channel',
+  'visibilityFailed': 'Could not change who can see the channel. Try again.',
+  'visibilityForbidden': 'Only the channel owner or an administrator can change who can see it.',
+  'invite.outsideProject': 'Other Agents · they join the project too',
+  'invite.outsideProjectLocked':
+    'Only the project creator or a workspace admin can add another Agent to this project',
+  'invite.joinProjectNotice':
+    '{{names}} will join the project “{{project}}” first, then this channel.',
+  'invite.joinProjectNoticeUnnamed': '{{names}} will join this project first, then this channel.',
+  'member.remove': 'Remove from channel',
+  'member.removeNamed': 'Remove {{name}} from the channel',
+  'member.removeConfirmTitle': 'Remove {{name}} from the channel?',
+  'member.removeConfirmPerson':
+    'They will no longer see this channel unless an admin invites them again.',
+  'member.removeConfirmAgent':
+    'Its replies in progress here stop. It stays in the project and can be invited again.',
+  'member.removeConfirmAgentStandalone':
+    'Its replies in progress here stop. You can invite it again later.',
+  'member.removeFailed': "Couldn't remove {{name}}. Try again.",
+  'leave': 'Leave channel',
+  'leaveConfirmTitle': 'Leave “{{title}}”?',
+  'leaveConfirm': 'You will no longer see this channel unless someone invites you again.',
+  'leaveConfirmProject': 'You can join again from the project at any time.',
+  'leaveFailed': "Couldn't leave the channel. Try again.",
+  'leaveSuccess': 'You left the channel',
+  'mentionInvite.confirmTitle': 'Invite {{name}} to this channel?',
+  'mentionInvite.confirmPerson': 'They will see the whole conversation in this channel.',
+  'mentionInvite.confirmAgent': 'It will read this channel and can reply here.',
+  'mentionInvite.confirmAgentProject':
+    'It is not in the project “{{project}}” yet: it joins the project first, then this channel.',
+  'mentionInvite.confirmOk': 'Invite and mention',
 };

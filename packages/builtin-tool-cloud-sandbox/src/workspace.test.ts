@@ -3,10 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { formatSandboxStoragePromptVariables } from './workspace';
 
 describe('formatSandboxStoragePromptVariables', () => {
-  it('leaves the ephemeral wording exactly as a run without persistence has always had it', () => {
+  it('tells a temporary run it is discarded after use, and what it suits', () => {
     // The ordinary sandbox is every free run and every topic that never asked
-    // for persistence; its prompt must not drift because the persistent one
-    // gained a rule.
+    // for persistence; it keeps its original lines and adds what it is for.
     expect(formatSandboxStoragePromptVariables()).toEqual({
       sandbox_session_files: '- Files from previous sessions may not persist',
       sandbox_workspace: [
@@ -14,8 +13,11 @@ describe('formatSandboxStoragePromptVariables', () => {
         '- Each conversation topic has its own isolated session',
         '- Sessions may expire after inactivity; files will be recreated if needed',
         '- The sandbox has its own isolated file system starting at the root directory',
+        '- This is a temporary sandbox, discarded after use: results and intermediate files are not kept once it is gone. It suits coding on a repository and one-off data processing, where nothing along the way needs keeping. Anything the user wants to keep has to leave the sandbox — export finished files with `exportFile`.',
       ].join('\n'),
     });
+    // A deployment without persistence must not be pointed at a drive.
+    expect(formatSandboxStoragePromptVariables().sandbox_workspace).not.toMatch(/drive/i);
     expect(formatSandboxStoragePromptVariables({ mode: 'ephemeral' })).toEqual(
       formatSandboxStoragePromptVariables(),
     );
@@ -78,6 +80,19 @@ describe('the three placements a run can have', () => {
 
     expect(prompt).toContain("the root of the user's **network drive**");
     expect(prompt).toContain('its own subfolder');
+  });
+
+  // The persistent sandbox is for everyday work; coding belongs in the
+  // temporary one, where dependencies and build output cost no drive space.
+  it('tells a drive run it is for everyday tasks, and to send coding to the Cloud Sandbox', () => {
+    const { sandbox_workspace: prompt } = formatSandboxStoragePromptVariables({
+      cwd: 'reports',
+      mode: 'drive',
+    });
+
+    expect(prompt).toContain('meant for everyday tasks');
+    expect(prompt).toContain('It is not meant for coding');
+    expect(prompt).toContain('switch this conversation to the Cloud Sandbox');
   });
 
   it('names an instance as an environment directory whose packages come back', () => {

@@ -1,7 +1,7 @@
 'use client';
 
 import { getConnectorCatalog } from '@lobechat/const';
-import { getActivePluginIds, parsePluginEntry, upsertPluginMode } from '@lobechat/types';
+import { parsePluginEntry, upsertConnectorEnabled, upsertPluginMode } from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
 import { Avatar, Button, cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
@@ -10,6 +10,7 @@ import { PlusIcon } from 'lucide-react';
 import React, { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MarketSkillIcon from '@/components/MarketSkillIcon';
 import ActionDropdown from '@/features/ChatInput/ActionBar/components/ActionDropdown';
 import ComposioServerItem from '@/features/ChatInput/ActionBar/Tools/ComposioServerItem';
 import ComposioSkillIcon, {
@@ -18,11 +19,11 @@ import ComposioSkillIcon, {
 import LobehubSkillIcon from '@/features/ChatInput/ActionBar/Tools/LobehubSkillIcon';
 import LobehubSkillServerItem from '@/features/ChatInput/ActionBar/Tools/LobehubSkillServerItem';
 import MarketAgentSkillPopoverContent from '@/features/ChatInput/ActionBar/Tools/MarketAgentSkillPopoverContent';
-import MarketSkillIcon from '@/features/ChatInput/ActionBar/Tools/MarketSkillIcon';
 import ToolItem from '@/features/ChatInput/ActionBar/Tools/ToolItem';
 import ToolItemDetailPopover from '@/features/ChatInput/ActionBar/Tools/ToolItemDetailPopover';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { createSkillStoreModal } from '@/features/SkillStore';
+import { getConnectorIdentifiers } from '@/helpers/toolEngineering/connectorActivation';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -130,10 +131,21 @@ const AgentTool = memo<AgentToolProps>(
       isPrivateAgent ? undefined : effectiveAgentId || undefined,
     );
 
-    // Plugin state management — pinned identifiers only (a disabled entry
-    // is a distinct, valid config state; this component has no tri-state UI
-    // and treats it as "not enabled", matching pre-tri-state semantics).
-    const plugins = getActivePluginIds(config?.plugins);
+    // A connector is two-state: this page turns it on (found on demand) or off, never pinned.
+    const connectorIdList = useToolStore(getConnectorIdentifiers, isEqual);
+    const connectorIds = useMemo(() => new Set(connectorIdList), [connectorIdList]);
+    // Everything switched on for this agent: pinned entries, plus the entries that carry an
+    // explicit `auto` — a connector turned on here, a library skill set to Auto in the chat input.
+    const enabledIds = useMemo(
+      () =>
+        new Set(
+          (config?.plugins ?? [])
+            .map((entry) => parsePluginEntry(entry))
+            .filter((entry) => entry.mode !== 'disabled')
+            .map((entry) => entry.identifier),
+        ),
+      [config?.plugins],
+    );
 
     const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
     const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
@@ -237,7 +249,7 @@ const AgentTool = memo<AgentToolProps>(
       async (pluginId: string, state?: boolean) => {
         if (!canEdit) return;
         if (!effectiveAgentId) return;
-        const hasPlugin = plugins.includes(pluginId);
+        const hasPlugin = enabledIds.has(pluginId);
         const shouldEnable = state !== undefined ? state : !hasPlugin;
         // Taking an item out must also work on one that is switched off: it is not pinned, but
         // it still has an entry to remove.
@@ -246,20 +258,23 @@ const AgentTool = memo<AgentToolProps>(
         );
         if (shouldEnable ? hasPlugin : !hasEntry) return;
 
-        // upsertPluginMode operates on the raw (possibly mixed-shape) config
-        // — not the pinned-only `plugins` above — so an existing disabled
-        // entry is flipped in place instead of being dropped from the array.
+        // upsertPluginMode operates on the raw (possibly mixed-shape) config,
+        // so an existing disabled entry is flipped in place instead of being
+        // dropped from the array.
         await updateAgentConfigById(effectiveAgentId, {
-          plugins: upsertPluginMode(config?.plugins, pluginId, shouldEnable ? 'pinned' : 'auto'),
+          plugins:
+            shouldEnable && connectorIds.has(pluginId)
+              ? upsertConnectorEnabled(config?.plugins, pluginId, true)
+              : upsertPluginMode(config?.plugins, pluginId, shouldEnable ? 'pinned' : 'auto'),
         });
       },
-      [canEdit, effectiveAgentId, plugins, config?.plugins, updateAgentConfigById],
+      [canEdit, effectiveAgentId, enabledIds, connectorIds, config?.plugins, updateAgentConfigById],
     );
 
-    // Check if a profile-managed tool is pinned.
+    // Check if a profile-managed tool is on for this agent.
     const isToolEnabled = useCallback(
-      (identifier: string) => plugins.includes(identifier),
-      [plugins],
+      (identifier: string) => enabledIds.has(identifier),
+      [enabledIds],
     );
 
     // Toggle a profile-managed tool.
@@ -624,7 +639,7 @@ const AgentTool = memo<AgentToolProps>(
           key: item.identifier,
           label: (
             <ToolItem
-              checked={plugins.includes(item.identifier)}
+              checked={enabledIds.has(item.identifier)}
               id={item.identifier}
               label={item.title}
               onUpdate={async () => {
@@ -656,7 +671,7 @@ const AgentTool = memo<AgentToolProps>(
           ),
         };
       },
-      [plugins, togglePlugin, t],
+      [enabledIds, togglePlugin, t],
     );
 
     // Community plugin list items
@@ -686,7 +701,7 @@ const AgentTool = memo<AgentToolProps>(
             key: connector.identifier,
             label: (
               <ToolItem
-                checked={plugins.includes(connector.identifier)}
+                checked={enabledIds.has(connector.identifier)}
                 id={connector.identifier}
                 label={connector.name || connector.identifier}
                 onUpdate={async () => {
@@ -707,7 +722,7 @@ const AgentTool = memo<AgentToolProps>(
             ),
           };
         }),
-      [customConnectors, plugins, togglePlugin, t],
+      [customConnectors, enabledIds, togglePlugin, t],
     );
 
     // Custom group children (User Agent Skills + custom plugins + custom connectors)
@@ -841,14 +856,14 @@ const AgentTool = memo<AgentToolProps>(
     // managed entries remain untouched in config for compatibility with other
     // flows, but do not inflate this section's count or render misleading chips.
     const allEnabledTools = useMemo(() => {
-      const visible = getVisibleProfileToolIds(plugins, {
+      const visible = getVisibleProfileToolIds([...enabledIds], {
         agentConnectorIdentifiers,
         nonConfigurableBuiltinToolIdentifiers: nonProfileConfigurableBuiltinToolIdentifiers,
       });
       if (kind === 'all') return visible;
       return visible.filter((id) => allSkillIdentifiers.has(id) === (kind === 'skills'));
     }, [
-      plugins,
+      enabledIds,
       agentConnectorIdentifiers,
       nonProfileConfigurableBuiltinToolIdentifiers,
       kind,
@@ -856,11 +871,10 @@ const AgentTool = memo<AgentToolProps>(
     ]);
 
     // A list shows what is turned off as well, so it can be turned back on; the chips show only
-    // what is on.
+    // what is on. Every entry is listed: one that is merely Auto has no entry at all, except a
+    // library skill, where an explicit Auto is what turns it on.
     const listedTools = useMemo(() => {
-      const entries = (config?.plugins ?? [])
-        .map((entry) => parsePluginEntry(entry))
-        .filter((entry) => entry.mode !== 'auto');
+      const entries = (config?.plugins ?? []).map((entry) => parsePluginEntry(entry));
       const visible = getVisibleProfileToolIds(
         entries.map((entry) => entry.identifier),
         {
@@ -891,7 +905,9 @@ const AgentTool = memo<AgentToolProps>(
     const setPluginEnabled = (pluginId: string, enabled: boolean) => {
       if (!canEdit || !effectiveAgentId) return;
       return updateAgentConfigById(effectiveAgentId, {
-        plugins: upsertPluginMode(config?.plugins, pluginId, enabled ? 'pinned' : 'disabled'),
+        plugins: connectorIds.has(pluginId)
+          ? upsertConnectorEnabled(config?.plugins, pluginId, enabled)
+          : upsertPluginMode(config?.plugins, pluginId, enabled ? 'pinned' : 'disabled'),
       });
     };
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { processingMessageField, shouldPostProcessingMessage } from './const';
+import { schema as dingtalkSchema } from './dingtalk/schema';
 import { schema as discordSchema } from './discord/schema';
 import { sharedSchema as feishuSchema } from './feishu/definitions/schema';
 import { schema as imessageSchema } from './imessage/schema';
@@ -30,6 +31,7 @@ describe('processingMessageField', () => {
   });
 
   it.each([
+    ['dingtalk', dingtalkSchema],
     ['discord', discordSchema],
     ['feishu', feishuSchema],
     ['imessage', imessageSchema],

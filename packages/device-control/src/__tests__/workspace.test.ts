@@ -165,6 +165,45 @@ describe('initWorkspace', () => {
 });
 
 describe('listProjectSkills', () => {
+  it('preserves manual-only declarations without hiding project or device skills', async () => {
+    const repo = path.join(base, 'repo');
+    await mkdir(path.join(repo, '.git'), { recursive: true });
+    await write(
+      path.join(repo, '.agents/skills/deploy/SKILL.md'),
+      '---\nname: deploy\ndisable-model-invocation: true\n---\nDeploy instructions',
+    );
+    await write(
+      path.join(home, '.claude/skills/release/SKILL.md'),
+      '---\nname: release\ndisable-model-invocation: true\n---\nRelease instructions',
+    );
+    await write(
+      path.join(home, '.codex/skills/review/SKILL.md'),
+      '---\nname: review\ndisable-model-invocation: false\n---\nReview instructions',
+    );
+    await write(
+      path.join(repo, '.claude/skills/context/SKILL.md'),
+      '---\nname: context\nuser-invocable: false\n---\nBackground knowledge',
+    );
+    await write(
+      path.join(repo, '.agents/skills/string-value/SKILL.md'),
+      '---\nname: string-value\ndisable-model-invocation: "false"\n---\nInvalid boolean',
+    );
+
+    const result = await listProjectSkills({ scope: repo });
+
+    expect(result.skills.map((skill) => skill.name)).toEqual([
+      'context',
+      'deploy',
+      'release',
+      'review',
+      'string-value',
+    ]);
+    expect(result.skills.filter((skill) => skill.disableModelInvocation)).toMatchObject([
+      { name: 'deploy', scope: 'project' },
+      { name: 'release', scope: 'device' },
+    ]);
+  });
+
   it('approves the source directory of a parent-level skill for preview', async () => {
     const repo = path.join(base, 'repo');
     const pkg = path.join(repo, 'pkg');

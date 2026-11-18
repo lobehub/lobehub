@@ -19,6 +19,7 @@ const channel: ChannelListItem = {
   sequence: 0,
   status: 'active',
   title: 'Old name',
+  visibility: 'private',
   workspaceId: null,
 };
 const detail = (item: ChannelListItem): ChannelDetail => ({

@@ -21,7 +21,7 @@ export const connectorsResource = defineReplica<
   key: () => CONNECTOR_LIST_KEY,
   name: 'connectors',
   storage: 'indexedDB',
-  version: 1,
+  version: 2,
 });
 
 /**
@@ -37,7 +37,7 @@ export const agentBoundConnectorsResource = defineReplica<
   key: () => CONNECTOR_LIST_KEY,
   name: 'agentBoundConnectors',
   storage: 'indexedDB',
-  version: 1,
+  version: 2,
 });
 
 /**
@@ -48,7 +48,7 @@ export const agentConnectorsResource = defineReplica<{ agentId: string }, Connec
   key: ({ agentId }) => agentId,
   name: 'agentConnectors',
   storage: 'indexedDB',
-  version: 1,
+  version: 2,
 });
 
 /** Connectors are addressed by `id` across the tool store. */

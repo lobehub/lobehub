@@ -12,7 +12,7 @@ import {
   useReactFlow,
   type Viewport,
 } from '@xyflow/react';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import { observeWidth } from '@/features/AgentGoals/ProcessControl/Graph/useFitViewOnResize';
 import { useSingleton } from '@/hooks/useSingleton';
@@ -21,7 +21,7 @@ import { sx } from '@/styles/sx';
 import { FlowAnchorContext } from './flowAnchor';
 import { FlowEdge } from './FlowEdge';
 import type { FlowGraphData } from './flowGraph';
-import { getSelectedFlowNodeId, panNodeIntoView } from './flowViewport';
+import { getSelectedFlowNodeId, panNodeIntoView, revealNode } from './flowViewport';
 
 const edgeTypes = { transition: FlowEdge };
 
@@ -70,12 +70,15 @@ export function FlowCanvas({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const { fitView, getNodesBounds, getViewport, setViewport } = useReactFlow();
-  const anchor = useSingleton(() => ({ current: null as string | null }));
+  const anchorRef = useRef<string | null>(null);
+  const markAnchor = useCallback((nodeId: string | null) => {
+    anchorRef.current = nodeId;
+  }, []);
   // The toggled group has just changed height, so follow it rather than leaving
   // the user staring at whatever slid into its place.
   useEffect(() => {
-    const toggled = anchor.current;
-    anchor.current = null;
+    const toggled = anchorRef.current;
+    anchorRef.current = null;
     const container = ref.current;
     if (!toggled || !container) return;
     panNodeIntoView(
@@ -83,15 +86,29 @@ export function FlowCanvas({
       { height: container.clientHeight, width: container.clientWidth },
       toggled,
     );
-  }, [nodes, anchor, getNodesBounds, getViewport, setViewport]);
+  }, [nodes, getNodesBounds, getViewport, setViewport]);
   const viewports = useSingleton(
     () => new Map<string, { viewport: Viewport; width: number; height: number }>(),
   );
   const selectedId = getSelectedFlowNodeId(nodes);
   const selectedRef = useRef(selectedId);
+  const clickedRef = useRef<string | undefined>(undefined);
+  const walkedRef = useRef(false);
+  // A click must never move the canvas out from under the pointer, but a state
+  // picked from outside it (Prev / Next) has no pointer to respect, so it is
+  // brought fully inside, clipped edges included.
   useEffect(() => {
     selectedRef.current = selectedId;
-  }, [selectedId]);
+    walkedRef.current = Boolean(selectedId) && selectedId !== clickedRef.current;
+    clickedRef.current = undefined;
+    const container = ref.current;
+    if (!walkedRef.current || !container) return;
+    revealNode(
+      { getNodesBounds, getViewport, setViewport },
+      { height: container.clientHeight, width: container.clientWidth },
+      selectedId,
+    );
+  }, [selectedId, getNodesBounds, getViewport, setViewport]);
   // The details panel opens beside the canvas when a node is picked. Refitting
   // here would throw away the zoom the user just set, so only bring the picked
   // node back into view when the narrower canvas hid it.
@@ -99,7 +116,7 @@ export function FlowCanvas({
     const container = ref.current;
     if (!container || typeof ResizeObserver === 'undefined') return;
     return observeWidth(container, () =>
-      panNodeIntoView(
+      (walkedRef.current ? revealNode : panNodeIntoView)(
         { getNodesBounds, getViewport, setViewport },
         { height: container.clientHeight, width: container.clientWidth },
         selectedRef.current,
@@ -130,7 +147,7 @@ export function FlowCanvas({
   return (
     // Custom nodes render inside React Flow, not under its `children`, so the
     // anchor channel has to sit above the canvas to reach a group's toggle.
-    <FlowAnchorContext value={anchor}>
+    <FlowAnchorContext value={markAnchor}>
       <Flexbox
         ref={ref}
         {...sx(
@@ -163,8 +180,11 @@ export function FlowCanvas({
           // the caption selected the branch, opened the panel and shifted the
           // canvas out from under the pointer. Branches stay pickable in the
           // outline view; on the canvas the state card is the way in.
-          onNodeClick={(_, n) => onSelect(n.id)}
           onPaneClick={() => onSelect('')}
+          onNodeClick={(_, n) => {
+            clickedRef.current = n.id;
+            onSelect(n.id);
+          }}
         >
           <Background bgColor="transparent" color={cssVar.colorBorderSecondary} gap={18} size={1} />
           <Controls position="bottom-right" showInteractive={false} />

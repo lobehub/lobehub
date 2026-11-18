@@ -36,7 +36,7 @@ import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDe
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
-import { markdownToTxt } from '@/utils/markdownToTxt';
+import { toTitleText } from '@/utils/markdownToTxt';
 
 import type { DeviceAccessReason } from '../deviceAccessPolicy';
 import { resolveDeviceAccessPolicy } from '../deviceAccessPolicy';
@@ -359,11 +359,13 @@ export interface TurnSetupInput {
   modelOverride?: string;
   operationTaskId?: string;
   parentMessageId?: string;
+  persistedUserMessageId?: string;
   prompt: string;
   providerOverride?: string;
   requestedDeviceId?: string;
   /** See `InternalExecAgentParams.requireDevice`. */
   requireDevice?: boolean;
+  reservedOperationId?: string;
   resolvedAgentId: string;
   /** Raw resume flag — a resume run must land on an existing topic. */
   resume?: boolean;
@@ -381,6 +383,7 @@ export interface TurnSetupInput {
   trigger?: string;
   /** The composer-authored part of the user message; see `ExecAgentParams.userMessage`. */
   userMessage?: InternalExecAgentParams['userMessage'];
+  webhookThread?: InternalExecAgentParams['webhookThread'];
 }
 
 export interface TurnSetupResult {
@@ -467,14 +470,17 @@ export const setupTurn = async (
     createdThreadId,
     externalOrigin,
     cronJobId,
+    webhookThread,
     files,
     modelOverride,
     operationTaskId,
     parentMessageId,
+    persistedUserMessageId,
     prompt,
     providerOverride,
     requestedDeviceId,
     requireDevice,
+    reservedOperationId,
     resolvedAgentId,
     resume,
     runFromHistory,
@@ -551,10 +557,14 @@ export const setupTurn = async (
 
   // Share-visitor fail-closed gate — reject a heterogeneous (Claude Code /
   // Codex / …) agent BEFORE any topic/message row is written. Heterogeneous
-  // agents are not available for shared visitor runs. Checked here (using the
-  // agent-level config, before any topic-pinned model override) rather than
-  // at the later hetero-detection site (`isHeteroAgent`) so it runs ahead of
-  // ALL row creation, not just the message rows.
+  // agents are not available for shared visitor runs, even when the share
+  // grants device access (`shareGate.canUseDevice`): the hetero dispatch path
+  // signs its gateway token for the run's user (the creator) and registers no
+  // visitor stream owner, so opening it would hand the visitor creator account
+  // access. Checked here (using the agent-level config, before any
+  // topic-pinned model override) rather than at the later hetero-detection
+  // site (`isHeteroAgent`) so it runs ahead of ALL row creation, not just the
+  // message rows.
   if (shareGate && (heterogeneousProvider?.type || isHeterogeneousAgentModelId(model))) {
     throw new TRPCError({
       code: 'FORBIDDEN',
@@ -630,6 +640,7 @@ export const setupTurn = async (
         projectDirectory,
         taskId: operationTaskId,
         topicBoundDeviceId,
+        webhookThread,
       });
       turnProjectId = await resolveTurnProjectId(deps, {
         directoryProjectId: projectDirectory?.projectId,
@@ -638,7 +649,7 @@ export const setupTurn = async (
         taskId: operationTaskId,
       });
 
-      const fallbackTitleSource = markdownToTxt(prompt);
+      const fallbackTitleSource = toTitleText(prompt);
       const snapshot = await resolveNewTopicSnapshot(deps, agentConfig);
       const metadataWithSnapshot = await withProjectSandbox(deps, {
         agentId: resolvedAgentId,
@@ -712,6 +723,17 @@ export const setupTurn = async (
       // The pinned model lives in the top-level `topics.model`/`provider` columns
       // (config source of truth), NOT in metadata.
       const existingTopic = await deps.topicModel.findById(topicId);
+      const pendingRun = existingTopic?.metadata?.scheduledRun;
+      if (
+        existingTopic?.status === 'scheduled' &&
+        pendingRun?.kind === 'worktree_start' &&
+        pendingRun.operationId !== reservedOperationId
+      ) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'This conversation is preparing its worktree.',
+        });
+      }
       topicEditingGroupId = existingTopic?.metadata?.editingGroupId ?? undefined;
       turnProjectId = await resolveTurnProjectId(deps, {
         shareGate,
@@ -818,7 +840,7 @@ export const setupTurn = async (
       }
 
       // Re-assert the share restriction after topic overrides are applied.
-      // Heterogeneous agents are not available for shared visitor runs.
+      // Heterogeneous agents are not available for shared visitor runs (see above).
       if (shareGate && isHeterogeneousAgentModelId(model)) {
         throw new TRPCError({
           code: 'FORBIDDEN',
@@ -874,7 +896,7 @@ export const setupTurn = async (
   // chat) and stops the device list from leaking into the LLM context.
   const { canUseDevice, reason: deviceAccessReason } = resolveDeviceAccessPolicy({
     botContext,
-    shareVisitor: !!shareGate,
+    shareVisitor: shareGate ? { canUseDevice: shareGate.canUseDevice } : undefined,
   });
   log(
     'execAgent: device access policy → canUseDevice=%s, reason=%s, hasBotContext=%s',
@@ -1143,6 +1165,6 @@ export const setupTurn = async (
     topicBoundDeviceId,
     topicEditingGroupId,
     topicId,
-    userMessageId: userMessageRecord?.id,
+    userMessageId: userMessageRecord?.id ?? persistedUserMessageId,
   };
 };
