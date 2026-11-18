@@ -77,8 +77,19 @@ export interface WatchToolCallCompletionOptions {
   toolCallId: string;
 }
 
-const defaultSleep = (ms: number, wake: Promise<void>) =>
-  Promise.race([new Promise<void>((resolve) => setTimeout(resolve, ms)), wake]);
+const defaultSleep = async (ms: number, wake: Promise<void>) => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, ms);
+      }),
+      wake,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
 
 /**
  * Watch a command the device left running and deliver its final result.
