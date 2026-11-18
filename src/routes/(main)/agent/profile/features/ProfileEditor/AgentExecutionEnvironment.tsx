@@ -360,7 +360,14 @@ const AgentExecutionEnvironment = memo<AgentExecutionEnvironmentProps>(
               if (!selection) return;
 
               if (!isWorkspaceAgent) {
-                void selectExecutionTarget(selection.target, selection.deviceId);
+                // Plain "This computer" is an explicit un-sandboxed pick, like the chat
+                // picker's local row: omitting the flag would leave a stored
+                // `localSandbox: true` fencing commands under a card that reads plain local.
+                void (selection.target === 'local'
+                  ? selectExecutionTarget(selection.target, selection.deviceId, {
+                      localSandbox: false,
+                    })
+                  : selectExecutionTarget(selection.target, selection.deviceId));
                 return;
               }
 

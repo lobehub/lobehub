@@ -385,6 +385,18 @@ describe('AgentExecutionEnvironment for a personal agent', () => {
     expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
   });
 
+  it('clears the local sandbox when the plain local target is picked', () => {
+    constState.isDesktop = true;
+
+    render(<AgentExecutionEnvironment agentId="agent-1" />);
+
+    lastSelectProps().onChange('target:local');
+
+    expect(selectExecutionTargetSpy).toHaveBeenCalledWith('local', undefined, {
+      localSandbox: false,
+    });
+  });
+
   it('says when the account has no devices instead of an empty list', () => {
     testState.deviceList = { data: [workspaceDevice], isConfirmed: true, isLoading: false };
 
