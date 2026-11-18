@@ -33,6 +33,8 @@ export const config = {
     '/a/(.*)',
     '/agent',
     '/agent(.*)',
+    /** Agent Share embed pages: per-share `frame-ancestors`, see `embedRoutes.ts`. */
+    '/embed/agent/(.*)',
     '/group',
     '/group(.*)',
     '/changelog(.*)',

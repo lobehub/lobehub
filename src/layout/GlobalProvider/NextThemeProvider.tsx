@@ -3,6 +3,7 @@
 import { ThemeProvider as NextThemesProvider } from 'next-themes';
 import { type ReactNode, useEffect } from 'react';
 
+import { useEmbedForcedTheme } from '@/libs/agentEmbed/forcedTheme';
 import { installFormAutocompleteDefaults } from '@/utils/client/installFormAutocompleteDefaults';
 
 interface NextThemeProviderProps {
@@ -12,6 +13,8 @@ interface NextThemeProviderProps {
 
 export default function NextThemeProvider({ children, forcedTheme }: NextThemeProviderProps) {
   useEffect(installFormAutocompleteDefaults, []);
+  // An embedded conversation wears the host website's theme (see `forcedTheme.ts`).
+  const embedTheme = useEmbedForcedTheme();
 
   return (
     <NextThemesProvider
@@ -19,7 +22,7 @@ export default function NextThemeProvider({ children, forcedTheme }: NextThemePr
       enableSystem
       attribute="data-theme"
       defaultTheme="system"
-      forcedTheme={forcedTheme}
+      forcedTheme={forcedTheme ?? embedTheme}
     >
       {children}
     </NextThemesProvider>

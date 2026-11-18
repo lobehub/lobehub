@@ -109,24 +109,38 @@ export function defineConfig(config: CustomNextConfig) {
         },
       ];
 
-      if (shouldUseCSP) {
-        securityHeaders.push(
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
-            key: 'Content-Security-Policy',
-            value: "frame-ancestors 'none';",
-          },
-        );
-      }
+      const frameHeaders = [
+        {
+          key: 'X-Frame-Options',
+          value: 'DENY',
+        },
+        {
+          key: 'Content-Security-Policy',
+          value: "frame-ancestors 'none';",
+        },
+      ];
+
+      // Every route refuses to be framed except the Agent Share embed page,
+      // whose proxy pass sets a per-share `frame-ancestors` allowlist instead
+      // (`src/libs/next/embedRoutes.ts`) — whether or not CSP is enabled here.
+      const frameRules = shouldUseCSP
+        ? [
+            { headers: frameHeaders, source: '/' },
+            // Exactly the embed route shape (`embedRoutes.ts`); any other `/embed/agent/…`
+            // path keeps the DENY rule.
+            {
+              headers: frameHeaders,
+              source: '/:path((?!embed/agent/[^/.]+(?:/[^/.]+)?/?$).*)',
+            },
+          ]
+        : [];
 
       return [
         {
           headers: securityHeaders,
           source: '/:path*',
         },
+        ...frameRules,
         // Agent Share visitor pages live under `/agent/:slugOrId` and are
         // reachable by anyone holding the link. Keep them out of search
         // indexes (privacy) — the SPA shell is static per variant, so a

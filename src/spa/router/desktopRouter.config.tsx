@@ -57,6 +57,18 @@ const webOnlyRoutes: RouteObject[] = [
     path: '/verify-im',
   },
 
+  // Agent Share embed panel, framed by a host website (`@lobechat/embed`).
+  // Web-only and outside the main layout; the proxy serves it the desktop
+  // bundle on every device, so the mobile router has no counterpart.
+  {
+    element: dynamicElement(
+      () => import('@/routes/embed/agent/[slugOrId]'),
+      'Desktop > Embed > Agent',
+    ),
+    errorElement: <ErrorBoundary />,
+    path: '/embed/agent/:slugOrId/:topicId?',
+  },
+
   // Acceptance renders outside the main layout, so it brings its own workspace
   // context: `/acceptance` is personal, `/:workspaceSlug/acceptance` is scoped.
   {

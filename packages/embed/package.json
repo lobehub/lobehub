@@ -1,0 +1,18 @@
+{
+  "name": "@lobechat/embed",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Embed a shared LobeHub Agent on any website: the <script> loader, its postMessage protocol and the embed-origin allowlist rules",
+  "sideEffects": false,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./origin": "./src/origin.ts",
+    "./protocol": "./src/protocol.ts"
+  },
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "tsx scripts/build.mts",
+    "test": "vitest"
+  }
+}

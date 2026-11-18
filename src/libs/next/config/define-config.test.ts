@@ -96,6 +96,56 @@ describe('defineConfig', () => {
     });
   });
 
+  describe('framing with CSP enabled', () => {
+    const originalCSP = process.env.ENABLED_CSP;
+
+    afterEach(() => {
+      if (originalCSP === undefined) delete process.env.ENABLED_CSP;
+      else process.env.ENABLED_CSP = originalCSP;
+    });
+
+    const framingHeadersOf = async (url: string) => {
+      process.env.ENABLED_CSP = '1';
+      const response = await unstable_getResponseFromNextConfig({
+        nextConfig: defineConfig({}),
+        url,
+      });
+
+      return {
+        csp: response.headers.get('content-security-policy'),
+        xfo: response.headers.get('x-frame-options'),
+      };
+    };
+
+    it('denies framing on every app route, including the root', async () => {
+      for (const url of [
+        'https://app.example.com/',
+        'https://app.example.com/settings/profile',
+        'https://app.example.com/a/my-bot/chat',
+        'https://app.example.com/embed',
+        'https://app.example.com/embed/other',
+        'https://app.example.com/embed/agent/',
+        'https://app.example.com/embed/agent/a/b/c',
+        'https://app.example.com/embed/agent/embed.js',
+      ]) {
+        expect(await framingHeadersOf(url), url).toEqual({
+          csp: "frame-ancestors 'none';",
+          xfo: 'DENY',
+        });
+      }
+    });
+
+    // The proxy sets the per-share allowlist; a static DENY here would override it.
+    it('leaves the Agent Share embed page to the proxy', async () => {
+      for (const path of ['/embed/agent/my-bot', '/embed/agent/my-bot/tpc_1']) {
+        expect(await framingHeadersOf(`https://app.example.com${path}`), path).toEqual({
+          csp: null,
+          xfo: null,
+        });
+      }
+    });
+  });
+
   it('disables Next.js agent rule injection', () => {
     expect(defineConfig({}).agentRules).toBe(false);
   });

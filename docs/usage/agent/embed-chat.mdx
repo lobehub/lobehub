@@ -1,0 +1,50 @@
+---
+title: Embed an Agent on Your Website
+description: Add a chat button to your own website that opens a shared Agent's conversation.
+tags:
+  - LobeHub
+  - Agent Share
+  - Embed
+---
+
+# Embed an Agent on Your Website
+
+A shared Agent can live on your own website: one script tag adds a chat button in the corner, and the button opens the Agent's conversation in a panel.
+
+<Callout type={'info'}>
+  Embedding is rolling out gradually. If you don't see **Embed on a website** in the share settings, it isn't available to your account yet.
+</Callout>
+
+## Set It Up
+
+1. Open the Agent, go to **Share**, and turn on the share link. Embedding uses the same link.
+2. Under **Embed on a website**, list every website allowed to show the chat, one origin per line — for example `https://docs.example.com` or `https://*.example.com`. Only origins, no paths.
+3. Copy the embed code and paste it before `</body>` on a page of one of those websites:
+
+```html
+<script src="https://app.lobehub.com/embed.js" data-agent="your-share-link" async></script>
+```
+
+## Who Can Show It
+
+The browser shows the conversation only on the websites you listed. On any other website the panel stays empty. Turning the share link off, or removing a website from the list, stops the embed right away.
+
+## What Visitors Get
+
+Visitors chat with the same Agent as on the share link: they sign in to LobeHub (in a new window, from the panel), their conversations stay private to them, and every run counts against the share's limits — topics per visitor, turns per topic, monthly spend and file storage.
+
+## Current Limitation
+
+Visitors stay signed in inside the panel only when your website and LobeHub share the same site (for example `docs.example.com` and `chat.example.com`). On other websites, browsers withhold the LobeHub session from the panel, so visitors are asked to sign in again. Wider support is planned.
+
+## Options
+
+| Attribute       | Meaning                                                   |
+| --------------- | --------------------------------------------------------- |
+| `data-agent`    | Your share link suffix or share id.                       |
+| `data-theme`    | `light`, `dark` or `auto` (follows the visitor's system). |
+| `data-position` | `right` (default) or `left`.                              |
+| `data-open`     | `true` opens the panel when the page loads.               |
+| `data-locale`   | Interface language, such as `zh-CN`.                      |
+
+For a programmatic setup — switching the theme from your page, opening the panel from your own button, or listening for `messageSent` events — see the `@lobechat/embed` package README.

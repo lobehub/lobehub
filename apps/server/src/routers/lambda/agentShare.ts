@@ -4,6 +4,7 @@ import {
   AGENT_SHARE_DEVICE_ALLOW_EMAILS_LIMIT,
   AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT,
 } from '@lobechat/const';
+import { EMBED_ALLOWED_ORIGINS_LIMIT, parseEmbedOrigins } from '@lobechat/embed/origin';
 import { assembleSkillPool } from '@lobechat/mecha';
 import { getActivePluginIds, getDisabledPluginIds } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
@@ -24,9 +25,13 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentService } from '@/server/services/agent';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { getAgentShareOwnerId } from '@/server/services/agentShare/embedPolicy';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
-import { assertAgentShareCreationEnabled } from './_helpers/agentShareFeatureGate';
+import {
+  assertAgentEmbedEnabled,
+  assertAgentShareCreationEnabled,
+} from './_helpers/agentShareFeatureGate';
 
 const agentIdInput = z.object({ agentId: z.string().trim().min(1) }).strict();
 
@@ -50,6 +55,26 @@ const shareToolGrantSchema = z
     identifier: z.string().trim().min(1),
   })
   .strict();
+
+/**
+ * Embed allowlist: every entry must be a bare origin, stored normalized and
+ * de-duplicated, because the server copies it verbatim into the embed page's
+ * `frame-ancestors` header.
+ */
+const embedAllowedOriginsSchema = z
+  .array(z.string().max(255))
+  .max(EMBED_ALLOWED_ORIGINS_LIMIT)
+  .transform((entries, ctx) => {
+    const { invalid, origins } = parseEmbedOrigins(entries);
+    if (invalid.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `Not a valid embed origin: ${invalid.join(', ')}`,
+      });
+      return z.NEVER;
+    }
+    return origins;
+  });
 
 export const agentShareConfigSchema = z
   .object({
@@ -76,6 +101,7 @@ export const agentShareConfigSchema = z
       .max(AGENT_SHARE_DEVICE_ALLOW_EMAILS_LIMIT)
       .refine((emails) => new Set(emails).size === emails.length, 'Duplicate email')
       .optional(),
+    embedAllowedOrigins: embedAllowedOriginsSchema.optional(),
     featuredWorkIds: z
       .array(z.string().trim().min(1))
       .max(100)
@@ -453,6 +479,14 @@ export const agentShareRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       await assertCanManageAgentShare(ctx, input.agentId);
+      // Clearing the allowlist is always allowed, so turning the flag off never
+      // strands a creator with an embed they cannot revoke. The rollout is the
+      // Agent owner's — the identity the embed page is served under — so a
+      // Workspace admin cannot save an allowlist that would silently never apply.
+      if (input.config.embedAllowedOrigins?.length) {
+        const ownerId = await getAgentShareOwnerId(ctx.serverDB, input.agentId);
+        await assertAgentEmbedEnabled(ownerId ?? ctx.userId);
+      }
       return requireShare(await ctx.agentShareModel.updateConfig(input.agentId, input.config));
     }),
 

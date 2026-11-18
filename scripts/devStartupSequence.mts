@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
 
+import { buildEmbedLoader } from '../packages/embed/scripts/build.mts';
 import { buildFileParseWorker } from './buildFileParseWorker.mts';
 
 interface DevProcessHandle {
@@ -297,6 +298,7 @@ const main = async () => {
   loadEnv();
   // Parsing runs in a prebuilt worker thread file; a stale or missing one would fail every parse.
   await buildFileParseWorker();
+  await buildEmbedLoader();
   nextPort = await resolveNextPort();
   process.env.PORT = String(nextPort);
   nextRootUrl = `http://${NEXT_HOST}:${nextPort}/`;

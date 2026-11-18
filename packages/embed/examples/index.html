@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Acme Docs · LobeHub embed example</title>
+    <style>
+      body { margin: 0; font: 15px/1.6 system-ui, sans-serif; color: #1f2328; background: #f6f8fa; }
+      header { padding: 16px 32px; background: #fff; border-bottom: 1px solid #d0d7de; font-weight: 600; }
+      main { max-width: 760px; margin: 32px auto; padding: 0 24px; }
+      .card { background: #fff; border: 1px solid #d0d7de; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
+      code { background: #eff1f3; padding: 2px 6px; border-radius: 6px; }
+      button { font: inherit; padding: 4px 12px; border-radius: 8px; border: 1px solid #d0d7de; background: #fff; cursor: pointer; }
+      #log { font: 12px/1.5 ui-monospace, monospace; white-space: pre-wrap; min-height: 60px; margin: 0; }
+    </style>
+  </head>
+  <body>
+    <header>Acme Docs</header>
+    <main>
+      <div class="card">
+        <h2>Ask our assistant</h2>
+        <p>
+          This page is a stand-in for your own website. The chat button in the corner comes from
+          one script tag:
+        </p>
+        <p><code id="snippet"></code></p>
+        <p>
+          Open it as <code>?host=&lt;LobeHub origin&gt;&amp;agent=&lt;share slug&gt;</code>. Its
+          origin must be in the share's <em>Allowed websites</em> list, or the browser refuses to
+          show the conversation.
+        </p>
+      </div>
+      <div class="card">
+        <p>
+          This page: <code id="page-origin"></code><br />
+          Conversation frame: <code id="frame-url">not opened yet</code>
+        </p>
+        <h3>Host controls</h3>
+        <p>
+          <button data-theme="light">Light</button>
+          <button data-theme="dark">Dark</button>
+          <button data-theme="auto">Auto</button>
+          <button id="toggle">Open / close</button>
+        </p>
+        <h3>Events from the conversation</h3>
+        <pre id="log"></pre>
+      </div>
+    </main>
+    <script>
+      const params = new URLSearchParams(location.search);
+      const host = params.get('host') || 'http://localhost:3010';
+      const agent = params.get('agent') || 'my-agent';
+      const theme = params.get('theme') || 'auto';
+      const log = (line) => {
+        document.getElementById('log').textContent += `${new Date().toLocaleTimeString()}  ${line}\n`;
+      };
+
+      document.getElementById('page-origin').textContent = location.origin;
+      const showFrameUrl = () => {
+        const frame = document
+          .querySelector('[data-lobehub-embed]')
+          ?.shadowRoot?.querySelector('iframe');
+        if (frame) document.getElementById('frame-url').textContent = frame.src;
+      };
+
+      document.getElementById('snippet').textContent =
+        `<script src="${host}/embed.js" data-agent="${agent}" async><\/script>`;
+
+      // A host that wants the instance loads the script without data-agent and calls init.
+      const script = document.createElement('script');
+      script.src = `${host}/embed.js`;
+      script.onload = () => {
+        const embed = window.LobeHubEmbed.init({ agent, host, theme });
+        window.lobehubEmbed = embed;
+        for (const event of ['open', 'close', 'ready', 'messageSent', 'topicCreated']) {
+          embed.on(event, (payload) => log(`${event} ${JSON.stringify(payload)}`));
+        }
+        embed.on('open', showFrameUrl);
+        document.querySelectorAll('[data-theme]').forEach((button) =>
+          button.addEventListener('click', () => {
+            embed.setTheme(button.dataset.theme);
+            log(`setTheme ${button.dataset.theme}`);
+          }),
+        );
+        document.getElementById('toggle').addEventListener('click', () => embed.toggle());
+        if (params.get('open') === 'true') embed.open();
+      };
+      script.onerror = () => log(`failed to load ${script.src}`);
+      document.head.append(script);
+    </script>
+  </body>
+</html>

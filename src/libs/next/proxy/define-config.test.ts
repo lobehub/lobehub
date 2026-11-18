@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { NextRequest } from 'next/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { auth } from '@/auth';
 import { config as proxyConfig } from '@/proxy';
 
 import { createRouteMatcher } from './createRouteMatcher';
@@ -14,6 +15,11 @@ import { defineConfig } from './define-config';
 vi.mock('@/auth', () => ({
   auth: { api: { getSession: vi.fn().mockResolvedValue({ user: { id: 'user-1' } }) } },
 }));
+
+const embedPolicy = vi.hoisted(() => ({
+  resolveAgentEmbedFrameAncestors: vi.fn(async (_slug: string) => "frame-ancestors 'none'"),
+}));
+vi.mock('@/server/services/agentShare/embedPolicy', () => embedPolicy);
 
 const { middleware } = defineConfig();
 
@@ -190,4 +196,56 @@ describe('channel deep links', () => {
       expect(new URL((await run(request.url))!).pathname).toMatch(new RegExp(`/spa/[^/]+${path}$`));
     },
   );
+});
+
+describe('Agent Share embed pages', () => {
+  const request = (url: string, userAgent?: string) =>
+    middleware(
+      new NextRequest(url, userAgent ? { headers: { 'user-agent': userAgent } } : undefined),
+    );
+
+  it('serves the desktop bundle with the share allowlist as frame-ancestors, without a session', async () => {
+    vi.mocked(auth.api.getSession).mockClear();
+    embedPolicy.resolveAgentEmbedFrameAncestors.mockResolvedValueOnce(
+      'frame-ancestors https://docs.example.com',
+    );
+
+    const response = await request(
+      'http://localhost:3010/embed/agent/my%20bot?hl=en-US',
+      MOBILE_USER_AGENT,
+    );
+
+    // `__0`: the desktop variant, even for the phone user agent.
+    expect(new URL(response!.headers.get('x-middleware-rewrite')!).pathname).toBe(
+      '/spa/en-US__0/embed/agent/my%20bot',
+    );
+    expect(embedPolicy.resolveAgentEmbedFrameAncestors).toHaveBeenLastCalledWith('my bot');
+    expect(response!.headers.get('content-security-policy')).toBe(
+      'frame-ancestors https://docs.example.com',
+    );
+    expect(response!.headers.get('x-frame-options')).toBeNull();
+    expect(response!.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+    expect(auth.api.getSession).not.toHaveBeenCalled();
+  });
+
+  it('forbids framing when the share allows no origin', async () => {
+    const response = await request('http://localhost:3010/embed/agent/my-bot/tpc_1?hl=en-US');
+
+    expect(embedPolicy.resolveAgentEmbedFrameAncestors).toHaveBeenLastCalledWith('my-bot');
+    expect(response!.headers.get('content-security-policy')).toBe("frame-ancestors 'none'");
+    expect(response!.headers.get('x-frame-options')).toBe('DENY');
+  });
+
+  it('is matched by the proxy and forbids framing for embed paths that are not the route', async () => {
+    const matcher = createRouteMatcher(proxyConfig.matcher);
+    expect(matcher(new NextRequest('http://localhost:3010/embed/agent/my-bot'))).toBe(true);
+
+    embedPolicy.resolveAgentEmbedFrameAncestors.mockClear();
+    for (const path of ['/embed/agent/a/b/c', '/embed/agent/', '/embed/agent/x.js']) {
+      const response = await request(`http://localhost:3010${path}?hl=en-US`);
+      expect(response!.headers.get('content-security-policy'), path).toBe("frame-ancestors 'none'");
+      expect(response!.headers.get('x-frame-options'), path).toBe('DENY');
+    }
+    expect(embedPolicy.resolveAgentEmbedFrameAncestors).not.toHaveBeenCalled();
+  });
 });
