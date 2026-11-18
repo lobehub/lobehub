@@ -15,6 +15,7 @@ import type {
   DecisionPayload,
   DecisionQuestions,
   DecisionResponse,
+  DiscardedChatAttempt,
   EmbeddingsOptions,
   EmbeddingsPayload,
   GenerateObjectOptions,
@@ -137,6 +138,16 @@ export interface ModelRuntimeHooks {
     options?: TextToSpeechOptions,
   ) => Promise<void>;
   beforeTranscribe?: (payload: ASRPayload, options?: ASROptions) => Promise<void>;
+  /**
+   * Called for each routed attempt RouterRuntime replaced with a retry or fallback. Its
+   * `onChatFinal` never runs, so this is where any usage the upstream still billed is recorded.
+   * Must not release request-level holds: a later attempt still serves the request.
+   */
+  onChatAttemptDiscarded?: (
+    attempt: DiscardedChatAttempt,
+    context: { options?: ChatMethodOptions; payload: ChatStreamPayload },
+  ) => void | Promise<void>;
+
   /**
    * Called when chat() throws. Handle side effects (sanitize, log, DB record).
    * The error is re-thrown after the hook completes — callers still handle response formatting.
@@ -423,14 +434,33 @@ export class ModelRuntime {
       );
     }
 
-    if (!this._hooks?.onChatFinal) return hookOptions;
+    const discardedHook = this._hooks?.onChatAttemptDiscarded;
+    const optionsWithDiscardHook: ChatMethodOptions | undefined = discardedHook
+      ? {
+          ...hookOptions,
+          callback: {
+            ...hookOptions?.callback,
+            async onAttemptDiscarded(attempt) {
+              await hookOptions?.callback?.onAttemptDiscarded?.(attempt);
+              try {
+                await discardedHook(attempt, { options, payload });
+              } catch (e) {
+                // Accounting for a replaced attempt must not break the attempt that replaces it
+                console.error('[ModelRuntime] onChatAttemptDiscarded hook error:', e);
+              }
+            },
+          },
+        }
+      : hookOptions;
+
+    if (!this._hooks?.onChatFinal) return optionsWithDiscardHook;
 
     const hookFn = this._hooks.onChatFinal;
-    const existingOnFinal = hookOptions?.callback?.onFinal;
+    const existingOnFinal = optionsWithDiscardHook?.callback?.onFinal;
     return {
-      ...hookOptions,
+      ...optionsWithDiscardHook,
       callback: {
-        ...hookOptions?.callback,
+        ...optionsWithDiscardHook?.callback,
         async onFinal(data) {
           const finalStartedAt = Date.now();
           if (metadata) {
