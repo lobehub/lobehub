@@ -13,6 +13,50 @@ interface DefaultChatModel {
 }
 
 /**
+ * The chat model a shared agent lands on when it moves back to the LobeHub harness.
+ *
+ * Moving back writes the account's default model, but a shared agent may only use models from
+ * the providers sharing allows: the server rejects anything else, and the person would be told
+ * to change a global setting on another page before they could switch. So when the default is
+ * not allowed, pick an allowed model instead — the deployment default when it is one, then a
+ * model with the same id, then the first allowed model. With no allowed model available the
+ * account default is kept and the server's rejection is reported as a failed switch.
+ */
+export const resolveHarnessModel = ({
+  allowedProviders,
+  defaults,
+  enabledChatModels,
+  fallback,
+}: {
+  /** Providers a shared agent may use; `undefined` when sharing restricts none. */
+  allowedProviders?: readonly string[];
+  defaults: DefaultChatModel;
+  enabledChatModels: { children: { id: string }[]; id: string }[];
+  /** The deployment's default chat model. */
+  fallback: DefaultChatModel;
+}): DefaultChatModel => {
+  if (!allowedProviders || allowedProviders.includes(defaults.provider)) return defaults;
+
+  const allowed = enabledChatModels.filter(
+    (provider) => allowedProviders.includes(provider.id) && provider.children.length > 0,
+  );
+  const find = (model: string, provider?: string) =>
+    allowed.find(
+      (item) =>
+        (!provider || item.id === provider) && item.children.some((child) => child.id === model),
+    );
+
+  const fallbackProvider = find(fallback.model, fallback.provider);
+  if (fallbackProvider) return fallback;
+
+  const sameModel = find(defaults.model);
+  if (sameModel) return { model: defaults.model, provider: sameModel.id };
+
+  const first = allowed[0];
+  return first ? { model: first.children[0].id, provider: first.id } : defaults;
+};
+
+/**
  * The config writes that move an agent to another driver, in the order they must land.
  *
  * Why not one patch: `updateConfig` deep-merges, so writing the new provider over the old

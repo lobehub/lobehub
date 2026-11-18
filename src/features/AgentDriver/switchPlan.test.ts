@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { planDriverRollback, planDriverSwitch, runDriverSwitch } from './switchPlan';
+import {
+  planDriverRollback,
+  planDriverSwitch,
+  resolveHarnessModel,
+  runDriverSwitch,
+} from './switchPlan';
 
 const defaults = { model: 'gpt-5.5', provider: 'openai' };
 
@@ -138,5 +143,57 @@ describe('runDriverSwitch', () => {
       'superseded',
     );
     expect(write).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('resolveHarnessModel', () => {
+  const fallback = { model: 'lobe-flash', provider: 'lobehub' };
+  const enabledChatModels = [
+    { children: [{ id: 'gpt-5.5' }], id: 'openai' },
+    { children: [{ id: 'lobe-pro' }, { id: 'lobe-flash' }], id: 'lobehub' },
+  ];
+
+  it('keeps the account default when sharing restricts nothing', () => {
+    expect(resolveHarnessModel({ defaults, enabledChatModels, fallback })).toEqual(defaults);
+  });
+
+  it('keeps an account default that sharing allows', () => {
+    const lobeDefault = { model: 'lobe-pro', provider: 'lobehub' };
+    expect(
+      resolveHarnessModel({
+        allowedProviders: ['lobehub'],
+        defaults: lobeDefault,
+        enabledChatModels,
+        fallback,
+      }),
+    ).toEqual(lobeDefault);
+  });
+
+  it('moves a shared agent onto the deployment default instead of a third-party default', () => {
+    expect(
+      resolveHarnessModel({ allowedProviders: ['lobehub'], defaults, enabledChatModels, fallback }),
+    ).toEqual(fallback);
+  });
+
+  it('falls back to the first allowed model when the deployment default is not enabled', () => {
+    expect(
+      resolveHarnessModel({
+        allowedProviders: ['lobehub'],
+        defaults,
+        enabledChatModels: [{ children: [{ id: 'lobe-pro' }], id: 'lobehub' }],
+        fallback,
+      }),
+    ).toEqual({ model: 'lobe-pro', provider: 'lobehub' });
+  });
+
+  it('keeps the account default when no allowed model is enabled, so the server reports it', () => {
+    expect(
+      resolveHarnessModel({
+        allowedProviders: ['lobehub'],
+        defaults,
+        enabledChatModels: [{ children: [{ id: 'gpt-5.5' }], id: 'openai' }],
+        fallback,
+      }),
+    ).toEqual(defaults);
   });
 });

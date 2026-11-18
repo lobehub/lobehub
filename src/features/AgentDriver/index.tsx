@@ -7,13 +7,21 @@ import { SparklesIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
+import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import { CONNECTABLE_PROVIDERS, getConnectableProvider } from '@/features/ConnectAgent/providers';
+import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
-import { type DriverTarget, planDriverSwitch, runDriverSwitch } from './switchPlan';
+import {
+  type DriverTarget,
+  planDriverSwitch,
+  resolveHarnessModel,
+  runDriverSwitch,
+} from './switchPlan';
 
 const HARNESS = 'lobehub';
 
@@ -80,6 +88,8 @@ const AgentDriverSelect = memo<AgentDriverSelectProps>(({ agentId, canEdit }) =>
   );
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const defaults = useUserStore(settingsSelectors.defaultAgentConfig);
+  const { isShared } = useAgentShareSupported(agentId);
+  const enabledChatModels = useEnabledChatModels();
 
   const harnessName = t('settingAgent.driver.harness');
   const current = heterogeneousProvider?.type ?? HARNESS;
@@ -101,10 +111,15 @@ const AgentDriverSelect = memo<AgentDriverSelectProps>(({ agentId, canEdit }) =>
       onOk: async () => {
         const plan = planDriverSwitch({
           currentlyHeterogeneous: !!heterogeneousProvider,
-          defaults: {
-            model: defaults.model ?? DEFAULT_MODEL,
-            provider: defaults.provider ?? DEFAULT_PROVIDER,
-          },
+          defaults: resolveHarnessModel({
+            allowedProviders: isShared ? AGENT_SHARE_ALLOWED_PROVIDERS : undefined,
+            defaults: {
+              model: defaults.model ?? DEFAULT_MODEL,
+              provider: defaults.provider ?? DEFAULT_PROVIDER,
+            },
+            enabledChatModels,
+            fallback: { model: DEFAULT_MODEL, provider: DEFAULT_PROVIDER },
+          }),
           target,
         });
 
