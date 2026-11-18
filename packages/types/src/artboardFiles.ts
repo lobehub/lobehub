@@ -61,11 +61,24 @@ const filePathSchema = z
   .min(1)
   .max(ARTBOARD_FILE_LIMITS.maxPathLength + 2);
 
+const sha256Schema = z.string().regex(/^[\da-f]{64}$/, 'a lowercase sha256 hex digest');
+
 export const artboardFileWriteSchema = z.union([
   z.object({ content: z.string(), path: filePathSchema }).strict(),
   z.object({ fileRef: z.string().min(1), path: filePathSchema }).strict(),
   z.object({ base64: z.string().min(1), path: filePathSchema }).strict(),
+  // A blob already PUT to a URL from artboard.prepareFileUploads.
+  z.object({ hash: sha256Schema, path: filePathSchema }).strict(),
 ]);
+
+export const artboardFileUploadsSchema = z
+  .array(
+    z
+      .object({ hash: sha256Schema, path: filePathSchema, size: z.number().int().nonnegative() })
+      .strict(),
+  )
+  .min(1)
+  .max(ARTBOARD_FILE_LIMITS.maxFiles);
 
 export const artboardFileEditSchema = z
   .object({ newText: z.string(), oldText: z.string().min(1), path: filePathSchema })

@@ -29,6 +29,16 @@ describe('onArtboardToolResult', () => {
     expect(useArtboardStore.getState().flash).toEqual(['f2']);
   });
 
+  it('refreshes the board and its comments after the agent rewrites board files', async () => {
+    await onArtboardToolResult({
+      apiName: 'writeArtboardFiles',
+      result: { state: { artboardId: 'art_1', files: [] }, success: true },
+    });
+
+    expect(mutate).toHaveBeenCalledWith(['artboard', 'art_1']);
+    expect(mutate).toHaveBeenCalledWith(['artboard-comments', 'art_1']);
+  });
+
   it('refreshes the board and its comments when the agent asks a question', async () => {
     await onArtboardToolResult({
       apiName: 'askArtboardQuestion',

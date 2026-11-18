@@ -17,13 +17,13 @@ const runningInTopic = (topicId: string | null) => (s: ReturnType<typeof useChat
   );
 
 export const useArtboardRevisionWatch = (
-  artboard: Pick<ArtboardItem, 'id' | 'revision' | 'topicId'>,
+  artboard: Pick<ArtboardItem, 'id' | 'revision' | 'topicId' | 'updatedAt'>,
 ) => {
-  const { id, revision, topicId } = artboard;
+  const { id, revision, topicId, updatedAt } = artboard;
   const running = useChatStore(runningInTopic(topicId));
   const stale = useArtboardStore((s) => s.staleRevision);
-  const shown = useRef(revision);
-  shown.current = revision;
+  const shown = useRef({ revision, updatedAt });
+  shown.current = { revision, updatedAt };
 
   useEffect(() => {
     if (stale !== null && revision >= stale) artboardActions.setStaleRevision(null);

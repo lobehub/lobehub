@@ -27,6 +27,7 @@ const fileStore: ArtboardBlobStore = {
     for (const key of keys) blobs.delete(key);
   },
   list: async (prefix) => [...blobs.keys()].filter((key) => key.startsWith(prefix)),
+  presignWrite: async (key) => ({ url: `memory://${key}` }),
   read: async (key) => blobs.get(key) ?? new Uint8Array(),
   write: async (key, bytes) => {
     blobs.set(key, bytes);

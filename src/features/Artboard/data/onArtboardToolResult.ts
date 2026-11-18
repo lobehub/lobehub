@@ -9,10 +9,13 @@ const WRITE_APIS = new Set<string>([
   ArtboardApiName.updateArtboard,
 ]);
 
-const COMMENT_APIS = new Set<string>([
+// Calls that change what boards or threads show without a new revision: a rewritten file
+// changes the page and can leave comments stale.
+const BOARD_AND_COMMENT_APIS = new Set<string>([
   ArtboardApiName.askArtboardQuestion,
   ArtboardApiName.replyArtboardComment,
   ArtboardApiName.resolveArtboardComment,
+  ArtboardApiName.writeArtboardFiles,
 ]);
 
 interface ArtboardToolOutcome {
@@ -24,7 +27,7 @@ export const onArtboardToolResult = async ({ apiName, result }: ArtboardToolOutc
   if (result.success === false) return;
   const state = result.state as Partial<ArtboardToolState> | undefined;
 
-  if (COMMENT_APIS.has(apiName)) {
+  if (BOARD_AND_COMMENT_APIS.has(apiName)) {
     const artboardId = state?.artboardId ?? useArtboardStore.getState().boardId;
     if (artboardId)
       await Promise.all([mutateArtboard(artboardId), mutateArtboardComments(artboardId)]);

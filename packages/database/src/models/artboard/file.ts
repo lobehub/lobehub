@@ -49,6 +49,19 @@ export class ArtboardFileModel {
       )
       .orderBy(asc(artboardFiles.path));
 
+  /**
+   * Lock the artboard row for the rest of the transaction and stamp its updatedAt, which viewers
+   * watch to notice file-only changes. False when the artboard is not accessible.
+   */
+  async lockArtboard(artboardId: string): Promise<boolean> {
+    const rows = await this.db
+      .update(artboards)
+      .set({ updatedAt: new Date() })
+      .where(and(eq(artboards.id, artboardId), inArray(artboards.id, this.accessible())))
+      .returning({ id: artboards.id });
+    return rows.length > 0;
+  }
+
   async upsert(artboardId: string, entries: ArtboardFileEntry[]) {
     if (!entries.length) return;
     const [owner] = await this.db

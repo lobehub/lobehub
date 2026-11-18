@@ -29,6 +29,7 @@ const memoryStore = () => {
       if (!bytes) throw new Error(`missing ${key}`);
       return bytes;
     },
+    presignWrite: async (key) => ({ url: `memory://${key}` }),
     write: async (key, bytes) => {
       blobs.set(key, bytes);
     },
@@ -191,5 +192,103 @@ describe('ArtboardFileService', () => {
     await service.removeAll(artboardId);
 
     expect([...blobs.keys()]).toEqual([]);
+  });
+
+  it('refuses an edit whose file changed after it was read', async () => {
+    await service.applyChanges(artboardId, {
+      writes: [{ content: '<h1>Old</h1><p>x</p>', path: 'a.html' }],
+    });
+    const first = await service.prepare(artboardId, {
+      edits: [{ newText: 'New', oldText: 'Old', path: 'a.html' }],
+    });
+    const second = await service.prepare(artboardId, {
+      edits: [{ newText: 'y', oldText: 'x', path: 'a.html' }],
+    });
+    await db.transaction((tx) => service.commit(artboardId, first, tx));
+
+    const error = await errorOf(db.transaction((tx) => service.commit(artboardId, second, tx)));
+
+    expect(error.code).toBe('conflict');
+    expect((await service.read(artboardId, 'a.html')).content).toBe('<h1>New</h1><p>x</p>');
+  });
+
+  it('reports the files left after a delete that landed between prepare and commit', async () => {
+    await service.applyChanges(artboardId, {
+      writes: [
+        { content: 'a', path: 'a.html' },
+        { content: 'b', path: 'b.html' },
+      ],
+    });
+    const write = await service.prepare(artboardId, { writes: [{ content: 'c', path: 'c.html' }] });
+    await service.applyChanges(artboardId, { deletes: ['b.html'] });
+
+    const { paths } = await db.transaction((tx) => service.commit(artboardId, write, tx));
+
+    expect([...paths].toSorted()).toEqual(['a.html', 'c.html']);
+  });
+
+  describe('presigned uploads', () => {
+    const big = new Uint8Array(3 * 1024 * 1024).fill(7);
+    const bigHash = createHash('sha256').update(big).digest('hex');
+    const putTo = (url: string, bytes: Uint8Array) =>
+      blobs.set(url.replace('memory://', ''), bytes);
+
+    it('commits a file the client uploaded to the signed URL, checked by its hash', async () => {
+      const { uploads } = await service.prepareUploads(artboardId, [
+        { hash: bigHash, path: 'shots/home.png', size: big.byteLength },
+      ]);
+      expect(uploads.map((upload) => upload.path)).toEqual(['shots/home.png']);
+      putTo(uploads[0].url, big);
+
+      const changed = await service.applyChanges(artboardId, {
+        writes: [{ hash: bigHash, path: 'shots/home.png' }],
+      });
+
+      expect(changed).toEqual([{ hash: bigHash, path: 'shots/home.png', size: big.byteLength }]);
+      expect((await service.read(artboardId, 'shots/home.png')).contentType).toBe('image/png');
+    });
+
+    it('asks for no upload of content the artboard already stores', async () => {
+      await service.applyChanges(artboardId, {
+        writes: [{ base64: Buffer.from(shot).toString('base64'), path: 'a.png' }],
+      });
+      const hash = createHash('sha256').update(shot).digest('hex');
+
+      const { uploads } = await service.prepareUploads(artboardId, [
+        { hash, path: 'b.png', size: shot.byteLength },
+      ]);
+
+      expect(uploads).toEqual([]);
+      await service.applyChanges(artboardId, { writes: [{ hash, path: 'b.png' }] });
+      expect((await service.list(artboardId)).map((file) => file.path)).toEqual(['a.png', 'b.png']);
+    });
+
+    it('refuses an upload over the size limit before signing it', async () => {
+      const error = await errorOf(
+        service.prepareUploads(artboardId, [
+          { hash: bigHash, path: 'huge.png', size: ARTBOARD_FILE_LIMITS.maxImageBytes + 1 },
+        ]),
+      );
+
+      expect(error.code).toBe('invalid');
+    });
+
+    it('refuses a commit whose uploaded bytes do not match the hash, or were never uploaded', async () => {
+      const { uploads } = await service.prepareUploads(artboardId, [
+        { hash: bigHash, path: 'shots/home.png', size: big.byteLength },
+      ]);
+      putTo(uploads[0].url, shot);
+
+      const tampered = await errorOf(
+        service.applyChanges(artboardId, { writes: [{ hash: bigHash, path: 'shots/home.png' }] }),
+      );
+      const missing = await errorOf(
+        service.applyChanges(artboardId, { writes: [{ hash: sha('nope'), path: 'x.png' }] }),
+      );
+
+      expect(tampered.code).toBe('invalid');
+      expect(missing.code).toBe('invalid');
+      expect(await service.list(artboardId)).toEqual([]);
+    });
   });
 });

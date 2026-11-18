@@ -1,4 +1,8 @@
-import { artboardFileChangesSchema, artboardOpSchema } from '@lobechat/types';
+import {
+  artboardFileChangesSchema,
+  artboardFileUploadsSchema,
+  artboardOpSchema,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -173,6 +177,14 @@ export const artboardRouter = router({
     .input(z.object({ projectId: z.string().min(1) }))
     .query(({ ctx, input }) =>
       run('listByProject', () => ctx.artboardService.listByProject(input.projectId)),
+    ),
+
+  prepareFileUploads: artboardProcedureWrite
+    .input(idInput.extend({ files: artboardFileUploadsSchema }))
+    .mutation(({ ctx, input }) =>
+      run('prepareFileUploads', () =>
+        ctx.artboardService.prepareFileUploads(input.id, input.files),
+      ),
     ),
 
   publish: artboardPublishProcedure

@@ -122,7 +122,7 @@ describe('ArtboardModel', () => {
 
     const updated = await personal.update(artboard.id, { expectedRevision: 1, title: '改名' });
     expect(updated).toMatchObject({ revision: 2, title: '改名' });
-    expect(await personal.getRevision(artboard.id)).toBe(2);
+    expect((await personal.getRevision(artboard.id))?.revision).toBe(2);
 
     await expect(
       personal.update(artboard.id, { expectedRevision: 1, title: '过期写入' }),

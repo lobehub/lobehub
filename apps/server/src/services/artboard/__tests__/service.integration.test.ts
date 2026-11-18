@@ -49,6 +49,7 @@ const fileStore: ArtboardBlobStore = {
     for (const key of keys) blobs.delete(key);
   },
   list: async (prefix) => [...blobs.keys()].filter((key) => key.startsWith(prefix)),
+  presignWrite: async (key) => ({ url: `memory://${key}` }),
   read: async (key) => blobs.get(key) ?? new Uint8Array(),
   write: async (key, bytes) => {
     blobs.set(key, bytes);
@@ -500,6 +501,19 @@ describe('ArtboardService.update and read', () => {
     });
   });
 
+  it('moves the stamp viewers watch on a file-only write, without bumping the revision', async () => {
+    const { artboard } = await createJourney();
+    const before = await service().getRevision(artboard.id);
+
+    await service().writeFiles(artboard.id, {
+      edits: [{ newText: '新的空项目', oldText: '空项目', path: 'pages/empty.html' }],
+    });
+    const after = await service().getRevision(artboard.id);
+
+    expect(after.revision).toBe(before.revision);
+    expect(after.updatedAt.getTime()).toBeGreaterThan(before.updatedAt.getTime());
+  });
+
   it('refuses to delete a file a board still shows', async () => {
     const { artboard } = await createJourney();
 
@@ -856,6 +870,30 @@ describe('ArtboardService.finalize', () => {
       { id: entry.id, patch: { x: -40 }, type: 'updateBoard' },
     ]);
     expect(moved.artboard.revision).toBe(3);
+  });
+
+  it('keeps the files of a finalized journey, while other files stay writable', async () => {
+    const created = await createJourney(checks(['empty', 'ingest']));
+    const { artboard } = await service().finalize(created.artboard.id, created.artboard.revision);
+
+    const edit = await errorOf(
+      service().writeFiles(artboard.id, {
+        edits: [{ newText: '改了', oldText: '空项目', path: 'pages/empty.html' }],
+      }),
+    );
+    const viaUpdate = await errorOf(
+      service().update(artboard.id, artboard.revision, [], {
+        writes: [{ content: '<p>new</p>', path: 'pages/ingest.html' }],
+      }),
+    );
+    expect(edit.code).toBe('locked');
+    expect(edit.message).toContain('pages/empty.html');
+    expect(viaUpdate.code).toBe('locked');
+
+    const notes = await service().writeFiles(artboard.id, {
+      writes: [{ content: '<p>notes</p>', path: 'pages/notes.html' }],
+    });
+    expect(notes.files.map((file) => file.path)).toEqual(['pages/notes.html']);
   });
 
   it('collapses a decision board into conditioned edges between the screens around it', async () => {

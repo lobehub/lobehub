@@ -27,6 +27,7 @@ const blobs = new Map<string, Uint8Array>();
 const store: ArtboardBlobStore = {
   delete: async () => {},
   list: async () => [],
+  presignWrite: async (key) => ({ url: `memory://${key}` }),
   read: async (key) => {
     const bytes = blobs.get(key);
     if (!bytes) throw new Error('missing');

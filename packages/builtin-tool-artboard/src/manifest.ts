@@ -184,6 +184,8 @@ export const ArtboardManifest: BuiltinToolManifest = {
         required: ['id'],
         type: 'object',
       },
+      // Parallel edits to one artboard would race: run them one after another.
+      serializeBy: 'id',
     },
     {
       description: 'Read one file of an artboard, to edit it with exact text.',

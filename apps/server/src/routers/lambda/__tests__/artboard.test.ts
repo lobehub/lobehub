@@ -36,7 +36,7 @@ describe('artboardRouter', () => {
 
   it('creates a board and reads it back by revision', async () => {
     const { artboard } = await createBoard();
-    expect(await caller().getRevision({ id: artboard.id })).toBe(1);
+    expect(await caller().getRevision({ id: artboard.id })).toMatchObject({ revision: 1 });
     expect((await caller().list({ topicId })).map((item) => item.id)).toEqual([artboard.id]);
   });
 
@@ -75,7 +75,7 @@ describe('artboardRouter', () => {
       replies: [{ content: '可以' }],
     });
     expect(listed.resolvedAt).toBeInstanceOf(Date);
-    expect(await caller().getRevision({ id: artboard.id })).toBe(1);
+    expect(await caller().getRevision({ id: artboard.id })).toMatchObject({ revision: 1 });
   });
 
   it('maps a round that is not on the board to NOT_FOUND', async () => {

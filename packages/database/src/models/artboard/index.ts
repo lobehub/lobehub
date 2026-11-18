@@ -139,13 +139,14 @@ export class ArtboardModel {
     await this.db.delete(artboards).where(and(eq(artboards.id, id), this.scope()));
   };
 
-  getRevision = async (id: string): Promise<number | undefined> => {
+  /** The structure revision and the row's updatedAt, which file-only writes also move. */
+  getRevision = async (id: string): Promise<{ revision: number; updatedAt: Date } | undefined> => {
     const [row] = await this.db
-      .select({ revision: artboards.revision })
+      .select({ revision: artboards.revision, updatedAt: artboards.updatedAt })
       .from(artboards)
       .where(and(eq(artboards.id, id), this.scope()))
       .limit(1);
-    return row?.revision;
+    return row;
   };
 
   update = async (id: string, params: UpdateArtboardParams): Promise<ArtboardRow> => {

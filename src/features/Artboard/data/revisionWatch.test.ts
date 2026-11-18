@@ -7,6 +7,8 @@ const { getRevision, mutate } = vi.hoisted(() => ({ getRevision: vi.fn(), mutate
 vi.mock('@/libs/swr', () => ({ mutate, useClientDataSWR: vi.fn() }));
 vi.mock('@/services/artboard', () => ({ artboardService: { getRevision } }));
 
+const shown = { revision: 3, updatedAt: new Date('2026-11-18T10:00:00Z') };
+
 describe('artboard revision watch', () => {
   afterEach(() => {
     artboardActions.reset();
@@ -15,38 +17,51 @@ describe('artboard revision watch', () => {
 
   it('flags the open board stale when the server has a newer revision', async () => {
     artboardActions.bindBoard('art_1');
-    getRevision.mockResolvedValue(5);
+    getRevision.mockResolvedValue({ revision: 5, updatedAt: new Date('2026-11-18T11:00:00Z') });
 
-    await checkArtboardRevision('art_1', 3);
+    await checkArtboardRevision('art_1', shown);
 
     expect(useArtboardStore.getState().staleRevision).toBe(5);
+    expect(mutate).not.toHaveBeenCalled();
   });
 
   it('stays quiet when the board already shows the latest revision', async () => {
     artboardActions.bindBoard('art_1');
-    getRevision.mockResolvedValue(3);
+    getRevision.mockResolvedValue(shown);
 
-    await checkArtboardRevision('art_1', 3);
+    await checkArtboardRevision('art_1', shown);
 
     expect(useArtboardStore.getState().staleRevision).toBeNull();
+    expect(mutate).not.toHaveBeenCalled();
+  });
+
+  it('reloads the open board in place when only its files changed', async () => {
+    artboardActions.bindBoard('art_1');
+    getRevision.mockResolvedValue({ revision: 3, updatedAt: new Date('2026-11-18T10:05:00Z') });
+
+    await checkArtboardRevision('art_1', shown);
+
+    expect(useArtboardStore.getState().staleRevision).toBeNull();
+    expect(mutate).toHaveBeenCalledWith(['artboard', 'art_1']);
   });
 
   it('ignores the answer when another board opened meanwhile', async () => {
     artboardActions.bindBoard('art_1');
     getRevision.mockImplementation(async () => {
       artboardActions.bindBoard('art_2');
-      return 9;
+      return { revision: 9, updatedAt: new Date('2026-11-18T12:00:00Z') };
     });
 
-    await checkArtboardRevision('art_1', 3);
+    await checkArtboardRevision('art_1', shown);
 
     expect(useArtboardStore.getState().staleRevision).toBeNull();
+    expect(mutate).not.toHaveBeenCalled();
   });
 
   it('reloads the board and clears the banner on refresh', async () => {
     artboardActions.bindBoard('art_1');
-    getRevision.mockResolvedValue(5);
-    await checkArtboardRevision('art_1', 3);
+    getRevision.mockResolvedValue({ revision: 5, updatedAt: new Date('2026-11-18T11:00:00Z') });
+    await checkArtboardRevision('art_1', shown);
 
     await refreshStaleArtboard('art_1');
 

@@ -28,6 +28,7 @@ import {
   type ArtboardBlobStore,
   type ArtboardFileChanges,
   ArtboardFileService,
+  type ArtboardFileUploadRequest,
   createFileServiceArtboardBlobStore,
 } from './files';
 import { buildJourneyFlow } from './finalize';
@@ -217,12 +218,12 @@ export class ArtboardService {
           topicId: context.topicId ?? null,
         });
         const files = await this.files.prepare(created.id, input.files ?? {}, tx);
-        await this.files.commit(created.id, files, tx);
+        const committed = await this.files.commit(created.id, files, tx);
         const changed = await applyArtboardOps(
           this.structure.withTransaction(tx),
           created,
           input.ops ?? [],
-          new Set(files.files.keys()),
+          committed,
         );
         return { changedIds: changed, row: created };
       }),
@@ -270,15 +271,16 @@ export class ArtboardService {
 
     const { changedIds, next } = await guardArtboard(() =>
       this.db.transaction(async (tx) => {
+        // Files first: the revision bump then stamps the row's final updatedAt.
+        const committed = await this.files.commit(id, files, tx);
         const bumped = await this.artboards
           .withTransaction(tx)
           .update(id, { expectedRevision: revision });
-        await this.files.commit(id, files, tx);
         const changed = await applyArtboardOps(
           this.structure.withTransaction(tx),
           row,
           ops,
-          new Set(files.files.keys()),
+          committed,
         );
         return { changedIds: changed, next: bumped };
       }),
@@ -291,13 +293,8 @@ export class ArtboardService {
     const files = await this.files.prepare(id, changes);
     await guardArtboard(() =>
       this.db.transaction(async (tx) => {
-        await this.files.commit(id, files, tx);
-        await applyArtboardOps(
-          this.structure.withTransaction(tx),
-          row,
-          [],
-          new Set(files.files.keys()),
-        );
+        const committed = await this.files.commit(id, files, tx);
+        await applyArtboardOps(this.structure.withTransaction(tx), row, [], committed);
       }),
     );
     return { files: files.changed };
@@ -313,6 +310,11 @@ export class ArtboardService {
     return this.files.read(id, path);
   }
 
+  async prepareFileUploads(id: string, files: ArtboardFileUploadRequest[]) {
+    await this.require(id);
+    return this.files.prepareUploads(id, files);
+  }
+
   async read(id: string): Promise<ArtboardReadResult> {
     return { artboard: withoutDraftPicks(await this.item(await this.require(id))) };
   }
@@ -324,10 +326,10 @@ export class ArtboardService {
     };
   }
 
-  async getRevision(id: string): Promise<number> {
-    const revision = await this.artboards.getRevision(id);
-    if (revision === undefined) throw notFound(id);
-    return revision;
+  async getRevision(id: string): Promise<{ revision: number; updatedAt: Date }> {
+    const stamp = await this.artboards.getRevision(id);
+    if (!stamp) throw notFound(id);
+    return stamp;
   }
 
   async getByTask(taskRef: string): Promise<ArtboardItem | null> {
