@@ -213,8 +213,8 @@ export class WorkspaceMemberModel {
     // membership) only means anything while they belong to the workspace, and
     // the soft delete is reactivated by `addMember`, so a row left behind would
     // silently restore their old access or teams on re-invite. Workspace-wide
-    // rows carry no subject and stay. The job title and responsibilities are
-    // cleared for the same reason: a re-invited member starts without them.
+    // rows carry no subject and stay. The job title, responsibilities and member
+    // config are cleared for the same reason: a re-invited member starts without them.
     //
     // Soft-delete first, then revoke, both in one transaction: the update takes
     // the membership row lock that a concurrent grant waits on, so a grant can
@@ -223,7 +223,7 @@ export class WorkspaceMemberModel {
     await this.db.transaction(async (tx) => {
       await tx
         .update(workspaceMembers)
-        .set({ deletedAt: new Date(), title: null, responsibilities: null })
+        .set({ config: {}, deletedAt: new Date(), responsibilities: null, title: null })
         .where(
           and(
             eq(workspaceMembers.workspaceId, workspaceId),
@@ -286,18 +286,31 @@ export class WorkspaceMemberModel {
   };
 
   /**
-   * Set an active member's workspace-scoped job title and responsibilities.
-   * `null` clears a field; an omitted field stays as it is. Returns the updated
-   * row, or `undefined` when the user is not an active member.
+   * Set an active member's workspace-scoped job title, responsibilities and
+   * badge color (kept in `config`). `null` clears a field; an omitted field
+   * stays as it is, and other `config` keys are left alone. Returns the
+   * updated row, or `undefined` when the user is not an active member.
    */
   updateMemberProfile = async (
     workspaceId: string,
     userId: string,
-    profile: { title?: string | null; responsibilities?: string | null },
+    profile: {
+      badgeColor?: string | null;
+      responsibilities?: string | null;
+      title?: string | null;
+    },
   ) => {
+    const { badgeColor } = profile;
+    const config =
+      badgeColor === undefined
+        ? undefined
+        : badgeColor === null
+          ? sql`${workspaceMembers.config} - 'badgeColor'`
+          : sql`${workspaceMembers.config} || ${JSON.stringify({ badgeColor })}::jsonb`;
+
     const [result] = await this.db
       .update(workspaceMembers)
-      .set({ title: profile.title, responsibilities: profile.responsibilities })
+      .set({ config, responsibilities: profile.responsibilities, title: profile.title })
       .where(
         and(
           eq(workspaceMembers.workspaceId, workspaceId),

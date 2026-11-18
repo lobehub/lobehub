@@ -151,11 +151,11 @@ interface MergeContentProps {
 const MergeContent = memo<MergeContentProps>(({ onConfirm, source }) => {
   const { t: translate } = useTranslation('verify');
   const { close } = useModalContext();
-  // Revalidate on open: the dialog is a decision surface, and the list's own
-  // invalidations do not reach this wider window's cache key.
+  // Revalidate on open: the dialog is a decision surface, so it does not ride
+  // the list's shared dedupe window.
   const { data, error, isLoading, mutate } = useAcceptanceList(true, {
+    fresh: true,
     limit: TARGET_WINDOW,
-    revalidateOnMount: true,
   });
   const [query, setQuery] = useState('');
   const [targetId, setTargetId] = useState<string | null>(null);

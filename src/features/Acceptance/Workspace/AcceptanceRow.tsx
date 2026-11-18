@@ -225,6 +225,8 @@ const AcceptanceRow = memo<{
           setMutating(true);
           try {
             const summary = await verifyService.mergeAcceptance(item.id, targetId);
+            // The merged-away entry no longer exists; a reload must not repaint it.
+            useVerifyStore.getState().removeAcceptancesFromLists([item.id]);
             if (active) navigate(acceptanceOverviewPath(targetId, routeBase), { replace: true });
             await Promise.all([
               onChanged(),
@@ -251,6 +253,7 @@ const AcceptanceRow = memo<{
           setMutating(true);
           try {
             await verifyService.deleteAcceptance(item.id, purge);
+            useVerifyStore.getState().removeAcceptancesFromLists([item.id]);
             if (active) navigate(acceptanceListPath(routeBase), { replace: true });
             await onChanged();
             toast.success(t('acceptance.workspace.deleteSuccess'));

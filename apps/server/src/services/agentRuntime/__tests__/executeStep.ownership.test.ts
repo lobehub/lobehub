@@ -1,9 +1,10 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 
 import { AgentRuntimeService } from '../AgentRuntimeService';
+import { stubRunningDurableOperation } from '../AgentRuntimeService/__tests__/testUtils';
 import { StepOwnershipLostError } from '../AgentRuntimeService/executionErrors';
 
 // Mock all heavy dependencies to isolate executeStep logic
@@ -17,6 +18,7 @@ vi.mock('@/server/modules/AgentRuntime', () => ({
   AgentRuntimeCoordinator: vi.fn().mockImplementation(function () {
     return {
       loadAgentState: vi.fn(),
+      loadAgentStatus: vi.fn().mockResolvedValue(null),
       saveAgentState: vi.fn(),
       saveStepResult: vi.fn(),
       createAgentOperation: vi.fn(),
@@ -71,6 +73,10 @@ vi.mock('@/server/services/toolExecution/builtin', () => ({
 vi.mock('@lobechat/builtin-tools/dynamicInterventionAudits', () => ({
   dynamicInterventionAudits: [],
 }));
+
+beforeEach(() => {
+  stubRunningDurableOperation();
+});
 
 describe('AgentRuntimeService.executeStep - step ownership', () => {
   // A step whose LLM call outlives the lock TTL can be claimed by a redelivery

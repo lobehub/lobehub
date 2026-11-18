@@ -102,6 +102,7 @@ export const evalRunChatConfigSchema = AgentChatConfigSchema.pick({
   thinkingLevel2: true,
   thinkingLevel3: true,
   thinkingLevel4: true,
+  thinkingLevel5: true,
 }).strict();
 
 export const evalRunModelParamsSchema = z

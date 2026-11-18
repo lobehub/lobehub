@@ -29,6 +29,7 @@ import { saveToast } from '@/store/utils/saveToast';
 
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
+import { useTaskProjectList } from '../features/useTaskProjectList';
 import { useTaskStatusChange } from '../features/useTaskStatusChange';
 import HiddenColumnsPanel from './HiddenColumnsPanel';
 import {
@@ -40,6 +41,7 @@ import {
   getKanbanColumnCreateDefaults,
   getKanbanLabelPatch,
   getKanbanTaskPatch,
+  mergeUnresolvedProjectGroups,
   moveTaskBetweenKanbanGroups,
   normalizeKanbanGroupBy,
 } from './kanbanBoardModel';
@@ -83,6 +85,8 @@ interface KanbanBoardProps {
 
 const KanbanBoard = memo<KanbanBoardProps>((props) => {
   const { agentId, emptyDescription, filter, myTaskScope, options, projectId, routeScope } = props;
+  // A project's own board does not repeat its badge on every card.
+  const hideProject = !!projectId;
   const { t } = useTranslation('chat');
   const { allowed: canEditTask } = usePermission('create_content');
   const groupBy = normalizeKanbanGroupBy(options.groupBy);
@@ -93,6 +97,10 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
   const { error: labelsError, mutate: retryLabels } = useFetchTaskLabels();
   const isLabelsInit = useTaskStore(taskLabelSelectors.isLabelsInit);
 
+  // Project columns are named from the project list, like label columns above.
+  const { error: projectsError, projects, retry: retryProjects } = useTaskProjectList();
+  const isProjectBoard = groupBy === 'project';
+
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
   // Keep the sync handle for `error` + `mutate` (the error/Retry state) and the
   // `queryKey` the groups are read by.
@@ -102,14 +110,20 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
     // A persisted label grouping may point at a deleted group; the page only
     // drops it once the registry is known, so wait for that (or its failure)
     // instead of sending one doomed request after every reload.
-    enabled: !isTaskLabelGroupBy(groupBy) || isLabelsInit,
+    // A project board likewise waits for the list that names its columns.
+    enabled:
+      (!isTaskLabelGroupBy(groupBy) || isLabelsInit) && (!isProjectBoard || projects !== undefined),
     filter,
     includeArchived: options.showArchived,
   });
   // Each board query (scope, dimension, filters) is its own store entry, so the
   // settled signal and the groups always describe the same board.
   const isTaskGroupListInit = useTaskStore(taskListSelectors.isTaskGroupListInit(queryKey));
-  const storedTaskGroups = useTaskStore(taskListSelectors.taskGroups(queryKey));
+  const rawTaskGroups = useTaskStore(taskListSelectors.taskGroups(queryKey));
+  const storedTaskGroups = useMemo(
+    () => (isProjectBoard ? mergeUnresolvedProjectGroups(rawTaskGroups, projects) : rawTaskGroups),
+    [isProjectBoard, projects, rawTaskGroups],
+  );
   // Cards edited out of the filter leave their column before the refetch lands.
   const currentTaskGroups = useMemo(() => {
     if (!filter) return storedTaskGroups;
@@ -139,8 +153,8 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
   const taskLabels = useTaskStore(taskLabelSelectors.labels);
   const columns = useMemo(
     () => buildKanbanColumns(currentTaskGroups, groupBy),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- registry changes rename label columns
-    [currentTaskGroups, groupBy, taskLabels],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- registry changes rename label and project columns
+    [currentTaskGroups, groupBy, projects, taskLabels],
   );
 
   const sensors = useSensors(
@@ -217,6 +231,15 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
       if (groupBy === 'status' && task.status === patch.status) return;
       if ((groupBy === 'assignee' || groupBy === 'member') && !assigneeUpdate) return;
       if (groupBy === 'priority' && (task.priority ?? 0) === (patch.priority ?? 0)) return;
+      // By column, not id: a task of an unseen project already sits in
+      // "Unavailable project", and letting it go back must not clear its project.
+      if (
+        isProjectBoard &&
+        currentTaskGroups
+          .find((group) => group.key === targetColumnKey)
+          ?.tasks.some((item) => item.id === task.id)
+      )
+        return;
 
       if (!queryKey) return;
       // The move is idempotent, so the overlay stays correct when the status
@@ -243,6 +266,8 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
           await updateTask(task.identifier, assigneeUpdate);
         } else if (groupBy === 'priority') {
           await updateTask(task.identifier, { priority: patch.priority ?? 0 });
+        } else if (isProjectBoard) {
+          await updateTask(task.identifier, { projectId: patch.projectId ?? null });
         } else if (labelPatch) {
           // The store action toasts its own failure and reports it here.
           const saved = await setTaskLabels(task.id, task.labels ?? [], labelPatch.labels);
@@ -262,7 +287,9 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
       canEditTask,
       changeTaskStatus,
       columns,
+      currentTaskGroups,
       groupBy,
+      isProjectBoard,
       queryKey,
       refreshTaskList,
       setTaskLabels,
@@ -383,6 +410,7 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
               droppable={droppable}
               groupBy={groupBy}
               groupMeta={col.groupMeta}
+              hideProject={hideProject}
               key={col.key}
               projectId={projectId}
               routeScope={routeScope}
@@ -413,7 +441,12 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
               width: COLUMN_WIDTH - 8,
             }}
           >
-            <AgentTaskItem routeScope={routeScope} task={activeTask} variant="compact" />
+            <AgentTaskItem
+              hideProject={hideProject}
+              routeScope={routeScope}
+              task={activeTask}
+              variant="compact"
+            />
           </div>
         ) : null}
       </DragOverlay>
@@ -426,7 +459,8 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
   // A label board needs the registry for its columns (names, colors, order);
   // if that failed, show it here with its own Retry rather than raw label ids.
   const registryError = isTaskLabelGroupBy(groupBy) && !isLabelsInit ? labelsError : undefined;
-  const boardError = registryError ?? error;
+  const projectListError = isProjectBoard && !projects ? projectsError : undefined;
+  const boardError = registryError ?? projectListError ?? error;
   return (
     <AsyncBoundary
       data={isTaskGroupListInit || undefined}
@@ -436,7 +470,9 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
       isEmpty={totalTasks === 0}
       isLoading={isLoading || (!isTaskGroupListInit && !boardError)}
       loading={skeletonBoard}
-      onRetry={() => (registryError ? retryLabels() : mutate())}
+      onRetry={() =>
+        registryError ? retryLabels() : projectListError ? retryProjects() : mutate()
+      }
     >
       {board}
     </AsyncBoundary>

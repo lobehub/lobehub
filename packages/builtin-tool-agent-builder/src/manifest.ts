@@ -56,6 +56,8 @@ export const AgentBuilderManifest: BuiltinToolManifest = {
     {
       description:
         'Install a plugin for the agent. This tool ALWAYS REQUIRES user approval before installation, even in auto-run mode. For MCP marketplace plugins, it will install and enable the plugin. For Composio tools and LobehubSkill providers that need OAuth, it will initiate the connection flow and wait for user to complete authorization.',
+      // An install adds a third-party endpoint the agent's later runs call
+      humanIntervention: 'always',
       name: AgentBuilderApiName.installPlugin,
       parameters: {
         properties: {

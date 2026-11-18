@@ -282,9 +282,16 @@ stale standalone install: a recently added workspace package fails to resolve â€
   one manual sign-in instead.
 - Concurrent instances (N worktrees / parallel runs): `electron-dev.sh` drives a
   pool â€” `start <id>` gives each its own CDP port, userData dir (with copied
-  login), Vite port, and IPC id. Drive each with a distinct
+  login), Vite port, and IPC id, and labels every window with the checkout and
+  `#<id>` (dev builds only, from `LOBE_DESKTOP_INSTANCE_LABEL`) so a screenshot
+  shows which instance it came from. Drive each with a distinct
   `agent-browser --session s<port> --cdp <port>`. Pool design, the collision
   matrix, and the login-copy recipe: `.agents/acceptance/references/multi-instance.md`.
+- Instance rules live in `apps/desktop/scripts/devInstance.mts` (ports, profile,
+  IPC and label environment; the CDP check that the UI rendered; login snapshot
+  seeding and saving). `electron-dev.sh` calls it through `devInstanceCli.mts`,
+  and other launchers that run several checkouts import it, so change the
+  rules there rather than in the shell script.
 
 ### Heterogeneous-agent compatibility (project skill)
 

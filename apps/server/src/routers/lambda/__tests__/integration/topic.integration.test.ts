@@ -20,7 +20,17 @@ vi.mock('@/server/utils/scheduleAfterResponse', () => ({
   after: vi.fn(function (callback: () => void) {
     return callback();
   }),
+  // Trash / archive hand the worktree cleanup to the host; nothing to run here.
+  afterUnscoped: vi.fn(),
 }));
+
+const legacyInboxTopic = (userId: string): typeof topics.$inferInsert => ({
+  title: 'Legacy Inbox Topic',
+  sessionId: null,
+  groupId: null,
+  agentId: null,
+  userId,
+});
 
 /**
  * Topic Router Integration Tests
@@ -685,13 +695,7 @@ describe('Topic Router Integration Tests', () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
       // Insert legacy inbox topic (sessionId IS NULL, groupId IS NULL, agentId IS NULL)
-      await serverDB.insert(topics).values({
-        title: 'Legacy Inbox Topic',
-        sessionId: null,
-        groupId: null,
-        agentId: null,
-        userId,
-      });
+      await serverDB.insert(topics).values(legacyInboxTopic(userId));
 
       // Query with isInbox=true
       const result = await caller.getTopics({
@@ -707,13 +711,7 @@ describe('Topic Router Integration Tests', () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
       // Insert legacy inbox topic
-      await serverDB.insert(topics).values({
-        title: 'Legacy Inbox Topic',
-        sessionId: null,
-        groupId: null,
-        agentId: null,
-        userId,
-      });
+      await serverDB.insert(topics).values(legacyInboxTopic(userId));
 
       // Insert new inbox topic with agentId
       await serverDB.insert(topics).values({
@@ -762,13 +760,7 @@ describe('Topic Router Integration Tests', () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
       // Insert legacy inbox topic
-      await serverDB.insert(topics).values({
-        title: 'Legacy Inbox Topic',
-        sessionId: null,
-        groupId: null,
-        agentId: null,
-        userId,
-      });
+      await serverDB.insert(topics).values(legacyInboxTopic(userId));
 
       // Query without isInbox (default is false/undefined)
       // Using testAgentId instead since it has a proper session mapping

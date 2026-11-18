@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initialState as fileInitialState } from '@/store/file/initialState';
 import { useFileStore } from '@/store/file/store';
+import { SortType } from '@/types/files';
 import type { ResourceItem } from '@/types/resource';
 
 import { useResourceManagerStore } from '.';
@@ -317,7 +318,11 @@ describe('resource manager store actions', () => {
   // the user had never seen instead of the search hits.
   describe('while the search overlay is up', () => {
     beforeEach(() => {
-      useResourceManagerStore.setState({ searchQuery: 'report' });
+      useResourceManagerStore.setState({
+        searchQuery: 'report',
+        sorter: 'custom',
+        sortType: SortType.Desc,
+      });
       useFileStore.setState({ queryParams: { parentId: 'folder-a' } as any });
     });
 
@@ -327,7 +332,12 @@ describe('resource manager store actions', () => {
       await useResourceManagerStore.getState().selectAllResources();
 
       const query = mockResolveSelectionIds.mock.calls[0][0];
-      expect(query).toMatchObject({ filesOnly: true, q: 'report' });
+      expect(query).toMatchObject({
+        filesOnly: true,
+        q: 'report',
+        sorter: 'custom',
+        sortType: SortType.Desc,
+      });
       expect(query).not.toHaveProperty('parentId');
       expect(useResourceManagerStore.getState().selectionTotal).toBe(2);
     });

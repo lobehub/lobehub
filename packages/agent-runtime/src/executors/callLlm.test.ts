@@ -210,6 +210,40 @@ describe('callLlm executor', () => {
     );
   });
 
+  it('ships the stored creation times on stream_start so the client orders by server time', async () => {
+    const transport = createCallTransport();
+    const messages = createMessageTransport();
+    vi.mocked(messages.findById).mockResolvedValue({
+      content: 'x',
+      createdAt: new Date('2026-11-11T15:22:48.000Z'),
+      id: 'steer-1',
+      metadata: { steer: true },
+      role: 'user',
+    });
+    vi.mocked(messages.createAssistantMessage).mockResolvedValue({
+      createdAt: new Date('2026-11-11T15:22:48.043Z'),
+      id: 'assistant-1',
+      parentId: 'steer-1',
+      role: 'assistant',
+    });
+    const stream = createStreamSink();
+    const host = createHost(transport.llm, messages, stream);
+
+    await callLlm(host)(
+      { payload: { ...instruction.payload, parentMessageId: 'steer-1' }, type: 'call_llm' },
+      createState(),
+      { phase: 'user_input' },
+    );
+
+    const streamStart = vi
+      .mocked(stream.publishEvent)
+      .mock.calls.find(([event]) => event.type === 'stream_start');
+    expect(streamStart?.[0].data).toMatchObject({
+      assistantMessage: { createdAt: Date.parse('2026-11-11T15:22:48.043Z'), id: 'assistant-1' },
+      parentMessage: { createdAt: Date.parse('2026-11-11T15:22:48.000Z'), id: 'steer-1' },
+    });
+  });
+
   it('leaves a non-steer parent off stream_start: the client already has it', async () => {
     const transport = createCallTransport();
     const messages = createMessageTransport();
@@ -317,6 +351,40 @@ describe('callLlm executor', () => {
     });
     expect(transport.trace.recordResult).toHaveBeenCalledWith(createAttemptOutput());
     expect(transport.trace.close).toHaveBeenCalledWith(undefined);
+  });
+
+  it('persists the context builder request accounting on the assistant message', async () => {
+    const contextAccounting = {
+      bySource: {
+        content: 3,
+        fileContext: 0,
+        reasoning: 0,
+        thoughtSignature: 0,
+        toolCallId: 0,
+        toolCalls: 0,
+        toolDefinition: 0,
+      },
+      estimator: 'tokenx' as const,
+      messageCount: 1,
+      system: 0,
+      total: 3,
+    };
+    const transport = createCallTransport();
+    const messages = createMessageTransport();
+    const context: ContextBuilder = {
+      build: vi.fn().mockResolvedValue({ ...contextOutput, contextAccounting }),
+    };
+    const host = createHost(transport.llm, messages, createStreamSink(), context);
+
+    await callLlm(host)(instruction, createState(), {
+      instructionIndex: 0,
+      phase: 'user_input',
+    });
+
+    expect(messages.update).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({ metadata: expect.objectContaining({ contextAccounting }) }),
+    );
   });
 
   it('reuses an existing assistant message without creating a new one', async () => {

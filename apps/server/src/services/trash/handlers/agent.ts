@@ -11,11 +11,12 @@ import type { LobeChatDatabase } from '@/database/type';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 
 import { MESSAGE_TITLE_LENGTH } from './message';
-import { topicEntry } from './topic';
+import { hasWaitingWorktreeCleanup, topicEntry, WORKTREE_CLEANUP_WAITING_MESSAGE } from './topic';
 import {
   type TrashCascade,
   type TrashHandler,
   type TrashHandlerContext,
+  TrashPurgeBlockedError,
   TrashRestoreError,
 } from './types';
 
@@ -101,6 +102,17 @@ export const agentHandler: TrashHandler = {
       const agentIds = await agentModel.lockTrashedForPurge([root.resourceId]);
       if (agentIds.length === 0) return;
       const sessionIds = await agentModel.findSessionIdsByAgentIds(agentIds);
+
+      // The cascade below takes the agent's topics with it — including the
+      // only record of a worktree cleanup still waiting on an offline device.
+      // Hold the whole purge until those have run (see `./topic`).
+      const waiting = await new TopicModel(
+        db,
+        ctx.userId,
+        ctx.workspaceId,
+      ).findWaitingCleanupTopicsUnder({ agentIds, sessionIds });
+      if (hasWaitingWorktreeCleanup(waiting))
+        throw new TrashPurgeBlockedError(WORKTREE_CLEANUP_WAITING_MESSAGE);
 
       // Topics / messages trashed on their own before this agent keep separate
       // roots; the cascade below deletes them, so drop those rows first.

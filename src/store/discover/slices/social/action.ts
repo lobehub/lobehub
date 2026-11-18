@@ -2,6 +2,7 @@ import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/r
 import {
   type FavoriteAgentItem,
   type FavoritePluginItem,
+  type FavoriteStatus,
   type FollowCounts,
   type FollowStatus,
   type FollowUserItem,
@@ -16,6 +17,8 @@ import { setNamespace } from '@/utils/storeDebug';
 import {
   favoriteAgentsResource,
   favoritePluginsResource,
+  favoriteStatusKey,
+  favoriteStatusResource,
   followCountsResource,
   followersResource,
   followingResource,
@@ -82,6 +85,7 @@ export const createSocialSlice = (set: Setter, get: () => DiscoverStore, _api?: 
 export class SocialActionImpl {
   readonly #favoriteAgents;
   readonly #favoritePlugins;
+  readonly #favoriteStatus;
   readonly #followCounts;
   readonly #followStatus;
   readonly #followers;
@@ -125,6 +129,13 @@ export class SocialActionImpl {
       set,
       stateKey: 'favoriteAgentsReplica',
       view: recordLens<DiscoverStore, PaginatedResponse<FavoriteAgentItem>>('favoriteAgentsMap'),
+    });
+    this.#favoriteStatus = createReplicaSlice(favoriteStatusResource, {
+      actionPrefix: n('favoriteStatus'),
+      get,
+      set,
+      stateKey: 'favoriteStatusReplica',
+      view: recordLens<DiscoverStore, FavoriteStatus>('favoriteStatusMap'),
     });
     this.#favoritePlugins = createReplicaSlice(favoritePluginsResource, {
       actionPrefix: n('favoritePlugins'),
@@ -252,6 +263,61 @@ export class SocialActionImpl {
       queryKey,
       active && this.#get().favoritePluginsMap[queryKey] !== undefined,
       active,
+    );
+  };
+
+  /**
+   * Whether the signed-in Market viewer has favorited a target. Pass
+   * `enabled: false` while the viewer is signed out of the Market. Read it
+   * with `socialSelectors.favoriteStatus(queryKey)`.
+   */
+  useFavoriteStatus = (
+    targetType: SocialTargetType,
+    identifier: string | undefined,
+    enabled = true,
+  ): SocialSyncResult => {
+    const active = enabled && !!identifier;
+    const params = { identifier: identifier ?? '', targetType };
+    const queryKey = favoriteStatusKey(params);
+    const sync = this.#favoriteStatus.useSync(active ? params : null, {
+      revalidateOnFocus: false,
+    });
+    return toSyncResult(
+      sync,
+      queryKey,
+      active && this.#get().favoriteStatusMap[queryKey] !== undefined,
+      active,
+    );
+  };
+
+  /**
+   * Favorite or unfavorite a target by identifier. The status flips at once and
+   * the confirmed value lands in the replica, memory and persisted row, so a
+   * reload paints it; a rejected call rolls the status back and rethrows.
+   */
+  setFavorite = async (
+    targetType: SocialTargetType,
+    identifier: string,
+    isFavorited: boolean,
+  ): Promise<void> => {
+    const key = favoriteStatusKey({ identifier, targetType });
+    const token = this.#favoriteStatus.beginOptimistic(key, () => ({ isFavorited }));
+    try {
+      if (isFavorited) await socialService.addFavorite(targetType, identifier);
+      else await socialService.removeFavorite(targetType, identifier);
+    } catch (error) {
+      token.rollback();
+      throw error;
+    }
+    token.commit();
+    // A status never loaded (no view mounted) has nothing to confirm against.
+    if (this.#get().favoriteStatusMap[key] === undefined) {
+      this.#favoriteStatus.update(key, () => ({ isFavorited }));
+    }
+    // Pick up any other server change in the background: the button is done
+    // once the write is confirmed, and a failed refresh keeps the confirmed status.
+    void Promise.all([this.#favoriteStatus.revalidate(key), this.#refreshFavorites()]).catch(
+      () => undefined,
     );
   };
 

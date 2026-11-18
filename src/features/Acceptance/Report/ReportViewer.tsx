@@ -1181,7 +1181,7 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
     );
   }
   if (isLoading) return <Loading debugId="verify-report-viewer" />;
-  if (error) {
+  if (error && data === undefined) {
     return (
       <ReportPageState
         description={t('report.error.description')}

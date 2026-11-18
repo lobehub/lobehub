@@ -70,4 +70,42 @@ describe('isLockedByOtherSession', () => {
       }),
     ).toBe(false);
   });
+
+  describe('collaboration rooms', () => {
+    it('is not locked for a room session when another room member holds the lock', () => {
+      expect(
+        isLockedByOtherSession({
+          holderId: 'user-2',
+          holderOwnerId: 'room:doc-1:peer',
+          inRoom: true,
+          myOwnerId: 'room:doc-1:me',
+          myUserId: 'user-1',
+        }),
+      ).toBe(false);
+    });
+
+    it('is locked for a room session when someone editing outside the room holds the lock', () => {
+      expect(
+        isLockedByOtherSession({
+          holderId: 'user-2',
+          holderOwnerId: 'page:doc-1:other',
+          inRoom: true,
+          myOwnerId: 'room:doc-1:me',
+          myUserId: 'user-1',
+        }),
+      ).toBe(true);
+    });
+
+    it('is locked outside the room while the room holds the lock', () => {
+      expect(
+        isLockedByOtherSession({
+          holderId: 'user-2',
+          holderOwnerId: 'room:doc-1:peer',
+          inRoom: false,
+          myOwnerId: 'page:doc-1:me',
+          myUserId: 'user-1',
+        }),
+      ).toBe(true);
+    });
+  });
 });

@@ -2,7 +2,11 @@ export type ViewMode = 'card' | 'list';
 
 export type StatusFilter = 'all' | 'active' | 'running' | 'completed' | 'archived';
 
-export type TriggerFilter = 'chat' | 'api' | 'task' | 'eval' | 'bot';
+/**
+ * `bot` is an IM bot platform (Discord, Telegram, …); `channel` is a multi-agent Channel, whose
+ * conversations are listed as Channels rather than as topics.
+ */
+export type TriggerFilter = 'chat' | 'api' | 'task' | 'eval' | 'bot' | 'channel' | 'webhook';
 
 export type TimeRangeFilter = 'all' | 'today' | 'week' | 'month';
 

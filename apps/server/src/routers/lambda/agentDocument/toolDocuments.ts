@@ -5,6 +5,8 @@ import { z } from 'zod';
 
 import { TaskModel } from '@/database/models/task';
 import { router } from '@/libs/trpc/lambda';
+import { AgentDocumentEditRejectedError } from '@/server/services/agentDocuments/editRejectedError';
+import { findRevokedDocumentReads } from '@/server/services/agentDocuments/revokedReads';
 import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocuments/toolOutcome';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 import { resolveTaskOrThrow } from '@/server/services/task/utils';
@@ -333,6 +335,21 @@ export const toolDocumentsRouter = router({
   /**
    * Tool-oriented: read document by id
    */
+  /**
+   * Of the document ids earlier turns of a conversation read, those whose content must no
+   * longer reach the model for this agent (deleted, disabled, or permanently removed). Used by
+   * browser-side context assembly; the server runtime calls the same resolver directly.
+   */
+  listRevokedDocumentReads: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        documentIds: z.array(z.string()).max(500),
+      }),
+    )
+    .query(async ({ ctx, input }) =>
+      findRevokedDocumentReads(ctx.agentDocumentModel, input.agentId, input.documentIds),
+    ),
   readDocument: agentDocumentProcedure
     .input(
       z.object({
@@ -360,13 +377,18 @@ export const toolDocumentsRouter = router({
         .and(agentDocumentToolTriggerSchema),
     )
     .mutation(async ({ ctx, input }) => {
-      const doc = await ctx.agentDocumentService.modifyDocumentNodesById(
-        input.id,
-        input.operations,
-        input.agentId,
-      );
-
-      return doc;
+      try {
+        return await ctx.agentDocumentService.modifyDocumentNodesById(
+          input.id,
+          input.operations,
+          input.agentId,
+        );
+      } catch (error) {
+        if (error instanceof AgentDocumentEditRejectedError) {
+          throw new TRPCError({ cause: error, code: 'BAD_REQUEST', message: error.message });
+        }
+        throw error;
+      }
     }),
   /**
    * Tool-oriented: replace document content by id

@@ -124,8 +124,18 @@ export class UserService {
     return lambdaClient.user.updateUsername.mutate(username);
   };
 
+  /** Wave goal asks off the approval island for every client of this account. */
+  addIslandDismissals = async (keys: string[]): Promise<string[]> => {
+    return lambdaClient.user.addIslandDismissals.mutate({ keys });
+  };
+
   updatePreference = async (preference: Partial<UserPreference>) => {
     return lambdaClient.user.updatePreference.mutate(preference);
+  };
+
+  /** Personal-mode "New worktree" switch for one directory; resolves to the stored list. */
+  setWorktreeModeDir = async (key: string, enabled: boolean): Promise<string[]> => {
+    return lambdaClient.user.setWorktreeModeDir.mutate({ enabled, key });
   };
 
   updateGuide = async (guide: Partial<UserGuide>) => {

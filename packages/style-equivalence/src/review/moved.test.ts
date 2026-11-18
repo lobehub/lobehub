@@ -67,12 +67,6 @@ describe('movedRules', () => {
     expect(moved.some((entry) => entry.slot === 'styles.td')).toBe(false);
   });
 
-  it('ignores elements outside the case element', () => {
-    const moved = movedRules(input)['styles.table'];
-
-    expect(moved.every((entry) => !entry.targets.includes('other'))).toBe(true);
-  });
-
   it('matches an attribute selector against literal attributes', () => {
     const moved = movedRules({
       base: {

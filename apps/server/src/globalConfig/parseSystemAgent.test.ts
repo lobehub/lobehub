@@ -111,6 +111,7 @@ describe('parseSystemAgent', () => {
       model: 'deepseek-v3',
     });
     expect(result.thread).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
+    expect(result.asr).toBeUndefined();
     expect(result.userMemoryEmbedding).toBeUndefined();
     expect(result.memoryAnalysisAgentConfig).toBeUndefined();
     expect(result.userMemoryPersonaWriter).toBeUndefined();
@@ -174,12 +175,6 @@ describe('parseSystemAgent', () => {
     expect(result.translation).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
     expect(result.agentMeta).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
     expect(result.thread).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
-  });
-
-  it('does not fill the speech-to-text slot from the chat default', () => {
-    const result = parseSystemAgent('default=ollama/deepseek-v3');
-
-    expect(result.asr).toBeUndefined();
   });
 
   it('parses an explicit speech-to-text model', () => {

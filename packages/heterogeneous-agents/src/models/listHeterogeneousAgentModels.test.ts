@@ -4,9 +4,17 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { listCodexModelsMock, listDroidAcpModelsMock, listTraeAcpModelsMock } = vi.hoisted(() => ({
+const {
+  detectDshCommandMock,
+  listCodexModelsMock,
+  listDroidAcpModelsMock,
+  listDshAcpModelsMock,
+  listTraeAcpModelsMock,
+} = vi.hoisted(() => ({
+  detectDshCommandMock: vi.fn(),
   listCodexModelsMock: vi.fn(),
   listDroidAcpModelsMock: vi.fn(),
+  listDshAcpModelsMock: vi.fn(),
   listTraeAcpModelsMock: vi.fn(),
 }));
 
@@ -26,6 +34,12 @@ vi.mock('../spawn/traeAcpSession', () => ({
 
 vi.mock('../spawn/droidAcpSession', () => ({
   listDroidAcpModels: listDroidAcpModelsMock,
+}));
+
+vi.mock('../spawn/dshAcpSession', () => ({
+  DSH_COMMAND: 'dsh',
+  detectDshCommand: detectDshCommandMock,
+  listDshAcpModels: listDshAcpModelsMock,
 }));
 
 vi.mock('./codex', () => ({ listCodexModels: listCodexModelsMock }));
@@ -56,13 +70,94 @@ const importModule = () => import('./listHeterogeneousAgentModels');
 describe('heterogeneous agent model discovery', () => {
   beforeEach(() => {
     execFileMock.mockReset();
+    detectDshCommandMock.mockReset();
     listCodexModelsMock.mockReset();
     listDroidAcpModelsMock.mockReset();
+    listDshAcpModelsMock.mockReset();
     listTraeAcpModelsMock.mockReset();
   });
 
   afterEach(() => {
     vi.resetModules();
+  });
+
+  it('queries DeepSeek Harness through ACP instead of --list-models', async () => {
+    const models = [{ id: '["gateway","model"]', modelId: 'model', providerId: 'gateway' }];
+    listDshAcpModelsMock.mockResolvedValue(models);
+    const { listHeterogeneousAgentModels } = await importModule();
+
+    await expect(
+      listHeterogeneousAgentModels({
+        args: ['--config', '/config'],
+        command: '/custom/dsh',
+        cwd: '/repo',
+        env: { DSH_TEST: 'value' },
+        type: 'deepseek-harness',
+      }),
+    ).resolves.toMatchObject({ models, status: 'success' });
+
+    expect(listDshAcpModelsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: ['--config', '/config'],
+        commandPath: '/custom/dsh',
+        cwd: '/repo',
+        env: expect.objectContaining({ DSH_TEST: 'value' }),
+      }),
+    );
+    expect(detectDshCommandMock).not.toHaveBeenCalled();
+    expect(execFileMock).not.toHaveBeenCalled();
+  });
+
+  it('resolves the default dsh executable before ACP discovery', async () => {
+    listDshAcpModelsMock.mockResolvedValue([]);
+    detectDshCommandMock.mockResolvedValue({
+      available: true,
+      path: '/opt/dsh/bin/dsh',
+      resolvedPathEnv: '/opt/dsh/bin',
+    });
+    const { listHeterogeneousAgentModels } = await importModule();
+
+    await listHeterogeneousAgentModels({
+      cwd: '/repo',
+      env: { PATH: '/usr/bin' },
+      type: 'deepseek-harness',
+    });
+
+    expect(listDshAcpModelsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ commandPath: '/opt/dsh/bin/dsh' }),
+    );
+  });
+
+  it('queries the configured Antigravity binary for its native model catalog', async () => {
+    resolveExecFile('gemini-4-argon-high  Gemini 4 Argon (High)');
+    const { listHeterogeneousAgentModels } = await importModule();
+    await expect(
+      listHeterogeneousAgentModels({
+        command: '/custom/agy',
+        cwd: '/repo',
+        env: { CUSTOM_ENV: 'value' },
+        type: 'antigravity',
+      }),
+    ).resolves.toMatchObject({
+      status: 'success',
+      models: [
+        { id: 'gemini-4-argon-high', label: 'Gemini 4 Argon (High)', providerId: 'antigravity' },
+      ],
+    });
+    expect(execFileMock).toHaveBeenCalledWith(
+      '/custom/agy',
+      ['models'],
+      expect.objectContaining({ cwd: '/repo', env: { CUSTOM_ENV: 'value' }, timeout: 15_000 }),
+      expect.any(Function),
+    );
+  });
+
+  it('reports a stalled Antigravity model query as a retryable catalog timeout', async () => {
+    rejectExecFile(Object.assign(new Error('timed out'), { killed: true }));
+    const { listHeterogeneousAgentModels } = await importModule();
+    await expect(
+      listHeterogeneousAgentModels({ command: '/custom/agy', type: 'antigravity' }),
+    ).resolves.toMatchObject({ status: 'error', error: { code: 'timeout' } });
   });
 
   it('loads Pi provider extensions with the same discovery policy as the configured run', async () => {

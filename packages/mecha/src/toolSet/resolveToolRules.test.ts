@@ -74,7 +74,9 @@ describe('resolveToolRules', () => {
     expect(resolved.allowExplicitActivation).toBe(true);
     expect(resolved.rules['my-plugin']).toBe(true);
     expect(resolved.rules['scope-plugin']).toBe(true);
-    expect(resolved.rules['lobe-agent']).toBe(true);
+    expect(resolved.rules['lobe-activator']).toBe(true);
+    expect(resolved.rules['lobe-agent']).toBeUndefined();
+    expect(resolved.rules['lobe-skill-store']).toBeUndefined();
     for (const id of groupSupervisorToolIds) {
       expect(resolved.rules[id]).toBe(true);
       expect(resolved.defaultToolIds).toContain(id);
@@ -130,7 +132,7 @@ describe('resolveToolRules', () => {
       }),
     );
     expect(noGateway.rules['lobe-remote-device']).toBe(false);
-    expect(noGateway.excludedIdentifiers).toEqual(new Set());
+    expect(noGateway.excludedIdentifiers).toEqual(new Set(['lobe-mcp-events']));
 
     const open = resolveToolRules(
       request({
@@ -164,6 +166,7 @@ describe('resolveToolRules', () => {
     expect(denied.excludedIdentifiers).toEqual(
       new Set([
         'my-plugin',
+        'lobe-mcp-events',
         'lobe-local-system',
         'lobe-remote-device',
         'lobe-browser',

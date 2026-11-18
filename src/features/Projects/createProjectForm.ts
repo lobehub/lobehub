@@ -4,6 +4,7 @@ import {
   PROJECT_IDENTIFIER_REGEX,
   type ProjectDuplicateField,
 } from '@lobechat/types';
+import { createNanoId } from '@lobechat/utils';
 import { kebabCase } from 'es-toolkit';
 import { pinyin } from 'pinyin-pro';
 
@@ -111,31 +112,41 @@ export const getCreateProjectInput = (draft: CreateProjectDraft) => {
   return { name, ...(identifier ? { identifier } : {}), ...(slug ? { slug } : {}) };
 };
 
-/** Lead a new project with an agent created for it, or with an existing one. */
-export type MainAgentMode = 'dedicated' | 'existing';
+export interface ReservedProjectIds {
+  /** Id of the dedicated main agent the project creates. */
+  agentId: string;
+  projectId: string;
+}
+
+const reserveIdSuffix = createNanoId(12);
 
 /**
- * Every new project starts with an agent of its own. Reusing an agent is an
- * explicit pick in the modal and is not carried over to the next project.
+ * Ids for the project and its dedicated agent, taken once when the create form
+ * opens. Generated avatars are seeded by id, so the form previews the very
+ * avatars both keep after creation, and typing the name no longer reshuffles
+ * them. Same shape as the server's `idGenerator` (`PROJECT_ID_REGEX`).
  */
-export const DEFAULT_MAIN_AGENT_MODE: MainAgentMode = 'dedicated';
+export const reserveProjectIds = (): ReservedProjectIds => ({
+  agentId: `agt_${reserveIdSuffix()}`,
+  projectId: `prj_${reserveIdSuffix()}`,
+});
 
 export interface CreateProjectExtras {
   avatar?: string;
-  /** The picked agent; only sent when the project reuses an existing agent. */
-  mainAgentId?: string;
-  mainAgentMode: MainAgentMode;
+  ids: ReservedProjectIds;
 }
 
 /**
  * Leaving `coordinatorAgentId` out is what makes the server create an agent
- * for the project, named after it and wearing its avatar.
+ * for the project, named after it and wearing its avatar. Every project the
+ * create dialogs make is led by such a dedicated agent.
  */
 export const buildCreateProjectRequest = (
   input: NonNullable<ReturnType<typeof getCreateProjectInput>>,
-  { avatar, mainAgentId, mainAgentMode }: CreateProjectExtras,
+  { avatar, ids }: CreateProjectExtras,
 ) => ({
   ...input,
+  dedicatedAgentId: ids.agentId,
+  id: ids.projectId,
   ...(avatar ? { avatar } : {}),
-  ...(mainAgentMode === 'existing' && mainAgentId ? { coordinatorAgentId: mainAgentId } : {}),
 });

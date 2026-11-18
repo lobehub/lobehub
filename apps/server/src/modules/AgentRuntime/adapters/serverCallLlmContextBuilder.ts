@@ -5,6 +5,7 @@ import {
   selectExpertise,
 } from '@lobechat/agent-runtime';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
+import { cacheEconomicsForProvider, getSlicedMessages } from '@lobechat/context-engine';
 import { gatherContextFacts } from '@lobechat/mecha';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
@@ -13,7 +14,7 @@ import {
   CONTEXT_ENGINEERING_SPAN_NAME,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
-import type { UIChatMessage } from '@lobechat/types';
+import { getOptedInPluginIds, type UIChatMessage } from '@lobechat/types';
 
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
 import {
@@ -21,6 +22,7 @@ import {
   resolveServerConnectorFeatures,
 } from '@/server/modules/Mecha/ContextEngineering/providers';
 import { resolveKnowledgeFileContents } from '@/server/services/file/resolveKnowledgeFileContents';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 import { resolveBuilderGroupId } from '@/server/services/toolExecution/serverRuntimes/groupAgentBuilderTarget';
 
 import type { RuntimeExecutorContext } from '../context';
@@ -134,6 +136,7 @@ export const buildServerCallLlmContext = async ({
       },
       agentId,
       disabledPluginIds: state.world?.disabledPluginIds,
+      discoverableTools: toolDiscoveryConfig?.availableTools,
       editingAgentId: state.origin?.editingAgentId,
       editingGroupId,
       enabledToolIds: resolved.enabledToolIds,
@@ -143,17 +146,39 @@ export const buildServerCallLlmContext = async ({
       isSubAgent: state.origin?.lineage?.isSubAgent === true,
       mentionedAgents: (state as any).initialContext?.initialContext?.mentionedAgents,
       messages: messagesForContext,
+      // `agent.plugins` is collapsed to pinned ids; the `auto` entries ride on
+      // the world. Together they are what the agent turned on.
+      optedInPluginIds: [
+        ...getOptedInPluginIds(agentConfig.plugins ?? undefined),
+        ...(state.world?.autoSkillIds ?? []),
+      ],
       shareVisitor: state.principal?.actor?.shareVisitor ?? ctx.agentShareVisitor,
       topicId,
       workspaceId: state.origin?.workspaceId ?? ctx.workspaceId,
     },
-    createServerContextFactProviders({ ctx, state }),
+    createServerContextFactProviders({
+      ctx,
+      documentIndexTurn: {
+        cacheTtlMs: cacheEconomicsForProvider(provider).ttlMs,
+        messages: messagesForContext,
+        // The engine drops older messages when history is limited; a change note
+        // on a dropped message no longer reaches the model.
+        visibleMessages: getSlicedMessages(messagesForContext, {
+          enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
+          historyCount,
+        }),
+      },
+      state,
+    }),
   );
 
   const contextEngineInput = {
+    enableMcpAppContext: await isMcpAppsEnabled(ctx.userId),
     additionalContexts: llmPayload.additionalContexts,
     attachmentPreviewFileIds: llmPayload.attachmentPreviewFileIds,
+    agentDocumentChanges: facts.agentDocumentChanges,
     agentDocuments: facts.agentDocuments,
+    revokedDocumentReads: facts.revokedDocumentReads,
     // Identity lives on the agent row, not in the prompt text — inject it so
     // the model introduces itself by the user-given name.
     agentIdentity: { name: agentConfig.name ?? undefined, title: agentConfig.title ?? undefined },

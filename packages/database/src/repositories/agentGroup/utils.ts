@@ -18,7 +18,8 @@ export const buildCopiedAgent = (
   openingMessage: source?.openingMessage,
   openingQuestions: source?.openingQuestions,
   params: source?.params,
-  pinned: source?.pinned,
+  // In a workspace `pinned` is the owner/admin team pin; copies never inherit it.
+  pinned: targetWorkspaceId ? false : source?.pinned,
   plugins: source?.plugins,
   provider: source?.provider,
   systemRole: source?.systemRole,

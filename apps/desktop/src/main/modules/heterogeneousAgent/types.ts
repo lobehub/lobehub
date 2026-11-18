@@ -18,6 +18,11 @@ export interface HeterogeneousAgentBuildPlan {
    * persisting conversation content for CLIs that cannot read prompts on stdin.
    */
   argvPayload?: string;
+  /**
+   * Keep stdin open after the prompt for as long as the session can use it
+   * (Claude Code, always): the channel for control requests and mid-run messages.
+   */
+  liveInput?: boolean;
   stdinPayload?: string;
 }
 

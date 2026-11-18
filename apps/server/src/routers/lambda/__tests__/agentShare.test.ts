@@ -5,9 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createContextInner } from '@/libs/trpc/lambda/context';
 
+/** Rows the router's Agent-owner lookup (`select … from agents`) returns. */
+const mockAgentOwnerRows = vi.fn(async () => [{ userId: 'user-1' }]);
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(function () {
-    return {};
+    return {
+      select: () => ({ from: () => ({ where: () => ({ limit: () => mockAgentOwnerRows() }) }) }),
+    };
   }),
 }));
 
@@ -104,6 +108,19 @@ vi.mock('@/database/models/file', () => ({
 const mockGetAgentShareMonthlySpend = vi.fn();
 vi.mock('@/business/server/agent-share/spendGate', () => ({
   getAgentShareMonthlySpend: (...args: unknown[]) => mockGetAgentShareMonthlySpend(...args),
+}));
+
+const mockFilterAddressBookPeople = vi.fn();
+const mockListAddressBookPeople = vi.fn();
+const mockFindUser = vi.fn();
+vi.mock('@/database/models/contact', () => ({
+  ContactModel: vi.fn(function () {
+    return {
+      filterAddressBookPeople: mockFilterAddressBookPeople,
+      findUser: mockFindUser,
+      listAddressBookPeople: mockListAddressBookPeople,
+    };
+  }),
 }));
 
 const mockGetFeatureFlagsState = vi.fn();
@@ -339,6 +356,89 @@ describe('agentShareRouter', () => {
       }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+
+  describe('execution environment grant', () => {
+    const bob = { avatar: null, fullName: 'Bob', id: 'user-bob', username: 'bob' };
+
+    beforeEach(() => {
+      mockAgentOwnerRows.mockResolvedValue([{ userId: 'user-1' }]);
+      mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true, enableChannels: true });
+    });
+
+    it('grants only people in the address book', async () => {
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+      mockFilterAddressBookPeople.mockResolvedValue(['user-bob']);
+
+      await expect(
+        caller.updateShareConfig({
+          agentId: 'agent-1',
+          config: { deviceAccess: 'allowlist', deviceAllowUserIds: ['user-bob', 'stranger'] },
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
+
+      const config = { deviceAccess: 'allowlist' as const, deviceAllowUserIds: ['user-bob'] };
+      await caller.updateShareConfig({ agentId: 'agent-1', config });
+      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', config);
+    });
+
+    // The runtime grants nothing while contacts are off, so a grant must not be
+    // stored then either (it would also come alive when they turn on).
+    it('refuses a grant while contacts are off for the Agent owner', async () => {
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+      mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true, enableChannels: false });
+      mockFilterAddressBookPeople.mockResolvedValue(['user-bob']);
+
+      await expect(
+        caller.updateShareConfig({
+          agentId: 'agent-1',
+          config: { deviceAccess: 'allowlist', deviceAllowUserIds: ['user-bob'] },
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(
+        caller.updateShareConfig({ agentId: 'agent-1', config: { deviceAccess: 'allowlist' } }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
+
+      await expect(caller.listDeviceGrantablePeople({ agentId: 'agent-1' })).resolves.toMatchObject(
+        { enabled: false, people: [] },
+      );
+      expect(mockListAddressBookPeople).not.toHaveBeenCalled();
+    });
+
+    // A workspace manager other than the owner must see and save the same
+    // people the run accepts: the runtime keys the book by the Agent owner.
+    it('keys the address book by the Agent owner, not the calling manager', async () => {
+      const { ContactModel } = await import('@/database/models/contact');
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+      mockAgentOwnerRows.mockResolvedValue([{ userId: 'owner-9' }]);
+      mockListAddressBookPeople.mockResolvedValue([]);
+
+      await caller.listDeviceGrantablePeople({ agentId: 'agent-1' });
+
+      expect(ContactModel).toHaveBeenCalledWith(expect.anything(), 'owner-9', undefined);
+      expect(mockGetFeatureFlagsState).toHaveBeenCalledWith('owner-9');
+    });
+
+    it('lists the address book and the granted people who left it', async () => {
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+      const carol = { avatar: null, fullName: 'Carol', id: 'user-carol', username: 'carol' };
+      mockGetByAgentId.mockResolvedValue({
+        ...share,
+        shareConfig: { ...share.shareConfig, deviceAllowUserIds: ['user-bob', 'user-carol'] },
+      });
+      mockListAddressBookPeople.mockResolvedValue([bob]);
+      mockFindUser.mockResolvedValue(carol);
+      mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true, enableChannels: true });
+
+      await expect(caller.listDeviceGrantablePeople({ agentId: 'agent-1' })).resolves.toEqual({
+        enabled: true,
+        people: [bob],
+        unlisted: [carol],
+      });
+      expect(mockFindUser).toHaveBeenCalledWith('user-carol');
+    });
   });
 
   it('caps maxTopicsPerVisitor at the visitor topic list limit', async () => {

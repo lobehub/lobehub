@@ -1,5 +1,6 @@
 import type {
   ChatToolPayload,
+  MessageContextAccounting,
   MessageMetadata,
   MessageToolCall,
   ModelPerformance,
@@ -48,6 +49,8 @@ interface FinalizeCallLlmTurnInput {
   assistantMessageId: string;
   /** Provider attempts spent on this call, including retries. */
   attempts?: number;
+  /** Estimated accounting of the request this turn sent; persisted on the message. */
+  contextAccounting?: MessageContextAccounting;
   events: AgentEvent[];
   host: AgentRuntimeHost;
   model: string;
@@ -61,12 +64,14 @@ interface FinalizeCallLlmTurnInput {
 
 interface PersistInterruptedCallLlmResultInput {
   assistantMessageId: string;
+  contextAccounting?: MessageContextAccounting;
   host: AgentRuntimeHost;
   output: LLMAttemptOutput;
 }
 
 const buildMessageMetadata = ({
   answerSalvagedFromReasoning,
+  contextAccounting,
   currentStepSpeed,
   currentStepUsage,
   executionSite,
@@ -76,6 +81,7 @@ const buildMessageMetadata = ({
   usageEstimated,
 }: {
   answerSalvagedFromReasoning?: boolean;
+  contextAccounting?: MessageContextAccounting;
   currentStepSpeed?: ModelPerformance;
   currentStepUsage?: ModelUsage;
   executionSite?: LLMAttemptOutput['executionSite'];
@@ -87,6 +93,7 @@ const buildMessageMetadata = ({
   const metadata: CallLlmMessageMetadata = {
     ...(currentStepUsage && { ...currentStepUsage, usage: currentStepUsage }),
     ...(currentStepSpeed && { ...currentStepSpeed, performance: currentStepSpeed }),
+    ...(contextAccounting && { contextAccounting }),
     ...(finishType && { finishType }),
     ...(hasContentImages && { isMultimodal: true }),
     ...(answerSalvagedFromReasoning && { answerSalvagedFromReasoning: true }),
@@ -180,21 +187,30 @@ const buildWorkAnchor = ({
 
 const persistFinalMessage = async ({
   assistantMessageId,
+  contextAccounting,
   host,
   output,
   state,
-}: Pick<FinalizeCallLlmTurnInput, 'assistantMessageId' | 'host' | 'output' | 'state'>) => {
+}: Pick<
+  FinalizeCallLlmTurnInput,
+  'assistantMessageId' | 'contextAccounting' | 'host' | 'output' | 'state'
+>) => {
   const finalContent = output.hasContentImages
     ? serializePartsForStorage(output.contentParts)
     : output.content;
   const finalReasoning = buildFinalReasoning(output);
+  // A Stop ends the stream gracefully with `finishReason: 'abort'`, so this is
+  // the write a mid-stream Stop lands on: mark it like the error-path partial.
+  const aborted = output.finishReason === 'abort';
   const metadata = buildMessageMetadata({
     answerSalvagedFromReasoning: output.answerSalvagedFromReasoning,
+    contextAccounting,
     currentStepSpeed: output.speed,
     currentStepUsage: output.usage,
     executionSite: output.executionSite,
     finishType: output.finishReason,
     hasContentImages: output.hasContentImages,
+    interruptedMidStream: aborted,
     usageEstimated: output.usageEstimated,
   });
   const workAnchor = buildWorkAnchor({
@@ -205,9 +221,17 @@ const persistFinalMessage = async ({
 
   try {
     await host.transports.messages.update(assistantMessageId, {
-      content: finalContent,
+      // Stopped before any text: keep the placeholder, which renders as stopped
+      // (an empty string renders as still loading).
+      content: aborted && !finalContent ? undefined : finalContent,
       imageList: output.imageList.length > 0 ? output.imageList : undefined,
-      metadata: workAnchor ? { ...metadata, work: workAnchor } : metadata,
+      metadata: {
+        ...metadata,
+        ...(workAnchor && { work: workAnchor }),
+        // A row stopped earlier and now written to completion is no longer stopped;
+        // the model merges metadata, so the stale marker is cleared explicitly.
+        ...(!aborted && { interruptedMidStream: false }),
+      },
       observationId: output.observationId,
       reasoning: finalReasoning,
       search: output.grounding,
@@ -288,6 +312,7 @@ const buildFinalState = ({
 export const finalizeCallLlmTurn = async ({
   assistantMessageId,
   attempts,
+  contextAccounting,
   events,
   host,
   model,
@@ -376,6 +401,7 @@ export const finalizeCallLlmTurn = async ({
 
   const finalReasoning = await persistFinalMessage({
     assistantMessageId,
+    contextAccounting,
     host,
     output: finalizedOutput,
     state,
@@ -446,6 +472,7 @@ export const finalizeCallLlmTurn = async ({
 
 export const persistInterruptedCallLlmResult = async ({
   assistantMessageId,
+  contextAccounting,
   host,
   output,
 }: PersistInterruptedCallLlmResultInput): Promise<void> => {
@@ -455,6 +482,7 @@ export const persistInterruptedCallLlmResult = async ({
     await host.transports.messages.update(assistantMessageId, {
       content: output.content,
       metadata: buildMessageMetadata({
+        contextAccounting,
         currentStepSpeed: output.speed,
         currentStepUsage: output.usage,
         executionSite: output.executionSite,

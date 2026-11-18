@@ -65,7 +65,10 @@ export class RecentPagesActionImpl {
 
     const pinnedIndex = pinnedPages.findIndex((p) => isSameTabTarget(p, url));
     if (pinnedIndex >= 0) {
-      const merged = guardedMergeCache(pinnedPages[pinnedIndex].cached, cached);
+      const merged = guardedMergeCache(
+        pinnedPages[pinnedIndex].cached,
+        cached ?? this.#openTabCache(url),
+      );
       if (merged === pinnedPages[pinnedIndex].cached) return;
 
       const updatedPinned = [...pinnedPages];
@@ -79,7 +82,7 @@ export class RecentPagesActionImpl {
     const existingEntry = existingIndex >= 0 ? recentPages[existingIndex] : null;
 
     const newEntry: TabItem = {
-      cached: guardedMergeCache(existingEntry?.cached, cached),
+      cached: guardedMergeCache(existingEntry?.cached, cached ?? this.#openTabCache(url)),
       id,
       lastVisited: Date.now(),
       url,
@@ -139,6 +142,39 @@ export class RecentPagesActionImpl {
     this.#savePinned(newPinned);
   };
 
+  /**
+   * A page's title and avatar resolve after the visit is recorded. Tabs learn them through
+   * `updateTabCache`, which forwards them here so the matching recent or pinned entry is not
+   * left on its static route label. Only the cache changes, never the visit order.
+   */
+  updateRecentPageCache = (url: string, cached: DynamicRouteMeta): void => {
+    if (tabScopeKey(resolveTabScope(url)) !== tabScopeKey(this.#get().activeRecentScope)) return;
+
+    const { pinnedPages, recentPages } = this.#get();
+
+    const pinnedIndex = pinnedPages.findIndex((p) => isSameTabTarget(p, url));
+    if (pinnedIndex >= 0) {
+      const merged = guardedMergeCache(pinnedPages[pinnedIndex].cached, cached);
+      if (merged === pinnedPages[pinnedIndex].cached) return;
+
+      const updatedPinned = [...pinnedPages];
+      updatedPinned[pinnedIndex] = { ...updatedPinned[pinnedIndex], cached: merged };
+      this.#set(this.#withActivePinned(updatedPinned), false, 'updateRecentPageCache');
+      this.#savePinned(updatedPinned);
+      return;
+    }
+
+    const recentIndex = recentPages.findIndex((p) => isSameTabTarget(p, url));
+    if (recentIndex < 0) return;
+
+    const merged = guardedMergeCache(recentPages[recentIndex].cached, cached);
+    if (merged === recentPages[recentIndex].cached) return;
+
+    const updatedRecent = [...recentPages];
+    updatedRecent[recentIndex] = { ...updatedRecent[recentIndex], cached: merged };
+    this.#set(this.#withActiveRecent(updatedRecent), false, 'updateRecentPageCache');
+  };
+
   removeRecentPage = (id: string): void => {
     const { recentPages } = this.#get();
     this.#set(
@@ -167,6 +203,11 @@ export class RecentPagesActionImpl {
     );
     this.#savePinned(newPinned);
   };
+
+  // The visit is recorded when the location changes, often after the tab already resolved
+  // its title, so a new entry starts from what the open tab knows.
+  #openTabCache = (url: string): DynamicRouteMeta | undefined =>
+    this.#get().tabs.find((tab) => isSameTabTarget(tab, url))?.cached;
 
   #ensureScopeForUrl = (url: string): void => {
     this.#loadScope(resolveTabScope(url));

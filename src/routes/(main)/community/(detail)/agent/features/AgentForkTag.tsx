@@ -4,12 +4,11 @@ import { Icon, Tag } from '@lobehub/ui';
 import { GitFork } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 import urlJoin from 'url-join';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { forkKeys } from '@/libs/swr/keys';
-import { marketApiService } from '@/services/marketApi';
+import { useDiscoverStore } from '@/store/discover';
+import { marketSelectors } from '@/store/discover/selectors';
 
 import { useDetailContext } from './DetailProvider';
 
@@ -22,18 +21,15 @@ const AgentForkTag = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
   const { identifier, forkedFromAgentId } = useDetailContext();
 
-  // Fetch fork source info
-  const { data: forkSource } = useSWR(
-    identifier && forkedFromAgentId ? forkKeys.source(identifier) : null,
-    () => marketApiService.getAgentForkSource(identifier!),
-    { revalidateOnFocus: false },
-  );
+  const useAgentForkSource = useDiscoverStore((s) => s.useAgentForkSource);
+  const { queryKey } = useAgentForkSource(identifier, !!forkedFromAgentId);
+  const source = useDiscoverStore(marketSelectors.agentForkSource(queryKey));
 
-  if (!forkSource?.source) return null;
+  if (!source) return null;
 
   const handleClick = () => {
-    if (forkSource?.source?.identifier) {
-      navigate(urlJoin('/community/agent', forkSource.source.identifier));
+    if (source?.identifier) {
+      navigate(urlJoin('/community/agent', source.identifier));
     }
   };
 
@@ -43,11 +39,11 @@ const AgentForkTag = memo(() => {
       icon={<Icon icon={GitFork} />}
       style={{ cursor: 'pointer' }}
       title={t('fork.forkedFrom', {
-        defaultValue: `Forked from ${forkSource.source.name}`,
+        defaultValue: `Forked from ${source.name}`,
       })}
       onClick={handleClick}
     >
-      {t('fork.forkedFrom')}: {forkSource.source.name}
+      {t('fork.forkedFrom')}: {source.name}
     </Tag>
   );
 });

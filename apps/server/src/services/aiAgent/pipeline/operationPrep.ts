@@ -1,5 +1,6 @@
 import type { AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { extractActivatedToolIdsFromMessages } from '@lobechat/agent-runtime';
+import { ChannelIdentifier } from '@lobechat/builtin-tool-channel';
 import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import type { OperationSkillSet, ProjectInstructionFile } from '@lobechat/context-engine';
@@ -293,7 +294,18 @@ const resolveWorkspaceInit = async (
       workingDirByDevice: agencyConfig?.workingDirByDevice,
     });
     const boundCwd = getWorkingDirEffectivePath(boundCwdConfig);
-    if (!boundCwd) return { workspace: empty };
+    if (!boundCwd) {
+      // Device-level skills do not require a project. Do not substitute the
+      // device's home or daemon cwd, bind a directory, or cache this result as
+      // a workingDirs entry (those entries also authorize file-operation roots).
+      if (deviceWaking) return { workspace: empty };
+      const scanned = await deviceGateway.initWorkspace({
+        deviceId: activeDeviceId,
+        userId: deps.userId,
+        workspaceId: deviceWorkspaceId,
+      });
+      return { workspace: scanned ?? empty };
+    }
     const resolved = {
       boundCwd,
       boundCwdConfig,
@@ -741,6 +753,7 @@ export const prepareOperation = async (
     buildViewedTaskContextPrompt(deps, appContext, input.taskId),
     buildViewedGoalOverview(deps, appContext),
     buildRunProjectContextPrompt(deps, appContext?.projectId, resolvedAgentId, {
+      channelMessaging: !!toolsResult.enabledToolIds?.includes(ChannelIdentifier),
       coordinationRules: !!toolsResult.enabledToolIds?.includes(TaskIdentifier),
     }),
   ]);
@@ -770,10 +783,11 @@ export const prepareOperation = async (
     };
   }
 
-  // Project skills + the root AGENTS.md are discovered server-side by
-  // scanning the device's bound project directory ("workspace init"), cached
-  // on `devices.workingDirs` and reused within the TTL. Skills surface in
-  // `<available_skills>` (metadata only — SKILL.md bodies are read lazily at
+  // On device runs, workspace init discovers home-directory skills. A bound directory
+  // also contributes project skills + AGENTS.md up to the repository root;
+  // those combined scans are cached on `devices.workingDirs` within the TTL.
+  // Without a bound directory, only home skill directories are scanned.
+  // Skills surface in `<available_skills>` (metadata only — SKILL.md bodies are read lazily at
   // activation via `local-system` readFile, which `serverRuntimes/skills.ts`
   // re-gates on `activeDeviceId`). Only `location` (the absolute SKILL.md
   // path) flows through; the directory tree is enumerated lazily, keeping the
@@ -817,8 +831,9 @@ export const prepareOperation = async (
   // concatenate them. Returning them rather than stamping `agentConfig` keeps
   // run context off the agent's configuration.
   if (workspaceInit.workspace.instructions.length) {
-    projectInstructions = workspaceInit.workspace.instructions.map(({ content, source }) => ({
+    projectInstructions = workspaceInit.workspace.instructions.map(({ content, path, source }) => ({
       content,
+      path,
       source,
     }));
     log(
@@ -833,6 +848,7 @@ export const prepareOperation = async (
     activeDeviceId,
     agentConfig,
     agentPlugins,
+    autoSkillIds: ctx.autoSkillIds,
     disabledPluginIds,
     executionPlan,
     prompt,

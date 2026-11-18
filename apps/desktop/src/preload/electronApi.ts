@@ -2,6 +2,7 @@ import { electronAPI } from '@electron-toolkit/preload';
 import type { RendererMemoryInfo, ScreenCaptureSession } from '@lobechat/electron-client-ipc';
 import { contextBridge, ipcRenderer } from 'electron';
 
+import { readExposeStoresArg } from '~common/remoteDebugging';
 import { readSystemLanguageArg } from '~common/systemLanguage';
 
 import { invoke } from './invoke';
@@ -73,6 +74,7 @@ export const setupElectronApi = () => {
     chromeVersion: process.versions.chrome,
     darwinMajorVersion,
     electronVersion: process.versions.electron,
+    exposeStores: readExposeStoresArg(process.argv),
     isMacTahoe: process.platform === 'darwin' && darwinMajorVersion >= 25,
     nodeVersion: process.versions.node,
     platform: process.platform,

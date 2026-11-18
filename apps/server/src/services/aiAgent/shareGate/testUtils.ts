@@ -4,6 +4,7 @@ import type { AgentShareGate, ShareGateToolSet } from '.';
 
 export const buildGate = (config: Partial<AgentShareGate['shareConfig']> = {}): AgentShareGate => ({
   agentId: 'agent-1',
+  canUseDevice: false,
   shareConfig: {
     maxTopicsPerVisitor: 5,
     maxTurnsPerTopic: 20,

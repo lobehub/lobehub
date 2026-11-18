@@ -77,6 +77,8 @@ describe('accountWindows', () => {
       state: 'blocked',
     });
     expect(windows[1]).toMatchObject({ blockedBy: undefined, state: 'idle' });
+    expect(isUsableAt(windows, NOW)).toBe(false);
+    expect(isUsableAt(windows, NOW + 2 * HOUR)).toBe(true);
   });
 
   it('blocks every window that starts before a used-up weekly limit resets', () => {
@@ -156,18 +158,7 @@ describe('accountWindows', () => {
   });
 });
 
-describe('isUsableAt / teamBuckets', () => {
-  it('counts an account as usable wherever a window holds it and is not blocked', () => {
-    const windows = accountWindows(
-      view({ session: { resetsAt: NOW + HOUR, usedPercent: 100 }, status: 'exhausted' }),
-      axis,
-      NOW,
-    );
-
-    expect(isUsableAt(windows, NOW)).toBe(false);
-    expect(isUsableAt(windows, NOW + 2 * HOUR)).toBe(true);
-  });
-
+describe('teamBuckets', () => {
   it('cuts the axis ahead of now into 5-hour buckets', () => {
     const buckets = teamBuckets(NOW, axis);
 

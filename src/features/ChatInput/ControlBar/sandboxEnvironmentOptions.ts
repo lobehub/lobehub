@@ -1,5 +1,7 @@
 import type { EnvironmentConfiguration } from '@lobechat/types';
 
+import type { SandboxSelection } from './useSandboxPlacement';
+
 /**
  * The environments a conversation may start from. A workspace-public agent runs
  * on its caller's session, so it applies published environments only — the
@@ -57,3 +59,14 @@ export const environmentChipState = ({
 
   return failed ? { kind: 'loadFailed' } : { kind: 'loading' };
 };
+
+/**
+ * Where a conversation works once a repository is picked: a fresh temporary
+ * sandbox the repository is cloned into. A repository is only cloned into an
+ * empty folder, so it never inherits the folder the conversation was on, and
+ * it is never checked out on the drive — the persistent sandbox is for keeping
+ * a folder of the drive, not a repository.
+ */
+export const repositorySelection = (environment: { id: string }): SandboxSelection => ({
+  environmentId: environment.id,
+});

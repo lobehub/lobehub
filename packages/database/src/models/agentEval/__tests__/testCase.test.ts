@@ -367,11 +367,6 @@ describe('AgentEvalTestCaseModel', () => {
       const results = await testCaseModel.findByDatasetId(datasetId);
 
       expect(results).toHaveLength(3);
-    });
-
-    it('should order by sortOrder', async () => {
-      const results = await testCaseModel.findByDatasetId(datasetId);
-
       expect(results[0].sortOrder).toBe(1);
       expect(results[1].sortOrder).toBe(2);
       expect(results[2].sortOrder).toBe(3);

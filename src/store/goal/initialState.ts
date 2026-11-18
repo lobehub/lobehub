@@ -39,6 +39,12 @@ export interface GoalState {
   goalListAgentFilter?: string;
   goalListByAgentId: Record<string, GoalListValue>;
   goalListFilter: GoalListFilter;
+  /**
+   * The goals page's search box, matched against the loaded rows' title and
+   * requirement. Kept in the store, like the tab, so returning from a goal
+   * keeps the search.
+   */
+  goalListKeyword: string;
   /** Local-first bookkeeping for `goalListByAgentId`. */
   goalListReplica: ReplicaState<GoalListValue>;
   goalListVisibleLimit: number;
@@ -73,6 +79,7 @@ export const initialState: GoalState = {
   goalGraphReplica: createReplicaState(),
   goalListByAgentId: {},
   goalListFilter: 'all',
+  goalListKeyword: '',
   goalListReplica: createReplicaState(),
   goalListVisibleLimit: 10,
   goalMetricSeriesById: {},

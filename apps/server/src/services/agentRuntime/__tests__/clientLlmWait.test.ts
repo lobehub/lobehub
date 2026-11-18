@@ -25,6 +25,7 @@ vi.mock('@/server/modules/AgentRuntime', () => ({
       hasQueuedMessages: vi.fn().mockResolvedValue(false),
       isInterrupted: vi.fn().mockResolvedValue(false),
       loadAgentState: vi.fn(),
+      loadAgentStatus: vi.fn().mockResolvedValue(null),
       markInterrupted: vi.fn().mockResolvedValue(undefined),
       refreshStepLock: vi.fn().mockResolvedValue(true),
       releaseStepLock: vi.fn().mockResolvedValue(undefined),

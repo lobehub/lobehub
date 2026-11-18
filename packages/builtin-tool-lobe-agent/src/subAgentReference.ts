@@ -51,3 +51,14 @@ export const buildBackgroundSubAgentReceipt = (subAgentId?: string): string => {
     'Started in the background. The result will be delivered to you as a new message when it finishes — do not wait or poll for it. Continue with other work, or end your turn and tell the user what is running.';
   return subAgentId ? appendSubAgentReference(receipt, subAgentId) : receipt;
 };
+
+/**
+ * Tool result of `callSubAgent({ subAgentId })` sent to a sub-agent that is
+ * still running: the instruction joins that run instead of starting a new one,
+ * so the answer comes the way the running call already reports it.
+ */
+export const buildSteeredSubAgentReceipt = (subAgentId: string): string =>
+  appendSubAgentReference(
+    'The sub-agent is still running, so this instruction was queued for it. It reads it at its next step and continues with it in mind; its result arrives the way its running call reports it — do not wait or poll for it here.',
+    subAgentId,
+  );

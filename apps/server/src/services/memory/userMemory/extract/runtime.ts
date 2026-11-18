@@ -1,3 +1,6 @@
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { isLobeHubModelAvailable } from '@lobechat/business-model-bank/model-config';
+import { resolveBusinessModelMapping } from '@lobechat/business-model-runtime';
 import type { ModelRuntimeHooks } from '@lobechat/model-runtime';
 import { ModelRuntime } from '@lobechat/model-runtime';
 import type { AiProviderRuntimeState, UserServiceModelConfig } from '@lobechat/types';
@@ -149,6 +152,34 @@ const debugRuntimeInit = (
     source: resolved.source,
   });
 };
+
+const MEMORY_MODEL_SETTINGS = [
+  ['memoryAnalysisAgentConfig', 'chat'],
+  ['userMemoryEmbedding', 'embedding'],
+  ['userMemoryPersonaWriter', 'chat'],
+] as const;
+
+/**
+ * Drops a user's memory model choice when it names a LobeHub model that is no longer served, so
+ * extraction falls back to the platform default instead of failing every run with
+ * `LobeHubModelDeprecated`. Choices on other providers are the user's to fix and stay as set.
+ */
+export async function withoutRetiredLobeHubMemoryModels(
+  systemAgent: Partial<UserServiceModelConfig> | undefined,
+  userEmail?: string | null,
+): Promise<Partial<UserServiceModelConfig> | undefined> {
+  if (!systemAgent) return systemAgent;
+  let result = systemAgent;
+  for (const [key, type] of MEMORY_MODEL_SETTINGS) {
+    const item = systemAgent[key];
+    if (item?.provider !== BRANDING_PROVIDER || !item.model) continue;
+    const { resolvedModelId } = await resolveBusinessModelMapping(item.provider, item.model);
+    if (await isLobeHubModelAvailable(resolvedModelId, type, { userEmail })) continue;
+    const { [key]: _retired, ...rest } = result;
+    result = rest;
+  }
+  return result;
+}
 
 export function resolveUserMemoryAgent(
   systemAgent: Partial<UserServiceModelConfig> | undefined,

@@ -10,6 +10,7 @@ import {
   ROLLOUT_MAX_CANARY_SIZE,
 } from '@lobechat/const/goal';
 import type { GoalGraphSnapshot, GoalTickResult } from '@lobechat/types';
+import { isBatchTemplate } from '@lobechat/utils/goalGraph';
 
 import { type ExpertiseCarrier, ExpertiseModel } from '@/database/models/expertise';
 import { GoalGraphModel } from '@/database/models/goalGraph';
@@ -278,7 +279,7 @@ export const restartRolloutLoop = async (
     // 1. A new recipe revision, or a forked new class (no `revises` chain).
     const template = await writer.createNode(goalId, {
       description: revisedOutline || baseOutline,
-      kind: 'finding',
+      kind: 'template',
       scopeId: batchId,
       title: GOAL_BATCH_TEMPLATE_TITLE,
     });
@@ -323,12 +324,7 @@ export const restartRolloutLoop = async (
           .map((edge) => edge.targetNodeId),
       );
       const earlier = graph.nodes
-        .filter(
-          (node) =>
-            node.kind === 'finding' &&
-            node.title === GOAL_BATCH_TEMPLATE_TITLE &&
-            inBatch.has(node.id),
-        )
+        .filter((node) => isBatchTemplate(node) && inBatch.has(node.id))
         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
         .map((node) => node.description?.trim() ?? '');
       planSkill = await inSavepoint('plan skill adoption', (db) =>

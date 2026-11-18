@@ -22,6 +22,7 @@ import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import { usePermission } from '@/hooks/usePermission';
 
 import { useCreateMenuItems } from '../../hooks';
 import Actions from './Actions';
@@ -38,22 +39,69 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
   const { isRevalidating } = useFetchAgentList();
   // Keep the label registry warm so the per-item "Labels" submenu opens populated.
   useFetchAgentLabels();
-  // In workspace mode the section pairs with the "Private" bucket, so the
-  // public/shared agents are labeled "Public" to make the contrast obvious.
-  // Personal mode has no such duality — keep the existing "Agents" label.
+  // One "Agents" section in both modes. In a workspace it lists shared and
+  // private rows together (private ones carry a lock icon).
   const activeWorkspaceId = useActiveWorkspaceId();
-  const titleKey = activeWorkspaceId ? 'navPanel.publicAgents' : 'navPanel.agent';
 
   const { openConfigGroupModal } = useAgentModal();
 
   // Create menu items
-  const { createTopLevelMenuItems, isLoading } = useCreateMenuItems();
+  const {
+    createAgentListMenuItem,
+    createAgentMenuItem,
+    createConnectAgentMenuItem,
+    createGroupChatMenuItem,
+    createMarketAgentMenuItem,
+    createTopLevelMenuItems,
+    isLoading,
+  } = useCreateMenuItems();
+  const { allowed: canCreatePublic } = usePermission('create_content');
 
-  const addMenuItems = useMemo(() => createTopLevelMenuItems(), [createTopLevelMenuItems]);
+  const addMenuItems = useMemo(() => {
+    if (!activeWorkspaceId) return createTopLevelMenuItems();
 
-  const handleOpenConfigGroupModal = useCallback(() => {
-    openConfigGroupModal();
-  }, [openConfigGroupModal]);
+    // Workspace: new agents start private (the safe default the former
+    // Private section used); a workspace agent is one explicit entry away.
+    const connectItem = createConnectAgentMenuItem({ visibility: 'private' });
+    const workspaceAgentItem = canCreatePublic
+      ? createAgentMenuItem({ visibility: 'public' })
+      : undefined;
+
+    return [
+      createAgentMenuItem({ visibility: 'private' }),
+      ...(workspaceAgentItem
+        ? [
+            {
+              ...workspaceAgentItem,
+              key: 'newWorkspaceAgent',
+              label: t('navPanel.createWorkspaceAgent'),
+            },
+          ]
+        : []),
+      createGroupChatMenuItem({ visibility: 'private' }),
+      ...(connectItem ? [{ type: 'divider' as const }, connectItem] : []),
+      { type: 'divider' as const },
+      createAgentListMenuItem(),
+      createMarketAgentMenuItem(),
+    ];
+  }, [
+    activeWorkspaceId,
+    canCreatePublic,
+    createAgentListMenuItem,
+    createAgentMenuItem,
+    createConnectAgentMenuItem,
+    createGroupChatMenuItem,
+    createMarketAgentMenuItem,
+    createTopLevelMenuItems,
+    t,
+  ]);
+
+  const handleOpenConfigGroupModal = useCallback(
+    (scope?: 'private' | 'public') => {
+      openConfigGroupModal(scope);
+    },
+    [openConfigGroupModal],
+  );
 
   const dropdownMenu = useAgentActionsDropdownMenu({
     openConfigGroupModal: handleOpenConfigGroupModal,
@@ -76,7 +124,7 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
           <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
             <Flexbox horizontal align="center" gap={4}>
               <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-                {t(titleKey)}
+                {t('navPanel.agent')}
               </Text>
               {isRevalidating && <Spin size="small" variant="network" />}
             </Flexbox>

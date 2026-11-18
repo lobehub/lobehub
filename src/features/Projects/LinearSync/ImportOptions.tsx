@@ -22,7 +22,9 @@ interface ImportOptionsProps {
   includeArchived: boolean;
   onIncludeArchivedChange: (checked: boolean) => void;
   onSyncCommentsChange: (checked: boolean) => void;
+  onSyncLabelsChange: (checked: boolean) => void;
   syncComments: boolean;
+  syncLabels: boolean;
 }
 
 interface OptionProps {
@@ -50,7 +52,14 @@ Option.displayName = 'LinearImportOption';
 
 /** What an import brings along besides the issues themselves. */
 const ImportOptions = memo<ImportOptionsProps>(
-  ({ includeArchived, onIncludeArchivedChange, onSyncCommentsChange, syncComments }) => {
+  ({
+    includeArchived,
+    onIncludeArchivedChange,
+    onSyncCommentsChange,
+    onSyncLabelsChange,
+    syncComments,
+    syncLabels,
+  }) => {
     const { t } = useTranslation('integration');
 
     return (
@@ -64,6 +73,12 @@ const ImportOptions = memo<ImportOptionsProps>(
             desc={t('linear.sync.options.syncCommentsDesc')}
             label={t('linear.sync.options.syncComments')}
             onChange={onSyncCommentsChange}
+          />
+          <Option
+            checked={syncLabels}
+            desc={t('linear.sync.options.syncLabelsDesc')}
+            label={t('linear.sync.options.syncLabels')}
+            onChange={onSyncLabelsChange}
           />
           <Option
             checked={includeArchived}

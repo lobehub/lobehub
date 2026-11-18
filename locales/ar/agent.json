@@ -359,8 +359,6 @@
   "channel.qq.webhookMigrationTitle": "النظر في الترقية إلى وضع WebSocket",
   "channel.quickSetup.connect.desc": "يحفظ ما قمت بملئه أعلاه ويجعل الروبوت متصلاً بالإنترنت. يمكن تغيير كل شيء آخر لاحقًا.",
   "channel.quickSetup.connect.title": "حفظ والاتصال",
-  "channel.quickSetup.discord.bot.desc": "في صفحة الروبوت، قم بإعادة تعيين الرمز ونسخه، ثم قم بتفعيل نية محتوى الرسائل.",
-  "channel.quickSetup.discord.bot.title": "احصل على رمز الروبوت واسمح بمحتوى الرسائل",
   "channel.quickSetup.discord.create.desc": "في بوابة المطورين، انقر على تطبيق جديد وقم بتسميته.",
   "channel.quickSetup.discord.create.title": "إنشاء تطبيق",
   "channel.quickSetup.discord.credentials.desc": "كلاهما موجود في المعلومات العامة.",

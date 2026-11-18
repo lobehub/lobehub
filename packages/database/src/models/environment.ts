@@ -129,6 +129,7 @@ export class EnvironmentModel {
         id: environments.id,
         name: environments.name,
         configuration: environments.configuration,
+        visibility: environments.visibility,
       })
       .from(environments)
       .where(and(buildWorkspaceWhere(this.scope(), environments), eq(environments.enabled, true)));
@@ -229,11 +230,15 @@ export class EnvironmentModel {
    * A new one is named after the repository; when that name is already taken by
    * another of the caller's environments, a numeric suffix keeps the
    * `(user, scope, name)` unique indexes satisfied.
+   *
+   * Asked for a published one — for a workspace-public agent, which applies
+   * nothing else — only a published environment is reused or made.
    */
   async ensureForRepository(input: {
     defaultBranch?: string;
     name: string;
     repositoryUrl: string;
+    visibility?: EnvironmentVisibility;
   }): Promise<EnvironmentItem> {
     const url = normalizeProjectRepository(input.repositoryUrl);
     const [existing] = await this.db
@@ -244,6 +249,7 @@ export class EnvironmentModel {
           this.ownership(),
           eq(environments.enabled, true),
           sql`${environments.configuration} -> 'sources' @> ${JSON.stringify([{ kind: 'git', url }])}::jsonb`,
+          input.visibility === 'public' ? eq(environments.visibility, 'public') : undefined,
         ),
       )
       .orderBy(asc(environments.createdAt))
@@ -258,6 +264,7 @@ export class EnvironmentModel {
     return this.create({
       configuration: { kind: 'code', sources: [{ kind: 'git', url, ...(ref ? { ref } : {}) }] },
       name,
+      visibility: input.visibility,
     });
   }
 

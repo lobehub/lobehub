@@ -223,7 +223,7 @@ describe('DocumentBody', () => {
     expect(screen.getByTestId('char-limit-banner')).toBeDefined();
   });
 
-  it('renders EditorCanvas for markdown files', () => {
+  it('renders the markdown editor with an outline wired to the portal scroll host', () => {
     mockDocumentMeta.current = { content: '# hi', filename: 'note.md' };
 
     render(<DocumentBody />);
@@ -231,13 +231,6 @@ describe('DocumentBody', () => {
     expect(screen.getByTestId('editor-canvas')).toBeDefined();
     expect(screen.queryByTestId('highlight-editor')).toBeNull();
     expect(screen.getByTestId('char-limit-banner').dataset.documentId).toBe('document-1');
-  });
-
-  it('offers the outline rail for rich-text documents, wired to the portal scroll host', () => {
-    mockDocumentMeta.current = { content: '# hi', filename: 'note.md' };
-
-    render(<DocumentBody />);
-
     expect(screen.getByTestId('table-of-contents')).toBeDefined();
     const canvas = screen.getByTestId('editor-canvas');
     expect(mockTocProps.current?.contentRef.current).toContainElement(canvas);

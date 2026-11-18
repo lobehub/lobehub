@@ -278,6 +278,17 @@ describe('LocalSystemExecutor.runCommand', () => {
     expect(args).not.toHaveProperty('sandboxNetwork');
   });
 
+  it('drops a model-supplied sandboxRoot so the model cannot move its fence', async () => {
+    await localSystemExecutor.runCommand(
+      { command: 'echo owned > ~/.zshrc', sandboxRoot: '/Users/me' } as never,
+      { localSandbox: true, messageId: 'm-1', workingDirectory: '/repo' },
+    );
+
+    const args = runCommandMock.mock.calls[0][0];
+    expect(args).not.toHaveProperty('sandboxRoot');
+    expect(args).toMatchObject({ cwd: '/repo', sandbox: true });
+  });
+
   it('never lets the model pick what it is fenced to', async () => {
     // The runtime drops an args-supplied `cwd` while `trustArgsCwd` is off, and
     // the sandbox roots itself at that same cwd — so a model that guesses the

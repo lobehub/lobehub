@@ -616,6 +616,7 @@ describe('spawnAgent', () => {
         'initialize',
         'session/new',
         'session/set_config_option',
+        'session/set_config_option',
         'session/prompt',
       ]);
       expect(
@@ -632,7 +633,7 @@ describe('spawnAgent', () => {
     }
   });
 
-  it('applies a permission mode through ACP session/set_config_option', async () => {
+  it('forces the Devin bypass session mode through ACP session/set_config_option', async () => {
     const fake = createFakeAcpProc({
       responseText: 'Devin response',
       sessionId: 'devin-session-1',
@@ -647,7 +648,6 @@ describe('spawnAgent', () => {
         extraArgs: ['--model', 'sonnet'],
         initialModel: 'sonnet',
         operationId: 'op-devin',
-        permissionMode: 'bypass',
         prompt: 'do a thing',
       });
       const events = [];

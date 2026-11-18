@@ -180,6 +180,7 @@ export class TaskListSliceActionImpl {
       get,
       merge: (incoming, _confirmed, query) => ({
         items: incoming.data,
+        ...(query.projectId && { projectId: query.projectId }),
         ...(query.statuses && { statuses: query.statuses }),
         total: incoming.total,
       }),
@@ -196,6 +197,7 @@ export class TaskListSliceActionImpl {
         ...(query.excludeStatuses && { excludeStatuses: query.excludeStatuses }),
         groupBy: query.groupBy,
         groups: incoming.data,
+        ...(query.projectId && { projectId: query.projectId }),
       }),
       set,
       stateKey: 'taskGroupListReplica',
@@ -232,7 +234,7 @@ export class TaskListSliceActionImpl {
         ? { groups: DEFAULT_KANBAN_GROUPS }
         : query.groupBy.startsWith('label:')
           ? { groupBy: 'label' as const, labelGroupId: query.groupBy.slice('label:'.length) }
-          : { groupBy: query.groupBy as 'assignee' | 'member' | 'priority' }),
+          : { groupBy: query.groupBy as 'assignee' | 'member' | 'priority' | 'project' }),
       includeArchived: query.includeArchived,
       projectId: query.projectId,
       scope: query.scope,

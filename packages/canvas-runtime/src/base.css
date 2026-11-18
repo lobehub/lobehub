@@ -17,7 +17,7 @@
 
     font-family: var(--lobe-font-family);
     font-size: var(--lobe-font-size);
-    -webkit-font-smoothing: antialiased;
+    -webkit-font-smoothing: subpixel-antialiased;
     line-height: var(--lobe-line-height);
     color: var(--lobe-color-text);
 

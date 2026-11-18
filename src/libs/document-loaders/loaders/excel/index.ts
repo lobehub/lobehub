@@ -1,3 +1,4 @@
+import { preflightXlsxZip } from '@lobechat/file-loaders/src/xlsxBudget';
 import type { CellValue } from 'exceljs';
 
 import type { DocumentChunk } from '../../types';
@@ -25,10 +26,15 @@ const cellToText = (value: CellValue): string => {
  * uploaded in.
  */
 export const ExcelLoader = async (fileBlob: Blob): Promise<DocumentChunk[]> => {
+  const data = await fileBlob.arrayBuffer();
+  // Structural budgets first (input size, entries, real inflated bytes): exceljs inflates the
+  // whole workbook into objects, so an archive over budget must never reach it.
+  await preflightXlsxZip(new Uint8Array(data));
+
   const { Workbook } = await import('exceljs');
 
   const workbook = new Workbook();
-  await workbook.xlsx.load(await fileBlob.arrayBuffer());
+  await workbook.xlsx.load(data);
 
   return workbook.worksheets.flatMap((sheet) => {
     const chunks: DocumentChunk[] = [];

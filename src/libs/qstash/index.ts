@@ -1,8 +1,11 @@
+import { isDesktop } from '@lobechat/const';
 import { recordUpstashWorkflowEvent } from '@lobechat/observability-otel/modules/upstash-workflow';
 import { errorNameFrom } from '@lobechat/utils';
 import { Client, type PublishRequest, type PublishResponse, Receiver } from '@upstash/qstash';
 import { Client as WorkflowClient, type TriggerOptions } from '@upstash/workflow';
 import debug from 'debug';
+
+import { verifyInternalCallback } from './internalSignature';
 
 const log = debug('lobe-server:qstash');
 
@@ -154,29 +157,35 @@ export const workflowClient = new OtelWorkflowClient({
 
 /**
  * Verify QStash signature using Receiver.
- * Returns true if signing keys are not configured (verification skipped) or signature is valid.
+ * Without QStash keys, only development, Electron or signed internal callbacks are allowed.
+ * With complete QStash keys, either a valid QStash signature or a valid internal callback
+ * signature is accepted, so the direct HTTP fallback after a publish failure still works.
  */
 export async function verifyQStashSignature(request: Request, rawBody: string): Promise<boolean> {
   const currentSigningKey = process.env.QSTASH_CURRENT_SIGNING_KEY;
   const nextSigningKey = process.env.QSTASH_NEXT_SIGNING_KEY;
 
   if (!currentSigningKey || !nextSigningKey) {
-    log('QStash signature verification disabled (no signing keys configured)');
-    return false;
+    // A partial QStash configuration must not enable a local authentication fallback.
+    if (currentSigningKey || nextSigningKey) return false;
+    if (process.env.NODE_ENV === 'development' || isDesktop) return true;
+    return verifyInternalCallback(request, rawBody);
   }
 
   const signature = request.headers.get('Upstash-Signature');
-  if (!signature) {
+  if (signature) {
+    const receiver = new Receiver({ currentSigningKey, nextSigningKey });
+
+    try {
+      if (await receiver.verify({ body: rawBody, signature })) return true;
+    } catch (error) {
+      log('QStash signature verification failed: %O', error);
+    }
+  } else {
     log('Missing Upstash-Signature header');
-    return false;
   }
 
-  const receiver = new Receiver({ currentSigningKey, nextSigningKey });
-
-  try {
-    return await receiver.verify({ body: rawBody, signature });
-  } catch (error) {
-    log('QStash signature verification failed: %O', error);
-    return false;
-  }
+  // QStash publish failures fall back to a direct HTTP callback, which is signed
+  // with the internal scheme. Either authentication method is sufficient.
+  return verifyInternalCallback(request, rawBody);
 }

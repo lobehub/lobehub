@@ -7,6 +7,7 @@ import type {
   LinearSyncResult,
   LinearSyncSkipReason,
   TaskItem,
+  TaskLabel,
 } from '@lobechat/types';
 import { isLinearNoProject } from '@lobechat/types';
 import debug from 'debug';
@@ -19,12 +20,14 @@ import {
   TaskExternalLinkModel,
   type TaskExternalLinkWithTask,
 } from '@/database/models/taskExternalLink';
+import { TaskLabelModel } from '@/database/models/taskLabel';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskService } from '../task';
 import { findTasksInOpenGoals } from '../task/archiveGuard';
 import { LinearApiError } from './client';
 import { linearCommentToContent } from './issueComments';
+import { linearIssueLabels, linearLabelKey, type LinearLabelSpec } from './issueLabels';
 import {
   getArchivedLinearIssuesByIds,
   getLinearIssuesByIds,
@@ -218,7 +221,11 @@ export class LinearIssueSyncService {
   async importIssues(
     accessToken: string,
     issueIds: string[],
-    options: { syncComments?: boolean; targetProjectId?: string | null } = {},
+    options: {
+      syncComments?: boolean;
+      syncLabels?: boolean;
+      targetProjectId?: string | null;
+    } = {},
   ): Promise<LinearSyncResult> {
     const issues = await getLinearIssuesByIds(accessToken, issueIds);
     const result = emptyResult();
@@ -240,6 +247,7 @@ export class LinearIssueSyncService {
       { createClosed: true, targetProjectId: options.targetProjectId },
       result,
     );
+    if (options.syncLabels) await this.syncLabels(issues, result);
     if (options.syncComments) {
       await this.syncComments(
         accessToken,
@@ -263,7 +271,8 @@ export class LinearIssueSyncService {
    * created; an unimported issue only marks the result `truncated`.
    *
    * With `syncComments`, the comments of every issue read are copied onto its
-   * task, so running again also fills in tasks imported without them.
+   * task, so running again also fills in tasks imported without them. With
+   * `syncLabels`, so are its labels.
    */
   async syncByFilter(
     accessToken: string,
@@ -272,6 +281,7 @@ export class LinearIssueSyncService {
       noCreate?: boolean;
       startAfter?: string;
       syncComments?: boolean;
+      syncLabels?: boolean;
       targetProjectId?: string | null;
     } = {},
   ): Promise<LinearFilterSyncResult> {
@@ -314,6 +324,7 @@ export class LinearIssueSyncService {
       },
       result,
     );
+    if (options.syncLabels) await this.syncLabels(issues, result);
     if (options.syncComments) {
       await this.syncComments(
         accessToken,
@@ -367,6 +378,16 @@ export class LinearIssueSyncService {
         await this.syncIssues(fetched, { closeOnly: true }, result);
         for (const issue of fetched) {
           if (CLOSED_STATE_TYPES.has(issue.state.type)) closing.push(issue.id);
+        }
+        if (options.syncLabels) {
+          // Only those being closed: an open issue the filter misses is left to
+          // the rule that lists it. Unlike comments, tasks already closed get no
+          // catch-up, which would mean reading their issues again on every run.
+          const closingIds = new Set(closing);
+          await this.syncLabels(
+            fetched.filter((issue) => closingIds.has(issue.id)),
+            result,
+          );
         }
       }
       // Issues archived since their task closed, which Linear also does on its
@@ -825,6 +846,134 @@ export class LinearIssueSyncService {
     });
   }
 
+  /**
+   * Bring these issues' labels onto their tasks, creating the labels not in the
+   * registry yet. Only what changed in Linear since the last sync is applied, so
+   * labels a person added or removed on the task stay that way, except that a
+   * grouped label Linear adds replaces its sibling, as attaching one always does.
+   * A label already in the registry is reused as it is, whatever its color or group.
+   * Only tasks the caller can see get labels. A failure skips the labels of the
+   * tasks it reaches, reported `labelsFailed` and retried by the next run, while
+   * the task writes of this run still count.
+   */
+  private async syncLabels(issues: LinearIssue[], result: LinearSyncResult): Promise<void> {
+    if (issues.length === 0) return;
+    const links = await this.visibleLinks(issues.map((issue) => issue.id));
+
+    const changes = issues.flatMap((issue) => {
+      const link = links.get(issue.id);
+      if (!link) return [];
+      const labels = linearIssueLabels(issue);
+      const { added, removed } = labelDelta(labels, link.metadata?.syncedLabels);
+      if (added.length === 0 && removed.length === 0) return [];
+      return [{ added, labels, link }];
+    });
+    if (changes.length === 0) return;
+
+    let registry: Map<string, TaskLabel>;
+    try {
+      registry = await this.ensureLabels(changes.flatMap((change) => change.added));
+    } catch (error) {
+      log('create labels failed: %O', error);
+      for (const { link } of changes) skip(result, link.externalIdentifier, 'labelsFailed');
+      return;
+    }
+
+    for (const { labels, link } of changes) {
+      try {
+        const changed = await this.applyLabelChange(link, labels, registry);
+        if (changed) result.labelsSynced = (result.labelsSynced ?? 0) + 1;
+      } catch (error) {
+        log('sync labels of %s failed: %O', link.externalIdentifier, error);
+        skip(result, link.externalIdentifier, 'labelsFailed');
+      }
+    }
+  }
+
+  /** The registry's label for each of these, created if missing, by {@link linearLabelKey}. */
+  private async ensureLabels(labels: LinearLabelSpec[]): Promise<Map<string, TaskLabel>> {
+    const model = new TaskLabelModel(this.db, this.userId, this.workspaceId);
+    const groups = new Map(
+      (
+        await model.findOrCreateMany(
+          labels.flatMap(({ group }) => (group ? [{ ...group, isGroup: true }] : [])),
+        )
+      )
+        // A label of that name that is not a group cannot hold others: stay ungrouped.
+        .filter((label) => label.isGroup)
+        .map((label) => [linearLabelKey(label.name), label.id]),
+    );
+
+    const rows = await model.findOrCreateMany(
+      labels.map(({ color, group, name }) => ({
+        color,
+        name,
+        parentId: group ? groups.get(linearLabelKey(group.name)) : undefined,
+      })),
+    );
+    return new Map(rows.map((label) => [linearLabelKey(label.name), label]));
+  }
+
+  /**
+   * Apply one issue's label change and record it in one transaction. The change
+   * is worked out again under the task's row lock: another run of a different rule
+   * may have applied labels since the batch was read, and a change based on that
+   * older read would leave its labels on the task, unknown to later syncs. Locks
+   * follow the order of every other writer: labels, then the task, then the link.
+   * False when no label of the task was affected, such as one the registry cannot
+   * attach.
+   */
+  private async applyLabelChange(
+    link: TaskExternalLinkWithTask,
+    labels: LinearLabelSpec[],
+    registry: Map<string, TaskLabel>,
+  ): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      const labelModel = new TaskLabelModel(tx, this.userId, this.workspaceId);
+      await labelModel.lockForShare(
+        labels.flatMap(({ key }) => {
+          const label = registry.get(key);
+          return label ? [label.id] : [];
+        }),
+      );
+      const tasks = new TaskModel(tx, this.userId, this.workspaceId);
+      if (!(await tasks.lockForUpdate(link.taskId))) return false;
+      const linkModel = new TaskExternalLinkModel(tx, this.userId, this.workspaceId);
+      const [current] = await linkModel.findByExternalIds('linear', [link.externalId]);
+      if (!current || current.taskId !== link.taskId) return false;
+
+      const { added, removed } = labelDelta(labels, current.metadata?.syncedLabels);
+      if (added.length === 0 && removed.length === 0) return false;
+
+      // A label group's name is not attachable, and the registry's own grouping can
+      // put two labels of one issue in the same group, which a task cannot carry. The
+      // others still count as synced: retrying them would swap siblings on every run.
+      const groupsTaken = new Set<string>();
+      const add: string[] = [];
+      for (const { key } of added) {
+        const label = registry.get(key);
+        // Only a run that raced this one asks for a label the batch did not create.
+        if (!label) throw new Error(`Label not resolved in this run: ${key}`);
+        if (label.isGroup) continue;
+        if (label.parentId) {
+          if (groupsTaken.has(label.parentId)) continue;
+          groupsTaken.add(label.parentId);
+        }
+        add.push(label.id);
+      }
+
+      const remove = (await labelModel.findByNames(removed))
+        .filter((label) => !label.isGroup)
+        .map((label) => label.id);
+      await labelModel.changeTaskLabels(link.taskId, { add, remove });
+      await linkModel.recordSyncedLabels(
+        link.id,
+        labels.map((label) => label.key),
+      );
+      return add.length > 0 || remove.length > 0;
+    });
+  }
+
   /** Links in this scope whose task the caller can still see. */
   private async visibleLinks(externalIds: string[]) {
     const links = await this.linkModel.findByExternalIds('linear', [...new Set(externalIds)]);
@@ -836,6 +985,16 @@ export class LinearIssueSyncService {
     );
   }
 }
+
+/** What changed in Linear since these labels were last applied to the task. */
+const labelDelta = (labels: LinearLabelSpec[], syncedLabels: string[] | undefined) => {
+  const synced = new Set(syncedLabels);
+  const current = new Set(labels.map((label) => label.key));
+  return {
+    added: labels.filter((label) => !synced.has(label.key)),
+    removed: [...synced].filter((key) => !current.has(key)),
+  };
+};
 
 const skip = (result: LinearSyncResult, identifier: string, reason: LinearSyncSkipReason) => {
   result.skippedCount = (result.skippedCount ?? 0) + 1;

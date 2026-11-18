@@ -696,6 +696,30 @@ describe('buildRunLifecycle.afterUserMessagePersisted — topic title (all runti
     }
   });
 
+  it('dev-slice title leaves inline image references out', async () => {
+    const previous = process.env.NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC;
+    process.env.NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC = '1';
+
+    try {
+      const { get, store } = makeStore();
+      const messages = [
+        { content: '[Image #1] [Image #1] dup test', id: 'm1', role: 'user' } as any,
+      ];
+
+      await lifecycle('client', get, 'top_level').afterUserMessagePersisted(
+        persistedEvent('client', 'top_level', { isCreateNewTopic: true, messages, topicId: 't1' }),
+      );
+
+      expect(store.internal_updateTopic).toHaveBeenCalledWith('t1', { title: 'dup test' });
+    } finally {
+      if (previous === undefined) {
+        delete process.env.NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC;
+      } else {
+        process.env.NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC = previous;
+      }
+    }
+  });
+
   it('loads the topic first when it is absent from the store (gateway fire-and-forget refreshTopic race)', async () => {
     const { get, store } = makeStore(); // topicMaps empty → getTopicById returns undefined
     const messages = [{ content: 'hi', id: 'm1', role: 'user' } as any];

@@ -13,7 +13,9 @@ import {
   summarizeCanvasStorage,
   useFetchCanvasStorage,
 } from '@/features/CanvasStorage/useCanvasStorage';
+import NavHeader from '@/features/NavHeader';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import { isMobileSurface } from '@/utils/mobileSurface';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
 import type { WorkGalleryKey } from './const';
@@ -27,11 +29,15 @@ const styles = createStaticStyles(({ css }) => ({
   agentFilter: css`
     flex: none;
 
-    padding-inline: 5px 10px;
+    padding-inline: 10px;
     border: 1px solid transparent;
     border-radius: 999px;
 
     color: ${cssVar.colorTextSecondary};
+  `,
+  // The avatar already carries visual weight on the leading side.
+  agentFilterWithAvatar: css`
+    padding-inline-start: 5px;
   `,
   agentFilterActive: css`
     border-color: ${cssVar.colorBorder};
@@ -149,9 +155,13 @@ const AgentFilter = memo<AgentFilterProps>(({ active, agentId, onSelect }) => {
 
   return (
     <Button
-      className={cx(styles.agentFilter, active && styles.agentFilterActive)}
       size={'small'}
       type={'text'}
+      className={cx(
+        styles.agentFilter,
+        styles.agentFilterWithAvatar,
+        active && styles.agentFilterActive,
+      )}
       icon={
         <AgentAvatar
           agentId={agentId}
@@ -330,42 +340,62 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
     );
   };
 
-  const typeTabs = (
-    <Flexbox className={styles.typeBar} gap={12}>
-      <WorksTypeTabs activeKey={galleryKey} />
-      {galleryKey === 'canvas' && <CanvasStorageSummary summary={canvasSummary} />}
-    </Flexbox>
-  );
+  // The type switch lives in the page header, right next to the panel toggle. A
+  // header that only hosted the toggle left a blank band above a floating row.
+  // Mobile keeps the switch on its own row: there the header is the back +
+  // drawer pair, which a five-item switch would crowd.
+  const mobile = isMobileSurface();
 
-  return isLoadingInitial && items.length === 0 ? (
+  const typeTabs = <WorksTypeTabs activeKey={galleryKey} />;
+
+  const typeBar =
+    mobile || galleryKey === 'canvas' ? (
+      <Flexbox className={styles.typeBar} gap={12}>
+        {mobile ? typeTabs : null}
+        {galleryKey === 'canvas' && <CanvasStorageSummary summary={canvasSummary} />}
+      </Flexbox>
+    ) : null;
+
+  const body =
+    isLoadingInitial && items.length === 0 ? (
+      <>
+        {typeBar}
+        <WorkGallerySkeleton />
+      </>
+    ) : (
+      <>
+        {typeBar}
+        {agentIds.length > 0 && (
+          <Flexbox horizontal align={'center'} className={styles.filterBar} gap={4}>
+            <Button
+              className={cx(styles.agentFilter, !activeAgentId && styles.agentFilterActive)}
+              size={'small'}
+              type={'text'}
+              onClick={() => setActiveAgentId(null)}
+            >
+              {t('work.agentFilter.all')}
+            </Button>
+            {agentIds.map((agentId) => (
+              <AgentFilter
+                active={activeAgentId === agentId}
+                agentId={agentId}
+                key={agentId}
+                onSelect={setActiveAgentId}
+              />
+            ))}
+          </Flexbox>
+        )}
+        <Flexbox className={styles.scroll}>{renderBody()}</Flexbox>
+      </>
+    );
+
+  return (
     <Flexbox className={styles.container}>
-      {typeTabs}
-      <WorkGallerySkeleton />
-    </Flexbox>
-  ) : (
-    <Flexbox className={styles.container}>
-      {typeTabs}
-      {agentIds.length > 0 && (
-        <Flexbox horizontal align={'center'} className={styles.filterBar} gap={4}>
-          <Button
-            className={cx(styles.agentFilter, !activeAgentId && styles.agentFilterActive)}
-            size={'small'}
-            type={'text'}
-            onClick={() => setActiveAgentId(null)}
-          >
-            {t('work.agentFilter.all')}
-          </Button>
-          {agentIds.map((agentId) => (
-            <AgentFilter
-              active={activeAgentId === agentId}
-              agentId={agentId}
-              key={agentId}
-              onSelect={setActiveAgentId}
-            />
-          ))}
-        </Flexbox>
-      )}
-      <Flexbox className={styles.scroll}>{renderBody()}</Flexbox>
+      <NavHeader
+        left={mobile ? undefined : typeTabs}
+        styles={mobile ? undefined : { left: { paddingInlineStart: 16 } }}
+      />
+      {body}
     </Flexbox>
   );
 });

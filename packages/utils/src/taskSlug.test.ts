@@ -2,11 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { TASK_SLUG_MAX_LENGTH, taskTitleSlug } from './taskSlug';
 
-const toGraphemes = (value: string) =>
-  [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(value)].map(
-    (entry) => entry.segment,
-  );
-
 describe('taskTitleSlug', () => {
   it('lowercases and joins words with a single dash', () => {
     expect(taskTitleSlug('Ship the Thing')).toBe('ship-the-thing');
@@ -47,7 +42,6 @@ describe('taskTitleSlug', () => {
     const slug = taskTitleSlug(`${'a'.repeat(TASK_SLUG_MAX_LENGTH)} tail`);
 
     expect(slug).toBe('a'.repeat(TASK_SLUG_MAX_LENGTH));
-    expect(slug.endsWith('-')).toBe(false);
   });
 
   it('truncates by code point so an astral character is never split', () => {
@@ -62,7 +56,6 @@ describe('taskTitleSlug', () => {
     // point would cut a cluster in half and strand a matra in the URL.
     const slug = taskTitleSlug('कि'.repeat(TASK_SLUG_MAX_LENGTH + 10));
 
-    expect(toGraphemes(slug)).toHaveLength(TASK_SLUG_MAX_LENGTH);
     expect(slug).toBe('कि'.repeat(TASK_SLUG_MAX_LENGTH));
   });
 

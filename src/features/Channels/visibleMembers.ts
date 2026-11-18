@@ -8,3 +8,11 @@ export const getVisibleStatusMembers = (
   members.filter(
     (member) => member.status === 'active' && (member.actorType === 'agent' || !!workspaceId),
   );
+
+/** People first, then Agents, each group keeping its join order. */
+export const groupMembersByActor = <T extends { member: Pick<ChannelPublicMember, 'actorType'> }>(
+  entries: T[],
+) => ({
+  agents: entries.filter((entry) => entry.member.actorType === 'agent'),
+  people: entries.filter((entry) => entry.member.actorType !== 'agent'),
+});

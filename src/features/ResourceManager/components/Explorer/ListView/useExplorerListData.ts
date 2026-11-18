@@ -26,7 +26,11 @@ export const useExplorerListData = ({
   isValidating: _isValidating,
   queryParams,
 }: UseExplorerListDataParams) => {
-  const [sorter, sortType] = useResourceManagerStore((s) => [s.sorter, s.sortType]);
+  const [libraryId, sorter, sortType] = useResourceManagerStore((s) => [
+    s.libraryId,
+    s.sorter,
+    s.sortType,
+  ]);
   const columnWidths = useGlobalStore((s) => ({
     ...DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
     ...(s.status.resourceManagerColumnWidths || INITIAL_STATUS.resourceManagerColumnWidths),
@@ -59,8 +63,8 @@ export const useExplorerListData = ({
   );
 
   const data = useMemo(
-    () => sortFileList(rawData, sorter, sortType) || [],
-    [rawData, sorter, sortType],
+    () => sortFileList(rawData, sorter, sortType, { groupFolders: Boolean(libraryId) }) || [],
+    [libraryId, rawData, sorter, sortType],
   );
 
   const showSkeleton = ((isLoading ?? false) && data.length === 0) || !!isNavigating;

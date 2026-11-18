@@ -1,4 +1,4 @@
-import type { ChannelDetail, ChannelListItem } from '@lobechat/types';
+import type { ChannelDetail, ChannelJoinableItem, ChannelListItem } from '@lobechat/types';
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
 
@@ -10,6 +10,8 @@ import type { ChannelOutbox } from './outbox';
 export interface ChannelState {
   detailMap: Record<string, ChannelDetail>;
   detailReplica: ReplicaState<ChannelDetail>;
+  joinableMap: Record<string, ChannelJoinableItem[]>;
+  joinableReplica: ReplicaState<ChannelJoinableItem[]>;
   listMap: Record<string, ChannelListItem[]>;
   listReplica: ReplicaState<ChannelListItem[]>;
   /** Messages sent from this tab, by conversation, until a loaded page holds them. */
@@ -19,6 +21,8 @@ export interface ChannelState {
 export const initialState: ChannelState = {
   detailMap: {},
   detailReplica: createReplicaState(),
+  joinableMap: {},
+  joinableReplica: createReplicaState(),
   listMap: {},
   listReplica: createReplicaState(),
   outbox: {},

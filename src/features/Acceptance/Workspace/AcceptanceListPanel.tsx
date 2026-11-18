@@ -330,6 +330,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       isLoadingMore,
       items: pagedItems,
       loadMore,
+      loadMoreError,
       ...pagedRest
     } = useAcceptanceListInfinite(searching ? null : filter, listQuery);
 
@@ -576,6 +577,13 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
               console.error('[acceptance:batchDelete]', part.reason);
               failedIds.push(...chunks[index]);
             });
+
+            // Every row that did not fail is gone server-side; drop it from the
+            // persisted lists too so a reload cannot repaint it.
+            const failed = new Set(failedIds);
+            useVerifyStore
+              .getState()
+              .removeAcceptancesFromLists(targets.filter((id) => !failed.has(id)));
 
             // The open acceptance just stopped existing — leave its dead route
             // rather than letting the detail pane render a 404.
@@ -895,6 +903,13 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                   <div ref={setSentinel} style={{ height: 1 }} />
                   {isLoadingMore && (
                     <SkeletonList rows={2} style={{ paddingBlock: 4, paddingInline: 0 }} />
+                  )}
+                  {Boolean(loadMoreError) && !isLoadingMore && (
+                    <Center paddingBlock={8}>
+                      <button {...stylex.props(styles.retryBtn)} type={'button'} onClick={loadMore}>
+                        {t('workspace.retry')}
+                      </button>
+                    </Center>
                   )}
                 </>
               )}

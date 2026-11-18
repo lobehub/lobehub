@@ -216,6 +216,68 @@ const createSession = (
 };
 
 describe('CodexThreadSession', () => {
+  describe('steer', () => {
+    const input = [{ text: 'also run the tests', text_elements: [], type: 'text' as const }];
+    const startTurn = async () => {
+      const harness = createClientHarness({ autoComplete: false });
+      const ctx = createSession(harness);
+      const running = ctx.run('op-1', 'Fix it');
+      await vi.waitFor(() =>
+        expect(harness.requests.some((r) => r.method === 'turn/start')).toBe(true),
+      );
+      const finish = async () => {
+        await harness.notify('turn/completed', {
+          threadId: 'thread-1',
+          turn: turn('turn-1', 'completed'),
+        });
+        await running;
+        ctx.session.close();
+      };
+      return { ...ctx, finish, harness };
+    };
+
+    it('adds the message to the running turn it started', async () => {
+      const { finish, harness, session } = await startTurn();
+
+      await expect(session.steer(input, 'steer-1')).resolves.toBe('accepted');
+
+      expect(harness.requests.at(-1)).toEqual({
+        method: 'turn/steer',
+        params: {
+          clientUserMessageId: 'steer-1',
+          expectedTurnId: 'turn-1',
+          input,
+          threadId: 'thread-1',
+        },
+      });
+      await finish();
+    });
+
+    it('leaves the message to a turn of its own when the turn refuses it', async () => {
+      const { finish, harness, session } = await startTurn();
+      const request = harness.client.request.getMockImplementation();
+      harness.client.request.mockImplementation(async (method: string, params: unknown) => {
+        if (method === 'turn/steer') {
+          throw new CodexAppServerRpcError('not steerable', -32600, {
+            codexErrorInfo: { activeTurnNotSteerable: { turnKind: 'review' } },
+          });
+        }
+        return request!(method, params);
+      });
+
+      await expect(session.steer(input, 'steer-1')).resolves.toBe('rejected');
+      await finish();
+    });
+
+    it('refuses with no turn running', async () => {
+      const harness = createClientHarness();
+      const { session } = createSession(harness);
+
+      await expect(session.steer(input, 'steer-1')).resolves.toBe('rejected');
+      expect(harness.requests).toEqual([]);
+    });
+  });
+
   describe('native user input', () => {
     const contexts: Array<{ bridge: AskUserBridge; session: CodexThreadSession }> = [];
     afterEach(() => {

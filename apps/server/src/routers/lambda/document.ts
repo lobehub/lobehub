@@ -26,6 +26,7 @@ import {
   snapshotPageThroughRoom,
   updateDocumentThroughRoom,
 } from '@/server/services/pageCollab/bodyWriter';
+import { dropPageRooms } from '@/server/services/pageCollab/notify';
 import {
   assertCanPerformResourceAction,
   buildResourcePermissionState,
@@ -758,6 +759,7 @@ export const documentRouter = router({
           result.documentIds.map((id) => sourcePermissionModel.removeAll('document', id)),
         );
       }
+      if (ctx.workspaceId && !input.targetWorkspaceId) dropPageRooms(result.documentIds);
       if (input.targetWorkspaceId && input.targetVisibility === 'public') {
         const targetPermissionModel = new ResourcePermissionModel(
           ctx.serverDB,

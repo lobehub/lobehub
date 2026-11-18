@@ -3,10 +3,12 @@
 import type { ComposioAppType, LobehubSkillProviderType } from '@lobechat/const';
 import { getConnectorCatalog } from '@lobechat/const';
 import type { BuiltinSkillManifest, LobeToolMeta } from '@lobechat/types';
+import { cx } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { SkillListVariantProvider } from '@/features/Settings/skill/features/SkillListRow';
 import {
   createBuiltinAgentSkillDetailModal,
   createBuiltinSkillDetailModal,
@@ -121,8 +123,9 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
   if (filteredItems.length === 0) return <Empty search={hasSearchKeywords} />;
 
   return (
-    <>
-      <div className={gridStyles.grid}>
+    // Same Codex-style rows as the Connectors page: borderless, icon first, `+` / `⋯` last.
+    <SkillListVariantProvider value={'page'}>
+      <div className={cx(gridStyles.grid, gridStyles.rows)}>
         {filteredItems.map((item) => {
           if (item.type === 'builtinAgentSkill') {
             const localizedTitle = t(`tools.builtins.${item.skill.identifier}.title`, {
@@ -203,7 +206,7 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
         })}
       </div>
       <WantMoreSkills />
-    </>
+    </SkillListVariantProvider>
   );
 });
 

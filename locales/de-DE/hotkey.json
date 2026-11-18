@@ -1,6 +1,4 @@
 {
-  "addUserMessage.desc": "Füge die aktuelle Eingabe als Benutzernachricht hinzu, ohne die Generierung auszulösen",
-  "addUserMessage.title": "Benutzernachricht hinzufügen",
   "commandPalette.desc": "Öffne die globale Befehlspalette für schnellen Zugriff auf Funktionen",
   "commandPalette.title": "Befehlspalette",
   "deleteAndRegenerateMessage.desc": "Lösche die letzte Nachricht und generiere sie neu",

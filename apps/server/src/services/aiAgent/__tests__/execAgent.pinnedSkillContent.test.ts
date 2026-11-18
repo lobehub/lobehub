@@ -1,3 +1,4 @@
+import type { AgentPluginEntry } from '@lobechat/types';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -241,7 +242,7 @@ const toolsEngineConfigArg = () =>
 const skillById = (identifier: string) =>
   operationSkillSetArg()?.skills.find((s) => s.identifier === identifier);
 
-const createAgentConfig = (plugins: string[]) => ({
+const createAgentConfig = (plugins: AgentPluginEntry[]) => ({
   chatConfig: {},
   id: 'agent-1',
   model: 'gpt-4',
@@ -306,15 +307,27 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
   });
 
   it('injects a pinned DB skill body into the operation skill set, leaving auto skills content-less', async () => {
-    // db-skill-pinned is pinned; db-skill-auto is absent from plugins → auto.
-    mockGetAgentConfig.mockResolvedValue(createAgentConfig(['db-skill-pinned']));
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig(['db-skill-pinned', { identifier: 'db-skill-auto', mode: 'auto' }]),
+    );
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
     expect(operationSkillSetArg()?.enabledPluginIds).toContain('db-skill-pinned');
     expect(skillById('db-skill-pinned')?.content).toBe('PINNED SKILL BODY');
     // The auto skill is still listed (activatable) but carries no body.
+    expect(skillById('db-skill-auto')).toBeDefined();
     expect(skillById('db-skill-auto')?.content).toBeUndefined();
+  });
+
+  it('leaves a library skill the agent never turned on out of the operation skill set', async () => {
+    // db-skill-auto is installed in the library but absent from this agent's plugins.
+    mockGetAgentConfig.mockResolvedValue(createAgentConfig(['db-skill-pinned']));
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
+
+    expect(skillById('db-skill-pinned')).toBeDefined();
+    expect(skillById('db-skill-auto')).toBeUndefined();
   });
 
   it('fetches bodies only for the pinned subset to keep the op-param payload bounded', async () => {
@@ -394,7 +407,9 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
 
   it('does not eager-inject an auto skill whose identifier collides with a turn-scoped tool id', async () => {
     // Nothing pinned — db-skill-auto is in auto mode.
-    mockGetAgentConfig.mockResolvedValue(createAgentConfig([]));
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig([{ identifier: 'db-skill-auto', mode: 'auto' }]),
+    );
 
     // db-skill-auto lands in the expanded operation tool list (`agentPlugins`)
     // via a turn-scoped @-mention pick, but it is NOT pinned on the agent.
@@ -406,6 +421,7 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
 
     // Eager injection must gate on the pinned set, not the expanded tool list,
     // so the colliding auto skill stays content-less (lazily activatable).
+    expect(skillById('db-skill-auto')).toBeDefined();
     expect(skillById('db-skill-auto')?.content).toBeUndefined();
     expect(mockSkillFindByIds).toHaveBeenCalledWith([]);
   });

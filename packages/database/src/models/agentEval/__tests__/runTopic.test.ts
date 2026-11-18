@@ -223,6 +223,8 @@ describe('AgentEvalRunTopicModel', () => {
       expect((results[0].topic as any).title).toBe('Topic 1');
       expect(results[0].testCase).toBeDefined();
       expect((results[0].testCase as any).id).toBe(testCaseId1);
+      expect(results[0].topicId).toBe(topicId1);
+      expect(results[1].topicId).toBe(topicId2);
     });
 
     it('should return status field after update', async () => {
@@ -233,15 +235,6 @@ describe('AgentEvalRunTopicModel', () => {
 
       expect(results[0].status).toBe('passed');
       expect(results[1].status).toBe('error');
-    });
-
-    it('should order by createdAt ascending', async () => {
-      const results = await runTopicModel.findByRunId(runId);
-
-      expect(results.length).toBe(2);
-      // First created should be first
-      expect(results[0].topicId).toBe(topicId1);
-      expect(results[1].topicId).toBe(topicId2);
     });
 
     it('should return empty array when no topics exist', async () => {

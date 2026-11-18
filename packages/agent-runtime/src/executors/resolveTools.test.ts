@@ -229,6 +229,71 @@ describe('resolveTools executors', () => {
     expect(result.newState.unresolvedToolFeedbackRounds).toBe(2);
   });
 
+  describe('stop note on the parent reply', () => {
+    const stopInstruction: Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> = {
+      payload: {
+        parentMessageId: 'assistant-msg-1',
+        parentNote: 'Stopped after 3 consecutive replies called tools that do not exist.',
+        toolsCalling: [createToolCall()],
+        unresolvedToolNames: true,
+      },
+      type: 'resolve_blocked_tools',
+    };
+
+    it('appends the note to the text the reply already has', async () => {
+      host.transports.messages.findById = vi
+        .fn()
+        .mockResolvedValue({ content: 'Running the script now.', id: 'assistant-msg-1' });
+
+      await resolveBlockedTools(host)(stopInstruction, createState());
+
+      expect(host.transports.messages.update).toHaveBeenCalledWith('assistant-msg-1', {
+        content:
+          'Running the script now.\n\nStopped after 3 consecutive replies called tools that do not exist.',
+        tools: [createToolCall()],
+      });
+    });
+
+    // The completion lifecycle reads the final assistant text from the runtime
+    // state and only recovers the row when that text is empty, so a reply that
+    // already carried text must carry the note in state as well.
+    it('mirrors the note into the runtime state reply', async () => {
+      host.transports.messages.findById = vi
+        .fn()
+        .mockResolvedValue({ content: 'Running the script now.', id: 'assistant-msg-1' });
+
+      const result = await resolveBlockedTools(host)(
+        stopInstruction,
+        createState({
+          messages: [
+            { content: 'Running the script now.', id: 'assistant-msg-1', role: 'assistant' },
+          ],
+        }),
+      );
+
+      const reply = result.newState.messages.find((message) => message.id === 'assistant-msg-1');
+      expect(reply?.content).toBe(
+        'Running the script now.\n\nStopped after 3 consecutive replies called tools that do not exist.',
+      );
+    });
+
+    // Image replies store serialized content parts; overwriting them with
+    // text would drop the images.
+    it('leaves a multimodal reply content alone', async () => {
+      host.transports.messages.findById = vi.fn().mockResolvedValue({
+        content: '[{"type":"image"}]',
+        id: 'assistant-msg-1',
+        metadata: { isMultimodal: true },
+      });
+
+      await resolveBlockedTools(host)(stopInstruction, createState());
+
+      expect(host.transports.messages.update).toHaveBeenCalledWith('assistant-msg-1', {
+        tools: [createToolCall()],
+      });
+    });
+  });
+
   it('leaves the parent untouched for ordinary blocked tools', async () => {
     const instruction: Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> =
       createBlockedInstruction(createToolCall());

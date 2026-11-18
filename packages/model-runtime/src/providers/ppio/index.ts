@@ -1,7 +1,7 @@
 import type { ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 import type { PPIOModelCard } from './type';
 
 export const LobePPIOAI = createOpenAICompatibleRuntime({

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { GeneralChatAgent, GraphAgent } from '@lobechat/agent-runtime';
 import type { AgentGraph } from '@lobechat/types';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   type AgentInterventionContinuationProvenance,
@@ -10,6 +10,7 @@ import {
 import { createRuntimeExecutors } from '@/server/modules/AgentRuntime/RuntimeExecutors';
 
 import { AgentRuntimeService } from '../AgentRuntimeService';
+import { stubRunningDurableOperation } from '../AgentRuntimeService/__tests__/testUtils';
 import { CriticalAgentInterventionPersistenceError } from '../CompletionLifecycle';
 import { hookDispatcher } from '../hooks';
 
@@ -41,30 +42,9 @@ vi.mock('@/database/models/message', () => ({
     return { query: vi.fn().mockResolvedValue([]) };
   }),
 }));
-vi.mock('@/server/modules/AgentRuntime', () => ({
-  AgentRuntimeCoordinator: vi.fn().mockImplementation(function () {
-    return {
-      loadAgentState: vi.fn(),
-      saveAgentState: vi.fn(),
-      saveStepResult: vi.fn(),
-      createAgentOperation: vi.fn(),
-      getOperationMetadata: vi.fn(),
-      isInterrupted: vi.fn().mockResolvedValue(false),
-      hasQueuedMessages: vi.fn().mockResolvedValue(false),
-      tryClaimStep: vi.fn().mockResolvedValue(true),
-      releaseStepLock: vi.fn().mockResolvedValue(undefined),
-      refreshStepLock: vi.fn().mockResolvedValue(true),
-    };
-  }),
-  createStreamEventManager: vi.fn(function () {
-    return {
-      publishStreamEvent: vi.fn(),
-      publishAgentRuntimeEnd: vi.fn(),
-      publishAgentRuntimeInit: vi.fn(),
-      cleanupOperation: vi.fn(),
-    };
-  }),
-}));
+vi.mock('@/server/modules/AgentRuntime', () =>
+  import('./testUtils').then((m) => m.executeStepAgentRuntimeModule()),
+);
 vi.mock('@/server/modules/AgentRuntime/RuntimeExecutors', () => ({
   createRuntimeExecutors: vi.fn(function () {
     return {};
@@ -97,6 +77,10 @@ vi.mock('@/server/services/toolExecution/builtin', () => ({
 vi.mock('@lobechat/builtin-tools/dynamicInterventionAudits', () => ({
   dynamicInterventionAudits: [],
 }));
+
+beforeEach(() => {
+  stubRunningDurableOperation();
+});
 
 describe('AgentRuntimeService intervention continuation dispatch recovery', () => {
   const operationId = 'op-intervention-recovery';

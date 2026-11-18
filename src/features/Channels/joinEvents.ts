@@ -1,4 +1,4 @@
-import type { ChannelPublicMember, ChannelPublicMessage } from '@lobechat/types';
+import type { ChannelListItem, ChannelPublicMember, ChannelPublicMessage } from '@lobechat/types';
 
 /** Members added by one action land within this window and read as one line. */
 const BATCH_MS = 5000;
@@ -8,7 +8,8 @@ export interface ChannelJoinEvent {
   id: string;
   /**
    * Only owners and admins add members. With no admin besides the owner, the owner added
-   * everyone else; otherwise the adder is unknown and the line says who joined.
+   * everyone else; otherwise the adder is unknown and the line says who joined. A Channel people
+   * can join on their own (see {@link isSelfJoinable}) never names an inviter.
    */
   inviter?: ChannelPublicMember;
   members: ChannelPublicMember[];
@@ -16,9 +17,18 @@ export interface ChannelJoinEvent {
 
 const time = (value: Date | string) => new Date(value).getTime();
 
-export const channelJoinEvents = (members: ChannelPublicMember[]): ChannelJoinEvent[] => {
+/** A workspace project's Channels and public Channels take members who join by themselves. */
+export const isSelfJoinable = (
+  channel: Pick<ChannelListItem, 'projectId' | 'visibility' | 'workspaceId'>,
+) => !!channel.workspaceId && (!!channel.projectId || channel.visibility === 'public');
+
+export const channelJoinEvents = (
+  members: ChannelPublicMember[],
+  { selfJoinable = false }: { selfJoinable?: boolean } = {},
+): ChannelJoinEvent[] => {
   const owner = members.find((member) => member.role === 'owner');
-  const inviter = members.some((member) => member.role === 'admin') ? undefined : owner;
+  const inviter =
+    selfJoinable || members.some((member) => member.role === 'admin') ? undefined : owner;
   const joined = members
     .filter((member) => member !== owner)
     .sort((a, b) => time(a.joinedAt) - time(b.joinedAt));

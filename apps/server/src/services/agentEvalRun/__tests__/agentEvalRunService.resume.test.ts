@@ -67,6 +67,19 @@ beforeEach(async () => {
   vi.mocked(AgentEvalRunWorkflow.triggerResumeThreadTrajectory).mockReset();
 });
 
+const resumedTrajectoryInput = (
+  run: { id: string },
+  testCase: { id: string },
+  topic: { id: string },
+): Parameters<AgentEvalRunService['executeResumedTrajectory']>[0] => ({
+  appContext: { topicId: topic.id },
+  parentMessageId: 'parent-message-id',
+  runId: run.id,
+  testCaseId: testCase.id,
+  topicId: topic.id,
+  userId,
+});
+
 describe('AgentEvalRunService', () => {
   describe('canResumeTrajectory', () => {
     it.each(['running', 'failed', 'aborted'] as const)(
@@ -632,14 +645,9 @@ describe('AgentEvalRunService', () => {
       mockExecAgent.mockResolvedValue({ operationId: 'op-resume-1' });
 
       const service = new AgentEvalRunService(serverDB, userId);
-      const result = await service.executeResumedTrajectory({
-        appContext: { topicId: topic.id },
-        parentMessageId: 'parent-message-id',
-        runId: run.id,
-        testCaseId: testCase.id,
-        topicId: topic.id,
-        userId,
-      });
+      const result = await service.executeResumedTrajectory(
+        resumedTrajectoryInput(run, testCase, topic),
+      );
 
       expect(result).toEqual({ status: 'started', topicId: topic.id });
       expect(mockExecAgent).toHaveBeenCalledWith(
@@ -695,14 +703,9 @@ describe('AgentEvalRunService', () => {
         return { operationId: 'op-resume-2' };
       });
 
-      await new AgentEvalRunService(serverDB, userId).executeResumedTrajectory({
-        appContext: { topicId: topic.id },
-        parentMessageId: 'parent-message-id',
-        runId: run.id,
-        testCaseId: testCase.id,
-        topicId: topic.id,
-        userId,
-      });
+      await new AgentEvalRunService(serverDB, userId).executeResumedTrajectory(
+        resumedTrajectoryInput(run, testCase, topic),
+      );
 
       // The operation is seeded with the previous total, so the completion
       // event is already cumulative and must not have `prevLlmCalls` added again.
@@ -752,14 +755,9 @@ describe('AgentEvalRunService', () => {
 
       await new AgentEvalRunModel(serverDB, userId).update(run.id, { status: 'failed' });
 
-      const result = await new AgentEvalRunService(serverDB, userId).executeResumedTrajectory({
-        appContext: { topicId: topic.id },
-        parentMessageId: 'parent-message-id',
-        runId: run.id,
-        testCaseId: testCase.id,
-        topicId: topic.id,
-        userId,
-      });
+      const result = await new AgentEvalRunService(serverDB, userId).executeResumedTrajectory(
+        resumedTrajectoryInput(run, testCase, topic),
+      );
 
       expect(result).toEqual({
         reason: 'Trajectory is not resumable',

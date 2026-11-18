@@ -2,13 +2,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import { ProjectRepository } from '../../repositories/project';
-import { environments, projectEnvironments, users } from '../../schemas';
+import { environments, projectEnvironments, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { EnvironmentModel } from '../environment';
 import type { CreateProjectInput } from '../project';
 import { ProjectModel } from '../project';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'project-repository-user';
+const workspaceId = 'project-repository-workspace';
 let projectIdentifierSequence = 0;
 
 // Creating a project spans the project and the environment aggregates, so the
@@ -32,6 +34,7 @@ describe('a project created from a GitHub repository', () => {
   afterEach(async () => {
     await serverDB.delete(projectEnvironments);
     await serverDB.delete(environments);
+    await serverDB.delete(workspaces);
     await serverDB.delete(users);
   });
 
@@ -63,6 +66,41 @@ describe('a project created from a GitHub repository', () => {
     const [first] = await model.listEnvironments(project.id);
     expect(await model.listEnvironments(second.id)).toEqual([
       expect.objectContaining({ id: first.id }),
+    ]);
+  });
+
+  it('publishes the repository of a shared workspace project instead of reusing a private one', async () => {
+    await serverDB.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Repository Workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    });
+    const repository = { name: 'lobehub/lobehub', url: 'https://github.com/lobehub/lobehub' };
+    // The creator already checks the repository out privately.
+    const own = await new EnvironmentModel(serverDB, userId, workspaceId).ensureForRepository({
+      name: repository.name,
+      repositoryUrl: repository.url,
+    });
+    const workspaceRepo = new ProjectRepository(serverDB, userId, workspaceId);
+    const workspaceModel = new ProjectModel(serverDB, userId, workspaceId);
+
+    const shared = await createProject(workspaceRepo, {
+      name: 'Shared',
+      repository,
+      visibility: 'public',
+    });
+    const privateProject = await createProject(workspaceRepo, {
+      name: 'Private',
+      repository,
+      visibility: 'private',
+    });
+
+    const [sharedEnvironment] = await workspaceModel.listEnvironments(shared.id);
+    expect(sharedEnvironment).toEqual(expect.objectContaining({ visibility: 'public' }));
+    expect(sharedEnvironment.id).not.toBe(own.id);
+    expect(await workspaceModel.listEnvironments(privateProject.id)).toEqual([
+      expect.objectContaining({ id: own.id, visibility: 'private' }),
     ]);
   });
 
