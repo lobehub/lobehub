@@ -191,11 +191,14 @@ const assertRedirectUris = (uris: string[], field: string) => {
 
   for (const uri of uris) {
     const issue = validateRedirectUri(uri);
-    if (issue) {
-      const Err =
-        field === 'redirect_uris' ? errors.InvalidRedirectUri : errors.InvalidClientMetadata;
-      throw new Err(`${field} entry is not allowed (${issue}): ${uri}`);
-    }
+    if (!issue) continue;
+
+    const description = `${field} entry is not allowed (${issue}): ${uri}`;
+    if (field !== 'redirect_uris') throw new errors.InvalidClientMetadata(description);
+
+    // InvalidRedirectUri carries a fixed description written for the
+    // authorization endpoint; a registrant needs to know which entry and why.
+    throw Object.assign(new errors.InvalidRedirectUri(), { error_description: description });
   }
 };
 

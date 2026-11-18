@@ -175,6 +175,7 @@ describe('client_credentials tokens', () => {
 
     const res = await request('/agents', { token: 'machine', workspace: OTHER_WORKSPACE });
     expect(res.status).toBe(403);
+    expect(await res.text()).toContain('Workspace OAuth app cannot access a different workspace');
   });
 
   it('is narrowed to nothing when it carries no scope', async () => {

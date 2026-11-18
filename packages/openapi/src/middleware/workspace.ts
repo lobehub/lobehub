@@ -26,10 +26,12 @@ const resolveWorkspaceId = (c: Context): string | undefined => {
 
   const apiKeyWorkspaceId = c.get('apiKeyWorkspaceId') as string | null | undefined;
 
+  const credential = c.get('authType') === 'apikey' ? 'API Key' : 'OAuth app';
+
   if (!apiKeyWorkspaceId) {
     if (requestedWorkspaceId) {
       throw new HTTPException(403, {
-        message: 'Personal API Key cannot access workspace data',
+        message: `Personal ${credential} cannot access workspace data`,
       });
     }
 
@@ -38,7 +40,7 @@ const resolveWorkspaceId = (c: Context): string | undefined => {
 
   if (requestedWorkspaceId && requestedWorkspaceId !== apiKeyWorkspaceId) {
     throw new HTTPException(403, {
-      message: 'Workspace API Key cannot access a different workspace',
+      message: `Workspace ${credential} cannot access a different workspace`,
     });
   }
 

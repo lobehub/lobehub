@@ -227,6 +227,23 @@ describe('dynamic client registration', () => {
     expect((await register(machineClient, token)).status).toBe(201);
   });
 
+  it('names the rejected redirect and the reason', async () => {
+    const response = await register(
+      {
+        ...machineClient,
+        grant_types: ['authorization_code'],
+        redirect_uris: ['http://x.example/cb'],
+        response_types: ['code'],
+      },
+      await ownerToken(),
+    );
+
+    expect(await response.json()).toEqual({
+      error: 'invalid_redirect_uri',
+      error_description: 'redirect_uris entry is not allowed (insecure): http://x.example/cb',
+    });
+  });
+
   it.each([
     [
       'a plain-http redirect off loopback',
