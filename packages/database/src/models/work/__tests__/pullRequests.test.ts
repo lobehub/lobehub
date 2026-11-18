@@ -283,3 +283,30 @@ describe('WorkModel.listTopicPullRequests', () => {
     });
   });
 });
+
+describe('WorkModel.listTopicPullRequests with a work that lost its resource id', () => {
+  it('skips a row whose pull-request identifier is gone', async () => {
+    await serverDB.insert(works).values({
+      id: 'work-null-resource',
+      resourceId: null,
+      resourceType: 'github_pull_request',
+      toolIdentifier: 'github',
+      toolName: 'create_pull_request',
+      type: 'external',
+      userId,
+      visibility: 'private',
+    });
+    await serverDB.insert(workVersions).values({
+      changeType: 'created',
+      toolIdentifier: 'claude-code',
+      toolName: 'Bash',
+      topicId,
+      version: 1,
+      workId: 'work-null-resource',
+    });
+
+    const rows = await new WorkModel(serverDB, userId).listTopicPullRequests(topicId);
+
+    expect(rows.map((row) => row.workId)).not.toContain('work-null-resource');
+  });
+});
