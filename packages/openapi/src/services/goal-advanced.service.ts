@@ -31,13 +31,34 @@ import { GoalRestService } from './goal.service';
  * procedures own the creator-or-owner rule on destructive edits, the draft-only
  * edge removal, the ended-goal guard on decisions and the follow-up advance.
  */
+/** The context `goal` procedures receive; the workspace role rides along on it. */
+type GoalCallerContext = Parameters<typeof goalRouter.createCaller>[0];
+
 export class GoalAdvancedRestService extends GoalRestService {
-  constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
+  /**
+   * The membership role the REST workspace middleware already resolved. The
+   * `goal` procedures decide whether a caller may touch a goal another member
+   * created by reading `ctx.workspaceRole` (`assertWorkspaceRowManageable`), so
+   * dropping it here would 403 a workspace owner on their own workspace's goals.
+   */
+  private readonly workspaceRole?: string;
+
+  constructor(
+    db: LobeChatDatabase,
+    userId: string | null,
+    workspaceId?: string,
+    workspaceRole?: string,
+  ) {
     super(db, userId, workspaceId);
+    this.workspaceRole = workspaceRole;
   }
 
   private get goals() {
-    return goalRouter.createCaller({ userId: this.userId, workspaceId: this.workspaceId });
+    return goalRouter.createCaller({
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+      workspaceRole: this.workspaceRole,
+    } as GoalCallerContext);
   }
 
   private scheduleAdvance(goalId: string, trigger: 'observe') {

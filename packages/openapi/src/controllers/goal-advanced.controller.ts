@@ -31,6 +31,7 @@ export class GoalAdvancedController extends BaseController {
       await this.getDatabase(),
       this.getUserId(c),
       this.getWorkspaceId(c),
+      c.get('workspaceRole'),
     );
   }
 
