@@ -36,6 +36,7 @@ import {
   getOpenPlatformFlags,
   openPlatformClientMetadata,
   openPlatformScopes,
+  stripOpenPlatformMetadata,
 } from './openPlatform';
 
 const logProvider = debug('lobe-oidc:provider');
@@ -402,6 +403,8 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
 
   const provider = new Provider(baseUrl, configuration);
   provider.proxy = true;
+
+  provider.use(stripOpenPlatformMetadata as Parameters<typeof provider.use>[0]);
 
   provider.on('server_error', (ctx, err) => {
     logProvider('OIDC Provider Server Error: %O', err); // Use logProvider

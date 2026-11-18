@@ -23,7 +23,11 @@ import {
   isAcceptanceReviewClient,
   isAcceptanceReviewIssued,
 } from './acceptanceReview';
-import { CLIENT_CREDENTIALS_OWNER_CLAIM, CLIENT_CREDENTIALS_WORKSPACE_CLAIM } from './openPlatform';
+import {
+  CLIENT_CREDENTIALS_OWNER_CLAIM,
+  CLIENT_CREDENTIALS_WORKSPACE_CLAIM,
+  oauthTokenApiScopes,
+} from './openPlatform';
 
 const log = debug('oidc-jwt');
 
@@ -166,10 +170,17 @@ const verifyJwt = async (token: string, publicKeys: JWK_RSA_Public[]) => {
 export interface ValidateOIDCJWTOptions {
   /**
    * Accept `client_credentials` tokens, which act as the user that owns their
-   * client. Only the public REST API opts in: it narrows every such token to
-   * its registered scopes, which other transports do not enforce.
+   * client. Only the public REST API opts in, and only while the grant is
+   * switched on: it narrows every such token to its registered scopes.
    */
   allowClientCredentials?: boolean;
+  /**
+   * Accept tokens limited to API scopes — any token carrying one, and every
+   * token of a dynamically registered client. Only a caller that enforces
+   * those scopes may opt in; elsewhere such a token would reach the whole
+   * account the user consented only a slice of.
+   */
+  allowScopedTokens?: boolean;
 }
 
 /**
@@ -209,6 +220,21 @@ export const validateOIDCJWT = async (token: string, options: ValidateOIDCJWTOpt
       throw new TRPCError({
         code: 'UNAUTHORIZED',
         message: 'Client credentials tokens are only accepted by the public API',
+      });
+    }
+
+    if (
+      !clientCredentials &&
+      !options.allowScopedTokens &&
+      oauthTokenApiScopes({
+        clientCredentials: false,
+        clientId: clientId as string | undefined,
+        scope: payload.scope as string | undefined,
+      }) !== undefined
+    ) {
+      throw new TRPCError({
+        code: 'UNAUTHORIZED',
+        message: 'Scoped OAuth tokens are only accepted by the public API',
       });
     }
 

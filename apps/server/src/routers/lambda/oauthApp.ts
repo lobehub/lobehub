@@ -28,6 +28,27 @@ const oauthAppProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
 const oauthAppWriteProcedure = oauthAppProcedure.use(requireWorkspaceRoleWhenScoped('admin'));
 
 /**
+ * A client_credentials app acts as the person who created it, with their
+ * workspace role. Any workspace admin may manage the app, so without this
+ * check one admin could rotate another's secret, or switch the app on, and
+ * mint tokens that act as that other person. Disabling and deleting stay open
+ * to every admin: they only take power away.
+ */
+const assertMachineClientCreator = async (
+  ctx: { oidcClientModel: OidcClientModel; userId: string },
+  id: string,
+) => {
+  const client = await ctx.oidcClientModel.findById(id);
+
+  if (client?.grants?.includes('client_credentials') && client.userId !== ctx.userId) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Only the creator of a client_credentials app can issue its secret or enable it',
+    });
+  }
+};
+
+/**
  * The stored secret is encrypted and is never a useful thing to ship to a
  * browser, so every read path replaces it with a boolean. The plaintext is
  * returned exactly once: by `rotateSecret` (which also issues a web app's
@@ -147,6 +168,8 @@ export const oauthAppRouter = router({
   rotateSecret: oauthAppWriteProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      await assertMachineClientCreator(ctx, input.id);
+
       const clientSecret = await ctx.oidcClientModel.rotateSecret(input.id);
 
       if (!clientSecret) throw new TRPCError({ code: 'NOT_FOUND' });
@@ -157,6 +180,8 @@ export const oauthAppRouter = router({
   setEnabled: oauthAppWriteProcedure
     .input(z.object({ enabled: z.boolean(), id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      if (input.enabled) await assertMachineClientCreator(ctx, input.id);
+
       return ctx.oidcClientModel.setEnabled(input.id, input.enabled);
     }),
 

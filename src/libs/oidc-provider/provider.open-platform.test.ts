@@ -151,6 +151,10 @@ describe('dynamic client registration', () => {
     expect(client.client_id).toMatch(/^lcd_/);
     expect(client.client_secret).toMatch(/^lcs_/);
     expect(client).not.toHaveProperty('registration_access_token');
+    // owner stamps are internal
+    expect(client).not.toHaveProperty('lobehub_owner_user_id');
+    expect(client).not.toHaveProperty('lobehub_owner_workspace_id');
+    expect(client).not.toHaveProperty('lobehub_pending_approval');
 
     const [row] = await db.select().from(oidcClients).where(eq(oidcClients.id, client.client_id));
     expect(row).toMatchObject({
@@ -198,6 +202,29 @@ describe('dynamic client registration', () => {
     );
 
     expect(response.status).toBe(201);
+  });
+
+  it('limits a client that registered no scope to the OIDC scopes', async () => {
+    const response = await register(
+      {
+        client_name: 'Sign-in only',
+        redirect_uris: ['https://partner.example.com/callback'],
+        token_endpoint_auth_method: 'none',
+      },
+      await ownerToken(),
+    );
+    const client = (await response.json()) as Record<string, any>;
+
+    expect(client.scope).toBe('openid profile email offline_access');
+  });
+
+  it('keeps the token when its own rules reject the payload, so it can be resent', async () => {
+    const token = await ownerToken();
+
+    const rejected = await register({ ...machineClient, jwks_uri: 'https://x.example/j' }, token);
+    expect(rejected.status).toBe(400);
+
+    expect((await register(machineClient, token)).status).toBe(201);
   });
 
   it.each([

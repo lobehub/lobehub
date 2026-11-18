@@ -288,6 +288,14 @@ export const assertRegistrationMetadata = (properties: Metadata, flags: OpenPlat
 export const createRegistrationOwnerPolicy =
   (db: LobeChatDatabase, flags: OpenPlatformFlags) =>
   async (ctx: KoaContextWithOIDC, properties: Metadata) => {
+    // Without a registered scope oidc-provider lets the client ask for any
+    // scope in the catalog, and the consent page would list API capabilities
+    // the token can never receive. A client that wants them registers them.
+    if (properties.scope === undefined) properties.scope = [...OIDC_SCOPES].join(' ');
+
+    // Checked before the token is burned, so a rejected payload can be fixed
+    // and resent. oidc-provider's own validation runs after the policy; a
+    // payload it rejects does cost the token.
     assertRegistrationMetadata(properties, flags);
 
     const jti = (ctx.oidc.entities as { InitialAccessToken?: { jti: string } }).InitialAccessToken
@@ -319,6 +327,21 @@ export const createRegistrationFeature = (
 export const openPlatformClientMetadata = (): Configuration['extraClientMetadata'] => ({
   properties: OPEN_PLATFORM_CLIENT_METADATA,
 });
+
+/**
+ * The owner stamps are internal: keep the owner's user and workspace ids out
+ * of the registration response a third party reads.
+ */
+export const stripOpenPlatformMetadata = async (
+  ctx: KoaContextWithOIDC,
+  next: () => Promise<unknown>,
+) => {
+  await next();
+
+  if (ctx.oidc?.route !== 'registration' || !ctx.body || typeof ctx.body !== 'object') return;
+
+  for (const key of OPEN_PLATFORM_CLIENT_METADATA) delete (ctx.body as Metadata)[key];
+};
 
 // ---------------------------------------------------------------------------
 // client_credentials

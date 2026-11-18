@@ -152,6 +152,7 @@ describe('OIDC protocol endpoints', () => {
     '/oauth/connector/client-metadata.json',
     '/oidc/token/revocation',
     '/oidc/token/introspection',
+    '/oidc/reg',
   ])('serves %s without sending an unauthenticated client to sign-in', async (path) => {
     const { getSession, response } = await callMiddleware(path);
 

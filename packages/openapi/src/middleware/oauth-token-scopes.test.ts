@@ -22,16 +22,30 @@ vi.mock('@/database/models/rbac', () => ({
     hasAnyPermission = async () => true;
   },
 }));
-vi.mock('@/envs/auth', () => ({ authEnv: { ENABLE_OIDC: true } }));
+const { authEnvMock } = vi.hoisted(() => ({
+  authEnvMock: {
+    ENABLE_OIDC: true,
+    OIDC_ENABLE_API_SCOPES: true,
+    OIDC_ENABLE_CLIENT_CREDENTIALS: true,
+  } as Record<string, boolean>,
+}));
+
+vi.mock('@/envs/auth', () => ({ authEnv: authEnvMock }));
 vi.mock('@/libs/oidc-provider/jwt', () => ({
-  validateOIDCJWT: vi.fn(async (token: string, options?: { allowClientCredentials?: boolean }) => {
-    const info = tokens.get(token);
-    if (!info) throw new Error('invalid token');
-    if (info.tokenData.clientCredentials && !options?.allowClientCredentials) {
-      throw new Error('client credentials not allowed');
-    }
-    return info;
-  }),
+  validateOIDCJWT: vi.fn(
+    async (
+      token: string,
+      options?: { allowClientCredentials?: boolean; allowScopedTokens?: boolean },
+    ) => {
+      const info = tokens.get(token);
+      if (!info) throw new Error('invalid token');
+      if (info.tokenData.clientCredentials && !options?.allowClientCredentials) {
+        throw new Error('client credentials not allowed');
+      }
+      if (!options?.allowScopedTokens) throw new Error('scoped tokens not allowed');
+      return info;
+    },
+  ),
 }));
 
 const { userAuthMiddleware } = await import('./auth');
@@ -177,6 +191,17 @@ describe('client_credentials tokens', () => {
 
     await db.update(oidcClients).set({ enabled: true, workspaceId: null });
     expect((await request('/agents', { token: 'machine' })).status).toBe(401);
+  });
+
+  it('is refused outright once the grant is switched off', async () => {
+    machineToken('machine', 'agent:read', WORKSPACE);
+    authEnvMock.OIDC_ENABLE_CLIENT_CREDENTIALS = false;
+
+    try {
+      expect((await request('/agents', { token: 'machine' })).status).toBe(401);
+    } finally {
+      authEnvMock.OIDC_ENABLE_CLIENT_CREDENTIALS = true;
+    }
   });
 
   it('rejects an unauthenticated request', async () => {

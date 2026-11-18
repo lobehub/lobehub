@@ -21,6 +21,7 @@ const mockCreate = vi.fn();
 const mockFindById = vi.fn();
 const mockList = vi.fn();
 const mockRotateSecret = vi.fn();
+const mockSetEnabled = vi.fn();
 const mockUpdate = vi.fn();
 
 vi.mock('@/database/models/oidcClient', () => ({
@@ -30,6 +31,7 @@ vi.mock('@/database/models/oidcClient', () => ({
       findById: mockFindById,
       list: mockList,
       rotateSecret: mockRotateSecret,
+      setEnabled: mockSetEnabled,
       update: mockUpdate,
     };
   }),
@@ -259,6 +261,43 @@ describe('oauthAppRouter', () => {
       mockFlags.mockReturnValue({ ...offFlags, apiScopes: true });
 
       await expect(caller().openPlatform()).resolves.toEqual({ ...offFlags, apiScopes: true });
+    });
+  });
+
+  describe('client_credentials apps', () => {
+    const machineApp = { grants: ['client_credentials'], id: 'lcd_machine', userId: 'user-1' };
+
+    it('refuses to hand another admin the secret of an app that acts as its creator', async () => {
+      mockFindById.mockResolvedValue({ ...machineApp, userId: 'owner-a' });
+
+      await expect(caller().rotateSecret({ id: 'lcd_machine' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      await expect(caller().setEnabled({ enabled: true, id: 'lcd_machine' })).rejects.toMatchObject(
+        { code: 'FORBIDDEN' },
+      );
+      expect(mockRotateSecret).not.toHaveBeenCalled();
+      expect(mockSetEnabled).not.toHaveBeenCalled();
+    });
+
+    it('still lets any admin disable it', async () => {
+      mockFindById.mockResolvedValue({ ...machineApp, userId: 'owner-a' });
+      mockSetEnabled.mockResolvedValue(undefined);
+
+      await caller().setEnabled({ enabled: false, id: 'lcd_machine' });
+
+      expect(mockSetEnabled).toHaveBeenCalledWith('lcd_machine', false);
+    });
+
+    it('lets the creator rotate and enable it', async () => {
+      mockFindById.mockResolvedValue(machineApp);
+      mockRotateSecret.mockResolvedValue('lcs_new');
+
+      await expect(caller().rotateSecret({ id: 'lcd_machine' })).resolves.toEqual({
+        clientSecret: 'lcs_new',
+      });
+      await caller().setEnabled({ enabled: true, id: 'lcd_machine' });
+      expect(mockSetEnabled).toHaveBeenCalledWith('lcd_machine', true);
     });
   });
 });

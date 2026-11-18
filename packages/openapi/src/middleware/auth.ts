@@ -7,7 +7,11 @@ import { ApiKeyModel } from '@/database/models/apiKey';
 import { authEnv } from '@/envs/auth';
 import { assertOIDCUserActive } from '@/libs/oidc-provider/access-control';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
-import { findClientOwner, oauthTokenApiScopes } from '@/libs/oidc-provider/openPlatform';
+import {
+  findClientOwner,
+  getOpenPlatformFlags,
+  oauthTokenApiScopes,
+} from '@/libs/oidc-provider/openPlatform';
 import { validateApiKeyFormat } from '@/utils/apiKey';
 import { extractBearerToken } from '@/utils/server/auth';
 
@@ -106,7 +110,12 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
 
       try {
         // Use direct JWT validation instead of OIDCService
-        const tokenInfo = await validateOIDCJWT(bearerToken, { allowClientCredentials: true });
+        // This transport enforces API scopes, so it is the one place scoped
+        // and machine tokens are accepted.
+        const tokenInfo = await validateOIDCJWT(bearerToken, {
+          allowClientCredentials: getOpenPlatformFlags().clientCredentials,
+          allowScopedTokens: true,
+        });
         if (tokenInfo.tokenData?.purpose === 'hetero-operation') {
           throw new Error('Operation tokens are only accepted by heterogeneous model endpoints');
         }
