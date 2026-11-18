@@ -116,9 +116,9 @@ const styles = stylex.create({
   downloadCard: {
     cursor: 'pointer',
     display: 'flex',
-    gap: '10px',
+    gap: '8px',
     alignItems: 'center',
-    paddingBlock: '8px',
+    paddingBlock: '6px',
     paddingInline: '8px',
     borderRadius: cssVar.borderRadius,
     textDecoration: 'none',
@@ -132,15 +132,9 @@ const styles = stylex.create({
     flex: 'none',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '28px',
-    height: '28px',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: cssVar.colorBorderSecondary,
-    borderRadius: cssVar.borderRadius,
+    width: '16px',
+    height: '16px',
     color: cssVar.colorText,
-    backgroundColor: cssVar.colorBgElevated,
-    backgroundImage: 'none',
   },
   optionMeta: { display: 'flex', flex: '1', flexDirection: 'column', gap: '1px', minWidth: '0' },
   optionTitle: {
@@ -687,7 +681,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   );
 
   const content = (
-    <Flexbox style={{ maxWidth: 320, minWidth: 280 }}>
+    <Flexbox style={{ maxWidth: 280, minWidth: 240 }}>
       <div {...stylex.props(styles.header)}>
         <Flexbox horizontal align={'center'} gap={4}>
           <span {...stylex.props(styles.headerTitle)}>
@@ -733,6 +727,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           plain row stays only while it is still the active pick. */}
       {showLocalRow ? (
         <OptionRow
+          compact
           active={isActive('local')}
           desc={t('heteroAgent.executionTarget.localDesc')}
           icon={<ExecutionTargetIcon target={'local'} />}
@@ -752,6 +747,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           heterogeneous agent has neither of the first two rows. */}
       {isHetero ? null : (
         <OptionRow
+          compact
           active={isActive('none')}
           desc={t('heteroAgent.executionTarget.noneDesc')}
           icon={<ExecutionTargetIcon target={'none'} />}
@@ -761,6 +757,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       )}
       {isHetero ? null : (
         <OptionRow
+          compact
           active={isActive('auto')}
           desc={t('heteroAgent.executionTarget.autoDesc')}
           icon={<ExecutionTargetIcon target={'auto'} />}
@@ -784,6 +781,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
             user with no way to find out why. */}
         {isDesktop ? (
           <OptionRow
+            compact
             active={isLocalSandboxActive}
             disabled={!canUseLocalSandbox}
             icon={<Icon icon={ShieldCheckIcon} size={14} />}
@@ -838,6 +836,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
             left, described as it always was. */}
         {offersPersistentSandbox ? (
           <OptionRow
+            compact
             active={isPersistentSandboxActive}
             desc={t('heteroAgent.executionTarget.persistentSandboxDesc')}
             icon={<Icon icon={HardDriveIcon} size={14} />}
@@ -860,6 +859,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           />
         ) : null}
         <OptionRow
+          compact
           active={isTemporarySandboxActive}
           disabled={!supportsSandbox}
           icon={<ExecutionTargetIcon target={'sandbox'} />}
