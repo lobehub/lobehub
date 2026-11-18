@@ -11,7 +11,7 @@
  *      sub-agent's answer and resumes the parent.
  *   5. The parent op runs one more LLM step and reaches `done`.
  */
-import { stripSubAgentReference } from '@lobechat/builtin-tool-lobe-agent';
+import { LobeAgentIdentifier, stripSubAgentReference } from '@lobechat/builtin-tool-lobe-agent';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { agentOperations, agents, messages } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
@@ -190,7 +190,8 @@ beforeEach(async () => {
       },
       chatConfig: {},
       model: 'gpt-5-pro',
-      plugins: [],
+      // The scripted first response delegates immediately, before any activation step.
+      plugins: [LobeAgentIdentifier],
       provider: 'openai',
       systemRole: 'You are a supervisor that can delegate work to sub-agents.',
       title: 'Supervisor',
@@ -272,6 +273,10 @@ describe('Server callSubAgent suspend/resume', () => {
       // Parent resumed and completed
       expect(finalState.status).toBe('done');
       expect(finalState.pendingToolsCalling ?? []).toHaveLength(0);
+
+      expect(mockResponsesCreate.mock.calls[0][0].tools).toContainEqual(
+        expect.objectContaining({ name: 'lobe-agent____callSubAgent', type: 'function' }),
+      );
 
       // Three LLM calls: parent-initial, sub-op, parent-resume
       expect(mockResponsesCreate).toHaveBeenCalledTimes(3);
