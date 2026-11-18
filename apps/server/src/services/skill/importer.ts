@@ -1,25 +1,50 @@
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
 import { type LobeChatDatabase } from '@lobechat/database';
 import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import {
   type CreateSkillInput,
+  type GitHubSkillBatchInput,
+  type GitHubSkillCandidate,
+  type GitHubSkillDiscovery,
+  type GitHubSkillOutcome,
   type ImportGitHubInput,
   type ImportUrlInput,
   type ImportZipInput,
+  type ParsedZipSkill,
   type SkillImportResult,
+  type SkillItem,
   type SkillManifest,
 } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
 import { AgentSkillModel } from '@/database/models/agentSkill';
-import { GitHub, GitHubNotFoundError, GitHubParseError } from '@/server/modules/GitHub';
+import {
+  GitHub,
+  GitHubNotFoundError,
+  GitHubParseError,
+  type GitHubRepoInfo,
+} from '@/server/modules/GitHub';
 import { FileService } from '@/server/services/file';
 
 import { SkillImportError, SkillManifestError } from './errors';
+import { readGitHubArchive } from './githubArchive';
 import { SkillParser } from './parser';
 import { SkillResourceService } from './resource';
+
+const sourceKey = (info: GitHubRepoInfo) =>
+  JSON.stringify([info.owner.toLowerCase(), info.repo.toLowerCase(), info.path ?? '']);
+const digest = (value: string) => createHash('sha256').update(value).digest('hex');
+const revisionOf = (skill?: SkillItem) =>
+  skill ? skill.id + '/' + skill.updatedAt.toISOString() : null;
+const unchanged = (skill: SkillItem, parsed: ParsedZipSkill) =>
+  !!parsed.zipHash &&
+  skill.zipFileHash === parsed.zipHash &&
+  skill.content === parsed.content &&
+  skill.name === parsed.manifest.name &&
+  skill.description === parsed.manifest.description;
 
 const log = debug('lobe-chat:service:skill-importer');
 
@@ -171,7 +196,7 @@ export class SkillImporter {
     // 1. Parse GitHub URL
     let repoInfo;
     try {
-      repoInfo = this.github.parseRepoUrl(input.gitUrl, input.branch);
+      repoInfo = this.github.parseRepoUrl(input.gitUrl, input.branch ?? 'HEAD');
       log('importFromGitHub: parsed repoInfo=%o', repoInfo);
     } catch (error) {
       log('importFromGitHub: failed to parse URL, error=%s', (error as Error).message);
@@ -200,34 +225,61 @@ export class SkillImporter {
 
     // 3. Parse ZIP package (pass basePath for subdirectory imports, repack to save only skill files)
     log('importFromGitHub: parsing ZIP package with basePath=%s', repoInfo.path);
-    const { manifest, content, resources, zipHash, skillZipBuffer } =
-      await this.parser.parseZipPackage(zipBuffer, {
-        basePath: repoInfo.path,
-        repackSkillZip: true,
-      });
-    log(
-      'importFromGitHub: parsed manifest=%o, resources count=%d, zipHash=%s, skillZipSize=%d',
-      manifest,
-      resources.size,
-      zipHash,
-      skillZipBuffer?.length ?? 0,
-    );
+    const parsed = await this.parser.parseZipPackage(zipBuffer, {
+      basePath: repoInfo.path,
+      fallbackName: repoInfo.path?.split('/').at(-1) || repoInfo.repo,
+      repackSkillZip: true,
+    });
+    return this.saveGitHubSkill(repoInfo, input.gitUrl, parsed, zipBuffer);
+  }
 
-    // 4. Generate identifier (use GitHub info for uniqueness, include path for subdirectory imports)
-    const identifier = this.github.generateIdentifier(repoInfo);
-    log('importFromGitHub: identifier=%s', identifier);
+  private gitHubIdentifiers(info: GitHubRepoInfo) {
+    const legacy = this.github.generateIdentifier(info);
+    return { legacy, identifier: `${legacy}-${digest(sourceKey(info)).slice(0, 20)}` };
+  }
 
-    // 5. Check for existing skill with same zipHash (deduplication)
-    // Also re-import if content is missing (e.g. from a previous buggy import)
-    const existing = await this.skillModel.findByIdentifier(identifier);
-    if (existing && existing.zipFileHash === zipHash && existing.content != null) {
-      log(
-        'importFromGitHub: skill unchanged (same zipHash=%s), skipping update id=%s',
-        zipHash,
-        existing.id,
-      );
-      return { skill: existing, status: 'unchanged' };
+  private gitHubTarget(info: GitHubRepoInfo, byIdentifier: Map<string, SkillItem>) {
+    const { identifier, legacy } = this.gitHubIdentifiers(info);
+    const exact = byIdentifier.get(identifier);
+    const existing = exact ?? byIdentifier.get(legacy);
+    if (existing?.manifest.sourceUrl) {
+      try {
+        if (sourceKey(this.github.parseRepoUrl(existing.manifest.sourceUrl)) === sourceKey(info))
+          return { existing, identifier: existing.identifier };
+      } catch (error) {
+        log('Ignoring unrecognized legacy source: %s', error);
+      }
     }
+    if (exact) throw new SkillImportError('Source identifier already in use', 'CONFLICT');
+    return { existing: undefined, identifier };
+  }
+
+  private async saveGitHubSkill(
+    info: GitHubRepoInfo,
+    sourceUrl: string,
+    parsed: ParsedZipSkill,
+    originalZip?: Buffer,
+    expectedRevision?: string | null,
+  ): Promise<SkillImportResult> {
+    const { content, manifest, resources, zipHash, skillZipBuffer } = parsed;
+    const inspect = async (model: AgentSkillModel, expected?: string | null) => {
+      const { identifier, legacy } = this.gitHubIdentifiers(info);
+      const rows = await model.findImportMatches([identifier, legacy], [manifest.name]);
+      const target = this.gitHubTarget(info, new Map(rows.map((row) => [row.identifier, row])));
+
+      const { existing } = target;
+      if (existing && unchanged(existing, parsed)) return target;
+      if (expected !== undefined && revisionOf(existing) !== expected)
+        throw new SkillImportError('The installed skill changed. Find skills again.', 'CONFLICT');
+      if (existing) this.assertCanOverwrite(existing);
+      const named = rows.find((row) => row.name.toLowerCase() === manifest.name.toLowerCase());
+      if (named && named.id !== existing?.id)
+        throw new SkillImportError('Skill name already in use', 'CONFLICT');
+      return target;
+    };
+    const before = await inspect(this.skillModel, expectedRevision);
+    if (before.existing && unchanged(before.existing, parsed))
+      return { skill: before.existing, status: 'unchanged' };
 
     // 6. Store resource files (only if skill is new or changed)
     log('importFromGitHub: storing %d resources...', resources.size);
@@ -239,14 +291,14 @@ export class SkillImporter {
     // 7. Build manifest with repository info
     const fullManifest: SkillManifest = {
       ...manifest,
-      repository: `https://github.com/${repoInfo.owner}/${repoInfo.repo}`,
-      sourceUrl: input.gitUrl,
+      repository: `https://github.com/${info.owner}/${info.repo}`,
+      sourceUrl,
     };
 
     // 8. Upload ZIP file to S3 and create globalFiles record (for zipFileHash foreign key)
     // Use skillZipBuffer (repacked skill-only ZIP) instead of full repo zipBuffer
     let zipFileHash: string | undefined;
-    const zipToUpload = skillZipBuffer ?? zipBuffer;
+    const zipToUpload = skillZipBuffer ?? originalZip;
     if (zipHash && zipToUpload) {
       const zipKey = `skills/zip/${zipHash}.zip`;
       await this.fileService.uploadBuffer(zipKey, zipToUpload, 'application/zip');
@@ -270,36 +322,151 @@ export class SkillImporter {
       );
     }
 
-    // 9. Update existing skill or create new
-    if (existing) {
-      this.assertCanOverwrite(existing);
-      log('importFromGitHub: skill exists but content changed, updating id=%s', existing.id);
-      const skill = await this.skillModel.update(existing.id, {
+    return this.skillModel.withImportLock(async (model) => {
+      const { identifier, existing } = await inspect(model, revisionOf(before.existing));
+      if (existing && unchanged(existing, parsed)) return { skill: existing, status: 'unchanged' };
+      const data = {
         content,
         description: manifest.description,
         manifest: fullManifest,
         name: manifest.name,
         resources: resourceIds,
         zipFileHash,
-      });
-      log('importFromGitHub: updated skill id=%s', skill.id);
-      return { skill, status: 'updated' };
-    }
-
-    // 10. Create new skill record
-    log('importFromGitHub: creating new skill...');
-    const skill = await this.skillModel.create({
-      content,
-      description: (manifest as any).description,
-      identifier,
-      manifest: fullManifest,
-      name: manifest.name,
-      resources: resourceIds,
-      source: 'market', // GitHub source marked as market
-      zipFileHash,
+      };
+      if (existing) {
+        const skill = await model.replaceImportedSkill(existing, data);
+        if (!skill)
+          throw new SkillImportError('The installed skill changed. Find skills again.', 'CONFLICT');
+        return { skill, status: 'updated' };
+      }
+      const skill = await model.create({ ...data, identifier, source: 'market' });
+      return { skill, status: 'created' };
     });
-    log('importFromGitHub: created skill id=%s', skill.id);
-    return { skill, status: 'created' };
+  }
+
+  private get importScope() {
+    return digest(JSON.stringify([this.userId, this.workspaceId ?? null]));
+  }
+
+  private async gitHubCollection(gitUrl: string, pinnedCommit?: string) {
+    const url = new URL(gitUrl);
+    const info = this.github.parseRepoUrl(url.origin + url.pathname.replace(/\/+$/, ''), 'HEAD');
+    const commit = pinnedCommit ?? (await this.github.resolveCommit(info));
+    const base = info.path ?? '';
+    const archive = await readGitHubArchive(
+      await this.github.downloadCommitZip(info, commit),
+      base,
+    );
+    const exact = url.pathname.split('/')[3] === 'blob' || (!!base && archive.has(base));
+    const directories = [...archive].filter(([path]) =>
+      exact ? path === base : !base || path === base || path.startsWith(base + '/'),
+    );
+    return { commit, directories, info };
+  }
+
+  async discoverGitHubSkills(gitUrl: string): Promise<GitHubSkillDiscovery> {
+    const { commit, directories, info } = await this.gitHubCollection(gitUrl);
+    const entries = directories.map(([path, directory]) => {
+      const fallbackName = path.split('/').at(-1) || info.repo;
+      const source = { ...info, path };
+      try {
+        const { manifest } = this.parser.parseSkillMd(directory.markdown, { fallbackName });
+        return { path, directory, source, fallbackName, manifest };
+      } catch {
+        return { path, directory, source, fallbackName };
+      }
+    });
+    const rows = await this.skillModel.findImportMatches(
+      entries.flatMap(({ source }) => Object.values(this.gitHubIdentifiers(source))),
+      entries.flatMap(({ manifest }) => (manifest ? [manifest.name] : [])),
+    );
+    const byIdentifier = new Map(rows.map((row) => [row.identifier, row]));
+    const byName = new Map(rows.map((row) => [row.name.toLowerCase(), row]));
+    const candidates: GitHubSkillCandidate[] = [];
+    for (const { path, directory, source, manifest, fallbackName } of entries) {
+      if (!manifest) {
+        candidates.push({
+          description: '',
+          name: fallbackName,
+          path,
+          revision: null,
+          status: 'invalid',
+        });
+        continue;
+      }
+      const named = byName.get(manifest.name.toLowerCase());
+      let existing: SkillItem | undefined;
+      try {
+        existing = this.gitHubTarget(source, byIdentifier).existing;
+      } catch (error) {
+        if (!(error instanceof SkillImportError)) throw error;
+        candidates.push({
+          description: manifest.description,
+          name: manifest.name,
+          path,
+          revision: null,
+          status: 'conflict',
+        });
+        continue;
+      }
+      let status: GitHubSkillCandidate['status'] = 'new';
+      if (named && named.id !== existing?.id) status = 'conflict';
+      else if (existing) {
+        const parsed = await this.parser.parseGitHubDirectory(directory, fallbackName);
+        if (unchanged(existing, parsed)) status = 'unchanged';
+        else if (
+          this.workspaceId &&
+          this.workspaceRole !== 'owner' &&
+          existing.userId !== this.userId
+        )
+          status = 'forbidden';
+        else status = 'update';
+      }
+      candidates.push({
+        description: manifest.description,
+        name: manifest.name,
+        path,
+        revision: revisionOf(existing),
+        status,
+      });
+    }
+    candidates.sort((a, b) => a.path.localeCompare(b.path));
+    return { candidates, commit, scope: this.importScope };
+  }
+
+  async importGitHubSkills(input: GitHubSkillBatchInput): Promise<GitHubSkillOutcome[]> {
+    if (this.importScope !== input.scope)
+      throw new SkillImportError('The active library changed. Find skills again.', 'CONFLICT');
+    const { directories, info } = await this.gitHubCollection(input.gitUrl, input.commit);
+    const available = new Map(directories);
+    const results: GitHubSkillOutcome[] = [];
+    for (const { path, revision } of input.selections) {
+      try {
+        const directory = available.get(path);
+        if (!directory) throw new SkillImportError('Skill outside selected scope', 'NOT_FOUND');
+        const parsed = await this.parser.parseGitHubDirectory(
+          directory,
+          path.split('/').at(-1) || info.repo,
+        );
+        const sourceUrl = `https://github.com/${info.owner}/${info.repo}/tree/${input.commit}${path ? '/' + path.split('/').map(encodeURIComponent).join('/') : ''}`;
+        const result = await this.saveGitHubSkill(
+          { ...info, path },
+          sourceUrl,
+          parsed,
+          undefined,
+          revision,
+        );
+        results.push({ path, status: result.status });
+      } catch (error) {
+        log('GitHub skill import failed for %s: %O', path, error);
+        const code = error instanceof SkillImportError ? error.code : undefined;
+        results.push({
+          path,
+          status: code === 'CONFLICT' ? 'conflict' : code === 'FORBIDDEN' ? 'forbidden' : 'failed',
+        });
+      }
+    }
+    return results;
   }
 
   /**

@@ -164,7 +164,10 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
     mode !== 'chat'
       ? {}
       : location.target === 'sandbox'
-        ? { environmentId: repositoryState.repository?.id }
+        ? {
+            environmentId: repositoryState.repository?.id,
+            withoutEnvironment: repositoryState.withoutEnvironment,
+          }
         : { directoryId: directoryState.directory?.id };
   const { send, sending } = useProjectComposer(project, mode, agentId, place);
 
@@ -246,7 +249,6 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
               disabled={sending}
               location={location}
               projectId={project.id}
-              publish={sharedAgent}
               showRepositories={mode === 'chat'}
               state={repositoryState}
             />

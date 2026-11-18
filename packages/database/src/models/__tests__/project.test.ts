@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { and, eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,11 +22,11 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
-import { EnvironmentModel } from '../environment';
 import type { CreateProjectInput } from '../project';
 import { ProjectModel } from '../project';
 import { TaskModel } from '../task';
 import { TopicModel } from '../topic';
+import { releaseProjectEnvironment } from '../utils/projectEnvironmentCleanup';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'project-model-user';
@@ -960,6 +958,8 @@ describe('ProjectModel', () => {
 
     const disappearing = await createProject(repo, { name: 'Disappearing' });
     const snapshot = await model.findManageableById(disappearing.id);
+    // A concurrent delete, which releases the project's environment first.
+    await releaseProjectEnvironment(serverDB, disappearing.id);
     await serverDB.delete(projects).where(eq(projects.id, disappearing.id));
     vi.spyOn(model, 'findManageableById').mockResolvedValueOnce(snapshot);
     expect(await model.updateStatus(disappearing.id, 'active')).toBeNull();
@@ -977,36 +977,6 @@ describe('ProjectModel', () => {
       instruction: 'Standalone',
     });
     expect(await model.getEnabledKnowledgeBaseIdsForTask(standaloneTask.id)).toEqual([]);
-  });
-
-  it('attaches environments and lists them per project in the owner scope', async () => {
-    const project = await createProject(repo, { name: 'Env host' });
-    const environmentModel = new EnvironmentModel(serverDB, userId);
-    const env = await environmentModel.save({
-      name: 'Shared GitHub',
-      repositoryUrl: 'https://github.com/lobehub/lobehub',
-    });
-    expect(await model.listEnvironments(project.id)).toEqual([]);
-    await model.attachEnvironment(project.id, env.id);
-    await model.attachEnvironment(project.id, env.id);
-    expect(await model.listEnvironments(project.id)).toEqual([
-      expect.objectContaining({ id: env.id }),
-    ]);
-    await expect(otherModel.attachEnvironment(project.id, env.id)).rejects.toThrow('access denied');
-    await expect(otherModel.listEnvironments(project.id)).rejects.toThrow('access denied');
-    await expect(model.attachEnvironment(project.id, randomUUID())).rejects.toThrow(
-      'access denied',
-    );
-
-    await expect(otherModel.detachEnvironment(project.id, env.id)).rejects.toThrow('access denied');
-    await model.detachEnvironment(project.id, env.id);
-    await model.detachEnvironment(project.id, env.id);
-    expect(await model.listEnvironments(project.id)).toEqual([]);
-    // Unlinking leaves the environment itself for the other places using it.
-    await model.attachEnvironment(project.id, env.id);
-    expect(await model.listEnvironments(project.id)).toEqual([
-      expect.objectContaining({ id: env.id }),
-    ]);
   });
 
   it('lists project conversations with or without directories, retaining each agent', async () => {

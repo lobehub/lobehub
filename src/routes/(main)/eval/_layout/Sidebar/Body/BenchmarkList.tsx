@@ -25,6 +25,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
@@ -56,6 +57,7 @@ interface BenchmarkListProps {
 }
 
 const BenchmarkList = memo<BenchmarkListProps>(({ activeKey, itemKey }) => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation('eval');
   const navigate = useWorkspaceAwareNavigate();
   const benchmarkList = useEvalStore(benchmarkSelectors.agentBenchmarkList);
@@ -63,12 +65,10 @@ const BenchmarkList = memo<BenchmarkListProps>(({ activeKey, itemKey }) => {
 
   return (
     <AccordionItem value={itemKey}>
-      <AccordionHeader style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+      <AccordionHeader style={sectionTriggerStyle}>
         <AccordionTrigger>
           <Flexbox horizontal align="center" gap={4}>
-            <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-              {t('sidebar.benchmarks')}
-            </Text>
+            <SectionTitle>{t('sidebar.benchmarks')}</SectionTitle>
             {benchmarkList.length > 0 && (
               <Text fontSize={12} type="secondary">
                 {benchmarkList.length}

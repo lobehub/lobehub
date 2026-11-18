@@ -88,6 +88,7 @@ const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader, onManage, sear
 
   const list = (
     <SkillsList
+      compact
       items={items}
       onSelectSkill={onSelectSkill}
       onSkillDragStart={handleSkillDragStart}
@@ -98,6 +99,7 @@ const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader, onManage, sear
 
   return (
     <SkillSection
+      compact
       isEmpty={items.length === 0}
       emptyText={t(
         searchQuery

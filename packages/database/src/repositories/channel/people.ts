@@ -1,5 +1,5 @@
 import type { SQL } from 'drizzle-orm';
-import { and, asc, eq, isNull, ne, notExists, or } from 'drizzle-orm';
+import { and, asc, eq, isNull, ne, notExists, or, sql } from 'drizzle-orm';
 
 import { channelMembers, users, workspaceMembers } from '../../schemas';
 import type { Transaction } from '../../type';
@@ -110,6 +110,15 @@ export const newChannelUserCandidates = async (
   return workspaceUserCandidates(tx, workspaceId, ne(users.id, userId), search);
 };
 
+/**
+ * Member metadata naming who added the member, merged into what it already holds. A null inviter,
+ * someone joining on their own, drops an earlier one so a rejoin does not keep the old adder.
+ */
+export const memberInviterMetadata = (invitedBy: string | null) =>
+  invitedBy
+    ? sql`coalesce(${channelMembers.metadata}, '{}'::jsonb) || jsonb_build_object('invitedBy', ${invitedBy}::text)`
+    : sql`coalesce(${channelMembers.metadata}, '{}'::jsonb) - 'invitedBy'`;
+
 export const addChannelUser = async (tx: Transaction, access: ChannelAccess, userId: string) => {
   const workspaceId = await requireGroupWorkspace(tx, access);
   await requireWorkspaceMember(tx, workspaceId, userId);
@@ -121,7 +130,11 @@ export const addChannelUser = async (tx: Transaction, access: ChannelAccess, use
   const [member] = existing
     ? await tx
         .update(channelMembers)
-        .set({ role: 'member', status: 'active' })
+        .set({
+          metadata: memberInviterMetadata(access.member.id),
+          role: 'member',
+          status: 'active',
+        })
         .where(eq(channelMembers.id, existing.id))
         .returning()
     : await tx
@@ -130,6 +143,7 @@ export const addChannelUser = async (tx: Transaction, access: ChannelAccess, use
           actorType: 'user',
           channelId: access.channel.id,
           lastReadSequence: 0,
+          metadata: { invitedBy: access.member.id },
           role: 'member',
           userId,
         })

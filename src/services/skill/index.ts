@@ -1,5 +1,8 @@
 import type {
   CreateSkillInput,
+  GitHubSkillBatchInput,
+  GitHubSkillDiscovery,
+  GitHubSkillOutcome,
   ImportGitHubInput,
   ImportUrlInput,
   ImportZipInput,
@@ -22,6 +25,14 @@ class AgentSkillService {
   }
 
   // ===== Import =====
+
+  discoverGitHubSkills(gitUrl: string): Promise<GitHubSkillDiscovery> {
+    return lambdaClient.agentSkills.discoverGitHubSkills.mutate({ gitUrl });
+  }
+
+  importGitHubSkills(input: GitHubSkillBatchInput): Promise<GitHubSkillOutcome[]> {
+    return lambdaClient.agentSkills.importGitHubSkills.mutate(input);
+  }
 
   async importFromGitHub(params: ImportGitHubInput): Promise<SkillImportResult | undefined> {
     return lambdaClient.agentSkills.importFromGitHub.mutate(params);

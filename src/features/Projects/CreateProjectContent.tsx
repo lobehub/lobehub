@@ -3,11 +3,14 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
 import { type ProjectListItem, useLoadedProjectList, useProjectStore } from '@/store/project';
 
 import {
   buildCreateProjectRequest,
+  DEFAULT_MAIN_AGENT_MODE,
   doesConflictApplyTo,
   getCreateProjectInput,
   getProjectConflictField,
@@ -15,6 +18,7 @@ import {
   isProjectIdentifierTaken,
   isProjectIdentifierValid,
   isProjectSlugValid,
+  type MainAgentMode,
   reserveProjectIds,
 } from './createProjectForm';
 import CreateProjectMoreFields from './CreateProjectMoreFields';
@@ -31,7 +35,7 @@ export interface CreateProjectOptions {
 }
 
 interface CreateProjectFormState {
-  /** Emoji or uploaded image URL; the dedicated main agent takes it over too. */
+  /** Emoji or uploaded image URL; a dedicated main agent takes it over too. */
   avatar?: string;
   /** Creating now would save the project, and its agent, without the avatar on its way. */
   avatarUploading: boolean;
@@ -39,6 +43,9 @@ interface CreateProjectFormState {
   /** Set when the server rejects the identifier as already taken. */
   identifierConflict: boolean;
   loading: boolean;
+  /** Explicit pick in this modal; otherwise LobeAI. */
+  mainAgentId?: string;
+  mainAgentMode: MainAgentMode;
   name: string;
   slug: string;
   /** Set when the server rejects the slug as already taken in this scope. */
@@ -63,6 +70,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
     identifier: '',
     identifierConflict: false,
     loading: false,
+    mainAgentMode: DEFAULT_MAIN_AGENT_MODE,
     name: '',
     slug: '',
     slugConflict: false,
@@ -70,6 +78,8 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
   });
   // Taken once per open modal: both generated avatars are seeded by these ids.
   const [reservedIds] = useState(reserveProjectIds);
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const mainAgentId = form.mainAgentId ?? inboxAgentId;
   const createInput = getCreateProjectInput(form);
   const identifierInvalid =
     Boolean(form.identifier.trim()) && !isProjectIdentifierValid(form.identifier);
@@ -108,11 +118,18 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
     updateForm({ loading: true });
     try {
       const project = await createProject(
-        buildCreateProjectRequest(createInput, { avatar: form.avatar, ids: reservedIds }),
+        buildCreateProjectRequest(createInput, {
+          avatar: form.avatar,
+          ids: reservedIds,
+          mainAgentId,
+          mainAgentMode: form.mainAgentMode,
+        }),
       );
-      // The project created an agent and maybe the Project label; show both.
-      const { refreshAgentLabels, refreshAgentList } = useHomeStore.getState();
-      void Promise.all([refreshAgentList(), refreshAgentLabels()]);
+      if (form.mainAgentMode === 'dedicated') {
+        // The project created an agent and maybe the Project label; show both.
+        const { refreshAgentLabels, refreshAgentList } = useHomeStore.getState();
+        void Promise.all([refreshAgentList(), refreshAgentLabels()]);
+      }
       close();
       if (onCreated) onCreated(project);
       else navigate(`/project/${project.slug ?? project.id}`);
@@ -172,9 +189,14 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
           </ProjectAvatarField>
         </Flexbox>
         <MainAgentSection
+          agentId={mainAgentId}
           dedicatedAgentId={reservedIds.agentId}
+          disabled={form.loading}
+          mode={form.mainAgentMode}
           projectAvatar={form.avatar}
           projectName={form.name}
+          onAgentChange={(id) => updateForm({ mainAgentId: id })}
+          onModeChange={(mainAgentMode) => updateForm({ mainAgentMode })}
         />
         <CreateProjectMoreFields
           identifier={form.identifier}

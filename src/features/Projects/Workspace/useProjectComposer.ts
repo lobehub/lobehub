@@ -121,9 +121,9 @@ export const useProjectComposer = (
    * Where the conversation works: a project repository in the cloud sandbox
    * (the server picks the first when unset), or a project folder on a device.
    */
-  place: { directoryId?: string; environmentId?: string } = {},
+  place: { directoryId?: string; environmentId?: string; withoutEnvironment?: boolean } = {},
 ) => {
-  const { directoryId, environmentId } = place;
+  const { directoryId, environmentId, withoutEnvironment } = place;
   const { t } = useTranslation('project');
   const navigate = useWorkspaceAwareNavigate();
   const workspaceSlug = useActiveWorkspaceSlug();
@@ -178,7 +178,13 @@ export const useProjectComposer = (
           ? startDirectoryTopic(directoryId, agentId, title).catch((error: unknown) => {
               throw new DirectoryUnavailableError(error);
             })
-          : createProjectTopic({ agentId, environmentId, projectId: project.id, title }),
+          : createProjectTopic({
+              agentId,
+              environmentId,
+              projectId: project.id,
+              title,
+              ...(withoutEnvironment && { withoutEnvironment: true }),
+            }),
         ensureAgentConfigLoaded(agentId),
       ]);
       // Open the conversation right away: the send shows its message there

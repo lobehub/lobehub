@@ -1,11 +1,15 @@
 import { Hono } from 'hono';
-import { z } from 'zod';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
 import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { AgentGroupController } from '../controllers/agent-group.controller';
+import {
+  LEGACY_ARRAY_LIST_DESCRIPTION,
+  LegacyArrayListQuerySchema,
+} from '../helpers/legacy-array-list';
+import { paginatedListSchema } from '../helpers/pagination';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission } from '../middleware/permission-check';
 import {
@@ -28,7 +32,8 @@ const AgentGroupRoutes = new Hono();
 AgentGroupRoutes.get(
   '/',
   routeDoc({
-    data: z.array(AgentGroupSchema),
+    data: paginatedListSchema(AgentGroupSchema, { total: true }),
+    description: LEGACY_ARRAY_LIST_DESCRIPTION,
     summary: 'List agent groups',
     tags: ['agent-groups'],
   }),
@@ -37,6 +42,7 @@ AgentGroupRoutes.get(
     getAllScopePermissions('AGENT_READ'),
     'You do not have permission to view agent group list',
   ),
+  zValidator('query', LegacyArrayListQuerySchema),
   async (c) => {
     const controller = new AgentGroupController();
     return await controller.getAgentGroups(c);

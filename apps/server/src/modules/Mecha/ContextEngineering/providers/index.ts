@@ -8,6 +8,7 @@ import {
   agentDocumentChangesByMessage,
   type AgentDocumentIndexSnapshot,
   agentDocumentsFromSnapshot,
+  reusablePinnedAgentDocumentIndex,
 } from '@lobechat/context-engine/agent-document';
 import type { ContextFactProviders, ContextFactRequest } from '@lobechat/mecha';
 import {
@@ -108,6 +109,15 @@ export const createServerContextFactProviders = ({
     let pending = agentDocumentIndexes.get(agentId);
     if (!pending) {
       pending = (async () => {
+        // A later step of a run renders the index from the snapshot its first
+        // step pinned, so it needs no progressive document. Skip reading them:
+        // an agent can hold over 10k, and every step used to read them all.
+        const pinned = documentIndexTurn
+          ? reusablePinnedAgentDocumentIndex({
+              messages: documentIndexTurn.messages,
+              pinned: state.binding?.agentDocumentIndex,
+            })
+          : undefined;
         const docs = toAgentContextDocuments(
           await new AgentDocumentsService(
             db,
@@ -115,8 +125,9 @@ export const createServerContextFactProviders = ({
             workspaceId,
             undefined,
             documentAccessScope,
-          ).getAgentContextDocuments(agentId),
+          ).getAgentContextDocuments(agentId, { excludeProgressive: !!pinned }),
         );
+        if (pinned) return { docs, snapshot: pinned };
         if (!documentIndexTurn) return { docs };
         try {
           const snapshot = await resolveServerAgentDocumentIndex({
@@ -476,7 +487,7 @@ export const createServerContextFactProviders = ({
     // the runtime is: that is the workspace the trust token carries, and the
     // entitlement has to agree with the token that presents it.
     resolveSandboxPersistence: async () => {
-      const { mode, cwd, claim, workingDir } = await resolveSandboxSessionConfig({
+      const { mode, cwd, claim, initialization, workingDir } = await resolveSandboxSessionConfig({
         isShareVisitorRun: Boolean(ctx.agentShareVisitor),
         serverDB: db,
         topicId: ctx.topicId ?? state.origin?.topicId,
@@ -489,7 +500,19 @@ export const createServerContextFactProviders = ({
         workspaceId,
       });
 
-      return claim ? { cwd, mode, workingDir } : undefined;
+      // What the topic's environment checks out, for the model to be told where
+      // each repository is — on any sandbox, persistent or not.
+      const repositories = (initialization?.sources ?? []).map((source) => ({
+        ...(source.path && source.path !== '.' && { folder: source.path }),
+        ...(source.ref && { ref: source.ref }),
+        repository: source.url
+          .replace(/^https:\/\/(www\.)?github\.com\//, '')
+          .replace(/\.git$/, '')
+          .replace(/\/$/, ''),
+      }));
+
+      if (claim) return { cwd, mode, workingDir, ...(repositories.length && { repositories }) };
+      return repositories.length ? { mode: 'ephemeral' as const, repositories } : undefined;
     },
 
     listTopicMessages: async (topic) => {

@@ -8,6 +8,7 @@ export const DEFAULT_COMMON_SETTINGS: UserGeneralConfig = {
   costEstimateWarningThreshold: DEFAULT_COST_ESTIMATE_WARNING_THRESHOLD,
   fontSize: 14,
   highlighterTheme: 'lobe-theme',
+  interfaceDensity: 'loose',
   isDevMode: false,
   isLiteMode: false,
   mermaidTheme: 'lobe-theme',

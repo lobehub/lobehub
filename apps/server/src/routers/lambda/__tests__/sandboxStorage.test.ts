@@ -137,6 +137,11 @@ const mockResolveCloneCredential = vi.hoisted(() => vi.fn());
 
 vi.mock('@/server/services/scm/cloneCredential', () => ({
   resolveScmCloneCredential: mockResolveCloneCredential,
+  // One repository: the single host-wide credential, as a list.
+  resolveScmCloneCredentials: async (params: unknown) => {
+    const credential = await mockResolveCloneCredential(params);
+    return credential ? [credential] : [];
+  },
 }));
 
 const { sandboxStorageRouter } = await import('../sandboxStorage');

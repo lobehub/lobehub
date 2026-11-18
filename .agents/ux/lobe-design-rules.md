@@ -190,7 +190,19 @@ The chat Tools picker lists services with connection records. Keep authorization
 
 Enforcement: `useControls.test.ts` covers missing connection records, cached unconnected providers, and pending or failed authorization rows. Source: user correction while debugging Kai’s chat Tools picker.
 
-## LOBE-UX-026 — Let success stay quiet; mark only the exceptions
+## LOBE-UX-026 — Tool menus expose choices, not fixed loaders
+
+Keep fixed Agent infrastructure (the skill loader and tool activator) out of both loading-policy lists. Hiding the loader must not hide individual skills or the optional Skill Store.
+
+Enforcement: the picker metadata excludes always-on identifiers; builtin selector and AgentToolsEngine tests cover the visible list and the runtime defaults.
+
+## LOBE-UX-027 — One agent, one tool configuration
+
+The profile library picker and chat Tools menu are two views of the same agent configuration. Share the tool inventory, translated names, state and agent-scoped write path, **not the popup**. The profile keeps its searchable checklist; chat keeps its loading-policy filters. Derive profile counts from the same unfiltered options. Agent-owned connector provisioning and the Skills invocation picker are separate tasks.
+
+Enforcement: both surfaces use the same tool controls; regression tests cover the profile summary, runtime-backed settings and fixed-loader exclusions.
+
+## LOBE-UX-028 — Let success stay quiet; mark only the exceptions
 
 On result surfaces (acceptance checks, verify boards, run summaries), passing is the default state and carries no badge of its own: no per-item "Passed" tag, check stamp or green outline. Show the outcome once, in one plain sentence (for example "6 项已核对，等你确认"). Item identifiers stay neutral (`01`, `04B`), without a check mark. Color and badges are reserved for what needs a person: a failed check (error color with the reason) or a pending decision. Actions such as "Accept" may keep their icon; status may not.
 

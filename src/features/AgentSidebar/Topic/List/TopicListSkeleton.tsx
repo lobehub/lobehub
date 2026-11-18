@@ -3,7 +3,9 @@
 import { cssVar, Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
-// Mirrors the grouped topic list frame (12px group caption + icon-led 36px
+import { usePanelDensityTokens } from '@/styles/density';
+
+// Mirrors the grouped topic list frame (12px group caption + icon-led
 // rows) so a session without a persisted page reads as the layout it resolves
 // into, unlike the avatar-style generic SkeletonList. The test id is the hook a
 // product-level frame capture uses to prove no such frame is painted once the
@@ -13,32 +15,36 @@ const GROUPS = [
   { header: 60, rows: ['64%', '76%', '48%', '68%'] },
 ];
 
-const RowSkeleton = memo<{ width: string }>(({ width }) => (
-  <Flexbox horizontal align={'center'} gap={8} height={36} paddingInline={4}>
-    <Skeleton
-      style={{
-        borderRadius: cssVar.borderRadiusSM,
-        height: 16,
-        maxHeight: 16,
-        maxWidth: 16,
-        minWidth: 16,
-      }}
-    />
-    <Flexbox flex={1}>
+const RowSkeleton = memo<{ width: string }>(({ width }) => {
+  const tokens = usePanelDensityTokens();
+
+  return (
+    <Flexbox horizontal align={'center'} gap={8} height={tokens?.rowHeight ?? 36} paddingInline={4}>
       <Skeleton
         style={{
-          borderRadius: cssVar.borderRadius,
-          height: 14,
-          margin: 0,
-          maxHeight: 14,
-          opacity: 0.5,
-          padding: 0,
-          width,
+          borderRadius: cssVar.borderRadiusSM,
+          height: 16,
+          maxHeight: 16,
+          maxWidth: 16,
+          minWidth: 16,
         }}
       />
+      <Flexbox flex={1}>
+        <Skeleton
+          style={{
+            borderRadius: cssVar.borderRadius,
+            height: 14,
+            margin: 0,
+            maxHeight: 14,
+            opacity: 0.5,
+            padding: 0,
+            width,
+          }}
+        />
+      </Flexbox>
     </Flexbox>
-  </Flexbox>
-));
+  );
+});
 
 RowSkeleton.displayName = 'TopicRowSkeleton';
 

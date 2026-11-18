@@ -130,3 +130,32 @@ html.desktop[data-window-fullscreen] body {
     display: none !important;
   }
 }
+
+/* lobe-ui ships its rules inside @layer lobe-ui, so these unlayered overrides win without !important */
+html[data-density='compact'] .lobe-menu-popup,
+html[data-density='compact'] .lobe-select__popup {
+  font-size: var(--lobe-density-font-size);
+}
+
+html[data-density='compact'] .lobe-dropdown-menu__item,
+html[data-density='compact'] .lobe-context-menu__item,
+html[data-density='compact'] .lobe-select__option {
+  min-height: var(--lobe-density-control-height);
+  padding-block: calc((var(--lobe-density-control-height) - 20px) / 2);
+  padding-inline: 8px;
+
+  font-size: var(--lobe-density-font-size);
+  line-height: 20px;
+}
+
+html[data-density='compact'] .lobe-select[data-size='middle'],
+html[data-density='compact'] .lobe-tabs__tab {
+  height: var(--lobe-density-control-height);
+  min-height: var(--lobe-density-control-height);
+  font-size: var(--lobe-density-font-size);
+}
+
+html[data-density='compact'] .lobe-segmented[data-size='small'] .lobe-segmented__item {
+  height: calc(var(--lobe-density-control-height) - 8px);
+  min-height: 0;
+}

@@ -25,6 +25,7 @@ export const WEB_ONBOARDING: BuiltinAgentDefinition = {
       },
       searchMode: 'off',
       skillActivateMode: 'manual',
+      toolMode: 'custom',
     },
     plugins: [WebOnboardingIdentifier, UserInteractionIdentifier, ...(ctx.plugins || [])],
     systemRole: createSystemRole(ctx.userLocale, { isDev: ctx.isDev }),

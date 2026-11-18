@@ -111,7 +111,7 @@ describe('workspace settings useCategory', () => {
     expect(result.current.at(-1)?.key).toBe(WorkspaceSettingsGroupKey.System);
   });
 
-  it('groups devices, subscription accounts and environments under Resources', () => {
+  it('groups devices, subscription accounts, environments and credentials under Runtime', () => {
     const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
     const keys = result.current.map((group) => group.key);
     const resourceGroup = result.current.find(
@@ -131,6 +131,7 @@ describe('workspace settings useCategory', () => {
       WorkspaceSettingsTabs.Devices,
       WorkspaceSettingsTabs.SubscriptionAccounts,
       WorkspaceSettingsTabs.Environments,
+      WorkspaceSettingsTabs.Creds,
     ]);
     expect(generalGroup?.items.map((item) => item.key)).not.toContain(
       WorkspaceSettingsTabs.Devices,
@@ -161,6 +162,9 @@ describe('workspace settings useCategory', () => {
 
     expect(connectionGroup?.items.map((item) => item.key)).toContain(
       WorkspaceSettingsTabs.Integrations,
+    );
+    expect(connectionGroup?.items.map((item) => item.key)).not.toContain(
+      WorkspaceSettingsTabs.Creds,
     );
   });
 

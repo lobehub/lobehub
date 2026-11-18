@@ -384,7 +384,7 @@ describe('SkillImporter', () => {
       expect(result).toBeDefined();
       expect(result.status).toBe('created');
       expect(result.skill.name).toBe('GitHub Skill');
-      expect(result.skill.identifier).toBe('lobehub-skill-demo');
+      expect(result.skill.identifier).toMatch(/^lobehub-skill-demo-[a-f0-9]{20}$/);
       expect(result.skill.source).toBe('market');
 
       // Verify manifest contains repository info
@@ -418,11 +418,11 @@ describe('SkillImporter', () => {
 
       expect(result).toBeDefined();
       expect(result.status).toBe('created');
-      expect(result.skill.identifier).toBe('openclaw-openclaw-skill-creator');
+      expect(result.skill.identifier).toMatch(/^openclaw-openclaw-skill-creator-[a-f0-9]{20}$/);
 
-      // Verify parseZipPackage was called with basePath and repackSkillZip
       expect(mockParserInstance.parseZipPackage).toHaveBeenCalledWith(expect.any(Buffer), {
         basePath: 'skills/skill-creator',
+        fallbackName: 'skill-creator',
         repackSkillZip: true,
       });
     });
@@ -473,7 +473,7 @@ describe('SkillImporter', () => {
         .select()
         .from(agentSkills)
         .where(
-          and(eq(agentSkills.userId, userId), eq(agentSkills.identifier, 'lobehub-skill-update')),
+          and(eq(agentSkills.userId, userId), eq(agentSkills.identifier, first.skill.identifier)),
         );
       expect(dbSkills).toHaveLength(1);
     });
@@ -727,7 +727,7 @@ describe('SkillImporter', () => {
       const dbSkills = await db
         .select()
         .from(agentSkills)
-        .where(eq(agentSkills.identifier, 'lobehub-skill-dedup'));
+        .where(eq(agentSkills.identifier, first.skill.identifier));
       expect(dbSkills).toHaveLength(1);
     });
 
@@ -1275,7 +1275,7 @@ description: A nested skill
 
       // Second user should not be able to create skill with same identifier
       // because findByIdentifier filters by userId
-      const otherResult = await otherImporter.createUserSkill({
+      await otherImporter.createUserSkill({
         content: '# User 2 Skill',
         description: 'User 2 skill',
         identifier: 'isolation-test-skill', // Same identifier, different user

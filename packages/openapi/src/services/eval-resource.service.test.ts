@@ -19,6 +19,9 @@ import {
 } from '../types/eval-response.type';
 import { EvalResourceService } from './eval-resource.service';
 
+// Services return the page's rows and total; the controller adds `hasMore`/`nextCursor`.
+const SERVICE_PAGE_FIELDS = { hasMore: true, nextCursor: true } as const;
+
 /** What the client receives: `c.json` serializes Dates and drops undefined keys. */
 const toJson = (value: unknown) => JSON.parse(JSON.stringify(value));
 
@@ -102,11 +105,17 @@ describe('public eval resources', () => {
       owner.listTestCases(dataset.id, {}),
     ]);
     expect(() => EvalBenchmarkSchema.parse(toJson(benchmark))).not.toThrow();
-    expect(() => EvalBenchmarkListSchema.parse(toJson(benchmarks))).not.toThrow();
+    expect(() =>
+      EvalBenchmarkListSchema.omit(SERVICE_PAGE_FIELDS).parse(toJson(benchmarks)),
+    ).not.toThrow();
     expect(() => EvalDatasetSchema.parse(toJson(dataset))).not.toThrow();
-    expect(() => EvalDatasetListSchema.parse(toJson(datasetList))).not.toThrow();
+    expect(() =>
+      EvalDatasetListSchema.omit(SERVICE_PAGE_FIELDS).parse(toJson(datasetList)),
+    ).not.toThrow();
     expect(() => EvalTestCaseSchema.parse(toJson(testCase))).not.toThrow();
-    expect(() => EvalTestCaseListSchema.parse(toJson(testCases))).not.toThrow();
+    expect(() =>
+      EvalTestCaseListSchema.omit(SERVICE_PAGE_FIELDS).parse(toJson(testCases)),
+    ).not.toThrow();
     const deletedCase = await member.deleteTestCase(testCase.id);
     expect(deletedCase).toEqual({ deleted: true, id: testCase.id });
     expect(() => DeletedResourceSchema.parse(deletedCase)).not.toThrow();

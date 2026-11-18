@@ -1,5 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import { type FollowUpMode, resolveFollowUpMode } from '@lobechat/types';
+import { type FollowUpMode, type InterfaceDensity, resolveFollowUpMode } from '@lobechat/types';
 
 import { DEFAULT_LANG } from '@/const/locale';
 import { type Locales, normalizeLocale } from '@/locales/resources';
@@ -46,6 +46,8 @@ const enablePasteAutoConvert = (s: UserStore) =>
   generalConfig(s).enablePasteAutoConvert ?? s.preference.lab?.enableInputMarkdown !== false;
 const showImageReadPreview = (s: UserStore) => generalConfig(s).showImageReadPreview ?? true;
 const fontAntialiasing = (s: UserStore) => generalConfig(s).fontAntialiasing ?? true;
+const interfaceDensity = (s: UserStore): InterfaceDensity =>
+  generalConfig(s).interfaceDensity ?? 'loose';
 /** The setting is a boolean: either the live tool list is open or it is a
  *  summary row. "Open" means the full list — the height-capped middle level
  *  just hid part of what the user asked to see. */
@@ -73,6 +75,7 @@ export const userGeneralSettingsSelectors = {
   fontAntialiasing,
   fontSize,
   highlighterTheme,
+  interfaceDensity,
   mermaidTheme,
   neutralColor,
   primaryColor,
