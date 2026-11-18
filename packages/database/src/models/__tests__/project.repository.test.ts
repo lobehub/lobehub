@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -28,18 +28,28 @@ describe('a project created from a GitHub repository', () => {
   const repo = new ProjectRepository(serverDB, userId);
   const model = new ProjectModel(serverDB, userId);
 
+  // Only this file's own rows: other test files share the database and run at
+  // the same time, and their environments hold their users back.
+  const cleanup = async () => {
+    const own = serverDB
+      .select({ id: environments.id })
+      .from(environments)
+      .where(eq(environments.userId, userId));
+    await serverDB
+      .delete(projectEnvironments)
+      .where(inArray(projectEnvironments.environmentId, own));
+    await serverDB.delete(environments).where(eq(environments.userId, userId));
+    await serverDB.delete(projects).where(eq(projects.userId, userId));
+    await serverDB.delete(workspaces).where(eq(workspaces.id, workspaceId));
+    await serverDB.delete(users).where(eq(users.id, userId));
+  };
+
   beforeEach(async () => {
-    await serverDB.delete(users);
+    await cleanup();
     await serverDB.insert(users).values([{ id: userId }]);
   });
 
-  afterEach(async () => {
-    await serverDB.delete(projectEnvironments);
-    await serverDB.delete(environments);
-    await serverDB.delete(projects);
-    await serverDB.delete(workspaces);
-    await serverDB.delete(users);
-  });
+  afterEach(cleanup);
 
   const environmentOf = (database: typeof serverDB, projectId: string, workspace?: string) =>
     new ProjectEnvironmentRepository(database, userId, workspace).get(projectId);
