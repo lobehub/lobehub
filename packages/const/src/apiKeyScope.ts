@@ -49,6 +49,15 @@ export const API_KEY_SCOPES = [
   'file:write',
   'knowledge:read',
   'knowledge:write',
+  /**
+   * Documents / Pages and topic notebooks on the public REST API
+   * (`/api/v1/documents`, `/api/v1/notebooks`), including the pages that live
+   * inside a knowledge base. It does not reach the knowledge-base resources
+   * themselves (libraries, their files, chunks, retrieval) — those stay behind
+   * `knowledge:*`. The tRPC document namespaces keep requiring `knowledge:*`.
+   */
+  'document:read',
+  'document:write',
   'mcp:read',
   'mcp:write',
   'usage:read',

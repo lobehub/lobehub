@@ -36,6 +36,8 @@
   "consent.redirecting": "授权成功，跳转中…",
   "consent.scope.acceptance-review": "在预览页上评论这张验收单，并通过或打回",
   "consent.scope.acceptance-review-site": "在站点上直接评论该站点的验收，有效期 8 小时",
+  "consent.scope.document-read": "读取你的文档和页面",
+  "consent.scope.document-write": "创建、编辑和删除你的文档和页面",
   "consent.scope.email": "访问你的电子邮件地址",
   "consent.scope.offline_access": "允许客户端访问你的数据",
   "consent.scope.openid": "使用你的 LobeHub 账户进行身份验证",

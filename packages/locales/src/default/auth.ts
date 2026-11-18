@@ -73,6 +73,7 @@ export default {
   'apikey.scopes.grantJoin': ': ',
   'apikey.scopes.groups.agent': 'Agents',
   'apikey.scopes.groups.chat': 'Chat',
+  'apikey.scopes.groups.document': 'Documents',
   'apikey.scopes.groups.file': 'Files',
   'apikey.scopes.groups.knowledge': 'Knowledge',
   'apikey.scopes.groups.mcp': 'MCP servers',

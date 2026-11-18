@@ -323,7 +323,10 @@ export class DocumentService {
     current?: number;
     excludeKnowledgeBaseIds?: string[];
     fileTypes?: string[];
+    keyword?: string;
+    offset?: number;
     pageSize?: number;
+    parentId?: string | null;
     sortBy?: DocumentQuerySortBy;
     sourceTypes?: string[];
     standaloneOnly?: boolean;

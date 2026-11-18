@@ -20,6 +20,13 @@ describe('isValidApiKeyScope', () => {
     expect(isValidApiKeyScope('')).toBe(false);
     expect(isValidApiKeyScope('billing:read')).toBe(false);
   });
+
+  it('catalogs the document scopes, with write implying read', () => {
+    expect(isValidApiKeyScope('document:read')).toBe(true);
+    expect(isValidApiKeyScope('document:write')).toBe(true);
+    expect(hasApiKeyScope(['document:write'], 'document:read')).toBe(true);
+    expect(hasApiKeyScope(['knowledge:write'], 'document:read')).toBe(false);
+  });
 });
 
 describe('isFullAccessApiKey', () => {
