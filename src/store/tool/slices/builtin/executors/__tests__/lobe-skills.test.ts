@@ -7,10 +7,41 @@ import { skillsExecutor } from '../lobe-skills';
 vi.mock('@lobechat/builtin-skills', () => ({ builtinSkills: [] }));
 vi.mock('@/helpers/skillFilters', () => ({ filterBuiltinSkills: () => [] }));
 vi.mock('@/services/cloudSandbox', () => ({ cloudSandboxService: { callTool: vi.fn() } }));
-vi.mock('@/services/skill', () => ({ agentSkillService: {} }));
+vi.mock('@/services/skill', () => ({
+  agentSkillService: {
+    getByName: async (name: string) => ({ id: name, identifier: name }),
+    readResource: async (id: string) => ({ content: `Reference for ${id}` }),
+  },
+}));
+vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({ agentMap: {} }) }));
 vi.mock('@/store/chat', () => ({
+  getChatStoreState: () => ({
+    dbMessagesMap: {
+      main_agent_topic: [{ metadata: { selectedSkillIds: ['main-skill'] }, role: 'user' }],
+      page_agent_doc: [{ metadata: { selectedSkillIds: ['page-skill'] }, role: 'user' }],
+      task_agent_topic: [{ metadata: { selectedSkillIds: ['task-skill'] }, role: 'user' }],
+    },
+  }),
   useChatStore: { getState: () => ({ activeTopicId: 'test-topic' }) },
 }));
+
+describe('Web Skills conversation selection', () => {
+  it.each([
+    { scope: 'task', topicId: 'topic' },
+    { documentId: 'doc', scope: 'page' },
+  ])('reads a reference selected in the $scope conversation', async (context) => {
+    const id = `${context.scope}-skill`;
+    const read = (skill: string) =>
+      skillsExecutor.invoke(
+        'readReference',
+        { id: skill, path: 'guide.md' },
+        { ...context, agentId: 'agent', messageId: 'message' },
+      );
+
+    expect(await read(id)).toMatchObject({ content: `Reference for ${id}`, success: true });
+    expect(await read('main-skill')).toMatchObject({ success: false });
+  });
+});
 
 describe.each(['runCommand', 'execScript'] as const)('Web Skills %s recreation', (api) => {
   beforeEach(() => {

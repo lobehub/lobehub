@@ -6,6 +6,7 @@ import {
   type BuiltinToolContext,
   getDisabledPluginIds,
   getLibrarySkillMode,
+  type MessageMapScope,
 } from '@lobechat/types';
 
 import { filterBuiltinSkills } from '@/helpers/skillFilters';
@@ -27,6 +28,7 @@ export const clientSkillCatalog = (ctx: BuiltinToolContext) => {
           agentId,
           documentId: ctx.documentId ?? undefined,
           groupId: ctx.groupId,
+          scope: (ctx.scope ?? undefined) as MessageMapScope | undefined,
           threadId: ctx.threadId ?? undefined,
           topicId: ctx.topicId,
         })
