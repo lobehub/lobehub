@@ -3,11 +3,13 @@ import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import { MessageModel } from '@/database/models/message';
+import { isModelImageFileType } from '@/database/models/message/attachments';
 import {
   collectMarkdownImageUrls,
   type InlineImage,
   resolveInlineImages,
 } from '@/server/services/file/inlineImages';
+import { resolveAttachmentMetadata } from '@/server/services/file/resolveAttachments';
 import { redisService } from '@/server/services/redis';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 
@@ -41,6 +43,7 @@ export interface HeteroSteerDelivery {
   entryId: string;
   /** Every follow-up merged into this delivery, when there were several (Steer mode). */
   entryIds?: string[];
+  fileIds?: string[];
   groupId?: string;
   scope: SteerQueueScope;
   trigger?: string;
@@ -48,24 +51,25 @@ export interface HeteroSteerDelivery {
 
 export interface HeteroSteerMessage {
   content: string;
-  /**
-   * Images pasted into the follow-up's body, which `content` only holds as
-   * markdown links: signed URLs for the session to take as image input.
-   */
+  /** Signed URLs for uploaded attachments and images linked from the body. */
   imageList?: InlineImage[];
   messageId: string;
+  /** An upload is part of the message; a producer must return it if the image fails. */
+  requiresImages?: true;
 }
 
 /**
- * Whether a follow-up can be typed into the running agent session: plain text
- * for the same agent. Attachments, attached selections, tool or skill
- * selections and @-mentions need a turn configured for them, and wait for the
- * run to end.
+ * Whether a follow-up can use the existing session's configuration. Uploaded
+ * files also need a producer that takes attachments and a successful image lookup.
  */
-export const canSteerHeteroRun = (entry: QueuedFollowUp, agentId: string | null): boolean => {
+export const canSteerHeteroRun = (
+  entry: QueuedFollowUp,
+  agentId: string | null,
+  acceptsImageAttachments = false,
+): boolean => {
   const { request } = entry;
   if (!request.prompt.trim()) return false;
-  if (request.fileIds?.length) return false;
+  if (request.fileIds?.length && !acceptsImageAttachments) return false;
   if (request.userMessage?.metadata) return false;
   if (request.selectedToolIds?.length || request.selectedSkillIds?.length) return false;
   if (request.mentionedAgents?.length) return false;
@@ -111,6 +115,7 @@ const fitsSession = (entry: QueuedFollowUp, acceptsImages: boolean | undefined) 
 export const takeHeteroSteer = async (
   ctx: StoreContext,
   params: {
+    acceptsImageAttachments?: boolean;
     acceptsImages?: boolean;
     agentId: string | null;
     mode?: FollowUpMode;
@@ -118,7 +123,7 @@ export const takeHeteroSteer = async (
     scope: SteerQueueScope;
   },
 ): Promise<HeteroSteerMessage | undefined> => {
-  const { acceptsImages, agentId, operationId, scope } = params;
+  const { acceptsImageAttachments, acceptsImages, agentId, operationId, scope } = params;
   const merging = params.mode === 'steer';
 
   const drained = await drainOwnFollowUps(ctx, scope, operationId);
@@ -145,23 +150,50 @@ export const takeHeteroSteer = async (
     return;
   }
 
-  // A session that only takes text gets no image follow-up: decided from the
-  // markdown alone, since the run asks again on every poll.
   const canGo = (entry: QueuedFollowUp) =>
-    canSteerHeteroRun(entry, agentId) && fitsSession(entry, acceptsImages);
+    canSteerHeteroRun(entry, agentId, acceptsImages && acceptsImageAttachments) &&
+    fitsSession(entry, acceptsImages);
   const firstHeld = drained.entries.findIndex((entry) => !canGo(entry));
   const ready = firstHeld === -1 ? drained.entries : drained.entries.slice(0, firstHeld);
-  const joining = merging ? takeSameSenderFollowUps(ready).taken : ready.slice(0, 1);
+  const candidates = merging ? takeSameSenderFollowUps(ready).taken : ready.slice(0, 1);
+
+  // Resolve only the files this poll could deliver. The metadata lookup checks
+  // file ownership without parsing documents that must wait for another turn.
+  const candidateFileIds = [...new Set(candidates.flatMap((entry) => entry.request.fileIds ?? []))];
+  const attachments = new Map<string, InlineImage>();
+  if (candidateFileIds.length > 0) {
+    try {
+      const files = await resolveAttachmentMetadata({
+        ...ctx,
+        fileIds: candidateFileIds,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      for (const { fileType, id, url } of files) {
+        if (url && isModelImageFileType(fileType)) attachments.set(id, { id, url });
+      }
+    } catch (error) {
+      await returnFollowUps(scope, drained, drained.entries, error);
+      return;
+    }
+  }
+  const firstUnsupported = candidates.findIndex((entry) =>
+    entry.request.fileIds?.some((id) => !attachments.has(id)),
+  );
+  const joining = firstUnsupported === -1 ? candidates : candidates.slice(0, firstUnsupported);
   if (joining.length === 0) {
     await returnFollowUps(scope, drained, drained.entries, 'needs a turn of its own');
     return;
   }
 
   const request = joining.length === 1 ? joining[0].request : mergeQueuedFollowUps(joining);
-  let imageList: InlineImage[] = [];
+  const fileIds = [...new Set(request.fileIds)];
+  const imageList = fileIds.map((id) => attachments.get(id)!);
   if (collectMarkdownImageUrls(request.prompt).length > 0) {
     try {
-      imageList = await resolveInlineImages(ctx, request.prompt);
+      const inline = fileIds.length
+        ? await resolveInlineImages(ctx, request.prompt, fileIds)
+        : await resolveInlineImages(ctx, request.prompt);
+      imageList.push(...inline);
     } catch (error) {
       await returnFollowUps(scope, drained, drained.entries, error);
       return;
@@ -208,6 +240,7 @@ export const takeHeteroSteer = async (
       editorData: request.userMessage?.editorData,
       entryId: joining[0].id,
       ...(joining.length > 1 && { entryIds: joining.map((entry) => entry.id) }),
+      ...(fileIds.length > 0 && { fileIds }),
       groupId: request.appContext?.groupId ?? undefined,
       scope,
       trigger: request.trigger,
@@ -222,6 +255,7 @@ export const takeHeteroSteer = async (
     content: request.prompt,
     ...(imageList.length > 0 && { imageList }),
     messageId,
+    ...(fileIds.length > 0 && { requiresImages: true }),
   };
 };
 
@@ -313,6 +347,7 @@ export const consumeHeteroSteer = async (
         agentId: params.agentId ?? undefined,
         content: delivery.content,
         editorData: delivery.editorData,
+        files: delivery.fileIds,
         groupId: delivery.groupId,
         metadata,
         parentId: params.parentId,

@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   findById: vi.fn(),
   isRunAlive: vi.fn(),
   renew: vi.fn(),
+  resolveAttachmentMetadata: vi.fn(),
   resolveInlineImages: vi.fn(),
   settle: vi.fn(),
 }));
@@ -29,6 +30,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/server/services/file/inlineImages', async (importOriginal) => ({
   ...(await importOriginal<typeof InlineImagesModule>()),
   resolveInlineImages: mocks.resolveInlineImages,
+}));
+
+vi.mock('@/server/services/file/resolveAttachments', () => ({
+  resolveAttachmentMetadata: mocks.resolveAttachmentMetadata,
 }));
 
 vi.mock('@/server/services/redis', () => ({
@@ -94,6 +99,7 @@ beforeEach(() => {
   mocks.findById.mockResolvedValue(undefined);
   mocks.settle.mockResolvedValue(undefined);
   mocks.renew.mockResolvedValue(true);
+  mocks.resolveAttachmentMetadata.mockResolvedValue([]);
   mocks.resolveInlineImages.mockResolvedValue([]);
 });
 
@@ -186,13 +192,80 @@ describe('takeHeteroSteer', () => {
     });
   });
 
-  it('leaves the queue to the run end when the first follow-up cannot join', async () => {
+  it('leaves uploaded attachments queued for a producer that only opts into inline images', async () => {
     mocks.drain.mockResolvedValue([followUp('a', 1, { fileIds: ['f1'] }), followUp('b', 2)]);
 
-    await expect(take()).resolves.toBeUndefined();
+    await expect(
+      takeHeteroSteer(ctx, { acceptsImages: true, agentId: 'agt-1', operationId: 'op-1', scope }),
+    ).resolves.toBeUndefined();
 
     expect(mocks.settle.mock.calls[0][2]).toEqual(['a', 'b']);
     expect(mocks.deliveries.size).toBe(0);
+  });
+
+  describe('uploaded image attachments', () => {
+    const screenshot = {
+      fileType: 'image/png',
+      id: 'file_screen',
+      name: 'screen.png',
+      url: 'https://bucket.example.com/screen.png?sig=s',
+    };
+    const steer = () =>
+      takeHeteroSteer(ctx, {
+        acceptsImageAttachments: true,
+        acceptsImages: true,
+        agentId: 'agt-1',
+        mode: 'steer',
+        operationId: 'op-1',
+        scope,
+      });
+
+    it('delivers an uploaded screenshot with the text and persists the attachment on replay', async () => {
+      mocks.drain.mockResolvedValue([
+        followUp('a', 1, { fileIds: [screenshot.id], prompt: 'add the department filter' }),
+      ]);
+      mocks.resolveAttachmentMetadata.mockResolvedValue([screenshot]);
+
+      await expect(steer()).resolves.toEqual({
+        content: 'add the department filter',
+        imageList: [{ id: screenshot.id, url: screenshot.url }],
+        messageId: 'msg-a',
+        requiresImages: true,
+      });
+
+      await consumeHeteroSteer(messageModel, {
+        agentId: 'agt-1',
+        messageId: 'msg-a',
+        operationId: 'op-1',
+        parentId: 'asst-1',
+        topicId: 'tpc-1',
+      });
+      expect(mocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({ files: [screenshot.id] }),
+        'msg-a',
+      );
+    });
+
+    it.each([
+      ['an inaccessible file', [screenshot]],
+      [
+        'a PDF',
+        [
+          screenshot,
+          { fileType: 'application/pdf', id: 'file_other', url: 'https://x/report.pdf' },
+        ],
+      ],
+    ])('keeps a batch with %s and the messages behind it in order', async (_kind, files) => {
+      mocks.drain.mockResolvedValue([
+        followUp('a', 1),
+        followUp('b', 2, { fileIds: [screenshot.id, 'file_other'] }),
+        followUp('c', 3),
+      ]);
+      mocks.resolveAttachmentMetadata.mockResolvedValue(files);
+
+      await expect(steer()).resolves.toEqual({ content: 'prompt a', messageId: 'msg-a' });
+      expect(mocks.settle).toHaveBeenCalledWith(scope, expect.any(String), ['b', 'c']);
+    });
   });
 
   describe('images pasted into the body', () => {
