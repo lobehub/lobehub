@@ -54,6 +54,7 @@ import { joinPublicChannel, listJoinableChannels } from './publicAccess';
 import { retryJob } from './retry';
 import { retryRouting } from './routing';
 import type { ChannelSendInput } from './send';
+import { type ChannelSearchOptions, searchChannelMessages } from './search';
 import { sendMessage } from './send';
 import type { ChannelStopScope } from './stop';
 import { stopScope } from './stop';
@@ -482,6 +483,18 @@ export class ChannelRepository {
     this.write(channelId, (tx, access) => channelUserCandidates(tx, access, search), {
       minRole: 'admin',
     });
+
+  /** Messages in a Channel the caller can read, its live Threads included, matching `query`. */
+  searchMessages = async (channelId: string, options: ChannelSearchOptions) => {
+    const access = await this.findAccess(channelId);
+    return this.db.transaction(async (tx) => {
+      const readable = access
+        ? !access.channel.isDeleted
+        : !!(await findOpenChannel(tx, this.userId, this.workspaceId, channelId));
+      if (!readable) throw new ChannelError('NOT_FOUND', 'Channel not found');
+      return searchChannelMessages(tx, channelId, options);
+    });
+  };
 
   detail = async (channelId: string, options?: Parameters<typeof readChannelView>[2]) => {
     if (!(await this.findAccess(channelId)))
