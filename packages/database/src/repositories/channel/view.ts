@@ -4,11 +4,11 @@ import {
   channelMessageEditedAt,
   channelMessageReceipt,
   channelMessageVia,
+  contactCardOf,
   type ChatMessageError,
   defaultChannelAgentDirectory,
   type LobeAgentAgencyConfig,
   resolveAgentAgencyConfig,
-  contactCardOf,
 } from '@lobechat/types';
 import {
   and,

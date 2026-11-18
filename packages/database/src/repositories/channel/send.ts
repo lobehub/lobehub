@@ -1,10 +1,11 @@
-import type { ChannelMessageMetadata, ChannelRoutingMode } from '@lobechat/types';
-import { CHANNEL_LIMITS } from '@lobechat/types';
+import type { ChannelMessageMetadata, ChannelRoutingMode, ContactCardInput } from '@lobechat/types';
+import { CHANNEL_LIMITS, contactCardOf, contactCardText } from '@lobechat/types';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 
+import { ContactModel } from '../../models/contact';
 import type { ChannelMessageItem } from '../../schemas';
 import { channelMembers, channelMessages, channelThreads, files } from '../../schemas';
-import type { Transaction } from '../../type';
+import type { LobeChatDatabase, Transaction } from '../../type';
 import { isUuid } from '../../utils/uuid';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { sharedAgentOwner } from './agent';
@@ -31,6 +32,11 @@ export interface ChannelSendInput {
    * (`channels.agentPairKey`). The caller stays the requester and execution identity.
    */
   authorAgentMemberId?: string;
+  /**
+   * Share a contact as a card. The server checks it may be shared, then writes the content (a text
+   * fallback) and `metadata.card` (a snapshot); a retry matches the original by this reference.
+   */
+  card?: ContactCardInput;
   content: string;
   fileIds?: string[];
   /** Member ids. A human quote dispatches only its mentioned Agents. */
@@ -51,14 +57,25 @@ export interface ChannelSendInput {
 const sameList = (a: string[], b: string[]) =>
   a.length === b.length && a.every((value, index) => value === b[index]);
 
+/** Whether a stored message shares the same contact, by reference rather than its snapshot. */
+const sameCard = (metadata: ChannelMessageMetadata | null, input: ContactCardInput) => {
+  const card = contactCardOf(metadata);
+  if (!card || card.type !== input.type) return false;
+  return card.type === 'user'
+    ? card.userId === (input as { userId: string }).userId
+    : card.agentId === (input as { agentId: string }).agentId;
+};
+
 export const validateSendInput = (input: ChannelSendInput) => {
   if (input.replyToId && input.rootMessageId)
     throw new ChannelError('BAD_REQUEST', 'Choose a reply or a thread root, not both');
   if (input.rootMessageId && input.threadId)
     throw new ChannelError('BAD_REQUEST', 'Choose a thread or a root message, not both');
   const fileIds = [...new Set(input.fileIds ?? [])];
+  if (input.card && fileIds.length)
+    throw new ChannelError('BAD_REQUEST', 'A card goes without attachments');
   if (
-    (!input.content.trim() && !fileIds.length) ||
+    (!input.card && !input.content.trim() && !fileIds.length) ||
     !input.requestKey ||
     input.content.length > CHANNEL_LIMITS.contentLength ||
     fileIds.length > CHANNEL_LIMITS.attachments
@@ -92,7 +109,7 @@ export const sendMessage = async (
 ): Promise<ChannelMessageItem> => {
   const { fileIds, mentions } = validateSendInput(input);
   const author = await requestAuthor(tx, channel, input.authorAgentMemberId);
-  if (author && (mentions.includes(author.id) || fileIds.length))
+  if (author && (mentions.includes(author.id) || fileIds.length || input.card))
     throw new ChannelError('BAD_REQUEST', 'An Agent asks the other Agent, without attachments');
   const [replyTo] = input.replyToId
     ? await tx
@@ -154,7 +171,9 @@ export const sendMessage = async (
     if (
       existing.userId !== (author ? null : member.userId) ||
       existing.agentId !== (author?.agentId ?? null) ||
-      existing.content !== input.content ||
+      !(input.card
+        ? sameCard(existing.metadata, input.card)
+        : existing.content === input.content) ||
       existing.replyToId !== (input.replyToId ?? null) ||
       existing.threadId !== threadId ||
       !sameList(existingFileIds, fileIds) ||
@@ -301,12 +320,22 @@ export const sendMessage = async (
             ? candidates
             : [];
 
+  // Resolved only for a new message: a retry returns the original card as it was sent.
+  const card =
+    input.card &&
+    (await new ContactModel(
+      tx as unknown as LobeChatDatabase,
+      member.userId!,
+      channel.workspaceId,
+    ).resolveCard(input.card));
+  const metadata = card ? { ...input.metadata, card } : input.metadata;
+
   const message = await appendMessage(tx, {
     ...(author ? { agentId: author.agentId } : { userId: member.userId }),
     channelId: channel.id,
-    content: input.content,
+    content: card ? contactCardText(card) : input.content,
     mentions,
-    ...(input.metadata && { metadata: input.metadata }),
+    ...(metadata && { metadata }),
     requestKey: input.requestKey,
     replyToId: input.replyToId,
     routingAttempt: routed.status === 'pending' ? 1 : 0,

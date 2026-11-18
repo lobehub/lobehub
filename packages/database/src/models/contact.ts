@@ -12,7 +12,7 @@ import type {
   ContactUserProfile,
   ContactWorkspace,
 } from '@lobechat/types';
-import { contactCardOf } from '@lobechat/types';
+import { channelMessageDeletedAt, contactCardOf } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import type { SQLWrapper } from 'drizzle-orm';
 import { and, desc, eq, exists, inArray, isNotNull, isNull, not, or, sql } from 'drizzle-orm';
@@ -841,7 +841,13 @@ export class ContactModel {
       .where(eq(channelMessages.id, messageId))
       .limit(1);
     const card = contactCardOf(row?.metadata);
-    if (!row || card?.type !== 'user' || card.userId !== addresseeId) return;
+    if (
+      !row ||
+      channelMessageDeletedAt(row.metadata) ||
+      card?.type !== 'user' ||
+      card.userId !== addresseeId
+    )
+      return;
     return { channelId: row.channelId, messageId, referrerId: row.senderId, type: 'card' };
   };
 

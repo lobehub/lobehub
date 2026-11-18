@@ -1,11 +1,10 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { ChannelVisibility, ContactCardInput } from '@lobechat/types';
+import type { ChannelVisibility } from '@lobechat/types';
 import {
   agentDisplayName,
   CHANNEL_LIMITS,
-  contactCardText,
   defaultChannelAgentDirectory,
   isChannelRuntime,
   isRemoteChannelRuntime,
@@ -530,19 +529,7 @@ export class ChannelService {
     await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
   };
 
-  send = async (
-    channelId: string,
-    { card: cardInput, ...input }: Omit<ChannelSendInput, 'routing'> & { card?: ContactCardInput },
-  ) => {
-    if (cardInput) {
-      if (input.fileIds?.length)
-        throw new ChannelError('BAD_REQUEST', 'A card goes without attachments');
-      const card = await new ContactModel(this.db, this.userId, this.workspaceId).resolveCard(
-        cardInput,
-      );
-      // The text fallback is what previews, notifications and Agents read.
-      input = { ...input, content: contactCardText(card), metadata: { card } };
-    }
+  send = async (channelId: string, input: Omit<ChannelSendInput, 'routing'>) => {
     // Explicit reply and mention routing is decided by the repository.
     const config =
       input.replyToId || input.mentions?.length

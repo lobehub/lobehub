@@ -10,13 +10,6 @@ const mocks = vi.hoisted(() => ({
   wake: vi.fn(),
   notify: vi.fn(),
   notifyMentions: vi.fn(),
-  resolveCard: vi.fn(),
-}));
-vi.mock('@/database/models/contact', () => ({
-  ContactModel: class {
-    resolveCard = mocks.resolveCard;
-  },
-  parseContactHandle: vi.fn(),
 }));
 vi.mock('@/database/repositories/channel', () => ({
   ChannelRepository: class {
@@ -74,51 +67,5 @@ describe('Channel routing ingress', () => {
     mocks.retry.mockRejectedValue(new Error('Forbidden'));
     await expect(service().retryRouting('channel', 'message')).rejects.toThrow('Forbidden');
     expect(mocks.wake).not.toHaveBeenCalled();
-  });
-});
-
-describe('sharing a contact card', () => {
-  const service = () => new ChannelService({} as never, 'sender', 'workspace');
-  const card = { avatar: null, name: 'Max', type: 'user', userId: 'max', username: 'max' };
-
-  it('stores the server snapshot and writes the text fallback itself', async () => {
-    mocks.resolveCard.mockResolvedValue(card);
-    await service().send('channel', {
-      card: { type: 'user', userId: 'max' },
-      content: 'forged',
-      requestKey: 'key',
-    });
-    expect(mocks.resolveCard).toHaveBeenCalledWith({ type: 'user', userId: 'max' });
-    expect(mocks.send).toHaveBeenCalledWith('channel', {
-      content: '[Contact card] Max',
-      metadata: { card },
-      requestKey: 'key',
-      routing: 'fallback',
-    });
-  });
-
-  it('sends nothing when the card is refused', async () => {
-    mocks.resolveCard.mockRejectedValue(new Error('Share only your contacts'));
-    await expect(
-      service().send('channel', {
-        card: { type: 'user', userId: 'stranger' },
-        content: '',
-        requestKey: 'key',
-      }),
-    ).rejects.toThrow('Share only your contacts');
-    expect(mocks.send).not.toHaveBeenCalled();
-  });
-
-  it('refuses attachments on a card', async () => {
-    // The mocked ChannelError keeps only its code.
-    await expect(
-      service().send('channel', {
-        card: { agentId: 'agent', type: 'agent' },
-        content: '',
-        fileIds: ['file'],
-        requestKey: 'key',
-      }),
-    ).rejects.toThrow('BAD_REQUEST');
-    expect(mocks.resolveCard).not.toHaveBeenCalled();
   });
 });
