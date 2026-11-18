@@ -12,8 +12,12 @@ import {
 } from '@lobechat/context-engine';
 import { assembleManifestPool, resolveToolRules } from '@lobechat/mecha';
 import {
+  type AgentPluginEntry,
   type BuiltinToolResolveContext,
   type ChatCompletionTool,
+  getActivePluginIds,
+  getDisabledPluginIds,
+  type LobeAgentChatConfig,
   type ToolManifest,
   type WorkingModel,
 } from '@lobechat/types';
@@ -42,6 +46,7 @@ import { getSearchConfig } from '../getSearchConfig';
 import { isCanUseFC } from '../isCanUseFC';
 import { buildClientConnectorManifests } from './buildClientConnectorManifests';
 import {
+  type AgentConnectorActivation,
   applyAgentConnectorActivation,
   resolveAgentConnectorActivation,
 } from './connectorActivation';
@@ -156,28 +161,25 @@ export const createAgentToolsEngine = (
      * `readAttachment` so the preview can be paged, as the server's tool discovery does.
      */
     hasOversizedFiles?: boolean;
-    /**
-     * The agent that is executing, when it is not the active one (a sub-agent
-     * or group member). Its own connector switches decide what the run can
-     * reach — the active agent's must not hide a connector it turned on.
-     */
-    runAgent?: Parameters<typeof resolveAgentConnectorActivation>[0];
+    /** Resolved for the executing agent, which can differ from the agent open in the UI. */
+    runAgent?: {
+      chatConfig?: LobeAgentChatConfig;
+      connectors?: AgentConnectorActivation;
+      enabledPluginIds?: string[];
+      plugins?: AgentPluginEntry[];
+    };
   } = {},
 ) => {
   const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
   const agentState = getAgentStoreState();
   const activeAgentId = agentState.activeAgentId || '';
-  const chatConfig = agentChatConfigSelectors.currentChatConfig(agentState);
-  // Connectors are opt-in per agent and two-state: one that is on is found
-  // through the activator instead of being invoked up front, one that is off
-  // leaves the pool. `pluginIds` already carries what this turn brings in.
-  const connectors = resolveAgentConnectorActivation(
-    options.runAgent ?? {
-      chatConfig,
-      plugins: agentSelectors.currentAgentConfig(agentState)?.plugins,
-    },
-    pluginIds,
-  );
+  const agent = options.runAgent ?? {
+    chatConfig: agentChatConfigSelectors.currentChatConfig(agentState),
+    plugins: agentSelectors.currentAgentConfig(agentState)?.plugins,
+  };
+  const chatConfig = agent.chatConfig ?? {};
+  const connectors =
+    options.runAgent?.connectors ?? resolveAgentConnectorActivation(agent, pluginIds);
 
   // The rules — mode, per-tool enablement and defaults — are shared with the
   // server runtime through `@lobechat/mecha`; the browser only assembles its
@@ -186,16 +188,15 @@ export const createAgentToolsEngine = (
   const resolved = resolveToolRules({
     agent: {
       chatConfig,
-      // `currentAgentPlugins` already resolves to pinned-only identifiers.
       plugins: applyAgentConnectorActivation(
-        agentSelectors.currentAgentPlugins(agentState),
+        options.runAgent?.enabledPluginIds ?? getActivePluginIds(agent.plugins),
         connectors,
       ),
     },
     // Feature-flagged tools (e.g. builtin-dashboard) leave the pool while their
     // flag is off for this user.
     disabledPluginIds: [
-      ...agentSelectors.currentAgentDisabledPlugins(agentState),
+      ...getDisabledPluginIds(agent.plugins),
       ...connectors.offIds,
       ...getFeatureDisabledToolIds(getServerConfigStoreState()?.featureFlags),
       // This engine serves runs the browser executes; server-only tools have nothing to run here.
@@ -227,6 +228,10 @@ export const createAgentToolsEngine = (
     manifestContext,
     enableChecker: createEnableChecker({
       allowExplicitActivation: resolved.allowExplicitActivation,
+      explicitActivationIds:
+        resolved.toolMode === 'custom'
+          ? new Set(connectors.connectorIds.filter(connectors.activation.isAllowed))
+          : undefined,
       platformFilter: ({ pluginId }) => {
         const toolStoreState = getToolStoreState();
         const installedPlugin = pluginSelectors.getInstalledPluginById(pluginId)(toolStoreState);

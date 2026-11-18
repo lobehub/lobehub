@@ -227,7 +227,11 @@ export class StreamingExecutorActionImpl {
     // Connectors are two-state: one the agent has on is found through the
     // activator, so it leaves the invocation set here unless this turn mentions
     // it. Manual mode has no activator and invokes it directly instead.
-    const runAgent = { chatConfig: agentConfig.chatConfig, plugins: agentConfigData?.plugins };
+    const runAgent = {
+      chatConfig: agentConfig.chatConfig,
+      enabledPluginIds: resolvedPluginIds,
+      plugins: agentConfigData?.plugins,
+    };
     const connectors = resolveAgentConnectorActivation(runAgent, selectedToolIds);
     const pluginIds =
       disableTools || !resolvedPluginIds
@@ -287,8 +291,7 @@ export class StreamingExecutorActionImpl {
       // sub-agent runs. Desktop client runs also need the local environment so
       // local-system can advertise IPC-only capabilities such as direct image reads.
       { executionEnv: isDesktop ? 'local' : undefined, isSubAgent, scope },
-      // `runAgent`: the executing agent's connector switches, not the active agent's.
-      { hasOversizedFiles: hasPreviewableFiles(messages), runAgent },
+      { hasOversizedFiles: hasPreviewableFiles(messages), runAgent: { ...runAgent, connectors } },
     );
     // Manual mode omits the activator and keeps explicit pins and runtime tools.
     const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';

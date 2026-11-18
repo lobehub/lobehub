@@ -225,7 +225,11 @@ export const discoverTools = async (
     exclusivePluginIds || isGoalTurn
       ? undefined
       : resolveConnectorActivation({
-          hasActivator: hasConnectorActivator(agentConfig.chatConfig),
+          hasActivator: hasConnectorActivator(
+            agentConfig.chatConfig,
+            agentPlugins,
+            disabledPluginIds,
+          ),
           optedInIds,
           turnIds: [
             ...(additionalPluginIds || []),
@@ -449,21 +453,22 @@ export const discoverTools = async (
 
     // A connector that is on is found on demand rather than invoked up front:
     // it leaves the invocation candidates here and stays in the discovery pool
-    // below. Without the activator (manual mode) it is the other way round.
+    // below. Runs without an activator need it in the initial tool set.
+    let allowedConnectorIds: Set<string> | undefined;
     if (connectorActivation) {
-      agentPlugins = applyConnectorActivation(
-        agentPlugins,
-        [
-          ...installedPlugins,
-          ...connectorManifests,
-          ...discoverableConnectorManifests,
-          ...lobehubSkillManifests,
-          ...composioManifests,
-        ]
-          .map((item) => item.identifier)
-          .filter((identifier) => !disabledPluginIdSet.has(identifier)),
-        connectorActivation,
-      );
+      const connectorIds = [
+        ...installedPlugins,
+        ...connectorManifests,
+        ...discoverableConnectorManifests,
+        ...lobehubSkillManifests,
+        ...composioManifests,
+      ]
+        .map((item) => item.identifier)
+        .filter((id) => !disabledPluginIdSet.has(id));
+      agentPlugins = applyConnectorActivation(agentPlugins, connectorIds, connectorActivation);
+      if (agentConfig.chatConfig?.toolMode === 'custom') {
+        allowedConnectorIds = new Set(connectorIds.filter(connectorActivation.isAllowed));
+      }
     }
 
     // Dynamically inject turn-scoped builtin tools.
@@ -587,6 +592,7 @@ export const discoverTools = async (
           : (agentConfig.chatConfig ?? undefined),
         plugins: agentPlugins,
       },
+      allowedConnectorIds,
       canUseDevice,
       deviceContext: gatewayConfigured
         ? {

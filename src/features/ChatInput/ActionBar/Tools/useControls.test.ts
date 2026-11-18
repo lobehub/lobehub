@@ -1,6 +1,7 @@
 import type { ItemType } from '@lobehub/ui';
-import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { createElement, Fragment } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ComposioServer, ComposioServerStatus } from '@/store/tool/slices/composioStore/types';
 import {
@@ -147,6 +148,33 @@ describe('chat input tool picker', () => {
     mocks.lobehubSkillServers = [];
     mocks.plugins = [];
     mocks.mode = 'auto';
+  });
+
+  afterEach(cleanup);
+
+  it.each([
+    { id: 'gmail', pin: false },
+    { id: 'builtin-tool', pin: true },
+  ])('offers the applicable activation actions on the $id row', async ({ id, pin }) => {
+    mocks.composioEnabled = true;
+    mocks.composioServers = [{ identifier: 'gmail', status: ComposioServerStatus.ACTIVE }];
+    mocks.plugins = [{ identifier: 'gmail', mode: 'auto' }];
+
+    const Row = () => {
+      const { marketItems } = useControls();
+      const group = marketItems.find((item) => item?.key === 'auto');
+      const row = group?.type === 'group' && group.children?.find((item) => item?.key === id);
+      if (!row || !('label' in row)) throw new Error(`Missing row ${id}`);
+      return createElement(Fragment, null, row.label);
+    };
+    render(createElement(Row));
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'tools.skillActivateMode.title' }));
+
+    expect(
+      await screen.findByRole('button', { name: 'tools.activation.action.auto' }),
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'tools.activation.action.disable' })).toBeTruthy();
+    expect(!!screen.queryByRole('button', { name: 'tools.activation.action.pin' })).toBe(pin);
   });
 
   it('only shows connectors with connection records and keeps rows needing authorization', () => {

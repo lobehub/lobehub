@@ -4,7 +4,12 @@ import {
   hasConnectorActivator,
   resolveConnectorActivation,
 } from '@lobechat/mecha';
-import { type AgentPluginEntry, getOptedInPluginIds } from '@lobechat/types';
+import {
+  type AgentPluginEntry,
+  getActivePluginIds,
+  getDisabledPluginIds,
+  getOptedInPluginIds,
+} from '@lobechat/types';
 
 import { getToolStoreState } from '@/store/tool';
 import type { ToolStoreState } from '@/store/tool/initialState';
@@ -52,6 +57,7 @@ export interface AgentConnectorActivation {
 export const resolveAgentConnectorActivation = (
   agent: {
     chatConfig?: Pick<LobeAgentChatConfig, 'enableAgentMode' | 'skillActivateMode' | 'toolMode'>;
+    enabledPluginIds?: readonly string[];
     /** The raw `plugins` field, before it is collapsed to pinned identifiers. */
     plugins?: AgentPluginEntry[];
   },
@@ -60,7 +66,11 @@ export const resolveAgentConnectorActivation = (
   toolState: ToolStoreState = getToolStoreState(),
 ): AgentConnectorActivation => {
   const activation = resolveConnectorActivation({
-    hasActivator: hasConnectorActivator(agent.chatConfig),
+    hasActivator: hasConnectorActivator(
+      agent.chatConfig,
+      [...(agent.enabledPluginIds ?? getActivePluginIds(agent.plugins)), ...turnIds],
+      getDisabledPluginIds(agent.plugins),
+    ),
     optedInIds: getOptedInPluginIds(agent.plugins),
     turnIds,
   });

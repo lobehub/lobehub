@@ -348,6 +348,33 @@ describe('discoverTools — custom MCP connectors are opt-in per agent', () => {
     },
   );
 
+  it.each([ON, { plugins: [YINGMI] }])(
+    'offers an enabled connector directly in a custom toolset without an activator: %j',
+    async (options) => {
+      const result = await run({ ...options, chatConfig: { toolMode: 'custom' } });
+
+      expect(result.toolsResult.enabledToolIds).not.toContain('lobe-activator');
+      expect(offeredToolNames(result)).toContain(`${YINGMI}____BatchGetFundNavHistory____mcp`);
+    },
+  );
+
+  it('lets a custom toolset with an explicit activator restore its configured connector', async () => {
+    const result = await run({
+      ...ON,
+      chatConfig: { toolMode: 'custom' },
+      plugins: ['lobe-activator'],
+    });
+
+    expect(result.toolsResult.enabledToolIds).toContain('lobe-activator');
+    expect(result.toolsResult.enabledToolIds).not.toContain(YINGMI);
+    const activated = result.toolsEngine!.generateToolsDetailed(explicitConnectorInput(YINGMI));
+    expect(offeredToolNames(activated)).toContain(`${YINGMI}____BatchGetFundNavHistory____mcp`);
+    expect(
+      result.toolsEngine!.generateToolsDetailed(explicitConnectorInput('lobe-skills'))
+        .enabledToolIds,
+    ).toEqual([]);
+  });
+
   it('keeps a connector the agent never turned on out of a manual-mode run too', async () => {
     const result = await run({ chatConfig: { skillActivateMode: 'manual' } });
 

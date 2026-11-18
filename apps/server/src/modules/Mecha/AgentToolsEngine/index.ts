@@ -213,6 +213,8 @@ export const createServerAgentToolsEngine = (
     manifestContext,
     enableChecker: createEnableChecker({
       allowExplicitActivation: resolved.allowExplicitActivation,
+      explicitActivationIds:
+        resolved.toolMode === 'custom' ? params.allowedConnectorIds : undefined,
       rules: resolved.rules,
     }),
   });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { resolveImplicitMode } from './librarySkillPolicy';
-import { CONNECTOR_MODES, resolveActivationSets } from './useActivationSets';
+import { resolveActivationSets } from './useActivationSets';
 
 const resolve = (rawPlugins: Parameters<typeof resolveActivationSets>[0]['rawPlugins']) =>
   resolveActivationSets({
@@ -49,11 +49,5 @@ describe('resolveActivationSets', () => {
 
     expect(resolveImplicitMode('gmail', optInIds)).toBe('disabled');
     expect(resolveImplicitMode('lobe-image-generation', optInIds)).toBe('auto');
-  });
-});
-
-describe('CONNECTOR_MODES', () => {
-  it('offers a connector row on and off only', () => {
-    expect(CONNECTOR_MODES).toEqual(['auto', 'disabled']);
   });
 });

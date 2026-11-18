@@ -1,17 +1,20 @@
+import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { type LobeAgentChatConfig, resolveToolMode } from '@lobechat/types';
 
-/**
- * Whether a run of this agent has the activator, i.e. whether a connector that
- * is on can be found on demand. Only agent mode allows explicit activation —
- * custom mode exposes exactly the declared plugins and chat mode its own
- * whitelist — and manual skill-activate mode strips the activator from it.
- */
+/** Agent mode provides the activator by default. Custom toolsets can declare it explicitly. */
 export const hasConnectorActivator = (
   chatConfig:
     | Pick<LobeAgentChatConfig, 'enableAgentMode' | 'skillActivateMode' | 'toolMode'>
     | null
     | undefined,
-): boolean => resolveToolMode(chatConfig) === 'agent' && chatConfig?.skillActivateMode !== 'manual';
+  pluginIds: readonly string[] = [],
+  disabledIds: readonly string[] = [],
+): boolean => {
+  if (chatConfig?.skillActivateMode === 'manual' || disabledIds.includes(LobeActivatorIdentifier))
+    return false;
+  const mode = resolveToolMode(chatConfig);
+  return mode === 'agent' || (mode === 'custom' && pluginIds.includes(LobeActivatorIdentifier));
+};
 
 export interface ConnectorActivationRequest {
   /**
