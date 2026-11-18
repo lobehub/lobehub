@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-import type { PublicChatGroup } from '../helpers/public-fields';
+import type { PublicChatGroup, PublicChatGroupMember } from '../helpers/public-fields';
 import type { IPaginationQuery } from './common.type';
-import { PaginationQuerySchema } from './common.type';
+import { dateTimeSchema, PaginationQuerySchema } from './common.type';
 
 // The supervisor is the group's own synthetic agent, created with the group;
 // an existing agent can never be promoted into that role.
@@ -67,3 +67,39 @@ export interface ChatGroupListResponse {
   chatGroups: PublicChatGroup[];
   total: number;
 }
+
+// ==================== Response Schemas ====================
+
+/** One `chat_groups_agents` row as `projectPublicChatGroup` exposes it. */
+export const ChatGroupMemberSchema = z
+  .object({
+    agentId: z.string(),
+    enabled: z.boolean().nullable(),
+    order: z.number().int().nullable(),
+    // `supervisor` is the group's own synthetic agent; callers can only assign the other two.
+    role: z.enum(['supervisor', ...CHAT_GROUP_MEMBER_ROLES]).nullable(),
+  } satisfies Record<keyof PublicChatGroupMember, z.ZodType>)
+  .strict()
+  .meta({ id: 'ChatGroupMember' });
+
+export const ChatGroupSchema = z
+  .object({
+    avatar: z.string().nullable(),
+    backgroundColor: z.string().nullable(),
+    createdAt: dateTimeSchema,
+    description: z.string().nullable(),
+    id: z.string(),
+    /** The supervisor first, then members by `order`. */
+    members: z.array(ChatGroupMemberSchema),
+    personal: z.boolean(),
+    pinned: z.boolean().nullable(),
+    title: z.string().nullable(),
+    updatedAt: dateTimeSchema,
+  } satisfies Record<keyof PublicChatGroup, z.ZodType>)
+  .strict()
+  .meta({ id: 'ChatGroup' });
+
+export const ChatGroupListSchema = z
+  .object({ chatGroups: z.array(ChatGroupSchema), total: z.number().int().min(0) })
+  .strict()
+  .meta({ id: 'ChatGroupList' });

@@ -6,8 +6,9 @@ import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
 import { logger } from 'hono/logger';
 import { prettyJSON } from 'hono/pretty-json';
-import { describeRoute } from 'hono-openapi';
+import { z } from 'zod';
 
+import { routeDoc } from './common/openapi';
 import { SCALAR_CUSTOM_CSS } from './docs-theme';
 // Import user authentication middleware (supports both OIDC and API Key authentication)
 import { userAuthMiddleware } from './middleware/auth';
@@ -15,6 +16,7 @@ import { workspaceAuthMiddleware } from './middleware/workspace';
 // Import routes
 import routes from './routes';
 import { buildSpecDocument } from './spec';
+import { dateTimeSchema } from './types/common.type';
 
 // Create Hono app instance
 const app = new Hono().basePath('/api/v1');
@@ -40,13 +42,31 @@ app.onError((error: Error, c) => {
 });
 
 // Health check endpoint
-app.get('/health', describeRoute({ summary: 'Health check', tags: ['health'] }), (c) => {
-  return c.json({
-    service: 'lobe-chat-api',
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-  });
-});
+const HealthSchema = z
+  .object({
+    service: z.string(),
+    status: z.literal('ok'),
+    timestamp: dateTimeSchema,
+  })
+  .strict();
+
+app.get(
+  '/health',
+  routeDoc({
+    data: HealthSchema,
+    envelope: false,
+    public: true,
+    summary: 'Health check',
+    tags: ['health'],
+  }),
+  (c) => {
+    return c.json({
+      service: 'lobe-chat-api',
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+    });
+  },
+);
 
 // API documentation (public, like the API spec itself).
 // The spec is rebuilt from the live routes on first request and cached, so it
