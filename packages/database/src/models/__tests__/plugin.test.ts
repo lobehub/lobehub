@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { NewInstalledPlugin } from '../../schemas';
-import { userInstalledPlugins, users, workspaces } from '../../schemas';
+import { userConnectors, userInstalledPlugins, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { PluginModel } from '../plugin';
 
@@ -249,6 +249,30 @@ describe('PluginModel', () => {
       expect(rows.map((row) => row.customParams?.composio?.connectedAccountId)).toEqual([
         'acc-legacy',
       ]);
+    });
+
+    it("removes a shared connection's projection but keeps a member's private connection", async () => {
+      // 456's projection mirrors its private connection of the app
+      await serverDB.insert(userConnectors).values({
+        identifier: 'gmail',
+        metadata: { composio: { connectedAccountId: 'acc-private' } },
+        name: 'Gmail',
+        sourceType: 'composio',
+        status: 'connected',
+        userId: '456',
+        visibility: 'private',
+        workspaceId,
+      } as any);
+
+      await new PluginModel(serverDB, userId, workspaceId).deleteComposioProjectionKeepingPrivate(
+        'gmail',
+      );
+
+      const rows = await new PluginModel(serverDB, userId, workspaceId).queryComposioMirrors();
+      expect(rows.map((row) => row.customParams?.composio?.connectedAccountId)).toEqual([
+        'acc-private',
+      ]);
+      expect(await new PluginModel(serverDB, userId, workspaceId).findById('search')).toBeDefined();
     });
   });
 

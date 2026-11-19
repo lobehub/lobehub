@@ -628,8 +628,8 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
       update: vi.fn().mockResolvedValue(undefined),
     };
     pluginModelMock = {
-      delete: vi.fn().mockResolvedValue(undefined),
       deleteComposioMirrors: vi.fn().mockResolvedValue(undefined),
+      deleteComposioProjectionKeepingPrivate: vi.fn().mockResolvedValue(undefined),
     };
     mocks.connectedAccountsDelete.mockResolvedValue(undefined);
     mocks.removeSubscriptions.mockResolvedValue(undefined);
@@ -735,7 +735,7 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
     await caller().delete({ id: DELETE_ID });
 
     expect(mocks.connectedAccountsDelete).toHaveBeenCalledWith('ca-github');
-    expect(pluginModelMock.delete).toHaveBeenCalledWith('github');
+    expect(pluginModelMock.deleteComposioProjectionKeepingPrivate).toHaveBeenCalledWith('github');
     expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
   });
 
@@ -758,7 +758,7 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
       '[Composio] Failed to delete remote connection:',
       expect.any(Error),
     );
-    expect(pluginModelMock.delete).toHaveBeenCalledWith('gmail');
+    expect(pluginModelMock.deleteComposioProjectionKeepingPrivate).toHaveBeenCalledWith('gmail');
     expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
     warn.mockRestore();
   });
@@ -791,7 +791,7 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
 
     expect(connectorModelMock.queryComposioAccountHolders).toHaveBeenCalledWith('ca-mate');
     expect(mocks.connectedAccountsDelete).not.toHaveBeenCalled();
-    expect(pluginModelMock.delete).not.toHaveBeenCalled();
+    expect(pluginModelMock.deleteComposioProjectionKeepingPrivate).not.toHaveBeenCalled();
     expect(pluginModelMock.deleteComposioMirrors).not.toHaveBeenCalled();
     expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
   });
@@ -808,7 +808,7 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
     await caller().delete({ id: DELETE_ID });
 
     expect(mocks.connectedAccountsDelete).not.toHaveBeenCalled();
-    expect(pluginModelMock.delete).not.toHaveBeenCalled();
+    expect(pluginModelMock.deleteComposioProjectionKeepingPrivate).not.toHaveBeenCalled();
     expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
   });
 

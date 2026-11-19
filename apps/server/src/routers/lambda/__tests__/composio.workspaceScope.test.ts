@@ -82,8 +82,8 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
     connectorToolModelMock = { deleteToolsNotIn: vi.fn(), upsertMany: vi.fn() };
     pluginModelMock = {
       create: vi.fn(),
-      delete: vi.fn(),
       deleteComposioMirrors: vi.fn(),
+      deleteComposioProjectionKeepingPrivate: vi.fn(),
       findById: vi.fn(),
       queryComposioMirrors: vi.fn().mockResolvedValue([]),
       update: vi.fn(),
@@ -280,7 +280,7 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
       expect(connectorModelMock.delete).not.toHaveBeenCalled();
       expect(connectorModelMock.update).not.toHaveBeenCalled();
       expect(connectorModelMock.create).not.toHaveBeenCalled();
-      expect(pluginModelMock.delete).not.toHaveBeenCalled();
+      expect(pluginModelMock.deleteComposioProjectionKeepingPrivate).not.toHaveBeenCalled();
     };
 
     it('refuses an account held by a teammate’s private connector', async () => {
@@ -441,7 +441,7 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
     expect(composioClientMocks.deleteAccount).toHaveBeenCalledWith('acc-shared');
     expect(connectorModelMock.delete).toHaveBeenCalledWith('conn-shared');
     // The shared connection is the workspace's projection of the app.
-    expect(pluginModelMock.delete).toHaveBeenCalledWith('gmail');
+    expect(pluginModelMock.deleteComposioProjectionKeepingPrivate).toHaveBeenCalledWith('gmail');
     expect(pluginModelMock.deleteComposioMirrors).not.toHaveBeenCalled();
   });
 
@@ -504,7 +504,7 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
       });
       await memberCaller().removeComposioPlugin({ identifier: 'gmail' });
 
-      expect(pluginModelMock.delete).not.toHaveBeenCalled();
+      expect(pluginModelMock.deleteComposioProjectionKeepingPrivate).not.toHaveBeenCalled();
       expect(pluginModelMock.deleteComposioMirrors).toHaveBeenNthCalledWith(
         1,
         'gmail',
@@ -565,7 +565,7 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
       expect(patch).not.toHaveProperty('visibility');
       expect(patch).not.toHaveProperty('agentId');
       // Only the private connection's own projection rows are replaced.
-      expect(pluginModelMock.delete).not.toHaveBeenCalled();
+      expect(pluginModelMock.deleteComposioProjectionKeepingPrivate).not.toHaveBeenCalled();
       expect(pluginModelMock.deleteComposioMirrors).toHaveBeenCalledWith('gmail', 'acc-stale');
     });
 

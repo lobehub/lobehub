@@ -41,7 +41,7 @@ vi.mock('@/database/models/plugin', () => ({
   PluginModel: vi.fn().mockImplementation(function () {
     return {
       create: mocks.pluginCreate,
-      delete: mocks.pluginDelete,
+      deleteComposioProjectionKeepingPrivate: mocks.pluginDelete,
       findById: mocks.pluginFindById,
       queryComposioMirrors: mocks.pluginQueryComposioMirrors,
       update: mocks.pluginUpdate,
