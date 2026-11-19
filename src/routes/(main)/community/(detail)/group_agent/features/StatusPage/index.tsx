@@ -16,7 +16,7 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
   const { t } = useTranslation('discover');
 
   const handleBackToMarket = () => {
-    navigate('/community');
+    navigate('/marketplace');
   };
 
   // Unpublished status

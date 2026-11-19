@@ -32,6 +32,7 @@ import TaskDetailSkeleton from '@/features/AgentTasks/AgentTaskDetail/TaskDetail
 import DevicesPageSkeleton from '@/features/DeviceManager/Skeleton';
 import { WORKSPACE_SETTINGS_TABS } from '@/features/Workspace/workspaceAwarePath';
 import AppShellSkeleton from '@/spa/BootShell/AppShellSkeleton';
+import { LegacyCommunityRedirect, LegacyPathRedirect } from '@/spa/router/legacyPathRedirect';
 import { createTabRouter } from '@/spa/router/tabRouter';
 import { resolveRouteSkeleton } from '@/spa/router/useRouteSkeleton';
 
@@ -90,6 +91,7 @@ async function readRouterSources() {
       'onboardingRoute.tsx',
       'collaborationRoutes.tsx',
       'evalRoutes.tsx',
+      'marketplaceRoutes.tsx',
     ].map((filename) => readFile(path.join(process.cwd(), 'src/spa/router', filename), 'utf8')),
   );
 }
@@ -719,6 +721,91 @@ describe('desktop router shared definition', () => {
 
       expect(settingsRoute, 'Workspace settings route must exist').toBeDefined();
       expect(registeredTabs).toEqual([...WORKSPACE_SETTINGS_TABS].sort());
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s serves installed skills and connectors in the Marketplace, beside the skill detail',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+
+      for (const [url, leaf, titleKey] of [
+        [
+          '/marketplace/skill/installed',
+          'skill/installed',
+          'navigation.marketplaceInstalledSkills',
+        ],
+        [
+          '/acme/marketplace/skill/installed',
+          'skill/installed',
+          'navigation.marketplaceInstalledSkills',
+        ],
+        ['/marketplace/connector', 'connector', 'navigation.marketplaceConnectors'],
+        ['/acme/marketplace/connector', 'connector', 'navigation.marketplaceConnectors'],
+      ] as const) {
+        const matches = matchRoutes(routes, url);
+        const handle = matches?.at(-1)?.route.handle as {
+          meta?: { Skeleton?: unknown; titleKey?: string };
+        };
+
+        expect(matches?.at(-1)?.route.path, url).toBe(leaf);
+        // Inside the marketplace root (its sidebar), not the list or detail layouts.
+        expect(matches?.at(-2)?.route.path, url).toBe('marketplace');
+        expect(handle.meta?.titleKey, url).toBe(titleKey);
+        expect(handle.meta?.Skeleton, url).toBeDefined();
+      }
+
+      // A real skill identifier still opens the catalog detail page.
+      expect(matchRoutes(routes, '/marketplace/skill/some-skill')?.at(-1)?.route.path).toBe(
+        'skill/:slug',
+      );
+      expect(matchRoutes(routes, '/marketplace/skill')?.at(-2)?.route.path).toBe('skill');
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s redirects settings skill / connector URLs to the Marketplace',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+
+      for (const [url, to] of [
+        ['/settings/skill', '/marketplace/skill/installed'],
+        ['/settings/skill/sub', '/marketplace/skill/installed'],
+        ['/settings/connector', '/marketplace/connector'],
+        ['/settings/connector/sub', '/marketplace/connector'],
+        ['/acme/settings/skill', '/marketplace/skill/installed'],
+        ['/acme/settings/connector', '/marketplace/connector'],
+      ] as const) {
+        const element = matchRoutes(routes, url)?.at(-1)?.route.element as
+          ReactElement<{ to: string }> | undefined;
+
+        // Before the static routes existed, `/settings/skill` fell into `:tab` and
+        // rendered the default tab once the componentMap entry was gone.
+        expect(element?.type, url).toBe(LegacyPathRedirect);
+        expect(element?.props.to, url).toBe(to);
+      }
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s forwards every old /community URL to the Marketplace',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+
+      for (const url of [
+        '/community',
+        '/community/mcp/notion',
+        '/acme/community/skill',
+        // Compete with `/:workspaceSlug/agent[/:aid]`; a lone `community/*`
+        // splat lost and read `community` as a workspace slug.
+        '/community/agent',
+        '/community/agent/some-agent',
+        '/acme/community/agent/some-agent',
+        '/community/workspace/settings',
+      ]) {
+        const element = matchRoutes(routes, url)?.at(-1)?.route.element as ReactElement | undefined;
+        expect(element?.type, url).toBe(LegacyCommunityRedirect);
+      }
     },
   );
 

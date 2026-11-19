@@ -2,36 +2,50 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { McpIcon, ProviderIcon, SkillsIcon } from '@lobehub/ui/icons';
-import { Bot, Brain, ShapesIcon } from 'lucide-react';
+import { Blocks, Bot, Brain, ShapesIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import {
+  getMarketplaceSubPath,
+  MARKETPLACE_CONNECTOR_PATH,
+  MARKETPLACE_INSTALLED_SKILLS_PATH,
+  MARKETPLACE_PATH,
+  MARKETPLACE_SKILL_PATH,
+} from '@/features/Marketplace/paths';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { DiscoverTab } from '@/types/discover';
 import { isModifierClick } from '@/utils/navigation';
+
+/** Connector management moved here from settings; not a Discover catalog tab. */
+const CONNECTOR_TAB = 'connector';
 
 interface Item {
   icon: NavItemProps['icon'];
   key: string;
+  /** Lists Market content, so it hides when the market is disabled. */
+  marketOnly?: boolean;
   onClick?: () => void;
   title: NavItemProps['title'];
   url?: string;
 }
 
+// Workspace-aware: `/:slug/marketplace/skill` resolves to `skill` as well.
 const useActiveTabKey = () => {
   const { pathname } = useActiveLocation();
-  if (pathname.endsWith('/community')) return DiscoverTab.Home;
-  return (pathname.split('/community/').at(1) as DiscoverTab) || DiscoverTab.Home;
+  return getMarketplaceSubPath(pathname) || DiscoverTab.Home;
 };
 
 const Nav = memo(() => {
   const tab = useActiveTabKey();
   const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('discover');
+  const { showMarket } = useServerConfigStore(featureFlagsSelectors);
 
   const items: Item[] = useMemo(
     () =>
@@ -39,41 +53,53 @@ const Nav = memo(() => {
         {
           icon: ShapesIcon,
           key: DiscoverTab.Home,
+          marketOnly: true,
           title: t('tab.home'),
-          url: '/community',
+          url: MARKETPLACE_PATH,
         },
         {
           icon: Bot,
           key: DiscoverTab.Assistants,
+          marketOnly: true,
           title: t('tab.assistant'),
-          url: '/community/agent',
+          url: `${MARKETPLACE_PATH}/agent`,
         },
         {
           icon: SkillsIcon,
           key: DiscoverTab.Skills,
           title: t('tab.skill'),
-          url: '/community/skill',
+          // Without the market only the installed view exists.
+          url: showMarket ? MARKETPLACE_SKILL_PATH : MARKETPLACE_INSTALLED_SKILLS_PATH,
+        },
+        {
+          icon: Blocks,
+          key: CONNECTOR_TAB,
+          title: t('tab.connector'),
+          url: MARKETPLACE_CONNECTOR_PATH,
         },
         {
           icon: McpIcon,
           key: DiscoverTab.Mcp,
+          marketOnly: true,
           title: `MCP`,
-          url: '/community/mcp',
+          url: `${MARKETPLACE_PATH}/mcp`,
         },
         {
           icon: Brain,
           key: DiscoverTab.Models,
+          marketOnly: true,
           title: t('tab.model'),
-          url: '/community/model',
+          url: `${MARKETPLACE_PATH}/model`,
         },
         {
           icon: ProviderIcon,
           key: DiscoverTab.Providers,
+          marketOnly: true,
           title: t('tab.provider'),
-          url: '/community/provider',
+          url: `${MARKETPLACE_PATH}/provider`,
         },
-      ] as Item[],
-    [t],
+      ].filter((item: Item) => showMarket || !item.marketOnly) as Item[],
+    [showMarket, t],
   );
 
   return (

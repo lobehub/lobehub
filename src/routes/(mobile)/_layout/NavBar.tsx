@@ -13,6 +13,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MOBILE_TABBAR_HEIGHT } from '@/const/layoutTokens';
+import { MARKETPLACE_INSTALLED_SKILLS_PATH, MARKETPLACE_PATH } from '@/features/Marketplace/paths';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useMobileNavigation } from '@/hooks/useMobileNavigation';
 import { SidebarTabKey } from '@/store/global/initialState';
@@ -55,13 +56,15 @@ const NavBar = memo(() => {
           },
           title: t('tab.chat'),
         },
-        showMarket && {
+        // Always shown: installed skills and connectors live in the Marketplace,
+        // so with the market off it opens straight on the installed skills.
+        {
           icon: (active: boolean) => (
             <Icon className={active ? fallback.active : undefined} icon={Compass} />
           ),
           key: SidebarTabKey.Community,
           onClick: () => {
-            navigate('/community');
+            navigate(showMarket ? MARKETPLACE_PATH : MARKETPLACE_INSTALLED_SKILLS_PATH);
           },
           title: t('tab.community'),
         },

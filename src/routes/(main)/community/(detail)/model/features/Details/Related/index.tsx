@@ -18,7 +18,7 @@ const Related = memo(() => {
           query: {
             category,
           },
-          url: '/community/plugin',
+          url: '/marketplace/mcp',
         })}
       >
         {t('assistants.details.related.listTitle')}

@@ -906,7 +906,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   );
 
   // Distinguish community plugins and custom plugins.
-  // Whitelist `type === 'plugin'` (matching /settings/skill) so connected
+  // Whitelist `type === 'plugin'` (matching /marketplace/skill/installed) so connected
   // integrations (Composio/LobeHub Skill gateway plugins with other sources like
   // 'self'/'builtin') don't leak in here and duplicate the brand-icon items
   // already rendered under the LobeHub group.

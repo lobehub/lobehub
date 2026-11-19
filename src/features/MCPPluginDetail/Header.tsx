@@ -142,7 +142,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
     <Link
       to={qs.stringifyUrl({
         query: { category: cate?.key },
-        url: '/community/mcp',
+        url: '/marketplace/mcp',
       })}
     >
       <Button icon={cate?.icon} size={'middle'}>

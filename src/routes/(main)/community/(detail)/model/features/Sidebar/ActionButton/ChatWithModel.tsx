@@ -22,7 +22,7 @@ const ChatWithModel = memo(() => {
     icon: <ProviderIcon provider={item.id} size={20} type={'avatar'} />,
     key: item.id,
     label: (
-      <WorkspaceLink to={urlJoin('/community/provider', item.id)}>
+      <WorkspaceLink to={urlJoin('/marketplace/provider', item.id)}>
         {[item.name, t('models.guide')].join(' ')}
       </WorkspaceLink>
     ),
@@ -44,7 +44,7 @@ const ChatWithModel = memo(() => {
 
   if (items.length === 1)
     return (
-      <WorkspaceLink style={{ flex: 1 }} to={urlJoin('/community/provider', items[0].key)}>
+      <WorkspaceLink style={{ flex: 1 }} to={urlJoin('/marketplace/provider', items[0].key)}>
         <Button block size={'large'} type={'primary'}>
           {t('models.guide')}
         </Button>

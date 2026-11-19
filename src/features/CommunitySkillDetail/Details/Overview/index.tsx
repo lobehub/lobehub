@@ -95,7 +95,7 @@ const Overview = memo(() => {
     versions.find((v) => v.version === version) || versions.find((v) => v.isLatest) || versions[0];
 
   const handleMoreRelated = useCallback(() => {
-    navigate(qs.stringifyUrl({ query: { category }, url: '/community/skill' }));
+    navigate(qs.stringifyUrl({ query: { category }, url: '/marketplace/skill' }));
     // In the modal, leave the detail open no longer than the navigation
     close?.();
   }, [category, close, navigate]);

@@ -35,7 +35,7 @@ const Category = memo(() => {
           q,
           sort: key === McpCategory.Discover ? McpSorts.Recommended : null,
         },
-        url: '/community/mcp',
+        url: '/marketplace/mcp',
       },
       { skipNull: true },
     );

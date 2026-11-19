@@ -20,6 +20,8 @@ export default {
   'navigation.discoverMcp': 'Discover MCP',
   'navigation.discoverModels': 'Discover Models',
   'navigation.discoverProviders': 'Discover Providers',
+  'navigation.marketplaceConnectors': 'Connectors',
+  'navigation.marketplaceInstalledSkills': 'Installed Skills',
   'navigation.appMenu': 'App menu',
   'navigation.apps': 'Apps',
   'navigation.group': 'Group',

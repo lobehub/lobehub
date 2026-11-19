@@ -46,8 +46,8 @@ export const NAVIGATION_ROUTES: NavigationRoute[] = [
     id: 'community',
     keywords: ['discover', 'market', 'assistant', 'model', 'provider', 'mcp'],
     keywordsKey: 'cmdk.keywords.community',
-    path: '/community',
-    pathPrefix: '/community',
+    path: '/marketplace',
+    pathPrefix: '/marketplace',
   },
   {
     cmdkKey: 'cmdk.video',

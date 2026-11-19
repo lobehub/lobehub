@@ -17,7 +17,6 @@ export const SETTINGS_TAB_TITLE_KEYS: Partial<Record<SettingsTabs, TitleKey>> = 
   [SettingsTabs.Automations]: ['setting', 'tab.automations'],
   [SettingsTabs.Webhooks]: ['setting', 'tab.webhooks'],
   [SettingsTabs.Billing]: ['subscription', 'tab.billing'],
-  [SettingsTabs.Connector]: ['setting', 'tab.connector'],
   [SettingsTabs.Creds]: ['setting', 'tab.creds'],
   [SettingsTabs.Credits]: ['subscription', 'tab.credits'],
   [SettingsTabs.Devices]: ['setting', 'devices.title'],

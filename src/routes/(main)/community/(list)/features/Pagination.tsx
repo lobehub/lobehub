@@ -27,7 +27,7 @@ const Pagination = memo<PaginationProps>(({ tab, currentPage, total, pageSize })
   const handlePageChange = (newPage: number) => {
     const searchParams = new URLSearchParams(location.search);
     searchParams.set('page', String(newPage));
-    navigate(`/community/${tab}?${searchParams.toString()}`);
+    navigate(`/marketplace/${tab}?${searchParams.toString()}`);
 
     const scrollContainerId = mobile ? SCROLL_CONTAINER_ID : SCROLL_PARENT_ID;
     const scrollableElement = document?.querySelector(`#${scrollContainerId}`);

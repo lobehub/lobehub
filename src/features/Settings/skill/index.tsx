@@ -5,7 +5,7 @@ import { ActionIcon, Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { ChevronLeft } from 'lucide-react';
-import { Activity, memo, useCallback, useEffect } from 'react';
+import { Activity, memo, type ReactNode, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
 
@@ -61,17 +61,20 @@ const styles = stylex.create({
 });
 
 interface ToolSettingsProps {
+  /** Rendered under the list page header (the Marketplace Discover / Installed tabs). */
+  headerExtra?: ReactNode;
   /**
-   * Which surface to manage. Fixed per-route now that skills and connectors
-   * each own a dedicated settings page (`/settings/skill` and
-   * `/settings/connector`) instead of sharing one tab-switched page.
+   * Which surface to manage. Fixed per-route: skills and connectors each own a
+   * dedicated Marketplace page (`/marketplace/skill/installed` and
+   * `/marketplace/connector`; the old `/settings/skill` and
+   * `/settings/connector` URLs redirect there).
    */
   viewMode: SkillViewMode;
 }
 
 const PUSHED_DETAIL_STATE = 'skillDetailPushed';
 
-export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
+export const ToolSettings = memo<ToolSettingsProps>(({ headerExtra, viewMode }) => {
   const { t } = useTranslation(['common', 'setting']);
   const mobile = isMobileSurface();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -157,6 +160,7 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
     <Activity mode={stackedSelected ? 'hidden' : 'visible'}>
       <LeftPanel
         fullWidth
+        headerExtra={headerExtra}
         page={!mobile || viewMode === 'skill'}
         viewMode={viewMode}
         visibility={visibility}
@@ -167,7 +171,7 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
     </Activity>
   );
 
-  // Mobile: the settings layout owns the header; list and detail take turns
+  // Mobile: the route shell (`mobileShellHeader`) owns the header; list and detail take turns
   // full-width instead of a 300px list squeezing the detail.
   if (mobile)
     return (
@@ -231,7 +235,3 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
 });
 
 ToolSettings.displayName = 'ToolSettings';
-
-const Page = () => <ToolSettings viewMode="skill" />;
-
-export default Page;

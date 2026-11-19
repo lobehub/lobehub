@@ -32,7 +32,7 @@ const TagList = memo<{ tags: string[] }>(({ tags }) => {
               query: {
                 q: tag,
               },
-              url: '/community/mcp',
+              url: '/marketplace/mcp',
             })}
           >
             <Tag className={styles.tag}>{tag}</Tag>

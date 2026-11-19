@@ -5,13 +5,15 @@ import { Button, DropdownMenu, Flexbox, Icon, SearchBar, Tabs, Text, Tooltip } f
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { ChevronDown, Grid2x2Plus, Import, LockIcon, Plus, Store, UsersIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { CustomConnectorModal } from '@/features/Connectors';
+import { MARKETPLACE_SKILL_PATH } from '@/features/Marketplace/paths';
 import { NavPanelDensityContext } from '@/features/NavPanel/density';
 import { createMarketSkillStoreModal, createSkillStoreModal } from '@/features/SkillStore';
 import { openSkillImportModal } from '@/features/SkillStore/SkillImportModal';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 import { usePermission } from '@/hooks/usePermission';
 import { useInterfaceDensity } from '@/styles/density';
@@ -92,6 +94,8 @@ const styles = stylex.create({
 interface LeftPanelProps {
   /** Fill the page instead of sitting as a 300px column beside the detail (mobile). */
   fullWidth?: boolean;
+  /** Rendered under the page header, e.g. the Marketplace Discover / Installed tabs. */
+  headerExtra?: ReactNode;
   onDeleteSelected: () => void;
   onSelect: (identifier: string, type: ToolDetailType) => void;
   onVisibilityChange?: (visibility: ConnectorVisibility) => void;
@@ -109,6 +113,7 @@ interface LeftPanelProps {
 const LeftPanel = memo<LeftPanelProps>(
   ({
     fullWidth,
+    headerExtra,
     onDeleteSelected,
     onSelect,
     onVisibilityChange,
@@ -123,7 +128,15 @@ const LeftPanel = memo<LeftPanelProps>(
     const [keyword, setKeyword] = useState('');
 
     const isConnectorView = viewMode === 'connector';
+    const navigate = useWorkspaceAwareNavigate();
     const handleOpenStore = isConnectorView ? createSkillStoreModal : createMarketSkillStoreModal;
+    // The page now lives in the Marketplace beside the skill catalog, so
+    // browsing more skills switches to the Discover tab instead of stacking
+    // the same catalog in a modal. Connectors keep their store modal: it also
+    // lists the OAuth and builtin connectors the Marketplace MCP list lacks.
+    const handleBrowseStore = isConnectorView
+      ? createSkillStoreModal
+      : () => navigate(MARKETPLACE_SKILL_PATH);
     const { allowed: canCreate } = usePermission('create_content');
     const isPrivateTab = isConnectorView && visibility === 'private';
     // Adding a shared workspace connector follows the same member policy as
@@ -189,7 +202,7 @@ const LeftPanel = memo<LeftPanelProps>(
                 icon: <Icon icon={Store} />,
                 key: 'store',
                 label: t('connectorMarket.add.browseStore'),
-                onClick: handleOpenStore,
+                onClick: handleBrowseStore,
               },
             ]),
         ...(!isConnectorView
@@ -245,6 +258,7 @@ const LeftPanel = memo<LeftPanelProps>(
           {visibilityTabs && <div {...stylex.props(styles.pageTabs)}>{visibilityTabs}</div>}
           {/* The member policy governs the shared pool only */}
           {isConnectorView && !isPrivateTab && <ConnectorManagePolicy variant={'page'} />}
+          {headerExtra}
         </>
       );
 

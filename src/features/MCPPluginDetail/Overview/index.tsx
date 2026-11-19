@@ -43,7 +43,7 @@ const Overview = memo<{ inModal?: boolean }>(({ inModal }) => {
               query: {
                 category,
               },
-              url: '/community/mcp',
+              url: '/marketplace/mcp',
             })}
           >
             {t('mcp.details.related.listTitle')}

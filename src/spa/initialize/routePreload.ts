@@ -73,7 +73,7 @@ const createWebRoutePreloadTasks = (): RoutePreloadTask[] => [
   createTask({
     id: 'community',
     idleDelay: 6000,
-    matches: matchesRoute('community'),
+    matches: matchesRoute('marketplace'),
     priority: 'medium',
   }),
   createTask({
@@ -154,7 +154,7 @@ const createMobileRoutePreloadTasks = (): RoutePreloadTask[] => [
   createTask({
     id: 'mobile-community',
     idleDelay: 6000,
-    matches: matchesRoute('community'),
+    matches: matchesRoute('marketplace'),
     priority: 'medium',
   }),
   createTask({

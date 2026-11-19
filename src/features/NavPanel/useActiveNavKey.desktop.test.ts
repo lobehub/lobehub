@@ -43,7 +43,7 @@ describe('useActiveNavKey (desktop)', () => {
   });
 
   it('falls back to the active tab before any tab is displayed', () => {
-    useElectronStore.setState({ activeTabId: 'only', tabs: [tab('only', '/community')] });
+    useElectronStore.setState({ activeTabId: 'only', tabs: [tab('only', '/marketplace')] });
 
     const { result } = renderHook(() => useActiveNavKey());
 

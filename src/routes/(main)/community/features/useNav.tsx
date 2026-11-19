@@ -1,7 +1,7 @@
 import { MCP } from '@lobehub/icons';
 import { Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { Bot, Brain, BrainCircuit, House } from 'lucide-react';
+import { Blocks, Bot, Brain, BrainCircuit, House } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,11 +12,15 @@ import { DiscoverTab } from '@/types/discover';
 
 const ICON_SIZE = 16;
 
+/** Connector management moved here from settings; not a Discover catalog tab. */
+export const MARKETPLACE_CONNECTOR_TAB = 'connector';
+
 export const useNav = () => {
   const location = useLocation();
   const { t } = useTranslation('discover');
   const activeKey = useMemo(() => {
     const pathname = location.pathname;
+    if (pathname.includes(`/${MARKETPLACE_CONNECTOR_TAB}`)) return MARKETPLACE_CONNECTOR_TAB;
     for (const value of Object.values(DiscoverTab)) {
       if (pathname.includes(`/${DiscoverTab.Plugins}`)) {
         return DiscoverTab.Mcp;
@@ -43,6 +47,11 @@ export const useNav = () => {
         icon: <Icon icon={SkillsIcon} size={ICON_SIZE} />,
         key: DiscoverTab.Skills,
         label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.skill')}</div>,
+      },
+      {
+        icon: <Icon icon={Blocks} size={ICON_SIZE} />,
+        key: MARKETPLACE_CONNECTOR_TAB,
+        label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.connector')}</div>,
       },
       {
         icon: <MCP className={'anticon'} size={ICON_SIZE} />,

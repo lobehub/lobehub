@@ -56,7 +56,7 @@ const SkillItem = memo<DiscoverSkillItem>(
     resourcesCount = 0,
   }) => {
     const { t } = useTranslation('discover');
-    const link = urlJoin('/community/skill', identifier);
+    const link = urlJoin('/marketplace/skill', identifier);
 
     const handleClick = useCallback(() => {
       discoverService

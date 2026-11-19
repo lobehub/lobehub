@@ -37,7 +37,7 @@ const Title = memo<TitleProps>(
 
     // Check if it's an external link or internal community route
     const isExternalLink = moreLink?.startsWith('http') ?? false;
-    const isCommunityRoute = moreLink?.startsWith('/community') ?? false;
+    const isCommunityRoute = moreLink?.startsWith('/marketplace') ?? false;
 
     let moreLinkElement = null;
     if (moreLink) {

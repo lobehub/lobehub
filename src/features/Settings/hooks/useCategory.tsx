@@ -1,11 +1,9 @@
 import { ENABLE_TOOL_CHANNEL_SETTINGS } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
-import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   AppWindowIcon,
   BellIcon,
-  Blocks,
   Brain,
   BrainCircuit,
   ChartColumnBigIcon,
@@ -174,11 +172,6 @@ export const useCategory = () => {
         key: SettingsTabs.ServiceModel,
         label: t('tab.serviceModel'),
       },
-      {
-        icon: SkillsIcon,
-        key: SettingsTabs.Skill,
-        label: t('tab.skill'),
-      },
       ENABLE_TOOL_CHANNEL_SETTINGS && {
         icon: Wrench,
         key: SettingsTabs.Tools,
@@ -217,13 +210,8 @@ export const useCategory = () => {
         key: SettingsTabs.Integrations,
         label: t('tab.integrations'),
       },
-      {
-        icon: Blocks,
-        key: SettingsTabs.Connector,
-        label: t('tab.connector'),
-      },
       // What connectors fire on their own: the event subscriptions agents made
-      // through them. Next to the connectors they come from.
+      // through them. Connectors themselves are managed in the Marketplace.
       enableWebhook && {
         icon: ZapIcon,
         key: SettingsTabs.Automations,

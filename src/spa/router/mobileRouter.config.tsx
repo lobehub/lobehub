@@ -12,16 +12,23 @@ import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
 import { delayed } from '@/components/Skeleton/Delayed';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
+import { MARKETPLACE_SEGMENT } from '@/features/Marketplace/paths';
 import { communityDetailRouteMeta } from '@/features/RouteMeta/communityRouteMeta';
 import {
   createSettingsTitleRouteMeta,
   providerDetailRouteMeta,
 } from '@/features/Settings/features/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
+import {
+  legacyCommunityRoutes,
+  legacySettingsMarketplaceRedirects,
+  marketplaceManageRoutes,
+} from '@/spa/router/marketplaceRoutes';
 import { mobileAgentRoute, mobileGroupRoute } from '@/spa/router/mobileAgentRoutes';
 import { mobileUnsupportedRoutes, mobileWorkspaceRoutes } from '@/spa/router/mobileWorkspaceRoutes';
 import { mobileWorkspaceSettingsChildren } from '@/spa/router/mobileWorkspaceSettingsRoutes';
 import { routeMeta } from '@/spa/router/routeMeta';
+import { overlayRoutes, withHandle } from '@/spa/router/routeOverlay';
 import { LegacySandboxStorageRedirect } from '@/spa/router/sandboxStorageRedirect';
 import { statsPageLoader } from '@/spa/router/statsPageLoader';
 import { SettingsTabs } from '@/store/global/initialState';
@@ -40,8 +47,16 @@ const settingsTabSubElement = dynamicElement(
   { preloadId: 'mobile-settings' },
 );
 
+// Skills and connectors moved to the Marketplace; their old tabs are redirects.
+const TABS_WITHOUT_SETTINGS_PAGE = new Set<string>([
+  SettingsTabs.Connector,
+  SettingsTabs.Creds,
+  SettingsTabs.Provider,
+  SettingsTabs.Skill,
+]);
+
 const personalSettingsTabRoutes: RouteObject[] = [...new Set(Object.values(SettingsTabs))]
-  .filter((tab) => tab !== SettingsTabs.Provider && tab !== SettingsTabs.Creds)
+  .filter((tab) => !TABS_WITHOUT_SETTINGS_PAGE.has(tab))
   .flatMap((tab) => {
     const meta = createSettingsTitleRouteMeta(tab);
     return [
@@ -101,6 +116,12 @@ export const sharedMainAreaChildren: RouteObject[] = [
         ),
         path: 'workspace/settings',
       },
+      // Installed skills and connectors: second-level pages with the shell's
+      // back header (the settings layout drew it before they moved here).
+      ...overlayRoutes(marketplaceManageRoutes, {
+        'connector': withHandle({ mobileShellHeader: true }),
+        'skill/installed': withHandle({ mobileShellHeader: true }),
+      }),
       // List routes (with ListLayout)
       {
         children: [
@@ -290,8 +311,9 @@ export const sharedMainAreaChildren: RouteObject[] = [
       { preloadId: 'mobile-community' },
     ),
     errorElement: <ErrorBoundary />,
-    path: 'community',
+    path: MARKETPLACE_SEGMENT,
   },
+  ...legacyCommunityRoutes,
 
   // Agents view-all route (flat list of workspace/private agents)
   {
@@ -372,6 +394,7 @@ export const mobileRoutes: RouteObject[] = [
             path: 'creds',
           },
           { element: <LegacySandboxStorageRedirect />, path: 'drive' },
+          ...legacySettingsMarketplaceRedirects,
           // Every known tab gets a static segment: `/settings/memory` and
           // `/:workspaceSlug/memory` (or `/agent`, `/image`, …) tie on route
           // score, and the workspace tree would read `settings` as a slug.

@@ -4,6 +4,7 @@ import { ArrowDownWideNarrow, ChevronDown } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getMarketplaceSubPath } from '@/features/Marketplace/paths';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { usePathname, useQuery } from '@/libs/router/navigation';
 import {
@@ -21,7 +22,7 @@ const SortButton = memo(() => {
   const pathname = usePathname();
   const { sort } = useQuery();
   const router = useQueryRoute();
-  const activeTab = useMemo(() => pathname.split('community/')[1] as DiscoverTab, [pathname]);
+  const activeTab = useMemo(() => getMarketplaceSubPath(pathname) as DiscoverTab, [pathname]);
   type SortItem = Extract<DropdownItem, { type?: 'item' }> & {
     key: string;
   };

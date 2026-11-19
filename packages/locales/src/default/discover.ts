@@ -1127,9 +1127,14 @@ export default {
 
   'skills.sorts.updatedAt': 'Recently Updated',
 
+  'skillView.discover': 'Discover',
+  'skillView.installed': 'Installed',
+
   'toc.permalink': 'Permalink for this section',
 
   'tab.assistant': 'Agent',
+
+  'tab.connector': 'Connectors',
 
   'tab.home': 'Home',
 

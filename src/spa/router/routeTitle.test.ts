@@ -32,6 +32,8 @@ const collectUntitledLeaves = (
 
     if (route.children?.length) return collectUntitledLeaves(route.children, path, meta);
     if (isValidElement(route.element) && route.element.type === Navigate) return [];
+    // Retired URLs that redirect with query and hash kept (`LegacyPathRedirect`).
+    if ((route.handle as { legacyRedirect?: boolean } | undefined)?.legacyRedirect) return [];
     if (meta?.titleKey || meta?.DynamicMeta) return [];
 
     return [path || '/'];
@@ -45,8 +47,8 @@ const UNTITLED_ALLOWED = [
   /\/project\/:projectId\/conversation\/:topicId\?$/,
   /\/settings\/drive$/,
   /\/:workspaceSlug\/settings\/provider\/:providerId$/,
-  // The community workspace profile is a Cloud surface; the OSS build stubs it.
-  /\/community\/workspace(\/settings)?$/,
+  // The marketplace workspace profile is a Cloud surface; the OSS build stubs it.
+  /\/marketplace\/workspace(\/settings)?$/,
   // The eval lab is an internal tool.
   /\/eval(\/|$)/,
   // Catch-all and standalone pages outside the main area.
@@ -81,14 +83,14 @@ describe('route document titles', () => {
     '/resource/library/kb_1/docs/docs_2',
     '/resource/library/kb_1/file/file_2',
     '/team/resource/page/abc',
-    '/community/agent/some-agent',
-    '/community/group_agent/some-group',
-    '/community/model/gpt-5',
-    '/community/provider/openai',
-    '/community/skill/some-skill',
-    '/community/mcp/some-mcp',
-    '/community/user/someone',
-    '/community/org/some-org',
+    '/marketplace/agent/some-agent',
+    '/marketplace/group_agent/some-group',
+    '/marketplace/model/gpt-5',
+    '/marketplace/provider/openai',
+    '/marketplace/skill/some-skill',
+    '/marketplace/mcp/some-mcp',
+    '/marketplace/user/someone',
+    '/marketplace/org/some-org',
     '/dashboard/dsh_1',
     '/project/prj_1/dashboard/dsh_1',
     '/settings/provider/openai',

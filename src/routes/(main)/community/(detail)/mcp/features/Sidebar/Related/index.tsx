@@ -22,14 +22,14 @@ const Related = memo(() => {
           query: {
             category,
           },
-          url: '/community/mcp',
+          url: '/marketplace/mcp',
         })}
       >
         {t('mcp.details.related.listTitle')}
       </Title>
       <Flexbox gap={8}>
         {related?.map((item, index) => {
-          const link = urlJoin('/community/mcp', item.identifier);
+          const link = urlJoin('/marketplace/mcp', item.identifier);
           return (
             <WorkspaceLink key={index} style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
               <Item {...item} />

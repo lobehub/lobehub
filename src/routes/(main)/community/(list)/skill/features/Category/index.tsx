@@ -35,7 +35,7 @@ const Category = memo(() => {
           q,
           sort: key === SkillCategory.All ? SkillSorts.InstallCount : null,
         },
-        url: '/community/skill',
+        url: '/marketplace/skill',
       },
       { skipNull: true },
     );

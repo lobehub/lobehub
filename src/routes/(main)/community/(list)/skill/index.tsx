@@ -5,6 +5,7 @@ import { memo } from 'react';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
+import SkillViewTabs from '@/features/Marketplace/SkillViewTabs';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
 import { skillSelectors } from '@/store/discover/selectors';
@@ -32,28 +33,32 @@ const SkillPage = memo(() => {
   const items = data?.items ?? [];
 
   return (
-    <AsyncBoundary
-      data={data}
-      empty={<SkillEmpty />}
-      error={error}
-      errorVariant={'page'}
-      isEmpty={items.length === 0}
-      isLoading={isLoading}
-      loading={<RouteLoading />}
-      onRetry={() => mutate()}
-    >
-      {data && (
-        <Flexbox gap={32} width={'100%'}>
-          <List data={items} />
-          <Pagination
-            currentPage={data.currentPage}
-            pageSize={data.pageSize}
-            tab={DiscoverTab.Skills}
-            total={data.totalCount}
-          />
-        </Flexbox>
-      )}
-    </AsyncBoundary>
+    <>
+      {/* Desktop and mobile both mount this page, so the Discover / Installed switch lives here. */}
+      <SkillViewTabs active={'discover'} />
+      <AsyncBoundary
+        data={data}
+        empty={<SkillEmpty />}
+        error={error}
+        errorVariant={'page'}
+        isEmpty={items.length === 0}
+        isLoading={isLoading}
+        loading={<RouteLoading />}
+        onRetry={() => mutate()}
+      >
+        {data && (
+          <Flexbox gap={32} width={'100%'}>
+            <List data={items} />
+            <Pagination
+              currentPage={data.currentPage}
+              pageSize={data.pageSize}
+              tab={DiscoverTab.Skills}
+              total={data.totalCount}
+            />
+          </Flexbox>
+        )}
+      </AsyncBoundary>
+    </>
   );
 });
 
