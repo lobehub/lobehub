@@ -24,7 +24,7 @@ describe('GenerationService', () => {
 
     await generationService.getGenerationStatus(generationId, asyncTaskId);
 
-    expect(lambdaClient.generation.getGenerationStatus.query).toBeCalledWith({
+    expect(lambdaClient.generation.getGenerationStatus.query).toHaveBeenCalledWith({
       generationId,
       asyncTaskId,
     });
@@ -35,6 +35,6 @@ describe('GenerationService', () => {
 
     await generationService.deleteGeneration(generationId);
 
-    expect(lambdaClient.generation.deleteGeneration.mutate).toBeCalledWith({ generationId });
+    expect(lambdaClient.generation.deleteGeneration.mutate).toHaveBeenCalledWith({ generationId });
   });
 });

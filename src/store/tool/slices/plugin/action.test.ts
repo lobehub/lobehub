@@ -34,7 +34,7 @@ describe('useToolStore:plugin', () => {
         await result.current.updatePluginSettings(pluginId, newSettings);
       });
 
-      expect(pluginService.updatePluginSettings).toBeCalledWith(
+      expect(pluginService.updatePluginSettings).toHaveBeenCalledWith(
         pluginId,
         newSettings,
         expect.any(AbortSignal),
@@ -57,7 +57,7 @@ describe('useToolStore:plugin', () => {
         await result.current.updatePluginSettings(pluginId, newSettings);
       });
 
-      expect(pluginService.updatePluginSettings).toBeCalledWith(
+      expect(pluginService.updatePluginSettings).toHaveBeenCalledWith(
         pluginId,
         mergedSettings,
         expect.any(AbortSignal),

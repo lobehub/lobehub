@@ -27,17 +27,17 @@ describe('GenerationTopic ServerService', () => {
 
   it('getAllGenerationTopics should call lambdaClient', async () => {
     await service.getAllGenerationTopics();
-    expect(lambdaClient.generationTopic.getAllGenerationTopics.query).toBeCalled();
+    expect(lambdaClient.generationTopic.getAllGenerationTopics.query).toHaveBeenCalled();
   });
 
   it('createTopic should call lambdaClient with undefined', async () => {
     await service.createTopic();
-    expect(lambdaClient.generationTopic.createTopic.mutate).toBeCalledWith(undefined);
+    expect(lambdaClient.generationTopic.createTopic.mutate).toHaveBeenCalledWith(undefined);
   });
 
   it('createTopic should pass type, visibility, and title to lambdaClient', async () => {
     await service.createTopic('image', 'public', 'A mountain lake at sunrise');
-    expect(lambdaClient.generationTopic.createTopic.mutate).toBeCalledWith({
+    expect(lambdaClient.generationTopic.createTopic.mutate).toHaveBeenCalledWith({
       title: 'A mountain lake at sunrise',
       type: 'image',
       visibility: 'public',
@@ -52,7 +52,7 @@ describe('GenerationTopic ServerService', () => {
 
     await service.updateTopic(id, data);
 
-    expect(lambdaClient.generationTopic.updateTopic.mutate).toBeCalledWith({
+    expect(lambdaClient.generationTopic.updateTopic.mutate).toHaveBeenCalledWith({
       id,
       value: data,
     });
@@ -64,7 +64,7 @@ describe('GenerationTopic ServerService', () => {
 
     await service.updateTopicCover(id, coverUrl);
 
-    expect(lambdaClient.generationTopic.updateTopicCover.mutate).toBeCalledWith({
+    expect(lambdaClient.generationTopic.updateTopicCover.mutate).toHaveBeenCalledWith({
       id,
       coverUrl,
     });
@@ -75,6 +75,6 @@ describe('GenerationTopic ServerService', () => {
 
     await service.deleteTopic(id);
 
-    expect(lambdaClient.generationTopic.deleteTopic.mutate).toBeCalledWith({ id });
+    expect(lambdaClient.generationTopic.deleteTopic.mutate).toHaveBeenCalledWith({ id });
   });
 });

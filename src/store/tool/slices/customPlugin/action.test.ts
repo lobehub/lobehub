@@ -48,7 +48,7 @@ describe('useToolStore:customPlugin', () => {
         result.current.uninstallCustomPlugin(pluginId);
       });
 
-      expect(pluginService.uninstallPlugin).toBeCalledWith(pluginId);
+      expect(pluginService.uninstallPlugin).toHaveBeenCalledWith(pluginId);
     });
   });
 
