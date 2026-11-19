@@ -4,6 +4,7 @@ import {
   channelMessageEditedAt,
   channelMessageReceipt,
   channelMessageVia,
+  contactCardOf,
   type ChatMessageError,
   defaultChannelAgentDirectory,
   type LobeAgentAgencyConfig,
@@ -90,6 +91,7 @@ export const publicMessage = (row: MessageRow, fileIds: string[]) => {
       name: isAgent ? senderAgentName || senderAgentTitle : senderUserName || senderUsername,
       type: isAgent ? ('agent' as const) : ('user' as const),
     },
+    card: contactCardOf(message.metadata) ?? null,
     deletedAt: channelMessageDeletedAt(message.metadata),
     editedAt: channelMessageEditedAt(message.metadata),
     // On an Agent's message, the exchange between Agents it reports from.

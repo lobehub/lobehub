@@ -446,6 +446,13 @@ export const channelRouter = router({
   send: externalChannelProcedure
     .input(
       z.object({
+        /** Share a contact as a card; the server writes the content and the card snapshot. */
+        card: z
+          .discriminatedUnion('type', [
+            z.object({ type: z.literal('user'), userId: z.string().min(1) }),
+            z.object({ agentId: z.string().min(1), type: z.literal('agent') }),
+          ])
+          .optional(),
         channelId,
         content: z.string().max(CHANNEL_LIMITS.contentLength),
         fileIds: z.array(z.string().min(1)).max(CHANNEL_LIMITS.attachments).optional(),
