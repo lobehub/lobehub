@@ -661,6 +661,69 @@ describe('agent-scoped connectors of an agent the caller cannot see', () => {
     expect(mcpService.callTool).not.toHaveBeenCalled();
   });
 
+  describe('with a pinned connector row', () => {
+    const pinnedCtx = (row: any, agentVisible = true) => {
+      const ctx = makeCtx([], [tool()], { agentVisible });
+      ctx.connectorModel.findById = vi.fn().mockResolvedValue(row);
+      return ctx;
+    };
+    const pinned = (agentId?: string) => ({
+      agentId,
+      connectorId: 'c1',
+      identifier: 'my-conn',
+      toolName: 'do_thing',
+    });
+
+    it("does not run a private agent's connector for a caller who cannot see it", async () => {
+      const ctx = pinnedCtx({ ...connector, agentId: 'agt_private' }, false);
+
+      await expect(callConnectorToolById(pinned('agt_private'), ctx)).rejects.toHaveProperty(
+        'code',
+        'NOT_FOUND',
+      );
+      expect(ctx.agentModel.existsById).toHaveBeenCalledWith('agt_private');
+      expect(mcpService.callTool).not.toHaveBeenCalled();
+    });
+
+    it('does not run an agent-bound connector under another agent', async () => {
+      const owned = pinnedCtx({ ...connector, agentId: 'agt_private' });
+      const mounted = pinnedCtx({ ...connector, metadata: { mountedByAgentId: 'agt_private' } });
+
+      for (const ctx of [owned, mounted]) {
+        await expect(callConnectorToolById(pinned('agt_mine'), ctx)).rejects.toHaveProperty(
+          'code',
+          'NOT_FOUND',
+        );
+        await expect(callConnectorToolById(pinned(), ctx)).rejects.toHaveProperty(
+          'code',
+          'NOT_FOUND',
+        );
+      }
+      expect(mcpService.callTool).not.toHaveBeenCalled();
+    });
+
+    it('does not run a base connector as an agent the caller cannot see', async () => {
+      const ctx = pinnedCtx(connector, false);
+
+      await expect(callConnectorToolById(pinned('agt_private'), ctx)).rejects.toHaveProperty(
+        'code',
+        'NOT_FOUND',
+      );
+      expect(mcpService.callTool).not.toHaveBeenCalled();
+    });
+
+    it('runs the pinned row through its own visible agent', async () => {
+      vi.mocked(mcpService.callTool).mockResolvedValue({ success: true } as any);
+      const ctx = pinnedCtx({ ...connector, agentId: 'agt_1' });
+
+      await callConnectorToolById(pinned('agt_1'), ctx);
+
+      expect(ctx.agentModel.existsById).toHaveBeenCalledWith('agt_1');
+      expect(ctx.connectorModel.resolveByIdentifiers).not.toHaveBeenCalled();
+      expect(mcpService.callTool).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('does not read their views', async () => {
     mcpAppsEnabled.mockResolvedValue(true);
     const ctx = makeCtx([connector], [], { agentVisible: false });

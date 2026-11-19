@@ -135,10 +135,15 @@ const findConnector = async (
   // that exact row and how the caller reaches it. Resolving the identifier again
   // would run a sibling that shares it — a different endpoint with different
   // credentials — in its place, so the selected row is used as is.
+  // The pin skips only the identifier lookup, not the agent rules: `findById`
+  // checks workspace visibility, not the agent a row is bound to.
   if (params.connectorId) {
     const connector = await ctx.connectorModel.findById(params.connectorId);
-    // An agent-scoped row is only reachable through its agent.
-    if (!connector || (!params.agentId && connector.agentId)) return [];
+    if (!connector || connector.identifier !== params.identifier) return [];
+    // An agent-bound (owned or mounted) row is only reachable through that agent.
+    const boundAgentId = connector.agentId ?? connector.metadata?.mountedByAgentId;
+    if (boundAgentId && boundAgentId !== params.agentId) return [];
+    if (params.agentId && !(await ctx.agentModel.existsById(params.agentId))) return [];
     return [connector];
   }
   if (!params.agentId) return ctx.connectorModel.queryByIdentifiers([params.identifier]);
