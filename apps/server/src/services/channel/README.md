@@ -8,7 +8,7 @@ replies never trigger another classification.
 
 ## Enable
 
-Configure a TypeSafe API key through the deployment's \`TYPESAFE_API_KEY\` environment variable,
+Configure a TypeSafe API key through the deployment's \`TYPESAFE\_API\_KEY\` environment variable,
 or in the sender's provider settings (workspace provider settings in workspace scope).
 Routing is enabled by default. Configure its switch and decision model in Settings → Service Models → Advanced → Channels:
 
@@ -122,8 +122,15 @@ A single `ModelRuntime.decide()` call asks a boolean question per eligible membe
 at least 0.7 select a member; probabilities at most 0.3 exclude them. A member between 0.3 and 0.7
 (exclusive) that is not quiet follows a selected primary as a deferred `followup`. When nobody
 reaches 0.7, only the most likely such member is woken, as a `followup` that may stay silent.
-All confident negatives still produce `skipped`.
-A missing/refused answer, invalid probability or provider failure leaves the message unassigned,
+
+The same call also asks one Channel-level question (`needs_agent_reply`): does the message need a
+reply from at least one Agent here? Member questions are answered one by one and prefer the
+best-fitting member, so a message that fits nobody in particular (a check-in to everyone, a general
+question among similar Agents) used to score every member low and get no answer at all. When that
+question is at least 0.7 and no member is, the most likely member that is not quiet (any member when
+all are) leads and owes an answer. Otherwise all confident negatives still produce `skipped`. A
+missing or invalid Channel-level answer is no verdict: the member answers decide alone.
+A missing/refused member answer, invalid probability or provider failure leaves the message unassigned,
 even when another answer is uncertain. These thresholds are policy defaults, not a claim of
 measured accuracy; calibrate them with actual Channel conversations.
 
