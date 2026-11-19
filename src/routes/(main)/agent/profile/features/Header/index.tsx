@@ -2,7 +2,6 @@ import { isDesktop } from '@lobechat/const';
 import { getOptedInPluginIds, type LobeAgentConfig } from '@lobechat/types';
 import {
   ActionIcon,
-  confirmModal,
   cssVar,
   DropdownMenu,
   Flexbox,
@@ -33,6 +32,7 @@ import { useBusinessAgentImportMenuItem } from '@/business/client/hooks/useBusin
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
+import { confirmRemoveAgent } from '@/features/AgentDeleteConfirm';
 import { useAgentMarketSubmission } from '@/features/AgentMarketSubmission/useAgentMarketSubmission';
 import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
 import { type AgentProfileTab } from '@/features/AgentProfileTabs/tabOptions';
@@ -178,11 +178,11 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
 
   const handleDelete = useCallback(() => {
     if (!canManage || !activeAgentId) return;
-    confirmModal({
-      okButtonProps: { danger: true },
-      onOk: async () => {
+    confirmRemoveAgent({
+      agentId: activeAgentId,
+      onConfirm: async (options) => {
         try {
-          await removeAgent(activeAgentId);
+          await removeAgent(activeAgentId, options);
         } catch (error) {
           toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));
           return;
@@ -190,9 +190,6 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
         toast.success(t('confirmRemoveSessionSuccess', { ns: 'chat' }));
         navigate('/');
       },
-      content: t('confirmRemoveSessionItemAlert', { ns: 'chat' }),
-      okText: t('delete', { ns: 'common' }),
-      title: t('delete', { ns: 'common' }),
     });
   }, [activeAgentId, canManage, navigate, removeAgent, t]);
 

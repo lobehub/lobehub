@@ -1,5 +1,6 @@
-import { CreateAgentSchema } from '@lobechat/types';
+import { type AgentDeleteImpact, CreateAgentSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -7,16 +8,80 @@ import { AGENT_COPY_IN_PROGRESS } from '@/database/models/agentCopyJob';
 import { AGENT_TRANSFER_IN_PROGRESS } from '@/database/models/agentTransferJob';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { ResourceTransferRequestModel } from '@/database/models/resourceTransferRequest';
-import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
+import { DEFAULT_RESOURCE_ACCESS_LEVELS, users } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { createAgentDirectChannel } from '@/server/services/channel/defaultChannel';
-import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
+import {
+  assertCanPerformResourceAction,
+  canPerformResourceAction,
+  getResourceMeta,
+} from '@/server/services/resourcePermission';
 import { TrashService } from '@/server/services/trash';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from '../_helpers/assertWorkspaceRowManageable';
 import { assertCanWriteTeamPin } from '../_helpers/sidebarPin';
 import { agentProcedure } from './procedures';
+
+interface AgentDeleteCtx {
+  serverDB: Parameters<typeof getResourceMeta>[0];
+  userId: string;
+  workspaceId: string;
+  workspaceRole?: string;
+}
+
+/**
+ * Who may delete a workspace agent, and on what terms.
+ *
+ * - The resource `delete` rule: the agent's author, or the workspace Owner.
+ * - A workspace Admin may also delete another member's (non-private) agent —
+ *   the same agents `manage` already lets them curate — but only as an
+ *   *override*: the caller must have shown the strong warning (someone else
+ *   created it, and what of other members' goes with it) and passed the
+ *   acknowledgments back. CLI, agent tools and older clients never do, so they
+ *   keep the old `:owner`-scoped rule; the RBAC matrix itself is unchanged.
+ */
+const resolveAgentDeleteAuthority = async (ctx: AgentDeleteCtx, agentId: string) => {
+  const meta = await getResourceMeta(ctx.serverDB, 'agent', agentId);
+  if (!meta || meta.workspaceId !== ctx.workspaceId) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Resource not found' });
+  }
+  const params = {
+    db: ctx.serverDB,
+    meta,
+    resourceId: agentId,
+    resourceType: 'agent' as const,
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  };
+  if (await canPerformResourceAction({ ...params, action: 'delete' })) {
+    return { adminOverride: false, meta };
+  }
+  if (
+    ctx.workspaceRole === 'admin' &&
+    meta.userId !== ctx.userId &&
+    (await canPerformResourceAction({ ...params, action: 'manage' }))
+  ) {
+    return { adminOverride: true, meta };
+  }
+  throw new TRPCError({
+    code: 'FORBIDDEN',
+    message: 'You do not have permission to delete this resource',
+  });
+};
+
+const getCreatorName = async (
+  db: AgentDeleteCtx['serverDB'],
+  creatorId: string | null | undefined,
+): Promise<string | null> => {
+  if (!creatorId) return null;
+  const [row] = await db
+    .select({ fullName: users.fullName, username: users.username })
+    .from(users)
+    .where(eq(users.id, creatorId))
+    .limit(1);
+  return row?.fullName || row?.username || null;
+};
 
 export const lifecycleRouter = router({
   /**
@@ -167,6 +232,33 @@ export const lifecycleRouter = router({
       });
     }),
   /**
+   * What deleting the agent would take down besides the caller's own work —
+   * feeds the delete confirmation, so it is gated like the delete itself.
+   * Personal scope has no other members, so it reports nothing foreign.
+   */
+  getAgentDeleteImpact: agentProcedure
+    .input(z.object({ agentId: z.string() }))
+    .query(async ({ input, ctx }): Promise<AgentDeleteImpact> => {
+      if (!ctx.workspaceId)
+        return {
+          createdByOther: false,
+          creatorName: null,
+          foreignTopicCount: 0,
+          hasForeignContent: false,
+        };
+
+      const { meta } = await resolveAgentDeleteAuthority(
+        { ...ctx, workspaceId: ctx.workspaceId },
+        input.agentId,
+      );
+      const createdByOther = !!meta.userId && meta.userId !== ctx.userId;
+      const [impact, creatorName] = await Promise.all([
+        ctx.agentModel.getDeleteImpact(input.agentId),
+        createdByOther ? getCreatorName(ctx.serverDB, meta.userId) : null,
+      ]);
+      return { ...impact, createdByOther, creatorName };
+    }),
+  /**
    * Get an agent by marketIdentifier
    * @returns agent id if exists, null otherwise
    */
@@ -211,23 +303,47 @@ export const lifecycleRouter = router({
    */
   removeAgent: agentProcedure
     .use(withScopedPermission('agent:delete'))
-    .input(z.object({ agentId: z.string() }))
+    .input(
+      z.object({
+        /**
+         * The caller showed the delete impact (`getAgentDeleteImpact`) and the
+         * user confirmed taking other members' content down with the agent.
+         * Only then may the agent's author delete an agent carrying it.
+         */
+        acknowledgeForeignContent: z.boolean().optional(),
+        /**
+         * The caller warned that someone else created this agent and the user
+         * confirmed anyway. Required for a workspace Admin's override delete.
+         */
+        acknowledgeOtherCreator: z.boolean().optional(),
+        agentId: z.string(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
       if (ctx.workspaceId) {
-        await assertCanPerformResourceAction({
-          action: 'delete',
-          db: ctx.serverDB,
-          resourceId: input.agentId,
-          resourceType: 'agent',
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId,
-        });
-        // Same rule as transfer: the delete cascade erases every linked
-        // session/topic/message, so a non-owner member must not take teammates'
-        // conversations down with their own agent.
+        const { adminOverride, meta } = await resolveAgentDeleteAuthority(
+          { ...ctx, workspaceId: ctx.workspaceId },
+          input.agentId,
+        );
+        if (adminOverride && input.acknowledgeOtherCreator !== true) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.OwnerOnly } },
+            code: 'FORBIDDEN',
+            message: "Deleting another member's agent needs the confirmation that warns about it",
+          });
+        }
+        // The delete cascade trashes the agent's topics and messages, so the
+        // guard asks what it would actually take (`getDeleteImpact`; sessions
+        // and tasks stay). The agent's author, or an Admin overriding, may
+        // still delete it once the caller acknowledges that other members'
+        // content goes with it; callers that never disclosed the impact (CLI,
+        // agent tools, older clients) keep the guard.
+        const acknowledged =
+          (adminOverride || meta.userId === ctx.userId) && input.acknowledgeForeignContent === true;
         if (
           isWorkspaceNonOwner(ctx) &&
-          (await ctx.agentModel.transferHasForeignRows(input.agentId))
+          !acknowledged &&
+          (await ctx.agentModel.getDeleteImpact(input.agentId)).hasForeignContent
         ) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.OwnerOnly } },
