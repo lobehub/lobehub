@@ -21,7 +21,6 @@ import {
 } from './delivery';
 import { ChannelError } from './error';
 import { isWorkspaceMember, peerOf, requirePeerRelation } from './peer';
-import { assertSharedAgentAdmission } from './shareLimits';
 import { audit } from './transaction';
 import type { ChannelAccess } from './types';
 import { createChannelThread } from './view';
@@ -200,23 +199,13 @@ export const sendMessage = async (
       peerOf(channel, member.userId)!,
     );
 
-  if (channel.agentId) {
-    // The same test the Channel list uses, so a workspace conversation with a shared Agent is
-    // treated like a personal one, while a colleague's public workspace Agent (the workspace's
-    // own) is not.
-    const agentOwnerId = await sharedAgentOwner(tx, channel, member.userId!);
-    if (agentOwnerId) {
-      // Another person's shared Agent runs as its owner, who cannot read the sender's files.
-      if (fileIds.length)
-        throw new ChannelError('BAD_REQUEST', 'Attachments cannot be sent to a shared Agent');
-      await assertSharedAgentAdmission(tx, {
-        agentId: channel.agentId,
-        content: input.content,
-        ownerId: agentOwnerId,
-        visitorId: member.userId!,
-      });
-    }
-  }
+  // Another person's shared Agent runs as its owner, who cannot read the sender's files. The test
+  // is the one the Channel list uses, so a workspace conversation with a shared Agent is treated
+  // like a personal one, while a colleague's public workspace Agent (the workspace's own) is not.
+  // The share's limits (prompt length, messages per visitor, monthly spend) never refuse the send:
+  // the reply fails with the limit's type when dispatched (`ChannelCoordinator.shareGate`).
+  if (channel.agentId && fileIds.length && (await sharedAgentOwner(tx, channel, member.userId!)))
+    throw new ChannelError('BAD_REQUEST', 'Attachments cannot be sent to a shared Agent');
 
   if (fileIds.length) {
     // A workspace's public files are its members'. An external contact talking in it attaches

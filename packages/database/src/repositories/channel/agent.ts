@@ -13,7 +13,7 @@ import type { PartialDeep } from 'type-fest';
 
 import type { ChannelItem, ChannelMemberItem } from '../../schemas';
 import { agents, agentShares, channelMembers, userSettings } from '../../schemas';
-import type { Transaction } from '../../type';
+import type { LobeChatDatabase, Transaction } from '../../type';
 import { agentUsableByWhere } from '../../utils/agent-access';
 import { mergeAgentDefaultConfig } from '../../utils/agentConfig';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
@@ -40,6 +40,25 @@ export const isSharedAgentChannel = (
     agent.agentWorkspaceId === channel.workspaceId &&
     agent.agentVisibility !== 'private'
   );
+
+/**
+ * What a listed Channel tells its viewer about another person's shared Agent it is with: that it
+ * is one; its visitor page (`/a/<handle>`), the only page of the Agent the viewer can open; and its
+ * owner, whom a refused reply offers to add as a contact.
+ */
+export const sharedAgentFields = (
+  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
+  agent: Parameters<typeof isSharedAgentChannel>[1],
+  viewerId: string,
+  handle: string | null,
+) => {
+  const sharedAgent = isSharedAgentChannel(channel, agent, viewerId);
+  return {
+    sharedAgent,
+    sharedAgentHandle: sharedAgent ? handle : null,
+    sharedAgentOwnerId: sharedAgent ? agent.agentOwnerId : null,
+  };
+};
 
 /**
  * The owner of the Agent a direct conversation is with, when it is another person's shared Agent
@@ -87,7 +106,7 @@ export interface ChannelAddAgentInput {
  * limits per person.
  */
 export const findSharedChannelAgent = async (
-  tx: Transaction,
+  tx: LobeChatDatabase | Transaction,
   userId: string,
   agentId: string,
 ): Promise<
@@ -129,6 +148,28 @@ export const findSharedChannelAgent = async (
  */
 const acceptsSharedAgent = (channel: Pick<ChannelItem, 'agentId'>, agentId: string) =>
   channel.agentId === agentId;
+
+/**
+ * The share a member's reply runs under, resolved as {@link resolveExecutionConfig} does: only in a
+ * direct conversation, and only for an Agent the requester cannot use as their own.
+ */
+export const channelReplyShare = async (
+  db: LobeChatDatabase | Transaction,
+  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
+  agentId: string,
+  userId: string,
+) => {
+  if (!acceptsSharedAgent(channel, agentId)) return;
+  const [usable] = await db
+    .select({ id: agents.id })
+    .from(agents)
+    .where(agentUsableByWhere(agentId, { userId, workspaceId: channel.workspaceId ?? undefined }));
+  if (usable) return;
+  const share = await findSharedChannelAgent(db, userId, agentId);
+  return (
+    share && { ownerId: share.ownerId, shareId: share.shareId, workspaceId: share.workspaceId }
+  );
+};
 
 /** Check Agent scope and hold it through creation of the Channel/member reference. */
 export const requireChannelAgent = async (

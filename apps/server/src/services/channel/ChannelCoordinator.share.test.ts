@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { SHARE_VISITOR_PROMPT_MAX_LENGTH } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,6 +7,7 @@ import { ChannelCoordinator } from './ChannelCoordinator';
 
 const {
   checkSpend,
+  countMessagesBySender,
   execAgent,
   executions,
   findOperation,
@@ -15,6 +17,7 @@ const {
   serviceOptions,
 } = vi.hoisted(() => ({
   checkSpend: vi.fn(),
+  countMessagesBySender: vi.fn(),
   getScopedOnlineDevices: vi.fn(),
   execAgent: vi.fn(),
   executions: {
@@ -49,6 +52,11 @@ vi.mock('@/database/models/agentOperation', () => ({
     findById = findOperation;
   },
 }));
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: class {
+    countMessagesBySender = countMessagesBySender;
+  },
+}));
 vi.mock('@/business/server/agent-share/spendGate', () => ({
   checkAgentShareSpendAllowance: checkSpend,
 }));
@@ -79,7 +87,7 @@ const share = { ownerId: 'owner', shareId: 'share-1', workspaceId: 'owner-ws' };
 const liveShare = {
   agentId: 'agt_shared',
   ownerId: 'owner',
-  shareConfig: { monthlySpendLimit: 5, toolGrants: [] },
+  shareConfig: { maxMessagesPerVisitor: 2, monthlySpendLimit: 5, toolGrants: [] },
   shareId: 'share-1',
   visibility: 'link',
   workspaceId: 'owner-ws',
@@ -127,6 +135,7 @@ describe('dispatching a contact’s shared Agent', () => {
     execAgent.mockResolvedValue({ success: true });
     findShare.mockResolvedValue(liveShare);
     checkSpend.mockResolvedValue({ allowed: true });
+    countMessagesBySender.mockResolvedValue(1);
     findOperation.mockResolvedValue({ status: 'idle' });
     executions.claim.mockResolvedValue({
       job: {
@@ -229,13 +238,57 @@ describe('dispatching a contact’s shared Agent', () => {
       await coordinator().advance('channel');
 
       expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
-        message: type,
+        message: expect.not.stringContaining(type),
         type,
       });
     },
   );
+
+  // Sending no longer refuses for a share's limits: the reply fails here, so the visitor's message
+  // stays and its failure explains the limit after a reload.
+  it('refuses a prompt beyond the share’s length cap before submission', async () => {
+    executions.input.mockResolvedValue([
+      { content: 'x'.repeat(SHARE_VISITOR_PROMPT_MAX_LENGTH + 1), id: 'message' },
+    ]);
+    await coordinator().advance('channel');
+
+    expect(execAgent).not.toHaveBeenCalled();
+    expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
+      message: `Messages to a shared Agent are limited to ${SHARE_VISITOR_PROMPT_MAX_LENGTH} characters`,
+      type: 'SharePromptTooLong',
+    });
+  });
+
+  // The quoted message rides in the input beside the request, but only the request is the prompt.
+  it('admits a short request quoting a message beyond the length cap', async () => {
+    const author = { id: 'visitor', name: 'Visitor', type: 'user' };
+    executions.input.mockResolvedValue([
+      { author, content: 'x'.repeat(SHARE_VISITOR_PROMPT_MAX_LENGTH + 1), id: 'quoted' },
+      { author, content: 'Summarize this', id: 'message' },
+    ]);
+    await coordinator().advance('channel');
+
+    expect(execAgent).toHaveBeenCalledOnce();
+    expect(executions.retireReservation).not.toHaveBeenCalled();
+  });
+
+  it('refuses once the visitor sent maxMessagesPerVisitor, counted as the owner', async () => {
+    countMessagesBySender.mockResolvedValue(2);
+    await coordinator().advance('channel');
+
+    expect(countMessagesBySender).toHaveBeenCalledWith({
+      agentId: 'agt_shared',
+      senderId: 'visitor',
+    });
+    expect(execAgent).not.toHaveBeenCalled();
+    expect(checkSpend).not.toHaveBeenCalled();
+    expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
+      message: 'You have sent all the messages this shared Agent allows',
+      type: 'ShareMessageLimitExceeded',
+    });
+  });
   // A visitor past the owner's message cap is refused by the atomic turn guard inside execAgent
-  // (the admission pre-check can race it); the receipt must still say why.
+  // (the gate's count can race it); the receipt must still say why, as readable text.
   it('records the message-limit refusal raised by the turn guard', async () => {
     execAgent.mockRejectedValue(
       new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'ShareMessageLimitExceeded' }),
@@ -243,7 +296,7 @@ describe('dispatching a contact’s shared Agent', () => {
     await coordinator().advance('channel');
 
     expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
-      message: 'ShareMessageLimitExceeded',
+      message: 'You have sent all the messages this shared Agent allows',
       type: 'ShareMessageLimitExceeded',
     });
   });

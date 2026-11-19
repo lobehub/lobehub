@@ -1,4 +1,4 @@
-import type { ChannelContextMessage } from '@lobechat/types';
+import type { ChannelContextMessage, ChannelSharedAgentAccess } from '@lobechat/types';
 import { and, desc, eq, gte, inArray, isNull, lt, ne } from 'drizzle-orm';
 import pMap from 'p-map';
 
@@ -16,6 +16,7 @@ import {
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
+import { channelReplyShare } from './agent';
 import { appendMessage } from './delivery';
 import { readManifestMessages } from './manifest';
 import type { OpeningFacts, OpeningLayout } from './openingLayout';
@@ -90,6 +91,11 @@ export interface ChannelOpeningCandidate {
   recent: ChannelContextMessage[];
   request: ChannelContextMessage;
   requesterUserId: string;
+  /**
+   * Set when the Agent is another person's, reached through its share: the reply opens only once
+   * the share admits the request, so a refused one fails where it was asked, with no acknowledgement.
+   */
+  share?: ChannelSharedAgentAccess;
   /**
    * Open Threads started before the request, nearest first, that the reply may continue in.
    * Empty when it cannot move: already in a Thread, or asked together with other Agents.
@@ -222,7 +228,7 @@ export const findOpeningCandidate = async (
           .where(eq(channelThreads.id, job.threadId))
       : [],
     db
-      .select({ workspaceId: channels.workspaceId })
+      .select({ agentId: channels.agentId, workspaceId: channels.workspaceId })
       .from(channels)
       .where(eq(channels.id, channelId)),
   ]);
@@ -255,6 +261,7 @@ export const findOpeningCandidate = async (
     recent: messages.filter((message) => message.id !== job.messageId),
     request: requestMessage,
     requesterUserId: requester.userId,
+    share: await channelReplyShare(db, channel, row.agentId, requester.userId),
     // Agents asked together share one new Thread under the request instead.
     threads:
       job.threadId || coAddressed.length

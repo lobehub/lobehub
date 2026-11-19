@@ -29,10 +29,10 @@ import { normalizeWorkspaceId } from '../../utils/workspace';
 import type { ChannelAddAgentInput } from './agent';
 import {
   addAgentMember,
-  isSharedAgentChannel,
   memberEnvironment,
   requireAgentMember,
   requireChannelAgent,
+  sharedAgentFields,
   sharedAgentOwner,
 } from './agent';
 import { openAgentPair } from './agentPair';
@@ -453,9 +453,10 @@ export class ChannelRepository {
         const admin = hasRole(access.member.role, 'admin');
         const view = await readChannelView(tx, channelId, options, this.userId);
         // Same test as `list`; the composer reads it from here to hide upload.
-        const sharedAgent = !!(await sharedAgentOwner(tx, access.channel, this.userId));
+        const sharedAgentOwnerId = await sharedAgentOwner(tx, access.channel, this.userId);
+        const channel = { ...access.channel, canDelete: admin, sharedAgentOwnerId };
         return {
-          channel: { ...access.channel, canDelete: admin, sharedAgent },
+          channel: { ...channel, sharedAgent: !!sharedAgentOwnerId },
           joined: true,
           ...view,
           // Mirrors `stop`: the requester or an admin.
@@ -548,6 +549,7 @@ export class ChannelRepository {
         replyJobs: ChannelReplyJob[];
         sectionId: string | null;
         sharedAgentHandle: string | null;
+        sharedAgentOwnerId: string | null;
         threadMentions: ChannelThreadMention[];
         unreadCount: number;
       }
@@ -688,13 +690,10 @@ export class ChannelRepository {
         shareSlug,
         ...agent
       }) => {
-        const sharedAgent = isSharedAgentChannel(channel, agent, this.userId);
         return {
           ...channel,
           agentIds: agentIdsOf.get(channel.id) ?? [],
-          sharedAgent,
-          // Its visitor page (`/a/<handle>`) is where the caller can see this Agent; it has no other.
-          sharedAgentHandle: sharedAgent ? (shareSlug ?? shareId) : null,
+          ...sharedAgentFields(channel, agent, this.userId, shareSlug ?? shareId),
           canDelete: hasRole(role, 'admin'),
           hidden,
           joined: true,
@@ -719,6 +718,7 @@ export class ChannelRepository {
         agentIds: agentIdsOf.get(channel.id) ?? [],
         sharedAgent: false,
         sharedAgentHandle: null,
+        sharedAgentOwnerId: null,
         canDelete: false,
         hidden: false,
         joined: false,

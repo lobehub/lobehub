@@ -11,6 +11,8 @@ export default {
     "This Agent can run for you only with its creator's permission. Ask its creator for access.",
   'receipt.errorShareMessageLimit':
     'You have sent all the messages its creator allows to this shared Agent.',
+  'receipt.errorSharePromptTooLong':
+    'This message is longer than a shared Agent accepts. Shorten it and send it again.',
   'receipt.errorShareSpendLimit':
     'This shared Agent reached the monthly usage limit its creator set. It will be available again next month.',
   'receipt.errorUnavailable':
