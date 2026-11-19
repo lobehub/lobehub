@@ -174,10 +174,11 @@ export class ChannelCoordinator {
             and(eq(channelMembers.channelId, channelId), inArray(channelMembers.id, requesterIds)),
           )
       : [];
-    const routedPresence = createRoutedDevicePresence(this.db, channel.workspaceId);
+    // A shared Agent's run executes as its owner; the claim reads that presence on demand.
+    const routedPresence = createRoutedDevicePresence(this.db);
     await pMap(
       requesters.flatMap(({ userId }) => (userId ? [userId] : [])),
-      (userId) => routedPresence.prefetch(userId),
+      (userId) => routedPresence.prefetch(userId, channel.workspaceId),
       { concurrency: 5 },
     );
     const owners = [
