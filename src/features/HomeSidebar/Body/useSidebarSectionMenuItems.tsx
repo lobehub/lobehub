@@ -53,7 +53,7 @@ const useSectionRenders = (): ((key: string) => boolean) => {
         }
         // Recents show a skeleton while loading and disappear once known to be empty.
         case 'recents': {
-          return isLogin && recentCount !== 0;
+          return !!isLogin && recentCount !== 0;
         }
         // The header renders Home and Search; legacy layouts may still list them.
         case 'home':
