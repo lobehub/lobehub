@@ -8,6 +8,7 @@ import {
   wsProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { DeviceModel, WorkspaceDevicePrivateConflictError } from '@/database/models/device';
+import { DeviceRemovalRepository } from '@/database/repositories/deviceRemoval';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signWorkspaceDeviceToken } from '@/libs/trpc/utils/internalJwt';
@@ -391,7 +392,12 @@ export const workspaceRouter = router({
           }
         }
       }
-      const removed = await model.deleteWorkspaceDevice(input.deviceId);
+      // Unbinds the workspace's agents from the device in the same transaction.
+      const removed = await new DeviceRemovalRepository(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId,
+      ).removeWorkspaceDevice(input.deviceId);
       await reportManagedDevicesRemoved(removed);
       return { success: true };
     }),

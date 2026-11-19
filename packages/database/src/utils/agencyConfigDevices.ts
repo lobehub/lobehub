@@ -1,14 +1,14 @@
 import type { LobeAgentAgencyConfig } from '@lobechat/types';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
-import { devices } from '../schemas';
+import { agents, devices } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 
 /**
  * Collect device ids that an incoming `agencyConfig` patch is *setting*
- * (not clearing). `workingDirByDevice` entries with `undefined` value are
- * deletes (per `applyWorkingDirByDevicePatch`) and are skipped.
+ * (not clearing). `workingDirByDevice` entries with an `undefined` or `null`
+ * value are deletes (per `applyWorkingDirByDevicePatch`) and are skipped.
  */
 export const collectBoundDeviceIds = (
   agencyConfig: PartialDeep<LobeAgentAgencyConfig> | null | undefined,
@@ -20,7 +20,7 @@ export const collectBoundDeviceIds = (
   const map = agencyConfig.workingDirByDevice;
   if (map) {
     for (const [deviceId, cwd] of Object.entries(map)) {
-      if (cwd === undefined) continue;
+      if (cwd == null) continue;
       ids.push(deviceId);
     }
   }
@@ -122,4 +122,78 @@ export const sanitizeAgencyConfigsForWorkspace = async (
 
     return next;
   });
+};
+
+/**
+ * Drop every reference to a removed device from one agent config: the
+ * `boundDeviceId` default and the device's `workingDirByDevice` entry. A
+ * `device` target left without its device has nowhere to run, so the agent
+ * returns to its default target instead of showing a device that no longer
+ * exists; a `fixed` contract on it falls back to member choice, the same
+ * downgrade {@link sanitizeAgencyConfigsForWorkspace} applies. Returns
+ * `undefined` when the config does not reference the device.
+ */
+export const removeDeviceFromAgencyConfig = (
+  config: LobeAgentAgencyConfig | null | undefined,
+  deviceId: string,
+): LobeAgentAgencyConfig | undefined => {
+  if (!config) return;
+
+  const isBound = config.boundDeviceId === deviceId;
+  const dirs = config.workingDirByDevice;
+  const hasDir = !!dirs && Object.hasOwn(dirs, deviceId);
+  if (!isBound && !hasDir) return;
+
+  const next: LobeAgentAgencyConfig = { ...config };
+  if (isBound) {
+    delete next.boundDeviceId;
+    if (next.executionTarget === 'device') {
+      delete next.executionTarget;
+      if (next.executionTargetSelectionPolicy === 'fixed') {
+        next.executionTargetSelectionPolicy = 'member';
+      }
+    }
+  }
+  if (dirs && hasDir) {
+    const { [deviceId]: _removed, ...rest } = dirs;
+    next.workingDirByDevice = rest;
+  }
+  return next;
+};
+
+/**
+ * Remove a deleted device from every agent in `scope` that still references
+ * it. Call it in the transaction that deletes the device row, so an agent can
+ * never keep routing to a device the account no longer has.
+ *
+ * `updatedAt` is kept: dropping a dead reference is not an edit, and agent
+ * lists sort by it.
+ */
+export const removeDeviceFromAgents = async (
+  tx: Transaction,
+  scope: SQL | undefined,
+  deviceId: string,
+): Promise<void> => {
+  const rows = await tx
+    .select({ agencyConfig: agents.agencyConfig, id: agents.id })
+    .from(agents)
+    .where(
+      and(
+        scope,
+        or(
+          sql`${agents.agencyConfig}->>'boundDeviceId' = ${deviceId}`,
+          sql`COALESCE(jsonb_exists(${agents.agencyConfig}->'workingDirByDevice', ${deviceId}), false)`,
+        ),
+      ),
+    )
+    .for('update');
+
+  for (const row of rows) {
+    const agencyConfig = removeDeviceFromAgencyConfig(row.agencyConfig, deviceId);
+    if (!agencyConfig) continue;
+    await tx
+      .update(agents)
+      .set({ agencyConfig, updatedAt: sql`${agents.updatedAt}` })
+      .where(eq(agents.id, row.id));
+  }
 };
