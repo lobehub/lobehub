@@ -31,6 +31,22 @@ export const repositorySlug = (environment: {
 };
 
 /**
+ * The repositories an environment checks out, as a label: the first one's
+ * `owner/name`, and `+N` for the rest — so a picker row never reads as one
+ * repository when the environment clones several.
+ */
+export const repositoriesLabel = (environment: {
+  configuration?: Pick<EnvironmentConfiguration, 'sources'> | null;
+}): string | undefined => {
+  const first = repositorySlug(environment);
+  if (!first) return undefined;
+  const count = (environment.configuration?.sources ?? []).filter(
+    (source) => source.kind === 'git',
+  ).length;
+  return count > 1 ? `${first} +${count - 1}` : first;
+};
+
+/**
  * What the environment chip says. A list still loading, or one that failed to
  * load, says nothing about the topic's environment — so it is not reported as
  * "none", which would read as initialization being off.

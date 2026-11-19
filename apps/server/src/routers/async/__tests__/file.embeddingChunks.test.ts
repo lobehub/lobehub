@@ -6,6 +6,7 @@ import { ChunkModel } from '@/database/models/chunk';
 import { EmbeddingModel } from '@/database/models/embedding';
 import { FileModel } from '@/database/models/file';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { resolveFileEmbeddingModel } from '@/server/services/knowledgeBase/fileEmbeddingModel';
 import { AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 
 import { fileRouter } from '../file';
@@ -20,6 +21,9 @@ vi.mock('@/server/services/chunk', () => ({ ChunkService: vi.fn() }));
 vi.mock('@/server/services/document', () => ({ DocumentService: vi.fn() }));
 vi.mock('@/server/services/file', () => ({ FileService: vi.fn() }));
 vi.mock('@/server/modules/ModelRuntime', () => ({ initModelRuntimeFromDB: vi.fn() }));
+vi.mock('@/server/services/knowledgeBase/fileEmbeddingModel', () => ({
+  resolveFileEmbeddingModel: vi.fn(),
+}));
 vi.mock('@/business/server/trpc-middlewares/async', () => ({
   checkEmbeddingUsage: async (opts: any) => opts.next({ ctx: opts.ctx }),
 }));
@@ -56,6 +60,10 @@ describe('fileRouter.embeddingChunks timeout', () => {
     });
     vi.mocked(EmbeddingModel).mockImplementation(function () {
       return embeddingModelMock as any;
+    });
+    vi.mocked(resolveFileEmbeddingModel).mockResolvedValue({
+      model: 'text-embedding-3-small',
+      provider: 'openai',
     });
     Reflect.set(FileModel, 'getFileById', undefined);
   });
@@ -130,5 +138,56 @@ describe('fileRouter.embeddingChunks timeout', () => {
 
     expect(embeddingModelMock.bulkCreate).not.toHaveBeenCalled();
     expect(errorUpdates()).toHaveLength(1);
+  });
+});
+
+describe('fileRouter.embeddingChunks model', () => {
+  const asyncTaskModelMock = { findById: vi.fn(), update: vi.fn() };
+  const embeddingModelMock = { bulkCreate: vi.fn() };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    asyncTaskModelMock.findById.mockResolvedValue({ id: 'task-1' });
+    vi.mocked(AsyncTaskModel).mockImplementation(function () {
+      return asyncTaskModelMock as any;
+    });
+    vi.mocked(FileModel).mockImplementation(function () {
+      return { findById: vi.fn().mockResolvedValue({ id: 'file-1', name: 'a.md' }) } as any;
+    });
+    vi.mocked(ChunkModel).mockImplementation(function () {
+      return {
+        getChunksTextByFileId: vi.fn().mockResolvedValue([{ id: 'chunk-1', text: 'hello' }]),
+      } as any;
+    });
+    vi.mocked(EmbeddingModel).mockImplementation(function () {
+      return embeddingModelMock as any;
+    });
+    Reflect.set(FileModel, 'getFileById', undefined);
+  });
+
+  it("embeds a new file's chunks with the resolved model and records that model", async () => {
+    vi.mocked(resolveFileEmbeddingModel).mockResolvedValue({
+      model: 'text-embedding-3-large',
+      provider: 'azure',
+    });
+    const embeddings = vi.fn().mockResolvedValue([[0.1]]);
+    vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ embeddings } as any);
+    const serverDB = {};
+
+    const caller = fileRouter.createCaller({ serverDB, userId: 'user-1' } as any);
+    await expect(
+      caller.embeddingChunks({ fileId: 'file-1', taskId: 'task-1', workspaceId: 'ws-1' }),
+    ).resolves.toMatchObject({ success: true });
+
+    expect(resolveFileEmbeddingModel).toHaveBeenCalledWith(serverDB, 'user-1', 'ws-1');
+    expect(initModelRuntimeFromDB).toHaveBeenCalledWith(serverDB, 'user-1', 'azure', 'ws-1');
+    expect(embeddings).toHaveBeenCalledWith(
+      expect.objectContaining({ dimensions: 1024, model: 'text-embedding-3-large' }),
+      expect.anything(),
+    );
+    expect(embeddingModelMock.bulkCreate).toHaveBeenCalledWith([
+      expect.objectContaining({ chunkId: 'chunk-1', model: 'text-embedding-3-large' }),
+    ]);
   });
 });

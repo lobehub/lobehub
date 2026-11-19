@@ -729,11 +729,11 @@ describe('toolEngineering', () => {
       expect(result.enabledToolIds).not.toContain('lobe-web-browsing');
       expect(result.filteredTools).toContainEqual({
         id: 'lobe-web-browsing',
-        reason: 'disabled',
+        reason: 'not_found',
       });
     });
 
-    it('should enable web browsing with isExplicitActivation even when useApplicationBuiltinSearchTool is false', () => {
+    it('keeps web browsing unavailable to explicit activation when application search is off', () => {
       mockUseApplicationBuiltinSearchTool = false;
 
       const toolsEngine = createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' });
@@ -745,12 +745,11 @@ describe('toolEngineering', () => {
         skipDefaultTools: true,
       });
 
-      expect(result.enabledToolIds).toContain('lobe-web-browsing');
-      expect(result.filteredTools).toEqual([]);
-      expect(result.tools).toHaveLength(1);
+      expect(result.enabledToolIds).not.toContain('lobe-web-browsing');
+      expect(result.tools).toBeUndefined();
     });
 
-    it('should bypass all enableChecker filters with isExplicitActivation', () => {
+    it('only allows explicit activation of manifests present in the run', () => {
       mockUseApplicationBuiltinSearchTool = false;
       mockInstalledPluginManifestList = () => [
         {
@@ -781,9 +780,7 @@ describe('toolEngineering', () => {
         skipDefaultTools: true,
       });
 
-      // Both should be enabled despite their normal filters
-      expect(result.enabledToolIds).toContain('stdio-mcp-plugin');
-      expect(result.enabledToolIds).toContain('lobe-web-browsing');
+      expect(result.enabledToolIds).toEqual(['stdio-mcp-plugin']);
     });
 
     it('does NOT let isExplicitActivation enable a plugin the agent has disabled', () => {

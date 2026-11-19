@@ -6,6 +6,7 @@ import {
   REQUEST_TOPIC_ID_HEADER,
   REQUEST_TRIGGER_HEADER,
 } from '@lobechat/const';
+import type { LobeToolManifest } from '@lobechat/context-engine';
 import { type FetchSSEOptions } from '@lobechat/fetch-sse';
 import { fetchSSE, standardizeAnimationStyle } from '@lobechat/fetch-sse';
 import type { ChatCompletionErrorPayload } from '@lobechat/model-runtime';
@@ -73,6 +74,7 @@ export interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload
    * budget is spent (planned by `shouldCompress`).
    */
   attachmentPreviewFileIds?: string[];
+  discoveryManifests?: Record<string, LobeToolManifest>;
   groupId?: string;
   messages: UIChatMessage[];
   /**
@@ -154,6 +156,7 @@ class ChatService {
       groupId,
       additionalContexts,
       attachmentPreviewFileIds,
+      discoveryManifests,
       topicId,
       resolvedAgentConfig,
       ...params
@@ -260,6 +263,7 @@ class ChatService {
       // Page editor context from agent runtime
       initialContext: options?.initialContext,
       inputTemplate: chatConfig.inputTemplate,
+      discoveryManifests,
       manifests: enabledManifests,
       messages: messagesForContext,
       model: payload.model,

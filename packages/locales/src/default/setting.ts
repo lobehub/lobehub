@@ -2169,6 +2169,14 @@ When I am ___, I need ___
   'systemAgent.expertise.modelDesc':
     'Model used to draft expertise domains and extract reusable experience from conversations.',
   'systemAgent.expertise.title': 'Agent Self-Evolution',
+  'systemAgent.fileEmbedding.modelDesc': 'Embeds file chunks and knowledge base search queries',
+  'systemAgent.fileEmbedding.precedence':
+    'In your personal space, this choice overrides the deployment default. System recommended uses DEFAULT_FILES_CONFIG or the built-in default.',
+  'systemAgent.fileEmbedding.reindexHint':
+    'Only files embedded after a change use the new model. Files already embedded keep their old vectors and may match poorly in semantic search; delete and re-upload them to embed them with the new model.',
+  'systemAgent.fileEmbedding.title': 'File & Knowledge Base Embedding',
+  'systemAgent.fileEmbedding.workspaceDefault':
+    'Team workspaces use the deployment default for file embedding and knowledge base search.',
   'systemAgent.goal.modelDesc':
     'Model used to turn a persistent goal into its standing acceptance criteria.',
   'systemAgent.goal.title': 'Goal Creation',
@@ -4848,9 +4856,6 @@ When I am ___, I need ___
   'environments.form.editEnv': 'Edit variable',
   'environments.form.changeRepository': 'Change repository',
   'environments.form.disconnect': 'Disconnect',
-  'environments.detail.tabs.overview': 'Overview',
-  'environments.detail.initializerDesc':
-    'Applied once to a working directory picked for a conversation: the repository is cloned there and the setup command runs.',
   'environments.detail.noRepository': 'No repository',
   'environments.detail.noSetup': 'No setup command',
   'environments.instances.copy': 'Duplicate copy',
@@ -4908,8 +4913,6 @@ When I am ___, I need ___
   'environments.meta.unknownCreator': 'Unknown',
   'environments.meta.createdAt': 'Created {{time}}',
   'environments.meta.storage': 'Using {{size}}',
-  'environments.detail.close': 'Close',
-  'environments.detail.tabs.settings': 'Settings',
   'environments.sessions.title': 'Run history',
   'environments.sessions.desc':
     'The most recent sessions that ran in these copies and the builds of them, newest first, with how each ended and whether what it installed was saved.',
@@ -5397,4 +5400,24 @@ When I am ___, I need ___
   'automations.empty.title': 'No automations yet',
   'automations.empty.desc':
     'Ask an agent to keep an eye on a connector for you, like "Tell me when CI fails on this PR". Subscriptions you approve show up here.',
+  'environments.form.addRepository': 'Add repository',
+  'environments.form.noRepositories': 'No repositories. Conversations start in an empty folder.',
+  'environments.form.noVariables': 'No variables',
+  'environments.github.openIntegrations': 'Open GitHub settings',
+  'environments.form.pasteRepository': 'Or paste a public repository URL',
+  'environments.form.addPastedRepository': 'Add',
+  'environments.form.repositoryUrlInvalid': 'Not a GitHub repository URL',
+  'environments.form.doneEditing': 'Done',
+  'environments.form.repositoryOptional':
+    'Optional \u2014 an environment can start without a repository and get one later.',
+  'environments.form.layoutHint':
+    "Each repository is checked out in a folder of its own, side by side. You can change them later in the environment's settings.",
+  'environments.detail.back': 'Environments',
+  'environments.detail.notFound': "This environment doesn't exist or you can't see it.",
+  'environments.form.editRepositorySettings': 'Edit branch, folder and setup',
+  'environments.form.repositorySetupHint':
+    "Runs inside this repository's folder after it's cloned, before the environment's setup command.",
+  'environments.form.bootstrapAfterRepositories':
+    "Runs at the top of the working directory, after each repository's own setup. Setup for a single repository goes on that repository.",
+  'environments.form.duplicateFolder': 'Another repository already uses this folder.',
 };

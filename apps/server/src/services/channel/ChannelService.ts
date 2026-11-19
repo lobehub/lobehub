@@ -7,6 +7,7 @@ import {
   CHANNEL_LIMITS,
   defaultChannelAgentDirectory,
   isChannelRuntime,
+  isRemoteChannelRuntime,
 } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -22,6 +23,7 @@ import type {
   ChannelStopScope,
 } from '@/database/repositories/channel';
 import { ChannelError, ChannelRepository } from '@/database/repositories/channel';
+import { findProjectMainChannelId } from '@/database/repositories/channel/projectMainChannel';
 import { users } from '@/database/schemas';
 import { AgentService } from '@/server/services/agent';
 import { deviceGateway } from '@/server/services/deviceGateway';
@@ -80,6 +82,8 @@ export class ChannelService {
     if (!isChannelRuntime(runtime))
       throw new ChannelError('BAD_REQUEST', 'Unsupported Channel runtime');
     const config: NonNullable<ChannelAddAgentInput['config']> = {};
+    if (input.deviceId && isRemoteChannelRuntime(runtime))
+      throw new ChannelError('BAD_REQUEST', 'A remote Agent runs on its own host, not a device');
     if (input.deviceId) {
       const device = this.workspaceId
         ? await this.deviceModel.findWorkspaceDeviceById(input.deviceId)
@@ -303,6 +307,24 @@ export class ChannelService {
     const existing = await this.repository.findDirectAccess(agentId);
     if (existing) return existing.channel.isDeleted ? undefined : existing;
     return this.createDirect(agentId);
+  };
+
+  /**
+   * Where a person lands opening an Agent from their contacts or Agent list. A project's main Agent
+   * talks in that project's Channel, so it opens there instead of a direct conversation beside it;
+   * a direct conversation the person already has with it still opens as it is.
+   */
+  openAgent = async (agentId: string): Promise<string | undefined> => {
+    const existing = await this.repository.findDirectAccess(agentId);
+    if (existing) return existing.channel.isDeleted ? undefined : existing.channel.id;
+    const projectChannelId = await findProjectMainChannelId(
+      this.db,
+      this.userId,
+      this.workspaceId ?? null,
+      agentId,
+    );
+    if (projectChannelId) return projectChannelId;
+    return (await this.createDirect(agentId))?.channel.id;
   };
 
   /**

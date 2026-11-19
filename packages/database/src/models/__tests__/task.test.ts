@@ -7,7 +7,7 @@ import {
 import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { getTestDB } from '../../core/getTestDB';
+import { deleteTestUsers, getTestDB } from '../../../tests/test-utils';
 import { ProjectRepository } from '../../repositories/project';
 import {
   agents,
@@ -41,12 +41,12 @@ const createTopic = async (id: string, uid = userId) => {
 };
 
 beforeEach(async () => {
-  await serverDB.delete(users);
+  await deleteTestUsers(serverDB);
   await serverDB.insert(users).values([{ id: userId }, { id: userId2 }]);
 });
 
 afterEach(async () => {
-  await serverDB.delete(users);
+  await deleteTestUsers(serverDB);
 });
 
 const testDocumentInput = (): typeof documents.$inferInsert => ({

@@ -12,6 +12,7 @@ import {
   getLlmCallCount,
   isParkedStatus,
 } from '@lobechat/agent-runtime';
+import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import {
@@ -21,6 +22,7 @@ import {
   resolveSubAgentModel,
 } from '@lobechat/const';
 import { type ToolsEngine } from '@lobechat/context-engine';
+import { initialToolSelection } from '@lobechat/mecha';
 import { FILE_PREVIEW_CHARS, isOversizedFileContent } from '@lobechat/prompts';
 import {
   buildGoalOverviewContext,
@@ -228,6 +230,7 @@ export class StreamingExecutorActionImpl {
     // activator, so it leaves the invocation set here unless this turn mentions
     // it. Manual mode has no activator and invokes it directly instead.
     const runAgent = {
+      id: effectiveAgentId,
       chatConfig: agentConfig.chatConfig,
       enabledPluginIds: resolvedPluginIds,
       plugins: agentConfigData?.plugins,
@@ -300,8 +303,7 @@ export class StreamingExecutorActionImpl {
     const toolsDetailed = toolsEngine.generateToolsDetailed({
       model: agentConfigData.model,
       provider: agentConfigData.provider!,
-      skipDefaultTools: disableTools || undefined,
-      toolIds: mergedToolIds,
+      ...initialToolSelection(mergedToolIds, runAgent.chatConfig, disableTools),
     });
 
     const { enabledToolIds, enabledManifests, tools } = composeEnabledTools({
@@ -311,12 +313,15 @@ export class StreamingExecutorActionImpl {
     });
 
     // Use enabledManifests directly to avoid getEnabledPluginManifests adding default tools again
-    const toolManifestMap = disableTools
-      ? Object.fromEntries(enabledManifests.map((manifest) => [manifest.identifier, manifest]))
-      : buildRunManifestMap(getToolStoreState(), enabledManifests, {
-          agentId: agentId || undefined,
-          topicId: topicId ?? undefined,
-        });
+    const toolManifestMap = enabledToolIds.includes(LobeActivatorIdentifier)
+      ? buildRunManifestMap(
+          getToolStoreState(),
+          toolsEngine.getAllPluginManifests(),
+          enabledManifests,
+          // The conversation's own connector rows are what it may discover
+          { agentId: agentId || undefined, topicId: topicId ?? undefined },
+        )
+      : Object.fromEntries(enabledManifests.map((manifest) => [manifest.identifier, manifest]));
 
     // Merge tools generation result into agentConfig for chatService to use
     const agentConfigWithTools = {

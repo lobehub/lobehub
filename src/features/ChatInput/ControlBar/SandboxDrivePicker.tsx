@@ -1,12 +1,12 @@
 'use client';
 
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-import { Github } from '@lobehub/icons';
 import { Flexbox, Icon, Popover, Skeleton, Tag, Text, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
   ChevronDownIcon,
+  ContainerIcon,
   FolderIcon,
   HardDriveIcon,
   InfoIcon,
@@ -36,6 +36,7 @@ import SandboxDriveMenu from './SandboxDriveMenu';
 import {
   environmentChipState,
   pickableEnvironments,
+  repositoriesLabel,
   repositorySelection,
   repositorySlug,
 } from './sandboxEnvironmentOptions';
@@ -261,12 +262,14 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
     const fallbackMessage = fallback ? t(`sandboxDrive.fallback.${fallback}`) : undefined;
     const chipIcon = fallback ? (
       <Icon icon={TriangleAlertIcon} size={14} />
+    ) : onRepository && repository && repositorySlug(repository) ? (
+      <RepositoryAvatar size={14} url={repositorySlug(repository)} />
     ) : onRepository ? (
-      <RepositoryAvatar size={14} url={repository && repositorySlug(repository)} />
+      <Icon icon={ContainerIcon} size={14} />
     ) : persistent ? (
       <Icon icon={currentIcon} size={14} />
     ) : repositoryOnly ? (
-      <Github size={14} />
+      <Icon icon={ContainerIcon} size={14} />
     ) : (
       <Icon icon={TimerIcon} size={14} />
     );
@@ -330,16 +333,16 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
             arrow
             compact
             active={onRepository}
-            hint={onRepository && repository ? repositorySlug(repository) : undefined}
+            hint={onRepository && repository ? repositoriesLabel(repository) : undefined}
             icon={
-              onRepository && repository ? (
+              onRepository && repository && repositorySlug(repository) ? (
                 <RepositoryAvatar size={16} url={repositorySlug(repository)} />
               ) : (
-                <Github size={16} />
+                <Icon icon={ContainerIcon} size={16} />
               )
             }
             label={
-              // The repository the conversation works in, by name; the
+              // The environment the conversation works in, by name; the
               // generic title only while none is picked.
               onRepository && repositoryState.kind === 'picked'
                 ? repositoryState.name

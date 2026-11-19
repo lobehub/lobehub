@@ -218,6 +218,7 @@ export const createAgentToolsEngine = (
     topicId?: string;
     /** Resolved for the executing agent, which can differ from the agent open in the UI. */
     runAgent?: {
+      id?: string;
       chatConfig?: LobeAgentChatConfig;
       connectors?: AgentConnectorActivation;
       enabledPluginIds?: string[];
@@ -225,9 +226,13 @@ export const createAgentToolsEngine = (
     };
   } = {},
 ) => {
-  const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
+  const searchConfig = getSearchConfig(
+    workingModel.model,
+    workingModel.provider,
+    options.runAgent?.id,
+  );
   const agentState = getAgentStoreState();
-  const activeAgentId = agentState.activeAgentId || '';
+  const targetAgentId = options.runAgent?.id ?? agentState.activeAgentId ?? '';
   const agent = options.runAgent ?? {
     chatConfig: agentChatConfigSelectors.currentChatConfig(agentState),
     plugins: agentSelectors.currentAgentConfig(agentState)?.plugins,
@@ -266,8 +271,12 @@ export const createAgentToolsEngine = (
       ...serverOnlyToolIds,
       // This engine serves runs the browser executes; server-only tools have nothing to run here.
     ],
-    executionTarget: chatConfigByIdSelectors.getExecutionTargetById(activeAgentId)(agentState),
-    hasEnabledKnowledgeBases: agentSelectors.hasEnabledKnowledgeBases(agentState),
+    executionTarget: chatConfigByIdSelectors.getExecutionTargetById(targetAgentId)(agentState),
+    hasEnabledKnowledgeBases: options.runAgent?.id
+      ? agentSelectors
+          .getAgentConfigById(targetAgentId)(agentState)
+          ?.knowledgeBases?.some((kb) => kb.enabled)
+      : agentSelectors.hasEnabledKnowledgeBases(agentState),
     hasOversizedFiles: options.hasOversizedFiles,
     // A `local` target only resolves on the desktop, where the host itself is
     // the machine: local tools are always reachable there.
@@ -286,7 +295,7 @@ export const createAgentToolsEngine = (
   });
 
   return createToolsEngine({
-    agentId: activeAgentId || undefined,
+    agentId: targetAgentId || undefined,
     topicId: options.topicId,
     defaultToolIds: resolved.defaultToolIds,
     disabledPluginIds: [...resolved.excludedIdentifiers],

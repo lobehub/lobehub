@@ -15,6 +15,7 @@ import { type ContextSnapshot, gatherContextFacts, runContextEngineering } from 
 import { historySummaryPrompt } from '@lobechat/prompts';
 import {
   agentIdentityLabel,
+  manifestBaseIdentifier,
   type OpenAIChatMessage,
   type RuntimeAdditionalContextFragment,
   type RuntimeInitialContext,
@@ -36,8 +37,6 @@ import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { getChatStoreState } from '@/store/chat';
 import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
-import { getToolStoreState } from '@/store/tool';
-import { toolSelectors } from '@/store/tool/selectors';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
@@ -81,6 +80,7 @@ interface ContextEngineeringContext {
    * `<available_skills>` nor resolvable by name via `activateSkill`.
    */
   disabledPluginIds?: string[];
+  discoveryManifests?: Record<string, LobeToolManifest>;
   /**
    * Runtime-resolved agent mode. Callers may force chat mode for models without
    * function calling while keeping the stored chatConfig unchanged.
@@ -143,6 +143,7 @@ export const contextEngineering = async ({
   agentId,
   autoSkillIds,
   disabledPluginIds,
+  discoveryManifests,
   enableAgentMode,
   groupId,
   initialContext,
@@ -244,20 +245,24 @@ export const contextEngineering = async ({
 
   let toolDiscoveryConfig: ToolDiscoveryConfig | undefined;
   if (isLobeToolsEnabled) {
-    const toolState = getToolStoreState();
     // Disabled tools and connectors the agent has off are in neither set: the
     // engine dropped their manifests, so listing them would only invite an
     // activation that cannot succeed.
     const disabledIdSet = new Set(disabledPluginIds ?? []);
-    const availableTools = toolSelectors
-      .availableToolsForDiscovery(toolState, { agentId, topicId })
-      // A connector row's tool set is disabled with its connector
+    // The run's discovery pool is scoped to the conversation already; a
+    // connector row's tool set is disabled with its connector
+    const availableTools = Object.values(discoveryManifests ?? {})
       .filter(
-        (tool) =>
-          !enabledToolSet.has(tool.identifier) &&
-          !disabledIdSet.has(tool.identifier) &&
-          !disabledIdSet.has(tool.connectorIdentifier ?? tool.identifier),
-      );
+        (manifest) =>
+          !enabledToolSet.has(manifest.identifier) &&
+          !disabledIdSet.has(manifest.identifier) &&
+          !disabledIdSet.has(manifestBaseIdentifier(manifest)),
+      )
+      .map(({ identifier, meta }) => ({
+        description: meta?.description ?? '',
+        identifier,
+        name: meta?.title ?? identifier,
+      }));
 
     if (availableTools.length > 0) {
       toolDiscoveryConfig = { availableTools };

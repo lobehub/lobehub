@@ -4,7 +4,7 @@ import {
   LocalExecutionHeterogeneousAgentTypeSchema,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './agent/heterogeneousAgent';
-import { CHANNEL_EXCLUDED_RUNTIMES, CHANNEL_RUNTIMES, isChannelRuntime } from './channel';
+import { isChannelRuntime, isRemoteChannelRuntime } from './channel';
 
 describe('isChannelRuntime', () => {
   it('accepts LobeHub native execution', () => {
@@ -18,16 +18,17 @@ describe('isChannelRuntime', () => {
     expect(isChannelRuntime('deepseek-harness')).toBe(true);
   });
 
-  it('excludes every remote-task runtime, each with a reason', () => {
+  it('accepts every remote-task runtime', () => {
     for (const { type } of REMOTE_HETEROGENEOUS_AGENT_CONFIGS) {
-      expect(isChannelRuntime(type)).toBe(false);
-      expect(CHANNEL_EXCLUDED_RUNTIMES[type]).toMatch(/remote-task/);
+      expect(isChannelRuntime(type)).toBe(true);
+      expect(isRemoteChannelRuntime(type)).toBe(true);
     }
   });
 
-  it('never lists an excluded runtime as supported', () => {
-    for (const type of Object.keys(CHANNEL_EXCLUDED_RUNTIMES))
-      expect(CHANNEL_RUNTIMES as readonly string[]).not.toContain(type);
+  it('marks only remote-task runtimes as remote', () => {
+    expect(isRemoteChannelRuntime('native')).toBe(false);
+    for (const type of LocalExecutionHeterogeneousAgentTypeSchema.options)
+      expect(isRemoteChannelRuntime(type)).toBe(false);
   });
 
   it('rejects unknown runtimes', () => {
