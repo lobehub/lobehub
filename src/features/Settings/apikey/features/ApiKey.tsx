@@ -202,14 +202,19 @@ const ApiKey: FC = () => {
     {
       key: 'scopes',
       render: (apiKey) => (
-        <Tag>
-          {isFullAccessApiKey(apiKey.scopes)
-            ? t('apikey.scopes.fullAccess')
-            : t('apikey.scopes.count', { count: apiKey.scopes?.length ?? 0 })}
-        </Tag>
+        <Flexbox horizontal gap={4} wrap={'wrap'}>
+          <Tag>
+            {isFullAccessApiKey(apiKey.scopes)
+              ? t('apikey.scopes.fullAccess')
+              : t('apikey.scopes.count', { count: apiKey.scopes?.length ?? 0 })}
+          </Tag>
+          {apiKey.scopes?.includes('device:operate') && (
+            <Tag color={'warning'}>{t('apikey.scopes.deviceOperateTag')}</Tag>
+          )}
+        </Flexbox>
       ),
       title: t('apikey.list.columns.scopes'),
-      width: 110,
+      width: 140,
     },
     ...(activeWorkspaceId && workspacePolicy.isAdmin
       ? [

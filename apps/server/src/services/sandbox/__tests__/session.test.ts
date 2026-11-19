@@ -618,6 +618,31 @@ describe('resolveSandboxSessionConfig', () => {
     expect(findById).not.toHaveBeenCalled();
   });
 
+  // The REST API addresses a sandbox by its instance, with no conversation
+  // behind it: the instance resolves exactly as a topic's binding would.
+  it('runs in an instance named directly, without a topic', async () => {
+    await expect(resolve({ instanceId: INSTANCE_ID, topicId: undefined })).resolves.toEqual({
+      claim: CLAIM,
+      cwd: 'projects/atlas',
+      drive: 'personal',
+      environment: INSTANCE_ID,
+      mode: 'persistent',
+    });
+    expect(findById).not.toHaveBeenCalled();
+    expect(findInstanceById).toHaveBeenCalledWith(INSTANCE_ID);
+  });
+
+  it('falls back when a directly named instance is not the caller’s', async () => {
+    findInstanceById.mockResolvedValue(undefined);
+
+    await expect(resolve({ instanceId: INSTANCE_ID, topicId: undefined })).resolves.toEqual({
+      claim: CLAIM,
+      drive: 'personal',
+      fallback: 'instanceUnavailable',
+      mode: 'ephemeral',
+    });
+  });
+
   describe('initializing from an environment', () => {
     const environment = {
       configuration: {

@@ -173,3 +173,43 @@ describe('documented scopes', () => {
     });
   });
 });
+
+describe('explicit scopes', () => {
+  // `device:operate` is in `API_KEY_EXPLICIT_SCOPES`: full access never implies
+  // it, on either gate, so the shortcut for full-access keys must not apply.
+  const buildOperateApp = (scopes: string[] | null) => {
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      c.set('authType' as never, 'apikey' as never);
+      c.set('apiKeyScopes' as never, scopes as never);
+      c.set('userId' as never, 'user-1' as never);
+      await next();
+    });
+    app.post('/commands', requireApiKeyScope('device:operate'), (c) => c.json({ ok: true }));
+    app.post(
+      '/sandboxes',
+      requireAnyPermissionWithApiKeyScope(['agent:update'], 'device:operate'),
+      (c) => c.json({ ok: true }),
+    );
+    return app;
+  };
+
+  it('refuses a full-access key that does not name device:operate', async () => {
+    for (const scopes of [null, ['*']]) {
+      const app = buildOperateApp(scopes);
+
+      for (const path of ['/commands', '/sandboxes']) {
+        const res = await app.request(path, { method: 'POST' });
+        expect(res.status).toBe(403);
+      }
+    }
+  });
+
+  it('lets a full-access key through once it names device:operate', async () => {
+    const app = buildOperateApp(['*', 'device:operate']);
+
+    for (const path of ['/commands', '/sandboxes']) {
+      expect((await app.request(path, { method: 'POST' })).status).toBe(200);
+    }
+  });
+});

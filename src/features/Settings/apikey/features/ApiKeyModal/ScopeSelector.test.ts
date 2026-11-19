@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { toggleScopeSelection } from './ScopeSelector';
+import { fromStoredScopes, toggleScopeSelection, toStoredScopes } from './ScopeSelector';
 
 const sorted = (scopes: string[]) => [...scopes].sort();
 
@@ -32,5 +32,36 @@ describe('toggleScopeSelection', () => {
     expect(toggleScopeSelection(['agent:read', 'agent:write'], 'agent:write', false)).toEqual([
       'agent:read',
     ]);
+  });
+});
+
+describe('device:operate', () => {
+  it('pulls device:read in with it, and goes when device:read goes', () => {
+    const granted = toggleScopeSelection([], 'device:operate', true);
+
+    expect(sorted(granted)).toEqual(['device:operate', 'device:read']);
+    expect(toggleScopeSelection(granted, 'device:read', false)).toEqual([]);
+  });
+
+  it('is stored beside `*` when ticked with full access, and only then', () => {
+    expect(toStoredScopes(true, [])).toEqual(['*']);
+    expect(toStoredScopes(true, ['device:read', 'device:operate', 'chat:read'])).toEqual([
+      '*',
+      'device:operate',
+    ]);
+    expect(toStoredScopes(false, ['device:read'])).toEqual(['device:read']);
+  });
+
+  it('reads a stored list back into the editor state', () => {
+    expect(fromStoredScopes(null)).toEqual({ fullAccess: true, selected: [] });
+    // device:read comes back with it, so turning full access off keeps a usable key
+    const { fullAccess, selected } = fromStoredScopes(['*', 'device:operate']);
+    expect(fullAccess).toBe(true);
+    expect(sorted(selected)).toEqual(['device:operate', 'device:read']);
+    expect(sorted(toStoredScopes(false, selected))).toEqual(['device:operate', 'device:read']);
+    expect(fromStoredScopes(['device:read', 'chat:read'])).toEqual({
+      fullAccess: false,
+      selected: ['device:read', 'chat:read'],
+    });
   });
 });

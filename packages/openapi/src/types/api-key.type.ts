@@ -1,4 +1,4 @@
-import { API_KEY_FULL_ACCESS_SCOPE, API_KEY_SCOPES } from '@lobechat/const';
+import { API_KEY_SCOPES, normalizeApiKeyScopes } from '@lobechat/const';
 import { z } from 'zod';
 
 import { dateTimeSchema } from './common.type';
@@ -7,9 +7,8 @@ const ApiKeyScopesSchema = z
   .array(z.enum(API_KEY_SCOPES, { error: 'Unknown API key scope' }))
   .min(1)
   .refine((scopes) => new Set(scopes).size === scopes.length, 'API key scopes must be unique')
-  .transform((scopes) =>
-    scopes.includes(API_KEY_FULL_ACCESS_SCOPE) ? [API_KEY_FULL_ACCESS_SCOPE] : scopes,
-  );
+  // full access collapses to ['*'], keeping explicit scopes (device:operate) beside it
+  .transform((scopes) => normalizeApiKeyScopes(scopes)!);
 
 const ExpiresAtSchema = z
   .string()

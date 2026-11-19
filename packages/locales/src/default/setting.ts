@@ -2318,6 +2318,12 @@ When I am ___, I need ___
   'trash.untitled': 'Untitled',
   'trash.workspaceDesc':
     'Public shows the shared content members deleted. Private shows only the private content you deleted, and no one else can see it. Deleted items stay here for {{days}} days and can be restored. After that they are removed permanently.',
+  'workspace.auditLog.actions.device.command_executed': 'Device command run',
+  'workspace.auditLog.actions.device.file_written': 'Device file written',
+  'workspace.auditLog.actions.device.git_operated': 'Device git operation',
+  'workspace.auditLog.actions.sandbox.command_executed': 'Sandbox command run',
+  'workspace.auditLog.actions.sandbox.created': 'Sandbox created',
+  'workspace.auditLog.actions.sandbox.file_written': 'Sandbox file written',
   'workspace.create.descPlaceholder': 'Describe what this workspace is for (optional)',
   'workspace.create.namePlaceholder': 'e.g. Acme Team',
   'workspace.create.submit': 'Create workspace',

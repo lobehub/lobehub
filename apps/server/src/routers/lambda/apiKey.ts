@@ -1,4 +1,8 @@
-import { API_KEY_FULL_ACCESS_SCOPE, isValidApiKeyScope } from '@lobechat/const';
+import {
+  explicitScopesBeyondIssuer,
+  isValidApiKeyScope,
+  normalizeApiKeyScopes,
+} from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -19,8 +23,26 @@ const apiKeyScopesSchema = z
   .min(1)
   .nullish();
 
-const normalizeScopes = (scopes: string[] | null | undefined) =>
-  scopes?.includes(API_KEY_FULL_ACCESS_SCOPE) ? [API_KEY_FULL_ACCESS_SCOPE] : scopes;
+/**
+ * Normalize the requested scopes, refusing an explicit scope (`device:operate`)
+ * the calling API key does not hold itself — full access never carried one, so
+ * a key minting or widening another with it would be an escalation. Session
+ * callers (`apiKeyScopes` undefined) may grant any catalog scope.
+ */
+const normalizeScopes = (ctx: object, scopes: string[] | null | undefined) => {
+  const issuerScopes = (ctx as { apiKeyScopes?: string[] | null }).apiKeyScopes;
+  if (issuerScopes !== undefined) {
+    const beyond = explicitScopesBeyondIssuer(scopes, issuerScopes);
+    if (beyond.length > 0) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: `An API key cannot grant a scope it does not hold: ${beyond.join(', ')}`,
+      });
+    }
+  }
+
+  return normalizeApiKeyScopes(scopes);
+};
 
 /**
  * Reads `workspaceRole` as an optional context field: the cloud workspace-auth
@@ -100,7 +122,7 @@ export const apiKeyRouter = router({
         }
       }
 
-      const scopes = normalizeScopes(input.scopes);
+      const scopes = normalizeScopes(ctx, input.scopes);
       // Plaintext goes back to the creator exactly once so the UI can show a
       // copy-now step; list/detail reads keep returning the stored record.
       const result = await ctx.apiKeyModel.createWithPlaintext({ ...input, scopes });
@@ -195,7 +217,8 @@ export const apiKeyRouter = router({
 
       const nextValue = {
         ...input.value,
-        scopes: input.value.scopes === undefined ? undefined : normalizeScopes(input.value.scopes),
+        scopes:
+          input.value.scopes === undefined ? undefined : normalizeScopes(ctx, input.value.scopes),
       };
       const result = await ctx.apiKeyModel.update(input.id, nextValue);
       await recordApiKeyAudit(ctx, {

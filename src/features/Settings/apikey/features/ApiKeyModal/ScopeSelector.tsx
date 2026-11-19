@@ -1,14 +1,19 @@
 'use client';
 
-import { Checkbox, Flexbox, Switch, Text } from '@lobehub/ui';
+import { Alert, Checkbox, Flexbox, Icon, Switch, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Check } from 'lucide-react';
+import { Check, TriangleAlert } from 'lucide-react';
 import type { FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ApiKeyScope } from '@/const/apiKeyScope';
-import { isValidApiKeyScope } from '@/const/apiKeyScope';
+import {
+  API_KEY_FULL_ACCESS_SCOPE,
+  isExplicitApiKeyScope,
+  isFullAccessApiKey,
+  isValidApiKeyScope,
+} from '@/const/apiKeyScope';
 
 const styles = stylex.create({
   disabled: { pointerEvents: 'none', opacity: 0.45 },
@@ -54,27 +59,55 @@ const styles = stylex.create({
     borderBlockEndColor: cssVar.colorBorderSecondary,
   },
   groupTitle: { fontSize: '12px', color: cssVar.colorTextSecondary },
+  /* The explicit device-operate grant: same card as the full-access row, with a
+     warning edge once ticked so the risky choice reads as one. */
+  operateRow: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'flex-start',
+    padding: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+  },
+  operateRowChecked: { borderColor: cssVar.colorWarningBorder },
   scopeRow: { flexWrap: 'wrap' },
 });
 
 /**
  * Scope groups shown to the user. Most domains carry read and write scopes;
- * usage is intentionally read-only, while two domains carry an additional
+ * usage is intentionally read-only, while three domains carry an additional
  * high-risk tier that is separate from plain write:
  *
  * - `model:invoke` burns money;
  * - `agent:credential:write` installs a secret into one of an agent's
- *   accounts — managing the agent's accounts must not imply that.
+ *   accounts — managing the agent's accounts must not imply that;
+ * - `device:operate` runs commands on the user's machines. It is an explicit
+ *   scope — full access does not carry it — so it is not in the grid the
+ *   full-access switch disables but in its own row ({@link DeviceOperateRow}).
  */
 type ScopeGroupKey =
-  'agent' | 'chat' | 'file' | 'knowledge' | 'mcp' | 'model' | 'usage' | 'user' | 'workspace';
+  | 'agent'
+  | 'chat'
+  | 'device'
+  | 'file'
+  | 'knowledge'
+  | 'mcp'
+  | 'model'
+  | 'usage'
+  | 'user'
+  | 'workspace';
 
 /**
  * Labels an extra scope can carry. Kept as literals (not `string`) so the
  * `t()` calls stay inside the generated key union.
  */
 type ScopeExtraLabel =
-  'apikey.scopes.agentCredential' | 'apikey.scopes.invoke' | 'apikey.scopes.modelInvoke';
+  | 'apikey.scopes.agentCredential'
+  | 'apikey.scopes.deviceOperate'
+  | 'apikey.scopes.invoke'
+  | 'apikey.scopes.modelInvoke';
 
 interface ScopeGroup {
   /**
@@ -126,6 +159,16 @@ const SCOPE_GROUPS: readonly ScopeGroup[] = [
     write: 'knowledge:write',
   },
   { key: 'mcp', label: 'apikey.scopes.groups.mcp', read: 'mcp:read', write: 'mcp:write' },
+  {
+    extra: {
+      createLabel: 'apikey.scopes.deviceOperate',
+      overviewLabel: 'apikey.scopes.deviceOperate',
+      scope: 'device:operate',
+    },
+    key: 'device',
+    label: 'apikey.scopes.groups.device',
+    read: 'device:read',
+  },
   { key: 'usage', label: 'apikey.scopes.groups.usage', read: 'usage:read' },
   {
     key: 'workspace',
@@ -197,6 +240,7 @@ export const ScopeOverview: FC<ScopeOverviewProps> = ({ scopes }) => {
  */
 const SCOPE_PREREQUISITES: Partial<Record<ApiKeyScope, readonly ApiKeyScope[]>> = {
   'agent:credential:write': ['agent:write'],
+  'device:operate': ['device:read'],
 };
 
 /** Each scope's prerequisites, with every `:write` needing its `:read` twin when one exists. */
@@ -241,6 +285,65 @@ export const toggleScopeSelection = (
   }
 
   return [...next];
+};
+
+/**
+ * The scope list to store. Full access is `['*']` plus whichever explicit
+ * scopes (`device:operate`) were ticked beside it — `*` never carries them.
+ */
+export const toStoredScopes = (fullAccess: boolean, selected: readonly ApiKeyScope[]) =>
+  fullAccess
+    ? [API_KEY_FULL_ACCESS_SCOPE, ...selected.filter((scope) => isExplicitApiKeyScope(scope))]
+    : [...selected];
+
+/** The editor state for a stored scope list — the inverse of {@link toStoredScopes}. */
+export const fromStoredScopes = (scopes: string[] | null | undefined) => {
+  const fullAccess = isFullAccessApiKey(scopes);
+  const stored = (scopes ?? []).filter(isValidApiKeyScope);
+
+  // with full access only the explicit grants are stored; bring back what they need
+  const selected = fullAccess
+    ? stored
+        .filter((scope) => isExplicitApiKeyScope(scope))
+        .reduce<ApiKeyScope[]>((next, scope) => toggleScopeSelection(next, scope, true), [])
+    : stored;
+
+  return { fullAccess, selected };
+};
+
+interface DeviceOperateRowProps {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}
+
+/**
+ * The `device:operate` grant. Kept out of the grid so it stays reachable when
+ * full access is on (full access does not include it), and says what it
+ * risks the moment it is ticked.
+ */
+const DeviceOperateRow: FC<DeviceOperateRowProps> = ({ checked, onChange }) => {
+  const { t } = useTranslation('auth');
+
+  return (
+    <Flexbox gap={8}>
+      <div {...stylex.props(styles.operateRow, checked && styles.operateRowChecked)}>
+        <Checkbox checked={checked} onChange={onChange} />
+        <Flexbox gap={2}>
+          <Text style={{ fontSize: 14 }}>{t('apikey.form.fields.scopes.deviceOperate')}</Text>
+          <Text style={{ fontSize: 12 }} type={'secondary'}>
+            {t('apikey.form.fields.scopes.deviceOperateDescription')}
+          </Text>
+        </Flexbox>
+      </div>
+      {checked && (
+        <Alert
+          icon={<Icon icon={TriangleAlert} />}
+          title={t('apikey.form.fields.scopes.deviceOperateWarning')}
+          type={'warning'}
+        />
+      )}
+    </Flexbox>
+  );
 };
 
 export interface ScopeSelectorProps {
@@ -296,7 +399,7 @@ const ScopeSelector: FC<ScopeSelectorProps> = ({
                       {t('apikey.scopes.write')}
                     </Checkbox>
                   )}
-                  {group.extra && (
+                  {group.extra && !isExplicitApiKeyScope(group.extra.scope) && (
                     <Checkbox
                       checked={selectedSet.has(group.extra.scope)}
                       disabled={fullAccess}
@@ -311,6 +414,11 @@ const ScopeSelector: FC<ScopeSelectorProps> = ({
           </div>
         </Flexbox>
       </div>
+
+      <DeviceOperateRow
+        checked={selectedSet.has('device:operate')}
+        onChange={(checked) => toggle('device:operate', checked)}
+      />
     </Flexbox>
   );
 };
