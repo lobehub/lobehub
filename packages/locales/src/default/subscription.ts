@@ -220,8 +220,6 @@ export default {
   'credits.dedicatedBudget.details.action': 'View details',
   'credits.dedicatedBudget.details.empty': 'No shared members yet',
   'credits.dedicatedBudget.details.customLimit': 'Custom limit',
-  'credits.dedicatedBudget.details.defaultLimit': 'Default ({{amount}})',
-  'credits.dedicatedBudget.details.editLimit': "Edit {{name}}'s limit",
   'credits.dedicatedBudget.details.limitReached': 'Limit reached',
   'credits.dedicatedBudget.details.noLimit': 'No limit',
   'credits.dedicatedBudget.details.removedShare': 'Spent by removed members',
@@ -248,6 +246,20 @@ export default {
   'credits.dedicatedBudget.removeConfirm.desc':
     'Shared members will fall back to their own budget immediately after confirmation.',
   'credits.dedicatedBudget.removeConfirm.title': 'Remove this dedicated budget?',
+  'credits.dedicatedBudget.rules.action': 'Member limits',
+  'credits.dedicatedBudget.rules.defaultHint': 'Applies to members without a rule of their own.',
+  'credits.dedicatedBudget.rules.desc':
+    'Cap how much each member can use from this budget per billing cycle. Members who reach their limit move on to their next budget.',
+  'credits.dedicatedBudget.rules.empty':
+    'Any member can use the whole budget. Add a rule to cap each member.',
+  'credits.dedicatedBudget.rules.emptyTitle': 'No member limits yet',
+  'credits.dedicatedBudget.rules.overrideCount_one': '{{count}} custom',
+  'credits.dedicatedBudget.rules.overrideCount_other': '{{count}} custom',
+  'credits.dedicatedBudget.rules.removeConfirm.defaultDesc':
+    'Members without a rule of their own will no longer be capped. Members with their own rule keep it.',
+  'credits.dedicatedBudget.rules.removeConfirm.memberDesc':
+    'This member will follow the rule for all members again.',
+  'credits.dedicatedBudget.rules.title': 'Member limits · {{name}}',
   'credits.dedicatedBudget.saveError': 'Failed to save the dedicated budget',
   'credits.dedicatedBudget.saveSuccess': 'Dedicated budget saved',
   'credits.dedicatedBudget.userPanel.label': 'Dedicated budget',
