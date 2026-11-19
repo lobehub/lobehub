@@ -170,10 +170,6 @@ export const lifecycleRouter = router({
       });
     }),
   /**
-   * Get an agent by marketIdentifier
-   * @returns agent id if exists, null otherwise
-   */
-  /**
    * What deleting the agent would take down besides the caller's own work —
    * feeds the delete confirmation, so it is gated like the delete itself.
    * Personal scope has no other members, so it reports nothing foreign.
@@ -193,6 +189,10 @@ export const lifecycleRouter = router({
       });
       return ctx.agentModel.getDeleteImpact(input.agentId);
     }),
+  /**
+   * Get an agent by marketIdentifier
+   * @returns agent id if exists, null otherwise
+   */
   getAgentByMarketIdentifier: agentProcedure
     .input(
       z.object({
