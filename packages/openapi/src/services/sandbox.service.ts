@@ -251,6 +251,14 @@ export class SandboxRestService extends BaseService {
 
   async writeFile(id: string, request: WriteSandboxFileRequest) {
     const instance = await this.requireInstance(id);
+    // the files live on the sandbox's drive: `getInstance` answers `null` when
+    // the row is on a drive this caller cannot see (a private environment that
+    // was later published). This write names a path, not the instance, so a
+    // defaulted drive would create or overwrite the same relative path on the
+    // workspace's public drive and report success for the wrong sandbox.
+    if (!instance.drive) {
+      throw new ApiException(403, 'forbidden', 'This sandbox is on a drive you cannot access');
+    }
 
     await this.audited(
       {
@@ -264,7 +272,7 @@ export class SandboxRestService extends BaseService {
       () =>
         this.caller.writeFile({
           content: request.content,
-          drive: instance.drive ?? undefined,
+          drive: instance.drive,
           path: this.drivePath(instance, request.path),
         }),
       () => ({ success: true }),
