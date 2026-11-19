@@ -1,4 +1,4 @@
-import { resolveInboxBlockState } from './inboxBlockState';
+import { resolveInboxBlockState, resolveSignedOutRailState } from './inboxBlockState';
 
 const firstLoad = { hasError: false, hiddenWidgets: [], isBriefsInit: false, isLoading: true };
 const failed = { hasError: true, hiddenWidgets: [], isBriefsInit: false, isLoading: false };
@@ -43,5 +43,19 @@ describe('resolveInboxBlockState', () => {
       resolveInboxBlockState({ ...firstLoad, hiddenWidgets: ['needsYou', 'news'] }),
     ).toBeNull();
     expect(resolveInboxBlockState({ ...failed, hiddenWidgets: ['needsYou', 'news'] })).toBeNull();
+  });
+});
+
+describe('resolveSignedOutRailState', () => {
+  it('holds the rail with skeletons while the session restores the last signed-in user', () => {
+    expect(resolveSignedOutRailState({ isRail: true, restoringSession: true })).toBe('skeleton');
+  });
+
+  it('renders nothing for a visitor the session will not sign in', () => {
+    expect(resolveSignedOutRailState({ isRail: true, restoringSession: false })).toBeNull();
+  });
+
+  it('leaves the main column to its own signed-out state', () => {
+    expect(resolveSignedOutRailState({ isRail: false, restoringSession: true })).toBeNull();
   });
 });
