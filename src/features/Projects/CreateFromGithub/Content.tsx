@@ -1,8 +1,9 @@
 'use client';
 
-import type { ScmRepositoryListItem } from '@lobechat/types';
+import type { ScmRepositoryListItem, TfsRepository } from '@lobechat/types';
 import { parseTfsRepository } from '@lobechat/utils/tfs';
 import {
+  ActionIcon,
   Button,
   cssVar,
   Flexbox,
@@ -12,6 +13,7 @@ import {
   toast,
   useModalContext,
 } from '@lobehub/ui';
+import { GitBranchIcon, XIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -33,7 +35,15 @@ import {
 } from '../createProjectForm';
 import MainAgentSection from '../MainAgentSection';
 import { parseGithubRepository } from './githubRepository';
+import { MAX_REPOSITORIES } from './RepositoryField';
 import RepositoryList from './RepositoryList';
+
+interface SelectedTfsRepository {
+  defaultBranch?: string;
+  fullName: string;
+  name: string;
+  url: string;
+}
 
 interface FormState {
   /** Default branch of the picked repository; unknown for a pasted URL. */
@@ -69,11 +79,14 @@ const CreateFromGithubContent = ({ provider = 'github' }: { provider?: 'github' 
     nameEdited: false,
     url: '',
   });
+  const [tfsRepositories, setTfsRepositories] = useState<SelectedTfsRepository[]>([]);
 
   // Taken once per open dialog: the dedicated agent's previewed character is seeded by it.
   const [reservedIds] = useState(reserveProjectIds);
 
-  const repository = parseRepository(form.url);
+  const repository = parseRepository(
+    provider === 'tfs' ? (tfsRepositories[0]?.url ?? '') : form.url,
+  );
   const urlInvalid = Boolean(form.url.trim()) && !repository;
   const identifierInvalid =
     (Boolean(form.identifier.trim()) && !isProjectIdentifierValid(form.identifier)) ||
@@ -99,6 +112,35 @@ const CreateFromGithubContent = ({ provider = 'github' }: { provider?: 'github' 
     applyUrl(repo.htmlUrl, repo.defaultBranch);
   };
 
+  const selectTfsRepository = (repo: TfsRepository) => {
+    const selected = {
+      defaultBranch: repo.defaultBranch,
+      fullName: `${repo.project.name}/${repo.name}`,
+      name: repo.name,
+      url: repo.remoteUrl,
+    };
+    setTfsRepositories((current) => {
+      const index = current.findIndex(
+        (item) => item.url.toLowerCase() === repo.remoteUrl.toLowerCase(),
+      );
+      if (index < 0) return current.length >= MAX_REPOSITORIES ? current : [...current, selected];
+      const next = [...current];
+      next[index] = selected;
+      return next;
+    });
+    setForm((current) => ({
+      ...current,
+      duplicate: undefined,
+      name: current.nameEdited || tfsRepositories.length > 0 ? current.name : selected.name,
+    }));
+  };
+
+  const removeTfsRepository = (url: string) => {
+    const next = tfsRepositories.filter((item) => item.url !== url);
+    setTfsRepositories(next);
+    if (!form.nameEdited && next[0]) setForm((current) => ({ ...current, name: next[0].name }));
+  };
+
   const updateName = (name: string) => {
     setForm((current) => ({ ...current, duplicate: undefined, name, nameEdited: true }));
   };
@@ -119,10 +161,17 @@ const CreateFromGithubContent = ({ provider = 'github' }: { provider?: 'github' 
           mainAgentMode: form.mainAgentMode,
         }),
         repository: {
-          defaultBranch: form.defaultBranch,
+          defaultBranch:
+            provider === 'tfs' ? tfsRepositories[0]?.defaultBranch : form.defaultBranch,
           name: repository.fullName,
           url: repository.url,
         },
+        ...(provider === 'tfs' && {
+          additionalRepositories: tfsRepositories.slice(1).map(({ defaultBranch, url }) => ({
+            defaultBranch,
+            url,
+          })),
+        }),
       });
       if (form.mainAgentMode === 'dedicated') {
         const { refreshAgentLabels, refreshAgentList } = useHomeStore.getState();
@@ -152,9 +201,9 @@ const CreateFromGithubContent = ({ provider = 'github' }: { provider?: 'github' 
         {/* Picking a connected repository is the primary path; the URL field is the fallback. */}
         {provider === 'tfs' ? (
           <TfsRepositoryPicker
-            onClear={() => applyUrl('')}
+            onClear={() => undefined}
             onLeave={close}
-            onSelect={(repo) => applyUrl(repo.remoteUrl, repo.defaultBranch)}
+            onSelect={selectTfsRepository}
           />
         ) : (
           <RepositoryList
@@ -162,6 +211,36 @@ const CreateFromGithubContent = ({ provider = 'github' }: { provider?: 'github' 
             onConnect={connectGithub}
             onSelect={selectRepository}
           />
+        )}
+
+        {provider === 'tfs' && tfsRepositories.length > 0 && (
+          <Flexbox gap={8}>
+            <Text fontSize={13} weight={500}>
+              {t('createFromGithub.repositoryTitle')}
+            </Text>
+            {tfsRepositories.map((item) => (
+              <Flexbox horizontal align="center" gap={8} key={item.url}>
+                <GitBranchIcon size={14} />
+                <Text ellipsis style={{ flex: 1 }} weight={500}>
+                  {item.fullName}
+                </Text>
+                {item.defaultBranch && (
+                  <Text fontSize={12} type="secondary">
+                    {item.defaultBranch}
+                  </Text>
+                )}
+                <ActionIcon
+                  icon={XIcon}
+                  size="small"
+                  title={t('createFromGithub.removeRepository')}
+                  onClick={() => removeTfsRepository(item.url)}
+                />
+              </Flexbox>
+            ))}
+            <Text fontSize={12} type="secondary">
+              {t('createFromGithub.layoutHint')}
+            </Text>
+          </Flexbox>
         )}
 
         {provider === 'github' && (
