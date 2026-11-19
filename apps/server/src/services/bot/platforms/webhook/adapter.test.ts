@@ -194,6 +194,42 @@ describe('BotWebhookAdapter.handleWebhook (inbound)', () => {
     expect((await adapter.handleWebhook(signedRequest('not json'))).status).toBe(400);
     expect((await adapter.handleWebhook(signedRequest('x'.repeat(300 * 1024)))).status).toBe(413);
   });
+
+  it('stops reading a chunked body that declares no Content-Length once it exceeds the limit', async () => {
+    const { adapter, processMessage } = await makeAdapter();
+
+    const chunk = new TextEncoder().encode('x'.repeat(64 * 1024));
+    let sent = 0;
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      cancel: () => {
+        cancelled = true;
+      },
+      pull: (controller) => {
+        // Keep feeding chunks: only the adapter's own byte cap can stop this.
+        if (sent >= 16) return controller.close();
+        sent += 1;
+        controller.enqueue(chunk);
+      },
+    });
+
+    const request = new Request('https://lobehub.test/api/agent/webhooks/custom/my-bot', {
+      body,
+      duplex: 'half',
+      headers: {
+        'X-LobeHub-Signature': signWebhookPayload(SECRET, 1, ''),
+        'X-LobeHub-Timestamp': '1',
+      },
+      method: 'POST',
+    } as RequestInit & { duplex: 'half' });
+
+    const res = await adapter.handleWebhook(request);
+
+    expect(res.status).toBe(413);
+    expect(sent).toBeLessThan(16);
+    expect(cancelled).toBe(true);
+    expect(processMessage).not.toHaveBeenCalled();
+  });
 });
 
 describe('BotWebhookAdapter.postMessage (outbound)', () => {

@@ -46,6 +46,51 @@ class BotWebhookFormatConverter extends BaseFormatConverter {
 
 const json = (status: number, body: Record<string, unknown>) => Response.json(body, { status });
 
+/**
+ * Reads the inbound body without ever buffering more than `limit` bytes.
+ *
+ * `request.text()` happily buffers a chunked POST that omits `Content-Length`,
+ * so a declared-length check alone does not bound memory on a self-hosted
+ * deployment that puts no small request limit in front of this route.
+ */
+const readBodyWithinLimit = async (
+  request: Request,
+  limit: number,
+): Promise<{ body: string; ok: true } | { ok: false }> => {
+  const declared = Number(request.headers.get('content-length') ?? '');
+  if (Number.isFinite(declared) && declared > limit) return { ok: false };
+
+  if (!request.body) return { body: '', ok: true };
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      received += value.byteLength;
+      if (received > limit) {
+        await reader.cancel().catch(() => {});
+        return { ok: false };
+      }
+
+      chunks.push(value);
+    }
+  } catch {
+    await reader.cancel().catch(() => {});
+    return { ok: false };
+  }
+
+  return {
+    body: Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8'),
+    ok: true,
+  };
+};
+
 /** Inbound attachments become metadata; the platform client downloads them on demand. */
 const toAttachments = (message: BotWebhookInboundMessage): Attachment[] =>
   (message.attachments ?? []).map(
@@ -111,11 +156,9 @@ export class BotWebhookAdapter implements Adapter<BotWebhookThread, BotWebhookIn
   async handleWebhook(request: Request, options?: WebhookOptions): Promise<Response> {
     if (request.method !== 'POST') return json(405, { error: 'method_not_allowed' });
 
-    const declared = Number(request.headers.get('content-length') ?? 0);
-    if (declared > BOT_WEBHOOK_MAX_BODY_BYTES) return json(413, { error: 'payload_too_large' });
-    const body = await request.text();
-    if (Buffer.byteLength(body) > BOT_WEBHOOK_MAX_BODY_BYTES)
-      return json(413, { error: 'payload_too_large' });
+    const read = await readBodyWithinLimit(request, BOT_WEBHOOK_MAX_BODY_BYTES);
+    if (!read.ok) return json(413, { error: 'payload_too_large' });
+    const body = read.body;
 
     const verdict = verifyInboundSignature({
       body,

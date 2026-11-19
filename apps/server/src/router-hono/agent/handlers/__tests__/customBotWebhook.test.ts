@@ -58,7 +58,15 @@ describe('customBotWebhook', () => {
 
     await customBotWebhook(context(ROW_ID));
 
-    expect(getWebhookHandler).toHaveBeenCalledWith('webhook', 'my-bot');
+    expect(findByIds).toHaveBeenCalledWith(expect.anything(), [ROW_ID]);
+
+    // The mapping itself is the point of this case: the row's Bot ID, not the UUID, reaches the adapter.
+    const [platform, applicationId] = getWebhookHandler.mock.calls[0] as unknown as [
+      string,
+      string,
+    ];
+    expect(platform).toBe('webhook');
+    expect(applicationId).toBe('my-bot');
   });
 
   it('answers 404 for the id of a bot on another platform', async () => {
