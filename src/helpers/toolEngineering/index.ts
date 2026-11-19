@@ -47,6 +47,7 @@ import {
 } from '@/store/tool/selectors';
 import { runtimeUninstalledBuiltinTools } from '@/store/tool/slices/builtin/projection';
 import {
+  composioIdsOutsideRun,
   connectorSelectors,
   pickRunConnectors,
   pickRunToolSets,
@@ -163,6 +164,12 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
     })
     .filter((c) => c.isEnabled && c.status === 'connected');
 
+  // A Composio app whose only connections this run may not use offers no tools
+  const composioOutsideRun = composioIdsOutsideRun(
+    connectorSelectors.connectorList(toolStoreState),
+    { agentId, includePrivate: includePrivateConnectors, listed },
+  );
+
   // Per-connector tool permissions, keyed by connector identifier: community-
   // MCP plugins execute outside the connector path, so the user's
   // needs_approval / disabled settings are patched onto their manifests.
@@ -181,6 +188,7 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
       builtinTools: toolStoreState.builtinTools,
       composio: composioStoreSelectors
         .composioAsLobeTools(toolStoreState)
+        .filter((tool) => !composioOutsideRun.has(tool.identifier))
         .map((tool) => tool.manifest as LobeToolManifest),
       connectors: buildClientConnectorManifests(connectorToolSets) as LobeToolManifest[],
       installedPlugins: pluginSelectors.installedPluginManifestList(

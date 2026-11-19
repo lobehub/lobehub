@@ -324,6 +324,40 @@ describe('MCP connectors in tool discovery', () => {
     expect(ids()).not.toContain('notes-mcp-3f9a1c2e');
   });
 
+  it('offers no Composio app whose only connection the conversation may not use', () => {
+    // Regression: a shared Composio connection switched to private kept its
+    // projection, so a workspace agent's chat advertised tools it cannot run.
+    const gmail = {
+      identifier: 'gmail',
+      label: 'Gmail',
+      status: 'active',
+      tools: [{ name: 'GMAIL_SEND', inputSchema: {} }],
+    };
+    const s = {
+      ...state([]),
+      composioServers: [gmail],
+      connectors: [
+        {
+          id: 'c-gmail',
+          identifier: 'gmail',
+          metadata: { composio: { connectedAccountId: 'ca-1' } },
+          visibility: 'private',
+        },
+      ],
+    } as unknown as ToolStoreState;
+    const ids = (run = {}) =>
+      toolSelectors.availableToolsForDiscovery(s, run).map((tool) => tool.identifier);
+
+    runListing.rows = [];
+    expect(ids({ agentId: 'agt-public', topicId: 'tpc-1' })).not.toContain('gmail');
+    runListing.rows = undefined;
+    expect(ids()).not.toContain('gmail');
+    // The owner's private agent's own conversation lists it
+    runListing.rows = [s.connectors[0]];
+    expect(ids({ agentId: 'agt-private', topicId: 'tpc-own' })).toContain('gmail');
+    runListing.rows = undefined;
+  });
+
   it("reads a connector-only identifier's manifest from its connector", () => {
     const s = state([marketplace('notes-mcp'), marketplace('plugin-1')]);
 

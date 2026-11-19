@@ -10,6 +10,7 @@ import { createToolsEngine } from './index';
  */
 let mockConnectors: any[] = [];
 let mockRunConnectors: any[] | undefined;
+let mockComposioServers: any[] = [];
 
 vi.mock('@/services/runConnectors', () => ({
   getRunConnectors: () => mockRunConnectors,
@@ -19,7 +20,7 @@ vi.mock('@/store/tool', () => ({
     agentConnectors: {},
     builtinSkills: [],
     builtinTools: [],
-    composioServers: [],
+    composioServers: mockComposioServers,
     connectors: mockConnectors,
     installedPlugins: [],
     lobehubSkillServers: [],
@@ -86,5 +87,33 @@ describe("the conversation's server-listed connector rows", () => {
     mockRunConnectors = [row('c-shared', 'github', 'list_issues')];
 
     expect(toolNames()).toEqual(['github____list_issues____mcp']);
+  });
+
+  it('offers no Composio app whose only connection the conversation may not use', () => {
+    // Regression: a shared Composio connection switched to private kept its
+    // projection, so a workspace agent's client-run chat offered tools whose
+    // every call the server refuses.
+    const gmail = {
+      id: 'c-gmail',
+      identifier: 'gmail',
+      metadata: { composio: { connectedAccountId: 'ca-1' } },
+      visibility: 'private',
+    };
+    mockConnectors = [gmail];
+    mockComposioServers = [
+      { identifier: 'gmail', label: 'Gmail', status: 'active', tools: [{ name: 'GMAIL_SEND' }] },
+    ];
+    const gmailTools = () =>
+      createToolsEngine({ agentId: 'agt', topicId: 'tpc' })
+        .generateToolsDetailed({ model: 'gpt-4', provider: 'openai', toolIds: ['gmail'] })
+        .tools?.filter((tool) => tool.function.name.startsWith('gmail')).length ?? 0;
+
+    mockRunConnectors = [];
+    expect(gmailTools()).toBe(0);
+    // The owner's private agent's own conversation lists the connection
+    mockRunConnectors = [gmail];
+    expect(gmailTools()).toBeGreaterThan(0);
+    mockComposioServers = [];
+    mockConnectors = [];
   });
 });

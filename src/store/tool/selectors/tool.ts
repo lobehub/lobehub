@@ -27,7 +27,7 @@ import { type ToolStoreState } from '../initialState';
 import { agentSkillsSelectors } from '../slices/agentSkills/selectors';
 import { builtinToolSelectors } from '../slices/builtin/selectors';
 import { ComposioServerStatus } from '../slices/composioStore';
-import { connectorSelectors } from '../slices/connector/selectors';
+import { composioIdsOutsideRun, connectorSelectors } from '../slices/connector/selectors';
 import { lobehubSkillStoreSelectors } from '../slices/lobehubSkillStore';
 import { LobehubSkillStatus } from '../slices/lobehubSkillStore/types';
 import { pluginSelectors } from '../slices/plugin/selectors';
@@ -224,9 +224,16 @@ const availableToolsForDiscovery = (
       };
     });
 
-  // 3. Composio MCP servers (connected only)
+  // 3. Composio MCP servers (connected only), but none whose only connections
+  //    the conversation may not use: without its listing, shared ones only
+  const composioOutsideRun = composioIdsOutsideRun(s.connectors ?? [], {
+    agentId: run.agentId,
+    includePrivate: false,
+    listed: run.agentId ? getRunConnectors(run) : undefined,
+  });
   const composioItems = (s.composioServers || [])
     .filter((server) => server.status === ComposioServerStatus.ACTIVE && server.tools?.length)
+    .filter((server) => !composioOutsideRun.has(server.identifier))
     // A connector identifier can have legacy Composio and current LobeHub
     // connections at the same time. Tool discovery is identifier-based, so the
     // canonical LobeHub connection must own the single visible entry.

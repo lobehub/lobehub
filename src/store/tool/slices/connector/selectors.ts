@@ -165,6 +165,38 @@ export const pickRunToolSets = <
   });
 };
 
+/**
+ * The Composio apps a run must not offer: those whose connection rows the
+ * caller's list holds, none of which the run may use — a private connection
+ * outside its owner's private agent's own conversation. Their tools come from
+ * the Composio projection, which no run scope filters, while the execution
+ * lookup only serves a connection the run may use, so every call would fail.
+ * The server's listing for the conversation (`connector.listForRun`) decides
+ * when present; otherwise the run's rows are picked the way the server picks
+ * them ({@link pickRunConnectors}). An app with no connection row (a legacy
+ * plugin-only connection) is left to its projection.
+ */
+export const composioIdsOutsideRun = <
+  T extends Pick<ConnectorWithTools, 'id' | 'identifier' | 'metadata' | 'visibility'>,
+>(
+  connectors: T[],
+  {
+    agentId,
+    includePrivate,
+    listed,
+  }: { agentId?: string; includePrivate: boolean; listed?: Pick<T, 'identifier' | 'metadata'>[] },
+): Set<string> => {
+  const isComposio = (c: Pick<T, 'metadata'>) => !!c.metadata?.composio;
+  const local = connectors.filter(isComposio);
+  const usable = new Set(
+    (listed
+      ? listed.filter(isComposio)
+      : pickRunConnectors(local, { agentId, includePrivate })
+    ).map((c) => c.identifier),
+  );
+  return new Set(local.map((c) => c.identifier).filter((id) => !usable.has(id)));
+};
+
 const connectorByIdentifier =
   (
     identifier: string,
