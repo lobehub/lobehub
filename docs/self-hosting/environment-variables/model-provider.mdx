@@ -533,6 +533,22 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 - Default: `https://dashscope.aliyuncs.com/compatible-mode/v1`
 - Example: `https://my-qwen-proxy.com/v1`
 
+## SteadyRouter
+
+### `STEADYROUTER_API_KEY`
+
+- Type: Required
+- Description: This is the API key you can obtain from SteadyRouter
+- Default: -
+- Example: `sk-xxxxx...xxxxx`
+
+### `STEADYROUTER_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the model list, use `+` to add a model, use `-` to hide a model, use `model_name->deploymentName=display_name<extension_config>` to customize the display name of a model, separated by commas. Definition syntax rules see [model-list][model-list]
+- Default: `-`
+- Example: `-all,+deepseek-v4-flash,+gpt-5.4-mini`
+
 ## Stepfun AI
 
 ### `STEPFUN_API_KEY`

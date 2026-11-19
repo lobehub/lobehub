@@ -1,0 +1,28 @@
+---
+title: Using SteadyRouter in LobeHub
+description: Connect LobeHub to SteadyRouter with one API key.
+tags:
+  - LobeHub
+  - SteadyRouter
+  - Model gateway
+---
+
+# Using SteadyRouter in LobeHub
+
+[SteadyRouter](https://www.steadyrouter.com) is an AI model API gateway: one API key for hundreds of models, with automatic failover between upstream sources. With smart routing on (the default for new keys), a request that fails in one source is retried in another within the same call, except on 504/524 timeouts.
+
+<Steps>
+  ### Step 1: Get an API key
+
+  Create an account on [SteadyRouter](https://www.steadyrouter.com/sign-up?aff=Dn19), then open **API Keys** in the console and create a key.
+
+  ### Step 2: Configure SteadyRouter in LobeHub
+
+  Open **Settings** → **AI Service Provider**, find **SteadyRouter**, paste the key and turn the provider on.
+
+  ### Step 3: Choose a model
+
+  Click **Fetch models** to load the models your key can use, then pick one in the chat's model selector.
+</Steps>
+
+Models and current prices are on [Model Square](https://www.steadyrouter.com/pricing). See the [API docs](https://www.steadyrouter.com/site/docs.html) for details.
