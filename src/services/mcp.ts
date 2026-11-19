@@ -522,7 +522,9 @@ class MCPService {
       args: isDesktop && isStdio ? (safeParseJSON(args) ?? {}) : args,
       env: connection?.type === 'stdio' ? params.env : (pluginSettings ?? connection?.env),
       ...(fromMcpApp && { fromApp: true }),
-      ...(fromEntrypoint && { fromEntrypoint: true, agentId }),
+      // The conversation's agent: the server gates the tool on the row it runs
+      ...((fromMcpApp || fromEntrypoint) && agentId && { agentId }),
+      ...(fromEntrypoint && { fromEntrypoint: true }),
       meta,
       params,
       toolName: apiName,

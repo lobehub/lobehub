@@ -10,10 +10,12 @@ import type {
 import { getDisabledPluginIds } from '@lobechat/types';
 
 import { resolveRunConnector, type RunConnector } from '@/services/connectorRun';
+import { getRunConnectors } from '@/services/runConnectors';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { getToolStoreState } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
+import { pickRunConnectors } from '@/store/tool/slices/connector/selectors';
 import { getUserStoreState } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 
@@ -90,6 +92,48 @@ type ToolLookup = { intervention?: unknown } | { missingFrom: string } | null;
  * The tool's own approval setting as the conversation's manifest carries it,
  * or null when the server doesn't offer the tool.
  */
+const PERMISSION_STRICTNESS: Record<string, number> = { auto: 1, disabled: 3, needs_approval: 2 };
+
+const strictestPermission = (permissions: (string | undefined)[]): string | undefined =>
+  permissions.reduce<string | undefined>(
+    (strictest, permission) =>
+      permission &&
+      (PERMISSION_STRICTNESS[permission] ?? 0) > (PERMISSION_STRICTNESS[strictest ?? ''] ?? 0)
+        ? permission
+        : strictest,
+    undefined,
+  );
+
+/**
+ * A plugin tool's permission as the conversation applies it: plugin calls keep
+ * the bare identifier, so the permission row is the one the run ranks first
+ * for it (the owner's private row shadows the shared one in their private
+ * agent's own topic, `pickRunConnectors`), not the row whose tool prefix the
+ * identifier names. The server's listing for the conversation decides which
+ * rows take part; without it any row of the identifier may be the one, so the
+ * strictest setting among them holds.
+ */
+const pluginToolPermission = (
+  identifier: string,
+  toolName: string,
+  run: { agentId?: string; topicId?: string },
+): string | undefined => {
+  const s = getToolStoreState();
+  const listed = run.agentId ? getRunConnectors(run) : undefined;
+  const rows = listed
+    ? pickRunConnectors(
+        listed.filter((c) => c.identifier === identifier),
+        { agentId: run.agentId, includePrivate: true },
+      )
+    : [
+        ...(s.connectors ?? []),
+        ...(run.agentId ? (s.agentConnectors?.[run.agentId] ?? []) : []),
+      ].filter((c) => c.identifier === identifier);
+  return strictestPermission(
+    rows.map((c) => c.tools.find((t) => t.toolName === toolName)?.permission),
+  );
+};
+
 const findToolIntervention = (
   /**
    * The connector the call runs on ({@link resolveRunConnector}): approval is
@@ -102,6 +146,8 @@ const findToolIntervention = (
   /** The lists were just loaded from the server; if not, nothing here can waive approval. */
   revalidated: boolean,
   fromEntrypoint = false,
+  /** A plugin tool's permission as the conversation applies it ({@link pluginToolPermission}). */
+  pluginPermission?: string,
 ): ToolLookup => {
   const s = getToolStoreState();
   const confirmed = revalidated && s.isConnectorListConfirmed(agentId);
@@ -158,7 +204,12 @@ const findToolIntervention = (
   // (patchManifestWithPermissions). Until the server confirms the lists they
   // may be stale or missing, so ask.
   if (!confirmed) return { intervention: 'required' };
-  const permission = resolved?.tools.find((t) => t.toolName === toolName)?.permission;
+  // The row the identifier names and the row the conversation ranks first for
+  // it: the stricter setting holds
+  const permission = strictestPermission([
+    resolved?.tools.find((t) => t.toolName === toolName)?.permission,
+    pluginPermission,
+  ]);
   if (permission === 'disabled') return null;
   // Never looser than the tool's own `always` (`patchManifestWithPermissions`)
   if (permission === 'needs_approval')
@@ -251,6 +302,7 @@ const lookUpTool = async (
     run.agentId,
     revalidated,
     fromEntrypoint,
+    pluginToolPermission(identifier, toolName, run),
   );
 };
 
