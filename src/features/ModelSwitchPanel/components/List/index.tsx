@@ -51,6 +51,8 @@ export const List: FC<ListProps> = ({
   const { t: tCommon } = useTranslation('common');
   const newLabel = tCommon('new');
   const {
+    featuredModels,
+    isModelHidden,
     isModelRestricted,
     onBeforeModelSelect,
     onRestrictedModelClick,
@@ -71,7 +73,15 @@ export const List: FC<ListProps> = ({
     onModelChange: onModelChangeProp,
     onOpenChange,
   });
-  const listItems = useBuildListItems(enabledList, groupMode, searchKeyword, sortModelLast);
+  // The guard's featured and hidden models describe the chat model list only; a
+  // host passing its own list (image / video generation) keeps it as given.
+  const listItems = useBuildListItems(
+    enabledList,
+    groupMode,
+    searchKeyword,
+    sortModelLast,
+    enabledListProp ? undefined : { featuredModels, isModelHidden },
+  );
 
   const resolvePricing = useBusinessModelPricing();
   const resolveRating = useBusinessModelRating();
@@ -149,7 +159,7 @@ export const List: FC<ListProps> = ({
                 : `${item.type}-${index}`,
           );
           const isActive =
-            (item.type === 'provider-model-item' &&
+            ((item.type === 'provider-model-item' || item.type === 'featured-model-item') &&
               menuKey(item.provider.id, item.model.id) === activeKey) ||
             (item.type === 'model-item-single' &&
               menuKey(item.data.providers[0].id, item.data.model.id) === activeKey) ||
