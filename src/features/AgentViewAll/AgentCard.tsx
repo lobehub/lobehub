@@ -16,6 +16,7 @@ import { type CSSProperties, memo, type ReactNode, useCallback, useRef, useState
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { densityVars } from '@/styles/densityVars';
 
 import AgentPendant from './AgentPendant';
 import type { AgentRowAuthor } from './AgentRow';
@@ -43,7 +44,7 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     padding-block: ${COVER_HEIGHT - AVATAR_SIZE / 2}px 16px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     text-align: center;
 
@@ -186,7 +187,7 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
     width: 100%;
     margin-block-start: 8px;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 600;
     line-height: 22px;
   `,
@@ -238,7 +239,7 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
 
     min-width: 0;
     margin-block-start: auto;
-    padding-block-start: 12px;
+    padding-block-start: ${densityVars.contentGap};
 
     font-size: 12px;
     line-height: 16px;
@@ -257,7 +258,7 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
   grid: css`
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(${AGENT_GRID_MIN_COLUMN}px, 100%), 1fr));
-    gap: 12px;
+    gap: ${densityVars.contentGap};
 
     width: 100%;
     min-width: 0;

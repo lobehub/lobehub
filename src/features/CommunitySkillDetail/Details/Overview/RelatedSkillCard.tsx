@@ -8,6 +8,7 @@ import urlJoin from 'url-join';
 
 import Rate from '@/components/RatingOverview/Rate';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { densityTokens } from '@/styles/density.stylex';
 import { type DiscoverSkillItem } from '@/types/discover';
 
 import { useDetailActionContext } from '../../DetailProvider';
@@ -42,7 +43,7 @@ const styles = stylex.create({
     whiteSpace: 'nowrap',
   },
   metaRating: { flex: 'none', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' },
-  name: { fontSize: '14px', fontWeight: 600, lineHeight: 1.3 },
+  name: { fontSize: densityTokens['--lobe-density-font-size'], fontWeight: 600, lineHeight: 1.3 },
 });
 
 const RelatedSkillCard = memo<DiscoverSkillItem>(
