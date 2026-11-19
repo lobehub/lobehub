@@ -115,6 +115,12 @@ export class InterventionController {
     threadId?: string;
     topicId?: string;
   }): Promise<{
+    /**
+     * A remote platform agent (OpenClaw, Hermes, …) accepted the cancel of its
+     * task. It has no runtime state to interrupt; its notify callback settles
+     * the operation later.
+     */
+    deviceCancellationAccepted?: boolean;
     deviceCancellationConfirmed?: boolean;
     operationId?: string;
     success: boolean;
@@ -128,6 +134,7 @@ export class InterventionController {
     let resolvedOperationId = operationId;
     let thread;
     let deviceCancellationConfirmed: boolean | undefined;
+    let deviceCancellationAccepted: boolean | undefined;
 
     if (threadId) {
       thread = await this.deps.threadModel.findById(threadId);
@@ -223,6 +230,9 @@ export class InterventionController {
           10_000,
         );
 
+        if (isRemoteHeterogeneousType(targetOperation.heteroType) && cancelResult.success) {
+          deviceCancellationAccepted = true;
+        }
         if (isLocalHeterogeneousType(targetOperation.heteroType)) {
           deviceCancellationConfirmed =
             cancelResult.success &&
@@ -298,6 +308,7 @@ export class InterventionController {
       const alreadyCancelled = thread?.status === ThreadStatus.Cancel;
 
       return {
+        deviceCancellationAccepted,
         deviceCancellationConfirmed,
         operationId: resolvedOperationId,
         success: alreadyCancelled,
@@ -317,6 +328,7 @@ export class InterventionController {
     }
 
     return {
+      deviceCancellationAccepted,
       deviceCancellationConfirmed,
       operationId: resolvedOperationId,
       success: true,

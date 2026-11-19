@@ -357,7 +357,11 @@ export interface CancelSubAgentRunDeps extends Pick<
     operationId?: string;
     threadId?: string;
     topicId?: string;
-  }) => Promise<{ deviceCancellationConfirmed?: boolean; success: boolean }>;
+  }) => Promise<{
+    deviceCancellationAccepted?: boolean;
+    deviceCancellationConfirmed?: boolean;
+    success: boolean;
+  }>;
   /** Whether the run carries the interrupt mark (set only by a stop that caught it live). */
   isOperationInterrupted: (operationId: string) => Promise<boolean>;
   /** How long to wait for the stopped run to reach a terminal status; tests pass 0. */
@@ -430,7 +434,11 @@ export const cancelSubAgentThreadRun = async (
       .releaseCancelSuppressedDelivery(ids)
       .catch((error) => log('cancelSubAgent: failed to restore delivery of %O: %O', ids, error));
 
-  let interrupted: { deviceCancellationConfirmed?: boolean; success: boolean };
+  let interrupted: {
+    deviceCancellationAccepted?: boolean;
+    deviceCancellationConfirmed?: boolean;
+    success: boolean;
+  };
   try {
     interrupted = await deps.interruptTask({ operationId, threadId, topicId });
   } catch (error) {
@@ -439,7 +447,9 @@ export const cancelSubAgentThreadRun = async (
     return { error: String(error), operationId, status: 'failed', threadId };
   }
 
-  if (!interrupted.success) {
+  // A platform agent's run has no runtime state to interrupt, so the stop
+  // reports no success; the platform accepting the cancel of its task is it.
+  if (!interrupted.success && interrupted.deviceCancellationAccepted !== true) {
     await restoreDelivery(suppressed);
     return {
       error: 'The sub-agent could not be confirmed as stopped.',
@@ -453,10 +463,12 @@ export const cancelSubAgentThreadRun = async (
   // `interruptOperation` then acknowledges the terminal state without setting
   // the interrupt sentinel, and its completion records a real answer that must
   // still reach the parent.
-  // An external agent (Claude Code) has no runtime state to carry the mark:
-  // the device confirming its process exited on this stop is the proof.
+  // An external agent has no runtime state to carry the mark: the device
+  // confirming its CLI exited (Claude Code, Codex, …), or a platform agent
+  // accepting the cancel of its task (OpenClaw, Hermes, …), is the proof.
   const stoppedByUs =
     interrupted.deviceCancellationConfirmed === true ||
+    interrupted.deviceCancellationAccepted === true ||
     (await deps.isOperationInterrupted(operationId).catch((error) => {
       log('cancelSubAgent: reading the interrupt mark of %s failed: %O', operationId, error);
       return false;

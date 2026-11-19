@@ -19,8 +19,8 @@ describe('shouldShowCustomToolRender', () => {
     ).toBe(true);
   });
 
-  // History keeps `callAgent` rows; the alias now forwards to callSubAgent too.
-  it('keeps the custom renderer for a failed legacy callAgent with a thread', () => {
+  // Its card shows only the instruction, so a failure would vanish in it.
+  it('keeps the generic error view for a failed legacy callAgent', () => {
     expect(
       shouldShowCustomToolRender({
         apiName: 'callAgent',
@@ -28,7 +28,7 @@ describe('shouldShowCustomToolRender', () => {
         result: { error: { message: 'Child failed' }, state: { threadId: 'thd_saved' } },
         showCustomToolRender: true,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('uses the generic error renderer when there is no child thread to open', () => {

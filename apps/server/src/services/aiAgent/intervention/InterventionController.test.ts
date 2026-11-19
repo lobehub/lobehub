@@ -132,4 +132,24 @@ describe('InterventionController.interruptTask', () => {
     );
     expect(result).toMatchObject({ deviceCancellationConfirmed: true, success: true });
   });
+
+  it('reports a platform agent cancel the device accepted', async () => {
+    executeToolCall.mockResolvedValue({ success: true });
+    const { controller, deps } = createController();
+    deps.topicModel.findById.mockResolvedValue({
+      id: TOPIC_ID,
+      metadata: {
+        runningOperation: {
+          deviceId: 'device_1',
+          heteroType: 'openclaw',
+          operationId: OPERATION_ID,
+        },
+      },
+    } as any);
+
+    const result = await controller.interruptTask({ operationId: OPERATION_ID, topicId: TOPIC_ID });
+
+    expect(executeToolCall).toHaveBeenCalled();
+    expect(result).toMatchObject({ deviceCancellationAccepted: true });
+  });
 });

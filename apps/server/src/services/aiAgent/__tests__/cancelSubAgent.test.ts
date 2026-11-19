@@ -247,6 +247,20 @@ describe('cancelSubAgentThreadRun', () => {
     expect(messageModel.releaseCancelSuppressedDelivery).not.toHaveBeenCalled();
   });
 
+  // A platform agent (OpenClaw, Hermes) has no runtime state; its task being
+  // cancelled on the device is the stop, settled later by its notify callback.
+  it('reports a platform sub-agent cancelled once the device accepts the cancel', async () => {
+    deps.isOperationInterrupted = vi.fn().mockResolvedValue(false);
+    deps.interruptTask = vi
+      .fn()
+      .mockResolvedValue({ deviceCancellationAccepted: true, success: false });
+
+    const result = await cancelSubAgentThreadRun(deps, params);
+
+    expect(result.status).toBe('cancelled');
+    expect(messageModel.releaseCancelSuppressedDelivery).not.toHaveBeenCalled();
+  });
+
   // The thread runs as the target agent; the dispatcher's tool call anchors it.
   it.each([
     ['callSubAgent({ agentId })', callSubAgentPlugin],
