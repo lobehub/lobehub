@@ -198,6 +198,31 @@ export const agentSkillsRouter = router({
     return ctx.skillModel.findByName(input.name);
   }),
 
+  checkGitHubUpdates: skillProcedure.query(({ ctx }) => ctx.skillImporter.checkGitHubUpdates()),
+
+  applyGitHubUpdate: skillWriteProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        commit: z.string().regex(/^[a-f0-9]{40}$/),
+        revision: z.string(),
+        overwriteLocal: z.boolean().optional(),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      ctx.skillImporter.applyGitHubUpdate(input).catch(handleSkillImportError),
+    ),
+
+  trackLegacyGitHubSkill: skillWriteProcedure
+    .input(
+      z.object({ id: z.string(), revision: z.string(), ref: z.string().trim().min(1).max(255) }),
+    )
+    .mutation(({ ctx, input }) =>
+      ctx.skillImporter
+        .trackLegacyGitHubSkill(input.id, input.revision, input.ref)
+        .catch(handleSkillImportError),
+    ),
+
   discoverGitHubSkills: skillWriteProcedure
     .input(z.object({ gitUrl: z.string().url() }))
     .mutation(({ ctx, input }) => ctx.skillImporter.discoverGitHubSkills(input.gitUrl)),

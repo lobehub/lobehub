@@ -1145,6 +1145,7 @@ table agent_skills {
   description text [not null]
   identifier text [not null]
   source text [not null]
+  upstream jsonb
   manifest jsonb [not null, default: `{}`]
   content text
   editor_data jsonb

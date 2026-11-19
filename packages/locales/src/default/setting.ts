@@ -313,6 +313,23 @@ export default {
   'agentSkillDetail.skillContent': 'Skill Content',
   'agentSkillDetail.sourceUrl': 'Skill Import Source',
   'agentSkillDetail.updatedAt': 'Updated',
+  'agentSkillUpdate.apply': 'Update skill',
+  'agentSkillUpdate.branch': 'Branch name (HEAD follows the default branch)',
+  'agentSkillUpdate.check': 'Check for updates',
+  'agentSkillUpdate.checking': 'Checking GitHub…',
+  'agentSkillUpdate.chooseRef': 'Choose a branch to track',
+  'agentSkillUpdate.current': 'Up to date',
+  'agentSkillUpdate.failed': 'Couldn’t update the skill',
+  'agentSkillUpdate.limited': 'GitHub rate limit reached',
+  'agentSkillUpdate.missing': 'Removed from the source repository',
+  'agentSkillUpdate.overwriteBody':
+    'This update replaces your installed copy. It contains local changes or predates edit tracking.',
+  'agentSkillUpdate.overwriteTitle': 'Replace the installed copy?',
+  'agentSkillUpdate.pinned': 'Pinned to a commit',
+  'agentSkillUpdate.replace': 'Replace and update',
+  'agentSkillUpdate.saved': 'Skill synced with GitHub',
+  'agentSkillUpdate.track': 'Track branch',
+  'agentSkillUpdate.unavailable': 'Couldn’t check GitHub',
   'agentSkillEdit.descriptionDesc':
     'A brief summary of what the skill does, helping the agent understand when to use it',
   'agentSkillEdit.fileReadonly':
