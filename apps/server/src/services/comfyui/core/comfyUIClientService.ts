@@ -5,9 +5,16 @@
  * Provides unified error handling and abstraction over SDK
  * Uses modular services for authentication, connection, and caching
  */
-import { assertSsrfSafeUrl, ssrfSafeAgent } from '@lobechat/ssrf-safe-fetch';
+import { assertSsrfSafeUrl, ssrfSafeAgent, ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import { type ComfyUIKeyVault } from '@lobechat/types';
-import { type PromptBuilder, type WebSocketInterface } from '@saintno/comfyui-sdk';
+import {
+  type BasicCredentials,
+  type BearerTokenCredentials,
+  type CustomCredentials,
+  type FetchOptions,
+  type PromptBuilder,
+  type WebSocketInterface,
+} from '@saintno/comfyui-sdk';
 import { CallWrapper, ComfyApi } from '@saintno/comfyui-sdk';
 import debug from 'debug';
 import WebSocket, { type ClientOptions } from 'ws';
@@ -106,12 +113,15 @@ export class ComfyUIClientService {
       // Create the SDK client only after the baseURL passes the SSRF policy.
       this.clientReady = assertSsrfSafeUrl(this.baseURL).then(() => {
         this.client = new ComfyApi(this.baseURL, undefined, {
-          credentials: this.authService.getCredentials(),
+          // Credentials are applied by hardenComfyApi, not here: the constructor
+          // would fire testCredentials() synchronously, ahead of the fetchApi
+          // patch, and that probe would reach the network unfiltered.
           // The SDK types the impl against the DOM WebSocket, but only uses the
           // members `ws` implements (onopen/onclose/onmessage/onerror, send,
           // close, readyState, ready-state constants).
           customWebSocketImpl: SsrfSafeComfyUIWebSocket as unknown as WebSocketInterface,
         });
+        this.hardenComfyApi(this.client, this.authService.getCredentials());
         this.client.init();
         return this.client;
       });
@@ -127,6 +137,43 @@ export class ComfyUIClientService {
       // Use ErrorHandlerService to transform internal errors to framework errors
       this.errorHandler.handleError(error);
     }
+  }
+
+  /**
+   * Route the SDK's HTTP traffic through the SSRF policy (T-07).
+   *
+   * Every SDK HTTP call funnels through `fetchApi` → global `fetch`. The
+   * constructor-time `assertSsrfSafeUrl` check cannot cover what happens once
+   * it has passed: a hostile ComfyUI endpoint (the baseURL is user-supplied)
+   * can answer any request with a redirect to an internal address, which the
+   * runtime fetch follows unchecked, and a hostname can re-resolve to a
+   * private address after the check (DNS rebinding). `fetchApi` is
+   * re-implemented 1:1 — credential headers plus `mode: 'cors'` — on top of
+   * `ssrfSafeFetch`, so every connect, including redirect hops, is filtered.
+   */
+  private hardenComfyApi(
+    client: ComfyApi,
+    credentials: BasicCredentials | BearerTokenCredentials | CustomCredentials | undefined,
+  ): void {
+    const api = client as unknown as {
+      apiURL: (route: string) => string;
+      credentials: typeof credentials;
+      getCredentialHeaders: () => Record<string, string>;
+      testCredentials?: () => Promise<boolean>;
+    };
+
+    client.fetchApi = async (route: string, options?: FetchOptions): Promise<Response> => {
+      // Same init the SDK builds: credential headers, `mode: 'cors'`.
+      const init: FetchOptions = {
+        ...options,
+        headers: { ...api.getCredentialHeaders() },
+        mode: 'cors',
+      };
+      return ssrfSafeFetch(api.apiURL(route), init);
+    };
+
+    api.credentials = credentials;
+    void api.testCredentials?.();
   }
 
   /**

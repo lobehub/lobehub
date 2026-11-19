@@ -1,5 +1,5 @@
 import type * as SSRFSafeFetchModule from '@lobechat/ssrf-safe-fetch';
-import { assertSsrfSafeUrl } from '@lobechat/ssrf-safe-fetch';
+import { assertSsrfSafeUrl, ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import { ComfyApi } from '@saintno/comfyui-sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -27,6 +27,7 @@ vi.mock('@lobechat/ssrf-safe-fetch', async (importOriginal) => {
     ...mod,
     assertSsrfSafeUrl: vi.fn().mockResolvedValue(undefined),
     ssrfSafeAgent: vi.fn(),
+    ssrfSafeFetch: vi.fn(),
   };
 });
 
@@ -106,7 +107,6 @@ describe('ComfyUIClientService', () => {
         expect.stringContaining('http'),
         undefined,
         expect.objectContaining({
-          credentials: undefined,
           customWebSocketImpl: expect.any(Function),
         }),
       );
@@ -131,7 +131,6 @@ describe('ComfyUIClientService', () => {
         'http://custom:8188',
         undefined,
         expect.objectContaining({
-          credentials: undefined,
           customWebSocketImpl: expect.any(Function),
         }),
       );
@@ -702,6 +701,7 @@ describe('ComfyUIClientService', () => {
 
 describe('ComfyUIClientService SSRF boundary', () => {
   let service: ComfyUIClientService;
+  let ssrfMockClient: any;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -712,6 +712,19 @@ describe('ComfyUIClientService SSRF boundary', () => {
       '@lobechat/ssrf-safe-fetch',
     );
     vi.mocked(assertSsrfSafeUrl).mockImplementation(realAssert);
+
+    // Fresh SDK client including the internals hardenComfyApi touches.
+    ssrfMockClient = {
+      apiURL: vi.fn((route: string) => `http://custom:8188${route}`),
+      fetchApi: vi.fn(),
+      getCheckpoints: vi.fn(),
+      getCredentialHeaders: vi.fn(() => ({})),
+      init: vi.fn(),
+      testCredentials: vi.fn().mockResolvedValue(true),
+    };
+    vi.mocked(ComfyApi).mockImplementation(function () {
+      return ssrfMockClient;
+    } as any);
   });
 
   afterEach(() => {
@@ -760,4 +773,43 @@ describe('ComfyUIClientService SSRF boundary', () => {
       expect(ComfyApi).not.toHaveBeenCalled();
     },
   );
+
+  it('routes SDK fetchApi calls through ssrfSafeFetch so redirect hops are filtered', async () => {
+    vi.mocked(assertSsrfSafeUrl).mockResolvedValue(undefined);
+    vi.mocked(ssrfSafeFetch).mockResolvedValue(new Response('{}'));
+
+    service = new ComfyUIClientService({ baseURL: 'http://custom:8188' });
+    // Resolves clientReady: client is constructed and fetchApi is patched.
+    await service.getCheckpoints();
+
+    ssrfMockClient.getCredentialHeaders.mockReturnValue({ Authorization: 'Bearer token' });
+
+    const response = await ssrfMockClient.fetchApi('/object_info');
+
+    expect(vi.mocked(ssrfSafeFetch)).toHaveBeenCalledWith(
+      'http://custom:8188/object_info',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer token' },
+        mode: 'cors',
+      }),
+    );
+    expect(response).toBeInstanceOf(Response);
+  });
+
+  it('applies credentials after patching instead of passing them to the constructor', async () => {
+    vi.mocked(assertSsrfSafeUrl).mockResolvedValue(undefined);
+
+    const credentials = { token: 'secret', type: 'bearer_token' as const };
+
+    service = new ComfyUIClientService({ baseURL: 'http://custom:8188' });
+    const authService = vi.mocked(ComfyUIAuthService).mock.results.at(-1)!.value as any;
+    authService.getCredentials.mockReturnValue(credentials);
+
+    await service.getCheckpoints();
+
+    const constructorOptions = vi.mocked(ComfyApi).mock.calls.at(-1)![2];
+    expect(constructorOptions).not.toHaveProperty('credentials');
+    expect(ssrfMockClient.credentials).toEqual(credentials);
+    expect(ssrfMockClient.testCredentials).toHaveBeenCalled();
+  });
 });
