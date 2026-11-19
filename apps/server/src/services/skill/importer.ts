@@ -23,13 +23,16 @@ import debug from 'debug';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import {
   GitHub,
+  GitHubError,
   GitHubNotFoundError,
   GitHubParseError,
+  GitHubRateLimitError,
   type GitHubRepoInfo,
 } from '@/server/modules/GitHub';
 import { FileService } from '@/server/services/file';
+import { redisService } from '@/server/services/redis';
 
-import { SkillImportError, SkillManifestError } from './errors';
+import { SkillImportError, SkillManifestError, SkillParseError } from './errors';
 import { readGitHubArchive } from './githubArchive';
 import {
   checkGitHubRows,
@@ -52,6 +55,18 @@ const unchanged = (skill: SkillItem, parsed: ParsedZipSkill) =>
   skill.description === parsed.manifest.description;
 
 const log = debug('lobe-chat:service:skill-importer');
+
+/** GitHub and package failures reach the client as import errors, not as a 500. */
+const asImportError = (error: unknown): never => {
+  if (error instanceof GitHubNotFoundError) throw new SkillImportError(error.message, 'NOT_FOUND');
+  if (
+    error instanceof GitHubError ||
+    error instanceof SkillParseError ||
+    error instanceof SkillManifestError
+  )
+    throw new SkillImportError(error.message, 'DOWNLOAD_FAILED');
+  throw error;
+};
 
 export class SkillImporter {
   private skillModel: AgentSkillModel;
@@ -216,8 +231,7 @@ export class SkillImporter {
     let commit: string;
     try {
       log('importFromGitHub: downloading repository ZIP...');
-      commit = await this.github.resolveCommit(repoInfo);
-      zipBuffer = await this.github.downloadCommitZip(repoInfo, commit);
+      ({ buffer: zipBuffer, commit } = await this.downloadRef(repoInfo));
       log('importFromGitHub: downloaded ZIP size=%d bytes', zipBuffer.length);
     } catch (error) {
       log('importFromGitHub: download failed, error=%s', (error as Error).message);
@@ -238,6 +252,34 @@ export class SkillImporter {
       repackSkillZip: true,
     });
     return this.saveGitHubSkill(repoInfo, input.gitUrl, parsed, commit, zipBuffer);
+  }
+
+  /**
+   * Resolve a ref live. Update checks share the answer, so they never offer an
+   * older commit than the one this import is about to install.
+   */
+  private async resolveCommit(info: GitHubRepoInfo) {
+    const commit = await this.github.resolveCommit(info);
+    await redisService.gitHubRefs.record(info, commit);
+    return commit;
+  }
+
+  private async downloadRef(info: GitHubRepoInfo) {
+    try {
+      const commit = await this.resolveCommit(info);
+      return { buffer: await this.github.downloadCommitZip(info, commit), commit };
+    } catch (error) {
+      if (!(error instanceof GitHubRateLimitError)) throw error;
+      // The REST quota is shared by everyone behind this server's address. The
+      // ref's archive needs none of it and names the commit it was cut from.
+      log('downloadRef: rate limited, reading the commit from the ref archive');
+      const archive = await this.github.downloadRefZip(info).catch((fallback) => {
+        log('downloadRef: ref archive failed, error=%s', (fallback as Error).message);
+        throw error;
+      });
+      await redisService.gitHubRefs.record(info, archive.commit);
+      return archive;
+    }
   }
 
   private gitHubIdentifiers(info: GitHubRepoInfo) {
@@ -292,11 +334,13 @@ export class SkillImporter {
     if (skill.upstream || !isCommit(info.branch))
       throw new SkillImportError('This skill already has a tracking ref', 'CONFLICT');
     const tracking = { ...info, branch: ref };
-    const commit = await this.github.resolveCommit(tracking);
-    const directory = (
-      await readGitHubArchive(await this.github.downloadCommitZip(info, commit), info.path)
-    ).get(info.path ?? '');
-    if (!directory) throw new SkillImportError('Skill not found on this branch', 'NOT_FOUND');
+    const archive = await this.resolveCommit(tracking)
+      .then(async (commit) =>
+        readGitHubArchive(await this.github.downloadCommitZip(info, commit), info.path),
+      )
+      .catch(asImportError);
+    if (!archive.get(info.path ?? ''))
+      throw new SkillImportError('Skill not found on this branch', 'NOT_FOUND');
     const row = await this.skillModel.replaceImportedSkill(skill, {
       upstream: {
         owner: info.owner,
@@ -324,12 +368,16 @@ export class SkillImporter {
       skill.upstream?.installedFingerprint !== installedFingerprint(skill)
     )
       throw new SkillImportError('Confirm replacement of local changes', 'CONFLICT');
-    const buffer = await this.github.downloadCommitZip(info, input.commit);
-    const parsed = await this.parser.parseZipPackage(buffer, {
-      basePath: info.path,
-      fallbackName: info.path?.split('/').at(-1) || info.repo,
-      repackSkillZip: true,
-    });
+    const parsed = await this.github
+      .downloadCommitZip(info, input.commit)
+      .then((buffer) =>
+        this.parser.parseZipPackage(buffer, {
+          basePath: info.path,
+          fallbackName: info.path?.split('/').at(-1) || info.repo,
+          repackSkillZip: true,
+        }),
+      )
+      .catch(asImportError);
     return this.saveGitHubSkill(
       info,
       this.snapshotUrl(info, input.commit),
@@ -489,7 +537,7 @@ export class SkillImporter {
   private async gitHubCollection(gitUrl: string, pinnedCommit?: string) {
     const url = new URL(gitUrl);
     const info = this.github.parseRepoUrl(url.origin + url.pathname.replace(/\/+$/, ''), 'HEAD');
-    const commit = pinnedCommit ?? (await this.github.resolveCommit(info));
+    const commit = pinnedCommit ?? (await this.resolveCommit(info));
     const base = info.path ?? '';
     const archive = await readGitHubArchive(
       await this.github.downloadCommitZip(info, commit),

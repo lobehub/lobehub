@@ -36,6 +36,8 @@ vi.mock('@/server/modules/GitHub', () => ({
   GitHub: vi.fn(function () {
     return mockGitHubInstance;
   }),
+  GitHubError: class GitHubError extends Error {},
+  GitHubRateLimitError: class GitHubRateLimitError extends Error {},
   GitHubNotFoundError: class GitHubNotFoundError extends Error {
     constructor(message: string) {
       super(message);
@@ -502,19 +504,13 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'non-existent',
       });
-      mockGitHubInstance.downloadCommitZip.mockImplementation(() => {
-        throw new GitHubNotFoundError('Repository not found');
-      });
+      mockGitHubInstance.resolveCommit.mockRejectedValueOnce(
+        new GitHubNotFoundError('GitHub repository or ref not found'),
+      );
 
       await expect(
         importer.importFromGitHub({ gitUrl: 'https://github.com/lobehub/non-existent' }),
-      ).rejects.toThrow(SkillImportError);
-
-      try {
-        await importer.importFromGitHub({ gitUrl: 'https://github.com/lobehub/non-existent' });
-      } catch (e) {
-        expect((e as SkillImportError).code).toBe('NOT_FOUND');
-      }
+      ).rejects.toMatchObject({ code: 'NOT_FOUND', name: 'SkillImportError' });
     });
 
     it('should use custom branch when provided', async () => {

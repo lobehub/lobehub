@@ -95,7 +95,7 @@ export class AgentSkillModel {
             isNotNull(agentSkills.upstream),
             and(
               eq(agentSkills.source, 'market'),
-              sql`${agentSkills.manifest}->>'sourceUrl' IS NOT NULL`,
+              sql`COALESCE(${agentSkills.manifest}->>'sourceUrl', '') <> ''`,
             ),
           ),
         ),

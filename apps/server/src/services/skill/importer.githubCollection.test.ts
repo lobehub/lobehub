@@ -8,7 +8,13 @@ import { strToU8, zipSync } from 'fflate';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentSkillModel } from '@/database/models/agentSkill';
-import { GitHub } from '@/server/modules/GitHub';
+import {
+  GitHub,
+  GitHubDownloadError,
+  GitHubNotFoundError,
+  GitHubRateLimitError,
+} from '@/server/modules/GitHub';
+import { redisService } from '@/server/services/redis';
 
 import { SkillImporter } from './importer';
 
@@ -240,6 +246,94 @@ describe('GitHub skill collection import', () => {
     vi.mocked(GitHub.prototype.resolveCommit).mockRejectedValue(new Error('offline'));
     expect((await importer.checkGitHubUpdates())[skill.id]).toEqual({ status: 'unavailable' });
     expect((await model.findById(skill.id))?.zipFileHash).toEqual(skill.zipFileHash);
+  });
+
+  it('imports from the ref archive when the commit lookup is rate limited', async () => {
+    const archived = 'f'.repeat(40);
+    vi.mocked(GitHub.prototype.resolveCommit).mockRejectedValue(
+      new GitHubRateLimitError('GitHub rate limit reached'),
+    );
+    const downloadRefZip = vi
+      .spyOn(GitHub.prototype, 'downloadRefZip')
+      .mockResolvedValue({ buffer: zip, commit: archived });
+    const record = vi.spyOn(redisService.gitHubRefs, 'record');
+
+    const { skill, status } = await importer.importFromGitHub({
+      gitUrl: repo + '/tree/main/' + review,
+    });
+
+    expect(status).toBe('created');
+    expect(skill.upstream).toMatchObject({ ref: 'main', installedCommit: archived });
+    expect(GitHub.prototype.downloadCommitZip).not.toHaveBeenCalled();
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ branch: 'main' }), archived);
+
+    downloadRefZip.mockRejectedValue(new GitHubNotFoundError('GitHub repository or ref not found'));
+    await expect(
+      importer.importFromGitHub({ gitUrl: repo + '/tree/v1.0.0/' + other }),
+    ).rejects.toMatchObject({ code: 'DOWNLOAD_FAILED', message: /rate limit/ });
+  });
+
+  it('shares one commit lookup between checks and reports the limit when there is none', async () => {
+    const { skill } = await importer.importFromGitHub({ gitUrl: repo + '/tree/main/' + review });
+    vi.mocked(GitHub.prototype.resolveCommit).mockClear();
+    const remember = vi.spyOn(redisService.gitHubRefs, 'remember').mockResolvedValue(commit);
+
+    expect((await importer.checkGitHubUpdates())[skill.id]).toEqual({ status: 'current' });
+    expect(remember).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: 'main', owner: 'owner', repo: 'collection' }),
+      expect.any(Function),
+    );
+    expect(GitHub.prototype.resolveCommit).not.toHaveBeenCalled();
+
+    remember.mockRestore();
+    vi.mocked(GitHub.prototype.resolveCommit).mockRejectedValue(
+      new GitHubRateLimitError('GitHub rate limit reached'),
+    );
+    expect((await importer.checkGitHubUpdates())[skill.id]).toEqual({ status: 'limited' });
+  });
+
+  it('reports GitHub and package failures of an update or a branch choice as import errors', async () => {
+    const pinned = await importer.importFromGitHub({
+      gitUrl: repo + '/tree/' + commit + '/' + review,
+    });
+    await model.replaceImportedSkill(pinned.skill, { upstream: null });
+    const legacy = (await importer.checkGitHubUpdates())[pinned.skill.id];
+    if (legacy.status !== 'chooseRef') throw new Error('Expected branch choice');
+    vi.mocked(GitHub.prototype.resolveCommit).mockRejectedValueOnce(
+      new GitHubNotFoundError('GitHub repository or ref not found'),
+    );
+    await expect(
+      importer.trackLegacyGitHubSkill(pinned.skill.id, legacy.revision, 'no-such-branch'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND', name: 'SkillImportError' });
+    expect((await model.findById(pinned.skill.id))?.upstream).toBeNull();
+
+    const next = 'b'.repeat(40);
+    const sibling = '.agents/skills/other';
+    const tracked = await importer.importFromGitHub({ gitUrl: repo + '/tree/main/' + sibling });
+    const update = {
+      commit: next,
+      id: tracked.skill.id,
+      revision: tracked.skill.id + '/' + tracked.skill.updatedAt.toISOString(),
+    };
+    vi.mocked(GitHub.prototype.downloadCommitZip).mockRejectedValue(
+      new GitHubDownloadError('Repository exceeds the 32 MiB download limit'),
+    );
+    await expect(importer.applyGitHubUpdate(update)).rejects.toMatchObject({
+      code: 'DOWNLOAD_FAILED',
+      message: /32 MiB/,
+    });
+    vi.mocked(GitHub.prototype.downloadCommitZip).mockResolvedValue(
+      Buffer.from(
+        zipSync({ ['repo-new/' + sibling + '/SKILL.md']: strToU8('---\nname: nope\n---') }),
+      ),
+    );
+    await expect(importer.applyGitHubUpdate(update)).rejects.toMatchObject({
+      code: 'DOWNLOAD_FAILED',
+      name: 'SkillImportError',
+    });
+    expect((await model.findById(tracked.skill.id))?.zipFileHash).toEqual(
+      tracked.skill.zipFileHash,
+    );
   });
 
   it('checks the library and creator permissions again when committing', async () => {

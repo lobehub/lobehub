@@ -19,6 +19,9 @@ callers do not choose a provider, prefix, key, SET options or claim lifetime.
   per user and hashed key. Every method returns `undefined` without Redis; the REST layer then
   admits the request (fail open).
 - `linear`: single-use OAuth state for "Connect Linear" (ten minutes, deleted on first read).
+- `gitHubRefs`: the commit a public GitHub ref points at, shared by every user's skill update
+  check for five minutes. `record` replaces it with a commit an import just resolved live.
+  Without Redis each check resolves live.
 - `connectorOAuth`: how each connector OAuth flow ended (account and outcome), for ten minutes,
   read back by the window that started the flow. `null` without Redis.
 - `agentDocumentIndex`: the agent-document index snapshot and change notes one conversation

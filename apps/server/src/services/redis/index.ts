@@ -7,6 +7,7 @@ import { botReply } from './botReply';
 import { botWake } from './botWake';
 import { connectorOAuth } from './connectorOAuth';
 import { deviceSystemInfo } from './deviceSystemInfo';
+import { gitHubRefs } from './gitHubRefs';
 import { heteroControl } from './heteroControl';
 import { inboundWebhook } from './inboundWebhook';
 import { linear } from './linear';
@@ -30,6 +31,7 @@ export const redisService = {
   botWake,
   connectorOAuth,
   deviceSystemInfo,
+  gitHubRefs,
   heteroControl,
   inboundWebhook,
   linear,

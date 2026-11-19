@@ -4,6 +4,7 @@ import type { GitHubSkillCheck, SkillItem } from '@lobechat/types';
 import pMap from 'p-map';
 
 import { type GitHub, GitHubRateLimitError, type GitHubRepoInfo } from '@/server/modules/GitHub';
+import { redisService } from '@/server/services/redis';
 
 import { readGitHubArchive } from './githubArchive';
 import type { SkillParser } from './parser';
@@ -102,7 +103,9 @@ export async function checkGitHubRows(rows: TrackedRow[], github: GitHub, parser
           return;
         }
         const { info } = group[0];
-        const commit = await github.resolveCommit(info);
+        const commit = await redisService.gitHubRefs.remember(info, () =>
+          github.resolveCommit(info),
+        );
         const changed = group.filter(({ skill }) => {
           if (skill.upstream?.installedCommit !== commit) return true;
           results[skill.id] = { status: 'current' };
