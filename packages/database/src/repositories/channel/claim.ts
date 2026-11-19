@@ -77,6 +77,19 @@ export const sameBranch = (threadId: string | null) =>
   threadId ? eq(channelJobs.threadId, threadId) : isNull(channelJobs.threadId);
 
 /**
+ * Narrows a member's queue in one branch to the jobs that take turns with this one. A device
+ * picked in the Channel hosts every run of the member in the same directory, so the whole member
+ * takes turns. Without one, each requester runs as themselves, in their own topic and usually on
+ * their own device, like separate conversations with the Agent: one requester's run never holds
+ * back another's. A job of each queue still answers in message order.
+ */
+export const sameQueue = (
+  job: Pick<ChannelJobItem, 'requesterMemberId'>,
+  member: Pick<ChannelMemberItem, 'config'>,
+) =>
+  member.config?.deviceId ? undefined : eq(channelJobs.requesterMemberId, job.requesterMemberId);
+
+/**
  * Records why a queued job cannot start; clients read the code, never the text. A job waiting
  * for a device also records which one in `deviceId`, so it can be shown before any claim sets
  * it. Only a claim gives a job its writer, so a queued job's device holds no directory.
@@ -236,8 +249,9 @@ const awaitsPrimary = (primary: { blockedCode: ChannelJobBlockCode | null; statu
   (primary.status === 'queued' && !(primary.blockedCode && STUCK_BLOCKS.has(primary.blockedCode)));
 
 /**
- * Starts the job if it is at the head of its member's queue and nothing holds the member,
- * its environment or its directory. The caller holds the channel lock. Returns null when
+ * Starts the job if it is at the head of its queue (its member's in its branch, per requester
+ * unless the Channel picked the member a device; see {@link sameQueue}) and nothing holds that
+ * queue, its environment or its directory. The caller holds the channel lock. Returns null when
  * the job cannot start now; a lasting reason is recorded on the job as `blockedCode`.
  */
 export const claimJob = async (
@@ -315,6 +329,13 @@ export const claimJob = async (
     return null;
   }
 
+  const [member] = await tx
+    .select()
+    .from(channelMembers)
+    .where(and(eq(channelMembers.id, job.memberId), eq(channelMembers.status, 'active')));
+  if (!member?.config) return null;
+  const queue = sameQueue(job, member);
+
   // Each member answers a branch in message order; its other branches run alongside.
   const [head] = await tx
     .select({ id: channelJobs.id })
@@ -325,6 +346,7 @@ export const claimJob = async (
         eq(channelJobs.memberId, job.memberId),
         eq(channelJobs.status, 'queued'),
         sameBranch(job.threadId),
+        queue,
       ),
     )
     .orderBy(asc(channelMessages.sequence), asc(channelJobs.createdAt))
@@ -334,7 +356,8 @@ export const claimJob = async (
     return null;
   }
 
-  // A Thread follows its root: the member answers the root on the main timeline first.
+  // A Thread follows its root: the member answers the root on the main timeline first. This is
+  // what the Thread's runs read, not a turn in a queue, so it holds every requester's Thread.
   const [rootReply] = thread
     ? await tx
         .select({ id: channelJobs.id })
@@ -357,12 +380,6 @@ export const claimJob = async (
     return null;
   }
 
-  const [member] = await tx
-    .select()
-    .from(channelMembers)
-    .where(and(eq(channelMembers.id, job.memberId), eq(channelMembers.status, 'active')));
-  if (!member?.config) return null;
-
   const [busy] = await tx
     .select({ id: channelJobs.id })
     .from(channelJobs)
@@ -372,6 +389,7 @@ export const claimJob = async (
         eq(channelJobs.writerHeld, true),
         isNull(channelJobs.isolatedAt),
         sameBranch(job.threadId),
+        queue,
       ),
     )
     .limit(1);

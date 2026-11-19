@@ -1,8 +1,8 @@
 import type { AgentOperationStatus } from '@lobechat/types';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, gte, inArray, min } from 'drizzle-orm';
 
 import type { ChannelJobItem } from '../../schemas';
-import { agentOperations, channelJobs } from '../../schemas';
+import { agentOperations, channelAudit, channelJobs } from '../../schemas';
 import type { Transaction } from '../../type';
 import { audit } from './transaction';
 
@@ -81,4 +81,59 @@ export const isolateWriter = async (tx: Transaction, job: ChannelJobItem, reason
   await audit(tx, job.channelId, 'execution_isolated', job.id, { reason, status: job.status });
 
   return true;
+};
+
+/** Audited when a stop revokes a claimed job's publication; its target is the job. */
+export const PUBLICATION_REVOKED_EVENT = 'publication_revoked';
+
+/**
+ * Events that revoke a held writer's publication, each audited with the job as its target:
+ * a stop (one job, or one revoked job of a branch stop), a failure, or a lost acknowledgement.
+ */
+const REVOCATION_EVENTS = [
+  PUBLICATION_REVOKED_EVENT,
+  'stop_requested',
+  'execution_failed',
+  'execution_unknown',
+];
+
+/**
+ * When the job's current run was first revoked. A failure is audited again on every reconcile
+ * pass, so the earliest event of this claim counts. Falls back to the claim for a revocation
+ * audited before per-job events existed.
+ */
+const revokedAt = async (tx: Transaction, job: ChannelJobItem) => {
+  const [first] = await tx
+    .select({ at: min(channelAudit.createdAt) })
+    .from(channelAudit)
+    .where(
+      and(
+        eq(channelAudit.targetId, job.id),
+        inArray(channelAudit.event, REVOCATION_EVENTS),
+        job.claimedAt ? gte(channelAudit.createdAt, job.claimedAt) : undefined,
+      ),
+    );
+  return first?.at ?? job.claimedAt;
+};
+
+/**
+ * Isolates a revoked writer (stopped or failed) whose termination the device has not confirmed
+ * `timeoutMs` after the revocation, so the member's queue moves on instead of waiting for a
+ * device that may never answer. See {@link isolateWriter}: the directory stays locked and a late
+ * confirmation still releases the writer. Returns whether it isolated the writer.
+ */
+export const isolateUnconfirmedStop = async (
+  tx: Transaction,
+  job: ChannelJobItem,
+  timeoutMs: number,
+  now = Date.now(),
+) => {
+  if (!job.writerHeld || job.isolatedAt || !job.publicationRevoked) return false;
+  // A dispatcher still holding its lease may yet submit the run; wait until it settles or lapses.
+  if (job.leaseExpiresAt && job.leaseExpiresAt.getTime() > now) return false;
+
+  const since = await revokedAt(tx, job);
+  if (!since || now - since.getTime() < timeoutMs) return false;
+
+  return isolateWriter(tx, job, 'The run did not confirm it stopped in time');
 };

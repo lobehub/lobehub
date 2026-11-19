@@ -32,7 +32,13 @@ import { stopScope } from './stop';
 import { audit, withChannelLock } from './transaction';
 import type { ChannelWorktreeCandidate } from './worktree';
 import { assignWorktree, findWorktreeCandidate, markWorktreeUnavailable } from './worktree';
-import { advanceOperation, isolateWriter, isOpenJob, operationStatus } from './writer';
+import {
+  advanceOperation,
+  isolateUnconfirmedStop,
+  isolateWriter,
+  isOpenJob,
+  operationStatus,
+} from './writer';
 
 /**
  * A claimed job under the channel lock. A revoked job may still record its termination
@@ -202,9 +208,12 @@ export class ChannelExecutionRepository {
 
   /**
    * What one advance pass works on: in-flight jobs to settle, oldest first and bounded, and
-   * the queue head of each member in each branch (a Thread, or the main timeline). Only a head
-   * can be claimed, so a member whose backlog is blocked (offline device, pending approval)
-   * cannot crowd out the other members, and one busy branch never holds back another.
+   * the queue head of each member for each requester in each branch (a Thread, or the main
+   * timeline). Only a head can be claimed, so a member whose backlog is blocked (offline device,
+   * pending approval) cannot crowd out the other members, one busy branch never holds back
+   * another, and one requester's stuck run never hides another requester's request. Where the
+   * member takes turns across requesters (a device picked in the Channel; see `sameQueue`), the
+   * claim itself holds the later heads back.
    */
   candidates = async (channelId: string, limit = 100) => {
     const [inFlight, heads] = await Promise.all([
@@ -223,7 +232,10 @@ export class ChannelExecutionRepository {
         .orderBy(asc(channelJobs.createdAt))
         .limit(limit),
       this.db
-        .selectDistinctOn([channelJobs.memberId, channelJobs.threadId], { job: channelJobs })
+        .selectDistinctOn(
+          [channelJobs.memberId, channelJobs.threadId, channelJobs.requesterMemberId],
+          { job: channelJobs },
+        )
         .from(channelJobs)
         .innerJoin(channelMessages, eq(channelMessages.id, channelJobs.messageId))
         .where(and(eq(channelJobs.channelId, channelId), eq(channelJobs.status, 'queued')))
@@ -231,6 +243,7 @@ export class ChannelExecutionRepository {
         .orderBy(
           channelJobs.memberId,
           channelJobs.threadId,
+          channelJobs.requesterMemberId,
           asc(channelMessages.sequence),
           asc(channelJobs.createdAt),
         ),
@@ -778,6 +791,15 @@ export class ChannelExecutionRepository {
   isolate = async (channelId: string, jobId: string, reason: string) =>
     withChannelLock(this.db, channelId, async (tx) =>
       isolateWriter(tx, await claimed(tx, channelId, jobId, true), reason),
+    );
+
+  /**
+   * Isolates a stopped or failed writer whose termination stayed unconfirmed for `timeoutMs`
+   * after its revocation, so the member's queue moves on. See {@link isolateUnconfirmedStop}.
+   */
+  isolateUnconfirmedStop = async (channelId: string, jobId: string, timeoutMs: number) =>
+    withChannelLock(this.db, channelId, async (tx) =>
+      isolateUnconfirmedStop(tx, await claimed(tx, channelId, jobId, true), timeoutMs),
     );
 
   /** System-initiated stop, e.g. a budget or reconcile decision. See {@link stopScope}. */

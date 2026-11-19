@@ -5,7 +5,7 @@ import { channelJobs, channelMessages } from '../../schemas';
 import type { Transaction } from '../../type';
 import { findThread } from './delivery';
 import { audit } from './transaction';
-import { OPEN_JOB_STATUSES } from './writer';
+import { OPEN_JOB_STATUSES, PUBLICATION_REVOKED_EVENT } from './writer';
 
 /** One job, or everything in a branch (`threadId: null` is the main channel). */
 export type ChannelStopScope = { jobId: string } | { threadId: string | null };
@@ -104,11 +104,15 @@ export const stopScope = async (
         job.claimed && !job.publicationRevoked && (!job.publishedMessageId || job.writerHeld),
     )
     .map((job) => job.id);
-  if (revocable.length)
+  if (revocable.length) {
     await tx
       .update(channelJobs)
       .set({ publicationRevoked: true })
       .where(inArray(channelJobs.id, revocable));
+    // Per job, so the time a stop was asked for is known even for a branch stop: a writer that
+    // never confirms it exited is isolated a while later; see `isolateUnconfirmedStop`.
+    for (const id of revocable) await audit(tx, channelId, PUBLICATION_REVOKED_EVENT, id);
+  }
 
   if (cancelled.length || revocable.length)
     await audit(tx, channelId, 'stop_requested', 'jobId' in scope ? scope.jobId : channelId, {
