@@ -69,7 +69,7 @@ const channelProcedure = channelBaseProcedure.use(denyExternalContact);
 
 export const channelRouter = router({
   ...channelHistoryProcedures,
-  /** Without a Channel, the people a new Channel in this workspace can start with. */
+  /** Without a Channel, the people a new Channel in this scope can start with. */
   userCandidates: channelProcedure
     .input(z.object({ channelId: channelId.optional(), search: z.string().max(100).optional() }))
     .query(async ({ ctx, input }) => ({

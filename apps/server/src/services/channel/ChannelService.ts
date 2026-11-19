@@ -171,7 +171,7 @@ export class ChannelService {
     }
   }
 
-  /** A group starts with Agents, workspace people, both, or only its creator. */
+  /** A group starts with Agents, people, both, or only its creator. */
   create = async (input: {
     agents: ChannelAgentSelection[];
     /** Seats Agents from outside the project in the project first. */
