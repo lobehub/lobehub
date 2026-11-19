@@ -5,6 +5,7 @@ import { AgentDocumentModel } from '@/database/models/agentDocuments';
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
+import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { knowledgeBaseFiles } from '@/database/schemas';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
@@ -18,6 +19,7 @@ vi.mock('@/database/models/agentDocuments', () => ({ AgentDocumentModel: vi.fn()
 vi.mock('@/database/models/chunk', () => ({ ChunkModel: vi.fn() }));
 vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn() }));
 vi.mock('@/database/models/file', () => ({ FileModel: vi.fn() }));
+vi.mock('@/database/models/knowledgeBase', () => ({ KnowledgeBaseModel: vi.fn() }));
 vi.mock('@/server/services/ftsSearch', () => ({ createFtsSearchRepo: vi.fn() }));
 vi.mock('../document', () => ({ DocumentService: vi.fn() }));
 vi.mock('@/server/globalConfig', () => ({ getServerDefaultFilesConfig: vi.fn() }));
@@ -34,6 +36,7 @@ describe('KnowledgeBaseSearchService', () => {
   let chunkModelMock: any;
   let documentModelMock: any;
   let fileModelMock: any;
+  let knowledgeBaseModelMock: any;
   let searchRepoMock: any;
   let documentServiceMock: any;
   let serverDB: any;
@@ -46,6 +49,7 @@ describe('KnowledgeBaseSearchService', () => {
     chunkModelMock = { semanticSearchForChat: vi.fn() };
     documentModelMock = { findById: vi.fn(), findByFileId: vi.fn() };
     fileModelMock = { findById: vi.fn() };
+    knowledgeBaseModelMock = { getSearchIndexStatus: vi.fn().mockResolvedValue(undefined) };
     searchRepoMock = { searchKnowledgeBaseDocuments: vi.fn() };
     documentServiceMock = { parseFile: vi.fn() };
     serverDB = {
@@ -65,6 +69,9 @@ describe('KnowledgeBaseSearchService', () => {
     });
     vi.mocked(FileModel).mockImplementation(function () {
       return fileModelMock;
+    });
+    vi.mocked(KnowledgeBaseModel).mockImplementation(function () {
+      return knowledgeBaseModelMock;
     });
     vi.mocked(createFtsSearchRepo).mockResolvedValue(searchRepoMock);
     vi.mocked(DocumentService).mockImplementation(function () {
@@ -461,6 +468,134 @@ describe('KnowledgeBaseSearchService', () => {
       expect(result.errors).toEqual({ bm25: 'bm25 dead', vector: 'vec dead' });
       expect(result.rejections?.vector).toBeDefined();
       expect(result.rejections?.bm25).toBeDefined();
+    });
+
+    describe('keyword fallback', () => {
+      const hit = (documentId: string, relevance: number) => ({
+        documentId,
+        knowledgeBaseId: 'kb_1',
+        relevance,
+        snippet: documentId,
+        title: documentId,
+        updatedAt: new Date(0),
+      });
+
+      beforeEach(() => {
+        chunkModelMock.semanticSearchForChat.mockResolvedValue([]);
+      });
+
+      it('ranks pages by how many keywords they hold when no page holds them all', async () => {
+        searchRepoMock.searchKnowledgeBaseDocuments.mockImplementation(async (query: string) => {
+          if (query === '环境变量') return [hit('docs_env', 2), hit('docs_basic', 5)];
+          if (query === 'OPENAI_API_KEY') return [hit('docs_env', 1)];
+          return [];
+        });
+
+        const result = await service.semanticSearchForChat({
+          knowledgeIds: ['kb_1'],
+          query: '环境变量 OPENAI_API_KEY 配置',
+        });
+
+        expect(
+          searchRepoMock.searchKnowledgeBaseDocuments.mock.calls.map((c: any[]) => c[0]),
+        ).toEqual(['环境变量 OPENAI_API_KEY 配置', '环境变量', 'OPENAI_API_KEY', '配置']);
+        expect(result.documents.map((d) => [d.documentId, d.relevance])).toEqual([
+          ['docs_env', 3],
+          ['docs_basic', 5],
+        ]);
+        expect(result.indexStatus).toBeUndefined();
+      });
+
+      it('keeps strict hits and never fans out a single-keyword query', async () => {
+        searchRepoMock.searchKnowledgeBaseDocuments.mockResolvedValueOnce([hit('docs_env', 1)]);
+
+        await service.semanticSearchForChat({ knowledgeIds: ['kb_1'], query: 'env vars' });
+        searchRepoMock.searchKnowledgeBaseDocuments.mockResolvedValue([]);
+        await service.semanticSearchForChat({ knowledgeIds: ['kb_1'], query: 'env' });
+
+        expect(searchRepoMock.searchKnowledgeBaseDocuments).toHaveBeenCalledTimes(2);
+      });
+
+      it('keeps at most three keyword searches in flight', async () => {
+        let inFlight = 0;
+        let peak = 0;
+        searchRepoMock.searchKnowledgeBaseDocuments.mockImplementation(async () => {
+          inFlight += 1;
+          peak = Math.max(peak, inFlight);
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          inFlight -= 1;
+          return [];
+        });
+
+        await service.semanticSearchForChat({ knowledgeIds: ['kb_1'], query: 'a b c d e f' });
+
+        // One strict query, then one per keyword.
+        expect(searchRepoMock.searchKnowledgeBaseDocuments).toHaveBeenCalledTimes(7);
+        expect(peak).toBe(3);
+      });
+
+      it('still reports a full-text failure when every keyword search fails', async () => {
+        searchRepoMock.searchKnowledgeBaseDocuments
+          .mockResolvedValueOnce([])
+          .mockRejectedValue(new Error('bm25 down'));
+
+        const result = await service.semanticSearchForChat({
+          knowledgeIds: ['kb_1'],
+          query: 'env vars',
+        });
+
+        expect(result.errors?.bm25).toBe('bm25 down');
+      });
+    });
+
+    describe('index status', () => {
+      const status = {
+        embeddedFiles: 0,
+        keywordOnlyItems: 0,
+        unindexedFileSamples: [{ id: 'file_env', name: 'environment-variables.mdx' }],
+        unindexedFiles: 20,
+      };
+
+      beforeEach(() => {
+        chunkModelMock.semanticSearchForChat.mockResolvedValue([]);
+        searchRepoMock.searchKnowledgeBaseDocuments.mockResolvedValue([]);
+      });
+
+      it('reports what the libraries let search read when nothing matched', async () => {
+        knowledgeBaseModelMock.getSearchIndexStatus.mockResolvedValue(status);
+        const scopedService = new KnowledgeBaseSearchService(serverDB, userId, 'ws_1', 'public');
+
+        const result = await scopedService.semanticSearchForChat({
+          knowledgeIds: ['kb_1'],
+          query: 'env',
+        });
+
+        expect(result.indexStatus).toEqual(status);
+        expect(knowledgeBaseModelMock.getSearchIndexStatus).toHaveBeenCalledWith(
+          ['kb_1'],
+          'public',
+        );
+      });
+
+      it('skips the lookup when something matched or no library was searched', async () => {
+        chunkModelMock.semanticSearchForChat.mockResolvedValueOnce([
+          { id: 'c1', fileId: 'f1', fileName: 'a.pdf', similarity: 0.9, text: 'aaa' },
+        ]);
+        await service.semanticSearchForChat({ knowledgeIds: ['kb_1'], query: 'env' });
+        await service.semanticSearchForChat({ query: 'env' });
+
+        expect(knowledgeBaseModelMock.getSearchIndexStatus).not.toHaveBeenCalled();
+      });
+
+      it('keeps an empty search successful when the lookup fails', async () => {
+        knowledgeBaseModelMock.getSearchIndexStatus.mockRejectedValue(new Error('db down'));
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        const result = await service.semanticSearchForChat({ knowledgeIds: ['kb_1'], query: 'x' });
+
+        expect(result.totalResults).toBe(0);
+        expect(result.indexStatus).toBeUndefined();
+      });
     });
   });
 });

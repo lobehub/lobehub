@@ -3,6 +3,7 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import {
   type ChatSemanticSearchChunk,
   type FileSearchResult,
+  type KnowledgeBaseSearchIndexStatus,
   RequestTrigger,
   type SemanticSearchSchemaType,
 } from '@lobechat/types';
@@ -13,6 +14,7 @@ import { AgentDocumentModel } from '@/database/models/agentDocuments';
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
+import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import type { FtsSearchKnowledgeBaseDocumentHit } from '@/database/repositories/ftsSearch';
 import { knowledgeBaseFiles } from '@/database/schemas';
 import { isFileBackedPlaceholder } from '@/database/utils/fileBackedPlaceholder';
@@ -27,6 +29,8 @@ import {
   assertContentsNotInRestrictedKnowledgeBase,
   type UsableKnowledgeBaseResolver,
 } from '@/server/services/knowledgeBaseAccess';
+
+import { searchAnyKeyword } from './anyKeywordSearch';
 
 export interface FileContentResult {
   content: string;
@@ -46,6 +50,11 @@ export interface SemanticSearchForChatResult {
   documents: FtsSearchKnowledgeBaseDocumentHit[];
   errors?: { bm25?: string; vector?: string };
   fileResults: FileSearchResult[];
+  /**
+   * What the searched knowledge bases hold that search can read. Present only when the search
+   * matched nothing, so callers can tell "no match" from "nothing was searchable".
+   */
+  indexStatus?: KnowledgeBaseSearchIndexStatus;
   /**
    * Raw rejection reasons preserved for callers (e.g. lambda chunk router)
    * that need to map provider errors to TRPCError codes. Present only when
@@ -98,6 +107,7 @@ export class KnowledgeBaseSearchService {
   private chunkModel: ChunkModel;
   private documentModel: DocumentModel;
   private fileModel: FileModel;
+  private knowledgeBaseModel: KnowledgeBaseModel;
   private documentServiceInstance?: DocumentService;
   private callerAgentVisibility?: 'private' | 'public' | null;
 
@@ -122,6 +132,7 @@ export class KnowledgeBaseSearchService {
     // enforcement point today.
     this.documentModel = new DocumentModel(serverDB, userId, workspaceId, callerAgentVisibility);
     this.fileModel = new FileModel(serverDB, userId, workspaceId);
+    this.knowledgeBaseModel = new KnowledgeBaseModel(serverDB, userId, workspaceId);
   }
 
   private get documentService() {
@@ -197,7 +208,11 @@ export class KnowledgeBaseSearchService {
         usage: 'knowledge_base',
         workspaceId: this.workspaceId,
       });
-      return ftsSearchRepo.searchKnowledgeBaseDocuments(input.query, knowledgeIds, topK);
+      const search = (query: string) =>
+        ftsSearchRepo.searchKnowledgeBaseDocuments(query, knowledgeIds, topK);
+      const hits = await search(input.query);
+      if (hits.length > 0) return hits;
+      return searchAnyKeyword(input.query, topK, search);
     };
 
     const [vectorResult, bm25Result] = await Promise.allSettled([vectorPath(), bm25Path()]);
@@ -225,15 +240,36 @@ export class KnowledgeBaseSearchService {
     }
 
     const fileResults = groupAndRankFiles(chunks, topK);
+    const totalResults = chunks.length + documents.length;
+    const indexStatus =
+      totalResults === 0 && knowledgeIds.length > 0
+        ? await this.getSearchIndexStatus(knowledgeIds)
+        : undefined;
 
     return {
       chunks,
       documents,
       errors: Object.keys(errors).length > 0 ? errors : undefined,
       fileResults,
+      indexStatus,
       rejections: Object.keys(rejections).length > 0 ? rejections : undefined,
-      totalResults: chunks.length + documents.length,
+      totalResults,
     };
+  }
+
+  /** Diagnostics only: a failure here must not turn an empty search into a failed one. */
+  private async getSearchIndexStatus(
+    knowledgeIds: string[],
+  ): Promise<KnowledgeBaseSearchIndexStatus | undefined> {
+    try {
+      return await this.knowledgeBaseModel.getSearchIndexStatus(
+        knowledgeIds,
+        this.callerAgentVisibility,
+      );
+    } catch (error) {
+      console.error('[KnowledgeBaseSearchService] index status lookup failed', error);
+      return undefined;
+    }
   }
 
   /**

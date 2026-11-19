@@ -1,4 +1,8 @@
-import type { ChatSemanticSearchChunk, FileSearchResult } from '@lobechat/types';
+import type {
+  ChatSemanticSearchChunk,
+  FileSearchResult,
+  KnowledgeBaseSearchIndexStatus,
+} from '@lobechat/types';
 
 export const KnowledgeBaseIdentifier = 'lobe-knowledge-base';
 
@@ -44,10 +48,12 @@ export interface SearchKnowledgeBaseState {
   documents: KnowledgeBaseDocumentResult[];
   errors?: { bm25?: string; vector?: string };
   fileResults: FileSearchResult[];
+  /** What the searched knowledge bases hold that search can read; set when nothing matched. */
+  indexStatus?: KnowledgeBaseSearchIndexStatus;
   /**
-   * How many hits `fileResults` held, pinned by the read-path projector before
-   * it drops the three lists. The collapsed chip shows only this number; the
-   * card hydrates the real hits when the row is expanded.
+   * How many hits `fileResults` and `documents` held, pinned by the read-path
+   * projector before it drops the three lists. The collapsed chip shows only
+   * this number; the card hydrates the real hits when the row is expanded.
    */
   resultCount?: number;
   /**
@@ -55,6 +61,11 @@ export interface SearchKnowledgeBaseState {
    * all — distinct from a search that ran and matched nothing.
    */
   scope?: 'none';
+  /**
+   * `'not_indexed'` when the knowledge bases hold files but none is indexed,
+   * so there was nothing to search — distinct from a search that matched nothing.
+   */
+  status?: 'not_indexed';
   totalResults: number;
 }
 

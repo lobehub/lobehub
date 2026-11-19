@@ -1,11 +1,12 @@
 import {
   formatSearchResults,
   promptFileContents,
+  promptKnowledgeBaseNotIndexed,
   promptNoKnowledgeBaseInScope,
   promptNoSearchResults,
 } from '@lobechat/prompts';
 import { sliceReadWindow } from '@lobechat/prompts/textWindow';
-import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
+import type { BuiltinServerRuntimeOutput, KnowledgeBaseSearchIndexStatus } from '@lobechat/types';
 
 import type {
   AddFilesArgs,
@@ -87,6 +88,8 @@ interface RagService {
     documents?: any[];
     errors?: { bm25?: string; vector?: string };
     fileResults: any[];
+    /** What the searched knowledge bases hold that search can read; set when nothing matched. */
+    indexStatus?: KnowledgeBaseSearchIndexStatus;
     /**
      * Knowledge base IDs the search actually covered, when the service
      * resolves the scope itself (server runtime: agent + task project KBs).
@@ -130,6 +133,10 @@ interface FileService {
     showFilesInKnowledgeBase?: boolean;
   }) => Promise<{ hasMore: boolean; items: FileResourceResult[] }>;
 }
+
+/** The libraries hold files, but neither search path can read any of them. */
+const isUnsearchable = (status: KnowledgeBaseSearchIndexStatus) =>
+  status.embeddedFiles === 0 && status.keywordOnlyItems === 0 && status.unindexedFiles > 0;
 
 export class KnowledgeBaseExecutionRuntime {
   private documentService?: DocumentService;
@@ -316,6 +323,7 @@ export class KnowledgeBaseExecutionRuntime {
       const fileResults = result.fileResults ?? [];
       const documents = result.documents ?? [];
       const errors = result.errors;
+      const indexStatus = result.indexStatus;
       const totalResults = chunks.length + documents.length;
 
       if (totalResults === 0) {
@@ -324,15 +332,37 @@ export class KnowledgeBaseExecutionRuntime {
           documents: [],
           errors,
           fileResults: [],
+          indexStatus,
           totalResults: 0,
         };
         // Surface failure details via formatSearchResults when errors are present
         // so they aren't silently dropped — otherwise fall back to the empty
         // template prompt.
-        const content = errors
-          ? formatSearchResults(fileResults, query, documents, errors)
-          : promptNoSearchResults(query);
-        return { content, state, success: true };
+        if (errors) {
+          return {
+            content: formatSearchResults(fileResults, query, documents, errors),
+            state,
+            success: true,
+          };
+        }
+        // The libraries hold files but nothing either path can read: an unbuilt
+        // index, not a miss. Fail with a typed error instead of "0 results" so
+        // neither the model nor the user reads it as "the content isn't there".
+        if (indexStatus && isUnsearchable(indexStatus)) {
+          const content = promptKnowledgeBaseNotIndexed(query, indexStatus);
+          return {
+            content,
+            error: {
+              code: 'KNOWLEDGE_BASE_NOT_INDEXED',
+              indexStatus,
+              message: `None of the ${indexStatus.unindexedFiles} file(s) in the searched knowledge bases is indexed, so there was nothing to search.`,
+              type: 'KnowledgeBaseNotIndexed',
+            },
+            state: { ...state, status: 'not_indexed' } satisfies SearchKnowledgeBaseState,
+            success: false,
+          };
+        }
+        return { content: promptNoSearchResults(query, indexStatus), state, success: true };
       }
 
       const formattedContent = formatSearchResults(fileResults, query, documents, errors);

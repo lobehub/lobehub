@@ -331,7 +331,7 @@ describe('search-result projectors', () => {
     expect(projected.payloadOmitted).toBe('render');
   });
 
-  it('drops all three knowledge-base hit lists and counts the one the chip shows', () => {
+  it('drops all three knowledge-base hit lists and counts the two the card lists', () => {
     const [projected] = projectToolViewModels(
       [
         searchMessage('lobe-knowledge-base', 'searchKnowledgeBase', {
@@ -344,7 +344,8 @@ describe('search-result projectors', () => {
       getToolProjector,
     );
 
-    expect(projected.pluginState).toEqual({ resultCount: 3, totalResults: 3 });
+    // Keyword (`documents`) hits are listed beside the file hits, so the chip counts both.
+    expect(projected.pluginState).toEqual({ resultCount: 4, totalResults: 3 });
   });
 
   // An empty search still has to read as settled, or the chip cannot tell

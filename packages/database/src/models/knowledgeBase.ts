@@ -1,12 +1,23 @@
-import type { KnowledgeBaseItem } from '@lobechat/types';
-import { and, count, desc, eq, inArray, ne, or, sum } from 'drizzle-orm';
+import type { KnowledgeBaseItem, KnowledgeBaseSearchIndexStatus } from '@lobechat/types';
+import { and, count, desc, eq, exists, inArray, isNull, ne, not, or, sql, sum } from 'drizzle-orm';
 
 import type { NewDocument, NewFile, NewKnowledgeBase } from '../schemas';
-import { documents, files, knowledgeBaseFiles, knowledgeBases } from '../schemas';
+import {
+  DOCUMENT_FOLDER_TYPE,
+  documents,
+  embeddings,
+  fileChunks,
+  files,
+  knowledgeBaseFiles,
+  knowledgeBases,
+} from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { isUserKnowledgeBase } from '../utils/knowledgeBaseType';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { FileModel } from './file';
+
+/** Enough unindexed files for a caller to read a few directly, without listing a whole library. */
+const SEARCH_INDEX_STATUS_SAMPLE_LIMIT = 5;
 
 export class KnowledgeBaseModel {
   private userId: string;
@@ -254,6 +265,99 @@ export class KnowledgeBaseModel {
       );
 
     return parseInt(result[0]?.totalSize ?? '0') || 0;
+  };
+
+  /**
+   * What a search over these knowledge bases can read: files with embedded chunks (semantic
+   * search), pages and parsed files (keyword search only), and uploaded files neither path can
+   * read because they were never parsed or embedded. Meant for a search that matched nothing, to
+   * tell "nothing matches" from "nothing was searchable".
+   *
+   * Applies the caller's visibility scope to files and pages, so a shared agent is never told about
+   * — or handed the name of — a member's private file.
+   */
+  getSearchIndexStatus = async (
+    knowledgeBaseIds: string[],
+    callerAgentVisibility?: 'private' | 'public' | null,
+  ): Promise<KnowledgeBaseSearchIndexStatus> => {
+    if (knowledgeBaseIds.length === 0) {
+      return { embeddedFiles: 0, keywordOnlyItems: 0, unindexedFiles: 0, unindexedFileSamples: [] };
+    }
+
+    const scope = { userId: this.userId, workspaceId: this.workspaceId };
+    const callerScope = { ...scope, callerAgentVisibility };
+    const hasText = sql`COALESCE(${documents.content}, '') <> ''`;
+
+    const embedded = exists(
+      this.db
+        .select({ one: sql`1` })
+        .from(fileChunks)
+        .innerJoin(embeddings, eq(embeddings.chunkId, fileChunks.chunkId))
+        .where(and(eq(fileChunks.fileId, files.id), buildWorkspaceWhere(scope, fileChunks))),
+    );
+    const parsed = exists(
+      this.db
+        .select({ one: sql`1` })
+        .from(documents)
+        .where(
+          and(eq(documents.fileId, files.id), hasText, buildWorkspaceWhere(callerScope, documents)),
+        ),
+    );
+    const unindexed = and(not(embedded), not(parsed));
+    const fileWhere = and(
+      inArray(
+        files.id,
+        this.db
+          .select({ id: knowledgeBaseFiles.fileId })
+          .from(knowledgeBaseFiles)
+          .where(
+            and(
+              inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseIds),
+              buildWorkspaceWhere(scope, knowledgeBaseFiles),
+            ),
+          ),
+      ),
+      buildWorkspaceWhere(callerScope, files),
+    );
+
+    const [[fileCounts], [standalonePages], unindexedFileSamples] = await Promise.all([
+      this.db
+        .select({
+          embedded: sql<number>`count(*) FILTER (WHERE ${embedded})`.mapWith(Number),
+          keywordOnly: sql<number>`count(*) FILTER (WHERE ${and(not(embedded), parsed)})`.mapWith(
+            Number,
+          ),
+          unindexed: sql<number>`count(*) FILTER (WHERE ${unindexed})`.mapWith(Number),
+        })
+        .from(files)
+        .where(fileWhere),
+      // Pages with no backing file row (folders hold no text).
+      this.db
+        .select({ count: count() })
+        .from(documents)
+        .where(
+          and(
+            inArray(documents.knowledgeBaseId, knowledgeBaseIds),
+            isNull(documents.fileId),
+            ne(documents.fileType, DOCUMENT_FOLDER_TYPE),
+            hasText,
+            buildWorkspaceWhere(callerScope, documents),
+          ),
+        ),
+      this.db
+        .select({ id: files.id, name: files.name })
+        .from(files)
+        .where(and(fileWhere, unindexed))
+        .orderBy(files.name)
+        .limit(SEARCH_INDEX_STATUS_SAMPLE_LIMIT),
+    ]);
+
+    return {
+      embeddedFiles: fileCounts?.embedded ?? 0,
+      keywordOnlyItems: (fileCounts?.keywordOnly ?? 0) + (standalonePages?.count ?? 0),
+      unindexedFiles: fileCounts?.unindexed ?? 0,
+      unindexedFileSamples,
+    };
   };
 
   // update

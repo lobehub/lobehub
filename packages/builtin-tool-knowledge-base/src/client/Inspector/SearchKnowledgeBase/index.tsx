@@ -1,8 +1,7 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Text } from '@lobehub/ui';
-import { cssVar, cx } from '@lobehub/ui';
+import { cssVar, cx, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,14 +15,22 @@ export const SearchKnowledgeBaseInspector = memo<
   const { t } = useTranslation('plugin');
 
   const query = args?.query || partialArgs?.query || '';
-  // Use fileResults length for display (aggregated by file)
+  // Count what the card lists: file hits (aggregated by file) plus keyword hits.
   // The read path drops the hit lists and pins the size as `resultCount`; the
-  // array is only here for a payload stored before that.
-  const resultCount = pluginState?.resultCount ?? pluginState?.fileResults?.length ?? 0;
+  // arrays are only here for a payload stored before that.
+  const resultCount =
+    pluginState?.resultCount ??
+    (pluginState?.fileResults?.length ?? 0) + (pluginState?.documents?.length ?? 0);
   const hasSettled = !!pluginState?.fileResults || typeof pluginState?.resultCount === 'number';
   const hasResults = resultCount > 0;
-  // No library was in scope, so nothing was searched — not the same as 0 hits.
-  const isUnscoped = pluginState?.scope === 'none';
+  // Nothing was searched — no library in scope, or none of its files indexed —
+  // which is not the same as 0 hits.
+  const emptyLabelKey =
+    pluginState?.scope === 'none'
+      ? 'builtins.lobe-knowledge-base.inspector.noScope'
+      : pluginState?.status === 'not_indexed'
+        ? 'builtins.lobe-knowledge-base.inspector.notIndexed'
+        : 'builtins.lobe-knowledge-base.inspector.noResults';
 
   // During argument streaming
   if (isArgumentsStreaming) {
@@ -64,13 +71,7 @@ export const SearchKnowledgeBaseInspector = memo<
               fontSize={12}
               style={{ marginInlineStart: 4 }}
             >
-              (
-              {t(
-                isUnscoped
-                  ? 'builtins.lobe-knowledge-base.inspector.noScope'
-                  : 'builtins.lobe-knowledge-base.inspector.noResults',
-              )}
-              )
+              ({t(emptyLabelKey)})
             </Text>
           ))}
       </span>

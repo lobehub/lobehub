@@ -635,6 +635,7 @@ export default {
   'builtins.lobe-knowledge-base.inspector.andMoreFiles': 'and {{count}} more',
   'builtins.lobe-knowledge-base.inspector.noResults': 'No results',
   'builtins.lobe-knowledge-base.inspector.noScope': 'No enabled library',
+  'builtins.lobe-knowledge-base.inspector.notIndexed': 'Library not indexed',
   'builtins.lobe-knowledge-base.render.noScope':
     'No enabled library is attached to this agent, so nothing was searched. Attach a library, or turn on an attached one, to let it search your files.',
   'builtins.lobe-knowledge-base.title': 'Library',
