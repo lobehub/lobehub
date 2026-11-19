@@ -1412,44 +1412,11 @@ export default {
   'settingAgent.prompt.placeholder': 'Enter agent instructions',
   'settingAgent.prompt.title': 'Core Instructions',
   'settingAgent.agentTools.add': 'Add Tool',
-  'settingAgent.agentTools.agentEmpty': 'Nothing only for this agent yet',
   'settingAgent.agentTools.authorizedBy': 'Authorized by {{name}}',
-  'settingAgent.agentTools.badge.agentOnly': 'Agent-only',
-  'settingAgent.agentTools.badge.copy': 'Copy',
-  'settingAgent.agentTools.badge.linked': 'Linked',
-  'settingAgent.agentTools.badge.overridden': 'Overridden',
-  'settingAgent.agentTools.connectNew.desc': 'Agent-exclusive connection',
-  'settingAgent.agentTools.connectNew.title': 'Connect new tool',
-  'settingAgent.agentTools.connectNewPickerTitle': 'Connect a new tool for this Agent',
-  'settingAgent.agentTools.copy.desc': 'Independent copy, separately configurable',
-  'settingAgent.agentTools.copy.title': 'Copy user tool',
-  'settingAgent.agentTools.copyConfirm': 'Copy {{count}}',
-  'settingAgent.agentTools.copyPick': 'Select user connectors to copy into this agent',
-  'settingAgent.agentTools.menuTitle': 'Add a tool for this Agent',
-  'settingAgent.agentTools.mount.desc': 'Reference, syncs with user config',
-  'settingAgent.agentTools.mount.title': 'Mount user tool',
-  'settingAgent.agentTools.overriddenNote':
-    '{{count}} user tool(s) overridden by same-named Agent Tools; they will not run.',
   'settingAgent.agentTools.pickerEmpty': 'No user connectors available to add',
-  'settingAgent.agentTools.priorityHint': 'Run priority',
-  'settingAgent.agentTools.priorityTooltip':
-    'When tools share a name, the agent-exclusive tool runs first at runtime; your user tools come next.',
-  'settingAgent.agentTools.priorityTooltipWorkspace':
-    'When tools share a name, this agent-scoped tool runs first at runtime; the workspace user tools are the fallback.',
-  'settingAgent.agentTools.removeOwnedConfirm':
-    'Delete this agent-exclusive connector? Its credentials will be removed.',
-  'settingAgent.agentTools.tabAgent': 'Only for this agent',
-  'settingAgent.agentTools.tabUser': 'From my library',
-  'settingAgent.agentTools.tabWorkspace': 'From the workspace library',
-  'settingAgent.tools.level.agentDesc':
-    'Belong to this agent alone. When a name clashes, these run first.',
-  'settingAgent.tools.level.libraryDesc':
-    'Shared by all your agents. Connection and credentials are managed in your library.',
   'settingAgent.tools.level.libraryEmpty':
     'Nothing from the library is turned on for this agent yet',
   'settingAgent.tools.level.skillsEmpty': 'No skills are turned on for this agent yet',
-  'settingAgent.tools.level.workspaceDesc':
-    'Shared across the workspace. Connection and credentials are managed in the workspace library.',
   'settingAgent.tools.showAll': 'Show all {{count}}',
   'settingAgent.tools.showLess': 'Show less',
   'settingAgent.tools.toolCount_one': '{{count}} tool',
@@ -1460,6 +1427,41 @@ export default {
   'settingAgent.tools.close': 'Close',
   'settingAgent.tools.detail.tools_one': '{{count}} tool it gives the agent',
   'settingAgent.tools.detail.tools_other': '{{count}} tools it gives the agent',
+  'settingAgent.tools.connection.own': 'Own connection',
+  'settingAgent.tools.connection.ownTitle': 'Uses its own connection',
+  'settingAgent.tools.connection.ownDesc':
+    'This agent signs in separately from your library. Changing or removing the library connection does not affect it.',
+  'settingAgent.tools.connection.ownDescWorkspace':
+    'This agent signs in separately from the workspace library. Changing or removing the library connection does not affect it.',
+  'settingAgent.tools.connection.libraryTitle': 'Uses your library connection',
+  'settingAgent.tools.connection.libraryDesc': 'Shared by every agent of yours that turns this on.',
+  'settingAgent.tools.connection.workspaceTitle': 'Uses the workspace connection',
+  'settingAgent.tools.connection.workspaceDesc':
+    'Shared by every agent in the workspace that turns this on.',
+  'settingAgent.tools.connection.menu': 'Connection options',
+  'settingAgent.tools.connection.create': 'Use a separate connection',
+  'settingAgent.tools.connection.createAccount': 'Connect a separate account',
+  'settingAgent.tools.connection.createDesc': 'For this agent only',
+  'settingAgent.tools.connection.created': '{{name}} now has its own connection for this agent',
+  'settingAgent.tools.connection.createdDesc':
+    'It starts as a copy of the library one. Change how it signs in under Manage connection.',
+  'settingAgent.tools.connection.createFailed':
+    'Could not set up a separate connection for {{name}}',
+  'settingAgent.tools.connection.manage': 'Manage connection',
+  'settingAgent.tools.connection.switchFailed':
+    'Could not switch connections for {{name}}. This agent still uses its own connection.',
+  'settingAgent.tools.connection.useLibrary': 'Use the library connection',
+  'settingAgent.tools.connection.useWorkspace': 'Use the workspace connection',
+  'settingAgent.tools.connection.useLibraryConfirm.title':
+    'Stop using a separate connection for {{name}}?',
+  'settingAgent.tools.connection.useLibraryConfirm.desc':
+    "This agent's own connection and its credentials will be deleted. It will use the one in your library from now on.",
+  'settingAgent.tools.connection.useWorkspaceConfirm.desc':
+    "This agent's own connection and its credentials will be deleted. It will use the one in the workspace library from now on.",
+  'settingAgent.tools.connection.removeConfirm.title': 'Remove {{name}} from this agent?',
+  'settingAgent.tools.connection.removeConfirm.desc':
+    'Only this agent has this connection. It will be deleted together with its credentials.',
+  'settingAgent.tools.connection.connectForAgent': 'Connect an app for this agent only',
   'settingAgent.tools.manageLibrary': 'Manage library',
   'settingAgent.tools.remove': 'Remove from this agent',
   'settingAgent.tools.type.builtin': 'Built-in tool',
@@ -1518,12 +1520,12 @@ export default {
   'settingAgent.toolsPage.desc':
     'Connect what it can act on: look things up, read files, call your services.',
   'settingAgent.toolsPage.title': 'Tools and connectors',
+  'settingAgent.toolsPage.group.title': "This agent's tools",
+  'settingAgent.toolsPage.group.empty': 'No tools are turned on for this agent yet',
   'settingAgent.skillsPage.title': 'Skills',
   'settingAgent.skillsPage.desc':
     'A skill is a set of steps it picks up only when a task needs them.',
   'settingAgent.skillsPage.group.title': 'Turned on for this agent',
-  'settingAgent.skillsPage.group.desc':
-    'Skills come from your library and are shared by all your agents.',
   'settingAgent.skills.source.builtin': 'Built-in',
   'settingAgent.skills.source.community': 'Community',
   'settingAgent.skills.source.custom': 'Custom',

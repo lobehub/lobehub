@@ -37,7 +37,7 @@ import {
 import { type LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 
-import { type ItemDetail } from './ItemDetailPanel';
+import { type ItemConnection, type ItemDetail } from './ItemDetailPanel';
 import ItemRow from './ItemRow';
 
 /**
@@ -106,6 +106,11 @@ export interface PluginTagProps {
    * so an agent-exclusive connector doesn't render as "Not Installed".
    */
   agentId?: string;
+  /**
+   * In a row, which connection the item runs on for this agent, when that is worth saying:
+   * a short label beside the name, and a sentence about it in the item's details.
+   */
+  connection?: ItemConnection;
   disabled?: boolean;
   /** In a row, an on/off switch for the item; `onToggle` makes it appear. */
   enabled?: boolean;
@@ -174,6 +179,7 @@ export interface PluginTagProps {
 const PluginTag = memo<PluginTagProps>(
   ({
     agentId,
+    connection,
     pluginId,
     onRemove,
     onSelect,
@@ -552,12 +558,18 @@ const PluginTag = memo<PluginTagProps>(
                   />
                 </Tooltip>
               ) : null}
+              {connection?.label ? (
+                <Tooltip title={connection.desc}>
+                  <Tag style={{ flex: 'none', margin: 0 }}>{connection.label}</Tag>
+                </Tooltip>
+              ) : null}
             </>
           }
           onClick={
             onOpen
               ? () =>
                   onOpen({
+                    connection,
                     description,
                     icon: renderIcon(),
                     identifier,
