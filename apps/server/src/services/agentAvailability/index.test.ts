@@ -6,14 +6,25 @@ const mocks = vi.hoisted(() => ({
   deviceByAgent: {} as Record<string, string>,
   online: [] as { deviceId: string; online: boolean }[],
   quota: {} as Record<string, { resetsAt?: number; status: string }>,
-  quotaCalls: [] as { agentId: string; deviceId?: string }[],
+  quotaCalls: [] as { agentId: string; deviceId?: string; provider?: string }[],
+  /** Agents that run Claude Code through bound accounts. */
+  routed: [] as string[],
   visible: [] as string[],
 }));
 
 vi.mock('@/database/models/agent', () => ({
   AgentModel: class {
     queryAgencyRoutingByIds = async (ids: string[]) =>
-      ids.filter((id) => mocks.visible.includes(id)).map((id) => ({ id }));
+      ids
+        .filter((id) => mocks.visible.includes(id))
+        .map((id) => ({
+          agencyConfig: mocks.routed.includes(id)
+            ? { heterogeneousProvider: { type: 'claude-code' } }
+            : id === 'own-login'
+              ? { heterogeneousProvider: { env: { ANTHROPIC_API_KEY: 'sk' }, type: 'claude-code' } }
+              : null,
+          id,
+        }));
   },
 }));
 vi.mock('@/database/models/device', () => ({ DeviceModel: class {} }));
@@ -28,8 +39,11 @@ vi.mock('@/server/routers/lambda/deviceBoundAgents', () => ({
 }));
 vi.mock('@/server/services/agentQuota', () => ({
   AgentQuotaService: class {
-    resolveAgentAvailability = async (agentId: string, options: { deviceId?: string }) => {
-      mocks.quotaCalls.push({ agentId, deviceId: options.deviceId });
+    resolveAgentAvailability = async (
+      agentId: string,
+      options: { deviceId?: string; provider?: string },
+    ) => {
+      mocks.quotaCalls.push({ agentId, deviceId: options.deviceId, provider: options.provider });
       return mocks.quota[agentId] ?? { accountIds: [], status: 'untracked' };
     };
   },
@@ -69,6 +83,7 @@ beforeEach(() => {
   mocks.online = [];
   mocks.quota = {};
   mocks.quotaCalls = [];
+  mocks.routed = [];
   mocks.visible = [];
   jobCounts.length = 0;
 });
@@ -76,6 +91,7 @@ beforeEach(() => {
 describe('AgentAvailabilityService', () => {
   it('answers only for agents the caller can see', async () => {
     mocks.visible = ['mine'];
+    mocks.routed = ['mine', 'someone-elses'];
     jobCounts.push({ agentId: 'mine', value: 1 });
 
     const result = await service().getAvailability(['mine', 'someone-elses'], now);
@@ -87,13 +103,16 @@ describe('AgentAvailabilityService', () => {
 
   it('judges quota on the device row the agent runs on', async () => {
     mocks.visible = ['a1'];
+    mocks.routed = ['a1'];
     mocks.deviceByAgent = { a1: 'd1' };
     mocks.online = [{ deviceId: 'd1', online: true }];
     mocks.quota = { a1: { resetsAt: now + 60_000, status: 'exhausted' } };
 
     const result = await service().getAvailability(['a1'], now);
 
-    expect(mocks.quotaCalls).toEqual([{ agentId: 'a1', deviceId: 'row-d1' }]);
+    expect(mocks.quotaCalls).toEqual([
+      { agentId: 'a1', deviceId: 'row-d1', provider: 'claude-code' },
+    ]);
     expect(result.a1).toMatchObject({
       dispatchable: false,
       resetsAt: now + 60_000,
@@ -101,8 +120,23 @@ describe('AgentAvailabilityService', () => {
     });
   });
 
+  it('never judges an agent whose runs skip bound accounts', async () => {
+    mocks.visible = ['own-login', 'native'];
+    mocks.quota = {
+      'native': { status: 'exhausted' },
+      'own-login': { status: 'exhausted' },
+    };
+
+    const result = await service().getAvailability(['own-login', 'native'], now);
+
+    expect(mocks.quotaCalls).toEqual([]);
+    expect(result['own-login']).toMatchObject({ dispatchable: true, status: 'online' });
+    expect(result.native).toMatchObject({ dispatchable: true, status: 'online' });
+  });
+
   it('keeps an agent with untracked quota on duty', async () => {
     mocks.visible = ['a1'];
+    mocks.routed = ['a1'];
 
     const result = await service().getAvailability(['a1'], now);
 

@@ -1,5 +1,6 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { AgentAvailability, ManagedDevicePhase } from '@lobechat/types';
+import { claudeCodeAgentEnvPicksLogin } from '@lobechat/heterogeneous-agents/quota';
+import type { AgentAvailability, LobeAgentAgencyConfig, ManagedDevicePhase } from '@lobechat/types';
 import debug from 'debug';
 import { and, count, eq, inArray } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -22,6 +23,16 @@ import type {
 import { resolveAgentAvailability } from './resolve';
 
 const log = debug('lobe-server:agent-availability');
+
+/**
+ * Whether a run of this agent is routed through its bound accounts at all, as device dispatch
+ * decides it (`resolveClaudeAccountRouting`): only Claude Code is, and not when the agent's env
+ * picks its own login (an API key, a config dir). Any other agent is never judged by quota.
+ */
+const routesThroughQuota = (agencyConfig?: LobeAgentAgencyConfig | null) => {
+  const provider = agencyConfig?.heterogeneousProvider;
+  return provider?.type === 'claude-code' && !claudeCodeAgentEnvPicksLogin(provider.env);
+};
 
 /** How long a status read waits for managed device phases; past it they read as unknown. */
 const MANAGED_PHASES_TIMEOUT_MS = 3000;
@@ -87,7 +98,11 @@ export class AgentAvailabilityService {
     });
     const [devices, quotas, activeJobs] = await Promise.all([
       this.readDevices([...new Set(Object.values(deviceByAgent))]),
-      this.readQuotas(ids, deviceByAgent, now),
+      this.readQuotas(
+        visible.filter((agent) => routesThroughQuota(agent.agencyConfig)).map((agent) => agent.id),
+        deviceByAgent,
+        now,
+      ),
       this.countActiveJobs(ids),
     ]);
 
@@ -108,9 +123,13 @@ export class AgentAvailabilityService {
     return result;
   };
 
-  /** The principal pool a device's presence is read in: the workspace, or the caller's own. */
+  /**
+   * The principal pool a device's presence is read in: the caller's own, or the caller within
+   * the workspace. Per caller even in a workspace: the scoped device list leaves out another
+   * member's private devices, so one member's view must never answer for another's.
+   */
   private get pool() {
-    return this.workspaceId ? `ws:${this.workspaceId}` : `user:${this.userId}`;
+    return this.workspaceId ? `ws:${this.workspaceId}:user:${this.userId}` : `user:${this.userId}`;
   }
 
   private readDevices = async (deviceIds: string[]) => {
@@ -200,6 +219,7 @@ export class AgentAvailabilityService {
           const quota = await quotaService.resolveAgentAvailability(agentId, {
             deviceId: deviceId ? await rowIdOf(deviceId) : undefined,
             now,
+            provider: 'claude-code',
           });
           return [
             agentId,
