@@ -172,6 +172,7 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     searchKeywords: ['claude code', 'claude sdk'],
     stage: 'alpha',
   },
+  // Connected devices run it too, so Web users need the toggle — not desktop only.
   {
     flag: 'enableCodexAppServer',
     i18nKey: 'codexAppServer',
