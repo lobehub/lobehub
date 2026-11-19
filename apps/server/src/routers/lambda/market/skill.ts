@@ -6,6 +6,7 @@ import { marketUserInfo, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MarketService } from '@/server/services/market';
 import { SkillSorts } from '@/types/discover';
 
+import { expiredMarketTokenCookies, shouldRetryWithoutMarketToken } from './marketAuthFallback';
 import { mapMarketError } from './marketError';
 
 const log = debug('lambda-router:market:skill');
@@ -14,15 +15,26 @@ const log = debug('lambda-router:market:skill');
 const marketProcedure = publicProcedure
   .use(serverDatabase)
   .use(marketUserInfo)
-  .use(async ({ ctx, next }) => {
-    return next({
-      ctx: {
-        marketService: new MarketService({
-          accessToken: ctx.marketAccessToken,
-          userInfo: ctx.marketUserInfo,
-        }),
-      },
+  .use(async ({ ctx, next, path, type }) => {
+    const createServices = (accessToken?: string) => ({
+      marketService: new MarketService({ accessToken, userInfo: ctx.marketUserInfo }),
     });
+
+    const result = await next({ ctx: createServices(ctx.marketAccessToken) });
+    if (
+      result.ok ||
+      !shouldRetryWithoutMarketToken({
+        accessToken: ctx.marketAccessToken,
+        error: result.error,
+        type,
+      })
+    )
+      return result;
+
+    log('Market rejected the access token for %s; retrying without it', path);
+    for (const cookie of expiredMarketTokenCookies()) ctx.resHeaders?.append('Set-Cookie', cookie);
+
+    return next({ ctx: createServices(undefined) });
   });
 
 export const skillRouter = router({
