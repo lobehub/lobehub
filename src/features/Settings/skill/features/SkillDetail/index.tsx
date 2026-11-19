@@ -192,6 +192,13 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
       ? (s.agentBoundConnectors ?? []).find((c) => c.id === identifier)
       : undefined,
   );
+  // The list loads the agents' connectors, but a detail opened by link (or after a reload)
+  // mounts while the list is hidden, where the list's effects never run.
+  const isAgentBoundInit = useToolStore((s) => s.isAgentBoundInit);
+  const fetchAgentBoundConnectors = useToolStore((s) => s.fetchAgentBoundConnectors);
+  useEffect(() => {
+    if (type === 'agent-connector' && !isAgentBoundInit) void fetchAgentBoundConnectors();
+  }, [type, isAgentBoundInit, fetchAgentBoundConnectors]);
 
   // Creator attribution for the row-level manage gate: agent skills carry it
   // on the skill row; connector-backed types on the connector row.
