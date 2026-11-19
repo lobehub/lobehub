@@ -10,8 +10,10 @@ import { isArtboardEnabled } from './useArtboardFeature';
 export const artboardOpensInPanel = (pathname: string, topicId: string | null | undefined) =>
   !!topicId && pathname.split('/').includes(topicId);
 
+// Every conversation route ends in its topic id (`/agent/:aid/:topicId`,
+// `/project/:pid/topic/:topicId`, …); `artboardOpensInPanel` matches it, so
+// no route shape is assumed here.
 const conversationTopicOf = async (artboardId: string) => {
-  if (!window.location.pathname.includes('/topic/')) return null;
   try {
     const view = await artboardService.get(artboardId);
     void mutateArtboard(artboardId, view);
