@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE, INBOX_SESSION_ID } from '@lobechat/const';
 import { CHANNEL_DELETED_AGENT_NAME, CHANNEL_DELETED_USER_NAME } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -91,6 +92,29 @@ describe('direct Channel identity', () => {
         author: { id: agent.id, name: 'Assistant', type: 'agent' },
         content: 'Answer',
       },
+    });
+  });
+
+  // The inbox is stored without a name; the Channel showed its replies as from a departed member.
+  it('labels a nameless inbox Agent with the default name and avatar', async () => {
+    const [inbox] = await db
+      .insert(agents)
+      .values({ slug: INBOX_SESSION_ID, userId: fixture.ownerId, workspaceId: fixture.workspaceId })
+      .returning();
+    const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const { channel } = await repository.create({ agentId: inbox.id, title: 'Direct' });
+    const request = await repository.send(channel.id, sendInput);
+    const { replyId } = await publish(channel.id, request.id);
+
+    const author = { avatar: DEFAULT_INBOX_AVATAR, id: inbox.id, name: DEFAULT_INBOX_TITLE };
+    const { members, messages } = await repository.detail(channel.id);
+    expect(messages.find((message) => message.id === replyId)?.author).toMatchObject(author);
+    expect(members.find((member) => member.agentId === inbox.id)).toMatchObject({
+      avatar: DEFAULT_INBOX_AVATAR,
+      name: DEFAULT_INBOX_TITLE,
+    });
+    expect((await repository.list()).find((item) => item.id === channel.id)).toMatchObject({
+      lastMessage: { author: { id: inbox.id, name: DEFAULT_INBOX_TITLE } },
     });
   });
 

@@ -25,6 +25,7 @@ import {
   workspaceMembers,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { agentTitleSql } from '../../utils/inboxAgent';
 import { normalizeWorkspaceId } from '../../utils/workspace';
 import { activeMembers, findThread } from './delivery';
 import { ChannelError } from './error';
@@ -247,7 +248,7 @@ export class ChannelHistoryRepository {
       .select({
         agentId: agentOperations.agentId,
         agentName: agents.name,
-        agentTitle: agents.title,
+        agentTitle: agentTitleSql(),
         status: agentOperations.status,
         trigger: agentOperations.trigger,
         userId: agentOperations.userId,

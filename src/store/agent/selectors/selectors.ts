@@ -3,6 +3,7 @@ import {
   DEFAULT_AGENT_CONFIG,
   DEFAULT_BACKGROUND_COLOR,
   DEFAULT_INBOX_AVATAR,
+  DEFAULT_INBOX_TITLE,
   DEFAULT_MODEL,
   DEFAUTT_AGENT_TTS_CONFIG,
   isDesktop,
@@ -103,6 +104,20 @@ const getAgentMetaById =
       title: data.title || undefined,
     };
   };
+
+/**
+ * The inbox agent's label: the name the user gave it, else its title, else `DEFAULT_INBOX_TITLE`.
+ * Use it wherever the inbox is named, rather than the brand constant.
+ */
+const inboxAgentDisplayName = (s: AgentStoreState) =>
+  agentDisplayName(
+    getAgentMetaById(builtinAgentSelectors.inboxAgentId(s) ?? '')(s),
+    DEFAULT_INBOX_TITLE,
+  );
+
+/** The inbox agent's avatar, else `DEFAULT_INBOX_AVATAR`. */
+const inboxAgentAvatar = (s: AgentStoreState) =>
+  getAgentMetaById(builtinAgentSelectors.inboxAgentId(s) ?? '')(s).avatar || DEFAULT_INBOX_AVATAR;
 
 /**
  * Full-body artwork of the agent's character, or `undefined` when it has none.
@@ -382,6 +397,8 @@ const isAgentSlugConfirmed = (slug?: string | null) => (s: AgentStoreState) =>
 const heteroServerDefaultCapability = (s: AgentStoreState) => s.heteroServerDefaultCapability;
 
 export const agentSelectors = {
+  inboxAgentAvatar,
+  inboxAgentDisplayName,
   currentAgentExecutionTarget,
   currentAgentHeterogeneousProviderType,
   currentAgentAuthorId,

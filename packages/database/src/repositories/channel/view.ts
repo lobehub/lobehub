@@ -40,6 +40,7 @@ import {
   workspaceUserSettings,
 } from '../../schemas';
 import type { Transaction } from '../../type';
+import { agentAvatarSql, agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
 import { fileIdsByMessage } from './attachments';
 import { isAgentAuthored } from './author';
@@ -49,9 +50,9 @@ import { externalWorksByMessage } from './works';
 
 export const publicMessageColumns = {
   ...getTableColumns(channelMessages),
-  senderAgentAvatar: agents.avatar,
+  senderAgentAvatar: agentAvatarSql(),
   senderAgentName: agents.name,
-  senderAgentTitle: agents.title,
+  senderAgentTitle: agentTitleSql(),
   senderUserAvatar: users.avatar,
   senderUserName: users.fullName,
   senderUsername: users.username,
@@ -121,7 +122,7 @@ const relayAgentAvatars = async (tx: Transaction, rows: MessageRow[]) => {
   ];
   if (!ids.length) return new Map<string, string | null>();
   const found = await tx
-    .select({ avatar: agents.avatar, id: agents.id })
+    .select({ avatar: agentAvatarSql(), id: agents.id })
     .from(agents)
     .where(inArray(agents.id, ids));
   return new Map(found.map(({ avatar, id }) => [id, avatar] as const));
@@ -466,7 +467,7 @@ export const readChannelView = async (
       .select({
         actorType: channelMembers.actorType,
         agentId: channelMembers.agentId,
-        avatar: agents.avatar,
+        avatar: agentAvatarSql(),
         // The same fallback routing uses: a Channel-specific description, else the Agent's own.
         description: sql<
           string | null
