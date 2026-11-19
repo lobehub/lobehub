@@ -3,6 +3,7 @@ import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
+import { toolSetsFrom } from './helpers/connectorToolSets';
 
 // Agent preferences expose skill metadata; only a topic selection requests its body.
 const {
@@ -118,6 +119,7 @@ vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn().mockImplementation(function () {
     return {
       resolveByIdentifiers: mockConnectorResolveByIdentifiers,
+      resolveToolSets: toolSetsFrom(mockConnectorResolveByIdentifiers),
     };
   }),
 }));

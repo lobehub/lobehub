@@ -43,7 +43,6 @@ import {
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
-import { connectorSelectors } from '@/store/tool/slices/connector';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
 import { useAgentId } from '../../hooks/useAgentId';
@@ -53,6 +52,7 @@ import { closeToolDetailPopovers } from '../components/useDetailPopoverState';
 import { MemoryEffortControl } from '../Memory/Controls';
 import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
 import { SearchAdvancedControls } from '../Search/Controls';
+import { useAgentMenuConnectors, useUnpinDeletedConnector } from './agentMenuConnectors';
 import { isCapabilityTool, resolveCapabilityConfigPatch } from './capabilityTools';
 import ComposioServerItem from './ComposioServerItem';
 import ComposioSkillIcon from './ComposioSkillIcon';
@@ -60,6 +60,7 @@ import { SKILL_ICON_SIZE } from './constants';
 import { resolveImplicitMode } from './librarySkillPolicy';
 import LobehubSkillIcon from './LobehubSkillIcon';
 import LobehubSkillServerItem from './LobehubSkillServerItem';
+import PrivateConnectorTag from './PrivateConnectorTag';
 import SkillRow from './SkillRow';
 import ToolItemDetailPopover from './ToolItemDetailPopover';
 import { ToolPickerHeader } from './ToolPickerHeader';
@@ -511,10 +512,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   // Agent Skills related state
   const installedBuiltinSkills = useToolStore(builtinToolSelectors.installedBuiltinSkills, isEqual);
 
-  // MCP connectors the user added: custom ones and marketplace installs
-  const customConnectors = useToolStore(
-    connectorSelectors.userMcpConnectorsForAgent(agentId),
-    isEqual,
+  // MCP connectors the user added that this agent loads (custom and marketplace)
+  const customConnectors = useAgentMenuConnectors(agentId);
+  // A deleted connector's switch turns off, unless the agent still loads a row of it
+  const unpinDeleted = useUnpinDeletedConnector(agentId, (identifier) =>
+    updateSkillPolicy(identifier, 'disabled'),
   );
   const getConfigure = useConnectorConfigure();
   const [
@@ -865,9 +867,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     ],
   );
 
-  // Connector MCP list items (custom ones and marketplace installs).
-  // Toggling adds the connector identifier to agents.plugins[] — the same field
-  // the runtime resolves connectors from, so they become callable immediately.
+  // Connector MCP rows (custom and marketplace). Toggling adds the identifier to
+  // agents.plugins[], the field the runtime resolves connectors from.
   const customConnectorItems = useMemo(
     () =>
       customConnectors.map((connector) => {
@@ -890,15 +891,10 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             displayName: title,
             onDelete: async () => {
               await deleteConnector(connector.id);
-              // Mirror removeComposioServer: drop the identifier from agent.plugins so
-              // no orphaned pin survives the connector deletion.
-              try {
-                await updateSkillPolicy(connector.identifier, 'disabled');
-              } catch (error) {
-                console.error('[Connector] Failed to unpin plugin after delete:', error);
-              }
+              await unpinDeleted(connector);
             },
           },
+          extraTag: connector.visibility === 'private' ? <PrivateConnectorTag /> : undefined,
           icon,
           id: connector.identifier,
           popoverContent,
@@ -906,7 +902,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           title,
         });
       }),
-    [customConnectors, t, createManagedSkillItem, deleteConnector, getConfigure, updateSkillPolicy],
+    [customConnectors, t, createManagedSkillItem, deleteConnector, getConfigure, unpinDeleted],
   );
 
   // Distinguish community plugins and custom plugins.

@@ -22,6 +22,8 @@ interface OpenMenuOptions {
   scope?: string;
   terminalAvailable: boolean;
   toggleTerminalPanel: (open: boolean) => void;
+  /** The conversation an app opened from the menu runs in. */
+  topicId?: string;
 }
 export const useOpenMenuItems = ({
   availableTabs,
@@ -35,9 +37,10 @@ export const useOpenMenuItems = ({
   scope,
   terminalAvailable,
   toggleTerminalPanel,
+  topicId,
 }: OpenMenuOptions) => {
   const { t } = useTranslation(['chat', 'setting', 'plugin']);
-  const entries = useMcpAppEntrypoints(agentId);
+  const entries = useMcpAppEntrypoints(agentId, topicId);
   return useCallback((): DropdownItem[] => {
     const itemOf = (key: string): DropdownItem | undefined => {
       const tab = availableTabs.get(key);
@@ -137,6 +140,7 @@ export const useOpenMenuItems = ({
                             identifier: entry.identifier,
                             linkId: entry.linkId,
                             toolName: entry.toolName,
+                            topicId,
                           }),
                       );
                   }
@@ -166,5 +170,6 @@ export const useOpenMenuItems = ({
     t,
     terminalAvailable,
     toggleTerminalPanel,
+    topicId,
   ]);
 };

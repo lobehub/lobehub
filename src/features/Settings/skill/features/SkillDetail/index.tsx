@@ -1,7 +1,7 @@
 'use client';
 
 import { getLobehubSkillProviderById } from '@lobechat/const';
-import { agentDisplayName } from '@lobechat/types';
+import { agentDisplayName, type ConnectorVisibility } from '@lobechat/types';
 import { Avatar, Button, confirmModal, Markdown, Skeleton, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -78,6 +78,8 @@ interface SkillDetailProps {
   identifier: string;
   onDelete?: () => void;
   type: ToolDetailType;
+  /** The workspace connector tab the row was opened from. */
+  visibility?: ConnectorVisibility;
 }
 
 /**
@@ -167,7 +169,7 @@ LobehubConnectorAction.displayName = 'LobehubConnectorAction';
  * - 'builtin-skill': renders BuiltinSkill description panel (Artifacts, Task, etc.)
  * - 'builtin'/'plugin'/'mcp-connector': syncs connector entry, renders permission editor
  */
-const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
+const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete, visibility }) => {
   const { t } = useTranslation('plugin');
   const { t: ts } = useTranslation('setting');
 
@@ -185,7 +187,7 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   const installBuiltinTool = useToolStore((s) => s.installBuiltinTool);
   const uninstallBuiltinTool = useToolStore((s) => s.uninstallBuiltinTool);
   const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
-  const connector = useToolStore(connectorSelectors.connectorByIdentifier(identifier));
+  const connector = useToolStore(connectorSelectors.connectorByIdentifier(identifier, visibility));
   // For agent connectors the `identifier` slot carries the connector id; resolve
   // the row from the agent-bound pool to show its owning-agent usage block.
   const agentBoundConnector = useToolStore((s) =>

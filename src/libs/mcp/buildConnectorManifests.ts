@@ -17,7 +17,12 @@ import type { UserConnectorToolItem } from '@/database/schemas';
  * is `humanIntervention: 'always'` unless disabled: auto-run cannot skip it.
  */
 export function buildConnectorManifests(
-  connectors: DecryptedConnector[],
+  /**
+   * Rows from `ConnectorModel.resolveToolSets` carry their tool prefix
+   * (`toolIdentifier`): each becomes its own manifest under it. Rows without
+   * one are keyed by their identifier.
+   */
+  connectors: (DecryptedConnector & { toolIdentifier?: string })[],
   tools: UserConnectorToolItem[],
   mcpApps = false,
 ): ToolManifest[] {
@@ -35,10 +40,12 @@ export function buildConnectorManifests(
     // adds the endpoint and credentials the runtime needs to call it.
     const manifest = buildConnectorManifest(
       {
+        id: connector.id,
         identifier: connector.identifier,
         isEnabled: connector.isEnabled,
         name: connector.name,
         links: connector.links,
+        toolIdentifier: connector.toolIdentifier,
         tools: toolsByConnector.get(connector.id) ?? [],
       },
       mcpApps,

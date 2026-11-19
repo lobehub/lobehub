@@ -54,7 +54,8 @@ vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     connector: {
       callTool: { mutate: vi.fn() },
-      getForEdit: { query: vi.fn() },
+      getForRun: { query: vi.fn() },
+      resolveForRun: { query: vi.fn() },
     },
   },
   toolsClient: {
@@ -274,7 +275,7 @@ describe('MCPService', () => {
         environment.deviceGatewayConfigured = false;
         mockGetToolStoreState.mockReturnValue({ connectors: [connector] });
         const { lambdaClient } = await import('@/libs/trpc/client');
-        vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue(detail as never);
+        vi.mocked(lambdaClient.connector.getForRun.query).mockResolvedValue(detail as never);
       });
 
       it('executes through local IPC with fresh configuration when no gateway is configured', async () => {
@@ -316,7 +317,7 @@ describe('MCPService', () => {
           vi.mocked(lambdaClient.connector.callTool.mutate).mockResolvedValue(result as never);
 
           await expect(mcpService.invokeMcpToolCall(payload, {})).resolves.toEqual(result);
-          expect(lambdaClient.connector.getForEdit.query).not.toHaveBeenCalled();
+          expect(lambdaClient.connector.getForRun.query).not.toHaveBeenCalled();
           expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
         },
       );
@@ -347,8 +348,9 @@ describe('MCPService', () => {
           mockElectronIpc.mcp.callTool.mockResolvedValue(superjson.serialize(result));
 
           await expect(mcpService.invokeMcpToolCall(payload, {})).resolves.toEqual(result);
-          expect(lambdaClient.connector.getForEdit.query).toHaveBeenCalledWith({
-            id: connector.id,
+          // The row the server resolves for the call, read with its configuration
+          expect(lambdaClient.connector.getForRun.query).toHaveBeenCalledWith({
+            identifier: payload.identifier,
           });
           expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();
         },
@@ -381,7 +383,7 @@ describe('MCPService', () => {
         },
       ])('rejects a newly disabled connector or unavailable tool before IPC', async (current) => {
         const { lambdaClient } = await import('@/libs/trpc/client');
-        vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue(current as never);
+        vi.mocked(lambdaClient.connector.getForRun.query).mockResolvedValue(current as never);
 
         await expect(mcpService.invokeMcpToolCall(payload, {})).rejects.toThrow();
         expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
@@ -390,9 +392,7 @@ describe('MCPService', () => {
 
       it('does not execute when the protected configuration read is denied', async () => {
         const { lambdaClient } = await import('@/libs/trpc/client');
-        vi.mocked(lambdaClient.connector.getForEdit.query).mockRejectedValue(
-          new Error('FORBIDDEN'),
-        );
+        vi.mocked(lambdaClient.connector.getForRun.query).mockRejectedValue(new Error('FORBIDDEN'));
 
         await expect(mcpService.invokeMcpToolCall(payload, {})).rejects.toThrow('FORBIDDEN');
         expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();

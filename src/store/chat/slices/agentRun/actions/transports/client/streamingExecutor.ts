@@ -46,6 +46,7 @@ import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
 import { messageService } from '@/services/message';
 import { hydrateProjectedConversation } from '@/services/message/hydrateProjectedTools';
+import { refreshRunConnectors } from '@/services/runConnectors';
 import { workService } from '@/services/work';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -298,6 +299,7 @@ export class StreamingExecutorActionImpl {
       {
         hasOversizedFiles: hasPreviewableFiles(messages),
         runAgent: { ...runAgent, connectors },
+        ...(topicId && { topicId }),
         uninstalledBuiltinTools,
       },
     );
@@ -319,6 +321,8 @@ export class StreamingExecutorActionImpl {
           getToolStoreState(),
           toolsEngine.getAllPluginManifests(),
           enabledManifests,
+          // The conversation's own connector rows are what it may discover
+          { agentId: agentId || undefined, topicId: topicId ?? undefined },
         )
       : Object.fromEntries(enabledManifests.map((manifest) => [manifest.identifier, manifest]));
 
@@ -631,6 +635,9 @@ export class StreamingExecutorActionImpl {
     // without rechecking capability. Wait (bounded) for the list so a fast first
     // send after reload never attaches tools to a model that can't use them.
     await getAiInfraStoreState().ensureAiProviderRuntimeStateReady();
+    // The connector rows this conversation may run, as the server resolves
+    // them (bounded; the local lists stand in on a timeout or failure)
+    await refreshRunConnectors({ agentId, topicId: topicId ?? undefined });
 
     // ===========================================
     // Step 1: Create Agent State (resolves config once)
