@@ -7,6 +7,7 @@ import {
   invokeAgentSpanName,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
+import type { UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
 
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
@@ -16,6 +17,7 @@ import {
   type AgentExecutionParams,
   type AgentExecutionResult,
   type AgentStepContinuation,
+  type DeferredMessagePatch,
 } from '../../types';
 import { STEP_LOCK_TTL_SECONDS } from '../constants';
 import { StepOwnershipLostError } from '../executionErrors';
@@ -35,6 +37,7 @@ import {
   skipUnrunnableStep,
 } from './guards';
 import { dispatchAfterStepHooks, dispatchBeforeStepHooks, persistStepTracking } from './hooks';
+import { publishDeferredMessagePatch, stepMessagesScopeKey } from './messagePatch';
 import { prepareStepInput } from './prepare';
 import { startRunSlotLease } from './runSlotLease';
 import { runAndReconcileStep, saveAndPublishStep } from './runStep';
@@ -133,8 +136,32 @@ export async function executeStep(
     stepLockOwner: providedStepLockOwner,
   } = params;
 
+  // The message patch still owed to the client: the previous inline step's on
+  // entry, this step's own once it defers one. Each exit that does not hand it
+  // on publishes it, reading the topic for its "after" side when no entry read
+  // is there to serve.
+  let pendingMessagePatch: DeferredMessagePatch | undefined = params.deferredMessagePatch;
+  const flushPendingMessagePatch = async (entry?: {
+    scopeKey: string;
+    uiMessages?: UIChatMessage[];
+  }) => {
+    const patch = pendingMessagePatch;
+    pendingMessagePatch = undefined;
+    if (patch) await publishDeferredMessagePatch(deps, operationId, patch, entry);
+  };
+  // For the exits ahead of the step's `finally`, which is what drains the
+  // gateway pushes otherwise: an undrained push can be lost with the invocation.
+  const settlePendingMessagePatch = async () => {
+    if (!pendingMessagePatch) return;
+    await flushPendingMessagePatch();
+    await deps.streamManager.drainPushes?.(operationId);
+  };
+
   const lockFree = await runLockFreeDelivery(deps, params);
-  if (lockFree) return lockFree;
+  if (lockFree) {
+    await settlePendingMessagePatch();
+    return lockFree;
+  }
 
   // ===== Distributed lock: prevent duplicate execution from QStash retries =====
   const stepLockOwner = providedStepLockOwner ?? createStepLockOwner(operationId, stepIndex);
@@ -144,7 +171,10 @@ export async function executeStep(
     STEP_LOCK_TTL_SECONDS,
     stepLockOwner,
   );
-  if (!claimed) return handleStepLockConflict(deps, params);
+  if (!claimed) {
+    await settlePendingMessagePatch();
+    return handleStepLockConflict(deps, params);
+  }
 
   await deps.agentOperationModel.touchRunning(operationId).catch((error) => {
     log('[%s][%d] Operation lease refresh failed: %O', operationId, stepIndex, error);
@@ -206,6 +236,9 @@ export async function executeStep(
       // that init here, after the step claim and before anything is published.
       let deferredInitContext: AgentRuntimeContext | undefined;
       if (agentState.request) {
+        // The init writes this turn's messages and may end the step; neither
+        // belongs to the previous step's patch.
+        await flushPendingMessagePatch();
         const init = await runPendingInit(
           {
             abortShareRun: (state) => deps.buildShareAbortResult(operationId, state),
@@ -238,6 +271,13 @@ export async function executeStep(
       const gatewayMessagePatchEnabled = deps.usesGatewayMessagePatch(agentState);
       const { uiMessages: stepStartUiMessages, messages: stepEntryMessages } =
         await deps.queryStepEntryMessages(agentState);
+      // The previous step's patch ends at this read. It goes out first: the
+      // client checks `step_start`'s `messageRevision` against the last patch
+      // it applied, and a gap makes it refetch the whole topic.
+      await flushPendingMessagePatch({
+        scopeKey: stepMessagesScopeKey(agentState),
+        uiMessages: stepStartUiMessages,
+      });
       await deps.streamManager.publishStreamEvent(operationId, {
         data: {
           ...(gatewayMessagePatchEnabled
@@ -343,9 +383,10 @@ export async function executeStep(
         };
       }
 
-      const { content, shouldContinue, stepPresentationData, toolsCalling } =
+      const { content, deferredMessagePatch, shouldContinue, stepPresentationData, toolsCalling } =
         await saveAndPublishStep(deps, {
           assertOwnership,
+          deferMessagePatch: inlineContinuation && !!deps.queueService,
           gatewayMessagePatchEnabled,
           operationId,
           startAt,
@@ -353,6 +394,7 @@ export async function executeStep(
           stepResult,
           stepStartUiMessages,
         });
+      pendingMessagePatch = deferredMessagePatch;
 
       const afterStepSignalEvents = await dispatchAfterStepHooks(deps, {
         content,
@@ -390,6 +432,8 @@ export async function executeStep(
       let continuation: AgentStepContinuation | undefined;
       if (shouldContinue && stepResult.nextContext && deps.queueService) {
         const scheduled = await scheduleNextStep(deps, {
+          // Another invocation's `step_start` must not overtake this step's patch.
+          beforeQueue: () => flushPendingMessagePatch(),
           inlineContinuation,
           operationId,
           stepIndex,
@@ -399,6 +443,10 @@ export async function executeStep(
         nextStepScheduled = scheduled.nextStepScheduled;
         if (scheduled.handedOffInline) handedOffInline = true;
       }
+
+      // The next step runs here, so the patch goes on with it.
+      const handedOnMessagePatch = continuation ? pendingMessagePatch : undefined;
+      if (handedOnMessagePatch) pendingMessagePatch = undefined;
 
       // Record final agent-level usage on the invoke_agent span. Done on every
       // step so partial trees (e.g. interrupted runs) still carry the
@@ -417,6 +465,7 @@ export async function executeStep(
 
       return {
         continuation,
+        ...(handedOnMessagePatch && { deferredMessagePatch: handedOnMessagePatch }),
         nextStepScheduled,
         state: stepResult.newState,
         stepResult,
@@ -424,6 +473,8 @@ export async function executeStep(
       };
     });
   } catch (error) {
+    // Ahead of the failure's own events, `agent_runtime_end` among them.
+    await flushPendingMessagePatch();
     return await failStep(deps, {
       error,
       externalRetryCount,
@@ -439,6 +490,9 @@ export async function executeStep(
     abortPoll?.stop();
     stopRunSlotLease?.();
     stopStepLockHeartbeat();
+    // Any exit above that neither published nor handed the patch on, e.g. a
+    // replayed intervention lifecycle.
+    await flushPendingMessagePatch();
     // Parked runs (human input, async tools) and finished ones are read back
     // by a different invocation, so the partial cannot stay in memory only.
     // An inline hand-off keeps it: the next step runs on this recorder.

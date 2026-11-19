@@ -15,13 +15,14 @@ tags:
 
 ## 选择开发路径
 
-| 目标 | 入口 | 边界 |
-| --- | --- | --- |
-| 修改界面、服务端或运行时 | [开发环境设置](/zh/docs/development/basic/setup-development)，再阅读下方技术栈和目录结构 | 需要源码开发环境；仅使用 CLI 或 API 不必搭建完整开发环境。 |
-| 从终端操作现有 LobeHub 实例 | [CLI README](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/apps/cli/README.md)，任务示例见[任务工具](/zh/docs/usage/agent/connectors#using-the-cli) | README 包含源码构建、链接命令和服务器配置。使用已安装的 CLI 前，核对版本、目标服务器及账户权限。 |
-| 用 HTTP 集成应用 | [OpenAPI 规范](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/packages/openapi/openapi.yml) | 按目标部署支持的公开 REST API、认证方式和参数调用；应用内部路由不等于公开 API 契约。 |
-| 用 TypeScript 集成应用 | [官方 SDK README](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/packages/sdk/README.md) | `@lobehub/sdk` 基于 OpenAPI 生成；方法、认证和流式处理以对应版本的 README 与规范为准。不要假定所有界面或 CLI 功能都有 SDK 方法。 |
-| 理解应用内部聊天调用 | [Chat API 内部实现](/zh/docs/development/basic/chat-api) | 供源码阅读和调试，不是外部应用的接口接入教程。 |
+| 目标                 | 入口                                                                                                                                         | 边界                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| 修改界面、服务端或运行时       | [开发环境设置](/zh/docs/development/basic/setup-development)，再阅读下方技术栈和目录结构                                                                       | 需要源码开发环境；仅使用 CLI 或 API 不必搭建完整开发环境。                                                    |
+| 从终端操作现有 LobeHub 实例 | [CLI README](https://github.com/lobehub/lobehub/blob/canary/apps/cli/README.md)，任务示例见[任务工具](/zh/docs/usage/agent/connectors#using-the-cli) | README 包含源码构建、链接命令和服务器配置。使用已安装的 CLI 前，核对版本、目标服务器及账户权限。                                |
+| 基于公开 API 开发        | [公开 API 指南](/zh/docs/development/api/overview)：鉴权、scope、错误、流式、Webhook 与 SDK 示例                                                             | 每项能力标明「已可用」或「即将推出」；目标部署支持哪些接口，以它自己的 `/api/v1/openapi.json` 为准。                        |
+| 用 HTTP 集成应用        | [OpenAPI 规范](https://github.com/lobehub/lobehub/blob/canary/packages/openapi/openapi.yml)                                                  | 按目标部署支持的公开 REST API、认证方式和参数调用；应用内部路由不等于公开 API 契约。                                     |
+| 用 TypeScript 集成应用  | [官方 SDK README](https://github.com/lobehub/lobehub/blob/canary/packages/sdk/README.md)                                                     | `@lobehub/sdk` 基于 OpenAPI 生成；方法、认证和流式处理以对应版本的 README 与规范为准。不要假定所有界面或 CLI 功能都有 SDK 方法。 |
+| 理解应用内部聊天调用         | [Chat API 内部实现](/zh/docs/development/basic/chat-api)                                                                                       | 供源码阅读和调试，不是外部应用的接口接入教程。                                                               |
 
 ### CLI 与执行环境
 
@@ -30,7 +31,6 @@ tags:
 [2026-05-04 更新](/zh/changelog/2026-05-04-task-scheduler)描述的是当时仅桌面端可用的 Claude Code / Codex 调度，并不是定时任务表单的发布依据。[2026-05-11 更新](/zh/changelog/2026-05-11-agent-tasks-ga)随后说明云端异构 Agent 和 `lh hetero exec`；[2026-06-22 更新](/zh/changelog/2026-06-22-delivery-checks)说明 `lh update`。这些记录不能用来推断所有部署都具备相同工具、命令或执行环境。
 
 以上入口依据 2026-09-14 核对的仓库快照。接入前核对实际安装版本；不要将 `/webapi/chat/[provider]` 或内部 tRPC 路由当作稳定的公开接口。
-
 
 ## 基础技术栈
 

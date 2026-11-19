@@ -164,6 +164,26 @@ describe('live connector account resolution at dispatch', () => {
     expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
     expect(mocks.call).not.toHaveBeenCalled();
   });
+  it('lets a shared visitor reach a device-only MCP under the share device grant', async () => {
+    mocks.find.mockResolvedValue({
+      id: 'c',
+      identifier: 'multi',
+      isEnabled: true,
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'http://localhost:1234/mcp',
+      credentials: null,
+      oidcConfig: { clientId: 'client', scheme: 'dcr' },
+    });
+    const result = await service.executeTool(
+      payload,
+      context('http://localhost:1234/mcp', {
+        activeDeviceId: 'device',
+        agentShareVisitor: { canUseDevice: true },
+      }),
+    );
+    expect(result).not.toMatchObject({ error: { code: 'SHARE_GATE_BLOCKED' } });
+    expect(deviceGateway.executeMcpCall).toHaveBeenCalled();
+  });
   it('retains the selected account on serialized device failures', async () => {
     mocks.find.mockResolvedValue({
       id: 'c',

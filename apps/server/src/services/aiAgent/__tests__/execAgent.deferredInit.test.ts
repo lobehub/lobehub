@@ -440,6 +440,7 @@ describe('AiAgentService.runDeferredInit - parity with the send path', () => {
   describe('a share visitor run', () => {
     const shareGate = {
       agentId: 'agent-1',
+      canUseDevice: false,
       shareConfig: { toolGrants: [] },
       shareId: 'share-1',
       visitorUserId: 'visitor-1',

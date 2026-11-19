@@ -7,6 +7,7 @@ import { memo } from 'react';
 
 import type { AgentBoundConnector } from '@/store/tool/slices/connector/types';
 
+import { RowMoreMenu } from './RowActions';
 import SkillListRow, { useSkillListVariant } from './SkillListRow';
 
 /**
@@ -25,7 +26,8 @@ const AgentConnectorItem = memo<{
 }>(({ connector, isSelected, onSelect }) => {
   // Resolve the same brand icon a base connector of this identifier would use;
   // fall back to the generic MCP icon for custom/unknown connectors.
-  const iconSize = useSkillListVariant() === 'page' ? 20 : 18;
+  const isPage = useSkillListVariant() === 'page';
+  const iconSize = isPage ? 20 : 18;
   const brand =
     getComposioAppByIdentifier(connector.identifier) ??
     getLobehubSkillProviderById(connector.identifier);
@@ -38,6 +40,18 @@ const AgentConnectorItem = memo<{
     }
     return <Icon icon={McpIcon} size={iconSize} />;
   };
+
+  if (isPage)
+    return (
+      <SkillListRow
+        extra={<RowMoreMenu onOpenDetail={onSelect} />}
+        icon={renderIcon}
+        // The owning agent is what sets this row apart from a base connector.
+        summary={connector.agentTitle || undefined}
+        title={brand?.label || connector.name || connector.identifier}
+        onClick={onSelect}
+      />
+    );
 
   return (
     <SkillListRow

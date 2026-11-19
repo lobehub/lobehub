@@ -12,7 +12,6 @@ import {
   type DropdownItem,
   DropdownMenu,
   Flexbox,
-  Text,
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -25,6 +24,7 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import AsyncError from '@/components/AsyncError';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
@@ -202,6 +202,7 @@ interface ChannelSectionProps {
  */
 const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSectionProps) => {
   const { t } = useTranslation('channel');
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { pathname } = useActiveLocation();
   const navigate = useWorkspaceAwareNavigate();
   const slug = useActiveWorkspaceSlug();
@@ -263,22 +264,32 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
     // The open Channel is being read; its count clears once the read receipt lands.
     const unread = !open && (channel.unreadCount ?? 0) > 0;
     const mentions = open ? 0 : (channel.mentionCount ?? 0);
+    // A project Channel the caller can read but has not joined: dimmed, with no member actions.
+    const joined = channel.joined !== false;
     return (
       <Flexbox key={channel.id} {...stylex.props(styles.channel)}>
         {unread && <span aria-hidden {...stylex.props(styles.unreadPill)} />}
         <NavItem
           active={open && !activeThreadId}
           aria-current={open && !activeThreadId ? 'page' : undefined}
-          contextMenuItems={() => menuItems(channel)}
+          contextMenuItems={joined ? () => menuItems(channel) : undefined}
           data-channel-id={channel.id}
           href={buildWorkspaceAwarePath(path, slug)}
           title={channel.title}
-          titleColor={unread ? cssVar.colorText : undefined}
-          actions={() => (
-            <DropdownMenu items={menuItems(channel)}>
-              <ActionIcon icon={MoreHorizontal} size="small" title={t('more', { ns: 'common' })} />
-            </DropdownMenu>
-          )}
+          titleColor={unread ? cssVar.colorText : joined ? undefined : cssVar.colorTextTertiary}
+          actions={
+            joined
+              ? () => (
+                  <DropdownMenu items={menuItems(channel)}>
+                    <ActionIcon
+                      icon={MoreHorizontal}
+                      size="small"
+                      title={t('more', { ns: 'common' })}
+                    />
+                  </DropdownMenu>
+                )
+              : undefined
+          }
           extra={
             mentions > 0 ? (
               <span
@@ -316,10 +327,8 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
   return (
     <AccordionItem value={itemKey}>
       <AccordionHeader>
-        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
-          <Text ellipsis fontSize={12} type="secondary" weight={500}>
-            {t('title')}
-          </Text>
+        <AccordionTrigger style={sectionTriggerStyle}>
+          <SectionTitle>{t('title')}</SectionTitle>
         </AccordionTrigger>
         <Flexbox
           horizontal

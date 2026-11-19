@@ -6,6 +6,8 @@ import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import { useAgentStore } from '@/store/agent';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import SelectorTrigger from '../../components/SelectorTrigger';
@@ -32,9 +34,12 @@ const ModelSwitch = memo(() => {
     topicId,
   } = useTopicModelSwitch(selection);
   const { isShared } = useAgentShareSupported(agentId);
+  const shareModelExempt = useAgentStore(
+    agentByIdSelectors.isAgentShareModelRestrictionExemptById(agentId),
+  );
   const chatModels = useEnabledChatModels();
   const enabledList =
-    !topicId && isShared && AGENT_SHARE_ALLOWED_PROVIDERS
+    !topicId && isShared && AGENT_SHARE_ALLOWED_PROVIDERS && !shareModelExempt
       ? chatModels.filter((item) => AGENT_SHARE_ALLOWED_PROVIDERS?.includes(item.id))
       : undefined;
   const modelNotice = enabledList ? (

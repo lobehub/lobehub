@@ -14,6 +14,10 @@ callers do not choose a provider, prefix, key, SET options or claim lifetime.
   operation, handed out through its `waitHeteroSteer` poll. At most once: a claim pops the message
   and nothing re-queues it; unclaimed past its expiry it reads `expired`, and the run's reported
   result stays readable for an hour. Writes throw without Redis; reads answer `undefined`.
+- `openapi`: the public REST API's per-caller rate-limit windows (fixed, epoch-aligned) and
+  `Idempotency-Key` records — a five minute in-flight claim, then the first response for 24 hours,
+  per user and hashed key. Every method returns `undefined` without Redis; the REST layer then
+  admits the request (fail open).
 - `linear`: single-use OAuth state for "Connect Linear" (ten minutes, deleted on first read).
 - `connectorOAuth`: how each connector OAuth flow ended (account and outcome), for ten minutes,
   read back by the window that started the flow. `null` without Redis.
@@ -52,6 +56,11 @@ Do not export transport primitives from the business service barrel.
 Existing raw-client and client-lib consumers remain explicit migration debt in ESLint.
 Move them domain by domain; runtime state requires a deployment/keyspace compatibility plan.
 This foundation does not migrate existing runtime, bot or OAuth stores.
+
+- `botDeferred`: how many times each bot message parked behind a busy topic was replayed into a
+  run, one key per origin message for 30 minutes. The deferred-message replay drops a message
+  past its cap; a replay parked again gets its lap back. Reads return `undefined` without Redis,
+  and the replay then proceeds without the cap.
 
 - `botWake`: channel state for passive bot waking — when the bot and its owner last spoke, the
   follow-up window, the silent-wake count (reset when the bot speaks), classifier calls per bot

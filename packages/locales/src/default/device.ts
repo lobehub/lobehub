@@ -48,6 +48,7 @@ export default {
   'workingDirectory.branchesLoading': 'Loading branches…',
   'workingDirectory.branchesNoMatch': 'No matching branches',
   'workingDirectory.cancel': 'Cancel',
+  'workingDirectory.cancelWorktreeSend': 'Cancel send',
   'workingDirectory.checkoutAction': 'Checkout',
   'workingDirectory.checkoutFailed': 'Checkout failed',
   'workingDirectory.chooseDifferentFolder': 'Choose a folder...',
@@ -89,6 +90,8 @@ export default {
   'workingDirectory.pathNotExist': "This path doesn't exist on the device",
   'workingDirectory.placeholder': 'Enter directory path, e.g. /Users/name/projects',
   'workingDirectory.prTooltipWithExtra': '{{title}} (+{{count}} more open PR on this branch)',
+  'workingDirectory.topicPullRequestsTooltip':
+    '{{title}} (+{{count}} more linked to this topic — click to see all)',
   'workingDirectory.pullAction': 'Click to pull {{count}} commit(s) from {{upstream}}',
   'workingDirectory.pullFailed': 'Pull failed',
   'workingDirectory.pullInProgress': 'Pulling…',
@@ -208,7 +211,12 @@ export default {
   'workingDirectory.switchRiskUncommitted_one': 'Uncommitted changes may be lost ({{count}} file).',
   'workingDirectory.switchRiskUncommitted_other':
     'Uncommitted changes may be lost ({{count}} files).',
+  'workingDirectory.worktreeCancelFailed': 'Could not cancel the send',
+  'workingDirectory.worktreeCancelTooLate': 'This send can no longer be cancelled',
   'workingDirectory.worktreeCreateFailed': 'Could not create the worktree',
+  'workingDirectory.worktreeDeviceRequired':
+    'Connect this device before sending with a new worktree.',
+  'workingDirectory.worktreeSendCancelled': 'Send cancelled',
   'workingDirectory.worktreeToggle': 'New worktree',
   'workingDirectory.worktreeToggleOffHint':
     'Turn on to run this topic in a new branch and worktree',
@@ -216,4 +224,5 @@ export default {
   'workingDirectory.worktreeToggleOnHint':
     'Sending creates a new branch and worktree from {{branch}}; this directory stays as it is',
   'workingDirectory.worktreeToggleSaveFailed': 'Could not save the New worktree setting',
+  'workingDirectory.worktreeWaitingForDevice': 'Waiting for the device to connect…',
 };

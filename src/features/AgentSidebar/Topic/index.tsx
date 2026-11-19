@@ -16,6 +16,7 @@ import { useDocumentVisibility } from 'ahooks';
 import React, { memo, Suspense, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { useChatStore } from '@/store/chat';
@@ -48,6 +49,7 @@ interface TopicProps {
 }
 
 const Topic = memo<TopicProps>(({ expanded, itemKey }) => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation(['topic', 'common']);
   const topicCount = useChatStore((s) => topicSelectors.currentTopicCount(s));
   const cleanupStaleRunningTopics = useChatStore((s) => s.cleanupStaleRunningTopics);
@@ -118,11 +120,9 @@ const Topic = memo<TopicProps>(({ expanded, itemKey }) => {
     <AccordionItem value={itemKey}>
       <ContextMenuTrigger items={dropdownMenu}>
         <AccordionHeader>
-          <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+          <AccordionTrigger style={sectionTriggerStyle}>
             <Flexbox horizontal align="center" gap={4}>
-              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-                {t('sidebar.title')}
-              </Text>
+              <SectionTitle>{t('sidebar.title')}</SectionTitle>
               {topicCount > 0 && (
                 <Text fontSize={11} type="secondary">
                   {topicCount}

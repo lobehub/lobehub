@@ -16,7 +16,7 @@ import {
 } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { t as translate } from 'i18next';
-import { DownloadIcon, Loader2, MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
+import { DownloadIcon, Loader2, MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -126,6 +126,7 @@ const MarketSkillItem = memo<DiscoverSkillItem & { community?: boolean }>(
       if (installed) {
         return (
           <DropdownMenu
+            nativeButton={false}
             placement="bottomRight"
             items={[
               ...(installedSkill?.zipFileHash
@@ -150,9 +151,9 @@ const MarketSkillItem = memo<DiscoverSkillItem & { community?: boolean }>(
             ]}
           >
             <ActionIcon
-              aria-label={tc('more')}
+              aria-label={t('connectorMarket.action.manage', { ns: 'setting' })}
               disabled={!canEdit}
-              icon={MoreVerticalIcon}
+              icon={MoreHorizontalIcon}
               loading={loading}
             />
           </DropdownMenu>

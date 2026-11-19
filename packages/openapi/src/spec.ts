@@ -1,1035 +1,126 @@
-import {
-  AGENT_ACCOUNT_DIGEST_MINUTES_RANGE,
-  AGENT_ACCOUNT_PERSISTED_KINDS,
-  AGENT_ACCOUNT_STATUSES,
-  AGENT_ACCOUNT_WAKE_MODES,
-} from '@lobechat/types';
 import { API_KEY_PREFIX } from '@lobechat/utils/apiKey';
 import { generateSpecs } from 'hono-openapi';
+import { z } from 'zod';
 
-import { API_KEY_SCOPES } from '@/const/apiKeyScope';
-import type { AgentAccountView } from '@/database/models/agentAccount';
-
-import { evalResponseSchema } from './types/eval-response.type';
+import { API_ERROR_CODES, ApiErrorCodeSchema } from './common/errors';
+import { ApiErrorSchema, errorResponse } from './common/openapi';
+import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from './helpers/pagination';
+import { IDEMPOTENCY_KEY_HEADER, IDEMPOTENT_REPLAYED_HEADER } from './middleware/idempotency';
+import { RATE_LIMIT_HEADERS } from './middleware/rate-limit';
+import { REQUEST_ID_HEADER } from './middleware/request-id';
 
 const HTTP_METHODS = new Set(['DELETE', 'GET', 'PATCH', 'POST', 'PUT']);
 
 type GenerateSpecsApp = Parameters<typeof generateSpecs>[0];
 
+interface ParameterObject {
+  $ref?: string;
+  deprecated?: boolean;
+  in?: string;
+  name?: string;
+  schema?: { deprecated?: boolean };
+}
+
+interface ResponseObject {
+  content?: unknown;
+  description?: string;
+  headers?: Record<string, unknown>;
+}
+
 interface OperationObject {
   operationId?: string;
-  responses?: Record<string, unknown>;
+  parameters?: ParameterObject[];
+  responses?: Record<string, ResponseObject>;
+  security?: unknown[];
   tags?: string[];
 }
 
-type SchemaObject = Record<string, unknown>;
-
-const dateTime = { format: 'date-time', type: 'string' } as const;
-const nullableString = { type: ['string', 'null'] } as const;
-const nullableBoolean = { type: ['boolean', 'null'] } as const;
-const nullableNumber = { type: ['number', 'null'] } as const;
-const nullableObject = { additionalProperties: true, type: ['object', 'null'] } as const;
-
-/**
- * Every field an account view carries. Typed against the view so a column added
- * to it fails type-checking here rather than being silently dropped from the
- * SDK — the schema sets `additionalProperties: false`, so a missing field also
- * makes strict response validators reject real payloads.
- */
-const agentAccountProperties = {
-  /** Last time the account was read or used — every account view carries it. */
-  accessedAt: dateTime,
-  agentId: { type: 'string' },
-  capabilities: {
-    additionalProperties: false,
-    properties: {
-      login: nullableBoolean,
-      receive: { type: 'boolean' },
-      send: { type: 'boolean' },
-      sign: nullableBoolean,
-    },
-    required: ['receive', 'send'],
-    type: 'object',
-  },
-  createdAt: dateTime,
-  credentialHint: nullableObject,
-  displayName: nullableString,
-  /** Whether a secret is installed. Never the secret itself. */
-  hasCredential: { type: 'boolean' },
-  id: { type: 'string' },
-  identifier: { type: 'string' },
-  // The persisted kinds, not just the creatable ones: an unfiltered read still
-  // returns retired-kind rows, and the response contract must not exclude a
-  // value the API actually returns.
-  kind: { enum: AGENT_ACCOUNT_PERSISTED_KINDS, type: 'string' },
-  metadata: nullableObject,
-  provider: { type: 'string' },
-  revokedAt: { ...dateTime, type: ['string', 'null'] },
-  // The owner's own settings. Stored JSON, so a field a later build adds may appear.
-  settings: {
-    additionalProperties: true,
-    properties: {
-      wake: {
-        additionalProperties: true,
-        properties: {
-          digestMinutes: {
-            maximum: AGENT_ACCOUNT_DIGEST_MINUTES_RANGE.max,
-            minimum: AGENT_ACCOUNT_DIGEST_MINUTES_RANGE.min,
-            type: 'integer',
-          },
-          mode: { enum: AGENT_ACCOUNT_WAKE_MODES, type: 'string' },
-          wakeSenders: { items: { type: 'string' }, type: 'array' },
-        },
-        type: 'object',
-      },
-    },
-    type: 'object',
-  },
-  status: { enum: AGENT_ACCOUNT_STATUSES, type: 'string' },
-  updatedAt: dateTime,
-  userId: { type: 'string' },
-  workspaceId: nullableString,
-} satisfies Record<keyof AgentAccountView, SchemaObject>;
-
-const resourceSchemas: Record<string, SchemaObject> = {
-  AgentAccount: {
-    additionalProperties: false,
-    properties: agentAccountProperties,
-    required: [
-      'id',
-      'agentId',
-      'kind',
-      'identifier',
-      'provider',
-      'status',
-      'capabilities',
-      'hasCredential',
-      'accessedAt',
-      'createdAt',
-      'updatedAt',
-    ],
-    type: 'object',
-  },
-  ApiKey: {
-    additionalProperties: false,
-    properties: {
-      createdAt: dateTime,
-      enabled: nullableBoolean,
-      expiresAt: { ...dateTime, type: ['string', 'null'] },
-      id: { type: 'string' },
-      lastUsedAt: { ...dateTime, type: ['string', 'null'] },
-      name: { type: 'string' },
-      scopes: { items: { enum: API_KEY_SCOPES, type: 'string' }, type: ['array', 'null'] },
-      updatedAt: dateTime,
-    },
-    required: ['id', 'name', 'createdAt', 'updatedAt'],
-    type: 'object',
-  },
-  Agent: {
-    additionalProperties: false,
-    properties: {
-      avatar: nullableString,
-      chatConfig: nullableObject,
-      createdAt: dateTime,
-      description: nullableString,
-      id: { type: 'string' },
-      model: nullableString,
-      params: nullableObject,
-      personal: { type: 'boolean' },
-      plugins: {
-        type: 'array',
-        items: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            identifier: { type: 'string' },
-            mode: { type: 'string', enum: ['pinned', 'auto', 'disabled'] },
-          },
-          required: ['identifier', 'mode'],
-        },
-      },
-      provider: nullableString,
-      slug: nullableString,
-      systemRole: nullableString,
-      title: nullableString,
-      updatedAt: dateTime,
-    },
-    required: ['id', 'createdAt', 'updatedAt'],
-    type: 'object',
-  },
-  AgentGroup: {
-    additionalProperties: false,
-    properties: {
-      createdAt: dateTime,
-      id: { type: 'string' },
-      name: { type: 'string' },
-      sort: { type: ['integer', 'null'] },
-      updatedAt: dateTime,
-    },
-    required: ['id', 'name', 'createdAt', 'updatedAt'],
-    type: 'object',
-  },
-  ChatGroup: {
-    additionalProperties: false,
-    properties: {
-      avatar: nullableString,
-      backgroundColor: nullableString,
-      createdAt: dateTime,
-      description: nullableString,
-      id: { type: 'string' },
-      members: {
-        items: {
-          additionalProperties: false,
-          properties: {
-            agentId: { type: 'string' },
-            enabled: nullableBoolean,
-            order: { type: ['integer', 'null'] },
-            role: {
-              enum: ['supervisor', 'participant', 'assistant', null],
-              type: ['string', 'null'],
-            },
-          },
-          required: ['agentId', 'enabled', 'order', 'role'],
-          type: 'object',
-        },
-        type: 'array',
-      },
-      personal: { type: 'boolean' },
-      pinned: nullableBoolean,
-      title: nullableString,
-      updatedAt: dateTime,
-    },
-    required: [
-      'id',
-      'title',
-      'description',
-      'avatar',
-      'backgroundColor',
-      'personal',
-      'pinned',
-      'members',
-      'createdAt',
-      'updatedAt',
-    ],
-    type: 'object',
-  },
-  ChatResponse: {
-    additionalProperties: false,
-    properties: {
-      content: { type: 'string' },
-      model: nullableString,
-      provider: nullableString,
-      usage: {
-        additionalProperties: false,
-        properties: {
-          completion_tokens: { type: ['integer', 'null'] },
-          prompt_tokens: { type: ['integer', 'null'] },
-          total_tokens: { type: ['integer', 'null'] },
-        },
-        type: ['object', 'null'],
-      },
-    },
-    required: ['content'],
-    type: 'object',
-  },
-  EvalRun: {
-    additionalProperties: false,
-    properties: {
-      createdAt: dateTime,
-      datasetId: { type: 'string' },
-      id: { type: 'string' },
-      metrics: nullableObject,
-      name: nullableString,
-      startedAt: { ...dateTime, type: ['string', 'null'] },
-      status: {
-        enum: ['idle', 'pending', 'running', 'completed', 'failed', 'aborted', 'external'],
-        type: 'string',
-      },
-      targetAgentId: nullableString,
-      updatedAt: dateTime,
-    },
-    required: ['id', 'datasetId', 'status', 'createdAt', 'updatedAt'],
-    type: 'object',
-  },
-  EvalRunResult: {
-    additionalProperties: false,
-    properties: {
-      createdAt: dateTime,
-      input: { type: 'string' },
-      passed: nullableBoolean,
-      result: nullableObject,
-      score: nullableNumber,
-      status: nullableString,
-      testCaseId: { type: 'string' },
-      topicId: { type: 'string' },
-    },
-    required: ['testCaseId', 'topicId', 'input', 'createdAt'],
-    type: 'object',
-  },
-  File: {
-    additionalProperties: true,
-    properties: {
-      createdAt: dateTime,
-      fileType: { type: 'string' },
-      id: { type: 'string' },
-      metadata: nullableObject,
-      name: { type: 'string' },
-      parentId: nullableString,
-      size: { type: 'integer' },
-      source: nullableString,
-      updatedAt: dateTime,
-      url: { type: 'string' },
-      visibility: { enum: ['private', 'public'], type: 'string' },
-    },
-    required: ['id', 'fileType', 'name', 'size', 'url', 'createdAt', 'updatedAt'],
-    type: 'object',
-  },
-  KnowledgeBase: {
-    additionalProperties: true,
-    properties: {
-      avatar: nullableString,
-      createdAt: dateTime,
-      description: nullableString,
-      id: { type: 'string' },
-      isPublic: nullableBoolean,
-      name: { type: 'string' },
-      settings: nullableObject,
-      type: nullableString,
-      updatedAt: dateTime,
-      visibility: { enum: ['private', 'public'], type: 'string' },
-    },
-    required: ['id', 'name', 'createdAt', 'updatedAt'],
-    type: 'object',
-  },
-  Message: {
-    additionalProperties: true,
-    properties: {
-      agentId: nullableString,
-      content: nullableString,
-      createdAt: dateTime,
-      error: nullableObject,
-      favorite: nullableBoolean,
-      id: { type: 'string' },
-      metadata: nullableObject,
-      model: nullableString,
-      parentId: nullableString,
-      provider: nullableString,
-      reasoning: nullableObject,
-      role: { type: 'string' },
-      search: nullableObject,
-      threadId: nullableString,
-      tools: nullableObject,
-      topicId: nullableString,
-      updatedAt: dateTime,
-      usage: nullableObject,
-    },
-    required: ['id', 'role', 'createdAt', 'updatedAt'],
-    type: 'object',
-  },
-  McpServer: {
-    additionalProperties: false,
-    properties: {
-      createdAt: dateTime,
-      description: nullableString,
-      hasCredentials: { type: 'boolean' },
-      id: { format: 'uuid', type: 'string' },
-      identifier: { type: 'string' },
-      isEnabled: { type: 'boolean' },
-      name: { type: 'string' },
-      serverUrl: { format: 'uri', type: 'string' },
-      status: { enum: ['connected', 'disconnected', 'error'], type: 'string' },
-      tools: {
-        items: {
-          additionalProperties: false,
-          properties: {
-            description: nullableString,
-            id: { format: 'uuid', type: 'string' },
-            inputSchema: nullableObject,
-            name: { type: 'string' },
-            permission: { enum: ['auto', 'needs_approval', 'disabled'], type: 'string' },
-          },
-          required: ['id', 'name', 'permission'],
-          type: 'object',
-        },
-        type: 'array',
-      },
-      updatedAt: dateTime,
-    },
-    required: [
-      'id',
-      'identifier',
-      'name',
-      'serverUrl',
-      'status',
-      'isEnabled',
-      'hasCredentials',
-      'tools',
-      'createdAt',
-      'updatedAt',
-    ],
-    type: 'object',
-  },
-  Model: {
-    additionalProperties: false,
-    properties: {
-      abilities: nullableObject,
-      config: nullableObject,
-      contextWindowTokens: { type: ['integer', 'null'] },
-      createdAt: dateTime,
-      description: nullableString,
-      displayName: nullableString,
-      enabled: nullableBoolean,
-      id: { type: 'string' },
-      organization: nullableString,
-      parameters: nullableObject,
-      pricing: nullableObject,
-      providerId: { type: 'string' },
-      releasedAt: nullableString,
-      settings: nullableObject,
-      sort: { type: ['integer', 'null'] },
-      source: nullableString,
-      type: { type: 'string' },
-      updatedAt: dateTime,
-    },
-    required: ['id', 'providerId', 'type', 'createdAt', 'updatedAt'],
-    type: 'object',
-  },
-  Permission: {
-    additionalProperties: false,
-    properties: {
-      category: { type: 'string' },
-      code: { type: 'string' },
-      createdAt: dateTime,
-      description: nullableString,
-      id: { type: 'string' },
-      isActive: nullableBoolean,
-      name: { type: 'string' },
-      updatedAt: dateTime,
-    },
-    required: ['id', 'code', 'name', 'category', 'createdAt', 'updatedAt'],
-    type: 'object',
-  },
-  Provider: {
-    additionalProperties: false,
-    properties: {
-      checkModel: nullableString,
-      config: nullableObject,
-      createdAt: dateTime,
-      description: nullableString,
-      enabled: nullableBoolean,
-      fetchOnClient: nullableBoolean,
-      id: { type: 'string' },
-      logo: nullableString,
-      name: nullableString,
-      settings: nullableObject,
-      sort: { type: ['integer', 'null'] },
-      source: nullableString,
-      updatedAt: dateTime,
-    },
-    required: ['id', 'createdAt', 'updatedAt'],
-    type: 'object',
-  },
-  Role: {
-    additionalProperties: false,
-    properties: {
-      createdAt: dateTime,
-      description: nullableString,
-      displayName: { type: 'string' },
-      id: { type: 'string' },
-      isActive: nullableBoolean,
-      isSystem: nullableBoolean,
-      name: { type: 'string' },
-      updatedAt: dateTime,
-    },
-    required: ['id', 'name', 'displayName', 'createdAt', 'updatedAt'],
-    type: 'object',
-  },
-  Topic: {
-    additionalProperties: true,
-    properties: {
-      agentId: nullableString,
-      completedAt: { ...dateTime, type: ['string', 'null'] },
-      content: nullableString,
-      cost: nullableObject,
-      createdAt: dateTime,
-      description: nullableString,
-      favorite: nullableBoolean,
-      groupId: nullableString,
-      historySummary: nullableString,
-      id: { type: 'string' },
-      metadata: nullableObject,
-      mode: nullableString,
-      model: nullableString,
-      provider: nullableString,
-      sessionId: nullableString,
-      status: nullableString,
-      title: nullableString,
-      totalCost: nullableNumber,
-      totalInputTokens: { type: ['integer', 'null'] },
-      totalOutputTokens: { type: ['integer', 'null'] },
-      totalTokens: { type: ['integer', 'null'] },
-      trigger: nullableString,
-      updatedAt: dateTime,
-      usage: nullableObject,
-    },
-    required: ['id', 'createdAt', 'updatedAt'],
-    type: 'object',
-  },
-  User: {
-    additionalProperties: true,
-    properties: {
-      avatar: nullableString,
-      createdAt: dateTime,
-      email: nullableString,
-      firstName: nullableString,
-      fullName: nullableString,
-      id: { type: 'string' },
-      isOnboarded: nullableBoolean,
-      lastName: nullableString,
-      phone: nullableString,
-      updatedAt: dateTime,
-      username: nullableString,
-    },
-    required: ['id', 'createdAt', 'updatedAt'],
-    type: 'object',
-  },
-  Usage: {
-    additionalProperties: false,
-    properties: {
-      available: { type: 'boolean' },
-      currency: { const: 'USD', type: 'string' },
-      daily: {
-        items: {
-          additionalProperties: false,
-          properties: { date: { type: 'string' }, value: { type: 'number' } },
-          required: ['date', 'value'],
-          type: 'object',
-        },
-        type: 'array',
-      },
-      period: {
-        additionalProperties: false,
-        properties: { since: dateTime, until: dateTime },
-        required: ['since', 'until'],
-        type: 'object',
-      },
-      quota: {
-        additionalProperties: false,
-        properties: {
-          limit: nullableNumber,
-          remaining: nullableNumber,
-          resetsAt: { ...dateTime, type: ['string', 'null'] },
-          source: { enum: ['personal', 'workspace_pool', 'member_budget'], type: 'string' },
-          used: { type: 'number' },
-          usedRatio: nullableNumber,
-        },
-        required: ['limit', 'remaining', 'resetsAt', 'source', 'used', 'usedRatio'],
-        type: ['object', 'null'],
-      },
-      remainingBalance: nullableNumber,
-      scope: { enum: ['personal', 'workspace'], type: 'string' },
-      spent: { type: 'number' },
-      usageByType: {
-        items: {
-          additionalProperties: false,
-          properties: {
-            count: { type: ['integer', 'null'] },
-            spend: { type: 'number' },
-            type: { type: 'string' },
-          },
-          required: ['count', 'spend', 'type'],
-          type: 'object',
-        },
-        type: 'array',
-      },
-    },
-    required: [
-      'available',
-      'currency',
-      'daily',
-      'period',
-      'quota',
-      'remainingBalance',
-      'scope',
-      'spent',
-      'usageByType',
-    ],
-    type: 'object',
-  },
+const toComponentSchema = (schema: z.ZodType) => {
+  const { $schema: _, ...json } = z.toJSONSchema(schema) as Record<string, unknown>;
+  return json;
 };
 
-const groupResources: Record<string, { listKey: string; schema: string }> = {
-  'agent-groups': { listKey: 'agentGroups', schema: 'AgentGroup' },
-  'agents': { listKey: 'agents', schema: 'Agent' },
-  'api-keys': { listKey: 'apiKeys', schema: 'ApiKey' },
-  'chat-groups': { listKey: 'chatGroups', schema: 'ChatGroup' },
-  'files': { listKey: 'files', schema: 'File' },
-  'knowledge-bases': { listKey: 'knowledgeBases', schema: 'KnowledgeBase' },
-  'messages': { listKey: 'messages', schema: 'Message' },
-  'mcp-servers': { listKey: 'mcpServers', schema: 'McpServer' },
-  'models': { listKey: 'models', schema: 'Model' },
-  'permissions': { listKey: 'permissions', schema: 'Permission' },
-  'providers': { listKey: 'providers', schema: 'Provider' },
-  'roles': { listKey: 'roles', schema: 'Role' },
-  'topics': { listKey: 'topics', schema: 'Topic' },
-  'users': { listKey: 'users', schema: 'User' },
-  'usage': { listKey: 'usage', schema: 'Usage' },
+const errorCodeCatalogue = Object.entries(API_ERROR_CODES)
+  .map(([code, { description }]) => `- \`${code}\`: ${description}`)
+  .join('\n');
+
+const apiErrorCodeJsonSchema = {
+  ...toComponentSchema(ApiErrorCodeSchema),
+  description: `Stable machine-readable error code. Codes are only ever added.\n\n${errorCodeCatalogue}`,
 };
 
-const ref = (schema: string): SchemaObject => ({ $ref: `#/components/schemas/${schema}` });
-
-/** One chat bubble of the IM channel — whole, never a partial stream. */
-const imMessageSchema: SchemaObject = {
-  additionalProperties: false,
-  properties: {
-    agentId: nullableString,
-    content: { type: 'string' },
-    createdAt: dateTime,
-    error: { type: 'boolean' },
-    files: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          id: { type: 'string' },
-          name: { type: 'string' },
-          fileType: { type: 'string' },
-          size: { type: 'number' },
-          url: { type: 'string' },
-        },
-        required: ['id', 'name', 'fileType', 'size', 'url'],
-      },
-    },
-    id: { type: 'string' },
-    role: { enum: ['assistant', 'user'], type: 'string' },
-  },
-  required: ['agentId', 'content', 'createdAt', 'error', 'id', 'role'],
-  type: 'object',
-};
-
-const imResponseSchema = (method: string, rest: string): SchemaObject => {
-  if (method === 'post' && rest === 'messages') {
-    return {
-      additionalProperties: false,
-      properties: {
-        accepted: { type: 'boolean' },
-        operationId: nullableString,
-        topicId: { type: 'string' },
-        userMessage: imMessageSchema,
-      },
-      required: ['accepted', 'operationId', 'topicId', 'userMessage'],
-      type: 'object',
-    };
-  }
-
-  if (rest.endsWith('/read')) {
-    return {
-      additionalProperties: false,
-      properties: { unread: { minimum: 0, type: 'integer' } },
-      required: ['unread'],
-      type: 'object',
-    };
-  }
-
-  return {
-    additionalProperties: false,
-    properties: {
-      cursor: { type: 'string' },
-      messages: { items: imMessageSchema, type: 'array' },
-      readUpTo: {
-        anyOf: [
-          {
-            additionalProperties: false,
-            properties: { messageId: { type: 'string' }, readAt: dateTime },
-            required: ['messageId', 'readAt'],
-            type: 'object',
-          },
-          { type: 'null' },
-        ],
-      },
-      state: { type: 'string' },
-      typing: { type: 'boolean' },
-      unread: { minimum: 0, type: 'integer' },
-    },
-    required: ['cursor', 'messages', 'readUpTo', 'state', 'typing', 'unread'],
-    type: 'object',
+const apiErrorJsonSchema = (() => {
+  const json = toComponentSchema(ApiErrorSchema) as {
+    properties: Record<string, Record<string, unknown>>;
   };
+  json.properties.code = { $ref: '#/components/schemas/ApiErrorCode' };
+  json.properties.error = {
+    description: 'Deprecated alias of `message`, kept for clients written before `code`.',
+    type: 'string',
+  };
+  json.properties.requestId = {
+    description: `Same value as the \`${REQUEST_ID_HEADER}\` response header; quote it when reporting an issue.`,
+    type: 'string',
+  };
+  return json;
+})();
+
+const headerRef = (name: string) => ({ $ref: `#/components/headers/${name}` });
+
+const RATE_LIMIT_RESPONSE_HEADERS = {
+  [RATE_LIMIT_HEADERS.limit]: headerRef('RateLimitLimit'),
+  [RATE_LIMIT_HEADERS.remaining]: headerRef('RateLimitRemaining'),
+  [RATE_LIMIT_HEADERS.reset]: headerRef('RateLimitReset'),
 };
 
-/**
- * Personal-agent resources whose payload is coordinator / inbox state rather
- * than a stable CRUD row (a goal's graph snapshot, a category of memory
- * entries, a page of receipts). The spec stays deliberately vague for these —
- * same policy as unnamed sub-operations: `additionalProperties` over a guessed
- * shape, so a generated client is never confidently mistyped.
- */
-const PERSONAL_AGENT_GROUPS = new Set(['goals', 'memories', 'notifications', 'signals', 'tasks']);
-
-/**
- * Handlers whose success status is not 200. A controller's return code is not
- * visible to the generator, so every non-200 success has to be declared here —
- * otherwise the document (and the SDK generated from it) advertises a status
- * the runtime never sends, and status-discriminating clients branch wrongly.
- */
-const CREATED_OPERATIONS = new Set([
-  'POST agent-groups',
-  'POST agents/{id}/duplicate',
-  'POST agents/{id}/accounts',
-  'POST api-keys',
-  'POST chat-groups',
-  'POST eval/benchmarks',
-  'POST eval/datasets',
-  'POST eval/datasets/{datasetId}/test-cases',
-  'POST goals',
-  'POST mcp-servers',
-  'POST tasks',
-]);
-
-const ACCEPTED_OPERATIONS = new Set([
-  'POST eval/runs',
-  'POST signals/source-events',
-  'POST signals/trigger',
-  'POST tasks/{id}/runs',
-]);
-
-const successStatusFor = (group: string, rest: string, method: string): number => {
-  const operation = `${method.toUpperCase()} ${group}${rest ? `/${rest}` : ''}`;
-  if (ACCEPTED_OPERATIONS.has(operation)) return 202;
-  if (CREATED_OPERATIONS.has(operation)) return 201;
-  return 200;
-};
-
-const successEnvelope = (data: SchemaObject): SchemaObject => ({
-  additionalProperties: false,
-  properties: {
-    data,
-    message: { type: 'string' },
-    success: { const: true, type: 'boolean' },
-    timestamp: dateTime,
-  },
-  required: ['success', 'timestamp'],
-  type: 'object',
-});
-
-const getSuccessSchema = (group: string, rest: string, method: string): SchemaObject => {
-  if (group === 'health') {
-    return {
-      additionalProperties: false,
-      properties: {
-        service: { type: 'string' },
-        status: { const: 'ok', type: 'string' },
-        timestamp: dateTime,
-      },
-      required: ['service', 'status', 'timestamp'],
-      type: 'object',
-    };
-  }
-
-  if (PERSONAL_AGENT_GROUPS.has(group)) {
-    return successEnvelope({ additionalProperties: true, type: ['array', 'object', 'null'] });
-  }
-
-  if (group === 'responses') {
-    return {
-      additionalProperties: true,
-      properties: {
-        id: { type: 'string' },
-        object: { const: 'response', type: 'string' },
-        output: { items: { type: 'object' }, type: 'array' },
-        status: { type: 'string' },
-        usage: { type: ['object', 'null'] },
-      },
-      required: ['id', 'object', 'output', 'status'],
-      type: 'object',
-    };
-  }
-
-  if (group === 'chat') {
-    if (rest === 'translate') {
-      return successEnvelope({
-        additionalProperties: false,
-        properties: { translatedText: { type: 'string' } },
-        required: ['translatedText'],
-        type: 'object',
-      });
-    }
-
-    if (rest === 'generate-reply') {
-      return successEnvelope({
-        additionalProperties: false,
-        properties: { reply: { type: 'string' } },
-        required: ['reply'],
-        type: 'object',
-      });
-    }
-
-    return successEnvelope(ref('ChatResponse'));
-  }
-
-  if (group === 'eval') return successEnvelope(evalResponseSchema(method, rest));
-
-  if (group === 'topics' && rest.endsWith('/threads'))
-    return successEnvelope({
-      type: 'object',
-      properties: {
-        threads: {
-          type: 'array',
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              id: { type: 'string' },
-              topicId: { type: 'string' },
-              title: nullableString,
-              type: { type: 'string' },
-              status: nullableString,
-              parentThreadId: nullableString,
-              createdAt: dateTime,
-              updatedAt: dateTime,
-            },
-          },
-        },
-        total: { type: 'integer' },
-      },
-      required: ['threads', 'total'],
-    });
-  if (group === 'plugins')
-    return successEnvelope({
-      type: 'object',
-      properties: {
-        plugins: {
-          type: 'array',
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              identifier: { type: 'string' },
-              type: { type: 'string' },
-              createdAt: dateTime,
-              updatedAt: dateTime,
-            },
-          },
-        },
-        total: { type: 'integer' },
-      },
-      required: ['plugins', 'total'],
-    });
-
-  if (group === 'im') return successEnvelope(imResponseSchema(method, rest));
-
-  if (group === 'push-tokens') {
-    if (method === 'delete') return successEnvelope({ type: 'null' });
-    return successEnvelope({
-      additionalProperties: false,
-      properties: { deviceId: { type: 'string' }, platform: { type: 'string' } },
-      required: ['deviceId', 'platform'],
-      type: 'object',
-    });
-  }
-
-  /**
-   * Agent identity assets: `/agents/{id}/accounts`. Every route answers with an
-   * `AgentAccount` (the collection GET wraps them), and none of them can carry
-   * a credential — the write-only sub-resource answers with the hint plus
-   * `hasCredential`, never the secret.
-   */
-  if (group === 'agents') {
-    if (rest === '{id}/accounts') {
-      if (method === 'get') {
-        return successEnvelope({
-          additionalProperties: false,
-          properties: {
-            accounts: { items: ref('AgentAccount'), type: 'array' },
-            total: { minimum: 0, type: 'integer' },
-          },
-          required: ['accounts', 'total'],
-          type: 'object',
-        });
-      }
-
-      return successEnvelope(ref('AgentAccount'));
-    }
-
-    if (rest === '{id}/accounts/{accountId}' || rest === '{id}/accounts/{accountId}/credential') {
-      return successEnvelope(ref('AgentAccount'));
-    }
-  }
-
-  const resource = groupResources[group];
-  if (!resource) return successEnvelope({ additionalProperties: true, type: 'object' });
-
-  if (group === 'usage') return successEnvelope(ref('Usage'));
-
-  const isRootList = method === 'get' && rest === '';
-  if (isRootList) {
-    if (group === 'agent-groups' || group === 'api-keys' || group === 'mcp-servers') {
-      return successEnvelope({ items: ref(resource.schema), type: 'array' });
-    }
-
-    return successEnvelope({
-      additionalProperties: true,
-      properties: {
-        [resource.listKey]: { items: ref(resource.schema), type: 'array' },
-        total: { minimum: 0, type: 'integer' },
-      },
-      required: [resource.listKey],
-      type: 'object',
-    });
-  }
-
-  if (group === 'chat-groups' && rest === '{id}/members') {
-    return successEnvelope(ref('ChatGroup'));
-  }
-
-  if (method === 'delete') {
-    return successEnvelope({ additionalProperties: true, type: ['object', 'null'] });
-  }
-
-  if (group === 'agent-groups' && method === 'post' && rest === '') {
-    return successEnvelope({
-      additionalProperties: false,
-      properties: { id: { type: 'string' } },
-      required: ['id'],
-      type: 'object',
-    });
-  }
-
-  if (group === 'api-keys' && method === 'post' && rest === '') {
-    const apiKey = resourceSchemas.ApiKey as { properties: Record<string, unknown> };
-    return successEnvelope({
-      additionalProperties: false,
-      properties: { ...apiKey.properties, key: { type: 'string' } },
-      required: ['id', 'name', 'key', 'createdAt', 'updatedAt'],
-      type: 'object',
-    });
-  }
-
-  if (group === 'mcp-servers' && method === 'post' && rest.endsWith('/sync')) {
-    return successEnvelope({
-      additionalProperties: false,
-      properties: {
-        id: { format: 'uuid', type: 'string' },
-        status: { const: 'connected', type: 'string' },
-        toolCount: { minimum: 0, type: 'integer' },
-      },
-      required: ['id', 'status', 'toolCount'],
-      type: 'object',
-    });
-  }
-
-  // The file controllers wrap their payloads instead of returning the bare
-  // resource, so the one-segment fallback below would advertise `File` and make
-  // generated clients mistype every one of these. Keep these explicit.
-  if (group === 'files') {
-    const fileDetail: SchemaObject = {
-      additionalProperties: false,
-      properties: { file: ref('File'), parsed: { type: 'object' } },
-      required: ['file'],
-      type: 'object',
-    };
-
-    if ((method === 'post' && rest === '') || (method === 'get' && rest === '{id}')) {
-      return successEnvelope(fileDetail);
-    }
-
-    if (method === 'post' && rest === 'batches') {
-      return successEnvelope({
-        additionalProperties: false,
-        properties: {
-          failed: {
-            items: {
-              additionalProperties: false,
-              properties: { error: { type: 'string' }, name: { type: 'string' } },
-              required: ['error', 'name'],
-              type: 'object',
-            },
-            type: 'array',
-          },
-          successful: { items: fileDetail, type: 'array' },
-          summary: {
-            additionalProperties: false,
-            properties: {
-              failed: { minimum: 0, type: 'integer' },
-              successful: { minimum: 0, type: 'integer' },
-              total: { minimum: 0, type: 'integer' },
-            },
-            required: ['failed', 'successful', 'total'],
-            type: 'object',
-          },
-        },
-        required: ['failed', 'successful', 'summary'],
-        type: 'object',
-      });
-    }
-
-    if (method === 'post' && rest === 'queries') {
-      return successEnvelope({
-        additionalProperties: false,
-        properties: {
-          failed: {
-            items: {
-              additionalProperties: false,
-              properties: { error: { type: 'string' }, fileId: { type: 'string' } },
-              required: ['error', 'fileId'],
-              type: 'object',
-            },
-            type: 'array',
-          },
-          files: { items: fileDetail, type: 'array' },
-          success: { minimum: 0, type: 'integer' },
-          total: { minimum: 0, type: 'integer' },
-        },
-        required: ['failed', 'files', 'success', 'total'],
-        type: 'object',
-      });
-    }
-  }
-
-  if (group === 'messages' && rest === 'count') {
-    return successEnvelope({
-      additionalProperties: false,
-      properties: { count: { minimum: 0, type: 'integer' } },
-      required: ['count'],
-      type: 'object',
-    });
-  }
-
-  // Returns the created message, or nothing when generation produced no reply.
-  if (group === 'messages' && rest === 'replies') {
-    return successEnvelope({ anyOf: [ref('Message'), { type: 'null' }] });
-  }
-
-  // A caller without `user:read` deliberately receives only `{ id }`.
-  if (group === 'users' && rest === 'me') {
-    return successEnvelope({
-      anyOf: [
-        ref('User'),
-        {
-          additionalProperties: false,
-          properties: { id: { type: 'string' } },
-          required: ['id'],
-          type: 'object',
-        },
-      ],
-    });
-  }
-
-  // Only true resource operations get the resource schema: the collection root
-  // and the `{id}` item. Every other single segment is a named sub-operation
-  // (`count`, `me`, `batches`, …) whose payload is its own shape, so it must be
-  // described explicitly above — falling back to a permissive object here keeps
-  // an undescribed route merely vague rather than confidently wrong.
-  const isResourceOperation = rest === '' || rest === '{id}';
-  return isResourceOperation
-    ? successEnvelope(ref(resource.schema))
-    : successEnvelope({ additionalProperties: true, type: 'object' });
-};
-
-const errorResponse = (description: string) => ({
-  content: { 'application/json': { schema: ref('ApiError') } },
+const integerHeader = (description: string) => ({
   description,
+  schema: { type: 'integer' as const },
 });
+
+const SHARED_HEADERS = {
+  IdempotentReplayed: {
+    description: `\`true\` when this response was replayed from the first request sent with the same \`${IDEMPOTENCY_KEY_HEADER}\`.`,
+    schema: { enum: ['true'], type: 'string' as const },
+  },
+  RateLimitLimit: integerHeader('Requests this API key may send per window.'),
+  RateLimitRemaining: integerHeader('Requests left in the current window.'),
+  RateLimitReset: integerHeader('Unix time (seconds) the current window resets.'),
+  RequestId: {
+    description:
+      'Unique id of this request, also returned as `requestId` in error bodies. A client-supplied `X-Request-Id` (≤128 chars of `[A-Za-z0-9_.:-]`) is echoed back.',
+    schema: { type: 'string' as const },
+  },
+  RetryAfter: integerHeader('Seconds to wait before retrying.'),
+};
+
+const IDEMPOTENCY_KEY_PARAMETER = {
+  description: `Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with \`${IDEMPOTENT_REPLAYED_HEADER}: true\`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both \`idempotency_conflict\`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.`,
+  in: 'header',
+  name: IDEMPOTENCY_KEY_HEADER,
+  required: false,
+  schema: { maxLength: 255, minLength: 1, type: 'string' as const },
+};
+
+const API_DESCRIPTION = `LobeHub platform REST API. Generated from \`packages/openapi\` routes — do not edit openapi.yml by hand; run \`bun generate:openapi\` instead.
+
+## Errors
+
+Every error answers with the \`ApiError\` body: \`{ success: false, code, message, details?, requestId, timestamp, error }\`. Branch on \`code\` (see \`ApiErrorCode\`), not on \`message\`. Validation failures use \`validation_error\` and list each failing field in \`details\` as \`{ path, message }\`, where \`path\` is dotted and starts with the request part (\`json\`, \`query\`, \`param\`, \`header\`). \`error\` is a deprecated alias of \`message\`. The OpenResponses route (\`POST /api/v1/responses\`) keeps the protocol's \`{ error: { type, message, code, param } }\` body, plus \`requestId\`.
+
+Every response carries an \`${REQUEST_ID_HEADER}\` header.
+
+## Pagination
+
+List endpoints take \`limit\` (1–${MAX_PAGE_LIMIT}, default ${DEFAULT_PAGE_LIMIT}) and an opaque \`cursor\`, and answer \`{ data: { <items>, total?, hasMore, nextCursor } }\`: pass \`nextCursor\` as \`cursor\` to read the next page; it is \`null\` on the last page. New endpoints name the item array \`items\`; older ones keep their own key (e.g. \`agents\`). The older \`page\`/\`pageSize\` and \`offset\` parameters still work but are deprecated.
+
+## Rate limits
+
+Requests authenticated with an API key are limited per key (default 600 per minute). Responses carry \`${RATE_LIMIT_HEADERS.limit}\`, \`${RATE_LIMIT_HEADERS.remaining}\` and \`${RATE_LIMIT_HEADERS.reset}\` (Unix seconds); a refused request answers 429 \`rate_limited\` with \`${RATE_LIMIT_HEADERS.retryAfter}\` in seconds.
+
+## Idempotency
+
+\`POST\` operations accept an \`${IDEMPOTENCY_KEY_HEADER}\` header; see the parameter description.`;
 
 /**
  * Build the OpenAPI 3.1 document from the live Hono app.
@@ -1037,24 +128,39 @@ const errorResponse = (description: string) => ({
  * Shared by the runtime `GET /api/v1/openapi.json` endpoint (see `app.ts`)
  * and the `scripts/generate-openapi.ts` emitter, so the served spec and the
  * committed `openapi.yml` always come from the same logic.
+ *
+ * Every response — success status, payload schema and error codes — comes from
+ * the route's own `routeDoc()` declaration. Nothing is inferred from the path:
+ * an operation that does not declare a typed success response fails the build
+ * instead of being documented with a guessed or open-ended shape.
  */
 export const buildSpecDocument = async (app: GenerateSpecsApp) => {
+  const { spec, undocumented } = await collectSpecDocument(app);
+
+  if (undocumented.length > 0) {
+    throw new Error(
+      `Routes without a declared success response (attach routeDoc() from src/common/openapi.ts):\n${undocumented.map((op) => `  - ${op}`).join('\n')}`,
+    );
+  }
+
+  return spec;
+};
+
+/**
+ * The document plus every operation that lacks a typed success response.
+ * `buildSpecDocument` refuses to emit a document with any; tests and tooling
+ * use this to report them.
+ */
+export const collectSpecDocument = async (app: GenerateSpecsApp) => {
   const spec = await generateSpecs(app, {
+    // Routes with a request validator can answer 400 through `zValidator`,
+    // which uses the shared error envelope.
+    defaultValidationErrorResponse: errorResponse(400),
     documentation: {
       components: {
-        schemas: {
-          ApiError: {
-            additionalProperties: false,
-            properties: {
-              error: { type: 'string' },
-              success: { const: false, type: 'boolean' },
-              timestamp: dateTime,
-            },
-            required: ['error', 'success', 'timestamp'],
-            type: 'object',
-          },
-          ...resourceSchemas,
-        },
+        headers: SHARED_HEADERS,
+        parameters: { IdempotencyKey: IDEMPOTENCY_KEY_PARAMETER },
+        schemas: { ApiError: apiErrorJsonSchema, ApiErrorCode: apiErrorCodeJsonSchema },
         securitySchemes: {
           bearerAuth: {
             bearerFormat: `API Key (${API_KEY_PREFIX}...) or OIDC JWT`,
@@ -1064,8 +170,7 @@ export const buildSpecDocument = async (app: GenerateSpecsApp) => {
         },
       },
       info: {
-        description:
-          'LobeHub platform REST API. Generated from `packages/openapi` routes — do not edit openapi.yml by hand; run `bun generate:openapi` instead.',
+        description: API_DESCRIPTION,
         title: 'LobeHub API',
         version: '1.0.0',
       },
@@ -1075,6 +180,7 @@ export const buildSpecDocument = async (app: GenerateSpecsApp) => {
   });
 
   const paths = (spec.paths ?? {}) as Record<string, Record<string, OperationObject>>;
+  const undocumented: string[] = [];
 
   for (const [path, item] of Object.entries(paths)) {
     // '/api/v1/agent-groups/{id}' -> group 'agent-groups', rest '{id}'
@@ -1087,45 +193,41 @@ export const buildSpecDocument = async (app: GenerateSpecsApp) => {
 
       op.tags ??= [group];
       op.operationId ??= `${group}.${method}${rest ? `_${rest.replaceAll(/[{}]/g, '').replaceAll('/', '_')}` : ''}`;
-      op.responses ??= {};
-      const successSchema = getSuccessSchema(group, rest, method);
-      const successContent: Record<string, unknown> = {
-        'application/json': { schema: successSchema },
-      };
-      if (group === 'responses') {
-        successContent['text/event-stream'] = { schema: { type: 'string' } };
+
+      const responses = op.responses ?? {};
+      const hasTypedSuccess = Object.entries(responses).some(
+        ([status, response]) => status.startsWith('2') && response.content,
+      );
+      if (!hasTypedSuccess) undocumented.push(`${method.toUpperCase()} ${path}`);
+
+      // Public operations (health) opt out of auth with `security: []`; only
+      // authenticated ones are rate limited and accept an Idempotency-Key.
+      const authenticated = !(Array.isArray(op.security) && op.security.length === 0);
+
+      for (const parameter of op.parameters ?? []) {
+        if (parameter.schema?.deprecated) parameter.deprecated = true;
+      }
+      if (authenticated && method === 'post') {
+        op.parameters = [
+          ...(op.parameters ?? []),
+          { $ref: '#/components/parameters/IdempotencyKey' },
+        ];
       }
 
-      const successStatus = successStatusFor(group, rest, method);
-      // `hono-openapi` fills a contentless 200 into operations that declare a
-      // request body but no responses. When the handler actually answers
-      // 201/202 that placeholder is not a real response and must go, or the
-      // document keeps advertising a status the runtime never sends.
-      const placeholder200 = op.responses[200] as { content?: unknown } | undefined;
-      if (successStatus !== 200 && placeholder200 && !placeholder200.content) {
-        delete op.responses[200];
-      }
-      const currentSuccess = (op.responses[successStatus] ?? {}) as Record<string, unknown>;
-      op.responses[successStatus] = {
-        ...currentSuccess,
-        content: currentSuccess.content ?? successContent,
-        description: currentSuccess.description ?? 'Successful response',
-      };
-
-      op.responses[400] ??= errorResponse('Invalid request');
-      op.responses[401] ??= errorResponse('Authentication required');
-      op.responses[403] ??= errorResponse('Insufficient permission');
-      op.responses[404] ??= errorResponse('Resource not found');
-      op.responses[409] ??= errorResponse('Resource conflict');
-      op.responses[429] ??= errorResponse('Rate limit exceeded');
-      op.responses[500] ??= errorResponse('Internal server error');
-
-      for (const response of Object.values(op.responses)) {
-        const responseObject = response as { description?: string };
-        responseObject.description ??= 'Response';
+      for (const [status, response] of Object.entries(responses)) {
+        response.description ??= 'Response';
+        response.headers = {
+          ...response.headers,
+          [REQUEST_ID_HEADER]: headerRef('RequestId'),
+          ...(authenticated ? RATE_LIMIT_RESPONSE_HEADERS : {}),
+          ...(status === '429' ? { [RATE_LIMIT_HEADERS.retryAfter]: headerRef('RetryAfter') } : {}),
+          ...(authenticated && method === 'post' && status.startsWith('2')
+            ? { [IDEMPOTENT_REPLAYED_HEADER]: headerRef('IdempotentReplayed') }
+            : {}),
+        };
       }
     }
   }
 
-  return spec;
+  return { spec, undocumented };
 };

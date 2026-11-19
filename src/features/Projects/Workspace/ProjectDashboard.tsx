@@ -43,6 +43,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { goalSelectors, useGoalStore } from '@/store/goal';
 import type { ProjectDetail } from '@/store/project';
 import { useWorkStore, workActions, workSelectors } from '@/store/work';
+import { useDensityTokens } from '@/styles/density';
 
 const styles = createStaticStyles(({ css }) => ({
   attention: css`
@@ -149,21 +150,24 @@ const SectionTitle = memo<{
   count?: number;
   onAction?: () => void;
   title: string;
-}>(({ action, count, onAction, title }) => (
-  <Flexbox horizontal align={'center'} justify={'space-between'}>
-    <Flexbox horizontal align={'center'} gap={7}>
-      <Text fontSize={16} weight={600}>
-        {title}
-      </Text>
-      {count !== undefined && <Tag>{count}</Tag>}
+}>(({ action, count, onAction, title }) => {
+  const { pageTitleFontSize } = useDensityTokens();
+  return (
+    <Flexbox horizontal align={'center'} justify={'space-between'}>
+      <Flexbox horizontal align={'center'} gap={7}>
+        <Text fontSize={pageTitleFontSize} weight={600}>
+          {title}
+        </Text>
+        {count !== undefined && <Tag>{count}</Tag>}
+      </Flexbox>
+      {action && (
+        <Button size={'small'} type={'text'} onClick={onAction}>
+          {action}
+        </Button>
+      )}
     </Flexbox>
-    {action && (
-      <Button size={'small'} type={'text'} onClick={onAction}>
-        {action}
-      </Button>
-    )}
-  </Flexbox>
-));
+  );
+});
 
 const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => {
   const { t } = useTranslation('project');

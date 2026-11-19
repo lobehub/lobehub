@@ -30,6 +30,7 @@ import { useDraftBranch } from './DraftGit/useDraftBranch';
 import { WorktreeToggle } from './DraftGit/WorktreeToggle';
 import { gitChipStyles } from './gitChipStyles';
 import StaleGitSnapshot from './StaleGitSnapshot';
+import TopicPullRequestChip from './TopicPullRequestChip';
 import WorktreeSwitcher from './WorktreeSwitcher';
 
 const styles = stylex.create({
@@ -193,11 +194,13 @@ const GitStatus = memo<GitStatusProps>(
       isDraft && draft.selectedBranch && draft.selectedBranch !== branch
         ? draft.selectedBranch
         : undefined;
+    // Under the lab a topic's PRs come from its Work rows (TopicPullRequestChip):
+    // the branch → PR guess is not asked at all.
     const { data: prData, mutate: mutatePR } = useFetchGitLinkedPR(
       deviceId,
       path,
       syncBranch ?? branch,
-      isGithub,
+      isGithub && !betterCoding,
     );
     // The remaining reads are all disabled once the directory is gone: nothing
     // below renders from them in that state, and the diff poll alone would keep
@@ -237,8 +240,9 @@ const GitStatus = memo<GitStatusProps>(
 
     // Until the linked-PR lookup answers for this branch, reuse the PR the topic
     // recorded for the same branch so the PR chip doesn't pop in late.
-    const pullRequest =
-      prData !== undefined
+    const pullRequest = betterCoding
+      ? undefined
+      : prData !== undefined
         ? prData.pullRequest
         : isGithub &&
             !syncBranch &&
@@ -368,19 +372,30 @@ const GitStatus = memo<GitStatusProps>(
       reviewPatches !== undefined ? liveDiffStats : (cachedDiffStats ?? liveDiffStats);
     const hasChanges = diffStats.files > 0;
 
+    // Better Coding Experience: the topic's linked PRs are server records, so
+    // they stay in the bar (with their last known state) even when the working
+    // directory cannot be read — an offline device, a deleted worktree.
+    const topicPullRequestChip =
+      betterCoding && topicId ? (
+        <TopicPullRequestChip deviceId={deviceId} path={path} topicId={topicId} />
+      ) : null;
+
     // Dead directory: the whole live cluster is unreachable, so hand off to the
     // snapshot renderer — it shows what the topic recorded and offers the one
     // action that can still work (drop the worktree override).
     if (isStale) {
       return (
-        <StaleGitSnapshot
-          agentId={agentId}
-          git={fallbackGit!}
-          isGithub={isGithub}
-          path={path}
-          sourcePath={sourcePath}
-          topicId={topicId}
-        />
+        <>
+          <StaleGitSnapshot
+            agentId={agentId}
+            git={betterCoding ? { ...fallbackGit!, github: undefined } : fallbackGit!}
+            isGithub={isGithub}
+            path={path}
+            sourcePath={sourcePath}
+            topicId={topicId}
+          />
+          {topicPullRequestChip}
+        </>
       );
     }
 
@@ -411,10 +426,11 @@ const GitStatus = memo<GitStatusProps>(
                 </Tooltip>
               </>
             )}
+            {topicPullRequestChip}
           </>
         );
       }
-      return null;
+      return topicPullRequestChip;
     }
 
     const branchTooltip = detached ? t('workingDirectory.detachedHead', { sha: branch }) : branch;
@@ -622,6 +638,7 @@ const GitStatus = memo<GitStatusProps>(
         {outdatedNode}
         {worktreeToggleNode}
         {diffNode}
+        {topicPullRequestChip}
         {pullRequest && (
           <>
             <div {...stylex.props(gitChipStyles.separator)} />

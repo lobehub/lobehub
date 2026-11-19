@@ -1,26 +1,24 @@
-import { confirmModal, createModal, toast } from '@lobehub/ui';
+import { getLibrarySkillMode } from '@lobechat/types';
+import { ActionIcon } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { t as translate } from 'i18next';
-import { EyeIcon, PencilIcon, Trash2Icon } from 'lucide-react';
+import { SettingsIcon } from 'lucide-react';
 import type React from 'react';
-import { lazy, memo, Suspense, useCallback, useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import MarketSkillIcon from '@/components/MarketSkillIcon';
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import {
   filterSkillItems,
-  openRenameSkillModal,
   type SkillListItem,
-  type SkillRowAction,
   SkillSection,
   SkillsList,
 } from '@/features/SkillsList';
-import { usePermission } from '@/hooks/usePermission';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
 
-const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
+import { useSelectSkill } from './useSelectSkill';
 
 const EMPTY_ITEMS: SkillListItem[] = [];
 
@@ -32,50 +30,39 @@ const handleSkillDragStart = (item: SkillListItem, event: React.DragEvent) => {
   });
 };
 
-const openSkillDetailModal = (skillId: string) =>
-  createModal({
-    content: (
-      <Suspense fallback={<div style={{ height: '100%' }} />}>
-        <AgentSkillDetail skillId={skillId} />
-      </Suspense>
-    ),
-    footer: null,
-    styles: { content: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } },
-    title: translate('workingPanel.skills.detail.title', { ns: 'chat' }),
-    width: 960,
-  });
-
 /**
  * Reads user-installed skills (entries in the `agent_skill` table — market
- * imports plus user-created customs) into the `SkillsList` row shape. Builtin
- * tools and LobeHub MCP servers are intentionally excluded — those belong in
- * the Tools popover, not in the per-user skill inventory.
+ * imports plus user-created customs) enabled for the current agent into the
+ * `SkillsList` row shape. Builtin tools and LobeHub MCP servers are intentionally
+ * excluded — those belong in the Tools popover, not in the per-user skill inventory.
  *
  * Also triggers the underlying SWR fetch so the working sidebar surfaces the
  * data even when the Tools popover hasn't been opened in this session. The key
  * is deduplicated, so co-mounting with `useControls` doesn't double-fetch.
  */
-export const useUserSkills = (enabled = true): SkillListItem[] => {
+export const useUserSkills = (enabled = true, includeDisabled = false): SkillListItem[] => {
   useToolStore((s) => s.useFetchAgentSkills)(enabled);
   const agentSkills = useToolStore(agentSkillsSelectors.getAgentSkills, isEqual);
+  const plugins = useAgentStore((s) => agentSelectors.currentAgentConfig(s)?.plugins);
 
   return useMemo(
     () =>
       !enabled
         ? EMPTY_ITEMS
-        : agentSkills.map((skill) => ({
-            description: skill.description ?? undefined,
-            icon:
-              skill.source === 'market' ? (
-                <MarketSkillIcon identifier={skill.identifier} name={skill.name} />
-              ) : undefined,
-            // `identifier` is what the runtime resolves through the skill registry,
-            // and is unique per skill — reuse it as both the React key and the
-            // drag payload's `type`.
-            id: skill.identifier,
-            name: skill.name,
-          })),
-    [agentSkills, enabled],
+        : agentSkills
+            .filter(
+              (skill) =>
+                includeDisabled || getLibrarySkillMode(plugins, skill.identifier) !== 'disabled',
+            )
+            .map((skill) => ({
+              description: skill.description ?? undefined,
+              // `identifier` is what the runtime resolves through the skill registry,
+              // and is unique per skill — reuse it as both the React key and the
+              // drag payload's `type`.
+              id: skill.identifier,
+              name: skill.name,
+            })),
+    [agentSkills, enabled, includeDisabled, plugins],
   );
 };
 
@@ -86,123 +73,50 @@ interface UserLevelSkillsProps {
    * matching the agent-only layout this used to ship with.
    */
   hideHeader?: boolean;
+  onManage?: () => void;
   /** Only render skills matching this query. */
   searchQuery?: string;
 }
 
-const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader, searchQuery = '' }) => {
+const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader, onManage, searchQuery = '' }) => {
   const { t } = useTranslation('chat');
-  const { t: tCommon } = useTranslation('common');
+  const onSelectSkill = useSelectSkill('skill');
 
   const userItems = useUserSkills();
   const items = useMemo(() => filterSkillItems(userItems, searchQuery), [userItems, searchQuery]);
-  // The row shape keys off `identifier`, but the store mutations key off the DB
-  // id — resolve one from the other through the raw skill list.
-  const agentSkills = useToolStore(agentSkillsSelectors.getAgentSkills, isEqual);
-  const updateAgentSkill = useToolStore((s) => s.updateAgentSkill);
-  const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
-  const { allowed: canEdit } = usePermission('edit_own_content');
-
-  const getRowActions = useCallback(
-    (item: SkillListItem): SkillRowAction[] => {
-      const skill = agentSkills.find((s) => s.identifier === item.id);
-      if (!skill) return [];
-
-      const actions: SkillRowAction[] = [
-        {
-          icon: EyeIcon,
-          key: 'view',
-          label: t('workingPanel.skills.actions.view'),
-          onClick: () => openSkillDetailModal(skill.id),
-          sfSymbol: 'eye',
-        },
-      ];
-
-      // Only user-authored skills carry an editable name; market imports are
-      // pinned to their source manifest.
-      if (skill.source === 'user') {
-        actions.push({
-          disabled: !canEdit,
-          icon: PencilIcon,
-          key: 'rename',
-          label: t('workingPanel.skills.actions.rename'),
-          onClick: () => {
-            openRenameSkillModal({
-              currentName: skill.name,
-              onSubmit: async (newName) => {
-                try {
-                  await updateAgentSkill({ id: skill.id, name: newName });
-                  return undefined;
-                } catch (error) {
-                  return error instanceof Error
-                    ? error.message
-                    : t('workingPanel.skills.rename.error');
-                }
-              },
-            });
-          },
-          sfSymbol: 'pencil',
-        });
-      }
-
-      actions.push({
-        danger: true,
-        disabled: !canEdit,
-        icon: Trash2Icon,
-        key: 'delete',
-        label: t('workingPanel.skills.actions.delete'),
-        onClick: () => {
-          confirmModal({
-            cancelText: tCommon('cancel'),
-            content: t('workingPanel.skills.delete.userConfirm', { name: skill.name }),
-            okButtonProps: { danger: true },
-            okText: tCommon('delete'),
-            onOk: async () => {
-              try {
-                await deleteAgentSkill(skill.id);
-                toast.success(t('workingPanel.skills.delete.success'));
-              } catch (error) {
-                toast.error(
-                  error instanceof Error ? error.message : t('workingPanel.skills.delete.error'),
-                );
-              }
-            },
-            title: t('workingPanel.skills.delete.title'),
-          });
-        },
-        sfSymbol: 'trash',
-      });
-
-      return actions;
-    },
-    [agentSkills, canEdit, deleteAgentSkill, t, tCommon, updateAgentSkill],
-  );
-
-  const onOpenSkill = useCallback(
-    (item: SkillListItem) => {
-      const skill = agentSkills.find((s) => s.identifier === item.id);
-      if (skill) openSkillDetailModal(skill.id);
-    },
-    [agentSkills],
-  );
-
-  if (items.length === 0) return null;
+  if (items.length === 0 && !onManage) return null;
 
   const list = (
     <SkillsList
-      getRowActions={getRowActions}
+      compact
       items={items}
-      onOpenSkill={onOpenSkill}
+      onSelectSkill={onSelectSkill}
       onSkillDragStart={handleSkillDragStart}
     />
   );
 
-  if (hideHeader) return list;
+  if (hideHeader && !onManage) return list;
 
   return (
     <SkillSection
+      compact
+      isEmpty={items.length === 0}
+      emptyText={t(
+        searchQuery
+          ? 'workingPanel.skills.noSearchResults'
+          : 'workingPanel.skills.manage.noneEnabled',
+      )}
       sectionHeader={{
-        count: items.length,
+        action: onManage && (
+          <ActionIcon
+            aria-label={t('workingPanel.skills.manage.title')}
+            icon={SettingsIcon}
+            size="small"
+            title={t('workingPanel.skills.manage.title')}
+            onClick={onManage}
+          />
+        ),
+        count: onManage ? userItems.length : items.length,
         title: t('workingPanel.skills.section.user'),
       }}
     >

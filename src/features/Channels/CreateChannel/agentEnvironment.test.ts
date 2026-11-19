@@ -8,6 +8,7 @@ import {
   changeChannelAgentDevice,
   createChannelAgentSelection,
   getChannelAgentIssue,
+  isRemoteChannelAgent,
   reconcileChannelAgentDraft,
   toChannelAgentSelection,
 } from './agentEnvironment';
@@ -231,8 +232,17 @@ describe('Channel runtime support', () => {
     },
   );
 
-  it.each(['openclaw', 'hermes'])('rejects the remote-task %s runtime', (type) => {
-    expect(getChannelAgentIssue(selection, withRuntime(type))).toBe('unsupportedRuntime');
+  it.each(['openclaw', 'hermes'])('accepts the remote-task %s runtime with no device', (type) => {
+    expect(getChannelAgentIssue({ agentId: 'agent' }, withRuntime(type))).toBeUndefined();
+    expect(isRemoteChannelAgent(withRuntime(type))).toBe(true);
+  });
+
+  it('keeps a device picker for local runtimes', () => {
+    expect(isRemoteChannelAgent(withRuntime('kimi-code'))).toBe(false);
+  });
+
+  it('rejects an unknown runtime', () => {
+    expect(getChannelAgentIssue(selection, withRuntime('unknown-cli'))).toBe('unsupportedRuntime');
   });
 });
 

@@ -7,13 +7,13 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ShareButton from '@/business/client/features/PageShare/ShareButton';
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { AutoSaveHint } from '@/features/EditorCanvas';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { oneLineEllipsis } from '@/styles';
+import { useHeaderActionSize } from '@/styles/density';
 
 import { useMenu } from './useMenu';
 
@@ -49,6 +49,7 @@ const Header = memo<HeaderProps>(
   }) => {
     const { t } = useTranslation(['file', 'chat']);
     const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
+    const headerActionSmallSize = useHeaderActionSize(true);
     const showTitleError = !!itemError && !title;
     const resolvedTitle = showTitleError
       ? t('workingPanel.resources.error', { ns: 'chat' })
@@ -92,7 +93,7 @@ const Header = memo<HeaderProps>(
               placement={'bottomLeft'}
               popupProps={{ style: { minWidth: 200 } }}
             >
-              <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
+              <ActionIcon icon={MoreHorizontal} size={headerActionSmallSize} />
             </DropdownMenu>
           </Flexbox>
         }

@@ -85,6 +85,7 @@ import {
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
   spawnDshAcpSession,
+  stopClaudeCodeTask,
 } from '@lobechat/heterogeneous-agents/spawn';
 import {
   buildClaudeCodeReplayTurn,
@@ -161,7 +162,17 @@ import { createLogger } from '@/utils/logger';
 
 import BrowserControlCtr from './BrowserControlCtr';
 import { sendPromptWithCodexAppServer } from './codexAppServer';
-import type { AgentSession, CliTraceSession, SendPromptParams } from './heterogeneousAgentSession';
+import { createLiveCliAdapter, endLiveCliRun, writeCliPrompt } from './heterogeneousAgentLiveInput';
+import type {
+  AgentSession,
+  CancelSessionParams,
+  CliTraceSession,
+  GetSessionInfoParams,
+  SendPromptParams,
+  StopBackgroundTaskParams,
+  StopSessionParams,
+  SubmitInterventionParams,
+} from './heterogeneousAgentSession';
 import {
   claudeProfileDirOf,
   closeActiveAcpSessions,
@@ -169,6 +180,12 @@ import {
   interruptActiveAcpSession,
   sendPromptWithAcpSession,
 } from './heterogeneousAgentSession';
+import {
+  steerAgentSession,
+  type SteerSessionParams,
+  type SteerSessionResult,
+} from './heterogeneousAgentSteer';
+import { redactPromptArgs } from './redactPromptArgs';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
 const logger = createLogger('controllers:HeterogeneousAgentCtr');
@@ -250,27 +267,7 @@ const PI_RPC_POOL_DEFAULT_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const waitForHeteroSessionCompleteGrace = () =>
   new Promise<void>((resolve) => setTimeout(resolve, HETERO_SESSION_COMPLETE_GRACE_MS));
 
-export const redactPromptArgs = (args: string[], agentType: HeterogeneousAgentType): string[] => {
-  let redactNext = false;
-  const supportsShortPromptFlag = agentType === 'kimi-code';
-
-  return args.map((arg) => {
-    if (redactNext) {
-      redactNext = false;
-      return '[REDACTED]';
-    }
-
-    if (arg === '--prompt' || (supportsShortPromptFlag && arg === '-p')) {
-      redactNext = true;
-      return arg;
-    }
-
-    if (arg.startsWith('--prompt=')) return '--prompt=[REDACTED]';
-    if (supportsShortPromptFlag && arg.startsWith('-p=')) return '-p=[REDACTED]';
-
-    return arg;
-  });
-};
+export { redactPromptArgs };
 
 // ─── IPC types ───
 
@@ -323,30 +320,6 @@ export interface HeteroTranscriptReplayOutcome {
 interface BrowserRunBinding {
   agentId?: string;
   topicId?: string;
-}
-
-interface CancelSessionParams {
-  sessionId: string;
-}
-
-interface SubmitInterventionParams {
-  cancelled?: boolean;
-  /** When set, signals user-cancelled or timeout — the bridge resolves with isError. */
-  cancelReason?: 'timeout' | 'user_cancelled';
-  /** Operation id stamped on the request the renderer is responding to. */
-  operationId: string;
-  /** Structured user answer; ignored when `cancelled` is true. */
-  result?: unknown;
-  /** Correlation key carried on the original `agent_intervention_request`. */
-  toolCallId: string;
-}
-
-interface StopSessionParams {
-  sessionId: string;
-}
-
-interface GetSessionInfoParams {
-  sessionId: string;
 }
 
 /**
@@ -1981,6 +1954,8 @@ export default class HeterogeneousAgentCtr {
       },
       onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
       operationId: params.operationId,
+      // Like the CLI, in every Follow-up mode: a steer is confirmed by its replay.
+      replayUserMessages: true,
       resumeSessionId: session.agentSessionId,
       sessionId: session.sessionId,
       stdinPayload: input.stdin,
@@ -2387,13 +2362,11 @@ export default class HeterogeneousAgentCtr {
       reject(new Error(typeof sessionError === 'string' ? sessionError : sessionError.message));
     });
 
-    // In stdin mode, write the prepared payload and close stdin.
+    // In stdin mode, write the prepared payload; close stdin unless live (Claude Code always is).
     if (useStdin && spawnPlan.stdinPayload !== undefined && proc.stdin) {
       void this.writeCliTraceFile(traceSession, 'stdin.txt', spawnPlan.stdinPayload);
-      const stdin = proc.stdin as Writable;
-      stdin.write(spawnPlan.stdinPayload, () => {
-        stdin.end();
-      });
+      const live = !!spawnPlan.liveInput;
+      session.liveInput = writeCliPrompt(proc.stdin as Writable, spawnPlan.stdinPayload, live);
     }
 
     session.process = proc;
@@ -2417,6 +2390,7 @@ export default class HeterogeneousAgentCtr {
     // file-change diff/stat tracker when `agentType === 'codex'`, so this
     // controller stays agent-agnostic.
     const pipeline = new AgentStreamPipeline({
+      ...(session.liveInput && { adapter: createLiveCliAdapter() }),
       agentType: session.agentType,
       cwd,
       env: spawnEnv,
@@ -2428,9 +2402,11 @@ export default class HeterogeneousAgentCtr {
       uploadImage: this.uploadResultImage,
     });
     let stdoutBroadcastQueue: Promise<void> = Promise.resolve();
+    let sawError = false;
 
     const broadcastStreamEvents = (events: AgentStreamEvent[]) => {
       for (const event of events) {
+        if (event.type === 'error') sawError = true;
         this.broadcast('heteroAgentEvent', {
           event,
           sessionId: session.sessionId,
@@ -2493,9 +2469,11 @@ export default class HeterogeneousAgentCtr {
     const stdout = proc.stdout as Readable;
     stdout.on('data', (chunk: Buffer) => {
       void this.appendCliTraceFile(traceSession, 'stdout.jsonl', chunk);
+      session.liveInput?.observe(chunk);
       broadcastPipelineBatch(() => pipeline.push(chunk));
     });
     stdout.on('end', () => {
+      session.liveInput?.finish();
       broadcastPipelineBatch(() => pipeline.flush());
     });
 
@@ -2557,11 +2535,8 @@ export default class HeterogeneousAgentCtr {
           // which the executor calls once its terminal handling and persistence
           // have settled, is the acknowledgement that releases it.
 
-          // If *we* killed it (cancel / stop / before-quit), treat the non-zero
-          // exit as a clean shutdown — surfacing it as an error would make a
-          // user-initiated cancel look like an agent failure, and an Electron
-          // shutdown affecting OTHER running CC sessions would pollute their
-          // topics with a misleading "Agent exited with code 143" message.
+          // If *we* killed it (cancel / stop / before-quit), a non-zero exit is a clean shutdown: as an
+          // error a cancel reads as an agent failure, a quit leaves "exited with code 143" elsewhere.
           if (session.cancelledByUs) {
             // Quit-driven kill: say nothing to the renderer. A `complete`
             // broadcast (or a settled `sendPrompt`) reaching a renderer that
@@ -2575,8 +2550,12 @@ export default class HeterogeneousAgentCtr {
             return;
           }
 
-          if (code === 0) {
-            broadcastStreamEvents(pipeline.validateCompletion());
+          const liveInput = session.liveInput;
+          session.liveInput = undefined;
+          if (code === 0) broadcastStreamEvents(pipeline.validateCompletion());
+          const liveEnd = endLiveCliRun(pipeline, liveInput, { code, sawError, signal });
+          if (code === 0 || liveEnd.length > 0) {
+            broadcastStreamEvents(liveEnd);
             this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
             resolve();
           } else {
@@ -3131,6 +3110,11 @@ export default class HeterogeneousAgentCtr {
    * Throws:
    * - When a CLI process remains active after the bounded SIGKILL escalation.
    */
+  /** Deliver a message into the session's running turn (Follow-up behavior: Steer). */
+  steerSession(params: SteerSessionParams): Promise<SteerSessionResult> {
+    return steerAgentSession(this.sessions.get(params.sessionId), params, this.fileCacheDir);
+  }
+
   async cancelSession(params: CancelSessionParams): Promise<void> {
     const session = this.sessions.get(params.sessionId);
     if (!session) return;
@@ -3171,6 +3155,7 @@ export default class HeterogeneousAgentCtr {
     }
     const proc = session.process;
     const gracefulExit = this.waitForProcessExit(proc, 2000);
+    session.liveInput?.close();
     this.killProcessTree(proc, 'SIGINT');
 
     if (await gracefulExit) return;
@@ -3182,6 +3167,20 @@ export default class HeterogeneousAgentCtr {
     if (!(await forcedExit)) {
       throw new Error(`Session ${params.sessionId} did not exit after SIGKILL`);
     }
+  }
+
+  /**
+   * Stop one background task of a Claude Code run, whose input (SDK stream or
+   * CLI stdin) stays open in every Follow-up mode until the run winds down.
+   * Resolves once CC accepted the request; its `stopped` report, the proof,
+   * reaches the renderer through the run's own stream.
+   */
+  async stopBackgroundTask({ sessionId, taskId }: StopBackgroundTaskParams): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (session?.sdkSession) return session.sdkSession.stopTask(taskId);
+    const live = session?.liveInput;
+    if (!live) throw new Error('This run cannot stop a single background task');
+    await stopClaudeCodeTask((request) => live.sendControlRequest(request), taskId);
   }
 
   /**
@@ -3228,6 +3227,7 @@ export default class HeterogeneousAgentCtr {
     if (session.process && !session.process.killed) {
       session.cancelledByUs = true;
       const proc = session.process;
+      session.liveInput?.close();
       this.killProcessTree(proc, 'SIGTERM');
       setTimeout(() => {
         if (session.process === proc && !proc.killed) {

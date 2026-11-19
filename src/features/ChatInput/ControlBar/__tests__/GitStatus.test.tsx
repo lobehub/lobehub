@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { gitService } from '@/services/git';
+import { useUserStore } from '@/store/user';
 
 import GitStatus from '../GitStatus';
 
@@ -41,6 +42,12 @@ vi.mock('../BranchSwitcher', () => ({
 vi.mock('../WorktreeSwitcher', () => ({
   default: ({ disabled }: { disabled?: boolean }) => (
     <span data-disabled={Boolean(disabled)} data-testid="worktree-switcher" />
+  ),
+}));
+
+vi.mock('../TopicPullRequestChip', () => ({
+  default: ({ topicId }: { topicId: string }) => (
+    <span data-testid="topic-pull-request-chip">{topicId}</span>
   ),
 }));
 
@@ -645,5 +652,74 @@ describe('GitStatus', () => {
 
     expect(screen.getByTestId('worktree-switcher')).toHaveAttribute('data-disabled', 'false');
     expect(screen.getByText('fix/remote-review')).toBeInTheDocument();
+  });
+});
+
+describe('GitStatus — Better Coding Experience pull requests', () => {
+  const setLab = (on: boolean) => {
+    const preference = useUserStore.getState().preference;
+    useUserStore.setState({
+      preference: { ...preference, lab: { ...preference.lab, enableBetterCodingExperience: on } },
+    });
+  };
+
+  afterEach(() => setLab(false));
+
+  it('shows the topic PR chip instead of the branch PR, and never asks gh for the branch', () => {
+    setLab(true);
+    gitHookMocks.useFetchGitLinkedPR.mockReturnValue({
+      data: {
+        pullRequest: { number: 77, state: 'OPEN', title: 'guessed', url: 'https://x/77' },
+      },
+      mutate: gitHookMocks.mutatePR,
+    });
+
+    render(<GitStatus isGithub agentId="agent-1" path="/repo" topicId="topic-1" />);
+
+    expect(gitHookMocks.useFetchGitLinkedPR).toHaveBeenCalledWith(
+      undefined,
+      '/repo',
+      'fix/remote-review',
+      false,
+    );
+    expect(screen.queryByText('#77')).toBeNull();
+    expect(screen.getByTestId('topic-pull-request-chip')).toHaveTextContent('topic-1');
+  });
+
+  it('shows no PR at all on a new conversation', () => {
+    setLab(true);
+
+    render(<GitStatus isGithub agentId="agent-1" path="/repo" topicId={null} />);
+
+    expect(screen.queryByTestId('topic-pull-request-chip')).toBeNull();
+  });
+
+  it('keeps the branch PR chip without the lab', () => {
+    gitHookMocks.useFetchGitLinkedPR.mockReturnValue({
+      data: { pullRequest: { number: 77, state: 'OPEN', title: 'branch', url: 'https://x/77' } },
+      mutate: gitHookMocks.mutatePR,
+    });
+
+    render(<GitStatus isGithub agentId="agent-1" path="/repo" topicId="topic-1" />);
+
+    expect(screen.getByText('#77')).toBeInTheDocument();
+    expect(screen.queryByTestId('topic-pull-request-chip')).toBeNull();
+  });
+
+  it('keeps the topic PR chip while the device cannot be read', () => {
+    setLab(true);
+    deviceStoreMock.devices = [{ deviceId: 'device-1', online: false }];
+    gitHookMocks.useFetchGitBranch.mockReturnValue({
+      data: undefined,
+      error: new Error('offline'),
+      isConfirmed: false,
+      mutate: gitHookMocks.mutateBranch,
+    });
+
+    render(
+      <GitStatus isGithub agentId="agent-1" deviceId="device-1" path="/repo" topicId="topic-1" />,
+    );
+
+    expect(screen.getByTestId('topic-pull-request-chip')).toHaveTextContent('topic-1');
   });
 });

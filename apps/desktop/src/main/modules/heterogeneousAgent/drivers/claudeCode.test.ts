@@ -21,6 +21,13 @@ const buildParams = (
 });
 
 describe('claudeCodeDriver', () => {
+  it('keeps every run live, as `lh hetero exec` does: input stays open and each read message is replayed', async () => {
+    const plan = await claudeCodeDriver.buildSpawnPlan(buildParams());
+
+    expect(plan.args).toContain('--replay-user-messages');
+    expect(plan.liveInput).toBe(true);
+  });
+
   it('prepares the namespaced server-default model without persisting the operation token', async () => {
     const plan = await claudeCodeDriver.prepareServerDefaultBinding!({
       args: [],

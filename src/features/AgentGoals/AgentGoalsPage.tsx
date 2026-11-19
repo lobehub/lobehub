@@ -9,10 +9,11 @@ import {
   Empty,
   Flexbox,
   ScrollShadow,
+  SearchBar,
   Segmented,
   Text,
 } from '@lobehub/ui';
-import { LayoutGridIcon, ListIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
+import { LayoutGridIcon, ListIcon, PlusIcon, RefreshCwIcon, SearchXIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -25,6 +26,7 @@ import { useCacheScope } from '@/libs/swr/useCacheScope';
 import type { GoalListFilter } from '@/store/goal';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 import { globalGoalListScopeId, goalListKey, goalListScopeId } from '@/store/goal/projection';
+import { useDensityTokens } from '@/styles/density';
 
 import { createGoalModal } from './CreateGoalModal';
 import GoalAgentFilter from './GoalAgentFilter';
@@ -32,6 +34,7 @@ import { goalAgentFilterOptions } from './goalAgentFilterOptions';
 import { GoalCardItem } from './GoalCardItem';
 import GoalEmptyState from './GoalEmptyState';
 import type { GoalExampleSeed } from './goalExamples';
+import { filterGoalsByKeyword, normalizeGoalKeyword } from './goalKeywordFilter';
 import { GoalListItem } from './GoalListItem';
 import { useGoalListAutoLoad } from './useGoalListAutoLoad';
 
@@ -75,6 +78,10 @@ const styles = createStaticStyles(({ css }) => ({
       border-inline-start: 0;
     }
   `,
+  search: css`
+    flex: none;
+    width: 200px;
+  `,
   sentinel: css`
     height: 1px;
   `,
@@ -110,6 +117,7 @@ interface AgentGoalsPageProps {
 
 const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   const { t } = useTranslation('chat');
+  const { pageTitleFontSize } = useDensityTokens();
   const navigate = useWorkspaceAwareNavigate();
   const cacheScope = useCacheScope();
   const isGlobal = !agentId && !projectId;
@@ -127,6 +135,8 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   const viewMode = useGoalStore((s) => s.goalViewMode);
   const visibleLimit = useGoalStore((s) => s.goalListVisibleLimit);
   const setFilter = useGoalStore((s) => s.setGoalListFilter);
+  const keyword = useGoalStore((s) => s.goalListKeyword);
+  const setKeyword = useGoalStore((s) => s.setGoalListKeyword);
   const setViewMode = useGoalStore((s) => s.setGoalViewMode);
   const loadMoreGoals = useGoalStore((s) => s.loadMoreGoals);
   // The rows live in the replica view; the hook only orchestrates the fetch, so
@@ -239,12 +249,24 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
     () => (filter === 'all' ? goals : (tabView?.goals ?? [])),
     [filter, goals, tabView],
   );
+  // The search box narrows the tab's rows on the client. It can only see the
+  // page the tab loaded, so a tab holding more goals than that says so below
+  // the matches instead of presenting them as the whole answer.
+  const isSearching = normalizeGoalKeyword(keyword) !== '';
+  const searchedGoals = useMemo(
+    () => filterGoalsByKeyword(filteredGoals, keyword),
+    [filteredGoals, keyword],
+  );
+  const tabTotal = filter === 'all' ? listView?.total : tabView?.total;
+  const isSearchPartial =
+    isSearching && !isTabUnresolved && tabTotal !== undefined && tabTotal > filteredGoals.length;
   const isFilterEmpty = !isTabUnresolved && filteredGoals.length === 0;
+  const isSearchEmpty = isSearching && !isFilterEmpty && searchedGoals.length === 0;
   // The tab's count is the server's answer for that tab. Until it arrives — or
   // when it failed — the list's page cannot stand in for it either.
-  const visibleGoalCount = isTabUnresolved ? '—' : filteredGoals.length;
+  const visibleGoalCount = isTabUnresolved ? '—' : searchedGoals.length;
   const GoalItem = viewMode === 'list' ? GoalListItem : GoalCardItem;
-  const hasMoreGoals = !isTabUnresolved && visibleLimit < filteredGoals.length;
+  const hasMoreGoals = !isTabUnresolved && visibleLimit < searchedGoals.length;
   const sentinelRef = useGoalListAutoLoad(hasMoreGoals, loadMoreGoals, visibleLimit);
   const openCreateGoal = (seed?: GoalExampleSeed) => {
     createGoalModal({
@@ -353,7 +375,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
               {/* Wraps so the filters drop below the title on a phone instead of crushing it. */}
               <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
                 <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
-                  <Text fontSize={16} weight={600}>
+                  <Text fontSize={pageTitleFontSize} weight={600}>
                     {t('goalPage.listTitle')}
                   </Text>
                   <span className={styles.countBadge}>{visibleGoalCount}</span>
@@ -368,6 +390,16 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                   size={24}
                   style={{ maxWidth: '100%' }}
                 >
+                  <SearchBar
+                    allowClear
+                    aria-label={t('goalPage.searchPlaceholder')}
+                    className={styles.search}
+                    placeholder={t('goalPage.searchPlaceholder')}
+                    size={'small'}
+                    value={keyword}
+                    variant={'filled'}
+                    onInputChange={setKeyword}
+                  />
                   {isGlobal && (
                     <GoalAgentFilter
                       options={agentFilterOptions}
@@ -432,8 +464,16 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                       title={t('goalPage.filteredEmptyTitle')}
                     />
                   </Block>
+                ) : isSearchEmpty ? (
+                  <Block padding={32} variant={'outlined'}>
+                    <Empty
+                      description={t('goalPage.searchEmptyDescription')}
+                      icon={SearchXIcon}
+                      title={t('goalPage.searchEmptyTitle', { keyword: keyword.trim() })}
+                    />
+                  </Block>
                 ) : (
-                  filteredGoals
+                  searchedGoals
                     .slice(0, visibleLimit)
                     .map((item) => (
                       <GoalItem
@@ -446,6 +486,14 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                 )}
               </div>
               {hasMoreGoals && <div aria-hidden className={styles.sentinel} ref={sentinelRef} />}
+              {isSearchPartial && (
+                <Text align={'center'} fontSize={12} type={'secondary'}>
+                  {t('goalPage.searchPartial', {
+                    loaded: filteredGoals.length,
+                    total: tabTotal,
+                  })}
+                </Text>
+              )}
             </Flexbox>
           </>
         )}

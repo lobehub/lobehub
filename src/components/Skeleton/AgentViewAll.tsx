@@ -8,6 +8,7 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useDensityTokens } from '@/styles/density';
 
 import SkeletonBar from './Bar';
 
@@ -117,32 +118,39 @@ export const AgentViewAllRowsSkeleton = ({ rows = 8 }: { rows?: number }) => (
  * with the "In sidebar" block and the toolbar (240px-max search left, split
  * create button right) over list-view rows (also the loading state of the card view).
  */
-const AgentViewAllSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => (
-  <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
-    {chrome !== 'body' && (
-      <Flexbox
-        horizontal
-        align={'center'}
-        flex={'none'}
-        height={44}
-        justify={'space-between'}
-        padding={8}
-      >
-        <Flexbox style={{ paddingInlineStart: 4 }}>
-          <SkeletonBar height={14} width={48} />
+const AgentViewAllSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
+  const { headerActionSmallSize, headerHeight } = useDensityTokens();
+
+  return (
+    <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
+      {chrome !== 'body' && (
+        <Flexbox
+          horizontal
+          align={'center'}
+          flex={'none'}
+          height={headerHeight}
+          justify={'space-between'}
+          padding={8}
+        >
+          <Flexbox style={{ paddingInlineStart: 4 }}>
+            <SkeletonBar height={14} width={48} />
+          </Flexbox>
+          <SkeletonBar
+            height={headerActionSmallSize.blockSize}
+            width={headerActionSmallSize.blockSize}
+          />
         </Flexbox>
-        <SkeletonBar height={28} width={28} />
-      </Flexbox>
-    )}
-    <WideScreenContainer fullWidth gap={16} paddingBlock={16} paddingInline={16}>
-      <AgentViewAllSidebarSectionSkeleton />
-      <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
-        <SkeletonBar height={32} width={206} />
-        <SkeletonBar height={32} width={64} />
-      </Flexbox>
-      <AgentViewAllRowsSkeleton />
-    </WideScreenContainer>
-  </Flexbox>
-);
+      )}
+      <WideScreenContainer fullWidth gap={16} paddingBlock={16} paddingInline={16}>
+        <AgentViewAllSidebarSectionSkeleton />
+        <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+          <SkeletonBar height={32} width={206} />
+          <SkeletonBar height={32} width={64} />
+        </Flexbox>
+        <AgentViewAllRowsSkeleton />
+      </WideScreenContainer>
+    </Flexbox>
+  );
+};
 
 export default AgentViewAllSkeleton;

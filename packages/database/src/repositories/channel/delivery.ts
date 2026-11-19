@@ -17,6 +17,7 @@ import {
 import type { Transaction } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
 import { ChannelError } from './error';
+import { unhideForActivity } from './sections';
 
 /** Why a deferred `followup` has not started; see {@link deliver} and `claimJob`. */
 export const AWAITING_PRIMARY_REASON = 'Waiting for the first responder to finish';
@@ -166,8 +167,13 @@ export const appendMessage = async (
   tx: Transaction,
   values: Omit<NewChannelMessage, 'sequence' | 'id'> & { id?: string },
 ): Promise<ChannelMessageItem> => {
+  // A reply is an Agent's; a request is a person's, or an Agent's in a conversation between Agents.
   const isReply = values.routingStatus === 'reply';
-  if (isReply ? !values.agentId || values.userId != null : !values.userId || values.agentId != null)
+  if (
+    isReply
+      ? !values.agentId || values.userId != null
+      : Boolean(values.userId) === Boolean(values.agentId)
+  )
     throw new ChannelError(
       'BAD_REQUEST',
       'A message requires exactly one sender of the correct type',
@@ -181,6 +187,7 @@ export const appendMessage = async (
     .insert(channelMessages)
     .values({ ...values, sequence })
     .returning();
+  await unhideForActivity(tx, values.channelId);
 
   return message;
 };

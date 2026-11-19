@@ -1,6 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import type { DeviceGitUpstreamRef } from '@lobechat/types';
-import { getWorkingDirSourcePath } from '@lobechat/types';
+import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 
 import { gitService } from '@/services/git';
@@ -8,7 +8,11 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { getChatStoreState } from '@/store/chat/store';
 import { getGitStatusStoreState } from '@/store/device/gitStatus/store';
 import { getElectronStoreState } from '@/store/electron';
+import { getUserStoreState } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
+import { applyOwnBranchToConfig, parseCreatedBranch } from './ownBranch';
+import { linkPushedPullRequests } from './pushedPullRequests';
 import {
   applyBranchToConfig,
   applyDetachedToConfig,
@@ -39,6 +43,11 @@ import {
 /** Flags on `git worktree add` that consume the following token as their value. */
 const VALUE_FLAGS = new Set(['-b', '-B', '--reason']);
 const BRANCH_VALUE_FLAGS = new Set(['-b', '-B']);
+/**
+ * Branch flags that can only CREATE: `-C` / `-B` / `--force-create` also reset an
+ * existing branch, so a successful run with them proves nothing about who made it.
+ */
+const CREATE_ONLY_BRANCH_FLAGS = new Set(['-b', '-c', '--create', '--orphan']);
 const BRANCH_SWITCH_VALUE_FLAGS = new Set([
   '-b',
   '-B',
@@ -102,13 +111,16 @@ const CC_SESSION_ENTER_MARKER = 'The session is now working in the worktree';
 
 interface WorktreeAddParseResult {
   branch?: string;
+  /** `-b` named {@link branch}: git refuses it when the branch exists, so it is new. */
+  createdBranch?: boolean;
   /** Resolved absolute path, present only when the command yielded a trustworthy literal. */
   path?: string;
   /** Positional commit-ish (often the checked-out branch) — hint for the device lookup. */
   ref?: string;
 }
 
-type BranchSwitchInfo = { branch: string } | { detached: true };
+/** `created`: a creation flag named the branch (`-c` / `-b` / `--orphan` …). */
+type BranchSwitchInfo = { branch: string; created?: true } | { detached: true };
 
 const stripQuotes = (token: string): string => {
   if (token.length >= 2) {
@@ -295,6 +307,7 @@ const parseGitBranchSwitchTokens = (
   if (!git || !GIT_BRANCH_SWITCH_SUBCOMMANDS.has(git.subcommand)) return undefined;
 
   let branch: string | undefined;
+  let created = false;
   for (let i = 0; i < git.args.length; i += 1) {
     const token = git.args[i];
     if (DETACH_FLAGS.has(stripQuotes(token))) return { detached: true };
@@ -302,6 +315,7 @@ const parseGitBranchSwitchTokens = (
     const branchFlag = getOptionValue(git.args, i, [...BRANCH_SWITCH_VALUE_FLAGS], env);
     if (branchFlag.value) {
       branch = normalizeBranch(branchFlag.value);
+      created = CREATE_ONLY_BRANCH_FLAGS.has(stripQuotes(token).split('=')[0]);
       break;
     }
     if (branchFlag.skipNext) {
@@ -323,7 +337,7 @@ const parseGitBranchSwitchTokens = (
     break;
   }
 
-  return branch ? { branch } : undefined;
+  return branch ? { branch, ...(created ? { created: true as const } : {}) } : undefined;
 };
 
 const isGitBranchSwitchCommand = (tokens: string[]): boolean | undefined => {
@@ -476,7 +490,11 @@ const parsePushRefMappings = (content?: string): PushRefMapping[] => {
     if (local === '(none)' || local.startsWith('refs/tags/') || remote.startsWith('refs/tags/'))
       continue;
 
-    mappings.push({ local, remote: remote.replace(/^refs\/heads\//, '') });
+    const mapping = { local, remote: remote.replace(/^refs\/heads\//, '') };
+    // git writes the table to stderr; a result that carries both streams (or
+    // echoes them) states the same mapping twice — one ref, not an ambiguity.
+    if (!mappings.some((m) => m.local === mapping.local && m.remote === mapping.remote))
+      mappings.push(mapping);
   }
   return mappings;
 };
@@ -532,6 +550,10 @@ const parseGitPush = (
 
   return { branch: remoteBranch, remote: push.remote ?? 'origin' };
 };
+
+/** The command runs a fallback when an earlier step fails (`a || b`). */
+const hasFailureRecovery = (command: string | string[]): boolean =>
+  (Array.isArray(command) ? command.join(' ') : command).includes('||');
 
 /** Collapse `.`/`..` segments in a POSIX path without touching the filesystem. */
 const normalizePosix = (p: string): string => {
@@ -671,12 +693,14 @@ const parseGitWorktreeAddTokens = (
 
   // Positionals after `add`: first is the worktree path, second the commit-ish.
   let branch: string | undefined;
+  let createdBranch = false;
   let path: string | undefined;
   let ref: string | undefined;
   for (; i < tokens.length; i += 1) {
     const token = tokens[i];
     if (BRANCH_VALUE_FLAGS.has(token)) {
       branch = resolveToken(tokens[i + 1] ?? '', env) || branch;
+      createdBranch = CREATE_ONLY_BRANCH_FLAGS.has(token);
       i += 1; // skip this flag's value
       continue;
     }
@@ -699,6 +723,7 @@ const parseGitWorktreeAddTokens = (
 
   return {
     ...(branch ? { branch } : {}),
+    ...(branch && createdBranch ? { createdBranch: true } : {}),
     ...(ref ? { ref } : {}),
     ...(isLiteralPath(path) ? { path: resolveWorktreePath(path, baseCwd) } : {}),
   };
@@ -919,10 +944,14 @@ export const recordWorktreeAdd = async (params: {
 export const recordGitCommandEffects = async (params: {
   command: string | string[];
   resultContent?: string;
+  /** The shell call's id; lets the server re-read a push to link its PR. */
+  toolCallId?: string;
   topicId: string;
 }): Promise<void> => {
-  const { command, resultContent, topicId } = params;
+  const { command, resultContent, toolCallId, topicId } = params;
   const state = getChatStoreState();
+  // Better Coding Experience: PRs reach the topic only as server Work rows.
+  const betterCoding = labPreferSelectors.enableBetterCodingExperience(getUserStoreState());
 
   const topic = topicSelectors.getTopicById(topicId)(state);
   const currentConfig = topic?.metadata?.workingDirectoryConfig;
@@ -966,7 +995,27 @@ export const recordGitCommandEffects = async (params: {
     nextConfig = applyPushToConfig(nextConfig, source, pushUpstream);
   }
 
-  const prCreate = parseGhPrCreate(command, resultContent);
+  // A branch the agent created is the conversation's own: its PR may be looked up.
+  // The creation shows in git's output, or — with `-q`, which prints nothing —
+  // in the creation flag that named it. A chain that recovers from a failure
+  // (`git switch -c x || git switch x`) succeeds whether or not the creation
+  // did, so only git's own output can say so there.
+  if (betterCoding) {
+    const commandSaysCreated = !hasFailureRecovery(command);
+    const created =
+      parseCreatedBranch(resultContent) ??
+      (commandSaysCreated && branchSwitch && 'created' in branchSwitch
+        ? branchSwitch.branch
+        : undefined) ??
+      (() => {
+        if (!commandSaysCreated) return undefined;
+        const worktreeAdd = parseWorktreeAddInfo(command, source);
+        return worktreeAdd?.createdBranch ? worktreeAdd.branch : undefined;
+      })();
+    nextConfig = applyOwnBranchToConfig(nextConfig, created);
+  }
+
+  const prCreate = betterCoding ? undefined : parseGhPrCreate(command, resultContent);
   if (prCreate) {
     nextConfig = applyPullRequestToConfig(nextConfig, source, prCreate);
   }
@@ -987,6 +1036,18 @@ export const recordGitCommandEffects = async (params: {
       currentDeviceId && boundDeviceId === currentDeviceId ? 'local' : boundDeviceId;
     const revalidateDeviceId = cacheDeviceId === 'local' ? undefined : cacheDeviceId;
     await getGitStatusStoreState().revalidateGitStatus(revalidateDeviceId, source, ['branch']);
+
+    const branch = nextConfig?.git?.branch;
+    if (betterCoding && pushUpstream && toolCallId && branch) {
+      // Not awaited: the device lookup and the server's re-read may retry.
+      void linkPushedPullRequests({
+        branch,
+        deviceId: revalidateDeviceId,
+        path: getWorkingDirEffectivePath(nextConfig) ?? source,
+        toolCallId,
+        topicId,
+      });
+    }
   }
 };
 
@@ -1038,7 +1099,9 @@ export const recordWorktreeEnter = async (params: {
   const worktreeInfo = parseWorktreeEnterInfo(content);
   if (!worktreeInfo || !source || worktreeInfo.path === source) return;
 
-  const nextConfig = applyWorktreeAddToConfig(currentConfig, source, worktreeInfo);
+  let nextConfig = applyWorktreeAddToConfig(currentConfig, source, worktreeInfo);
+  if (labPreferSelectors.enableBetterCodingExperience(getUserStoreState()))
+    nextConfig = applyOwnBranchToConfig(nextConfig, parseCreatedBranch(content))!;
 
   if (isEqual(currentConfig, nextConfig)) return;
   await state.updateTopicMetadata(topicId, { workingDirectoryConfig: nextConfig });

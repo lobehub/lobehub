@@ -61,6 +61,9 @@ export const componentMap = {
   [SettingsTabs.Environments]: dynamic(() => import('../environments'), {
     loading: loading('Settings > Environments'),
   }),
+  [SettingsTabs.SubscriptionAccounts]: dynamic(() => import('../subscription-accounts'), {
+    loading: loading('Settings > Subscription Accounts'),
+  }),
   [SettingsTabs.Labels]: dynamic(() => import('../labels'), {
     loading: loading('Settings > Labels'),
   }),
@@ -94,6 +97,9 @@ export const componentMap = {
   }),
   [SettingsTabs.Automations]: dynamic(() => import('../automations'), {
     loading: loading('Settings > Automations'),
+  }),
+  [SettingsTabs.Webhooks]: dynamic(() => import('../webhooks'), {
+    loading: loading('Settings > Webhooks'),
   }),
   [SettingsTabs.Tools]: dynamic(() => import('../tools'), {
     loading: loading('Settings > Tools'),

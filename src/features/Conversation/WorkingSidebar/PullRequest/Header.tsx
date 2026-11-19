@@ -2,12 +2,12 @@ import type { DeviceGitPullRequestAction, DeviceGitPullRequestDetail } from '@lo
 import {
   ActionIcon,
   copyToClipboard,
-  cx,
   type DropdownItem,
   DropdownMenu,
   Icon,
   toast,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import {
   ArrowRightIcon,
   ChevronDownIcon,
@@ -18,8 +18,8 @@ import {
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { electronSystemService } from '@/services/electron/system';
 import { useGitRemoteBranches } from '@/store/device';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { rowStyles } from '../Overview/OverviewRow';
 import PrHead, { headStyles, PrStatePill, PrTitle } from './Head';
@@ -37,6 +37,7 @@ interface HeaderProps {
 const Header = memo<HeaderProps>(
   ({ actionsDisabled, activityLoaded = true, detail, deviceId, onAction, workingDirectory }) => {
     const { t } = useTranslation('chat');
+    const openOnGithubLabel = t('workingPanel.pr.menu.openOnGithub');
     const canChangeBase = detail.viewerCanWrite && detail.state === 'open';
     const [basePickerOpen, setBasePickerOpen] = useState(false);
     const { data: remoteBranches } = useGitRemoteBranches(
@@ -57,8 +58,6 @@ const Header = memo<HeaderProps>(
             },
           }))
       : [{ disabled: true, key: 'loading', label: t('workingPanel.review.baseRef.loading') }];
-
-    const openOnGithub = () => void electronSystemService.openExternalLink(detail.url);
 
     const menuItems: DropdownItem[] = [
       {
@@ -97,10 +96,11 @@ const Header = memo<HeaderProps>(
         actions={
           <>
             <ActionIcon
+              aria-label={openOnGithubLabel}
               icon={ExternalLinkIcon}
               size={'small'}
-              title={t('workingPanel.pr.menu.openOnGithub')}
-              onClick={openOnGithub}
+              title={openOnGithubLabel}
+              onClick={() => openTrustedExternalUrl(detail.url)}
             />
             <DropdownMenu items={menuItems} placement={'bottomRight'}>
               <ActionIcon icon={EllipsisIcon} size={'small'} />
@@ -110,7 +110,7 @@ const Header = memo<HeaderProps>(
         meta={
           <>
             <PrStatePill pr={detail} />
-            <span className={headStyles.ref} title={detail.headRefName}>
+            <span {...stylex.props(headStyles.ref)} title={detail.headRefName}>
               {detail.headRefName}
             </span>
             <Icon icon={ArrowRightIcon} size={11} />
@@ -122,7 +122,7 @@ const Header = memo<HeaderProps>(
                 onOpenChange={setBasePickerOpen}
               >
                 <span
-                  className={cx(headStyles.ref, headStyles.refButton)}
+                  {...stylex.props(headStyles.ref, headStyles.refButton)}
                   role={'button'}
                   tabIndex={0}
                   title={t('workingPanel.pr.header.changeBase')}
@@ -132,16 +132,16 @@ const Header = memo<HeaderProps>(
                 </span>
               </DropdownMenu>
             ) : (
-              <span className={headStyles.ref} title={detail.baseRefName}>
+              <span {...stylex.props(headStyles.ref)} title={detail.baseRefName}>
                 {detail.baseRefName}
               </span>
             )}
             {activityLoaded && (
               <span>· {t('workingPanel.pr.header.commits', { count: detail.commits.length })}</span>
             )}
-            <span className={headStyles.stats}>
-              <span className={rowStyles.changeAdditions}>+{detail.additions}</span>{' '}
-              <span className={rowStyles.changeDeletions}>−{detail.deletions}</span>
+            <span {...stylex.props(headStyles.stats)}>
+              <span {...stylex.props(rowStyles.changeAdditions)}>+{detail.additions}</span>{' '}
+              <span {...stylex.props(rowStyles.changeDeletions)}>−{detail.deletions}</span>
             </span>
           </>
         }

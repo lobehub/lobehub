@@ -45,6 +45,8 @@ export interface StartOperationInput {
   approvalClaim: ApprovalClaimState;
   approvalSourceOperationId?: string;
   approvalSourceToolMessageIds: string[];
+  /** Library skills the agent set to `auto`, kept on the world slot for the skill pool. */
+  autoSkillIds?: string[];
   autoStart: boolean;
   botContext?: InternalExecAgentParams['botContext'];
   botPlatformContext?: InternalExecAgentParams['botPlatformContext'];
@@ -127,6 +129,7 @@ export const startOperation = async (
     approvalClaim,
     approvalSourceOperationId,
     approvalSourceToolMessageIds,
+    autoSkillIds,
     autoStart,
     botContext,
     botPlatformContext,
@@ -248,6 +251,9 @@ export const startOperation = async (
             // actual chokepoint) via `isShareBlockedDataToolCall` — see
             // `shareGate/dispatch.ts`.
             allowReadMemory: shareGate.shareConfig.allowReadMemory,
+            // Re-applied at dispatch by the device-builtin and device-only MCP
+            // gates, so they decide exactly as the assembled tool set did.
+            canUseDevice: shareGate.canUseDevice,
             // Mirrors `shareConfig.toolGrants` so tool runtimes resolved
             // outside `toolManifestMap` (e.g. `activateSkill`, which queries
             // builtin/DB skills by name) can enforce the same allowlist.
@@ -280,6 +286,7 @@ export const startOperation = async (
             visitorUserId: shareGate.visitorUserId,
           }
         : undefined,
+      autoSkillIds,
       disabledPluginIds,
       userTimezone,
       appContext: {

@@ -18,6 +18,7 @@ vi.mock('@/server/modules/AgentRuntime', () => ({
   AgentRuntimeCoordinator: vi.fn().mockImplementation(function () {
     return {
       loadAgentState: vi.fn(),
+      loadAgentStatus: vi.fn().mockResolvedValue(null),
       saveAgentState: vi.fn(),
       saveStepResult: vi.fn(),
       createAgentOperation: vi.fn(),

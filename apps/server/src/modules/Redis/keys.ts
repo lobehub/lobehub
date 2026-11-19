@@ -41,6 +41,11 @@ export const RedisKeyNamespace = {
    */
   BOT_WAKE: 'bot-wake',
   /**
+   * Replay bookkeeping for bot messages parked while their topic was busy: how many times each
+   * parked message reached a run, so one that keeps coming back stops looping.
+   */
+  BOT_DEFERRED: 'bot-deferred',
+  /**
    * Short-lived reply routes an IM platform hands out with an inbound message
    * (DingTalk's `sessionWebhook`), kept so the process that posts the reply
    * can use them even when another one received the message.
@@ -63,6 +68,11 @@ export const RedisKeyNamespace = {
    * Core LOBEHUB application keys (sessions, cache, etc.)
    */
   LOBEHUB: 'lobechat',
+  /**
+   * Public REST API (`packages/openapi`): per-API-key rate-limit windows and
+   * the first response stored for each `Idempotency-Key`.
+   */
+  OPENAPI: 'openapi',
   /**
    * Short-lived derived answers the send path would otherwise re-fetch per
    * turn (device system info, a skill's live tool list) and the one-shot
@@ -123,6 +133,15 @@ export const RedisKeys = {
      */
     nightlyTopics: (userId: string, localDate: string): string =>
       `nightly_topics:v1:${userId}:${localDate}`,
+  },
+  /** Bot deferred-replay scope — see {@link RedisKeyNamespace.BOT_DEFERRED}. */
+  botDeferred: {
+    /**
+     * Times one parked message (by its origin platform id) was replayed into a run.
+     * Full key: bot-deferred:replays:v1:{applicationId}:{threadId}:{messageId}
+     */
+    replays: (applicationId: string, threadId: string, messageId: string): string =>
+      `replays:v1:${applicationId}:${threadId}:${messageId}`,
   },
   /** Bot reply-route scope — see {@link RedisKeyNamespace.BOT_REPLY}. */
   botReply: {
@@ -339,6 +358,23 @@ export const RedisKeys = {
       `workspace_rescan_claim:v1:${userId}:${pool}:${deviceId}:${cwd}`,
   },
   /**
+   * Public REST API scope — see {@link RedisKeyNamespace.OPENAPI}.
+   */
+  openapi: {
+    /**
+     * Requests one caller identity sent to one rate-limit bucket in one fixed window.
+     * Full key: openapi:rate_limit:v1:{identity}:{bucket}:{windowStart}
+     */
+    rateLimit: (identity: string, bucket: string, windowStart: number): string =>
+      `rate_limit:v1:${identity}:${bucket}:${windowStart}`,
+    /**
+     * The claim, then the stored first response, of one user's `Idempotency-Key`.
+     * `{keyHash}` hashes the client key so arbitrary header bytes never reach the key.
+     * Full key: openapi:idempotency:v1:{userId}:{keyHash}
+     */
+    idempotency: (userId: string, keyHash: string): string => `idempotency:v1:${userId}:${keyHash}`,
+  },
+  /**
    * QQ passive-reply scope — see {@link RedisKeyNamespace.QQ_PASSIVE}. `{key}` is
    * `{applicationId}:{threadId}`.
    */
@@ -368,10 +404,12 @@ export const RedisKeyScopeNamespace = {
   agentSignal: RedisKeyNamespace.AGENT_SIGNAL,
   agentSteer: RedisKeyNamespace.AGENT_STEER,
   aiGeneration: RedisKeyNamespace.AI_GENERATION,
+  botDeferred: RedisKeyNamespace.BOT_DEFERRED,
   botReply: RedisKeyNamespace.BOT_REPLY,
   botWake: RedisKeyNamespace.BOT_WAKE,
   integrations: RedisKeyNamespace.INTEGRATIONS,
   lobechat: RedisKeyNamespace.LOBEHUB,
+  openapi: RedisKeyNamespace.OPENAPI,
   qqPassive: RedisKeyNamespace.QQ_PASSIVE,
   sendPathCache: RedisKeyNamespace.SEND_PATH_CACHE,
 } as const satisfies Record<

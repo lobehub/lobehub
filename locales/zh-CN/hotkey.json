@@ -1,6 +1,4 @@
 {
-  "addUserMessage.desc": "将当前输入内容添加为用户消息，但不触发生成",
-  "addUserMessage.title": "添加一条用户消息",
   "commandPalette.desc": "打开全局命令面板快速访问功能",
   "commandPalette.title": "命令面板",
   "deleteAndRegenerateMessage.desc": "删除最后一条消息并重新生成",
@@ -43,7 +41,7 @@
   "showApp.title": "显示主窗口",
   "switchAgent.desc": "通过按住 Ctrl 加数字 0~9 切换固定在侧边栏的助理",
   "switchAgent.title": "快捷切换助理",
-  "switchTab.desc": "通过按住 ⌘/Ctrl 加数字 1~9 跳转到对应位置的标签页",
+  "switchTab.desc": "按住 ⌘/Ctrl 加数字 1~8 跳转到对应位置的标签页，加 9 跳转到最后一个标签页",
   "switchTab.title": "按编号切换标签页",
   "toggleFavorite.desc": "将当前页面加入侧边栏收藏夹，或从中移出",
   "toggleFavorite.title": "加入 / 移出收藏夹",

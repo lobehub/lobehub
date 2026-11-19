@@ -12,15 +12,19 @@ import {
   channelJobs,
   channelMembers,
   channelMessages,
+  channels,
+  channelThreads,
+  users,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import type { ChannelClaim, ChannelClaimOptions } from './claim';
 import { claimJob } from './claim';
-import { appendMessage } from './delivery';
+import { activeMembers, appendMessage, deliver } from './delivery';
 import { ChannelError } from './error';
 import { countManifestMessages, readManifestMessages } from './manifest';
 import type { ChannelOpeningDecision } from './opening';
-import { applyOpening, findOpeningCandidate, findOpeningReply } from './opening';
+import { applyOpening, findCoAddressed, findOpeningCandidate, findOpeningReply } from './opening';
+import { findTextMentions, MAX_REPLY_MENTION_HOPS, replyMentionHops } from './replyMentions';
 import type { ChannelRoutingDecision } from './routing';
 import { resolveRouting } from './routing';
 import type { ChannelStopScope } from './stop';
@@ -399,6 +403,9 @@ export class ChannelExecutionRepository {
   open = (channelId: string, jobId: string, decision: ChannelOpeningDecision) =>
     applyOpening(this.db, channelId, jobId, decision);
 
+  /** The other Agents the job's request asked to answer alongside it. */
+  coAddressed = (channelId: string, jobId: string) => findCoAddressed(this.db, channelId, jobId);
+
   /** The acknowledgement the job posted before its run, if any. */
   openingReply = async (channelId: string, jobId: string) =>
     (await findOpeningReply(this.db, channelId, jobId))?.content;
@@ -473,6 +480,184 @@ export class ChannelExecutionRepository {
       await audit(tx, channelId, 'draft_published', job.id, { messageId: reply.id });
 
       return reply.id;
+    });
+
+  /**
+   * In a conversation between Agents, an answer goes back to the Agent that asked: its published
+   * reply becomes that Agent's next input, queued for the same requester. Only an answer to an
+   * Agent's request wakes anyone, and the asking Agent's own answer is a reply to a reply, so an
+   * exchange ends there unless that Agent asks again. Idempotent; returns whether a job was queued.
+   */
+  deliverAnswerToAsker = async (channelId: string, replyMessageId: string): Promise<boolean> =>
+    withChannelLock(this.db, channelId, async (tx) => {
+      const [row] = await tx
+        .select({ channel: channels, reply: channelMessages })
+        .from(channelMessages)
+        .innerJoin(channels, eq(channels.id, channelMessages.channelId))
+        .where(
+          and(eq(channelMessages.channelId, channelId), eq(channelMessages.id, replyMessageId)),
+        )
+        .limit(1);
+      if (!row?.channel.agentPairKey || row.reply.routingStatus !== 'reply' || !row.reply.replyToId)
+        return false;
+      const [job] = await tx
+        .select({ requesterMemberId: channelJobs.requesterMemberId })
+        .from(channelJobs)
+        .where(
+          and(
+            eq(channelJobs.channelId, channelId),
+            eq(channelJobs.publishedMessageId, replyMessageId),
+          ),
+        )
+        .limit(1);
+      const [request] = await tx
+        .select({ agentId: channelMessages.agentId, routingStatus: channelMessages.routingStatus })
+        .from(channelMessages)
+        .where(
+          and(
+            eq(channelMessages.channelId, channelId),
+            eq(channelMessages.id, row.reply.replyToId),
+          ),
+        )
+        .limit(1);
+      if (!job || !request?.agentId || request.routingStatus === 'reply') return false;
+      if (request.agentId === row.reply.agentId) return false;
+      const [asker] = await tx
+        .select()
+        .from(channelMembers)
+        .where(
+          and(
+            eq(channelMembers.channelId, channelId),
+            eq(channelMembers.agentId, request.agentId),
+            eq(channelMembers.actorType, 'agent'),
+            eq(channelMembers.status, 'active'),
+          ),
+        )
+        .limit(1);
+      if (!asker) return false;
+      const [queued] = await tx
+        .select({ id: channelJobs.id })
+        .from(channelJobs)
+        .where(and(eq(channelJobs.messageId, replyMessageId), eq(channelJobs.memberId, asker.id)))
+        .limit(1);
+      if (queued) return false;
+      await deliver(tx, row.reply, [asker], job.requesterMemberId);
+      await audit(tx, channelId, 'answer_delivered', replyMessageId, { memberId: asker.id });
+      return true;
+    });
+
+  /**
+   * Turns the `@Name` text of a published reply into real mentions: records them on the reply,
+   * so people are notified and see it in their mentions, and queues each mentioned Agent on it,
+   * for the same requester, unless the exchange already took {@link MAX_REPLY_MENTION_HOPS}
+   * Agent-to-Agent hops since a person spoke. A conversation between two Agents has its own
+   * exchange and only records them. Idempotent: a retry finds the mentions already recorded.
+   */
+  deliverReplyMentions = async (
+    channelId: string,
+    replyMessageId: string,
+  ): Promise<{ mentions: string[]; woke: boolean; workspaceId: string | null }> =>
+    withChannelLock(this.db, channelId, async (tx) => {
+      const [row] = await tx
+        .select({ channel: channels, reply: channelMessages })
+        .from(channelMessages)
+        .innerJoin(channels, eq(channels.id, channelMessages.channelId))
+        .where(
+          and(eq(channelMessages.channelId, channelId), eq(channelMessages.id, replyMessageId)),
+        )
+        .limit(1);
+      const none = { mentions: [], woke: false, workspaceId: row?.channel.workspaceId ?? null };
+      if (!row || row.reply.routingStatus !== 'reply' || row.reply.mentions.length) return none;
+      const [job] = await tx
+        .select({
+          memberId: channelJobs.memberId,
+          requesterMemberId: channelJobs.requesterMemberId,
+        })
+        .from(channelJobs)
+        .where(
+          and(
+            eq(channelJobs.channelId, channelId),
+            eq(channelJobs.publishedMessageId, replyMessageId),
+          ),
+        )
+        .limit(1);
+      if (!job) return none;
+
+      const members = await tx
+        .select({
+          actorType: channelMembers.actorType,
+          id: channelMembers.id,
+          name: sql<string>`coalesce(nullif(${channelMembers.name}, ''), nullif(${users.fullName}, ''), ${users.username}, '')`,
+        })
+        .from(channelMembers)
+        .leftJoin(users, eq(users.id, channelMembers.userId))
+        .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.status, 'active')));
+      // Resolve against everyone, the speaker included, so a longer or shared name is still
+      // recognised as the speaker's; only then drop the speaker naming itself.
+      const mentions = findTextMentions(row.reply.content, members).filter(
+        (id) => id !== job.memberId,
+      );
+      if (!mentions.length) return none;
+
+      const [request] = row.reply.replyToId
+        ? await tx
+            .select({
+              metadata: channelMessages.metadata,
+              routingStatus: channelMessages.routingStatus,
+            })
+            .from(channelMessages)
+            .where(
+              and(
+                eq(channelMessages.channelId, channelId),
+                eq(channelMessages.id, row.reply.replyToId),
+              ),
+            )
+            .limit(1)
+        : [];
+      // Only a person's message resets the count; an Agent's reply carries the hops so far.
+      const hops =
+        (request?.routingStatus === 'reply' ? replyMentionHops(request.metadata) : 0) + 1;
+      const agentIds = new Set(
+        members.filter((member) => member.actorType === 'agent').map((member) => member.id),
+      );
+      const targets =
+        row.channel.agentPairKey || hops > MAX_REPLY_MENTION_HOPS
+          ? []
+          : await activeMembers(
+              tx,
+              channelId,
+              mentions.filter((id) => agentIds.has(id)),
+            );
+
+      await tx
+        .update(channelMessages)
+        .set({
+          mentions,
+          ...(targets.length && { metadata: { ...row.reply.metadata, mentionHops: hops } }),
+        })
+        .where(eq(channelMessages.id, replyMessageId));
+      if (row.reply.threadId) {
+        // Like a person's mention, the mentioned follow the Thread they were called into.
+        const [thread] = await tx
+          .select({ followerMemberIds: channelThreads.followerMemberIds })
+          .from(channelThreads)
+          .where(eq(channelThreads.id, row.reply.threadId));
+        if (thread && mentions.some((id) => !thread.followerMemberIds.includes(id)))
+          await tx
+            .update(channelThreads)
+            .set({ followerMemberIds: [...new Set([...thread.followerMemberIds, ...mentions])] })
+            .where(eq(channelThreads.id, row.reply.threadId));
+      }
+      const woke = targets.length
+        ? (await deliver(tx, { ...row.reply, mentions }, targets, job.requesterMemberId)).length > 0
+        : false;
+      await audit(tx, channelId, 'reply_mentioned', replyMessageId, {
+        hops,
+        mentions,
+        woke: targets.map((target) => target.id),
+      });
+
+      return { mentions, woke, workspaceId: row.channel.workspaceId };
     });
 
   /**

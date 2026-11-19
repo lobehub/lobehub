@@ -27,6 +27,11 @@ export const channelRuntime: ServerRuntimeRegistration = {
       ),
       {
         listChannels: messaging.listChannels,
+        listPeople: messaging.listPeople,
+        messagePerson: (params) => {
+          if (!toolCallId) throw new Error('Messaging a person requires a tool call id');
+          return messaging.messagePerson(params, toolCallId);
+        },
         sendMessage: (params) => {
           // The tool call id keys the post, so a retried call returns what it already sent.
           if (!toolCallId) throw new Error('Sending a Channel message requires a tool call id');

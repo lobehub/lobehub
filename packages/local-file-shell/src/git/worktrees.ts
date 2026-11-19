@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 
 import { isInvalidBranchRef, qualifyStartPoint } from './branches';
 import { getGitWorkingTreeStatus } from './info';
+import { isValidOwnerToken, readOwnerMarker, writeOwnerMarker } from './ownerMarker';
 import type {
   GitAddWorktreeResult,
   GitRemoveWorktreeResult,
@@ -181,11 +182,19 @@ export const removeGitWorktree = async (payload: {
  */
 export const addGitWorktree = async (payload: {
   branch: string;
+  /**
+   * Set when the app creates the worktree for a conversation: written into the
+   * worktree's git admin dir as its creation receipt (`ownedWorktree.ts`), and
+   * echoed back so the caller knows this device recorded it.
+   */
+  ownerToken?: string;
   path: string;
   startPoint?: string;
   worktreePath: string;
 }): Promise<GitAddWorktreeResult> => {
-  const { path: dirPath, branch, startPoint, worktreePath } = payload;
+  const { path: dirPath, branch, ownerToken, startPoint, worktreePath } = payload;
+  if (ownerToken !== undefined && !isValidOwnerToken(ownerToken))
+    return { error: 'Invalid owner token', success: false };
   if (!dirPath?.trim()) return { error: 'Working directory is required', success: false };
   if (!branch?.trim()) return { error: 'Branch name is required', success: false };
   if (!worktreePath?.trim()) return { error: 'Worktree path is required', success: false };
@@ -196,8 +205,19 @@ export const addGitWorktree = async (payload: {
 
   if (!path.isAbsolute(worktreePath))
     return { error: `Worktree path must be absolute: ${worktreePath}`, success: false };
-  if (existsSync(worktreePath))
+  if (existsSync(worktreePath)) {
+    if (ownerToken) {
+      const existing = await findListedWorktree(dirPath, worktreePath);
+      if (
+        existing?.branch === normalizeBranchRef(branch) &&
+        !existing.prunable &&
+        (await readOwnerMarker(existing.path).catch(() => undefined)) === ownerToken
+      ) {
+        return { ownerToken, startPoint, success: true, worktreePath: existing.path };
+      }
+    }
     return { error: `Worktree folder already exists: ${worktreePath}`, success: false };
+  }
 
   const parent = path.dirname(worktreePath);
   try {
@@ -220,9 +240,25 @@ export const addGitWorktree = async (payload: {
       ],
       { cwd: dirPath, timeout: 30_000 },
     );
-    return startPoint
-      ? { startPoint, success: true, worktreePath }
-      : { success: true, worktreePath };
+    // The receipt is what lets this conversation clean the worktree up later;
+    // without it a later cleanup refuses, so report it as part of the add.
+    if (ownerToken) {
+      try {
+        await writeOwnerMarker(worktreePath, ownerToken);
+      } catch (error: any) {
+        return {
+          error: `Worktree created, but its ownership receipt could not be written: ${error?.message ?? error}`,
+          success: false,
+          worktreePath,
+        };
+      }
+    }
+    return {
+      ...(ownerToken && { ownerToken }),
+      ...(startPoint && { startPoint }),
+      success: true,
+      worktreePath,
+    };
   } catch (error: any) {
     const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
     return { error: stderr || 'git worktree add failed', success: false };

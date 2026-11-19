@@ -1,11 +1,11 @@
 'use client';
 
-import { Button, DropdownMenu, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Button, DropdownMenu, Flexbox, Icon, SearchBar, Text } from '@lobehub/ui';
 import { GithubIcon, McpIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { FileArchive, Grid2x2Plus, Link, Store } from 'lucide-react';
-import { memo, useCallback } from 'react';
+import { ChevronDown, FileArchive, Grid2x2Plus, Link, Plus, Store } from 'lucide-react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createSkillStoreModal } from '@/features/SkillStore';
@@ -13,6 +13,7 @@ import { openImportFromGithubModal } from '@/features/SkillStore/SkillList/Impor
 import { openImportFromUrlModal } from '@/features/SkillStore/SkillList/ImportFromUrlModal';
 import { openUploadSkillModal } from '@/features/SkillStore/SkillList/UploadSkillModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { usePermission } from '@/hooks/usePermission';
 
 import ConnectorManagePolicy from './ConnectorManagePolicy';
 import { type ToolDetailType } from './SkillDetail';
@@ -20,17 +21,43 @@ import SkillList, { type SkillViewMode } from './SkillList';
 import { SkillListVariantProvider } from './SkillListRow';
 
 const styles = stylex.create({
+  // @lobehub/ui paints every open dropdown trigger with `colorFillTertiary`
+  // (`.lobe-dropdown-menu-trigger[data-popup-open]`, `lobe-popup` layer), which
+  // wins over the primary Button's own open state and leaves its light text on
+  // a near-white fill. Restore the primary open state with the same tokens the
+  // Button uses, so the label stays readable in both themes.
+  addTrigger: {
+    backgroundColor: {
+      'default': null,
+      ':is([data-popup-open])': cssVar.colorPrimaryActive,
+    },
+    color: {
+      'default': null,
+      ':is([data-popup-open])': cssVar.colorBgLayout,
+    },
+  },
   body: { overflowY: 'auto', flex: '1', paddingBlock: '4px', paddingInline: '8px' },
   pageBody: { paddingBlockStart: '0', paddingBlockEnd: '24px', paddingInline: '0' },
+  // Title and one line of what connectors do on the left; search and the page
+  // actions on the right, the primary Add last.
   pageHeader: {
     display: 'flex',
     flexShrink: 0,
+    flexWrap: 'wrap',
     gap: '16px',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingBlockStart: '24px',
-    paddingBlockEnd: '4px',
+    paddingBlockStart: '32px',
+    paddingBlockEnd: '8px',
     paddingInline: '12px',
+  },
+  pageSearch: { width: '240px' },
+  pageTitle: {
+    marginBlock: 0,
+    fontSize: cssVar.fontSizeHeading3,
+    fontWeight: 600,
+    lineHeight: 1.3,
+    color: cssVar.colorText,
   },
   header: {
     display: 'flex',
@@ -69,46 +96,121 @@ interface LeftPanelProps {
 
 const LeftPanel = memo<LeftPanelProps>(
   ({ fullWidth, onDeleteSelected, onSelect, page, selectedIdentifier, viewMode }) => {
-    const { t } = useTranslation('setting');
+    const { t } = useTranslation(['setting', 'tool']);
     const navigate = useWorkspaceAwareNavigate();
+    const [keyword, setKeyword] = useState('');
 
     const handleOpenStore = useCallback(() => {
       createSkillStoreModal();
     }, []);
 
     const isConnectorView = viewMode === 'connector';
-    const isConnectorPage = page && isConnectorView;
+    const { allowed: canCreate } = usePermission('create_content');
+    const openConnectorMarket = () => navigate('/community/mcp');
+    if (page) {
+      const addItems = [
+        ...(isConnectorView
+          ? [
+              {
+                icon: <Icon icon={McpIcon} />,
+                key: 'marketplace',
+                label: t('mcp.categories.all.description', { ns: 'discover' }),
+                onClick: openConnectorMarket,
+              },
+            ]
+          : []),
+        {
+          desc: t('connectorMarket.add.browseStoreDesc'),
+          icon: <Icon icon={Store} />,
+          key: 'store',
+          label: t('connectorMarket.add.browseStore'),
+          onClick: handleOpenStore,
+        },
+        ...(!isConnectorView
+          ? [
+              {
+                desc: t('tab.importFromGithub.desc'),
+                disabled: !canCreate,
+                icon: <Icon icon={GithubIcon} />,
+                key: 'importGithub',
+                label: t('tab.importFromGithub'),
+                onClick: () => openImportFromGithubModal(),
+              },
+              {
+                desc: t('tab.importFromUrl.desc'),
+                disabled: !canCreate,
+                icon: <Icon icon={Link} />,
+                key: 'importUrl',
+                label: t('tab.importFromUrl'),
+                onClick: () => openImportFromUrlModal(),
+              },
+              {
+                desc: t('tab.uploadZip.desc'),
+                disabled: !canCreate,
+                icon: <Icon icon={FileArchive} />,
+                key: 'uploadZip',
+                label: t('tab.uploadZip'),
+                onClick: () => openUploadSkillModal(),
+              },
+            ]
+          : []),
+      ];
+      const searchPlaceholder = t(
+        isConnectorView ? 'connectorMarket.search.placeholder' : 'skillView.search.placeholder',
+      );
 
-    if (isConnectorPage)
-      return (
-        <SkillListVariantProvider value={'page'}>
-          {/* The shared navigation header carries the title; the page actions
-              share the intro row so they line up with the list below. */}
+      const renderHeader = () => (
+        <>
           <div {...stylex.props(styles.pageHeader)}>
-            <Text type={'secondary'}>{t('skillView.connectorsDesc')}</Text>
-            <Flexbox horizontal flex={'none'} gap={8}>
-              <Tooltip title={t('skillStore.title')}>
+            <Flexbox gap={4} style={{ minWidth: 0 }}>
+              <h1 {...stylex.props(styles.pageTitle)}>
+                {t(isConnectorView ? 'skillView.connectors' : 'skillView.skills')}
+              </h1>
+              <Text type={'secondary'}>
+                {t(isConnectorView ? 'skillView.connectorsDesc' : 'skillView.skillsDesc')}
+              </Text>
+            </Flexbox>
+            <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+              <SearchBar
+                allowClear
+                aria-label={searchPlaceholder}
+                className={stylex.props(styles.pageSearch).className}
+                placeholder={searchPlaceholder}
+                value={keyword}
+                variant={'outlined'}
+                onInputChange={setKeyword}
+              />
+              <DropdownMenu items={addItems} placement={'bottomRight'}>
                 <Button
-                  aria-label={t('skillStore.title')}
-                  icon={<Icon icon={Store} />}
-                  onClick={handleOpenStore}
-                />
-              </Tooltip>
-              <Button icon={McpIcon} onClick={() => navigate('/community/mcp')}>
-                MCP
-              </Button>
+                  className={stylex.props(styles.addTrigger).className}
+                  icon={Plus}
+                  type={'primary'}
+                >
+                  {t('connectorMarket.add')}
+                  <Icon icon={ChevronDown} size={14} />
+                </Button>
+              </DropdownMenu>
             </Flexbox>
           </div>
-          <ConnectorManagePolicy variant={'page'} />
+          {isConnectorView && <ConnectorManagePolicy variant={'page'} />}
+        </>
+      );
+
+      return (
+        <SkillListVariantProvider value={'page'}>
           <div {...stylex.props(styles.pageBody)}>
             <SkillList
+              keyword={keyword}
+              renderHeader={renderHeader}
               viewMode={viewMode}
+              onClearKeyword={() => setKeyword('')}
               onDeleteSelected={onDeleteSelected}
               onSelect={onSelect}
             />
           </div>
         </SkillListVariantProvider>
       );
+    }
 
     return (
       <>
@@ -123,11 +225,15 @@ const LeftPanel = memo<LeftPanelProps>(
                 : t('skillView.skills', 'Skills')}
             </Text>
 
+            {/* lobe-design-ignore LOBE-DIV-CLICK: not a control; keeps header button clicks from reaching the panel */}
             <div style={{ display: 'flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
               {isConnectorView ? (
-                <Button icon={McpIcon} size="small" onClick={() => navigate('/community/mcp')}>
-                  MCP
-                </Button>
+                <Button
+                  aria-label={t('mcp.categories.all.description', { ns: 'discover' })}
+                  icon={McpIcon}
+                  size="small"
+                  onClick={openConnectorMarket}
+                />
               ) : (
                 // Skill view: import a skill from a URL, GitHub, or a zip upload.
                 <DropdownMenu
@@ -175,10 +281,15 @@ const LeftPanel = memo<LeftPanelProps>(
                     },
                   ]}
                 >
-                  <Button icon={Grid2x2Plus} size="small" />
+                  <Button aria-label={t('connectorMarket.add')} icon={Grid2x2Plus} size="small" />
                 </DropdownMenu>
               )}
-              <Button icon={<Icon icon={Store} />} size="small" onClick={handleOpenStore} />
+              <Button
+                aria-label={t('skillStore.title')}
+                icon={<Icon icon={Store} />}
+                size="small"
+                onClick={handleOpenStore}
+              />
             </div>
           </div>
 

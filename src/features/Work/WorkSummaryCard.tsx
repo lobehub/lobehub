@@ -8,6 +8,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
@@ -156,6 +158,39 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 15px;
     font-weight: 500;
   `,
+  row: css`
+    overflow: hidden;
+
+    width: 100%;
+    padding-block: 5px;
+    padding-inline: ${sidebarRow.paddingInline};
+    border-radius: ${sidebarRow.radius};
+  `,
+  rowClickable: css`
+    cursor: pointer;
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  rowIcon: css`
+    flex-shrink: 0;
+    width: ${sidebarRow.iconBox};
+    height: ${sidebarRow.textLineHeight};
+    color: ${cssVar.colorTextTertiary};
+  `,
+  rowTitle: css`
+    min-width: 0;
+    font-size: ${sidebarRow.textFontSize};
+    line-height: ${sidebarRow.textLineHeight};
+    color: ${cssVar.colorText};
+  `,
+  rowMeta: css`
+    min-width: 0;
+    font-size: ${sidebarRow.metaFontSize};
+    line-height: 18px;
+    color: ${cssVar.colorTextTertiary};
+  `,
 }));
 
 interface WorkMetaLineProps {
@@ -247,15 +282,17 @@ interface WorkSummaryCardProps {
    * `card` (default) renders the elevated 36×36 icon-box layout used across the
    * chat portal and the works gallery. `inline` renders a flat row (17px icon,
    * 6px hover fill) for the WorkingSidebar Overview, so a shared card doesn't
-   * dictate the flat sidebar's visual vocabulary.
+   * dictate the flat sidebar's visual vocabulary. `row` is the WorkingSidebar
+   * two-line row: the row-text title, then the meta line and usage.
    */
-  variant?: 'card' | 'inline';
+  variant?: 'card' | 'inline' | 'row';
 }
 
 const WorkSummaryCard = memo<WorkSummaryCardProps>(
   ({ className, item, onOpen, variant = 'card' }) => {
     const { t } = useTranslation('chat');
     const { t: tTopic } = useTranslation('topic');
+    const density = useDensityTokens();
     const openCanvas = useChatStore((s) => s.openCanvas);
     const openDocument = useChatStore((s) => s.openDocument);
     const openFilePreview = useChatStore((s) => s.openFilePreview);
@@ -340,6 +377,42 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
           item={item}
           onOpen={clickable ? handleOpen : undefined}
         />
+      );
+    }
+
+    if (variant === 'row') {
+      return (
+        <Flexbox
+          horizontal
+          align={'flex-start'}
+          className={cx(styles.row, clickable && styles.rowClickable, className)}
+          gap={density.gap}
+          onClick={clickable ? handleOpen : undefined}
+        >
+          <Center className={styles.rowIcon} title={stateLabel}>
+            <Icon size={density.iconSize} />
+          </Center>
+          <Flexbox flex={1} style={{ minWidth: 0 }}>
+            <Text ellipsis className={styles.rowTitle} title={title}>
+              {title}
+            </Text>
+            <Flexbox horizontal align={'center'} className={styles.rowMeta} gap={4}>
+              <WorkMetaLine
+                branch={branch}
+                description={description}
+                identifier={metaIdentifier}
+                identifierIcon={identifierIcon}
+                variant={'card'}
+              />
+              {usage && (
+                <Center horizontal className={styles.cost} gap={2} title={usageTitle}>
+                  <LobeIcon icon={usage.icon} />
+                  {usage.value}
+                </Center>
+              )}
+            </Flexbox>
+          </Flexbox>
+        </Flexbox>
       );
     }
 

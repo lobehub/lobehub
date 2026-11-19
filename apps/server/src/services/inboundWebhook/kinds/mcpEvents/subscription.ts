@@ -74,12 +74,16 @@ export async function applySubscriptionResult(
   if (result.deliveryStatus !== undefined) state.deliveryStatus = result.deliveryStatus;
   if (result.truncated) state.truncated = true;
   const reported = result.deliveryStatus?.lastError;
-  const lastError: InboundWebhookError | null =
+  const upstreamError: InboundWebhookError | null =
     result.deliveryStatus?.active === false
       ? 'delivery_suspended'
       : reported
         ? (INBOUND_WEBHOOK_ERRORS.find((value) => value === reported) ?? 'unknown')
         : null;
+  // A healthy server says nothing about the Channel results go to: a post the Channel refused
+  // stays reported until a post (or a check of the Channel) succeeds.
+  const lastError =
+    upstreamError ?? (ctx.row.lastError === 'channel_unavailable' ? 'channel_unavailable' : null);
   const now = Date.now();
   const updated = await ctx.model.updateIfStatus(
     ctx.row.id,
@@ -90,7 +94,7 @@ export async function applySubscriptionResult(
         result.refreshBefore === null
           ? null
           : new Date(now + Math.max(1000, (Date.parse(result.refreshBefore) - now) / 2)),
-      status: lastError ? 'error' : 'active',
+      status: upstreamError ? 'error' : 'active',
     },
     ctx.row.status === 'terminated' ? ['terminated'] : ['pending', 'active', 'error'],
     state,

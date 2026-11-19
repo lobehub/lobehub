@@ -6,6 +6,7 @@ import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { CatalogGrid } from '@/features/MarketplaceCatalog/CatalogGrid';
 import { CatalogSections } from '@/features/MarketplaceCatalog/CatalogSections';
 import { getLocalizedBuiltinSkillDetail } from '@/features/Settings/skill/features/SkillDetail/localization';
+import { SkillListVariantProvider } from '@/features/Settings/skill/features/SkillListRow';
 import BuiltinItem from '@/features/SkillStore/SkillList/Builtin/Item';
 import MarketSkillItem from '@/features/SkillStore/SkillList/Community/MarketSkillItem';
 import { isBuiltinSkillAvailableInCurrentEnv } from '@/helpers/toolAvailability';
@@ -77,19 +78,21 @@ export const FeaturedSkills = () => {
       <Text as="h2" fontSize={18} weight={600}>
         {t('skills.lobehubPicks')}
       </Text>
-      <CatalogGrid>
-        {skills.map((skill) => (
-          <BuiltinItem
-            avatar={skill.avatar}
-            identifier={skill.identifier}
-            key={skill.identifier}
-            detailHref={
-              root + '?' + new URLSearchParams({ open: 'builtin-skill:' + skill.identifier })
-            }
-            {...getLocalizedBuiltinSkillDetail(skill, skill.identifier, ts)}
-          />
-        ))}
-      </CatalogGrid>
+      <SkillListVariantProvider value="page">
+        <CatalogGrid>
+          {skills.map((skill) => (
+            <BuiltinItem
+              avatar={skill.avatar}
+              identifier={skill.identifier}
+              key={skill.identifier}
+              detailHref={
+                root + '?' + new URLSearchParams({ open: 'builtin-skill:' + skill.identifier })
+              }
+              {...getLocalizedBuiltinSkillDetail(skill, skill.identifier, ts)}
+            />
+          ))}
+        </CatalogGrid>
+      </SkillListVariantProvider>
     </Block>
   );
 };

@@ -97,6 +97,16 @@ describe('resolveInlineImages', () => {
     );
   });
 
+  it('drops image formats models cannot read', async () => {
+    mocks.resolveFileIdsFromUrls.mockResolvedValue(['file_dwg']);
+    mocks.resolveAttachmentMetadata.mockResolvedValue([
+      // Browsers report AutoCAD drawings as `image/vnd.dwg`
+      { fileType: 'image/vnd.dwg', id: 'file_dwg', name: 'a.dwg', size: 1, url: 'https://x/a' },
+    ]);
+
+    await expect(resolveInlineImages(ctx, '![d](/f/file_dwg)')).resolves.toEqual([]);
+  });
+
   it('does not touch the database without images', async () => {
     await expect(resolveInlineImages(ctx, 'plain text')).resolves.toEqual([]);
     expect(mocks.resolveFileIdsFromUrls).not.toHaveBeenCalled();

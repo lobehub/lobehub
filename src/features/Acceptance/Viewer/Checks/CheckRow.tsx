@@ -192,6 +192,7 @@ export const AcceptanceCheckRow = memo<{
               styles.body,
               !detailMode && styles.bodyInList,
               !hasEvidenceColumn && styles.bodySingle,
+              !detailMode && styles.bodyStacked,
             )}
           >
             {hasEvidenceColumn && (

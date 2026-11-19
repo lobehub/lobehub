@@ -2,6 +2,7 @@ import { ChannelIdentifier } from '@lobechat/builtin-tool-channel';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { buildChannelPrompt, CHANNEL_INSTRUCTIONS } from '@lobechat/prompts';
 import type { ChannelExecutionConfig, ChannelSharedAgentAccess } from '@lobechat/types';
+import { agentDisplayName } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { and, eq, inArray } from 'drizzle-orm';
 import { groupBy } from 'es-toolkit';
@@ -13,7 +14,7 @@ import { AgentOperationModel } from '@/database/models/agentOperation';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
-import type { ChannelClaim } from '@/database/repositories/channel';
+import type { ChannelClaim, ChannelCoAddressedAgent } from '@/database/repositories/channel';
 import { ChannelExecutionRepository } from '@/database/repositories/channel';
 import { agentOperations, channelJobs, channelMembers, channels } from '@/database/schemas';
 import { getServerDefaultAgentConfig } from '@/server/globalConfig';
@@ -21,14 +22,17 @@ import { extractTextFromMessage } from '@/server/services/agentRuntime/Completio
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
 import type { AgentShareGate } from '@/server/services/aiAgent/shareGate';
+import { resolveShareVisitorDeviceAccess } from '@/server/services/aiAgent/shareGate/deviceAccess';
 import { detectNoReply } from '@/server/services/conversationWake/noReply';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
+import { reportAgentExchange } from './agentExchange';
 import { resolveChannelAttachments } from './attachments';
 import { ChannelRoutingService } from './ChannelRoutingService';
+import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
 import { registerLocalChannelAdvance, wakeChannel } from './queue';
 import { deliverRelayReceipt } from './relayReceipt';
@@ -37,6 +41,12 @@ import { createRoutedDevicePresence, resolveChannelRoutedDevice } from './routed
 import { createChannelWorktree } from './worktree';
 
 const LEASE_MS = 60_000;
+
+/** A co-addressed Agent as the run reads it: its name, and its title when that says more. */
+const describePeer = (agent: ChannelCoAddressedAgent) => {
+  const name = agentDisplayName(agent);
+  return name && agent.title && agent.title !== name ? `${name} (${agent.title})` : name;
+};
 // Limit startup IO, not the number of Agents that may execute concurrently.
 const STARTUP_CONCURRENCY = 5;
 
@@ -84,6 +94,7 @@ export class ChannelCoordinator {
     if (!spend.allowed) throw new Error('This shared Agent reached its monthly usage limit');
     return {
       agentId,
+      canUseDevice: await resolveShareVisitorDeviceAccess(this.db, share, requesterId),
       shareConfig: share.shareConfig,
       shareId: share.shareId,
       visitorUserId: requesterId,
@@ -291,11 +302,12 @@ export class ChannelCoordinator {
               'Device cannot track Native operation lifetime; update its client',
           );
       }
-      const [input, context, primaryReply, opening] = await Promise.all([
+      const [input, context, primaryReply, opening, coAddressed] = await Promise.all([
         this.executions.input(job.channelId, job.id),
         this.executions.recentContext(job.channelId, job.id),
         this.executions.primaryReply(job.channelId, job.id),
         this.executions.openingReply(job.channelId, job.id),
+        this.executions.coAddressed(job.channelId, job.id),
       ]);
       const shareGate =
         share && topic.senderId
@@ -321,11 +333,11 @@ export class ChannelCoordinator {
         ...attachments,
         hooks: [completion],
         instructions: CHANNEL_INSTRUCTIONS,
-        maxSteps: 32,
         prompt: buildChannelPrompt(job.manifest, input, {
           context: context.messages,
           omitted: context.omitted,
           opening,
+          peers: coAddressed.map(describePeer).filter((peer): peer is string => !!peer),
           primaryReply,
           wake: job.wake,
         }),
@@ -424,7 +436,33 @@ export class ChannelCoordinator {
       }
       const replyMessageId = await this.executions.publish(channelId, jobId);
       await this.stopWriters([job]);
+      // `@Name` in the reply addresses people and Agents like a person's mention does.
+      const mentioned = await this.executions
+        .deliverReplyMentions(channelId, replyMessageId)
+        .catch((error) => {
+          console.error('[channel:reply-mentions]', error);
+          return undefined;
+        });
       await notifyChannel(this.db, channelId);
+      if (mentioned?.mentions.length && operation.userId)
+        notifyChannelMentions(
+          this.db,
+          {
+            // The Agent wrote it, so the person it ran for is notified like anyone else.
+            includeActor: true,
+            userId: operation.userId,
+            workspaceId: mentioned.workspaceId ?? undefined,
+          },
+          { channelId, id: replyMessageId, mentions: mentioned.mentions },
+        );
+      if (mentioned?.woke) await wakeChannel(channelId);
+      // Between Agents, an answer wakes the Agent that asked, and what that Agent concludes from
+      // it is posted where its asking began.
+      if (await this.executions.deliverAnswerToAsker(channelId, replyMessageId))
+        await wakeChannel(channelId);
+      await reportAgentExchange(this.db, { channelId, jobId, replyMessageId }).catch((error) =>
+        console.error('[channel:agent-exchange]', error),
+      );
       // A reply to a relayed request also goes back to the Agent that relayed it.
       await deliverRelayReceipt(this.db, { channelId, jobId, replyMessageId }).catch((error) =>
         console.error('[channel:relay-receipt]', error),

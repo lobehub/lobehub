@@ -41,6 +41,8 @@ import { getPlatformIcon } from '@/features/AgentChannel/const';
 import { useChannelsEnabled } from '@/features/Channels/useChannelsEnabled';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import { useTopicsViewStore } from './store';
 import type {
@@ -52,7 +54,6 @@ import type {
   TriggerFilter,
 } from './types';
 
-const CONTROL_HEIGHT = 32;
 const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
 
 const styles = createStaticStyles(({ css }) => ({
@@ -64,10 +65,10 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 6px;
     align-items: center;
 
-    height: ${CONTROL_HEIGHT}px;
+    height: ${sidebarRow.controlHeight};
     padding-inline: 12px;
     border: 1px dashed ${cssVar.colorBorder};
-    border-radius: ${CONTROL_HEIGHT / 2}px;
+    border-radius: calc(${sidebarRow.controlHeight} / 2);
 
     font-size: 13px;
     color: ${cssVar.colorTextSecondary};
@@ -83,9 +84,9 @@ const styles = createStaticStyles(({ css }) => ({
     display: inline-flex;
     align-items: stretch;
 
-    height: ${CONTROL_HEIGHT}px;
+    height: ${sidebarRow.controlHeight};
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${CONTROL_HEIGHT / 2}px;
+    border-radius: calc(${sidebarRow.controlHeight} / 2);
 
     background: ${cssVar.colorFillTertiary};
 
@@ -104,8 +105,8 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     padding-inline: 8px 12px;
-    border-start-end-radius: ${CONTROL_HEIGHT / 2}px;
-    border-end-end-radius: ${CONTROL_HEIGHT / 2}px;
+    border-start-end-radius: calc(${sidebarRow.controlHeight} / 2);
+    border-end-end-radius: calc(${sidebarRow.controlHeight} / 2);
 
     color: ${cssVar.colorTextTertiary};
 
@@ -145,9 +146,9 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 6px;
     align-items: center;
 
-    height: ${CONTROL_HEIGHT}px;
+    height: ${sidebarRow.controlHeight};
     padding-inline: 12px;
-    border-radius: ${CONTROL_HEIGHT / 2}px;
+    border-radius: calc(${sidebarRow.controlHeight} / 2);
 
     font-size: 13px;
     color: ${cssVar.colorText};
@@ -240,6 +241,7 @@ const FilterChip = memo<FilterChipProps>(({ icon, iconNode, label, value, items,
 
 const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelOptions }) => {
   const { t } = useTranslation('topic');
+  const { controlHeight, iconSize } = useDensityTokens();
 
   const topics = useChatStore(topicSelectors.agentTopicsViewTopics);
   const updateTopicStatus = useChatStore((s) => s.updateTopicStatus);
@@ -622,7 +624,7 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelOptions 
       <DropdownMenu items={overflowItems} placement={'bottomRight'}>
         <ActionIcon
           icon={MoreHorizontal}
-          size={{ blockSize: CONTROL_HEIGHT, size: 18 }}
+          size={{ blockSize: controlHeight, size: iconSize }}
           title={t('management.actionsMenu.title')}
         />
       </DropdownMenu>

@@ -71,6 +71,8 @@ export interface QueryMessagesOptions {
     path: string | null,
     file: { fileType: string; id?: string | null },
   ) => Promise<string>;
+  /** See `QueryMessageParams.skipCompressedMembers`. */
+  skipCompressedMembers?: boolean;
   /**
    * Skip the Work-summary assembly (see `QueryMessageParams.skipWorks`).
    */

@@ -19,6 +19,7 @@ import {
   type AfterCompletionCallback,
   AI_RUNTIME_OPERATION_TYPES,
   isClientHeldQueuedMessage,
+  isSendableQueuedMessage,
   type Operation,
   type OperationCancelContext,
   type OperationContext,
@@ -952,16 +953,23 @@ export class OperationActionsImpl {
    * Takes nothing while the server holds any of them: it delivers those
    * itself, and the ones queued after them must not overtake them.
    */
-  drainQueuedMessages = (contextKey: string): QueuedMessage[] => {
+  /**
+   * Take the queue to send it. `limit` takes only that many from its head (a
+   * queue sent one message per turn); the rest stays queued.
+   */
+  drainQueuedMessages = (contextKey: string, options?: { limit?: number }): QueuedMessage[] => {
     const queue = this.#get().queuedMessages[contextKey];
     if (!queue || queue.length === 0) return [];
     if (!queue.every(isClientHeldQueuedMessage)) return [];
 
-    const messages = [...queue];
+    // A steer that may already be with the agent is never sent on its own.
+    const sendable = queue.filter(isSendableQueuedMessage);
+    const messages = options?.limit ? sendable.slice(0, options.limit) : sendable;
+    if (messages.length === 0) return [];
 
     this.#set(
       produce((state: ChatStore) => {
-        state.queuedMessages[contextKey] = [];
+        state.queuedMessages[contextKey] = queue.filter((message) => !messages.includes(message));
       }),
       false,
       n(`drainQueuedMessages/${contextKey}`),
@@ -969,6 +977,22 @@ export class OperationActionsImpl {
 
     log('[drainQueuedMessages] contextKey=%s, drained %d', contextKey, messages.length);
     return messages;
+  };
+
+  /** Put messages taken from a queue back at its head, in their order (a failed hand-over). */
+  requeueQueuedMessages = (contextKey: string, messages: QueuedMessage[]): void => {
+    if (messages.length === 0) return;
+
+    this.#set(
+      produce((state: ChatStore) => {
+        state.queuedMessages[contextKey] = [
+          ...messages,
+          ...(state.queuedMessages[contextKey] ?? []),
+        ];
+      }),
+      false,
+      n(`requeueQueuedMessages/${contextKey}`),
+    );
   };
 
   moveQueuedMessages = (fromContextKey: string, toContextKey: string): void => {
@@ -1018,7 +1042,12 @@ export class OperationActionsImpl {
     patch: Partial<
       Pick<
         QueuedMessage,
-        'heldBehindOperationId' | 'serverDelivering' | 'serverDelivery' | 'serverRequest' | 'serverUnconfirmed'
+        | 'heldBehindOperationId'
+        | 'localSteer'
+        | 'serverDelivering'
+        | 'serverDelivery'
+        | 'serverRequest'
+        | 'serverUnconfirmed'
       >
     >,
   ): void => {

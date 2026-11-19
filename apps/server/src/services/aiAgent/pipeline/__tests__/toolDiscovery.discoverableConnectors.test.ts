@@ -69,11 +69,14 @@ const connectorTools = [
 
 interface RunOptions {
   agentId?: string;
+  /** The agent's `auto` entries: what turns a connector on without a legacy pin. */
+  autoSkillIds?: string[];
+  chatConfig?: Record<string, unknown>;
   /** Override the connector's transport (`http` by default). */
   connection?: { mcpConnectionType: string; mcpServerUrl: string | null };
   installed?: boolean;
   metadata?: Record<string, unknown>;
-  /** The agent's own `plugins` config — i.e. what the user pinned. */
+  /** The agent's legacy pinned entries, which also read as on. */
   plugins?: string[];
   /** This turn's @-mention picks. */
   selectedToolIds?: string[];
@@ -121,8 +124,9 @@ const run = (options: RunOptions = {}) => {
       userId: 'user-1',
     } as never,
     {
-      agentConfig: { chatConfig: {}, plugins: options.plugins ?? [] },
+      agentConfig: { chatConfig: options.chatConfig ?? {}, plugins: options.plugins ?? [] },
       appContext: undefined,
+      autoSkillIds: options.autoSkillIds ?? [],
       canUseDevice: false,
       model: 'test-model',
       prompt: '470008 呢',
@@ -158,9 +162,12 @@ const availableToolIds = (
 const offeredToolNames = (result: { tools?: { function: { name: string } }[] }) =>
   (result.tools ?? []).map((tool) => tool.function.name);
 
-describe('discoverTools — unpinned custom MCP connectors', () => {
+/** The agent turned the connector on: an `auto` entry in its plugins. */
+const ON = { autoSkillIds: [YINGMI] };
+
+describe('discoverTools — custom MCP connectors are opt-in per agent', () => {
   it.each([
-    {},
+    ON,
     { plugins: [YINGMI] },
     { selectedToolIds: [YINGMI] },
     {
@@ -183,7 +190,7 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
   );
 
   it.each([
-    { label: 'auto', options: {} },
+    { label: 'on', options: ON },
     { label: 'pinned', options: { plugins: [YINGMI] } },
     { label: 'mentioned', options: { selectedToolIds: [YINGMI] } },
     {
@@ -209,7 +216,7 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
   });
 
   it('keeps a completed marketplace install discoverable and explicitly activatable', async () => {
-    const result = await run({ installed: true, sourceType: 'marketplace' });
+    const result = await run({ ...ON, installed: true, sourceType: 'marketplace' });
     expect(result.toolManifestMap[YINGMI]).toBeDefined();
     const activated = result.toolsEngine!.generateToolsDetailed(explicitConnectorInput(YINGMI));
     expect(activated.enabledToolIds).toContain(YINGMI);
@@ -221,6 +228,7 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
   ])('treats a connector-only marketplace install as installed: $label', async ({ connection }) => {
     // No user_installed_plugins row: the connector's own mark is the install
     const result = await run({
+      ...ON,
       connection,
       installed: false,
       metadata: { marketplaceInstalled: true },
@@ -244,6 +252,7 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
   // disconnected until its tools sync: the old tools must not run against it
   it('rejects a pending reinstall over a plugin row until its connector is connected', async () => {
     const result = await run({
+      ...ON,
       installed: true,
       sourceType: 'marketplace',
       status: 'disconnected',
@@ -253,6 +262,7 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
 
   it('keeps an endpoint-less plugin projection on its plugin row whatever its status', async () => {
     const result = await run({
+      ...ON,
       connection: { mcpConnectionType: null as never, mcpServerUrl: null },
       installed: true,
       sourceType: 'marketplace',
@@ -266,6 +276,7 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
   // callback connects it: the client already hides it, so must a server run
   it('rejects a finished install while it is not connected', async () => {
     const result = await run({
+      ...ON,
       installed: false,
       metadata: { marketplaceInstalled: true },
       sourceType: 'marketplace',
@@ -276,6 +287,7 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
 
   it('rejects an unfinished cloud marketplace install that has no plugin row', async () => {
     const result = await run({
+      ...ON,
       connection: { mcpConnectionType: 'cloud', mcpServerUrl: null },
       installed: false,
       sourceType: 'marketplace',
@@ -283,10 +295,32 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
     expect(result.toolManifestMap[YINGMI]).toBeUndefined();
   });
 
-  it('keeps an unmentioned, unpinned connector discoverable without enabling it', async () => {
-    // The follow-up turn after an @-mention: no mention, nothing pinned. The
-    // activator used to answer "Not found: yingmi" here.
+  it('keeps a connector the agent never turned on out of the run', async () => {
     const result = await run();
+
+    expect(result.toolManifestMap[YINGMI]).toBeUndefined();
+    expect(result.toolSourceMap[YINGMI]).toBeUndefined();
+    expect(result.toolsResult.enabledToolIds).not.toContain(YINGMI);
+    // Off means never read: its credentials are not decrypted for this run.
+    expect(connectorModel.resolveAll).not.toHaveBeenCalled();
+    expect(connectorModel.resolveByIdentifiers).not.toHaveBeenCalled();
+    // …and a previous turn's activation cannot bring it back.
+    const restored = result.toolsEngine!.generateToolsDetailed(explicitConnectorInput(YINGMI));
+    expect(restored.enabledToolIds).not.toContain(YINGMI);
+  });
+
+  it.each([
+    { label: 'turned on', options: ON },
+    { label: 'pinned', options: { plugins: [YINGMI] } },
+  ])('keeps a connector the agent $label discoverable without enabling it', async ({ options }) => {
+    // The follow-up turn after an @-mention: no mention this turn. The
+    // activator used to answer "Not found: yingmi" here.
+    const result = await run(options);
+
+    // Resolved by identifier only — never the user's whole connector list.
+    expect(connectorModel.resolveAll).not.toHaveBeenCalled();
+    expect(connectorModel.resolveByIdentifiers).toHaveBeenCalledTimes(1);
+    expect(connectorModel.resolveByIdentifiers.mock.calls[0][0]).toEqual([YINGMI]);
 
     expect(result.toolManifestMap[YINGMI]).toBeDefined();
     expect(result.toolSourceMap[YINGMI]).toBe('mcp');
@@ -297,8 +331,58 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
     expect(offeredToolNames(result).some((name) => name.startsWith(`${YINGMI}____`))).toBe(false);
   });
 
+  it.each([
+    { label: 'turned on', options: ON },
+    { label: 'pinned', options: { plugins: [YINGMI] } },
+  ])(
+    'defers a connector the agent $label even with a legacy manual preference',
+    async ({ options }) => {
+      const result = await run({ ...options, chatConfig: { skillActivateMode: 'manual' } });
+
+      expect(result.toolsResult.enabledToolIds).toContain('lobe-activator');
+      expect(result.toolsResult.enabledToolIds).not.toContain(YINGMI);
+      expect(availableToolIds(result.toolManifestMap, result.toolsResult.enabledToolIds)).toContain(
+        YINGMI,
+      );
+    },
+  );
+
+  it.each([ON, { plugins: [YINGMI] }])(
+    'offers an enabled connector directly in a custom toolset without an activator: %j',
+    async (options) => {
+      const result = await run({ ...options, chatConfig: { toolMode: 'custom' } });
+
+      expect(result.toolsResult.enabledToolIds).not.toContain('lobe-activator');
+      expect(offeredToolNames(result)).toContain(`${YINGMI}____BatchGetFundNavHistory____mcp`);
+    },
+  );
+
+  it('lets a custom toolset with an explicit activator restore its configured connector', async () => {
+    const result = await run({
+      ...ON,
+      chatConfig: { toolMode: 'custom' },
+      plugins: ['lobe-activator'],
+    });
+
+    expect(result.toolsResult.enabledToolIds).toContain('lobe-activator');
+    expect(result.toolsResult.enabledToolIds).not.toContain(YINGMI);
+    const activated = result.toolsEngine!.generateToolsDetailed(explicitConnectorInput(YINGMI));
+    expect(offeredToolNames(activated)).toContain(`${YINGMI}____BatchGetFundNavHistory____mcp`);
+    expect(
+      result.toolsEngine!.generateToolsDetailed(explicitConnectorInput('lobe-skills'))
+        .enabledToolIds,
+    ).toEqual([]);
+  });
+
+  it('keeps a connector the agent never turned on out of a manual-mode run too', async () => {
+    const result = await run({ chatConfig: { skillActivateMode: 'manual' } });
+
+    expect(result.toolManifestMap[YINGMI]).toBeUndefined();
+    expect(result.toolsResult.enabledToolIds).not.toContain(YINGMI);
+  });
+
   it('lets the next operation restore a previous turn’s activation', async () => {
-    const result = await run();
+    const result = await run(ON);
 
     // The cross-turn restore in `operationPrep` re-checks historical
     // activations through the engine with explicit activation.
@@ -319,7 +403,7 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
     expect(call).toMatchObject({ apiName: 'BatchGetFundNavHistory', identifier: YINGMI });
   });
 
-  it('still enables the connector on the turn that @-mentions it', async () => {
+  it('enables a connector the agent has off on the turn that @-mentions it', async () => {
     const result = await run({ selectedToolIds: [YINGMI] });
 
     expect(result.toolsResult.enabledToolIds).toContain(YINGMI);
@@ -330,10 +414,10 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
     ).toBe(true);
   });
 
-  it('schedules the stale-tool refresh for an unpinned connector too', async () => {
+  it('schedules the stale-tool refresh for a connector that is on but not invoked', async () => {
     vi.mocked(scheduleStaleConnectorToolsRefresh).mockClear();
 
-    await run();
+    await run(ON);
 
     // An activatable connector whose upstream tools changed must not keep
     // offering the old list until someone re-syncs it by hand.
@@ -352,7 +436,7 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
       visitorUserId: 'visitor-1',
     });
 
-    it('does not resolve or decrypt an ungranted unpinned connector', async () => {
+    it('does not resolve or decrypt an ungranted connector', async () => {
       vi.mocked(scheduleStaleConnectorToolsRefresh).mockClear();
 
       const result = await run({
@@ -368,7 +452,9 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
       expect(connectors.map((c) => c.identifier)).not.toContain(YINGMI);
     });
 
-    it('makes a granted unpinned connector activatable without enabling it', async () => {
+    // The share's grants cut the run, not the agent's own switches: the
+    // creator's agent has no entry for the connector here.
+    it('makes a granted connector activatable without enabling it', async () => {
       const result = await run({ shareGate: shareGateFor([{ identifier: YINGMI }]) });
 
       // Resolved by identifier only — never the creator's whole connector list.

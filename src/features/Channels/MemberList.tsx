@@ -2,19 +2,23 @@ import type { ChannelDetail, ChannelPublicMember } from '@lobechat/types';
 import type { DropdownItem } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { ExternalLink, FolderCog, MoreHorizontal } from 'lucide-react';
+import { ExternalLink, FolderCog, MoreHorizontal, UserMinus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { openChannelAgentEnvironment } from './AgentEnvironment';
 import { ChannelStatus } from './ChannelStatus';
 import type { ChannelStatusTone } from './jobStatus';
 import { channelJobTone, memberCurrentJob, memberJobStatus } from './jobStatus';
 import { MemberAvatar } from './MemberAvatar';
-import { memberName } from './memberName';
+import { callerMemberRole, canRemoveMember } from './memberManagement';
+import { isCurrentUserMember, memberName } from './memberName';
 import { MemberProfileTrigger } from './MemberProfileTrigger';
 import { statusStyles, styles, toneStyles } from './styles';
+import { useRemoveMember } from './useMemberActions';
 import { getVisibleStatusMembers, groupMembersByActor } from './visibleMembers';
 
 interface MemberEntry {
@@ -77,10 +81,20 @@ interface MemberRowProps {
   entry: MemberEntry;
   manageable: boolean;
   onAction?: () => void;
+  onRemove: () => void;
+  removable: boolean;
   showDescription?: boolean;
 }
 
-const MemberRow = ({ channelId, entry, manageable, onAction, showDescription }: MemberRowProps) => {
+const MemberRow = ({
+  channelId,
+  entry,
+  manageable,
+  onAction,
+  onRemove,
+  removable,
+  showDescription,
+}: MemberRowProps) => {
   const { t } = useTranslation('channel');
   const navigate = useWorkspaceAwareNavigate();
   const isAgent = entry.member.actorType === 'agent';
@@ -104,6 +118,17 @@ const MemberRow = ({ channelId, entry, manageable, onAction, showDescription }: 
       onClick: () => {
         onAction?.();
         navigate(`/agent/${agentId}`);
+      },
+    });
+  if (removable)
+    menuItems.push({
+      danger: true,
+      icon: <Icon icon={UserMinus} />,
+      key: 'remove',
+      label: t('member.remove'),
+      onClick: () => {
+        onAction?.();
+        onRemove();
       },
     });
 
@@ -168,6 +193,9 @@ export function MemberList({
   const entries = useMemberEntries(detail);
   const { channel } = detail;
   const manageable = channel.canDelete && channel.status !== 'archived';
+  const userId = useUserStore(userProfileSelectors.userId);
+  const selfRole = callerMemberRole(detail.members, userId);
+  const removeMember = useRemoveMember();
   const { agents, people } = groupMembersByActor(entries);
   const renderRow = (entry: MemberEntry) => (
     <MemberRow
@@ -176,7 +204,12 @@ export function MemberList({
       key={entry.member.id}
       manageable={manageable}
       showDescription={showDescription}
+      removable={canRemoveMember(channel, entry.member, {
+        isSelf: isCurrentUserMember(entry.member, userId),
+        selfRole,
+      })}
       onAction={onAction}
+      onRemove={() => removeMember(channel, entry.member, entry.name)}
     />
   );
 

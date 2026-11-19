@@ -47,6 +47,7 @@ import {
 } from './utils';
 
 export type { InterruptedRunningTopic, OrphanedRunningTopic } from './scheduling';
+export { TaskTreeProjectMoveError } from './tree';
 export { isTaskIdentifierUniqueViolation, taskActivityActor } from './utils';
 
 export class TaskModel {
@@ -305,6 +306,14 @@ export class TaskModel {
 
   async hasSubtaskOutsideProject(taskId: string, projectId: string | null): Promise<boolean> {
     return tree.hasSubtaskOutsideProject(this.ctx, taskId, projectId);
+  }
+
+  /**
+   * File an unfiled root task and all its descendants under `projectId` at once.
+   * Throws `TaskTreeProjectMoveError` when the tree cannot move as a whole.
+   */
+  async moveUnfiledTreeToProject(rootId: string, projectId: string): Promise<TaskItem | null> {
+    return tree.moveUnfiledTreeToProject(this.ctx, rootId, projectId);
   }
 
   async getTaskTree(rootTaskId: string): Promise<TaskItem[]> {

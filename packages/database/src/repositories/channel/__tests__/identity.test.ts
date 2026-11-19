@@ -67,9 +67,59 @@ describe('direct Channel identity', () => {
     await repository.send(channel.id, { ...sendInput, content: 'First', requestKey: 'first' });
     await repository.send(channel.id, { ...sendInput, content: 'Second', requestKey: 'second' });
     expect((await repository.list()).find((item) => item.id === channel.id)).toMatchObject({
-      lastMessage: { content: 'Second' },
-      unreadCount: 2,
+      lastMessage: {
+        attachments: null,
+        author: { id: fixture.ownerId, type: 'user' },
+        content: 'Second',
+        thread: null,
+      },
+      // The caller's own messages are never unread for them.
+      unreadCount: 0,
     });
+  });
+
+  // A list row could not tell "Me: …" from the other side's message.
+  it('previews the newest message with its sender, an Agent reply by the Agent name', async () => {
+    const agent = await createAgent();
+    const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const { channel } = await repository.create({ agentId: agent.id, title: 'Direct' });
+    const request = await repository.send(channel.id, sendInput);
+    await publish(channel.id, request.id);
+
+    expect((await repository.list()).find((item) => item.id === channel.id)).toMatchObject({
+      lastMessage: {
+        author: { id: agent.id, name: 'Assistant', type: 'agent' },
+        content: 'Answer',
+      },
+    });
+  });
+
+  // The preview stopped at the main conversation, so a newer Thread reply looked like no news.
+  it('previews a newer Thread reply with its Thread, until the Thread is trashed', async () => {
+    const agent = await createAgent();
+    const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const { channel } = await repository.create({ agentId: agent.id, title: 'Direct' });
+    const root = await repository.send(channel.id, {
+      ...sendInput,
+      content: '  Root line\nmore',
+      requestKey: 'root',
+    });
+    const reply = await repository.send(channel.id, {
+      ...sendInput,
+      content: 'In the thread',
+      requestKey: 'thread-reply',
+      rootMessageId: root.id,
+    });
+    const listed = async () =>
+      (await repository.list()).find((item) => item.id === channel.id)?.lastMessage;
+
+    expect(await listed()).toMatchObject({
+      content: 'In the thread',
+      thread: { id: reply.threadId, title: 'Root line' },
+    });
+
+    await repository.removeThread(channel.id, reply.threadId!);
+    expect(await listed()).toMatchObject({ content: '  Root line\nmore', thread: null });
   });
 
   // A list row only knew a reply was in progress once its conversation was opened.

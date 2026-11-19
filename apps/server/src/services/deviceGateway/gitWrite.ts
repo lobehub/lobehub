@@ -11,9 +11,13 @@ import type {
   DeviceGitRemoveWorktreeResult,
   DeviceGitRenameBranchResult,
   DeviceGitSyncResult,
+  OwnedWorktreeCleanupResult,
+  OwnedWorktreeRestoreResult,
 } from '@lobechat/types';
+import { OWNED_WORKTREE_RPC_UNSUPPORTED } from '@lobechat/types';
 import debug from 'debug';
 
+import { gitPullRequestDetail } from './gitRead';
 import type { DeviceClientGetter } from './types';
 
 const log = debug('lobe-server:device-gateway');
@@ -191,6 +195,8 @@ export async function addGitWorktree(
   params: {
     branch: string;
     deviceId: string;
+    /** Creation receipt the device writes into the worktree (app-created worktrees). */
+    ownerToken?: string;
     path: string;
     /** Fork the worktree's branch from this branch instead of HEAD. */
     startPoint?: string;
@@ -204,6 +210,7 @@ export async function addGitWorktree(
     userId,
     deviceId,
     branch,
+    ownerToken,
     path,
     startPoint,
     worktreePath,
@@ -218,7 +225,13 @@ export async function addGitWorktree(
       { deviceId, timeout, userId, workspaceId },
       {
         method: 'addGitWorktree',
-        params: { branch, path, worktreePath, ...(startPoint ? { startPoint } : {}) },
+        params: {
+          branch,
+          path,
+          worktreePath,
+          ...(ownerToken ? { ownerToken } : {}),
+          ...(startPoint ? { startPoint } : {}),
+        },
       },
     );
 
@@ -231,6 +244,135 @@ export async function addGitWorktree(
   } catch (error) {
     log('addGitWorktree: error for deviceId=%s — %O', deviceId, error);
     return { error: (error as Error)?.message || 'Add worktree failed', success: false };
+  }
+}
+
+/** A device client older than the owned-worktree RPCs rejects the method name. */
+const isUnsupportedMethod = (error: string | undefined) =>
+  !!error && error.includes(OWNED_WORKTREE_RPC_UNSUPPORTED);
+
+/**
+ * Remove (or keep, when it has uncommitted work) a worktree the app created
+ * for a conversation, via the `cleanupOwnedWorktree` device RPC. Every guard
+ * runs on the device. A device that cannot be reached or is too old for the
+ * RPC answers `unreachable`, which the caller keeps as pending.
+ */
+export async function cleanupOwnedWorktree(
+  getClient: DeviceClientGetter,
+  params: {
+    deviceId: string;
+    discard?: boolean;
+    /** The creation receipt the device checks before acting (see local-file-shell). */
+    ownerToken?: string;
+    sourcePath: string;
+    timeout?: number;
+    userId: string;
+    workspaceId?: string;
+    worktreePath: string;
+  },
+): Promise<OwnedWorktreeCleanupResult> {
+  const {
+    userId,
+    deviceId,
+    discard,
+    ownerToken,
+    sourcePath,
+    worktreePath,
+    workspaceId,
+    // Above the device's own 90s budget, so its answer (not ours) decides.
+    timeout = 100_000,
+  } = params;
+  const client = getClient();
+  if (!client) return { error: 'Device gateway not configured', outcome: 'unreachable' };
+
+  try {
+    const result = await client.invokeRpc<OwnedWorktreeCleanupResult>(
+      { deviceId, timeout, userId, workspaceId },
+      {
+        method: 'cleanupOwnedWorktree',
+        params: {
+          discard: discard === true,
+          ...(ownerToken && { ownerToken }),
+          sourcePath,
+          worktreePath,
+        },
+      },
+    );
+    if (!result.success || !result.data) {
+      log('cleanupOwnedWorktree: failed for deviceId=%s — %s', deviceId, result.error);
+      return {
+        error: result.error || 'Device unreachable',
+        outcome: 'unreachable',
+        ...(isUnsupportedMethod(result.error) && { outdated: true }),
+      };
+    }
+    return result.data;
+  } catch (error) {
+    const message = (error as Error)?.message || 'Device unreachable';
+    log('cleanupOwnedWorktree: error for deviceId=%s — %O', deviceId, error);
+    return {
+      error: message,
+      outcome: 'unreachable',
+      ...(isUnsupportedMethod(message) && { outdated: true }),
+    };
+  }
+}
+
+/**
+ * Check a cleaned-up worktree out again at its path via the
+ * `restoreOwnedWorktree` device RPC.
+ */
+export async function restoreOwnedWorktree(
+  getClient: DeviceClientGetter,
+  params: {
+    branch: string;
+    deviceId: string;
+    ownerToken?: string;
+    sourcePath: string;
+    timeout?: number;
+    userId: string;
+    workspaceId?: string;
+    worktreePath: string;
+  },
+): Promise<OwnedWorktreeRestoreResult> {
+  const {
+    userId,
+    deviceId,
+    branch,
+    ownerToken,
+    sourcePath,
+    worktreePath,
+    workspaceId,
+    timeout = 45_000,
+  } = params;
+  const client = getClient();
+  if (!client) return { error: 'Device gateway not configured', outcome: 'unreachable' };
+
+  try {
+    const result = await client.invokeRpc<OwnedWorktreeRestoreResult>(
+      { deviceId, timeout, userId, workspaceId },
+      {
+        method: 'restoreOwnedWorktree',
+        params: { branch, ...(ownerToken && { ownerToken }), sourcePath, worktreePath },
+      },
+    );
+    if (!result.success || !result.data) {
+      log('restoreOwnedWorktree: failed for deviceId=%s — %s', deviceId, result.error);
+      return {
+        error: result.error || 'Device unreachable',
+        outcome: 'unreachable',
+        ...(isUnsupportedMethod(result.error) && { outdated: true }),
+      };
+    }
+    return result.data;
+  } catch (error) {
+    const message = (error as Error)?.message || 'Device unreachable';
+    log('restoreOwnedWorktree: error for deviceId=%s — %O', deviceId, error);
+    return {
+      error: message,
+      outcome: 'unreachable',
+      ...(isUnsupportedMethod(message) && { outdated: true }),
+    };
   }
 }
 
@@ -323,19 +465,39 @@ export async function runGitPullRequestAction(
     number: number;
     path: string;
     timeout?: number;
+    url?: string;
     userId: string;
     workspaceId?: string;
   },
 ): Promise<DeviceGitPullRequestActionResult> {
-  const { userId, deviceId, path, number, action, timeout = 65_000, workspaceId } = params;
+  const { userId, deviceId, path, number, action, url, workspaceId } = params;
+  const timeout = params.timeout ?? (url ? 75_000 : 65_000);
   const client = getClient();
   if (!client) return { error: 'Device gateway not configured', success: false };
 
   try {
+    const scope = { deviceId, timeout, userId, workspaceId };
+    const legacy = { method: 'runPullRequestAction', params: { action, number, path } };
     const result = await client.invokeRpc<DeviceGitPullRequestActionResult>(
-      { deviceId, timeout, userId, workspaceId },
-      { method: 'runPullRequestAction', params: { action, number, path } },
+      scope,
+      url ? { method: 'runPullRequestActionByUrl', params: { action, number, path, url } } : legacy,
     );
+
+    // An explicit unknown method means nothing ran. An older device can still
+    // use the approved source checkout once it confirms the same GitHub PR.
+    if (
+      url &&
+      !result.success &&
+      result.error?.includes('Unknown device RPC method: runPullRequestActionByUrl')
+    ) {
+      const confirmed = await gitPullRequestDetail(getClient, { ...params, coreOnly: true });
+      if (confirmed?.detail?.url.toLowerCase() !== url.toLowerCase()) {
+        return { error: 'The pull request does not match the approved repository', success: false };
+      }
+      const fallback = await client.invokeRpc<DeviceGitPullRequestActionResult>(scope, legacy);
+      if (fallback.success && fallback.data) return fallback.data;
+      return { error: fallback.error || 'Pull request action failed', success: false };
+    }
 
     if (!result.success || !result.data) {
       log('runGitPullRequestAction: failed for deviceId=%s — %s', deviceId, result.error);

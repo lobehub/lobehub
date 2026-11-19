@@ -1,0 +1,102 @@
+---
+title: LobeHub API Versioning, Deprecation, and Changelog
+description: >-
+  How the LobeHub public API and SDKs are versioned, what counts as a breaking
+  change, how deprecations are announced, and the API changelog.
+tags:
+  - LobeHub
+  - REST API
+  - Versioning
+  - Deprecation
+  - Changelog
+---
+
+# LobeHub API Versioning, Deprecation, and Changelog
+
+## Versioning
+
+- **The major version is in the path.** Every public endpoint is under `/api/v1`. Within `v1`, changes are backward compatible. A change that would break existing clients ships under a new major path instead, and `v1` keeps working alongside it.
+- **The specification is the contract.** [`packages/openapi/openapi.yml`](https://github.com/lobehub/lobehub/blob/canary/packages/openapi/openapi.yml) is generated from the route definitions on every change, and the SDKs are generated from it. A deployment serves its own spec at `/api/v1/openapi.json`; a self-hosted instance on an older release supports only what its own spec lists.
+- **LobeHub Cloud follows `canary`.** A merged change reaches LobeHub Cloud with the next deployment. Self-hosted instances get it with the next release that includes it.
+
+### Compatible Changes Within v1
+
+Clients must tolerate these, and they can happen without notice:
+
+- New endpoints, new optional request fields, new query parameters
+- New fields in responses
+- New values in enumerations such as event types, statuses, and error codes. Treat an unknown value as its closest known category (an unknown error code by its HTTP status, an unknown event by ignoring it)
+- New webhook event types, which reach an endpoint only after you subscribe to them
+- New API key scopes. Scopes are added for new endpoints. An existing key keeps exactly the access it had; a few high-risk scopes such as `device:operate` are explicit and are not included in full access
+
+### Breaking Changes
+
+These are not made within `v1`: removing or renaming an endpoint, field, or SDK method; changing a field's type; making an optional field required; changing the meaning of a status code or error code; requiring a new scope for an existing operation.
+
+Error codes are only ever added. Operation ids, which become SDK method names (`agents.list`), do not change once shipped.
+
+## Deprecation
+
+When a field, parameter, or endpoint is replaced:
+
+1. The old form keeps working, and the OpenAPI spec marks it `deprecated: true`. The SDKs show the deprecation in their type documentation.
+2. The replacement is documented in the [changelog](#api-changelog) with a migration note.
+3. The old form is removed only in a new major version.
+
+Current deprecations, effective when [#23231](https://github.com/lobehub/lobehub/pull/23231) ships:
+
+| Deprecated                                                                                       | Replacement                                                    |
+| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| `page`, `pageSize`, `offset` query parameters                                                    | `limit` and `cursor`                                           |
+| `error` text in error bodies                                                                     | `code` and `message`                                           |
+| `format=array` on `GET /agent-groups`, `/api-keys`, `/mcp-servers` (the old bare-array response) | The paginated `{ items, total, hasMore, nextCursor }` response |
+
+**Exception to the compatibility rule.** When [#23231](https://github.com/lobehub/lobehub/pull/23231) ships, `GET /agent-groups`, `GET /api-keys`, and `GET /mcp-servers` change their default response from a bare array to the paginated object. This is a breaking change inside `v1`. A client that reads these lists as arrays must send `format=array` or move to the paginated response before that release.
+
+## SDK Versions
+
+- `@lobehub/sdk` is published to npm from `canary` automatically when the SDK changes, as `1.0.<UTC timestamp>` under the `latest` tag.
+- With [#23246](https://github.com/lobehub/lobehub/pull/23246), releases follow semantic versioning with a `CHANGELOG.md`: versions with a changelog entry are published as `latest`, and every other change as `x.y.z-canary.<timestamp>` under the `canary` tag. Pin `latest` versions in production. A pull request that changes the spec without regenerating the SDK then fails CI.
+- The Python SDK `lobehub` ([#23337](https://github.com/lobehub/lobehub/pull/23337)) starts at `0.1.0`.
+
+## API Changelog
+
+Entries are grouped by status. **Released** entries are merged and on LobeHub Cloud; **Coming soon** entries are open pull requests and can change before release.
+
+### Released
+
+| Date       | Change                                                                                                                                                    | Pull request                                            |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| 2026-11-18 | Every success response has a typed schema in the spec, so SDK return types are concrete. Every `DELETE` returns `{ deleted, id }` or `{ deleted, count }` | [#23217](https://github.com/lobehub/lobehub/pull/23217) |
+| 2026-11-16 | `GET /users/me` returns `messageCount` only when the caller asks for it                                                                                   | [#23119](https://github.com/lobehub/lobehub/pull/23119) |
+| 2026-10-30 | `GET /usage` exposes the caller's credit quota                                                                                                            | [#21933](https://github.com/lobehub/lobehub/pull/21933) |
+| 2026-10-22 | `POST /tasks/{id}/runs` runs a task now; `GET /tasks/{id}/runs` lists its runs                                                                            | [#21470](https://github.com/lobehub/lobehub/pull/21470) |
+| 2026-10-20 | `/chat-groups` for multi-agent groups, and `sdk.chatGroups`                                                                                               | [#21280](https://github.com/lobehub/lobehub/pull/21280) |
+
+### Coming Soon
+
+| Change                                                                                                                                                     | Pull request                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Unified error body with `code`, `requestId`, and `details`; cursor pagination; per-key rate limits; `Idempotency-Key`                                      | [#23231](https://github.com/lobehub/lobehub/pull/23231) |
+| SDK: readable method names, `workspaceId`, retries, timeouts, typed errors, `paginate`, `responses.stream`, `files.upload`, scopes in docs, CI drift check | [#23246](https://github.com/lobehub/lobehub/pull/23246) |
+| `/runs`: start, read, stream, cancel, and steer Agent runs; human approval; client tool results; `run:read` / `run:write`                                  | [#23253](https://github.com/lobehub/lobehub/pull/23253) |
+| Messages and Topics: edits, fork / clone / branch, transcripts, export / import, search, batch, share, thread writes                                       | [#23254](https://github.com/lobehub/lobehub/pull/23254) |
+| `/documents` and `/notebooks`: Pages, versions, comments, sharing; `document:*`                                                                            | [#23255](https://github.com/lobehub/lobehub/pull/23255) |
+| Library semantic search; Memory write, search, and extraction                                                                                              | [#23265](https://github.com/lobehub/lobehub/pull/23265) |
+| Image, video, speech, and transcription generation; `generation:*`                                                                                         | [#23267](https://github.com/lobehub/lobehub/pull/23267) |
+| Developer webhooks with HMAC signatures and retried delivery; `webhook:*`                                                                                  | [#23272](https://github.com/lobehub/lobehub/pull/23272) |
+| Skills, plugin install, connectors, and direct tool calls; `tool:invoke`                                                                                   | [#23274](https://github.com/lobehub/lobehub/pull/23274) |
+| Advanced Agent configuration, Agent labels, session groups, chat group operations; `agent:transfer`                                                        | [#23292](https://github.com/lobehub/lobehub/pull/23292) |
+| Workspaces, members, invitations, audit logs, collaborators, transfer requests, share links; `share:*`                                                     | [#23301](https://github.com/lobehub/lobehub/pull/23301) |
+| Task sub-resources, task templates, and goal control                                                                                                       | [#23303](https://github.com/lobehub/lobehub/pull/23303) |
+| Projects, widgets, dashboards, artifact publishing; `project:*`, `widget:*`, `dashboard:*`, `artifact:publish`                                             | [#23311](https://github.com/lobehub/lobehub/pull/23311) |
+| Settings, model and provider operations, OAuth apps, trash, export / import; `oauth_app:*`, `trash:*`                                                      | [#23315](https://github.com/lobehub/lobehub/pull/23315) |
+| Devices and sandboxes; `device:read`, explicit `device:operate`                                                                                            | [#23316](https://github.com/lobehub/lobehub/pull/23316) |
+| MCP server at `/api/v1/mcp`                                                                                                                                | [#23318](https://github.com/lobehub/lobehub/pull/23318) |
+| OAuth open platform: dynamic client registration, `client_credentials`, API scopes for OAuth tokens                                                        | [#23322](https://github.com/lobehub/lobehub/pull/23322) |
+| Custom Webhook channel and `/bots`; `bot:*`                                                                                                                | [#23332](https://github.com/lobehub/lobehub/pull/23332) |
+| Python SDK `lobehub`                                                                                                                                       | [#23337](https://github.com/lobehub/lobehub/pull/23337) |
+
+Related developer surfaces, also coming soon: MCP-UI rendering of `ui://` resources in tool cards ([#23325](https://github.com/lobehub/lobehub/pull/23325)), the publishable widget spec package ([#23321](https://github.com/lobehub/lobehub/pull/23321)), embedding a shared Agent on any website ([#23333](https://github.com/lobehub/lobehub/pull/23333)), and the `lh` CLI calling the REST API through `@lobehub/sdk` ([#23350](https://github.com/lobehub/lobehub/pull/23350)).
+
+When an entry merges, it moves to **Released** with its date, and the pages of this guide drop their "Coming soon" label for it.

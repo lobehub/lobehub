@@ -12,9 +12,9 @@ import {
   getLlmCallCount,
   isParkedStatus,
 } from '@lobechat/agent-runtime';
+import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
-import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import {
   getSubAgentChatConfigOverride,
   isDesktop,
@@ -22,6 +22,7 @@ import {
   resolveSubAgentModel,
 } from '@lobechat/const';
 import { type ToolsEngine } from '@lobechat/context-engine';
+import { initialToolSelection } from '@lobechat/mecha';
 import { FILE_PREVIEW_CHARS, isOversizedFileContent } from '@lobechat/prompts';
 import {
   buildGoalOverviewContext,
@@ -35,6 +36,10 @@ import {
 import debug from 'debug';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
+import {
+  applyAgentConnectorActivation,
+  resolveAgentConnectorActivation,
+} from '@/helpers/toolEngineering/connectorActivation';
 import { aiAgentService } from '@/services/aiAgent';
 import { isCanUseAudio, isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
@@ -66,8 +71,10 @@ import { toolInterventionSelectors } from '@/store/user/selectors';
 import { getUserStoreState } from '@/store/user/store';
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
+import { getFollowUpMode } from '../../lifecycle/followUpMode';
 import type { RunParkedReason, RunScope } from '../../lifecycle/types';
 import { buildViewedTaskPrompt } from '../viewedTaskPrompt';
+import { steerQueuedFollowUps } from './clientSteer';
 import { buildRunManifestMap } from './discoverableManifests';
 import { clientInterventionAudits } from './interventionAudits';
 
@@ -214,10 +221,24 @@ export class StreamingExecutorActionImpl {
           }
         : resolvedAgentConfig;
 
-    const { agentConfig: agentConfigData, plugins: pluginIds } = agentConfig;
+    const { agentConfig: agentConfigData, plugins: resolvedPluginIds } = agentConfig;
     const selectedToolIds = initialContext?.initialContext?.selectedTools?.map(
       (tool) => tool.identifier,
     );
+    // Connectors are two-state: one the agent has on is found through the
+    // activator, so it leaves the invocation set here unless this turn mentions
+    // it. Manual mode has no activator and invokes it directly instead.
+    const runAgent = {
+      id: effectiveAgentId,
+      chatConfig: agentConfig.chatConfig,
+      enabledPluginIds: resolvedPluginIds,
+      plugins: agentConfigData?.plugins,
+    };
+    const connectors = resolveAgentConnectorActivation(runAgent, selectedToolIds);
+    const pluginIds =
+      disableTools || !resolvedPluginIds
+        ? resolvedPluginIds
+        : applyAgentConnectorActivation(resolvedPluginIds, connectors);
 
     if (!agentConfigData || !agentConfigData.model) {
       throw new Error(
@@ -272,19 +293,12 @@ export class StreamingExecutorActionImpl {
       // sub-agent runs. Desktop client runs also need the local environment so
       // local-system can advertise IPC-only capabilities such as direct image reads.
       { executionEnv: isDesktop ? 'local' : undefined, isSubAgent, scope },
-      { hasOversizedFiles: hasPreviewableFiles(messages) },
+      { hasOversizedFiles: hasPreviewableFiles(messages), runAgent: { ...runAgent, connectors } },
     );
-    // When skillActivateMode is 'manual':
-    // Exclude only discovery tools (activator, skill-store) so runtime-managed defaults
-    // (skills, web-browsing, sandbox, memory, etc.) remain available for all agents.
-    const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
-
     const toolsDetailed = toolsEngine.generateToolsDetailed({
-      excludeDefaultToolIds: isManualMode ? manualModeExcludeToolIds : undefined,
       model: agentConfigData.model,
       provider: agentConfigData.provider!,
-      skipDefaultTools: disableTools || undefined,
-      toolIds: mergedToolIds,
+      ...initialToolSelection(mergedToolIds, runAgent.chatConfig, disableTools),
     });
 
     const { enabledToolIds, enabledManifests, tools } = composeEnabledTools({
@@ -294,9 +308,13 @@ export class StreamingExecutorActionImpl {
     });
 
     // Use enabledManifests directly to avoid getEnabledPluginManifests adding default tools again
-    const toolManifestMap = disableTools
-      ? Object.fromEntries(enabledManifests.map((manifest) => [manifest.identifier, manifest]))
-      : buildRunManifestMap(getToolStoreState(), enabledManifests);
+    const toolManifestMap = enabledToolIds.includes(LobeActivatorIdentifier)
+      ? buildRunManifestMap(
+          getToolStoreState(),
+          toolsEngine.getAllPluginManifests(),
+          enabledManifests,
+        )
+      : Object.fromEntries(enabledManifests.map((manifest) => [manifest.identifier, manifest]));
 
     // Merge tools generation result into agentConfig for chatService to use
     const agentConfigWithTools = {
@@ -726,7 +744,20 @@ export class StreamingExecutorActionImpl {
       );
       // Accumulate activated skills from activateSkill messages
       const activatedSkills = selectActivatedSkillsFromMessages(currentDBMessages);
-      const hasQueuedMessages = (this.#get().queuedMessages[contextKey]?.length ?? 0) > 0;
+      // Steer joins what can join right here; Queue lets the run finish first.
+      const followUpMode = getFollowUpMode();
+      if (followUpMode === 'steer') {
+        const steered = await steerQueuedFollowUps(this.#get, {
+          context,
+          contextKey,
+          nextContext,
+          operationId,
+          state,
+        });
+        if (steered) ({ nextContext, state } = steered);
+      }
+      const hasQueuedMessages =
+        followUpMode !== 'queue' && (this.#get().queuedMessages[contextKey]?.length ?? 0) > 0;
       const stepContext = computeStepContext({
         activatedSkills,
         activatedToolIds,

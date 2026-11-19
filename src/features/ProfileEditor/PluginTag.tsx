@@ -14,12 +14,13 @@ import {
   Text,
   Tooltip,
 } from '@lobehub/ui';
-import { McpIcon } from '@lobehub/ui/icons';
+import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
 import isEqual from 'fast-deep-equal';
 import { AlertCircle, Loader2, Square, SquareCheckBig, SquareMinus, X } from 'lucide-react';
 import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MarketSkillIcon from '@/components/MarketSkillIcon';
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useDiscoverStore } from '@/store/discover';
@@ -27,6 +28,7 @@ import { pluginSelectors as discoverPluginSelectors } from '@/store/discover/sel
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
+  agentSkillsSelectors,
   builtinToolSelectors,
   composioStoreSelectors,
   lobehubSkillStoreSelectors,
@@ -196,6 +198,12 @@ const PluginTag = memo<PluginTagProps>(
 
     // Extract identifier
     const identifier = typeof pluginId === 'string' ? pluginId : pluginId?.identifier;
+    const showMarketSkillIcon = useToolStore(
+      (s) =>
+        variant === 'row' &&
+        isSkill &&
+        agentSkillsSelectors.getAgentSkillByIdentifier(identifier)(s)?.source === 'market',
+    );
 
     // Agent-scoped connectors (empty unless agentId is provided).
     const agentConnectors = useToolStore(
@@ -310,9 +318,13 @@ const PluginTag = memo<PluginTagProps>(
         return {
           availableInWeb,
           avatar: builtinMeta.meta.avatar,
-          description: builtinMeta.meta.description,
+          description: t(`tools.builtins.${identifier}.description` as any, {
+            defaultValue: builtinMeta.meta.description || '',
+          }),
           isInstalled: true,
-          title: builtinMeta.meta.title,
+          title: t(`tools.builtins.${identifier}.title` as any, {
+            defaultValue: builtinMeta.meta.title || identifier,
+          }),
           type: 'builtin' as const,
         };
       }
@@ -374,6 +386,7 @@ const PluginTag = memo<PluginTagProps>(
       allLobehubSkillServers,
       customConnectors,
       marketplaceConnectors,
+      t,
       useAllMetaList,
     ]);
 
@@ -409,6 +422,17 @@ const PluginTag = memo<PluginTagProps>(
       // Show warning icon when not installed
       if (!meta.isInstalled) {
         return <AlertCircle className={styles.warningIcon} size={14} />;
+      }
+
+      if (showMarketSkillIcon) {
+        return (
+          <MarketSkillIcon
+            fallback={<Icon icon={SkillsIcon} size={16} />}
+            identifier={identifier}
+            name={displayTitle}
+            size={16}
+          />
+        );
       }
 
       // Composio type has icon property

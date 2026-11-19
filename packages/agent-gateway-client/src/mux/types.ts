@@ -218,6 +218,12 @@ export interface MuxChannelChangedMessage {
   type: 'channel_changed';
 }
 
+/** Something of the user's own changed (`topic`, e.g. `contacts`). Re-fetch it through the API. */
+interface MuxUserChangedMessage {
+  topic: string;
+  type: 'user_changed';
+}
+
 export interface MuxErrorMessage {
   code: string;
   message: string;
@@ -238,7 +244,8 @@ export type MuxServerMessage =
   | MuxSessionCompleteMessage
   | MuxStatusChangeMessage
   | MuxSubscribeFailedMessage
-  | MuxToolConfirmationRequestMessage;
+  | MuxToolConfirmationRequestMessage
+  | MuxUserChangedMessage;
 
 /** Hub → client messages that are addressed to one operation subscription. */
 export type MuxOperationMessage =
@@ -301,6 +308,7 @@ export interface GatewayMuxClientEvents {
    * expected to fall back to the v1 per-operation socket.
    */
   unavailable: (reason: string) => void;
+  user_changed: (event: MuxUserChangedMessage) => void;
 }
 
 // ─── Operation subscription ───

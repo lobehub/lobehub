@@ -184,4 +184,12 @@ describe('parseSystemAgent', () => {
 
     expect(result.asr).toEqual({ provider: 'lobehub', model: 'gpt-4o-mini-transcribe' });
   });
+
+  it('leaves the file embedding slot to DEFAULT_FILES_CONFIG', () => {
+    const result = parseSystemAgent('default=ollama/deepseek-v3,fileEmbedding=openai/text-embed');
+
+    // `default=` names a chat model, and an explicit entry would be a second
+    // knob next to `DEFAULT_FILES_CONFIG` that file indexing never reads.
+    expect(result.fileEmbedding).toBeUndefined();
+  });
 });

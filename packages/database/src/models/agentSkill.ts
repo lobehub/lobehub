@@ -82,6 +82,23 @@ export class AgentSkillModel {
     return result;
   };
 
+  findImportMatches = async (identifiers: string[], names: string[]): Promise<SkillItem[]> =>
+    this.db
+      .select(skillItemColumns)
+      .from(agentSkills)
+      .where(
+        and(
+          this.scopeWhere(),
+          or(
+            inArray(agentSkills.identifier, identifiers),
+            inArray(
+              sql`lower(${agentSkills.name})`,
+              names.map((name) => name.toLowerCase()),
+            ),
+          ),
+        ),
+      );
+
   findByName = async (name: string): Promise<SkillItem | undefined> => {
     const [result] = await this.db
       .select(skillItemColumns)
@@ -149,6 +166,30 @@ export class AgentSkillModel {
       .where(and(eq(agentSkills.id, id), this.scopeWhere()))
       .returning(skillItemColumns);
     return result;
+  };
+
+  // Serialize GitHub create/name decisions within a library. Only final row
+  // writes take this lock; archive downloads and object uploads run outside it.
+  withImportLock = <T>(write: (model: AgentSkillModel) => Promise<T>) =>
+    this.db.transaction(async (tx) => {
+      const scope = this.workspaceId ? `workspace:${this.workspaceId}` : `user:${this.userId}`;
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${'skill-import:' + scope}))`);
+      return write(new AgentSkillModel(tx, this.userId, this.workspaceId));
+    });
+
+  replaceImportedSkill = async (existing: SkillItem, data: Partial<NewAgentSkill>) => {
+    const [row] = await this.db
+      .update(agentSkills)
+      .set({ ...data, updatedAt: new Date() })
+      .where(
+        and(
+          this.scopeWhere(),
+          eq(agentSkills.id, existing.id),
+          sql`date_trunc('milliseconds', ${agentSkills.updatedAt}) = ${existing.updatedAt.toISOString()}::timestamptz`,
+        ),
+      )
+      .returning(skillItemColumns);
+    return row;
   };
 
   // ========== Delete ==========

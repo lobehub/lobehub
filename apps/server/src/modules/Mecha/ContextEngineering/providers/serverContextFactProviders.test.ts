@@ -314,6 +314,16 @@ describe('createServerContextFactProviders', () => {
       title: 'Report',
       updatedAt: new Date(updatedAt),
     });
+    const alwaysRow = {
+      content: 'Always follow the style guide.',
+      contentCharCount: 30,
+      documentId: 'doc-2',
+      filename: 'style.md',
+      id: 'agent-doc-2',
+      policyLoad: 'always',
+      title: 'Style',
+      updatedAt: new Date('2026-11-01T00:00:00.000Z'),
+    };
     const turn = {
       cacheTtlMs: 5 * 60 * 1000,
       messages: [
@@ -370,6 +380,9 @@ describe('createServerContextFactProviders', () => {
         ],
       });
       expect(getAgentContextDocuments).toHaveBeenCalledTimes(1);
+      expect(getAgentContextDocuments).toHaveBeenCalledWith('agent-1', {
+        excludeProgressive: false,
+      });
       expect(redisIndexGet).toHaveBeenCalledWith({
         agentId: 'agent-1',
         threadId: undefined,
@@ -380,19 +393,52 @@ describe('createServerContextFactProviders', () => {
     });
 
     it('renders later steps from the pinned snapshot without reading the stored one', async () => {
-      getAgentContextDocuments.mockResolvedValue([reportRow(14_100, '2026-11-14T10:00:20.000Z')]);
+      // The database answers the narrowed read with the always-loaded documents only.
+      getAgentContextDocuments.mockResolvedValue([alwaysRow]);
       const bindAgentDocumentIndex = vi.fn();
       const providers = providersFor(
         { binding: { agentDocumentIndex: stored }, origin: { topicId: 'topic-1' } },
         bindAgentDocumentIndex,
       );
 
-      const [doc] = (await providers.listAgentDocuments!('agent-1'))!;
+      const docs = (await providers.listAgentDocuments!('agent-1'))!;
 
-      expect(doc).toMatchObject({ contentCharCount: 9400 });
+      expect(docs).toEqual([
+        expect.objectContaining({ content: 'Always follow the style guide.', id: 'agent-doc-2' }),
+        expect.objectContaining({ contentCharCount: 9400, id: 'agent-doc-1' }),
+      ]);
+      expect(getAgentContextDocuments).toHaveBeenCalledWith('agent-1', {
+        excludeProgressive: true,
+      });
       expect(redisIndexGet).not.toHaveBeenCalled();
       expect(redisIndexSet).not.toHaveBeenCalled();
       expect(bindAgentDocumentIndex).not.toHaveBeenCalled();
+    });
+
+    it('reads every document again when a compression retires the pinned snapshot', async () => {
+      getAgentContextDocuments.mockResolvedValue([reportRow(14_100, '2026-11-14T10:00:20.000Z')]);
+      const bindAgentDocumentIndex = vi.fn();
+      const providers = createServerContextFactProviders({
+        ctx: { bindAgentDocumentIndex, serverDB: {}, userId: 'owner-1' } as never,
+        documentIndexTurn: {
+          ...turn,
+          messages: [...turn.messages, { id: 'cmp-1', role: 'compressedGroup' }],
+        },
+        state: {
+          binding: { agentDocumentIndex: stored },
+          origin: { topicId: 'topic-1' },
+        } as never,
+      });
+
+      const [doc] = (await providers.listAgentDocuments!('agent-1'))!;
+
+      expect(doc).toMatchObject({ contentCharCount: 14_100 });
+      expect(getAgentContextDocuments).toHaveBeenCalledWith('agent-1', {
+        excludeProgressive: false,
+      });
+      expect(bindAgentDocumentIndex).toHaveBeenCalledWith(
+        expect.objectContaining({ compressionId: 'cmp-1' }),
+      );
     });
 
     it('renders the live documents when the snapshot cannot be resolved', async () => {

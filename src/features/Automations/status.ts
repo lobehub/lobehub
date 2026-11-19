@@ -32,12 +32,15 @@ export interface AutomationStatus {
 
 /** One readable reason per `last_error` value (契约 3.1); `unknown` covers anything unmapped. */
 export const automationErrorKey = (error: InboundWebhookError | string) =>
-  `automations.error.${ERROR_KEYS.has(error as InboundWebhookError) ? error : 'unknown'}`;
+  error === 'access_revoked'
+    ? 'automations.error.reconnectToResubscribe'
+    : `automations.error.${ERROR_KEYS.has(error as InboundWebhookError) ? error : 'unknown'}`;
 
 const ERROR_KEYS = new Set<InboundWebhookError>([
   'access_revoked',
   'auth',
   'challenge_failed',
+  'channel_unavailable',
   'connection_refused',
   'delivery_suspended',
   'event_unavailable',
@@ -60,7 +63,9 @@ const remedyFor = (error: InboundWebhookError | string): AutomationRemedy => {
     case 'event_unavailable': {
       return 'resubscribe';
     }
-    // The hourly cap lifts by itself; credits are topped up elsewhere.
+    // The hourly cap lifts by itself; credits are topped up elsewhere; Channel membership is
+    // changed in the Channel.
+    case 'channel_unavailable':
     case 'wake_cap':
     case 'insufficient_budget': {
       return 'none';

@@ -744,6 +744,7 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
   const taskLines = [
     `<task>`,
     `<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>`,
+    `Use the task tools or, with a shell, \`lh task\` (\`lh man task\` lists the commands). Respect dependencies, record milestones in task comments, and pin deliverables as task documents.`,
     `${taskIdentity(task)} ${task.name || task.identifier}`,
     `Status: ${statusIcon(task.status)} ${task.status}     Priority: ${priorityLabel(task.priority)}`,
   ];
@@ -755,7 +756,11 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
           ? `cron "${task.schedulePattern}" (${task.scheduleTimezone || 'UTC'})`
           : task.automationMode;
     taskLines.push(
-      `Automation: ${cadence} — this task is a recurring loop and this run is one tick of it. When the run ends, the next tick is armed automatically; a tick with nothing to do, or whose condition is not met yet, is still a successful run — NEVER end the loop for that, and never set it to canceled or failed. The only exception: when the Instruction defines an end condition (e.g. "until X", "stop once Y", "after Z is done") and this tick has verified that it is now met, mark this task completed as your final step — that retires the loop once this run finishes. Do not ask the user to stop it instead.`,
+      `Automation: ${cadence} — this task is a recurring loop and this run is one tick of it. When the run ends, the next tick is armed automatically; a tick with nothing to do, or whose condition is not met yet, is still a successful run — NEVER end the loop for that, and never set it to canceled or failed. The only exception: when the Instruction defines an end condition (e.g. "until X", "stop once Y", "after Z is done") and this tick has verified that it is now met, request completion (\`lh task complete <id>\` with a shell) as your final step — that retires the loop once this run finishes. Do not ask the user to stop it instead.`,
+    );
+  } else if (!task.verify?.enabled && !task.review?.enabled) {
+    taskLines.push(
+      'When all deliverables are ready, request completion of this task (`lh task complete <id>` with a shell).',
     );
   }
   taskLines.push(`Instruction: ${task.instruction}`);

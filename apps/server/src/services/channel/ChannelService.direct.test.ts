@@ -7,11 +7,13 @@ import { ChannelError } from '@/database/repositories/channel';
 import { ChannelService } from './ChannelService';
 
 const {
+  contactScope,
   create,
   createGroupFromDirect,
   findAccess,
   findDevice,
   findDirectAccess,
+  findProjectMainChannelId,
   findShare,
   findSharedAgent,
   getAgent,
@@ -19,11 +21,13 @@ const {
   querySystemInfo,
   statPath,
 } = vi.hoisted(() => ({
+  contactScope: vi.fn(),
   create: vi.fn(),
   createGroupFromDirect: vi.fn(),
   findAccess: vi.fn(),
   findDevice: vi.fn(),
   findDirectAccess: vi.fn(),
+  findProjectMainChannelId: vi.fn(),
   findShare: vi.fn(),
   findSharedAgent: vi.fn(),
   getAgent: vi.fn(),
@@ -40,10 +44,16 @@ vi.mock('@/database/repositories/channel', async (original) => ({
     findDirectAccess = findDirectAccess;
   },
 }));
+vi.mock('@/database/repositories/channel/projectMainChannel', () => ({
+  findProjectMainChannelId,
+}));
 vi.mock('@/database/models/project', () => ({ ProjectModel: class {} }));
 vi.mock('@/database/models/contact', async (original) => ({
   ...(await original<object>()),
   ContactModel: class {
+    constructor(_db: unknown, userId: string, workspaceId?: string) {
+      contactScope(userId, workspaceId);
+    }
     findAgentAccess = findSharedAgent;
   },
 }));
@@ -125,9 +135,19 @@ describe('the direct Channel of a new Agent', () => {
     expect(create).toHaveBeenCalledWith({ agentConfig: {}, agentId: 'agt_new', title: 'Windy' });
   });
 
-  it('opens nothing for a runtime Channels do not support', async () => {
+  it.each(['hermes', 'openclaw'])('opens a remote %s Agent without a device', async (type) => {
     getAgent.mockResolvedValue({
-      agencyConfig: { heterogeneousProvider: { type: 'openclaw' } },
+      agencyConfig: { heterogeneousProvider: { type } },
+      name: 'Agent',
+    });
+    await expect(createDirect()).resolves.toEqual({ channel: { id: 'chn_1' } });
+    expect(findDevice).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledWith({ agentConfig: {}, agentId: 'agt_new', title: 'Agent' });
+  });
+
+  it('opens nothing for an unknown runtime', async () => {
+    getAgent.mockResolvedValue({
+      agencyConfig: { heterogeneousProvider: { type: 'unknown-cli' } },
       name: 'Agent',
     });
     await expect(createDirect()).resolves.toBeUndefined();
@@ -152,13 +172,18 @@ describe('the direct Channel of a new Agent', () => {
     });
   });
 
-  it('never opens a shared Agent in a workspace', async () => {
+  it('opens a shared Agent added in a workspace in that workspace', async () => {
     getAgent.mockResolvedValue(null);
     findSharedAgent.mockResolvedValue({ name: null, ownerId: 'other', title: 'Shared Helper' });
-    await expect(
-      new ChannelService({} as never, 'owner', 'ws_1').createDirect('agt_1'),
-    ).resolves.toBeUndefined();
-    expect(findSharedAgent).not.toHaveBeenCalled();
+    await new ChannelService({} as never, 'owner', 'ws_1').createDirect('agt_1');
+    // The entry is looked up among those added in this workspace.
+    expect(contactScope).toHaveBeenCalledWith('owner', 'ws_1');
+    expect(create).toHaveBeenCalledWith({
+      agentConfig: {},
+      agentId: 'agt_1',
+      sharedAgent: true,
+      title: 'Shared Helper',
+    });
   });
 });
 
@@ -188,6 +213,44 @@ describe('opening the direct Channel of an existing Agent', () => {
     findDirectAccess.mockResolvedValue(undefined);
     await expect(openDirect()).resolves.toEqual({ channel: { id: 'chn_new' } });
     expect(create).toHaveBeenCalledWith({ agentConfig: {}, agentId: 'agt_old', title: 'Nasa' });
+  });
+});
+
+describe('opening an Agent from the contacts or Agent list', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    create.mockResolvedValue({ channel: { id: 'chn_new' } });
+    getAgent.mockResolvedValue({ model: 'gpt-5', name: 'Apollo' });
+  });
+  const openAgent = () => new ChannelService({} as never, 'owner', 'ws').openAgent('agt_main');
+
+  // Creating a project used to leave two conversations with its main Agent in the list: the
+  // project's General Channel and a direct conversation opened on the first click.
+  it("opens a project's main Agent in the project's Channel without a direct conversation", async () => {
+    findDirectAccess.mockResolvedValue(undefined);
+    findProjectMainChannelId.mockResolvedValue('chn_general');
+
+    await expect(openAgent()).resolves.toBe('chn_general');
+
+    expect(findProjectMainChannelId).toHaveBeenCalledWith({}, 'owner', 'ws', 'agt_main');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('keeps a direct conversation the person already has with that Agent', async () => {
+    findDirectAccess.mockResolvedValue({ channel: { id: 'chn_dm', isDeleted: null } });
+
+    await expect(openAgent()).resolves.toBe('chn_dm');
+
+    expect(findProjectMainChannelId).not.toHaveBeenCalled();
+  });
+
+  it('opens a direct conversation for an Agent that leads no project', async () => {
+    findDirectAccess.mockResolvedValue(undefined);
+    findProjectMainChannelId.mockResolvedValue(undefined);
+
+    await expect(openAgent()).resolves.toBe('chn_new');
+
+    expect(create).toHaveBeenCalledWith({ agentConfig: {}, agentId: 'agt_main', title: 'Apollo' });
   });
 });
 
@@ -269,7 +332,10 @@ describe('opening another person’s Agent from its share', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it('is personal only', async () => {
-    await expect(openShared('shared-helper', 'ws_1')).rejects.toThrow('personal scope');
+  it('opens in a workspace as well', async () => {
+    await expect(openShared('shared-helper', 'ws_1')).resolves.toMatchObject({
+      channel: { id: 'chn_shared' },
+    });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ sharedAgent: true }));
   });
 });

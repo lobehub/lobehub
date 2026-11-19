@@ -17,6 +17,8 @@ import type {
 import { agents, channelMessages, users } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { fileIdsByMessage } from './attachments';
+import { isAgentAuthored } from './author';
+import { messageStands } from './tombstone';
 
 /** Freeze the public history cutoff and branch for this request. */
 export const buildManifest = (params: {
@@ -52,6 +54,8 @@ const manifestScope = (channelId: string, manifest: ChannelInputManifest) => {
   return and(
     eq(channelMessages.channelId, channelId),
     lte(channelMessages.sequence, manifest.cutoffSequence),
+    // A message deleted after the manifest froze leaves the context it was in.
+    messageStands(),
     threadId
       ? or(eq(channelMessages.threadId, threadId), mainPrefix)
       : isNull(channelMessages.threadId),
@@ -132,9 +136,9 @@ export const readManifestMessages = async (
   );
 
   return visible.map((message) => {
-    const isAgent = message.routingStatus === 'reply';
+    const isAgent = isAgentAuthored(message);
     const via = isAgent ? undefined : channelMessageVia(message.metadata);
-    const receipt = isAgent ? undefined : channelMessageReceipt(message.metadata);
+    const receipt = channelMessageReceipt(message.metadata);
     return {
       author: {
         id: isAgent ? message.agentId : message.userId,

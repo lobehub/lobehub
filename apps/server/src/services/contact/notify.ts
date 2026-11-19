@@ -1,5 +1,6 @@
 import type { NotifyContactRequestParams } from '@/business/server/contact/notifyActivity';
 import { notifyContactRequest } from '@/business/server/contact/notifyActivity';
+import { notifyUsers } from '@/server/services/user/notify';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 /**
@@ -19,4 +20,13 @@ export const notifyContactRequestAfterResponse = (params: NotifyContactRequestPa
       });
     }
   });
+};
+
+/**
+ * Refresh the address book of everyone a contact change touched, on every device they have
+ * open: the badge for a new request, a request that was answered or withdrawn, a contact added
+ * or removed. Include the actor, whose other devices are stale too. Runs after the response.
+ */
+export const notifyContactsChangedAfterResponse = (userIds: string[]) => {
+  after(() => notifyUsers('contacts', userIds));
 };

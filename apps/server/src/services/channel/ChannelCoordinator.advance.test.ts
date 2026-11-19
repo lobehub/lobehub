@@ -22,6 +22,7 @@ const {
     claim: vi.fn(),
     finishDispatch: vi.fn(),
     input: vi.fn(),
+    coAddressed: vi.fn(),
     openingReply: vi.fn(),
     primaryReply: vi.fn(),
     recentContext: vi.fn(),
@@ -101,6 +102,7 @@ describe('Channel concurrent startup', () => {
     executions.input.mockResolvedValue([]);
     executions.recentContext.mockResolvedValue({ messages: [], omitted: 0 });
     executions.primaryReply.mockResolvedValue(null);
+    executions.coAddressed.mockResolvedValue([]);
     executions.openingReply.mockResolvedValue(undefined);
     executions.heartbeat.mockResolvedValue(true);
     execAgent.mockResolvedValue({ success: true });
@@ -329,6 +331,20 @@ describe('Channel concurrent startup', () => {
     const [{ prompt }] = execAgent.mock.calls[0];
     expect(prompt).toContain('<channel_opening');
     expect(prompt).toContain('收到，我先翻一下昨天的报错日志。');
+  });
+
+  it('tells the run which other Agents the request asked, by name and role', async () => {
+    executions.coAddressed.mockResolvedValue([
+      { name: 'Alien', title: 'Growth engineer' },
+      { name: null, title: '数据分析师' },
+    ]);
+    await coordinator(1).advance('channel');
+
+    expect(executions.coAddressed).toHaveBeenCalledWith('channel', 'job-0');
+    const [{ prompt }] = execAgent.mock.calls[0];
+    expect(prompt).toContain(
+      'This request also asked Alien (Growth engineer), 数据分析师 to answer.',
+    );
   });
 
   describe('a job waiting on its directory', () => {

@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import { type FollowUpMode, type InterfaceDensity, resolveFollowUpMode } from '@lobechat/types';
 
 import { DEFAULT_LANG } from '@/const/locale';
 import { type Locales, normalizeLocale } from '@/locales/resources';
@@ -45,11 +46,23 @@ const enablePasteAutoConvert = (s: UserStore) =>
   generalConfig(s).enablePasteAutoConvert ?? s.preference.lab?.enableInputMarkdown !== false;
 const showImageReadPreview = (s: UserStore) => generalConfig(s).showImageReadPreview ?? true;
 const fontAntialiasing = (s: UserStore) => generalConfig(s).fontAntialiasing ?? true;
+const interfaceDensity = (s: UserStore): InterfaceDensity =>
+  generalConfig(s).interfaceDensity ?? 'loose';
 /** The setting is a boolean: either the live tool list is open or it is a
  *  summary row. "Open" means the full list — the height-capped middle level
  *  just hid part of what the user asked to see. */
 const workflowStreamingExpandLevel = (s: UserStore) =>
   generalConfig(s).expandWorkflowWhileStreaming ? 'full' : 'collapsed';
+
+/**
+ * What a message sent during a run does. `legacy` (lab off) keeps the
+ * behavior from before the setting existed; the setting defaults to steer.
+ */
+const followUpBehavior = (s: UserStore): FollowUpMode =>
+  resolveFollowUpMode(
+    s.preference.lab?.enableBetterCodingExperience,
+    generalConfig(s).followUpBehavior,
+  );
 
 export const userGeneralSettingsSelectors = {
   animationMode,
@@ -58,9 +71,11 @@ export const userGeneralSettingsSelectors = {
   enableAutoScrollOnStreaming,
   enableMessageLinkIcon,
   enablePasteAutoConvert,
+  followUpBehavior,
   fontAntialiasing,
   fontSize,
   highlighterTheme,
+  interfaceDensity,
   mermaidTheme,
   neutralColor,
   primaryColor,

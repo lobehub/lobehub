@@ -578,8 +578,8 @@ export function sharedRendererDefine(options: { isElectron: boolean; isMobile: b
 }
 
 export const sharedOptimizeDeps = {
-  // Bundle the Markdown serializer per importer. Externalizing its bare name
-  // makes the CJK plugin resolve the workspace's 2.1.x instead of its own 2.2.x.
+  // Keep Markdown inside pre-bundling: externalizing it loses the CJK extension's
+  // importer path and resolves its required 2.2 handlers to the root's pinned 2.1.
   exclude: [...stylexTokenModules],
   include: [
     'react',

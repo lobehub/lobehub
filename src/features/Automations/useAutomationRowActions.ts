@@ -11,9 +11,10 @@ import {
   feedbackForCheckError,
   feedbackForDeleteError,
 } from './checkFeedback';
+import { openRenameAutomationModal } from './RenameAutomationModal';
 
 export interface AutomationRowCallbacks {
-  /** The server answered a check with this row; put it in place. */
+  /** The server answered a check or a rename with this row; put it in place. */
   onChecked: (item: InboundWebhookItem) => void;
   /** The row no longer exists on the server; drop it. */
   onRemoved: (id: string) => void;
@@ -60,20 +61,17 @@ export const useAutomationRowActions = (
     }
   };
 
+  // The event it follows: fixed, and what the agent knows it by.
+  const event = item.source.kind === 'mcp_events' ? item.source.eventName : item.identifier;
+
   const confirmDelete = () =>
     confirmModal({
       cancelText: t('automations.delete.cancel'),
-      content:
-        item.source.kind === 'generic'
-          ? t('automations.delete.contentWebhook', {
-              agent: agentDisplayName(item.agent, t('untitledAgent', { ns: 'chat' })),
-              name: item.name?.trim() || t('automations.source.webhook'),
-            })
-          : t('automations.delete.content', {
-              agent: agentDisplayName(item.agent, t('untitledAgent', { ns: 'chat' })),
-              connector: item.connector?.name ?? item.source.eventName,
-              event: item.source.eventName,
-            }),
+      content: t('automations.delete.content', {
+        agent: agentDisplayName(item.agent, t('untitledAgent', { ns: 'chat' })),
+        connector: item.connector?.name ?? event,
+        event,
+      }),
       okButtonProps: { danger: true },
       okText: t('automations.delete.ok'),
       onOk: async () => {
@@ -90,5 +88,26 @@ export const useAutomationRowActions = (
       title: t('automations.delete.title'),
     });
 
-  return { check, checking, confirmDelete };
+  /**
+   * The name people see; the event it follows stays what the agent knows it by. Only its
+   * creator renames it, as only they change what it runs.
+   */
+  const canRename = item.canConfigure;
+
+  const rename = () =>
+    openRenameAutomationModal({
+      currentName: item.name ?? '',
+      fallback: event,
+      onSubmit: async (name) => {
+        try {
+          onChecked(await inboundWebhookService.update(item.id, { name }));
+          toast.success(t('automations.rename.done'));
+          return undefined;
+        } catch {
+          return t('automations.rename.failed');
+        }
+      },
+    });
+
+  return { canRename, check, checking, confirmDelete, rename };
 };

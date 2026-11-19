@@ -13,9 +13,9 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import type { ResourceListVisibilityFilter } from '@/features/ResourceManager/store/initialState';
+import { useHeaderActionSize } from '@/styles/density';
 
 const OPTIONS: Array<{
   icon: typeof LockIcon;
@@ -47,6 +47,7 @@ const OPTIONS: Array<{
  */
 const ResourceModeToggle = memo(() => {
   const { t } = useTranslation('chat');
+  const headerActionSmallSize = useHeaderActionSize(true);
   const activeWorkspaceId = useActiveWorkspaceId();
   const [listVisibility, setListVisibility, hydrateListVisibility] = useResourceManagerStore(
     (s) => [s.listVisibility, s.setListVisibility, s.hydrateListVisibility],
@@ -94,7 +95,7 @@ const ResourceModeToggle = memo(() => {
     <DropdownMenu items={menuItems} open={open} onOpenChange={setOpen}>
       <ActionIcon
         icon={current.icon}
-        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+        size={headerActionSmallSize}
         title={`${t('resources.visibility.label')}: ${currentLabel}`}
       />
     </DropdownMenu>

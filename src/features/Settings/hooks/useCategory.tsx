@@ -15,6 +15,7 @@ import {
   EllipsisIcon,
   EthernetPort,
   FlaskConical,
+  GaugeIcon,
   Gift,
   Info,
   KeyboardIcon,
@@ -29,6 +30,7 @@ import {
   TagIcon,
   TerminalSquare,
   Trash2,
+  WebhookIcon,
   Wrench,
   ZapIcon,
 } from 'lucide-react';
@@ -221,10 +223,11 @@ export const useCategory = () => {
         key: SettingsTabs.Automations,
         label: t('tab.automations'),
       },
-      {
-        icon: KeyRound,
-        key: SettingsTabs.Creds,
-        label: t('tab.creds'),
+      // URLs outside systems call to wake an agent; made on each agent's page, managed here too.
+      enableWebhook && {
+        icon: WebhookIcon,
+        key: SettingsTabs.Webhooks,
+        label: t('tab.webhooks'),
       },
     ].filter(Boolean) as CategoryItem[];
 
@@ -241,12 +244,26 @@ export const useCategory = () => {
         key: SettingsTabs.Devices,
         label: t('tab.devices'),
       },
+      // The coding-agent subscriptions this member's devices signed in to:
+      // the capacity their agents are balanced onto.
+      {
+        icon: GaugeIcon,
+        key: SettingsTabs.SubscriptionAccounts,
+        label: t('tab.subscriptionAccounts'),
+      },
       // Always there: a code environment is a definition, written down before
       // anything runs it, and useful with or without a drive to run it on.
       {
         icon: ContainerIcon,
         key: SettingsTabs.Environments,
         label: t('tab.environments'),
+      },
+      // Secrets the agents' runs read at execution time, next to the
+      // environments that consume them.
+      {
+        icon: KeyRound,
+        key: SettingsTabs.Creds,
+        label: t('tab.creds'),
       },
       isDesktop && {
         icon: EthernetPort,

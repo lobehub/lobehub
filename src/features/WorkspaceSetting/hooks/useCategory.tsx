@@ -32,6 +32,7 @@ import {
   Trash2,
   Users,
   UsersRound,
+  WebhookIcon,
   ZapIcon,
 } from 'lucide-react';
 import { useMemo } from 'react';
@@ -267,10 +268,11 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Automations,
               label: t('tab.automations'),
             },
-            {
-              icon: KeyRound,
-              key: WorkspaceSettingsTabs.Creds,
-              label: t('tab.creds'),
+            // The workspace's agents' webhooks; made on each agent's page, managed here too.
+            enableWebhook && {
+              icon: WebhookIcon,
+              key: WorkspaceSettingsTabs.Webhooks,
+              label: t('tab.webhooks'),
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Connection,
@@ -299,6 +301,13 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: ContainerIcon,
               key: WorkspaceSettingsTabs.Environments,
               label: t('tab.environments'),
+            },
+            // Secrets the agents' runs read at execution time, next to the
+            // environments that consume them.
+            {
+              icon: KeyRound,
+              key: WorkspaceSettingsTabs.Creds,
+              label: t('tab.creds'),
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Resource,

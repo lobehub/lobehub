@@ -1,4 +1,3 @@
-import { projectCheckoutDirectory } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { EnvironmentConfiguration } from '@lobechat/types';
 
 import type { SandboxSelection } from './useSandboxPlacement';
@@ -32,6 +31,22 @@ export const repositorySlug = (environment: {
 };
 
 /**
+ * The repositories an environment checks out, as a label: the first one's
+ * `owner/name`, and `+N` for the rest — so a picker row never reads as one
+ * repository when the environment clones several.
+ */
+export const repositoriesLabel = (environment: {
+  configuration?: Pick<EnvironmentConfiguration, 'sources'> | null;
+}): string | undefined => {
+  const first = repositorySlug(environment);
+  if (!first) return undefined;
+  const count = (environment.configuration?.sources ?? []).filter(
+    (source) => source.kind === 'git',
+  ).length;
+  return count > 1 ? `${first} +${count - 1}` : first;
+};
+
+/**
  * What the environment chip says. A list still loading, or one that failed to
  * load, says nothing about the topic's environment — so it is not reported as
  * "none", which would read as initialization being off.
@@ -62,25 +77,12 @@ export const environmentChipState = ({
 };
 
 /**
- * Where a conversation works once a repository is picked. A repository is only
- * cloned into an empty folder, so it never inherits the folder the
- * conversation was on: it starts in a temporary sandbox — or, in a project, in
- * the project's own checkout of it, which every conversation there shares (the
- * run makes the folder when it first needs it). A private checkout stays on the
- * member's own drive; the public one is every member's.
+ * Where a conversation works once a repository is picked: a fresh temporary
+ * sandbox the repository is cloned into. A repository is only cloned into an
+ * empty folder, so it never inherits the folder the conversation was on, and
+ * it is never checked out on the drive — the persistent sandbox is for keeping
+ * a folder of the drive, not a repository.
  */
-export const repositorySelection = (
-  environment: { id: string; name: string },
-  {
-    projectId,
-    published,
-    workspace,
-  }: { projectId?: string; published: boolean; workspace: boolean },
-): SandboxSelection =>
-  projectId
-    ? {
-        ...(workspace && { drive: published ? 'public' : 'personal' }),
-        environmentId: environment.id,
-        workingDirectory: projectCheckoutDirectory(projectId, environment.id),
-      }
-    : { environmentId: environment.id };
+export const repositorySelection = (environment: { id: string }): SandboxSelection => ({
+  environmentId: environment.id,
+});

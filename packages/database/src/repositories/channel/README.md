@@ -11,7 +11,7 @@ public messages, deliveries, topics and operations.
 | ---------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Membership, roles, routing, branches, ordering | Channel tables                                                                        |
 | Conversation kind                              | `channels.agentId`: bound Agent for a direct conversation; NULL for a group           |
-| Message sender                                 | `channel_messages.userId` or `agentId`; never the requesting user on an Agent reply   |
+| Message sender                                 | `channel_messages.userId` or `agentId`; never the requesting user on an Agent message |
 | Public content and replies                     | `channel_messages.content`; independent IDs                                           |
 | Public attachments                             | `channel_message_files`, with sender-checked file references and order                |
 | Internal conversation                          | Ordinary `topics` and `messages`, with the actual Agent and requester                 |
@@ -97,11 +97,31 @@ never take one. The claim freezes `executionConfig.share` (owner, share and the 
 
 ## Conversations between contacts
 
-`channels.peerUserId` marks a personal conversation between two people who are mutual contacts
-(`openPeer`). One exists per pair, whoever opened it: no unique index backs this, so `openPeer` takes an advisory lock on the pair before looking for it. Both people are owner members. It takes no
-Agents and no third person, so messages never route. Sending rechecks the contact relation in
-both directions: removing a contact silences the conversation and keeps its history. The list
-reports `peerUserId` relative to the viewer. Either account's deletion removes it.
+`channels.peerUserId` marks a one-on-one conversation between two people (`openPeer`). One
+exists per pair and scope, whoever opened it: no unique index backs this, so `openPeer` takes an
+advisory lock on the pair and scope before looking for it. Both people are owner members. It takes
+no Agents and no third person, so messages never route. The list reports `peerUserId` relative to
+the viewer. Either account's deletion removes it.
+
+Who may talk (`requirePeerRelation`, rechecked on every send so a lapsed relation silences the
+conversation and keeps its history): in the personal space, mutual contacts; in a workspace, two
+members, or a member and an external contact of the workspace paired with them in
+`user_contacts`. Two external contacts never talk to each other there.
+
+## Conversations between Agents
+
+`channels.agentPairKey` (`agentA:agentB`, sorted) marks the conversation in which one of a
+person's Agents asks another (`openAgentPair`). A unique index keeps one per pair, person and
+scope, whichever Agent opens it. It is group-shaped (`agentId` NULL): the person is its owner
+member, and its two Agents are members with the environments the caller passes. It is the only
+Channel that takes a request written by an Agent (`authorAgentMemberId` on send): such a row has
+`agentId` and no `userId` while its job's requester stays the person, so execution identity,
+access and continuation are unchanged. Authorship is `isAgentAuthored` (a reply, or a row with
+`agentId`), not `routingStatus` alone.
+
+When a reply to an Agent's request is published there, `deliverAnswerToAsker` queues the asking
+Agent on that reply, for the same requester. A reply to a reply wakes no one, so an exchange ends
+with the asking Agent's answer unless it asks again.
 
 ## Delivery-key retirement rollout
 

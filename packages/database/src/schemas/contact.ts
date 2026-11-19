@@ -17,12 +17,19 @@ import { users } from './user';
 import { workspaces } from './workspace';
 
 /**
- * One entry in an address book. People are personal: their entries pin `user_id` and appear in
- * every scope. An `agent` entry belongs to the scope it was added in: with no `workspace_id` it
- * is its owner's alone; with one it is the workspace's, shown to every member there, and
- * `user_id` only records who added it.
+ * One entry in an address book. Every entry belongs to the scope it was made in.
  *
- * A `user` entry exists only for an accepted contact request, and always in both directions.
+ * A `user` entry pins `user_id`. Without `workspace_id` it is a personal contact, listed only in
+ * the personal space. With one it pairs a member of that workspace with an external contact: a
+ * person outside it who accepted a member's invitation. Colleagues need no entry, they are the
+ * workspace's members; an external contact sees only the members paired with them there, the
+ * inviter first, and each member opens or closes only themselves.
+ *
+ * An `agent` entry with no `workspace_id` is its owner's alone; with one it is the workspace's,
+ * shown to every member there, and `user_id` only records who added it.
+ *
+ * A `user` entry exists only for an accepted contact request or a member opening themselves to
+ * an external contact, and always in both directions.
  * An `agent` entry is another person's Agent added through its share link. It references the
  * Agent, not the share: an Agent has at most one share row, and access is rechecked against
  * that live row on every read and run, so pausing the share disables the entry without
@@ -43,7 +50,7 @@ export const userContacts = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
 
-    /** Only on `agent` entries: the workspace whose address book holds it; null is personal. */
+    /** The workspace whose address book holds the entry; null is personal. */
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     type: text('type').$type<ContactType>().notNull(),
@@ -63,7 +70,10 @@ export const userContacts = pgTable(
   (t) => [
     uniqueIndex('user_contacts_user_unique')
       .on(t.userId, t.contactUserId)
-      .where(sql`${t.contactUserId} IS NOT NULL`),
+      .where(sql`${t.contactUserId} IS NOT NULL AND ${t.workspaceId} IS NULL`),
+    uniqueIndex('user_contacts_workspace_user_unique')
+      .on(t.workspaceId, t.userId, t.contactUserId)
+      .where(sql`${t.contactUserId} IS NOT NULL AND ${t.workspaceId} IS NOT NULL`),
     uniqueIndex('user_contacts_agent_unique')
       .on(t.userId, t.agentId)
       .where(sql`${t.agentId} IS NOT NULL AND ${t.workspaceId} IS NULL`),
@@ -73,13 +83,18 @@ export const userContacts = pgTable(
     // Neither partial index serves the cascades from users and agents.
     index('user_contacts_contact_user_id_idx').on(t.contactUserId),
     index('user_contacts_agent_id_idx').on(t.agentId),
+    index('user_contacts_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
 /**
- * A request to become mutual contacts. At most one pending request exists per ordered pair;
- * a request sent while the other person's request is pending accepts it instead. Answered
+ * A request to become mutual contacts. At most one pending request exists per ordered pair and
+ * scope; a personal request sent while the other person's is pending accepts it instead. Answered
  * rows are kept for their status, and a new request may follow a declined or cancelled one.
+ *
+ * With `workspace_id` it is a member inviting someone outside the workspace to be its external
+ * contact. The addressee answers it from their personal space, since they cannot enter the
+ * workspace before accepting.
  */
 export const userContactRequests = pgTable(
   'user_contact_requests',
@@ -94,6 +109,9 @@ export const userContactRequests = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
 
+    /** The workspace a member sent it from, for an external contact; null is personal. */
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
     message: text('message'),
     status: text('status').$type<ContactRequestStatus>().notNull().default('pending'),
     respondedAt: timestamptz('responded_at'),
@@ -103,9 +121,13 @@ export const userContactRequests = pgTable(
   (t) => [
     uniqueIndex('user_contact_requests_pending_unique')
       .on(t.requesterId, t.addresseeId)
-      .where(sql`${t.status} = 'pending'`),
+      .where(sql`${t.status} = 'pending' AND ${t.workspaceId} IS NULL`),
+    uniqueIndex('user_contact_requests_workspace_pending_unique')
+      .on(t.workspaceId, t.requesterId, t.addresseeId)
+      .where(sql`${t.status} = 'pending' AND ${t.workspaceId} IS NOT NULL`),
     index('user_contact_requests_addressee_status_idx').on(t.addresseeId, t.status),
     index('user_contact_requests_requester_status_idx').on(t.requesterId, t.status),
+    index('user_contact_requests_workspace_id_idx').on(t.workspaceId),
     check('user_contact_requests_not_self_check', sql`${t.requesterId} <> ${t.addresseeId}`),
   ],
 );

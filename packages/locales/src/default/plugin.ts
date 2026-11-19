@@ -30,12 +30,28 @@ export default {
   'builtins.lobe-channel.sendError':
     "The message wasn't sent. Check the Channel and its Agents, then try again.",
   'builtins.lobe-channel.sentTo': 'Sent to {{agents}} in #{{channel}}',
+  'builtins.lobe-channel.apiName.listPeople': 'List people',
+  'builtins.lobe-channel.apiName.messagePerson': 'Message a person',
+  'builtins.lobe-channel.listPeopleError':
+    "Couldn't list the people you can message. Try again in a moment.",
+  'builtins.lobe-channel.messagePersonError':
+    "The message wasn't sent. Check that you can message this person, then try again.",
+  'builtins.lobe-channel.noPeople': 'No one found to message.',
+  'builtins.lobe-channel.openConversation': 'Open conversation',
+  'builtins.lobe-channel.peopleCount': 'People: {{count}}',
+  'builtins.lobe-channel.sentToPerson': 'Sent to {{name}}',
   'builtins.lobe-mcp-events.title': 'Event subscriptions',
+  'builtins.lobe-mcp-events.intervention.unsubscribeTitle': 'End this subscription?',
+  'builtins.lobe-mcp-events.intervention.unsubscribeDesc':
+    'It is also ended on its MCP server, and its events stop running the agent. To get them again, ask the agent to subscribe.',
   'builtins.lobe-mcp-events.apiName.listEventTypes': 'List connector events',
   'builtins.lobe-mcp-events.apiName.subscribeEvent': 'Subscribe to event',
   'builtins.lobe-mcp-events.apiName.listSubscriptions': 'List subscriptions in this topic',
+  'builtins.lobe-mcp-events.apiName.renameSubscription': 'Rename subscription',
+  'builtins.lobe-mcp-events.apiName.checkSubscription': 'Check subscription',
   'builtins.lobe-mcp-events.apiName.unsubscribeEvent': 'Unsubscribe',
   'builtins.lobe-mcp-events.inspector.failed': 'Failed',
+  'builtins.lobe-mcp-events.inspector.listAgentSubscriptions': "List this agent's subscriptions",
   'builtins.lobe-mcp-events.intervention.filter': 'Filter',
   'builtins.lobe-mcp-events.intervention.instructions': 'When it fires',
   'builtins.lobe-mcp-events.intervention.costTitle': 'Runs the agent on every event',
@@ -44,9 +60,16 @@ export default {
   'builtins.lobe-mcp-events.render.noFilter': 'All {{event}} events',
   'builtins.lobe-mcp-events.render.moreArgs': '{{text}} +{{count}}',
   'builtins.lobe-mcp-events.render.expiresNever': 'Never expires',
+  'builtins.lobe-mcp-events.render.deliversToChannel':
+    "Results post to the Channel's main timeline",
+  'builtins.lobe-mcp-events.render.deliversToThread': 'Results post to this thread',
   'builtins.lobe-mcp-events.render.expiresAt': 'Valid until {{time}}, renewed automatically',
   'builtins.lobe-mcp-events.render.manage': 'Manage in Automations',
   'builtins.lobe-mcp-events.render.listEmpty': 'No subscriptions in this topic.',
+  'builtins.lobe-mcp-events.render.listAgentEmpty':
+    "You haven't subscribed this agent to any events yet.",
+  'builtins.lobe-mcp-events.render.inTopic': 'Runs in {{topic}}',
+  'builtins.lobe-mcp-events.render.untitledTopic': 'an untitled topic',
   'builtins.lobe-mcp-events.render.eventTypesEmpty':
     "None of this agent's connectors offer events.",
   'builtins.lobe-mcp-events.render.notSubscribable': 'No webhook delivery',
@@ -58,7 +81,7 @@ export default {
   'builtins.lobe-mcp-events.error.public_url_required':
     'Event subscriptions need LobeHub on a public HTTPS address. Ask your administrator to set APP_URL',
   'builtins.lobe-mcp-events.error.channel_unsupported':
-    "Event subscriptions aren't available in Channels. Ask in a direct conversation with this agent instead.",
+    'Ask from a message in the Channel, so events know where to post their results',
   'builtins.lobe-mcp-events.error.connector_not_found': "This agent doesn't have that connector",
   'builtins.lobe-mcp-events.error.events_unsupported': "This connector doesn't offer events",
   'builtins.lobe-mcp-events.error.delivery_unsupported':
@@ -70,8 +93,77 @@ export default {
     "The connector couldn't reach LobeHub's callback address",
   'builtins.lobe-mcp-events.error.limit_reached':
     'Subscription limit reached. Delete one in Settings › Automations first',
-  'builtins.lobe-mcp-events.error.not_found': 'This topic has no such subscription',
+  'builtins.lobe-mcp-events.error.not_found': 'This agent has no such subscription of yours',
+  'builtins.lobe-mcp-events.error.rate_limited':
+    'Checked moments ago. Wait 30 seconds, then check again',
   'builtins.lobe-mcp-events.error.unknown': "The subscription request didn't finish",
+  'builtins.lobe-webhook.title': 'Webhooks',
+  'builtins.lobe-webhook.apiName.listWebhooks': "List this agent's webhooks",
+  'builtins.lobe-webhook.apiName.createWebhook': 'Create webhook',
+  'builtins.lobe-webhook.apiName.updateWebhook': 'Update webhook',
+  'builtins.lobe-webhook.apiName.sendTestWebhook': 'Send test call',
+  'builtins.lobe-webhook.apiName.listWebhookCalls': 'List webhook calls',
+  'builtins.lobe-webhook.apiName.deleteWebhook': 'Delete webhook',
+  'builtins.lobe-webhook.inspector.failed': 'Failed',
+  'builtins.lobe-webhook.render.manage': 'Manage on the Webhook page',
+  'builtins.lobe-webhook.render.listEmpty': 'This agent has no webhooks yet.',
+  'builtins.lobe-webhook.render.identifier':
+    'Identifier: what the agent knows this webhook by. Renaming never changes it.',
+  'builtins.lobe-webhook.render.aChannel': 'a Channel',
+  'builtins.lobe-webhook.render.aThread': 'a Thread',
+  'builtins.lobe-webhook.render.deliversToChannel': 'Answers posted to #{{channel}}',
+  'builtins.lobe-webhook.render.deliversToThread': 'Answers posted to {{thread}} in #{{channel}}',
+  'builtins.lobe-webhook.render.deletedWebhook':
+    'Deleted. Calls to its URL are refused from now on.',
+  'builtins.lobe-webhook.render.testSent':
+    'Test call accepted. The agent is running it; see it under the webhook calls.',
+  'builtins.lobe-webhook.render.testPaused':
+    "The webhook is paused, so the test call wasn't accepted. Resume it first.",
+  'builtins.lobe-webhook.render.testRefused': "The test call wasn't accepted (HTTP {{status}}).",
+  'builtins.lobe-webhook.key.generate': 'Generate key',
+  'builtins.lobe-webhook.key.regenerate': 'New key',
+  'builtins.lobe-webhook.key.confirmTitle': 'Generate a key for this webhook?',
+  'builtins.lobe-webhook.key.confirmContent':
+    "The key is shown once, here, and isn't saved in the chat. Any key issued before stops working at once; the URL stays the same.",
+  'builtins.lobe-webhook.key.confirmOk': 'Generate key',
+  'builtins.lobe-webhook.key.cancel': 'Cancel',
+  'builtins.lobe-webhook.key.hide': 'Done, hide key',
+  'builtins.lobe-webhook.key.failed':
+    "Couldn't generate a key. Try again, or use the agent's Webhook page.",
+  'builtins.lobe-webhook.intervention.name': 'Name',
+  'builtins.lobe-webhook.intervention.instructions': 'Each call',
+  'builtins.lobe-webhook.intervention.topicMode': 'Topic',
+  'builtins.lobe-webhook.intervention.autoApprove': 'Auto-approve',
+  'builtins.lobe-webhook.intervention.state': 'State',
+  'builtins.lobe-webhook.intervention.on': 'On',
+  'builtins.lobe-webhook.intervention.off': 'Off',
+  'builtins.lobe-webhook.intervention.pause': 'Pause: calls are refused',
+  'builtins.lobe-webhook.intervention.resume': 'Resume: calls run the agent again',
+  'builtins.lobe-webhook.intervention.destination.label': 'Answers',
+  'builtins.lobe-webhook.intervention.destination.topic': 'Stay in the topic each call runs in',
+  'builtins.lobe-webhook.intervention.destination.channel':
+    "Posted to this Channel's main timeline",
+  'builtins.lobe-webhook.intervention.destination.thread': 'Posted to this Thread',
+  'builtins.lobe-webhook.intervention.autoApproveTitle': 'Runs tools without asking',
+  'builtins.lobe-webhook.intervention.autoApproveDesc':
+    "Anyone with this webhook's key can make the agent use its tools without your approval. Tools that always ask are skipped.",
+  'builtins.lobe-webhook.intervention.channelAutoApproveDesc':
+    "Nobody can approve a tool where the answer is posted, so auto-approve is turned on: anyone with this webhook's key can make the agent use its tools without your approval.",
+  'builtins.lobe-webhook.intervention.createTitle': 'Every call runs the agent',
+  'builtins.lobe-webhook.intervention.createDesc':
+    "Each call runs this agent once and uses credits, until you pause or delete the webhook. The key isn't shown in the chat: generate it from the result card or the agent's Webhook page.",
+  'builtins.lobe-webhook.intervention.deleteTitle': "This can't be undone",
+  'builtins.lobe-webhook.intervention.deleteWebhookDesc':
+    "Calls to this webhook's URL will be refused, and its key stops working.",
+  'builtins.lobe-webhook.error.bad_request': "The change wasn't accepted",
+  'builtins.lobe-webhook.error.disabled': 'Webhooks are turned off for this account',
+  'builtins.lobe-webhook.error.forbidden': 'Only the member who created this webhook can do that',
+  'builtins.lobe-webhook.error.not_found': "This agent doesn't have that webhook",
+  'builtins.lobe-webhook.error.not_in_channel':
+    'Answers can only be posted to the Channel or Thread this conversation is in',
+  'builtins.lobe-webhook.error.rate_limited':
+    'Too many requests. Wait a moment, or delete a webhook you no longer use',
+  'builtins.lobe-webhook.error.unknown': "The webhook request didn't finish",
 
   'builtins.lobe-attachments.apiName.readAttachment': 'Read attachment',
   'builtins.lobe-attachments.title': 'Attachments',
