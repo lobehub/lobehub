@@ -149,6 +149,16 @@ describe('lh artboard skill init', () => {
     expect(skill).toMatch(/push[^.]*re-?sync/i);
   });
 
+  it('answers the comments on the board itself and asks board questions there', async () => {
+    await run('--dir', directory);
+
+    const skill = await readFile(skillPath('SKILL.md'), 'utf8');
+    expect(skill).toContain('lh artboard comments <id>');
+    expect(skill).toContain('lh artboard reply <commentId>');
+    expect(skill).toContain('lh artboard resolve <commentId>');
+    expect(skill).toContain('lh artboard ask <id>');
+  });
+
   it('does not tie a board to an existing file', async () => {
     await run('--dir', directory);
 
@@ -207,7 +217,7 @@ describe('lh artboard skill init', () => {
     expect(skill).toContain('lh artboard ops');
     expect(skill).toContain('lh artboard files write');
     expect(skill).not.toMatch(
-      /lh artboard (?!create|update|read|list|ops|push|files (?:list|read|write|rm)\b|--help|skill)[a-z]/,
+      /lh artboard (?!create|update|read|list|ops|push|files (?:list|read|write|rm)\b|comments|reply|resolve|ask|--help|skill)[a-z]/,
     );
     expect(skill).not.toMatch(/listArtboardComments|replyArtboardComment|askArtboardQuestion/);
   });

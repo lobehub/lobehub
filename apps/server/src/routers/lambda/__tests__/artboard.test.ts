@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { type LobeChatDatabase } from '@lobechat/database';
-import { projects, topics } from '@lobechat/database/schemas';
+import { agents, projects, topics } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -82,6 +82,32 @@ describe('artboardRouter', () => {
     });
     expect(listed.resolvedAt).toBeInstanceOf(Date);
     expect(await caller().getRevision({ id: artboard.id })).toMatchObject({ revision: 1 });
+  });
+
+  it("lets the run's agent take the user's threads, answer them and ask its own question", async () => {
+    const agentId = `agt_${userId}`;
+    await testDB.insert(agents).values({ id: agentId, userId });
+    const { artboard } = await createBoard();
+    const thread = await caller().addComment({
+      clientId: 'c1',
+      content: '太挤了',
+      id: artboard.id,
+    });
+
+    const taken = await caller().takeComments({ agentId, id: artboard.id });
+    expect(taken.map((item) => [item.id, item.unread])).toEqual([[thread.id, true]]);
+    expect(await caller().countUndeliveredComments({ id: artboard.id })).toBe(0);
+
+    const reply = await caller().replyAsAgent({ agentId, commentId: thread.id, content: '已拉开' });
+    expect(reply.authorAgentId).toBe(agentId);
+
+    const question = await caller().askQuestion({
+      agentId,
+      content: '入口放哪？',
+      id: artboard.id,
+    });
+    const { artboard: after } = await caller().get({ id: artboard.id });
+    expect(after.content.questions.map((item) => item.id)).toEqual([question.id]);
   });
 
   it('maps a round that is not on the board to NOT_FOUND', async () => {

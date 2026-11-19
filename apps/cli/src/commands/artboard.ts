@@ -10,6 +10,7 @@ import type { Command } from 'commander';
 
 import { getTrpcClient } from '../api/client';
 import { outputJson } from '../utils/format';
+import { registerArtboardCommentCommands } from './artboardComments';
 import { registerArtboardOpsCommand } from './artboardOps';
 import { pushArtboardDir, toLocalArtboardFile, writeArtboardFiles } from './artboardPush';
 import { registerArtboardSkillCommand } from './artboardSkill';
@@ -220,6 +221,7 @@ export const registerArtboardCommand = (program: Command) => {
       for (const board of boards)
         console.log(`${board.id}  ${board.title}  ${board.phase}  revision ${board.revision}`);
     });
+  registerArtboardCommentCommands(artboard);
   registerArtboardOpsCommand(artboard);
   registerArtboardSkillCommand(artboard);
 };

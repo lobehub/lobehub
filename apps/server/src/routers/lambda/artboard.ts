@@ -57,6 +57,10 @@ const artboardProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
         ctx.workspaceId ?? undefined,
       ),
       artboardService: new ArtboardService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
+      asAgent: (agentId: string) =>
+        new ArtboardService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined, {
+          context: { agentId },
+        }),
     },
   });
 });
@@ -71,6 +75,7 @@ const idInput = z.object({ id: z.string().min(1) });
 const revisionInput = idInput.extend({ revision: z.number().int().positive() });
 
 const commentInput = z.object({ commentId: z.string().min(1) });
+const agentInput = z.object({ agentId: z.string().min(1) });
 const commentContent = z.string().trim().min(1).max(10_000);
 const commentAnchor = z.union([
   z.object({ type: z.literal('canvas'), x: z.number().finite(), y: z.number().finite() }),
@@ -229,6 +234,34 @@ export const artboardRouter = router({
     .input(commentInput)
     .mutation(({ ctx, input }) =>
       run('resolveComment', () => ctx.artboardService.resolveComment(input.commentId)),
+    ),
+
+  askQuestion: artboardProcedureWrite
+    .input(
+      idInput.merge(agentInput).extend({
+        boardId: z.string().nullish(),
+        content: commentContent,
+        groupId: z.string().nullish(),
+        pageId: z.string().nullish(),
+      }),
+    )
+    .mutation(({ ctx, input }) => {
+      const { agentId, id, ...question } = input;
+      return run('askQuestion', () => ctx.asAgent(agentId).askQuestion(id, question));
+    }),
+
+  replyAsAgent: artboardProcedureWrite
+    .input(commentInput.merge(agentInput).extend({ content: commentContent }))
+    .mutation(({ ctx, input }) =>
+      run('replyAsAgent', () =>
+        ctx.asAgent(input.agentId).replyComment(input.commentId, { content: input.content }),
+      ),
+    ),
+
+  takeComments: artboardProcedureWrite
+    .input(idInput.merge(agentInput))
+    .mutation(({ ctx, input }) =>
+      run('takeComments', () => ctx.asAgent(input.agentId).takeUndeliveredComments(input.id)),
     ),
 
   submitRound: artboardProcedureWrite

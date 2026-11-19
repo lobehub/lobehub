@@ -51,17 +51,25 @@ If no screen can be made (writing the files is refused or times out), tell the u
 - one options group holds the options of exactly one round;
 - the user submits every open round at once, so open only the rounds you want answered now.
 
+**Comments and questions.** The user comments on boards, groups and pages. Answer them on the artboard, not only in chat:
+
+- \`lh artboard comments <id>\` prints the threads waiting for you, each with its id and what it is on; the ones printed count as read;
+- \`lh artboard reply <commentId> <text>\` answers a thread, and \`lh artboard resolve <commentId>\` closes it once what it asks for is done;
+- to ask about one screen, group or page, use \`lh artboard ask <id> --board <boardId> <question>\` (or \`--group\`, \`--page\`) instead of asking in chat. The user answers in that thread, and the artboard cannot be finalized while your question is open: resolve it once you have the answer.
+
 ## 4. Hand over
 
-Reply with what is on the artboard and what is waiting for the user's choice. Do not ask the same questions again in chat. A question that is not a choice between designs has no place on the artboard yet: ask it in your reply.
+Reply with what is on the artboard and what is waiting for the user's choice. Do not ask the same questions again in chat. A question about something on the artboard goes there with \`lh artboard ask\`; ask in your reply only what concerns no screen.
 
 ## 5. After the user submits
 
-The picks arrive as a message in this conversation. Then:
+The picks and the user's new comments arrive as one message in this conversation. Then:
 
 1. \`lh artboard read <id>\` to see each round's chosen board; a round the user left unpicked takes your recommendation.
-2. Apply the picks to the journey in one \`lh artboard update\`.
-3. Open the next rounds if something is still undecided; otherwise say the requirement is settled and what was decided.
+2. \`lh artboard comments <id>\` for the threads and their ids; the user's answers to your questions are there too.
+3. Apply the picks and what the comments ask for in one \`lh artboard update\`.
+4. Reply in each thread with what you changed, then resolve the threads that are done and the questions that are answered.
+5. Open the next rounds if something is still undecided; otherwise say the requirement is settled and what was decided.
 
 ## 6. After the user finalizes
 
