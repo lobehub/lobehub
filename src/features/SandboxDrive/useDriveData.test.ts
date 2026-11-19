@@ -178,6 +178,18 @@ describe('useRemeasureDrive', () => {
     expect(globalMutate).not.toHaveBeenCalled();
   });
 
+  it('should not measure when the workspace changed before the delete finished', async () => {
+    vi.mocked(sandboxStorageService.refreshStorageUsage).mockResolvedValue({} as any);
+    const { result } = renderHook(() => useRemeasureDrive());
+
+    // The delete began in ws_1; the user is in ws_2 by the time it ends.
+    workspace.id = 'ws_2';
+    await result.current('public', 'ws_1');
+
+    expect(sandboxStorageService.refreshStorageUsage).not.toHaveBeenCalled();
+    expect(globalMutate).not.toHaveBeenCalled();
+  });
+
   it('should swallow a failed measurement', async () => {
     vi.mocked(sandboxStorageService.refreshStorageUsage).mockRejectedValue(new Error('down'));
     const { result } = renderHook(() => useRemeasureDrive());

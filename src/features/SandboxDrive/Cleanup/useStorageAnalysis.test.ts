@@ -6,6 +6,11 @@ import { useStorageAnalysis } from './useStorageAnalysis';
 const service = vi.hoisted(() => ({ analyzeStorage: vi.fn(), deleteFiles: vi.fn() }));
 const refreshDrive = vi.hoisted(() => vi.fn());
 const remeasureDrive = vi.hoisted(() => vi.fn());
+const workspace = vi.hoisted(() => ({ id: 'ws_1' as string | null }));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  getActiveWorkspaceId: () => workspace.id,
+}));
 
 vi.mock('@/services/sandboxStorage', () => ({ sandboxStorageService: service }));
 vi.mock('../useDriveData', () => ({
@@ -44,6 +49,7 @@ beforeEach(() => {
   service.deleteFiles.mockReset();
   refreshDrive.mockReset().mockResolvedValue(undefined);
   remeasureDrive.mockReset().mockResolvedValue(undefined);
+  workspace.id = 'ws_1';
 });
 
 describe('useStorageAnalysis', () => {
@@ -122,7 +128,7 @@ describe('useStorageAnalysis', () => {
     expect(refreshDrive).toHaveBeenCalled();
     // Reloading alone returns the figure measured before the delete
     // (T-14518): the drive is measured again.
-    expect(remeasureDrive).toHaveBeenCalledWith('personal');
+    expect(remeasureDrive).toHaveBeenCalledWith('personal', 'ws_1');
   });
 
   it('should leave in the figures what could not be deleted in time', async () => {
@@ -281,5 +287,22 @@ describe('useStorageAnalysis estimates', () => {
     });
 
     expect(result.current.analysis?.result?.stale).toBe(true);
+  });
+
+  it('should tie the re-measure to the workspace the delete began in', async () => {
+    service.analyzeStorage.mockResolvedValue(done);
+    service.deleteFiles.mockImplementation(async () => {
+      // The user switches workspace while the delete is running.
+      workspace.id = 'ws_2';
+      return { deleted: ['app/data.bin'], done: true, freedBytes: 300, missing: [], pending: [] };
+    });
+    const { result } = renderHook(() => useStorageAnalysis('personal'));
+    await waitFor(() => expect(result.current.scanning).toBe(false));
+
+    await act(async () => {
+      await result.current.remove([items[1]]);
+    });
+
+    expect(remeasureDrive).toHaveBeenCalledWith('personal', 'ws_1');
   });
 });

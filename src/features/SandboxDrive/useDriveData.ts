@@ -145,10 +145,14 @@ export const useRemeasureDrive = () => {
   const { mutate } = useSWRConfig();
 
   return useCallback(
-    async (drive: SandboxDrive) => {
-      // Requests go to whichever workspace is active: a walk started in one
-      // must not carry on in the next.
-      const workspaceId = getActiveWorkspaceId();
+    /**
+     * `startedIn`: the workspace active when the delete began — capture it
+     * before awaiting the delete, so a switch while it runs is noticed.
+     */
+    async (drive: SandboxDrive, startedIn: string | null = getActiveWorkspaceId()) => {
+      // Requests go to whichever workspace is active: a walk for a delete made
+      // in one must not run, or carry on, in the next.
+      const workspaceId = startedIn;
       try {
         for (let call = 0; call < MAX_MEASURE_CALLS; call++) {
           if (call > 0) {
