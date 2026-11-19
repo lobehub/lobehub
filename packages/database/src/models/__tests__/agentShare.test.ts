@@ -102,6 +102,21 @@ describe('AgentShareModel', () => {
       expect(rows[0].visibility).toBe('private');
     });
 
+    it('marks only a newly inserted share for default grants', async () => {
+      const created = await agentShareModel.create(agentId, 'link');
+      expect(created.shareConfig.seedDefaultGrants).toBe(true);
+
+      await agentShareModel.updateConfig(agentId, {
+        seedDefaultGrants: false,
+        toolGrants: [{ identifier: 'search' }],
+      });
+      // Re-enabling returns the existing row and must not re-arm the marker.
+      const again = await agentShareModel.create(agentId, 'link');
+
+      expect(again.shareConfig.seedDefaultGrants).toBe(false);
+      expect(again.shareConfig.toolGrants).toEqual([{ identifier: 'search' }]);
+    });
+
     describe('profile slug seed', () => {
       it("seeds the share slug from the agent's own profile slug", async () => {
         await serverDB
@@ -355,6 +370,20 @@ describe('AgentShareModel', () => {
       expect((await agentShareModel.getByAgentId(agentId))?.shareConfig.demoCases).toEqual([]);
     });
 
+    it('persists declined grant ids through unrelated patches', async () => {
+      await agentShareModel.create(agentId);
+      expect(
+        (await agentShareModel.getByAgentId(agentId))?.shareConfig.declinedGrantIds,
+      ).toBeUndefined();
+
+      await agentShareModel.updateConfig(agentId, { declinedGrantIds: ['calculator'] });
+      await agentShareModel.updateConfig(agentId, { toolGrants: [{ identifier: 'search' }] });
+
+      expect((await agentShareModel.getByAgentId(agentId))?.shareConfig.declinedGrantIds).toEqual([
+        'calculator',
+      ]);
+    });
+
     it('does not let another owner replace profile content', async () => {
       await agentShareModel.create(agentId);
       expect(
@@ -415,8 +444,15 @@ describe('AgentShareModel', () => {
       const readBack = await agentShareModel.getByAgentId(agentId);
 
       // The slug seeded from the agent's profile slug at `create` survives a
-      // full config overwrite — it is owner-facing url state, not config.
-      const expected = { demoCases: [], featuredWorkIds: [], ...config, slug: 'shareable-agent' };
+      // full config overwrite — it is owner-facing url state, not config. So
+      // does the default-grant marker `create` set, which this config omits.
+      const expected = {
+        demoCases: [],
+        featuredWorkIds: [],
+        seedDefaultGrants: true,
+        ...config,
+        slug: 'shareable-agent',
+      };
       expect(updated?.shareConfig).toEqual(expected);
       expect(readBack?.shareConfig).toEqual(expected);
     });

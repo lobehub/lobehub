@@ -952,6 +952,10 @@ export default {
   'share.settings.notice.workspaceDesc':
     'Visitors don’t just read this Agent — they run it. Every reply is generated in the Workspace and charged to its shared budget, without consuming the creator’s or another member’s quota. The Agent only acts with the visitor access you grant below.',
   'share.settings.notice.workspaceTitle': 'Visitors run this Agent on the Workspace budget',
+  'share.settings.pendingGrants.desc': 'Including {{names}}',
+  'share.settings.pendingGrants.grantAll': 'Grant all',
+  'share.settings.pendingGrants.title':
+    'Visitors can’t use {{count}} of this Agent’s tools or skills yet',
   'share.settings.permissions.allowCreatorViewSessions': 'Let me read visitor conversations',
   'share.settings.permissions.allowCreatorViewSessionsHint':
     "Off by default: visitor conversations stay private to the visitor. When on, they appear under Share on this agent's Topics page.",
