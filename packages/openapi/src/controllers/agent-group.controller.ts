@@ -1,6 +1,8 @@
 import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
+import type { LegacyArrayListQuery } from '../helpers/legacy-array-list';
+import { pageLoadedList } from '../helpers/legacy-array-list';
 import { AgentGroupService } from '../services/agent-group.service';
 import type {
   CreateAgentGroupRequest,
@@ -30,7 +32,11 @@ export class AgentGroupController extends BaseController {
       );
       const agentGroups = await agentGroupService.getAgentGroups();
 
-      return this.success(c, agentGroups, 'Agent category list retrieved successfully');
+      return this.success(
+        c,
+        pageLoadedList(agentGroups, this.getQuery<LegacyArrayListQuery>(c)),
+        'Agent category list retrieved successfully',
+      );
     } catch (error) {
       return this.handleError(c, error);
     }

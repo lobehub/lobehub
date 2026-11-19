@@ -35,6 +35,7 @@ import { UsageBar } from '@/features/DeviceManager/DeviceHealth/UsageMeter';
 import { type QuotaAccount, useAgentQuotaStore } from '@/store/agentQuota';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { useDensity } from '@/styles/density';
 
 import {
   type AccountStatus,
@@ -90,6 +91,8 @@ const styles = stylex.create({
   },
   // The account whose panel is open.
   rowActive: { backgroundColor: cssVar.colorFillSecondary },
+  // Compact density: 6px block padding and a 24px provider avatar → ~56px rows.
+  rowCompact: { paddingBlock: '6px' },
 });
 
 const PROVIDER_META: Record<
@@ -190,6 +193,7 @@ interface AccountRowProps {
 
 const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
   const { t } = useTranslation('setting');
+  const { compact, tokens } = useDensity();
   const { t: tCommon } = useTranslation('common');
   const [
     useFetchQuotaReadings,
@@ -306,7 +310,7 @@ const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
 
   return (
     <div
-      {...stylex.props(styles.row, active && styles.rowActive)}
+      {...stylex.props(styles.row, compact && styles.rowCompact, active && styles.rowActive)}
       aria-current={active || undefined}
       role={'button'}
       tabIndex={0}
@@ -329,7 +333,7 @@ const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
           opacity: view.status === 'disabled' ? 0.55 : undefined,
         }}
       >
-        <span style={{ display: 'flex', flex: 'none' }}>{meta.icon(28)}</span>
+        <span style={{ display: 'flex', flex: 'none' }}>{meta.icon(tokens.iconBox)}</span>
         <Flexbox gap={2} style={{ minWidth: 0 }}>
           {editing ? (
             <Flexbox horizontal align={'center'} gap={4} {...stop}>

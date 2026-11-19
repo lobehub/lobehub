@@ -12,6 +12,7 @@ import {
   getLlmCallCount,
   isParkedStatus,
 } from '@lobechat/agent-runtime';
+import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import {
@@ -21,6 +22,7 @@ import {
   resolveSubAgentModel,
 } from '@lobechat/const';
 import { type ToolsEngine } from '@lobechat/context-engine';
+import { initialToolSelection } from '@lobechat/mecha';
 import { FILE_PREVIEW_CHARS, isOversizedFileContent } from '@lobechat/prompts';
 import {
   buildGoalOverviewContext,
@@ -44,6 +46,7 @@ import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
 import { messageService } from '@/services/message';
 import { hydrateProjectedConversation } from '@/services/message/hydrateProjectedTools';
+import { refreshRunConnectors } from '@/services/runConnectors';
 import { workService } from '@/services/work';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -132,7 +135,9 @@ export class StreamingExecutorActionImpl {
     isSubAgent,
     modelOverride,
     chatConfigOverride,
+    uninstalledBuiltinTools,
   }: {
+    uninstalledBuiltinTools?: string[];
     messages: UIChatMessage[];
     parentMessageId: string;
     agentId?: string;
@@ -227,6 +232,7 @@ export class StreamingExecutorActionImpl {
     // activator, so it leaves the invocation set here unless this turn mentions
     // it. Manual mode has no activator and invokes it directly instead.
     const runAgent = {
+      id: effectiveAgentId,
       chatConfig: agentConfig.chatConfig,
       enabledPluginIds: resolvedPluginIds,
       plugins: agentConfigData?.plugins,
@@ -290,13 +296,17 @@ export class StreamingExecutorActionImpl {
       // sub-agent runs. Desktop client runs also need the local environment so
       // local-system can advertise IPC-only capabilities such as direct image reads.
       { executionEnv: isDesktop ? 'local' : undefined, isSubAgent, scope },
-      { hasOversizedFiles: hasPreviewableFiles(messages), runAgent: { ...runAgent, connectors } },
+      {
+        hasOversizedFiles: hasPreviewableFiles(messages),
+        runAgent: { ...runAgent, connectors },
+        ...(topicId && { topicId }),
+        uninstalledBuiltinTools,
+      },
     );
     const toolsDetailed = toolsEngine.generateToolsDetailed({
       model: agentConfigData.model,
       provider: agentConfigData.provider!,
-      skipDefaultTools: disableTools || undefined,
-      toolIds: mergedToolIds,
+      ...initialToolSelection(mergedToolIds, runAgent.chatConfig, disableTools),
     });
 
     const { enabledToolIds, enabledManifests, tools } = composeEnabledTools({
@@ -306,9 +316,15 @@ export class StreamingExecutorActionImpl {
     });
 
     // Use enabledManifests directly to avoid getEnabledPluginManifests adding default tools again
-    const toolManifestMap = disableTools
-      ? Object.fromEntries(enabledManifests.map((manifest) => [manifest.identifier, manifest]))
-      : buildRunManifestMap(getToolStoreState(), enabledManifests);
+    const toolManifestMap = enabledToolIds.includes(LobeActivatorIdentifier)
+      ? buildRunManifestMap(
+          getToolStoreState(),
+          toolsEngine.getAllPluginManifests(),
+          enabledManifests,
+          // The conversation's own connector rows are what it may discover
+          { agentId: agentId || undefined, topicId: topicId ?? undefined },
+        )
+      : Object.fromEntries(enabledManifests.map((manifest) => [manifest.identifier, manifest]));
 
     // Merge tools generation result into agentConfig for chatService to use
     const agentConfigWithTools = {
@@ -471,6 +487,8 @@ export class StreamingExecutorActionImpl {
   };
 
   executeClientAgent = async (params: {
+    /** Already resolved for a resumed run and its initial operation tool set. */
+    uninstalledBuiltinTools?: string[];
     context: ConversationContext;
     disableTools?: boolean;
     initialContext?: AgentRuntimeContext;
@@ -598,11 +616,15 @@ export class StreamingExecutorActionImpl {
     // bodies, so put the stored payloads back first. Ids come from the raw
     // store list too: a folded tool result no longer carries `payloadOmitted`.
     // Also returns a new array, so the caller's messages are never mutated.
-    const messages = await hydrateProjectedConversation(
-      [...originalMessages],
-      this.#get().dbMessagesMap[messageKey],
-      messageService.getToolResultPayloads,
-    );
+    const [messages, uninstalledBuiltinTools] = await Promise.all([
+      hydrateProjectedConversation(
+        [...originalMessages],
+        this.#get().dbMessagesMap[messageKey],
+        messageService.getToolResultPayloads,
+      ),
+      params.uninstalledBuiltinTools ??
+        (disableTools ? undefined : getToolStoreState().getUninstalledBuiltinToolsForRun()),
+    ]);
 
     // Decide tool / function-calling capability from real data, not a guess.
     // The enabled-model list hydrates asynchronously (auth session → aiProvider
@@ -613,6 +635,9 @@ export class StreamingExecutorActionImpl {
     // without rechecking capability. Wait (bounded) for the list so a fast first
     // send after reload never attaches tools to a model that can't use them.
     await getAiInfraStoreState().ensureAiProviderRuntimeStateReady();
+    // The connector rows this conversation may run, as the server resolves
+    // them (bounded; the local lists stand in on a timeout or failure)
+    await refreshRunConnectors({ agentId, topicId: topicId ?? undefined });
 
     // ===========================================
     // Step 1: Create Agent State (resolves config once)
@@ -627,6 +652,7 @@ export class StreamingExecutorActionImpl {
       messages,
       parentMessageId: params.parentMessageId,
       agentId,
+      uninstalledBuiltinTools,
       disableTools,
       topicId,
       threadId: threadId ?? undefined,

@@ -313,6 +313,23 @@ export default {
   'agentSkillDetail.skillContent': 'Skill Content',
   'agentSkillDetail.sourceUrl': 'Skill Import Source',
   'agentSkillDetail.updatedAt': 'Updated',
+  'agentSkillUpdate.apply': 'Update skill',
+  'agentSkillUpdate.branch': 'Branch name (HEAD follows the default branch)',
+  'agentSkillUpdate.check': 'Check for updates',
+  'agentSkillUpdate.checking': 'Checking GitHub…',
+  'agentSkillUpdate.chooseRef': 'Choose a branch to track',
+  'agentSkillUpdate.current': 'Up to date',
+  'agentSkillUpdate.failed': 'Couldn’t update the skill',
+  'agentSkillUpdate.limited': 'GitHub rate limit reached',
+  'agentSkillUpdate.missing': 'Removed from the source repository',
+  'agentSkillUpdate.overwriteBody':
+    'This update replaces your installed copy. It contains local changes or predates edit tracking.',
+  'agentSkillUpdate.overwriteTitle': 'Replace the installed copy?',
+  'agentSkillUpdate.pinned': 'Pinned to a commit',
+  'agentSkillUpdate.replace': 'Replace and update',
+  'agentSkillUpdate.saved': 'Skill synced with GitHub',
+  'agentSkillUpdate.track': 'Track branch',
+  'agentSkillUpdate.unavailable': 'Couldn’t check GitHub',
   'agentSkillEdit.descriptionDesc':
     'A brief summary of what the skill does, helping the agent understand when to use it',
   'agentSkillEdit.fileReadonly':
@@ -331,22 +348,90 @@ export default {
   'agentSkillModal.contentPlaceholder': 'Enter skill content in Markdown format...',
   'agentSkillModal.description': 'Description',
   'agentSkillModal.descriptionPlaceholder': 'Briefly describe this skill',
+  'agentSkillModal.done': 'Done',
+  'agentSkillModal.file': 'File',
+  'agentSkillModal.github.allSkills': 'All skills ({{count}})',
+  'agentSkillModal.github.batchFailed':
+    'Couldn’t import the selected skills. Try again or rescan the repository.',
+  'agentSkillModal.github.browseAll': 'Browse all skills',
+  'agentSkillModal.github.change': 'Change source',
+  'agentSkillModal.github.chooseMore': 'Choose more skills',
+  'agentSkillModal.github.clear': 'Clear selection',
+  'agentSkillModal.github.clearSearch': 'Clear search',
+  'agentSkillModal.github.complete_one': '{{count}} skill is ready to use',
+  'agentSkillModal.github.complete_other': '{{count}} skills are ready to use',
   'agentSkillModal.github.desc':
     'Paste the URL of a skill directory from a public GitHub repository. The directory must contain a SKILL.md file.',
+  'agentSkillModal.github.empty':
+    'No SKILL.md found at this URL. Try another repository or directory.',
+  'agentSkillModal.github.example': 'https://github.com/owner/repository',
+  'agentSkillModal.github.find': 'Find skills',
+  'agentSkillModal.github.findFailed':
+    'Couldn’t read this GitHub link. Check the URL and try again.',
+  'agentSkillModal.github.finding': 'Finding skills…',
+  'agentSkillModal.github.hint': 'Find skills in a public repository, then choose which to import.',
+  'agentSkillModal.github.importFailed':
+    'Couldn’t import the selected skills. Find skills again, then retry.',
+  'agentSkillModal.github.importSelected_one': 'Import {{count}} skill',
+  'agentSkillModal.github.importSelected_other': 'Import {{count}} skills',
+  'agentSkillModal.github.importSelected_zero': 'Import selected',
+  'agentSkillModal.github.install': 'Import {{count}} ({{updates}} updates)',
+  'agentSkillModal.github.label': 'Repository or folder URL',
+  'agentSkillModal.github.noMatch': 'No matching skills',
+  'agentSkillModal.github.noneSelected': 'No skills selected yet',
+  'agentSkillModal.github.refreshFailed':
+    'The import finished, but the skill list couldn’t refresh.',
+  'agentSkillModal.github.rescan': 'Scan again',
+  'agentSkillModal.github.retry': 'Retry failed imports',
+  'agentSkillModal.github.sameName': 'Choose one of the skills with this name.',
+  'agentSkillModal.github.search': 'Search by name, description or path',
+  'agentSkillModal.github.selectAvailable': 'Select all available ({{count}})',
+  'agentSkillModal.github.selectFiltered': 'Select matches ({{count}})',
+  'agentSkillModal.github.selectedSkills': 'Selected ({{count}})',
+  'agentSkillModal.github.skillDetails': 'Details for {{name}}',
+  'agentSkillModal.github.status.conflict': 'Conflict · check the library and scan again',
+  'agentSkillModal.github.status.created': 'Imported',
+  'agentSkillModal.github.status.failed': 'Import failed',
+  'agentSkillModal.github.status.forbidden': 'Update requires the creator or a workspace owner',
+  'agentSkillModal.github.status.invalid': 'Invalid SKILL.md',
+  'agentSkillModal.github.status.new': 'New',
+  'agentSkillModal.github.status.unchanged': 'Up to date',
+  'agentSkillModal.github.status.update': 'Update available',
+  'agentSkillModal.github.status.updated': 'Updated',
+  'agentSkillModal.github.summary': '{{success}} imported or up to date · {{failed}} failed',
   'agentSkillModal.github.title': 'Import from GitHub',
-  'agentSkillModal.github.urlPlaceholder':
-    'https://github.com/username/repo/tree/main/skills/my-skill',
+  'agentSkillModal.github.updates_one': 'Updates {{count}} installed skill',
+  'agentSkillModal.github.updates_other': 'Updates {{count}} installed skills',
   'agentSkillModal.importError': 'Import failed: {{error}}',
   'agentSkillModal.importSuccess': 'Agent Skill imported successfully',
+  'agentSkillModal.importing': 'Importing…',
+  'agentSkillModal.link': 'Link',
+  'agentSkillModal.result.created': 'Imported {{name}}',
+  'agentSkillModal.result.unchanged': '{{name}} is already up to date',
+  'agentSkillModal.result.updated': 'Updated {{name}}',
+  'agentSkillModal.source': 'Import source',
+  'agentSkillModal.sources': 'From GitHub, a link, or a local file',
+  'agentSkillModal.title': 'Import skill',
+  'agentSkillModal.upload.choose': 'Choose a file or drag it here',
   'agentSkillModal.upload.desc': 'Upload a local .zip or .skill file to install.',
-  'agentSkillModal.upload.dragText': 'Drag and drop or click to upload',
+  'agentSkillModal.upload.failed':
+    'Couldn’t import this package. Check its contents and try again.',
+  'agentSkillModal.upload.hint':
+    'Include a SKILL.md file with a name and description in its YAML front matter.',
+  'agentSkillModal.upload.invalid': 'Choose one .zip or .skill file.',
+  'agentSkillModal.upload.label': 'Skill package',
+  'agentSkillModal.upload.replace': '{{size}} · Choose another file',
   'agentSkillModal.upload.requirementSkillMd':
     'SKILL.md contains skill name and description in YAML format',
   'agentSkillModal.upload.requirementZip': '.zip or .skill file with SKILL.md in root directory',
   'agentSkillModal.upload.requirements': 'File Requirements',
   'agentSkillModal.upload.title': 'Upload Skill',
   'agentSkillModal.upload.uploading': 'Uploading...',
-  'agentSkillModal.url.desc': 'Import a skill by providing a direct link to a SKILL.md file.',
+  'agentSkillModal.url.failed':
+    'Couldn’t import this link. Check that the file is accessible and try again.',
+  'agentSkillModal.url.hint': 'Use a direct link to a SKILL.md file or a skill package.',
+  'agentSkillModal.url.invalid': 'Enter a complete URL starting with https:// or http://.',
+  'agentSkillModal.url.label': 'Skill URL',
   'agentSkillModal.url.title': 'Import from URL',
   'agentSkillModal.url.urlPlaceholder': 'https://example.com/path/to/SKILL.md',
   'agentSkillTag': 'Agent Skill',
@@ -1202,6 +1287,7 @@ export default {
   'notification.item.topic_comment_mentioned': 'Mentioned in a comment',
   'notification.item.video_generation_completed': 'Video generation completed',
   'notification.item.workspace_credit_balance_low': 'Workspace balance running low',
+  'notification.item.workspace_member_budget_exceeded': 'Member budget used up',
   'notification.item.workspace_member_invited': 'Workspace invitation',
   'notification.item.workspace_member_joined': 'New member joined',
   'notification.item.workspace_member_removed': 'Removed from workspace',
@@ -1327,44 +1413,11 @@ export default {
   'settingAgent.prompt.placeholder': 'Enter agent instructions',
   'settingAgent.prompt.title': 'Core Instructions',
   'settingAgent.agentTools.add': 'Add Tool',
-  'settingAgent.agentTools.agentEmpty': 'Nothing only for this agent yet',
   'settingAgent.agentTools.authorizedBy': 'Authorized by {{name}}',
-  'settingAgent.agentTools.badge.agentOnly': 'Agent-only',
-  'settingAgent.agentTools.badge.copy': 'Copy',
-  'settingAgent.agentTools.badge.linked': 'Linked',
-  'settingAgent.agentTools.badge.overridden': 'Overridden',
-  'settingAgent.agentTools.connectNew.desc': 'Agent-exclusive connection',
-  'settingAgent.agentTools.connectNew.title': 'Connect new tool',
-  'settingAgent.agentTools.connectNewPickerTitle': 'Connect a new tool for this Agent',
-  'settingAgent.agentTools.copy.desc': 'Independent copy, separately configurable',
-  'settingAgent.agentTools.copy.title': 'Copy user tool',
-  'settingAgent.agentTools.copyConfirm': 'Copy {{count}}',
-  'settingAgent.agentTools.copyPick': 'Select user connectors to copy into this agent',
-  'settingAgent.agentTools.menuTitle': 'Add a tool for this Agent',
-  'settingAgent.agentTools.mount.desc': 'Reference, syncs with user config',
-  'settingAgent.agentTools.mount.title': 'Mount user tool',
-  'settingAgent.agentTools.overriddenNote':
-    '{{count}} user tool(s) overridden by same-named Agent Tools; they will not run.',
   'settingAgent.agentTools.pickerEmpty': 'No user connectors available to add',
-  'settingAgent.agentTools.priorityHint': 'Run priority',
-  'settingAgent.agentTools.priorityTooltip':
-    'When tools share a name, the agent-exclusive tool runs first at runtime; your user tools come next.',
-  'settingAgent.agentTools.priorityTooltipWorkspace':
-    'When tools share a name, this agent-scoped tool runs first at runtime; the workspace user tools are the fallback.',
-  'settingAgent.agentTools.removeOwnedConfirm':
-    'Delete this agent-exclusive connector? Its credentials will be removed.',
-  'settingAgent.agentTools.tabAgent': 'Only for this agent',
-  'settingAgent.agentTools.tabUser': 'From my library',
-  'settingAgent.agentTools.tabWorkspace': 'From the workspace library',
-  'settingAgent.tools.level.agentDesc':
-    'Belong to this agent alone. When a name clashes, these run first.',
-  'settingAgent.tools.level.libraryDesc':
-    'Shared by all your agents. Connection and credentials are managed in your library.',
   'settingAgent.tools.level.libraryEmpty':
     'Nothing from the library is turned on for this agent yet',
   'settingAgent.tools.level.skillsEmpty': 'No skills are turned on for this agent yet',
-  'settingAgent.tools.level.workspaceDesc':
-    'Shared across the workspace. Connection and credentials are managed in the workspace library.',
   'settingAgent.tools.showAll': 'Show all {{count}}',
   'settingAgent.tools.showLess': 'Show less',
   'settingAgent.tools.toolCount_one': '{{count}} tool',
@@ -1375,6 +1428,41 @@ export default {
   'settingAgent.tools.close': 'Close',
   'settingAgent.tools.detail.tools_one': '{{count}} tool it gives the agent',
   'settingAgent.tools.detail.tools_other': '{{count}} tools it gives the agent',
+  'settingAgent.tools.connection.own': 'Own connection',
+  'settingAgent.tools.connection.ownTitle': 'Uses its own connection',
+  'settingAgent.tools.connection.ownDesc':
+    'This agent signs in separately from your library. Changing or removing the library connection does not affect it.',
+  'settingAgent.tools.connection.ownDescWorkspace':
+    'This agent signs in separately from the workspace library. Changing or removing the library connection does not affect it.',
+  'settingAgent.tools.connection.libraryTitle': 'Uses your library connection',
+  'settingAgent.tools.connection.libraryDesc': 'Shared by every agent of yours that turns this on.',
+  'settingAgent.tools.connection.workspaceTitle': 'Uses the workspace connection',
+  'settingAgent.tools.connection.workspaceDesc':
+    'Shared by every agent in the workspace that turns this on.',
+  'settingAgent.tools.connection.menu': 'Connection options',
+  'settingAgent.tools.connection.create': 'Use a separate connection',
+  'settingAgent.tools.connection.createAccount': 'Connect a separate account',
+  'settingAgent.tools.connection.createDesc': 'For this agent only',
+  'settingAgent.tools.connection.created': '{{name}} now has its own connection for this agent',
+  'settingAgent.tools.connection.createdDesc':
+    'It starts as a copy of the library one. Change how it signs in under Manage connection.',
+  'settingAgent.tools.connection.createFailed':
+    'Could not set up a separate connection for {{name}}',
+  'settingAgent.tools.connection.manage': 'Manage connection',
+  'settingAgent.tools.connection.switchFailed':
+    'Could not switch connections for {{name}}. This agent still uses its own connection.',
+  'settingAgent.tools.connection.useLibrary': 'Use the library connection',
+  'settingAgent.tools.connection.useWorkspace': 'Use the workspace connection',
+  'settingAgent.tools.connection.useLibraryConfirm.title':
+    'Stop using a separate connection for {{name}}?',
+  'settingAgent.tools.connection.useLibraryConfirm.desc':
+    "This agent's own connection and its credentials will be deleted. It will use the one in your library from now on.",
+  'settingAgent.tools.connection.useWorkspaceConfirm.desc':
+    "This agent's own connection and its credentials will be deleted. It will use the one in the workspace library from now on.",
+  'settingAgent.tools.connection.removeConfirm.title': 'Remove {{name}} from this agent?',
+  'settingAgent.tools.connection.removeConfirm.desc':
+    'Only this agent has this connection. It will be deleted together with its credentials.',
+  'settingAgent.tools.connection.connectForAgent': 'Connect an app for this agent only',
   'settingAgent.tools.manageLibrary': 'Manage library',
   'settingAgent.tools.remove': 'Remove from this agent',
   'settingAgent.tools.type.builtin': 'Built-in tool',
@@ -1433,12 +1521,12 @@ export default {
   'settingAgent.toolsPage.desc':
     'Connect what it can act on: look things up, read files, call your services.',
   'settingAgent.toolsPage.title': 'Tools and connectors',
+  'settingAgent.toolsPage.group.title': "This agent's tools",
+  'settingAgent.toolsPage.group.empty': 'No tools are turned on for this agent yet',
   'settingAgent.skillsPage.title': 'Skills',
   'settingAgent.skillsPage.desc':
     'A skill is a set of steps it picks up only when a task needs them.',
   'settingAgent.skillsPage.group.title': 'Turned on for this agent',
-  'settingAgent.skillsPage.group.desc':
-    'Skills come from your library and are shared by all your agents.',
   'settingAgent.skills.source.builtin': 'Built-in',
   'settingAgent.skills.source.community': 'Community',
   'settingAgent.skills.source.custom': 'Custom',
@@ -1508,10 +1596,11 @@ export default {
   'settingAppearance.animationMode.disabled': 'Off',
   'settingAppearance.animationMode.elegant': 'Elegant',
   'settingAppearance.animationMode.title': 'Response Animation',
-  'settingAppearance.contextMenuMode.default': 'Default',
-  'settingAppearance.contextMenuMode.desc': 'Enable the right-click menu for some list items.',
-  'settingAppearance.contextMenuMode.disabled': 'Disabled',
-  'settingAppearance.contextMenuMode.title': 'Right-Click Menu Mode',
+  'settingAppearance.density.compact': 'Compact',
+  'settingAppearance.density.desc':
+    'Row height and spacing in the sidebars. Compact fits more on screen; Loose gives each row more room.',
+  'settingAppearance.density.loose': 'Loose',
+  'settingAppearance.density.title': 'Interface Density',
   'settingAppearance.desktop.title': 'Desktop',
   'settingAppearance.font.antialiasing.desc':
     'Render text with grayscale antialiasing for a thinner, crisper look. Turn off to use the system default rendering. Only affects macOS.',
@@ -1845,8 +1934,9 @@ export default {
   'serviceModel.systemRecommended': 'System recommended',
   'serviceModel.tierPicker': 'Model',
   'serviceModel.title': 'Service Model',
-  'serviceModel.tier.embedding.desc': 'Memory retrieval',
-  'serviceModel.tier.embedding.title': 'Embedding Model',
+  'serviceModel.tier.embedding.desc':
+    'Embeds memories for semantic search. Not used for files or knowledge bases (set via the DEFAULT_FILES_CONFIG env var)',
+  'serviceModel.tier.embedding.title': 'Memory Embedding Model',
   'serviceModel.tier.flash.desc':
     'Frequent tasks such as naming, translation, compression and memory',
   'serviceModel.tier.flash.title': 'Flash Model',
@@ -1949,6 +2039,7 @@ export default {
   'skillStore.button': 'Skill Store',
   'skillStore.empty': 'Browse the Skill Store. Install one to get started, add more later.',
   'skillStore.emptySearch': 'No matching Skills',
+  'skillStore.marketEmpty': 'No skills are available in the store yet.',
   'skillStore.networkError': 'Network error, please try again',
   'skillStore.rateLimited': 'Too many requests just now. Please wait a moment and try again.',
   'skillStore.search': 'Search skills by name or keyword, press Enter to search…',
@@ -1978,16 +2069,26 @@ When I am ___, I need ___
   'skillStore.wantMore.feedback.title':
     '[Skill Request] Summarize the skill you need in one sentence',
   'skillStore.wantMore.reachedEnd': "You've reached the end. Can't find what you need?",
+  'skillView.browseStoreDesc': 'Find and install skills for your agents',
+  'skillView.connectorTabs.private': 'Private',
+  'skillView.connectorTabs.workspace': 'Workspace',
   'skillView.connectors': 'Connectors',
   'skillView.connectorsDesc':
     'Connect the apps and tools your agents can use. Open one to see its account and tools.',
   'skillView.empty.description': 'Browse the Skill Store or import a skill from the Add menu.',
   'skillView.empty.search': 'No skills match “{{keyword}}”',
   'skillView.empty.title': 'No skills yet',
+  'skillView.privateConnectorsDesc':
+    'Only you can see these connectors, and only your private agents use them. Workspace agents never load them.',
+  'skillView.privateConnectorsEmpty.desc':
+    'Add a custom connector here to keep it to yourself and your private agents.',
+  'skillView.privateConnectorsEmpty.title': 'No private connectors yet',
   'skillView.search.placeholder': 'Search skills',
   'skillView.skills': 'Skills',
   'skillView.skillsDesc':
     'Give your agents task-specific skills. Open a skill to see its instructions and resources.',
+  'skillView.workspaceConnectorsDesc':
+    'Shared with every member, and every agent in this workspace can use them. Open one to see its account and tools.',
   'startConversation': 'Start Conversation',
   'storage.actions.transfer.button': 'Move to…',
   'storage.actions.transfer.desc':
@@ -2128,6 +2229,14 @@ When I am ___, I need ___
   'systemAgent.expertise.modelDesc':
     'Model used to draft expertise domains and extract reusable experience from conversations.',
   'systemAgent.expertise.title': 'Agent Self-Evolution',
+  'systemAgent.fileEmbedding.modelDesc': 'Embeds file chunks and knowledge base search queries',
+  'systemAgent.fileEmbedding.precedence':
+    'In your personal space, this choice overrides the deployment default. System recommended uses DEFAULT_FILES_CONFIG or the built-in default.',
+  'systemAgent.fileEmbedding.reindexHint':
+    'Only files embedded after a change use the new model. Files already embedded keep their old vectors and may match poorly in semantic search; delete and re-upload them to embed them with the new model.',
+  'systemAgent.fileEmbedding.title': 'File & Knowledge Base Embedding',
+  'systemAgent.fileEmbedding.workspaceDefault':
+    'Team workspaces use the deployment default for file embedding and knowledge base search.',
   'systemAgent.goal.modelDesc':
     'Model used to turn a persistent goal into its standing acceptance criteria.',
   'systemAgent.goal.title': 'Goal Creation',
@@ -4675,6 +4784,9 @@ When I am ___, I need ___
   'tools.plugins.management': 'Skill Management',
   'tools.plugins.noEnabled': 'No skills enabled',
   'tools.plugins.store': 'Add skill',
+  'tools.privateConnector.tag': 'Private',
+  'tools.privateConnector.tooltip':
+    'Your private connector: only you can see it, and only your private agents load it.',
   'tools.search': 'Search skills...',
   'tools.loading.onDemand': 'Load on demand',
   'tools.activation.action.auto': 'Auto',
@@ -4804,9 +4916,6 @@ When I am ___, I need ___
   'environments.form.editEnv': 'Edit variable',
   'environments.form.changeRepository': 'Change repository',
   'environments.form.disconnect': 'Disconnect',
-  'environments.detail.tabs.overview': 'Overview',
-  'environments.detail.initializerDesc':
-    'Applied once to a working directory picked for a conversation: the repository is cloned there and the setup command runs.',
   'environments.detail.noRepository': 'No repository',
   'environments.detail.noSetup': 'No setup command',
   'environments.instances.copy': 'Duplicate copy',
@@ -4864,8 +4973,6 @@ When I am ___, I need ___
   'environments.meta.unknownCreator': 'Unknown',
   'environments.meta.createdAt': 'Created {{time}}',
   'environments.meta.storage': 'Using {{size}}',
-  'environments.detail.close': 'Close',
-  'environments.detail.tabs.settings': 'Settings',
   'environments.sessions.title': 'Run history',
   'environments.sessions.desc':
     'The most recent sessions that ran in these copies and the builds of them, newest first, with how each ended and whether what it installed was saved.',
@@ -5353,4 +5460,24 @@ When I am ___, I need ___
   'automations.empty.title': 'No automations yet',
   'automations.empty.desc':
     'Ask an agent to keep an eye on a connector for you, like "Tell me when CI fails on this PR". Subscriptions you approve show up here.',
+  'environments.form.addRepository': 'Add repository',
+  'environments.form.noRepositories': 'No repositories. Conversations start in an empty folder.',
+  'environments.form.noVariables': 'No variables',
+  'environments.github.openIntegrations': 'Open GitHub settings',
+  'environments.form.pasteRepository': 'Or paste a public repository URL',
+  'environments.form.addPastedRepository': 'Add',
+  'environments.form.repositoryUrlInvalid': 'Not a GitHub repository URL',
+  'environments.form.doneEditing': 'Done',
+  'environments.form.repositoryOptional':
+    'Optional \u2014 an environment can start without a repository and get one later.',
+  'environments.form.layoutHint':
+    "Each repository is checked out in a folder of its own, side by side. You can change them later in the environment's settings.",
+  'environments.detail.back': 'Environments',
+  'environments.detail.notFound': "This environment doesn't exist or you can't see it.",
+  'environments.form.editRepositorySettings': 'Edit branch, folder and setup',
+  'environments.form.repositorySetupHint':
+    "Runs inside this repository's folder after it's cloned, before the environment's setup command.",
+  'environments.form.bootstrapAfterRepositories':
+    "Runs at the top of the working directory, after each repository's own setup. Setup for a single repository goes on that repository.",
+  'environments.form.duplicateFolder': 'Another repository already uses this folder.',
 };

@@ -1,4 +1,4 @@
-import { Empty, Flexbox, Skeleton, Tag, Text } from '@lobehub/ui';
+import { Center, Empty, Flexbox, Skeleton, Tag, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { Loader2Icon, PanelsTopLeftIcon } from 'lucide-react';
@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PortalMoreMenu from '@/features/Portal/components/PortalMoreMenu';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import CanvasFrame from './CanvasFrame';
 import CanvasShareButton from './CanvasShareButton';
@@ -52,11 +53,21 @@ const styles = stylex.create({
     animationName: spin,
     animationTimingFunction: 'linear',
   },
+  title: {
+    color: cssVar.colorTextTertiary,
+    flex: '1',
+    fontSize: sidebarRow.labelFontSize,
+    fontWeight: sidebarRow.labelFontWeight,
+    minWidth: 0,
+  },
   toolbar: {
     borderBlockEndColor: cssVar.colorBorderSecondary,
     borderBlockEndStyle: 'solid',
     borderBlockEndWidth: 1,
+    height: sidebarRow.toolbarHeight,
     minWidth: 0,
+    paddingInlineEnd: sidebarRow.toolbarPaddingInlineEnd,
+    paddingInlineStart: sidebarRow.toolbarPaddingInlineStart,
   },
 });
 
@@ -86,22 +97,18 @@ const CanvasPane = memo<CanvasPaneProps>(({ canvasId }) => {
   }
 
   if (!data) {
-    return <Empty description={t('canvas.notFound')} icon={PanelsTopLeftIcon} />;
+    return (
+      <Center paddingBlock={24}>
+        <Empty description={t('canvas.notFound')} icon={PanelsTopLeftIcon} />
+      </Center>
+    );
   }
 
   return (
     <Flexbox flex={1} {...stylex.props(styles.body)}>
-      <Flexbox
-        horizontal
-        align={'center'}
-        flex={'none'}
-        gap={8}
-        height={36}
-        paddingInline={12}
-        {...stylex.props(styles.toolbar)}
-      >
+      <Flexbox horizontal align={'center'} flex={'none'} gap={4} {...stylex.props(styles.toolbar)}>
         <Tag size={'small'}>{`v${data.version}`}</Tag>
-        <Text ellipsis fontSize={12} style={{ flex: 1, minWidth: 0 }} type={'secondary'}>
+        <Text ellipsis {...stylex.props(styles.title)}>
           {data.title}
         </Text>
         {/* Two ghost icon buttons: their own padding is the separation, so the

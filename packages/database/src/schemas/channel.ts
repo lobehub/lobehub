@@ -183,7 +183,10 @@ export const channelMembers = pgTable(
     lastReadSequence: integer('last_read_sequence'),
     /** This person's sidebar section; NULL falls back to the built-in section. */
     sectionId: uuid('section_id').references(() => channelSections.id, { onDelete: 'set null' }),
-    /** Pinned to the top of this person's sidebar. */
+    /**
+     * @deprecated Unused duplicate of `pinnedAt`, which carries both the pin and its order. Kept
+     * only so dropping it needs no migration; read and write `pinnedAt` instead.
+     */
     pinned: boolean('pinned').notNull().default(false),
     /** Hidden from this person's sidebar until new activity reaches them. */
     hidden: boolean('hidden').notNull().default(false),
@@ -564,6 +567,7 @@ export const channelJobs = pgTable(
 export type ChannelItem = typeof channels.$inferSelect;
 export type NewChannel = typeof channels.$inferInsert;
 export type ChannelMemberItem = typeof channelMembers.$inferSelect;
+export type ChannelSectionItem = typeof channelSections.$inferSelect;
 export type NewChannelMember = typeof channelMembers.$inferInsert;
 export type ChannelMemberGrantItem = typeof channelMemberGrants.$inferSelect;
 export type ChannelThreadItem = typeof channelThreads.$inferSelect;

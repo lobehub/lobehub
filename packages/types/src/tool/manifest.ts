@@ -20,6 +20,13 @@ export interface ToolManifest {
   $schema?: string;
   api: LobeChatPluginApi[];
   author?: string;
+  /**
+   * A connector row's tool set: the row it executes on and the connector
+   * identifier it serves. `identifier` above is the row's tool prefix
+   * (`connectorToolIdentifier`), which differs from the base identifier for a
+   * private or personal row sharing it with the workspace's shared one.
+   */
+  connector?: { id: string; identifier: string };
   connectorLinks?: { connectorId: string; param: string };
   createdAt?: string;
   gateway?: string;
@@ -45,6 +52,7 @@ export interface ToolManifest {
 export const ToolManifestSchema = z.object({
   $schema: z.string().optional(),
   api: z.array(LobeChatPluginApiSchema),
+  connector: z.object({ id: z.string(), identifier: z.string() }).optional(),
   connectorLinks: z.object({ connectorId: z.string(), param: z.string() }).optional(),
   author: z.string().optional(),
   createdAt: z.string().optional(),

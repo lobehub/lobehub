@@ -4,6 +4,7 @@ import { AgentModel } from '@/database/models/agent';
 import type { FileItem, KnowledgeBaseItem, NewAgent } from '@/database/schemas';
 import { agents, agentsToSessions } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { getNewAgentPlugins } from '@/database/utils/agentConfig';
 import { idGenerator, randomSlug } from '@/database/utils/idGenerator';
 import { isWorkspacePrimaryOwner } from '@/server/services/workspacePermission';
 
@@ -130,8 +131,7 @@ export class AgentService extends BaseService {
           metadata: request.personal ? { personal: true } : null,
           model: request.model || null,
           params: request.params ?? {},
-          // JSONB accepts mixed plugin entries; the legacy DB column remains string[].
-          plugins: request.plugins as unknown as string[] | undefined,
+          plugins: getNewAgentPlugins(request),
           provider: request.provider || null,
           slug: randomSlug(4), // Auto-generated slug
           systemRole: request.systemRole || null,
@@ -232,8 +232,7 @@ export class AgentService extends BaseService {
               : mergeJsonPatch(existingAgent.chatConfig, request.chatConfig);
         }
         if (request.description !== undefined) updateData.description = request.description ?? null;
-        if (request.plugins !== undefined)
-          updateData.plugins = request.plugins as unknown as string[];
+        if (request.plugins !== undefined) updateData.plugins = request.plugins;
         if (request.model !== undefined) updateData.model = request.model ?? null;
         if (request.provider !== undefined) updateData.provider = request.provider ?? null;
         if (request.systemRole !== undefined) updateData.systemRole = request.systemRole ?? null;

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import SkeletonBar from '@/components/Skeleton/Bar';
+import { useDensityTokens } from '@/styles/density';
 
 import { SiteCard } from './SiteCard';
 import { openSiteModal } from './SiteFormModal';
@@ -11,6 +12,7 @@ import { isForbidden, useProjectSites } from './useProjectReview';
 
 export function SitesSettings({ projectId }: { projectId: string }) {
   const { t } = useTranslation('project');
+  const { pageTitleFontSize } = useDensityTokens();
   const { data: sites, error, mutate } = useProjectSites(projectId);
 
   if (isForbidden(error)) return <Empty description={t('review.accessForbidden')} />;
@@ -19,7 +21,7 @@ export function SitesSettings({ projectId }: { projectId: string }) {
     <Flexbox gap={20}>
       <Flexbox horizontal align="flex-start" gap={12} justify="space-between">
         <Flexbox gap={6}>
-          <Text fontSize={16} weight={600}>
+          <Text fontSize={pageTitleFontSize} weight={600}>
             {t('review.sites.title')}
           </Text>
           <Text type="secondary">{t('review.sites.description')}</Text>

@@ -91,6 +91,7 @@ vi.mock('@/store/user', () => ({
   useUserStore: (selector: (s: unknown) => unknown) => selector({}),
 }));
 vi.mock('@/store/user/selectors', () => ({
+  userGeneralSettingsSelectors: { interfaceDensity: () => 'loose' },
   userProfileSelectors: { userId: () => 'user-self' },
 }));
 vi.mock('./MessageAttachments', () => ({ MessageAttachments: () => null }));

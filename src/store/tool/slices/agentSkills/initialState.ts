@@ -1,6 +1,6 @@
 import { createReplicaState, type ReplicaState } from '@/libs/replica';
 
-import type { AgentSkillDetail, AgentSkillListItem } from './projection';
+import type { AgentSkillDetail, AgentSkillListItem, GitHubUpdateChecks } from './projection';
 
 export interface AgentSkillsState {
   /** Replica view of the loaded skill details, one entry per skill id. */
@@ -11,9 +11,13 @@ export interface AgentSkillsState {
   agentSkillListMap: Record<string, AgentSkillListItem[]>;
   /** Replica bookkeeping of `agentSkillListMap`. */
   agentSkillListReplica: ReplicaState<AgentSkillListItem[]>;
+  gitHubUpdateMap: Record<string, GitHubUpdateChecks>;
+  gitHubUpdateReplica: ReplicaState<GitHubUpdateChecks>;
 }
 
 export const initialAgentSkillsState: AgentSkillsState = {
+  gitHubUpdateMap: {},
+  gitHubUpdateReplica: createReplicaState(),
   agentSkillDetailMap: {},
   agentSkillDetailReplica: createReplicaState(),
   agentSkillListMap: {},

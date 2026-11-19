@@ -1,17 +1,15 @@
 'use client';
 
-import { Button, Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { Button, Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
   ArrowUpRight,
   CheckCircle2,
   ChevronDown,
-  ChevronUp,
   CircleSlash,
   Clock3,
   LoaderCircle,
-  Workflow,
 } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,8 +17,12 @@ import { useTranslation } from 'react-i18next';
 import AsyncError from '@/components/AsyncError';
 import AssigneeProfileAvatar from '@/features/AgentGoals/ProcessControl/AssigneeProfileAvatar';
 import { useChatStore } from '@/store/chat';
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
+import { SidebarRowSkeleton } from '../DeferredSkeleton';
+import { SectionHeader } from '../Overview/SectionHeader';
 import {
   buildGoalStepSegments,
   type GoalWorkflowRow,
@@ -37,17 +39,6 @@ const stepPulse = stylex.keyframes({
 
 const styles = stylex.create({
   collapsed: { display: 'none' },
-  count: {
-    flexShrink: 0,
-    paddingBlock: '1px',
-    paddingInline: '6px',
-    borderRadius: '4px',
-    fontFamily: cssVar.fontFamilyCode,
-    fontSize: '11px',
-    color: cssVar.colorTextSecondary,
-    backgroundColor: cssVar.colorFillSecondary,
-    backgroundImage: 'none',
-  },
   decisionRow: {
     cursor: 'pointer',
     marginBlockStart: '2px',
@@ -57,28 +48,36 @@ const styles = stylex.create({
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorWarningBorder,
-    borderRadius: '6px',
+    borderRadius: sidebarRow.radius,
     fontSize: '12px',
     color: cssVar.colorWarning,
     backgroundColor: { 'default': cssVar.colorWarningBg, ':hover': cssVar.colorWarningBorder },
     backgroundImage: { 'default': 'none', ':hover': 'none' },
   },
-  footer: { paddingBlockStart: '6px', paddingBlockEnd: '2px', paddingInline: '10px' },
-  headerRow: {
-    cursor: 'pointer',
-    userSelect: 'none',
-    paddingBlockStart: '4px',
-    paddingBlockEnd: '6px',
-    paddingInline: '10px',
-    borderRadius: '6px',
-    transition: 'background-color 0.12s ease',
-    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
-    backgroundImage: { 'default': null, ':hover': 'none' },
-    outlineWidth: { 'default': null, ':focus-visible': '2px' },
-    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
-    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
-    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  footer: { paddingBlockStart: '6px', paddingBlockEnd: '2px', paddingInline: '6px' },
+  iconBox: {
+    display: 'grid',
+    flexShrink: 0,
+    placeItems: 'center',
+    width: sidebarRow.iconBox,
+    height: sidebarRow.iconBox,
   },
+  phase: {
+    flexShrink: 0,
+    fontSize: sidebarRow.labelFontSize,
+    fontWeight: 400,
+    color: cssVar.colorTextTertiary,
+  },
+  rowTitle: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: 0,
+    fontSize: sidebarRow.textFontSize,
+    lineHeight: sidebarRow.textLineHeight,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  rows: { display: 'flex', flexDirection: 'column', gap: '1px' },
   lessRow: {
     cursor: 'pointer',
     justifyContent: 'center',
@@ -94,7 +93,7 @@ const styles = stylex.create({
     borderWidth: '1px',
     borderStyle: 'dashed',
     borderColor: cssVar.colorBorder,
-    borderRadius: '6px',
+    borderRadius: sidebarRow.radius,
     fontSize: '12px',
     color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
@@ -117,9 +116,11 @@ const styles = stylex.create({
   },
   row: {
     cursor: 'pointer',
-    paddingBlock: '5px',
-    paddingInline: '8px',
-    borderRadius: '6px',
+    gap: sidebarRow.gap,
+    minHeight: sidebarRow.height,
+    paddingInline: sidebarRow.paddingInline,
+    borderRadius: sidebarRow.radius,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
     outlineWidth: { 'default': null, ':focus-visible': '2px' },
@@ -127,7 +128,7 @@ const styles = stylex.create({
     outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
     outlineOffset: { 'default': null, ':focus-visible': '-2px' },
   },
-  loading: { paddingBlockStart: '4px', paddingBlockEnd: '8px', paddingInline: '10px' },
+  loading: { paddingBlockStart: '4px', paddingBlockEnd: '8px' },
   segActive: {
     backgroundColor: cssVar.colorInfo,
     backgroundImage: 'none',
@@ -145,17 +146,7 @@ const styles = stylex.create({
     height: '4px',
     marginBlockStart: '2px',
     marginBlockEnd: '8px',
-    marginInline: '10px',
-  },
-  sectionTitle: {
-    overflow: 'hidden',
-    flex: '1',
-    minWidth: 0,
-    fontSize: '13px',
-    fontWeight: 500,
-    color: cssVar.colorText,
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
+    marginInline: '6px',
   },
 });
 
@@ -168,6 +159,7 @@ const STATE_VISUALS = {
 
 const WorkflowRow = memo<{ onOpen: () => void; row: GoalWorkflowRow }>(({ row, onOpen }) => {
   const visual = STATE_VISUALS[row.state];
+  const { iconSize } = useDensityTokens();
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -181,29 +173,19 @@ const WorkflowRow = memo<{ onOpen: () => void; row: GoalWorkflowRow }>(({ row, o
       horizontal
       align={'center'}
       {...stylex.props(styles.row)}
-      gap={8}
       role={'button'}
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={handleKeyDown}
     >
-      {row.assigneeId ? (
-        <AssigneeProfileAvatar agentId={row.assigneeId} size={20} />
-      ) : (
-        <CircleSlash size={14} style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }} />
-      )}
-      <span
-        style={{
-          flex: 1,
-          fontSize: 13,
-          minWidth: 0,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {row.title}
+      <span {...stylex.props(styles.iconBox)}>
+        {row.assigneeId ? (
+          <AssigneeProfileAvatar agentId={row.assigneeId} size={20} />
+        ) : (
+          <CircleSlash size={iconSize} style={{ color: cssVar.colorTextQuaternary }} />
+        )}
       </span>
+      <span {...stylex.props(styles.rowTitle)}>{row.title}</span>
       <Icon
         icon={visual.icon}
         size={14}
@@ -257,14 +239,6 @@ const GoalWorkflowCard = memo<{
 
   const open = useCallback(() => openGoalPortal(goal.goalId), [goal.goalId, openGoalPortal]);
   const toggleCollapsed = useCallback(() => setCollapsed((prev) => !prev), []);
-  const handleHeaderKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.key !== 'Enter' && event.key !== ' ') return;
-      event.preventDefault();
-      toggleCollapsed();
-    },
-    [toggleCollapsed],
-  );
 
   const rows = sliceVisibleWorkflowRows(goal.rows, rowsExpanded);
   const hiddenCount = goal.rows.length - rows.length;
@@ -276,51 +250,35 @@ const GoalWorkflowCard = memo<{
 
   return (
     <div>
-      <Flexbox
-        horizontal
-        align={'center'}
-        aria-controls={bodyId}
-        aria-expanded={!collapsed}
-        {...stylex.props(styles.headerRow)}
-        gap={8}
-        justify="space-between"
-        role={'button'}
-        tabIndex={0}
-        onClick={toggleCollapsed}
-        onKeyDown={handleHeaderKeyDown}
-      >
-        <Flexbox horizontal align={'center'} gap={8} style={{ flex: 1, minWidth: 0 }}>
-          <Icon icon={Workflow} size={14} style={{ color: cssVar.colorTextSecondary }} />
-          <span {...stylex.props(styles.sectionTitle)} title={title}>
-            {title}
-          </span>
-          {hasSnapshot && goal.phase !== 'running' && (
-            <span {...stylex.props(styles.count)}>{t(`goalTask.status.${goal.phase}`)}</span>
-          )}
-          {hasSnapshot && (
-            <span {...stylex.props(styles.count)}>
-              {goal.summary.done}/{goal.summary.total}
-            </span>
-          )}
-        </Flexbox>
-        <Icon
-          icon={collapsed ? ChevronDown : ChevronUp}
-          size={14}
-          style={{ color: cssVar.colorTextTertiary, flexShrink: 0 }}
-        />
-      </Flexbox>
+      <SectionHeader
+        collapsed={collapsed}
+        controls={bodyId}
+        count={hasSnapshot ? `${goal.summary.done}/${goal.summary.total}` : undefined}
+        title={title}
+        titleAttr={title}
+        meta={
+          hasSnapshot &&
+          goal.phase !== 'running' && (
+            <span {...stylex.props(styles.phase)}>{t(`goalTask.status.${goal.phase}`)}</span>
+          )
+        }
+        onToggle={toggleCollapsed}
+      />
 
       <div hidden={collapsed} {...stylex.props(collapsed && styles.collapsed)} id={bodyId}>
         {goal.error ? (
           <div {...stylex.props(styles.loading)}>
-            <AsyncError error={goal.error} variant={'inline'} onRetry={goal.retry} />
+            <AsyncError
+              align={'start'}
+              error={goal.error}
+              variant={'inline'}
+              onRetry={goal.retry}
+            />
           </div>
         ) : goal.loading ? (
-          <Flexbox {...stylex.props(styles.loading)} data-testid={'goal-workflow-loading'} gap={8}>
-            <Skeleton height={12} radius={4} />
-            <Skeleton height={28} radius={6} />
-            <Skeleton height={28} radius={6} />
-          </Flexbox>
+          <div data-testid={'goal-workflow-loading'}>
+            <SidebarRowSkeleton rows={3} />
+          </div>
         ) : (
           <>
             <StepTrack rows={goal.rows} />
@@ -346,7 +304,7 @@ const GoalWorkflowCard = memo<{
               </Flexbox>
             )}
 
-            <div style={{ paddingInline: 4 }}>
+            <div {...stylex.props(styles.rows)}>
               {rows.map((row) => (
                 <WorkflowRow key={row.id} row={row} onOpen={open} />
               ))}

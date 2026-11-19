@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 
+import { toolSetsFrom } from '../../__tests__/helpers/connectorToolSets';
 import { AiAgentService } from '../../index';
 
 // The share-gate filter now runs at the top of `discoverTools`, before
@@ -99,6 +100,7 @@ vi.mock('@/database/models/connector', () => ({
     return {
       queryByIdentifiers: vi.fn().mockResolvedValue([]),
       resolveByIdentifiers: mockResolveByIdentifiers,
+      resolveToolSets: toolSetsFrom(mockResolveByIdentifiers),
     };
   }),
 }));

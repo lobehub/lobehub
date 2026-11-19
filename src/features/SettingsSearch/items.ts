@@ -344,10 +344,10 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     tab: SettingsTabs.Appearance,
   },
   {
-    anchor: 'appearance-context-menu',
-    descKey: 'settingAppearance.contextMenuMode.desc',
-    keywords: ['context menu', 'right click'],
-    labelKey: 'settingAppearance.contextMenuMode.title',
+    anchor: 'appearance-density',
+    descKey: 'settingAppearance.density.desc',
+    keywords: ['density', 'compact', 'loose', 'spacing', 'row height', 'sidebar'],
+    labelKey: 'settingAppearance.density.title',
     tab: SettingsTabs.Appearance,
   },
   {
@@ -535,6 +535,13 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     descKey: 'serviceModel.tier.verify.desc',
     keywords: ['acceptance', 'verify', 'verifier', 'vision', 'multimodal'],
     labelKey: 'serviceModel.tier.verify.title',
+    tab: SettingsTabs.ServiceModel,
+  },
+  {
+    anchor: 'service-model-fileEmbedding',
+    descKey: 'systemAgent.fileEmbedding.modelDesc',
+    keywords: ['embedding', 'file', 'knowledge base', 'vector', 'DEFAULT_FILES_CONFIG'],
+    labelKey: 'systemAgent.fileEmbedding.title',
     tab: SettingsTabs.ServiceModel,
   },
   {

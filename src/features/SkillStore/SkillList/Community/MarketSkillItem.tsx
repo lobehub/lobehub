@@ -11,9 +11,7 @@ import {
   DropdownMenu,
   Flexbox,
   Icon,
-  Tag,
 } from '@lobehub/ui';
-import { SkillsIcon } from '@lobehub/ui/icons';
 import { t as translate } from 'i18next';
 import { DownloadIcon, Loader2, MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useState } from 'react';
@@ -35,12 +33,19 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     overflow: hidden;
+    align-self: flex-start;
+    max-width: 100%;
+    padding: 0;
+    border: 0;
 
+    font-family: inherit;
     font-size: 14px;
     font-weight: 500;
+    line-height: inherit;
     color: ${cssVar.colorText};
     text-overflow: ellipsis;
     white-space: nowrap;
+    background: transparent;
 
     &:hover {
       color: ${cssVar.colorPrimary};
@@ -178,12 +183,13 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
       >
         <Avatar avatar={icon || name} shape={'square'} size={40} style={{ flex: 'none' }} />
         <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
-          <Flexbox horizontal align="center" gap={8}>
-            <span className={styles.title} onClick={() => openMarketSkillDetailModal(identifier)}>
-              {name}
-            </span>
-            <Tag icon={<Icon icon={SkillsIcon} />} size={'small'} />
-          </Flexbox>
+          <button
+            className={styles.title}
+            type="button"
+            onClick={() => openMarketSkillDetailModal(identifier)}
+          >
+            {name}
+          </button>
           {description && <span className={itemStyles.description}>{description}</span>}
         </Flexbox>
         {renderAction()}

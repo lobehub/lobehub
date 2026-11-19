@@ -11,6 +11,7 @@ import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 
 import { AiAgentService } from '../index';
+import { toolSetsFrom } from './helpers/connectorToolSets';
 
 const runtimeAgentConfig = (chatConfig: Record<string, unknown>, id: string, slug: string) => ({
   chatConfig,
@@ -136,6 +137,7 @@ vi.mock('@/database/models/connector', () => ({
     return {
       queryByIdentifiers: vi.fn().mockResolvedValue([]),
       resolveByIdentifiers: vi.fn().mockResolvedValue([]),
+      resolveToolSets: toolSetsFrom(vi.fn().mockResolvedValue([])),
     };
   }),
 }));
@@ -175,6 +177,7 @@ vi.mock('@/database/models/user', () => ({
   UserModel: class {
     static getInfoForAIGeneration = mockGetInfoForAIGeneration;
     getUserPreference = mockGetUserPreference;
+    getUserSettings = vi.fn().mockResolvedValue(undefined);
   },
 }));
 

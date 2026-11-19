@@ -8,6 +8,9 @@ import {
   GoalSupervisionSchema,
 } from './goal.type';
 
+// Services return the page's rows and total; the controller adds `hasMore`/`nextCursor`.
+const SERVICE_PAGE_FIELDS = { hasMore: true, nextCursor: true } as const;
+
 /** What `c.json` does to a payload: Dates become ISO strings, `undefined` keys vanish. */
 // A JSON round trip on purpose: `structuredClone` would keep the Dates the wire turns into strings.
 // eslint-disable-next-line unicorn/prefer-structured-clone
@@ -182,7 +185,7 @@ describe('goal response schemas', () => {
       total: 1,
     };
 
-    expect(() => GoalListResponseSchema.parse(wire(list))).not.toThrow();
+    expect(() => GoalListResponseSchema.omit(SERVICE_PAGE_FIELDS).parse(wire(list))).not.toThrow();
   });
 
   it('accepts supervision with and without a ledger', () => {

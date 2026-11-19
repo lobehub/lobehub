@@ -225,6 +225,7 @@ export function bindGatewayClientHandlers(
             imageList: request.imageList,
             jwt: request.jwt,
             operationId: request.operationId,
+            permissionMode: request.permissionMode,
             prompt: request.prompt,
             resumeFallbackSystemContext: request.resumeFallbackSystemContext,
             resumeSessionId: request.resumeSessionId,

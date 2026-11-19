@@ -1,4 +1,8 @@
-import { getConnectorMode, upsertConnectorEnabled, upsertPluginMode } from '@lobechat/types';
+import {
+  getConnectorMode,
+  shouldEnableConnectorOnConnect,
+  upsertConnectorEnabled,
+} from '@lobechat/types';
 import { Checkbox, Flexbox, Icon, Spin, stopPropagation } from '@lobehub/ui';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -154,23 +158,23 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
     );
 
     const pluginId = server ? server.identifier : '';
-    const plugins = useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId))?.plugins;
-    // A connector is two-state: on is any entry that is not disabled.
-    const checked = getConnectorMode(plugins, pluginId) === 'auto';
+    const config = useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId));
+    const plugins = config?.plugins;
+    const checked = getConnectorMode(plugins, pluginId, config?.chatConfig) === 'auto';
     const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
     // Toggle plugin for the effective agent
-    const togglePlugin = useCallback(
-      async (pluginIdToToggle: string) => {
+    const setPluginEnabled = useCallback(
+      async (identifier: string, enabled: boolean) => {
         if (!effectiveAgentId) return;
-        // Turning it on writes the explicit entry; turning it off here takes it off the agent.
-        const isOn = getConnectorMode(plugins, pluginIdToToggle) === 'auto';
-        const newPlugins = isOn
-          ? upsertPluginMode(plugins, pluginIdToToggle, 'auto')
-          : upsertConnectorEnabled(plugins, pluginIdToToggle, true);
-        await updateAgentConfigById(effectiveAgentId, { plugins: newPlugins });
+        const current = agentSelectors.getAgentConfigById(effectiveAgentId)(
+          useAgentStore.getState(),
+        );
+        await updateAgentConfigById(effectiveAgentId, {
+          plugins: upsertConnectorEnabled(current?.plugins, identifier, enabled),
+        });
       },
-      [effectiveAgentId, plugins, updateAgentConfigById],
+      [effectiveAgentId, updateAgentConfigById],
     );
 
     // Listen for OAuth success message from popup window
@@ -198,13 +202,18 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
             .lobehubSkillServers?.find((s) => s.identifier === provider);
           if (latestServer?.status === LobehubSkillStatus.CONNECTED) {
             const newPluginId = latestServer.identifier;
-            const currentAgentPlugins = agentSelectors.getAgentConfigById(effectiveAgentId)(
+            const currentAgentConfig = agentSelectors.getAgentConfigById(effectiveAgentId)(
               useAgentStore.getState(),
-            )?.plugins;
-            const isAlreadyEnabled = getConnectorMode(currentAgentPlugins, newPluginId) === 'auto';
-            if (canEdit && !isAlreadyEnabled) {
-              console.info('[LobehubSkill] Auto-enabling plugin:', newPluginId);
-              togglePlugin(newPluginId);
+            );
+            if (
+              canEdit &&
+              shouldEnableConnectorOnConnect(
+                currentAgentConfig?.plugins,
+                newPluginId,
+                currentAgentConfig?.chatConfig,
+              )
+            ) {
+              await setPluginEnabled(newPluginId, true);
             }
           }
         }
@@ -212,7 +221,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
 
       window.addEventListener('message', handleMessage);
       return () => window.removeEventListener('message', handleMessage);
-    }, [canEdit, provider, cleanup, checkStatus, togglePlugin, effectiveAgentId]);
+    }, [canEdit, provider, cleanup, checkStatus, setPluginEnabled, effectiveAgentId]);
 
     const handleConnect = async () => {
       if (!canCreate || !canEdit) return;
@@ -238,7 +247,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
     const handleToggle = async () => {
       if (!canEdit || !server) return;
       setIsToggling(true);
-      await togglePlugin(pluginId);
+      await setPluginEnabled(pluginId, !checked);
       setIsToggling(false);
     };
 

@@ -178,7 +178,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
    * Mirrors `mirrorTargets`'s two population paths:
    *  - fast path: set at `publishAgentRuntimeInit` / `publishAgentRuntimeEnd`
    *    from the state's `metadata.agentShareVisitor`, so the share's real
-   *    `showModelInfo` / `showErrorDetails` config is honored.
+   *    `showErrorDetails` config is honored.
    *  - queue path: lazily resolved from persisted op metadata via
    *    `resolvePersistedShareVisitor`, which can only tell share-or-not — it
    *    therefore falls back to {@link FULL_STRIP_REDACTION}.

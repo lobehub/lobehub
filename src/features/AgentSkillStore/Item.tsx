@@ -53,7 +53,7 @@ const Item = memo<ItemProps>(({ agentId, appSlug, description, icon, identifier,
     if (!canEdit) return;
     confirmModal({
       cancelText: t('cancel', { ns: 'common' }),
-      content: t('settingAgent.agentTools.removeOwnedConfirm'),
+      content: t('settingAgent.tools.connection.removeConfirm.desc'),
       okButtonProps: { danger: true },
       okText: t('tools.lobehubSkill.disconnect'),
       onOk: handleDisconnect,

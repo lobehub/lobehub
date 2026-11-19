@@ -10,6 +10,7 @@ import AgentAvatar from '@/components/AgentAvatar';
 import AuthorChip from '@/features/HomeInbox/AuthorChip';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useDensity } from '@/styles/density';
 import { sx } from '@/styles/sx';
 
 import { formatDuration } from './layout';
@@ -33,6 +34,7 @@ const styles = stylex.create({
     paddingBlock: 16,
     paddingInline: 16,
   },
+  cardCompact: { paddingBlock: 12, paddingInline: 12 },
   count: { color: cssVar.colorTextTertiary, fontSize: 12 },
   // Folded: a slim column that still says how much is waiting, so putting the
   // list away never hides that something is stuck.
@@ -87,12 +89,14 @@ const styles = stylex.create({
     textAlign: 'start',
     width: 'calc(100% + 16px)',
   },
+  itemCompact: { paddingBlock: 6 },
   meta: { flexShrink: 0, fontSize: 12, whiteSpace: 'nowrap' },
 });
 
 const Item = ({ item, now }: { item: AgentRunBoardAttentionItem; now: Date }) => {
   const { t } = useTranslation('home');
   const openDrawer = useOpenRunDrawer();
+  const { compact } = useDensity();
   const failed = item.kind === 'failed';
   const canAct = item.isMine && !failed;
   const elapsed = formatDuration(now.getTime() - item.since.getTime());
@@ -103,7 +107,7 @@ const Item = ({ item, now }: { item: AgentRunBoardAttentionItem; now: Date }) =>
       data-testid={`team-board-attention-${item.kind}`}
       disabled={!item.topicId}
       type={'button'}
-      {...stylex.props(styles.item)}
+      {...stylex.props(styles.item, compact && styles.itemCompact)}
       onClick={() =>
         openDrawer({
           agentId: item.agentId,
@@ -122,7 +126,7 @@ const Item = ({ item, now }: { item: AgentRunBoardAttentionItem; now: Date }) =>
             name={item.agentTitle ?? undefined}
             size={20}
           />
-          <Text ellipsis style={{ flex: 1 }} weight={500}>
+          <Text ellipsis fontSize={compact ? 13 : undefined} style={{ flex: 1 }} weight={500}>
             {title}
           </Text>
           {!item.isMine && <AuthorChip avatarOnly userId={item.ownerUserId} />}
@@ -173,6 +177,7 @@ const Section = ({
 
 const AttentionList = ({ items, now }: { items: AgentRunBoardAttentionItem[]; now: Date }) => {
   const { t } = useTranslation('home');
+  const { compact, tokens } = useDensity();
   const collapsed = useGlobalStore(systemStatusSelectors.teamBoardAttentionCollapsed);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const setCollapsed = (next: boolean) =>
@@ -188,7 +193,11 @@ const AttentionList = ({ items, now }: { items: AgentRunBoardAttentionItem[]; no
   ].filter((section) => section.items.length > 0);
 
   const card = (
-    <Flexbox gap={16} {...stylex.props(styles.card)} data-testid={'team-board-attention'}>
+    <Flexbox
+      gap={tokens.sectionGap}
+      {...stylex.props(styles.card, compact && styles.cardCompact)}
+      data-testid={'team-board-attention'}
+    >
       {sections.map((section, index) => (
         <Section
           items={section.items}

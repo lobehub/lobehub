@@ -74,7 +74,7 @@ const AgentListContent = memo<AgentListContentProps>(({ hideInbox, onMoreClick }
   if (contentState !== 'ready')
     return (
       <>
-        {!hideInbox && <InboxItem style={{ minHeight: 36 }} />}
+        {!hideInbox && <InboxItem />}
         {contentState === 'loading' && <SkeletonList rows={3} />}
       </>
     );
@@ -83,7 +83,7 @@ const AgentListContent = memo<AgentListContentProps>(({ hideInbox, onMoreClick }
   // even when the user has only the built-in Lobe AI inbox.
   return (
     <>
-      {!hideInbox && <InboxItem style={{ minHeight: 36 }} />}
+      {!hideInbox && <InboxItem />}
       {showPinned &&
         (isWorkspace ? (
           <SessionList dataSource={pinnedList!} />

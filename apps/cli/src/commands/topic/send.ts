@@ -164,11 +164,23 @@ export const sendToNewConversation = async (
   params: {
     agentId?: string;
     content: string;
+    /** Open a topic linked to no parent, even from inside a conversation. */
+    detach?: boolean;
     device?: string;
+    /** The parent topic; overrides `LOBEHUB_TOPIC_ID`. */
+    parentTopicId?: string;
     title?: string;
   },
 ): Promise<ConversationSendResult> => {
   const agentId = params.agentId ?? process.env.LOBEHUB_AGENT_ID;
+  if (params.detach && params.parentTopicId) {
+    throw new Error('Pass either --parent-topic-id or --detach, not both.');
+  }
+  // The parent: an explicit --parent-topic-id, else the conversation running
+  // this command, else none; --detach links none.
+  const parentTopicId = params.detach
+    ? undefined
+    : params.parentTopicId || process.env.LOBEHUB_TOPIC_ID || undefined;
   if (!agentId) {
     throw new Error(
       'No agent to start the new conversation with: pass --agent-id (LOBEHUB_AGENT_ID is not set).',
@@ -189,6 +201,9 @@ export const sendToNewConversation = async (
     request.requireDevice = true;
   }
   if (params.title) request.title = params.title;
+  // Recorded as the new topic's `metadata.openedBy`: it lists under its parent
+  // (`lh topic list --parent-topic-id`).
+  if (parentTopicId) request.openedByTopicId = parentTopicId;
   const sourceOperationId = process.env.LOBEHUB_OPERATION_ID;
   if (sourceOperationId) request.sourceOperationId = sourceOperationId;
 
@@ -272,6 +287,14 @@ export function registerTopicSendCommand(topic: Command) {
     .option('--device <target>', `With --new: ${NEW_CONVERSATION_OPTIONS_HELP.device}`)
     .option('--title <title>', `With --new: ${NEW_CONVERSATION_OPTIONS_HELP.title}`)
     .option(
+      '--parent-topic-id <tpc_id>',
+      'With --new: the parent topic the new one lists under (default: the conversation running this command, LOBEHUB_TOPIC_ID)',
+    )
+    .option(
+      '--detach',
+      'With --new: link the new topic to no parent, even from inside a conversation',
+    )
+    .option(
       '--workspace <id|slug>',
       "The workspace the topic lives in (overrides LOBEHUB_WORKSPACE_ID and 'workspace use')",
     )
@@ -282,6 +305,11 @@ export function registerTopicSendCommand(topic: Command) {
 Examples:
   lh topic send tpc_xxx -c "Iterate the verifier with these notes"
   lh topic send --new -c "Draft the release notes" --device local --title "Release notes"
+  lh topic send --new -c "Check the flaky test" --parent-topic-id tpc_xxx
+
+Run from inside a conversation, --new opens a topic linked to it as its parent
+('lh topic list --parent-topic-id <id>' lists them); --detach opens one that
+stands on its own.
 
 Run by an agent, the message is shown as written by that agent, and the
 receiving agent can answer it with 'lh message reply <messageId>', which wakes
@@ -293,8 +321,10 @@ after a few rounds, so a person can step in.`,
         topicId: string | undefined,
         options: NewConversationOptions & {
           content: string;
+          detach?: boolean;
           json?: boolean;
           new?: boolean;
+          parentTopicId?: string;
           workspace?: string;
         },
       ) => {
@@ -307,9 +337,15 @@ after a few rounds, so a person can step in.`,
           if (!topicId) {
             throw new Error('Pass the <topicId> to send to, or --new to open a new conversation.');
           }
-          if (options.agentId || options.device || options.title) {
+          if (
+            options.agentId ||
+            options.device ||
+            options.title ||
+            options.parentTopicId ||
+            options.detach
+          ) {
             throw new Error(
-              '--agent-id, --device and --title only apply with --new; an existing conversation keeps its own.',
+              '--agent-id, --device, --title, --parent-topic-id and --detach only apply with --new; an existing conversation keeps its own.',
             );
           }
           return sendToConversation(client, { content: options.content, topicId });

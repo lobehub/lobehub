@@ -8,10 +8,12 @@ import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
 import { type KeyboardEvent, memo, useCallback } from 'react';
 
-import { sx } from '@/styles/sx';
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import type { ComposerTarget } from '../../types';
 import FileItemBody, { FileItemHeader } from './FileItem';
+import { reviewFileRowMarker } from './markers.stylex';
 import type { ReviewMode } from './useReviewPatches';
 
 const styles = stylex.create({
@@ -19,7 +21,7 @@ const styles = stylex.create({
     // Skip layout/paint of off-screen rows. Preserved from the previous
     // implementation.
     contentVisibility: 'auto',
-    containIntrinsicSize: 'auto 32px',
+    containIntrinsicSize: `auto ${sidebarRow.height}`,
     flex: 'none',
     // Every row carries its own top border — separates file-from-file AND
     // file-from-header without doubling up when a group is collapsed. The first
@@ -35,11 +37,13 @@ const styles = stylex.create({
     cursor: 'pointer',
     userSelect: 'none',
     display: 'flex',
-    gap: '6px',
+    gap: sidebarRow.gap,
     alignItems: 'center',
     width: '100%',
-    paddingBlock: '5px',
-    paddingInline: '10px',
+    minHeight: sidebarRow.height,
+    paddingInline: sidebarRow.paddingInline,
+    fontSize: sidebarRow.textFontSize,
+    lineHeight: sidebarRow.textLineHeight,
     transition: 'background 0.12s',
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
@@ -47,6 +51,15 @@ const styles = stylex.create({
     outlineStyle: { 'default': null, ':focus-visible': 'solid' },
     outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
     outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+  },
+  indent: (paddingInlineStart: number) => ({ paddingInlineStart }),
+  chevronBox: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '16px',
+    height: sidebarRow.textLineHeight,
   },
   chevron: {
     flex: 'none',
@@ -105,6 +118,7 @@ const FileRow = memo<FileRowProps>(
     viewMode,
     wordWrap,
   }) => {
+    const { paddingInline } = useDensityTokens();
     const onKeyDown = useCallback(
       (e: KeyboardEvent<HTMLDivElement>) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -120,20 +134,22 @@ const FileRow = memo<FileRowProps>(
           data-review-row
           aria-expanded={expanded}
           role={'button'}
-          {...sx(
+          {...stylex.props(
             styles.row,
-            stylex.defaultMarker(),
-            indent ? { paddingInlineStart: 10 + indent } : undefined,
+            reviewFileRowMarker,
+            !!indent && styles.indent(paddingInline + indent),
           )}
           tabIndex={0}
           onClick={onToggle}
           onKeyDown={onKeyDown}
         >
-          <ChevronRightIcon
-            {...stylex.props(styles.chevron)}
-            data-expanded={expanded ? 'true' : 'false'}
-            size={14}
-          />
+          <span {...stylex.props(styles.chevronBox)}>
+            <ChevronRightIcon
+              {...stylex.props(styles.chevron)}
+              data-expanded={expanded ? 'true' : 'false'}
+              size={12}
+            />
+          </span>
           <FileItemHeader
             additions={entry.additions}
             deletions={entry.deletions}

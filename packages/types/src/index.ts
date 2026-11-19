@@ -1,5 +1,6 @@
 export * from './agent';
 export * from './agentAccount';
+export * from './agentAvailability';
 export * from './agentExecution';
 export * from './agentGroup';
 export * from './agentHook';
@@ -99,6 +100,8 @@ export * from './acceptanceReviewRound';
 export * from './agentRuntime';
 export * from './artboard';
 export * from './connector';
+export * from './connectorToolIdentifier';
+export * from './heteroPermissionMode';
 export * from './inboundWebhook';
 export * from './oauthApp';
 export * from './openai/chat';

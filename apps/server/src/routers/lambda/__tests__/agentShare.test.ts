@@ -161,7 +161,7 @@ describe('share profile configuration', () => {
 const share = {
   agentId: 'agent-1',
   id: 'share-1',
-  shareConfig: { maxTopicsPerVisitor: 5, maxTurnsPerTopic: 20 },
+  shareConfig: { maxMessagesPerVisitor: 100 },
   visibility: 'private',
 };
 
@@ -329,7 +329,7 @@ describe('agentShareRouter', () => {
 
   it('forwards an atomic share configuration patch', async () => {
     const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
-    const config = { maxTopicsPerVisitor: 10 };
+    const config = { maxMessagesPerVisitor: 10 };
 
     await caller.updateShareConfig({ agentId: 'agent-1', config });
 
@@ -340,19 +340,19 @@ describe('agentShareRouter', () => {
     expect(agentShareConfigPatchSchema.safeParse({}).success).toBe(false);
   });
 
-  it('requires positive integer topic and turn limits', async () => {
+  it('requires a positive integer message limit', async () => {
     const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
 
     await expect(
       caller.updateShareConfig({
         agentId: 'agent-1',
-        config: { maxTopicsPerVisitor: 0 },
+        config: { maxMessagesPerVisitor: 0 },
       }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     await expect(
       caller.updateShareConfig({
         agentId: 'agent-1',
-        config: { maxTurnsPerTopic: 1.5 },
+        config: { maxMessagesPerVisitor: 1.5 },
       }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     expect(mockUpdateConfig).not.toHaveBeenCalled();
@@ -441,27 +441,6 @@ describe('agentShareRouter', () => {
     });
   });
 
-  it('caps maxTopicsPerVisitor at the visitor topic list limit', async () => {
-    // The visitor topic list (`TopicModel.queryBySender`) is not paginated
-    // and is bounded by `AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT` (200), so a
-    // cap above it would let visitors create topics they can never reopen.
-    const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
-
-    await expect(
-      caller.updateShareConfig({
-        agentId: 'agent-1',
-        config: { maxTopicsPerVisitor: 201 },
-      }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-    expect(mockUpdateConfig).not.toHaveBeenCalled();
-
-    await caller.updateShareConfig({
-      agentId: 'agent-1',
-      config: { maxTopicsPerVisitor: 200 },
-    });
-    expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', { maxTopicsPerVisitor: 200 });
-  });
-
   it('accepts a toolset-level grant and a per-API scoped grant in toolGrants', async () => {
     const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
     const config = {
@@ -527,13 +506,13 @@ describe('agentShareRouter', () => {
     expect(
       agentShareConfigSchema.safeParse({
         filePermissionConfig: { agentFiles: 'read' },
-        maxTopicsPerVisitor: 5,
+        maxMessagesPerVisitor: 5,
       }).success,
     ).toBe(false);
     expect(
       agentShareConfigSchema.safeParse({
         guestEnabled: true,
-        maxTopicsPerVisitor: 5,
+        maxMessagesPerVisitor: 5,
       }).success,
     ).toBe(false);
   });
@@ -601,7 +580,7 @@ describe('agentShareRouter', () => {
     await expect(
       caller.updateShareConfig({
         agentId: 'agent-1',
-        config: { maxTopicsPerVisitor: 5 },
+        config: { maxMessagesPerVisitor: 5 },
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await expect(
@@ -654,7 +633,7 @@ describe('agentShareRouter', () => {
       await caller.updateVisibility({ agentId: 'agent-1', visibility: 'private' });
       await caller.disableShare({ agentId: 'agent-1' });
       await caller.getShareStatus({ agentId: 'agent-1' });
-      await caller.updateShareConfig({ agentId: 'agent-1', config: { maxTurnsPerTopic: 3 } });
+      await caller.updateShareConfig({ agentId: 'agent-1', config: { maxMessagesPerVisitor: 3 } });
 
       expect(mockUpdateVisibility).toHaveBeenCalledWith('agent-1', 'private');
       expect(mockUpdateVisibility).toHaveBeenCalledTimes(2);

@@ -64,7 +64,9 @@ export const createRuntimeFromOption = async (
       getDurationMs(startedAt),
     );
 
-    const runtime = LobeVertexAI.initFromVertexAI(vertexOptions);
+    // Report the router's provider id like the other channels below: getModelPricing picks the
+    // card by provider, and `vertexai` would bill the static Vertex card instead of the router's.
+    const runtime = LobeVertexAI.initFromVertexAI({ ...vertexOptions, id: deps.id });
     setRuntimeSignatureScopeSource(runtime, signatureScopeSource);
 
     return {

@@ -4,6 +4,8 @@ import { cssVar, Divider, Flexbox } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
 import type { ReactNode } from 'react';
 
+import { useInterfaceDensity } from '@/styles/density';
+
 import SkeletonBar from '../../Bar';
 import { useSkeletonText } from '../useSkeletonText';
 import type { SettingsTabSkeleton } from './types';
@@ -39,14 +41,15 @@ const Rank = ({ title }: { title: ReactNode }) => (
 
 /**
  * The stats tab: the overview group (figures, activity heatmap, rankings) and
- * the usage group (spend cards, trend chart, table), 36px apart like the two
+ * the usage group (spend cards, trend chart, table), 36px (compact 24px) apart like the two
  * settled `Form.Group`s. Group and section titles are static copy.
  */
 const Body = () => {
   const text = useSkeletonText('auth');
+  const compact = useInterfaceDensity() === 'compact';
 
   return (
-    <Flexbox aria-busy gap={36}>
+    <Flexbox aria-busy gap={compact ? 24 : 36}>
       <Form.Group
         collapsible={false}
         extra={<SkeletonBar height={32} width={32} />}

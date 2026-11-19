@@ -114,7 +114,7 @@ export const activatorRuntime: ServerRuntimeRegistration = {
         // with `activeDeviceId` as the fallback for callers without a plan.
         builtinSkills: filterBuiltinSkills(builtinSkills, {
           canExecuteOnDevice: context.deviceCapable ?? !!context.activeDeviceId,
-        }).filter((skill) => isSkillReachable(skill.identifier)),
+        }).filter((skill) => isLibrarySkillReachable(skill.identifier)),
         service: {
           findAll: async () => {
             const result = await skillModel.findAll();

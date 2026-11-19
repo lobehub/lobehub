@@ -66,17 +66,15 @@ export class Health extends HeyApiClient {
      * Health check
      */
     public check<ThrowOnError extends boolean = false>(options?: Options<GetApiV1HealthData, ThrowOnError>): RequestResult<GetApiV1HealthResponses, unknown, ThrowOnError> {
-        return (options?.client ?? this.client).get<GetApiV1HealthResponses, unknown, ThrowOnError>({
-            security: [{ scheme: 'bearer', type: 'http' }],
-            url: '/api/v1/health',
-            ...options
-        });
+        return (options?.client ?? this.client).get<GetApiV1HealthResponses, unknown, ThrowOnError>({ url: '/api/v1/health', ...options });
     }
 }
 
 export class AgentGroups extends HeyApiClient {
     /**
      * List agent groups
+     *
+     * Paginated with `limit` + `cursor`; answers `{ items, total, hasMore, nextCursor }`. Clients that still expect the former bare array can pass the deprecated `format=array`, which returns every item as a plain array.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1AgentGroupsData, ThrowOnError>): RequestResult<GetApiV1AgentGroupsResponses, GetApiV1AgentGroupsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1AgentGroupsResponses, GetApiV1AgentGroupsErrors, ThrowOnError>({
@@ -280,6 +278,8 @@ export class Agents extends HeyApiClient {
 export class ApiKeys extends HeyApiClient {
     /**
      * List API keys
+     *
+     * Paginated with `limit` + `cursor`; answers `{ items, total, hasMore, nextCursor }`. Clients that still expect the former bare array can pass the deprecated `format=array`, which returns every item as a plain array.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1ApiKeysData, ThrowOnError>): RequestResult<GetApiV1ApiKeysResponses, GetApiV1ApiKeysErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1ApiKeysResponses, GetApiV1ApiKeysErrors, ThrowOnError>({
@@ -1217,6 +1217,8 @@ export class KnowledgeBases extends HeyApiClient {
 export class McpServers extends HeyApiClient {
     /**
      * List remote MCP servers
+     *
+     * Paginated with `limit` + `cursor`; answers `{ items, total, hasMore, nextCursor }`. Clients that still expect the former bare array can pass the deprecated `format=array`, which returns every item as a plain array.
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1McpServersData, ThrowOnError>): RequestResult<GetApiV1McpServersResponses, GetApiV1McpServersErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1McpServersResponses, GetApiV1McpServersErrors, ThrowOnError>({

@@ -121,6 +121,7 @@ export class TopicModel {
 
   query = this.withContext(list.query);
   queryTopics = this.withContext(list.queryTopics);
+  listChildTopicAgentIds = this.withContext(list.listChildTopicAgentIds);
 
   // **************** Read *************** //
 
@@ -151,7 +152,7 @@ export class TopicModel {
   // **************** Agent Share (visitor-scoped) *************** //
 
   queryBySender = this.withContext(shareVisitor.queryBySender);
-  countBySender = this.withContext(shareVisitor.countBySender);
+  countMessagesBySender = this.withContext(shareVisitor.countMessagesBySender);
   countShareVisitors = this.withContext(shareVisitor.countShareVisitors);
 
   // **************** Create *************** //

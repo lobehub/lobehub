@@ -124,3 +124,22 @@ export const useNavigateToAgentTopics = () => {
     [router],
   );
 };
+
+/**
+ * Opens the active agent's full topic page from the sidebar. Leaves the current
+ * topic first so the page doesn't open over a stale chat. `undefined` until an
+ * agent is active, so callers can hide the entry instead of rendering a no-op.
+ */
+export const useOpenActiveAgentTopics = () => {
+  const [activeAgentId, switchTopic] = useChatStore((s) => [s.activeAgentId, s.switchTopic]);
+  const navigateToAgentTopics = useNavigateToAgentTopics();
+
+  return useMemo(() => {
+    if (!activeAgentId) return undefined;
+
+    return () => {
+      switchTopic(null, { skipRefreshMessage: true });
+      navigateToAgentTopics(activeAgentId);
+    };
+  }, [activeAgentId, navigateToAgentTopics, switchTopic]);
+};

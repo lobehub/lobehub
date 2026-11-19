@@ -23,11 +23,12 @@ import { ChannelMessage, ThreadRootMessage } from './ChannelMessage';
 import { Composer } from './Composer';
 import { hasReplyActivity } from './jobStatus';
 import { JoinEventLine } from './JoinEventLine';
-import { channelJoinEvents, channelTimeline, isSelfJoinable } from './joinEvents';
+import { channelJoinEvents, channelTimeline } from './joinEvents';
 import { isCurrentUserMember } from './memberName';
 import { channelTimeFormatters, presentChannelTimeline } from './messagePresentation';
 import { presentOutgoingMessage, timelineTail } from './outgoing';
 import { OutgoingStatus } from './OutgoingStatus';
+import { ReadOnlyNotice } from './ReadOnlyNotice';
 import { ReplyActivity } from './ReplyActivity';
 import type { ReplyTopic } from './ReplyTopicPanel';
 import { styles } from './styles';
@@ -44,12 +45,15 @@ interface ChannelConversationProps {
   onOpenThread?: (threadId: string, toggle?: boolean) => void;
   onOpenTopic?: (topic: ReplyTopic) => void;
   onStartThread?: (draft: ChannelThreadDraft) => void;
+  /** Markdown filling the main composer when nothing is saved for it; never sent by itself. */
+  starter?: string;
   threadId?: string | null;
 }
 
 const Timeline = ({
   channelId,
   inert,
+  starter,
   threadId = null,
   onOpenThread,
   onOpenTopic,
@@ -122,6 +126,8 @@ const Timeline = ({
   const thread = threadId ? detail?.threads.find((entry) => entry.id === threadId) : undefined;
   const selectReply = (message: ChannelPublicMessage) => reply.select(message);
   const channelArchived = detail?.channel.status === 'archived';
+  // A shared Agent's owner reading a visitor's conversation: nothing to send, reply to or branch.
+  const readOnly = !!detail?.readOnly;
   const direct = !!detail?.channel.agentId;
   // Join lines belong to the main conversation; a thread starts from its root message. A direct
   // conversation reads like a chat with its Agent, so it has no "invited" lines at all.
@@ -130,9 +136,7 @@ const Timeline = ({
         outgoing.length
           ? [...detail.messages, ...outgoing.map((item) => item.message)]
           : detail.messages,
-        threadId || direct
-          ? []
-          : channelJoinEvents(detail.members, { selfJoinable: isSelfJoinable(detail.channel) }),
+        threadId || direct ? [] : channelJoinEvents(detail.members),
         !detail.hasMore && before === undefined,
       )
     : [];
@@ -202,7 +206,9 @@ const Timeline = ({
                     highlighted={highlighted === detail.rootMessage.id}
                     root={detail.rootMessage}
                     onReply={
-                      channelArchived || thread?.status === 'archived' ? undefined : selectReply
+                      channelArchived || readOnly || thread?.status === 'archived'
+                        ? undefined
+                        : selectReply
                     }
                   />
                 )}
@@ -259,9 +265,11 @@ const Timeline = ({
                         onJumpToMessage={jumpToMessage}
                         onOpenThread={onOpenThread}
                         onOpenTopic={onOpenTopic}
-                        onStartThread={channelArchived ? undefined : onStartThread}
+                        onStartThread={channelArchived || readOnly ? undefined : onStartThread}
                         onReply={
-                          channelArchived || thread?.status === 'archived' ? undefined : selectReply
+                          channelArchived || readOnly || thread?.status === 'archived'
+                            ? undefined
+                            : selectReply
                         }
                       />
                     )}
@@ -269,7 +277,9 @@ const Timeline = ({
                 ))}
               </WideScreenContainer>
             </Flexbox>
-            {channelArchived || thread?.status === 'archived' ? (
+            {readOnly ? (
+              <ReadOnlyNotice />
+            ) : channelArchived || thread?.status === 'archived' ? (
               <ArchivedNotice channel={detail.channel} threadId={threadId} />
             ) : (
               <Composer
@@ -278,6 +288,7 @@ const Timeline = ({
                 key={channelDraftKey(channelId, threadId)}
                 members={activeMembers}
                 replyTarget={reply.target}
+                starter={threadId ? undefined : starter}
                 activity={
                   hasReplyActivity(detail, threadId) ? (
                     <ReplyActivity detail={detail} threadId={threadId} />

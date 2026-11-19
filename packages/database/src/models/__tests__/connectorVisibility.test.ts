@@ -295,8 +295,10 @@ describe('connector visibility — agent configuration', () => {
     expect(await availableIdentifiers(ownerModel)).toEqual(['ws-shared-linear']);
   });
 
-  it('reports the row the agent’s own conversation ranks first, without credentials', async () => {
-    await insertConnector({ identifier: 'notion', userId: mate });
+  it('reports every tool set the agent loads, without credentials', async () => {
+    // The shared row and the owner's private one are tool sets of their own: a
+    // disabled private row no longer hides the shared one from validation
+    const sharedRow = await insertConnector({ identifier: 'notion', userId: mate });
     const privateRow = await insertConnector({ identifier: 'notion', visibility: 'private' });
     await serverDB
       .update(userConnectors)
@@ -306,6 +308,7 @@ describe('connector visibility — agent configuration', () => {
 
     expect(await model.queryAvailableForAgent(privateAgent)).toEqual([
       { id: privateRow.id, identifier: 'notion', isEnabled: false, status: 'connected' },
+      { id: sharedRow.id, identifier: 'notion', isEnabled: true, status: 'connected' },
     ]);
   });
 });
@@ -370,6 +373,70 @@ describe('connector visibility — priority within one identifier', () => {
   });
 });
 
+describe('connector visibility — tool sets of one identifier', () => {
+  const suffix = (id: string) => id.replaceAll('-', '').slice(0, 8);
+  const toolSets = async (target: { agentId?: string; topicId?: string }) =>
+    (await new ConnectorModel(serverDB, owner, workspaceId).resolveToolSets(target, ['gmail'])).map(
+      (row) => [row.toolIdentifier, row.id],
+    );
+
+  it('keeps the shared, private and personal rows each as its own tool set', async () => {
+    const shared = await insertConnector({ identifier: 'gmail', userId: mate });
+    const personal = await insertConnector({ identifier: 'gmail', workspaceId: null });
+    const mine = await insertConnector({ identifier: 'gmail', visibility: 'private' });
+
+    expect(await toolSets({ agentId: privateAgent, topicId: privateTopic })).toEqual([
+      [`gmail-${suffix(mine.id)}`, mine.id],
+      [`gmail-${suffix(personal.id)}`, personal.id],
+      ['gmail', shared.id],
+    ]);
+    // Any run but the private agent's own topic resolves the shared row alone
+    expect(await toolSets({ agentId: workspaceAgent, topicId: workspaceAgentTopic })).toEqual([
+      ['gmail', shared.id],
+    ]);
+  });
+
+  it("never lets a literal identifier share a private row's prefix", async () => {
+    const mine = await insertConnector({ identifier: 'gmail', visibility: 'private' });
+    // A shared connector literally named like the private row's short prefix
+    const literal = await insertConnector({ identifier: `gmail-${suffix(mine.id)}`, userId: mate });
+    const model = new ConnectorModel(serverDB, owner, workspaceId);
+    const target = { agentId: privateAgent, topicId: privateTopic };
+
+    // Whichever identifiers a caller asks for, the private row takes its whole id
+    for (const identifiers of [['gmail'], ['gmail', literal.identifier], undefined]) {
+      const rows = await model.resolveToolSets(target, identifiers);
+      expect(rows.find((row) => row.id === mine.id)?.toolIdentifier).toBe(
+        `gmail-${mine.id.replaceAll('-', '')}`,
+      );
+    }
+    expect(
+      (await model.resolveToolSets(target, [literal.identifier])).map((row) => row.toolIdentifier),
+    ).toEqual([literal.identifier]);
+  });
+
+  it('lets a row bound to the agent stand alone for its identifier', async () => {
+    await insertConnector({ identifier: 'gmail', userId: mate });
+    await insertConnector({ identifier: 'gmail', visibility: 'private' });
+    const agentOwned = await insertConnector({ agentId: privateAgent, identifier: 'gmail' });
+
+    expect(await toolSets({ agentId: privateAgent, topicId: privateTopic })).toEqual([
+      ['gmail', agentOwned.id],
+    ]);
+  });
+
+  it('keeps one tool set for duplicate shared rows, the lowest id', async () => {
+    const [first] = [
+      await insertConnector({ identifier: 'gmail', userId: mate }),
+      await insertConnector({ identifier: 'gmail', userId: owner }),
+    ].sort((a, b) => a.id.localeCompare(b.id));
+
+    expect(await toolSets({ agentId: privateAgent, topicId: privateTopic })).toEqual([
+      ['gmail', first.id],
+    ]);
+  });
+});
+
 describe('connector visibility — write paths', () => {
   it('looks up the idempotency row within one visibility', async () => {
     const shared = await insertConnector({ identifier: 'notion', userId: mate });
@@ -387,6 +454,32 @@ describe('connector visibility — write paths', () => {
     // A teammate's private row of the same identifier is never "mine".
     await insertConnector({ identifier: 'slack', userId: mate, visibility: 'private' });
     expect(await model.findScopedByIdentifier('slack', undefined, undefined, 'private')).toBeNull();
+  });
+
+  it('counts the private connectors an agent uses, owned or mounted', async () => {
+    const model = new ConnectorModel(serverDB, owner, workspaceId);
+    expect(await model.countPrivateAgentBindings(privateAgent)).toBe(0);
+
+    // Shared rows, and private rows serving another agent, never count
+    await insertConnector({ agentId: privateAgent, identifier: 'shared-own' });
+    await insertConnector({
+      identifier: 'shared-mount',
+      metadata: { mountedByAgentId: privateAgent },
+    });
+    await insertConnector({ agentId: workspaceAgent, identifier: 'other', visibility: 'private' });
+    expect(await model.countPrivateAgentBindings(privateAgent)).toBe(0);
+
+    await insertConnector({ agentId: privateAgent, identifier: 'notion', visibility: 'private' });
+    await insertConnector({
+      identifier: 'linear',
+      metadata: { mountedByAgentId: privateAgent },
+      visibility: 'private',
+    });
+    expect(await model.countPrivateAgentBindings(privateAgent)).toBe(2);
+    // Personal scope has no private connectors
+    expect(await new ConnectorModel(serverDB, owner).countPrivateAgentBindings(privateAgent)).toBe(
+      0,
+    );
   });
 
   it('claims a base identifier within one visibility', async () => {
@@ -423,6 +516,35 @@ describe('connector visibility — write paths', () => {
       visibility: 'private',
     });
     expect(myPrivateSlack.visibility).toBe('private');
+  });
+
+  it('lets only one of two concurrent shares of one identifier take the shared slot', async () => {
+    const mine = await insertConnector({ identifier: 'notion', visibility: 'private' });
+    const theirs = await insertConnector({
+      identifier: 'notion',
+      userId: mate,
+      visibility: 'private',
+    });
+
+    const results = await Promise.all([
+      new ConnectorModel(serverDB, owner, workspaceId).changeVisibilityUnlessHeld(
+        mine.id,
+        'notion',
+        'public',
+      ),
+      new ConnectorModel(serverDB, mate, workspaceId).changeVisibilityUnlessHeld(
+        theirs.id,
+        'notion',
+        'public',
+      ),
+    ]);
+
+    expect(results.filter((result) => 'changed' in result)).toHaveLength(1);
+    const shared = await serverDB
+      .select({ id: userConnectors.id })
+      .from(userConnectors)
+      .where(eq(userConnectors.visibility, 'public'));
+    expect(shared).toHaveLength(1);
   });
 
   it('moves an agent connector into the base scope within its own visibility', async () => {

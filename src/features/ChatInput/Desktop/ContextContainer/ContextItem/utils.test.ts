@@ -45,6 +45,13 @@ describe('getUploadChipState', () => {
     },
   );
 
+  it('shows the failure but offers no retry when retrying would fail the same way', () => {
+    expect(getUploadChipState({ retryable: false, status: 'error' })).toMatchObject({
+      canRetry: false,
+      indicator: 'error',
+    });
+  });
+
   it.each([undefined, Number.NaN, Number.POSITIVE_INFINITY])(
     'drops unmeasurable progress (%s)',
     (progress) => {

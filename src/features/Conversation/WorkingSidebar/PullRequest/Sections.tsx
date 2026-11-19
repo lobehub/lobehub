@@ -4,23 +4,22 @@ import type {
   DeviceGitPullRequestDetail,
 } from '@lobechat/types';
 // oxlint-disable-next-line stylex-migration/no-emotion-styles -- Markdown output gets no className
-import { Button, createStaticStyles, Flexbox, Icon, Markdown, Skeleton } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Markdown } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import {
-  ChevronDownIcon,
-  ChevronRightIcon,
-  FolderOpenIcon,
-  GitCommitHorizontalIcon,
-} from 'lucide-react';
-import { memo, type ReactNode, useState } from 'react';
+import { FolderOpenIcon, GitCommitHorizontalIcon } from 'lucide-react';
+import { memo, type ReactNode, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import type { GitReplicaReadResult } from '@/store/device';
+import { useDensityTokens } from '@/styles/density';
 import { sx } from '@/styles/sx';
 
+import { SidebarRowSkeleton } from '../DeferredSkeleton';
 import { ChevronRight, OverviewRow, rowStyles } from '../Overview/OverviewRow';
-import { sectionProps, sectionStyles } from '../Overview/sectionStyles';
+import { SectionHeader } from '../Overview/SectionHeader';
+import { sectionProps } from '../Overview/sectionStyles';
 import ActivityTimeline from './ActivityTimeline';
 import ChecksList from './ChecksList';
 import { timeAgo } from './prVisual';
@@ -32,10 +31,9 @@ const styles = stylex.create({
     minWidth: 0,
     paddingBlockStart: '2px',
     paddingBlockEnd: '6px',
-    paddingInline: '8px',
+    paddingInline: '6px',
     overflowWrap: 'anywhere',
   },
-  header: { cursor: 'pointer', userSelect: 'none', gap: '6px' },
   sha: { fontFamily: cssVar.fontFamilyCode },
 });
 
@@ -67,26 +65,25 @@ interface SectionProps {
   title: string;
 }
 
-const Section = memo<SectionProps>(({ children, count, onToggle, open = true, title }) => (
-  <Flexbox {...sectionProps(true)}>
-    <Flexbox
-      horizontal
-      align={'center'}
-      role={onToggle ? 'button' : undefined}
-      {...stylex.props(
-        sectionStyles.sectionHeader,
-        sectionStyles.sectionTitle,
-        onToggle && styles.header,
+const Section = memo<SectionProps>(({ children, count, onToggle, open = true, title }) => {
+  const bodyId = useId();
+  return (
+    <Flexbox {...sectionProps(true)}>
+      <SectionHeader
+        collapsed={!open}
+        controls={onToggle ? bodyId : undefined}
+        count={count}
+        title={title}
+        onToggle={onToggle}
+      />
+      {open && (
+        <Flexbox gap={1} id={bodyId}>
+          {children}
+        </Flexbox>
       )}
-      onClick={onToggle}
-    >
-      {onToggle && <Icon icon={open ? ChevronDownIcon : ChevronRightIcon} size={12} />}
-      {title}
-      {count !== undefined && <span {...stylex.props(sectionStyles.count)}>{count}</span>}
     </Flexbox>
-    {open && children}
-  </Flexbox>
-));
+  );
+});
 
 Section.displayName = 'PullRequestSection';
 
@@ -105,16 +102,18 @@ interface SectionsProps {
 const Sections = memo<SectionsProps>(
   ({ actionsDisabled, activity, busy, detail, onAction, onOpenTab }) => {
     const { t } = useTranslation('chat');
-    const { t: tCommon } = useTranslation('common');
+    const density = useDensityTokens();
     const activityPlaceholder = activity.error ? (
-      <Flexbox gap={8}>
-        <span>{t('workingPanel.pr.error.load')}</span>
-        <Button loading={activity.isValidating} onClick={() => void activity.mutate()}>
-          {tCommon('retry')}
-        </Button>
-      </Flexbox>
+      <AsyncError
+        align={'start'}
+        error={activity.error}
+        retrying={activity.isValidating}
+        title={t('workingPanel.pr.error.load')}
+        variant={'inline'}
+        onRetry={() => void activity.mutate()}
+      />
     ) : (
-      <Skeleton.Text rows={3} />
+      <SidebarRowSkeleton rows={3} />
     );
     const [open, setOpen] = useState({
       activity: true,
@@ -152,7 +151,11 @@ const Sections = memo<SectionsProps>(
             title={t('workingPanel.pr.section.description')}
             onToggle={toggle('description')}
           >
-            <Markdown fontSize={13} variant={'chat'} {...sx(styles.body, fallback.body)}>
+            <Markdown
+              fontSize={density.fontSize}
+              variant={'chat'}
+              {...sx(styles.body, fallback.body)}
+            >
               {detail.body}
             </Markdown>
           </Section>
@@ -191,7 +194,6 @@ const Sections = memo<SectionsProps>(
             ? activityPlaceholder
             : commits.map((commit) => (
                 <OverviewRow
-                  weak
                   icon={GitCommitHorizontalIcon}
                   key={commit.sha}
                   title={commit.message}
