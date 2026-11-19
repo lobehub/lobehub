@@ -21,7 +21,7 @@ import {
   Zap,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { buildAgentProfileTabPath } from '@/features/AgentProfileTabs/tabOptions';
@@ -512,14 +512,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const installedBuiltinSkills = useToolStore(builtinToolSelectors.installedBuiltinSkills, isEqual);
 
   // MCP connectors the user added: custom ones and marketplace installs
-  const customConnectors = useToolStore(connectorSelectors.userMcpConnectors, isEqual);
+  const customConnectors = useToolStore(
+    connectorSelectors.userMcpConnectorsForAgent(agentId),
+    isEqual,
+  );
   const getConfigure = useConnectorConfigure();
-  const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
-  const fetchConnectors = useToolStore((s) => s.fetchConnectors);
-  useEffect(() => {
-    if (!isConnectorsInit) fetchConnectors();
-  }, [isConnectorsInit, fetchConnectors]);
-
   const [
     useFetchUserComposioConnections,
     useFetchLobehubSkillConnections,

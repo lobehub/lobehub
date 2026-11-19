@@ -144,19 +144,21 @@ const agentConnectors =
   (s: ToolStore): ConnectorWithTools[] =>
     s.agentConnectors?.[agentId] ?? [];
 
+/** A base connection is available to every agent until one agent mounts it. */
+export const isLibraryConnectorForAgent = (connector: ConnectorWithTools, agentId?: string) => {
+  const mountedBy = connector.metadata?.mountedByAgentId;
+  return !connector.agentId && (!mountedBy || mountedBy === agentId);
+};
+
+const userMcpConnectorsForAgent = (agentId: string) => (s: ToolStoreState) =>
+  userMcpConnectors(s).filter((connector) => isLibraryConnectorForAgent(connector, agentId));
+
 /**
  * The connector a conversation of `agentId` resolves `identifier` to, mirroring
  * the server's agent-aware resolution: the agent's own row first (agent-owned
  * over mounted), else the base connector. Agent tools are only known once that
  * agent's list has loaded.
  */
-/** Mounted (locked) to an agent other than `agentId`; without one, to any agent. */
-const isMountedByAnotherAgent = (connector: ConnectorWithTools, agentId?: string) => {
-  const mountedBy = connector.metadata?.mountedByAgentId;
-
-  return typeof mountedBy === 'string' && mountedBy !== '' && mountedBy !== agentId;
-};
-
 const connectorByIdentifierForAgent =
   (identifier: string, agentId?: string) =>
   (s: ToolStore): ConnectorWithTools | undefined => {
@@ -170,7 +172,7 @@ const connectorByIdentifierForAgent =
       // A base connector another agent mounted serves only that agent, as the
       // server's scope rule has it (`ConnectorModel.scopePredicate`)
       (s.connectors ?? []).find(
-        (c) => c.identifier === identifier && !isMountedByAnotherAgent(c, agentId),
+        (c) => c.identifier === identifier && isLibraryConnectorForAgent(c, agentId),
       )
     );
   };
@@ -238,4 +240,5 @@ export const connectorSelectors = {
     },
   notConnectedConnectors,
   userMcpConnectors,
+  userMcpConnectorsForAgent,
 };

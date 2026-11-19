@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => {
     connectors: [] as Array<{ id: string; identifier: string }>,
     createComposioConnection: vi.fn(),
     deleteAgentSkill: vi.fn(),
-    fetchAgentBoundConnectors: vi.fn(),
+    useFetchAgentBoundConnectors: vi.fn(() => ({ isValidating: false })),
     fetchConnectors: vi.fn(),
     getLobehubSkillAuthorizeUrl: vi.fn(),
     installBuiltinTool: vi.fn(),
@@ -365,25 +365,15 @@ describe('SkillDetail', () => {
   });
 
   it('loads the agents’ connectors when an agent connector’s detail is opened by link', () => {
-    mocks.toolState.isAgentBoundInit = false;
-    mocks.toolState.fetchAgentBoundConnectors.mockClear();
-
     render(<SkillDetail identifier="row-1" type="agent-connector" />);
 
-    // The list that normally loads them is hidden behind the detail, so the detail asks.
-    expect(mocks.toolState.fetchAgentBoundConnectors).toHaveBeenCalledTimes(1);
+    expect(mocks.toolState.useFetchAgentBoundConnectors).toHaveBeenCalledWith(true);
     expect(screen.getByTestId('connector-detail')).toHaveTextContent('row-1');
   });
 
-  it('does not load the agents’ connectors again once they are there, or for other details', () => {
-    mocks.toolState.fetchAgentBoundConnectors.mockClear();
-    mocks.toolState.isAgentBoundInit = true;
-    const { unmount } = render(<SkillDetail identifier="row-1" type="agent-connector" />);
-    unmount();
-
-    mocks.toolState.isAgentBoundInit = false;
+  it('leaves the agent connector query disabled for other details', () => {
     render(<SkillDetail identifier="agent-skill-1" type="agent-skill" />);
 
-    expect(mocks.toolState.fetchAgentBoundConnectors).not.toHaveBeenCalled();
+    expect(mocks.toolState.useFetchAgentBoundConnectors).toHaveBeenCalledWith(false);
   });
 });

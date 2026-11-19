@@ -20,6 +20,11 @@ const mocks = vi.hoisted(() => ({
     { identifier: 'lobehub', name: 'LobeHub' },
   ],
   checked: [] as string[],
+  connectors: [] as Array<{
+    identifier: string;
+    metadata: { mountedByAgentId?: string };
+    sourceType: 'custom';
+  }>,
   composioEnabled: false,
   composioServers: [] as Pick<ComposioServer, 'identifier' | 'status'>[],
   lobehubEnabled: false,
@@ -82,6 +87,7 @@ vi.mock('@/store/tool', () => ({
   useToolStore: (selector: (state: unknown) => unknown) =>
     selector({
       composioServers: mocks.composioServers,
+      connectors: mocks.connectors,
       isConnectorsInit: true,
       lobehubSkillServers: mocks.lobehubSkillServers,
       useFetchAgentSkills: vi.fn(),
@@ -119,9 +125,10 @@ vi.mock('@/store/tool/selectors', () => ({
     ],
   },
 }));
-vi.mock('@/store/tool/slices/connector', () => ({
-  connectorSelectors: { userMcpConnectors: () => [] },
-}));
+vi.mock(
+  '@/store/tool/slices/connector',
+  async () => import('@/store/tool/slices/connector/selectors'),
+);
 
 const leafKeys = (items: ItemType[]): string[] =>
   items.flatMap((item) => {
@@ -144,6 +151,7 @@ describe('chat input tool picker', () => {
     vi.clearAllMocks();
     mocks.agentId = 'agent-1';
     mocks.checked = [];
+    mocks.connectors = [];
     mocks.composioEnabled = false;
     mocks.composioServers = [];
     mocks.lobehubEnabled = false;
@@ -263,6 +271,22 @@ describe('chat input tool picker', () => {
       chatConfig: { searchMode: 'auto' },
       plugins: [other],
     });
+  });
+
+  it('offers only free library MCP connections and those mounted to this agent', () => {
+    mocks.connectors = [
+      { identifier: 'free', metadata: {}, sourceType: 'custom' },
+      { identifier: 'lent-here', metadata: { mountedByAgentId: 'agent-1' }, sourceType: 'custom' },
+      {
+        identifier: 'lent-elsewhere',
+        metadata: { mountedByAgentId: 'agent-2' },
+        sourceType: 'custom',
+      },
+    ];
+    const { result } = renderHook(() => useControls());
+    const ids = result.current.toolOptions.map((option) => option.id);
+    expect(ids).toEqual(expect.arrayContaining(['free', 'lent-here']));
+    expect(ids).not.toContain('lent-elsewhere');
   });
 
   it('derives the profile summary from the same unfiltered options as chat', () => {

@@ -19,6 +19,7 @@ const ToolsEditor = memo(() => {
   useEffect(() => useItemDetailStore.getState().close, []);
 
   return (
+    // ProfileArea's WideScreenContainer owns the centered column and wide-screen preference.
     <Flexbox gap={24} paddingBlock={'8px 48px'}>
       <Flexbox gap={4}>
         <Text fontSize={24} weight={600}>

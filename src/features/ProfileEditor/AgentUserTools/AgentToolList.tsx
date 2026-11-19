@@ -5,11 +5,12 @@ import { upsertConnectorEnabled } from '@lobechat/types';
 import { Button, type ItemType } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { PlusIcon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
+import AsyncBoundary from '@/components/AsyncBoundary';
 import { createAgentSkillStoreModal } from '@/features/AgentSkillStore';
 import ActionDropdown from '@/features/ChatInput/ActionBar/components/ActionDropdown';
 import ToolItem from '@/features/ChatInput/ActionBar/Tools/ToolItem';
@@ -20,7 +21,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
-import { connectorSelectors } from '@/store/tool/slices/connector';
+import { connectorSelectors, isLibraryConnectorForAgent } from '@/store/tool/slices/connector';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 import { useUserStore } from '@/store/user';
 
@@ -50,12 +51,11 @@ const Tools = ({ agentId, group, onOpenDetail }: Props) => {
   const isComposioEnabled = useServerConfigStore(serverConfigSelectors.enableComposio);
 
   const isInit = useToolStore(connectorSelectors.isAgentConnectorsInit(agentId));
-  const fetchAgentConnectors = useToolStore((s) => s.fetchAgentConnectors);
-  useEffect(() => {
-    if (agentId && !isInit) fetchAgentConnectors(agentId);
-  }, [agentId, isInit, fetchAgentConnectors]);
+  const useFetchAgentConnectors = useToolStore((s) => s.useFetchAgentConnectors);
+  const { error, isValidating, revalidate } = useFetchAgentConnectors(agentId);
 
   const agentConnectors = useToolStore(connectorSelectors.agentConnectors(agentId), isEqual);
+  const libraryLoaded = useToolStore((s) => s.isConnectorsInit);
   const libraryConnectors = useToolStore(connectorSelectors.connectorList, isEqual);
   const plugins = useAgentStore((s) => agentSelectors.getAgentConfigById(agentId)(s)?.plugins);
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
@@ -76,7 +76,7 @@ const Tools = ({ agentId, group, onOpenDetail }: Props) => {
   /** The library's connection for a tool that signs in somewhere; nothing for other tools. */
   const libraryConnectionOf = (identifier: string) => {
     const connector = libraryConnectors.find(
-      (c) => c.identifier === identifier && !c.agentId && !c.metadata?.mountedByAgentId,
+      (c) => c.identifier === identifier && isLibraryConnectorForAgent(c, agentId),
     );
     if (!connector) return;
     if (isComposioConnection(connector)) return isComposioEnabled ? connector : undefined;
@@ -136,7 +136,7 @@ const Tools = ({ agentId, group, onOpenDetail }: Props) => {
       : [];
   });
 
-  return (
+  const list = (
     <ToolListGroup
       {...group}
       activeCount={rows.filter((row) => row.enabled).length}
@@ -185,7 +185,7 @@ const Tools = ({ agentId, group, onOpenDetail }: Props) => {
         </ActionDropdown>
       }
       rows={rows.map(({ canDisable, enabled, id, inLibrary, ownConnection }) => {
-        const libraryConnection = ownConnection ? undefined : libraryConnectionOf(id);
+        const libraryConnection = libraryConnectionOf(id);
         return (
           <PluginTag
             useAllMetaList
@@ -203,12 +203,19 @@ const Tools = ({ agentId, group, onOpenDetail }: Props) => {
             extra={
               <ConnectionMenu
                 agentId={agentId}
-                inLibrary={inLibrary}
+                hasLibraryConnection={inLibrary && !!libraryConnection}
                 libraryConnection={
-                  libraryConnection && canManage(libraryConnection) ? libraryConnection : undefined
+                  !ownConnection &&
+                  libraryConnection &&
+                  !libraryConnection.metadata?.mountedByAgentId &&
+                  canManage(libraryConnection)
+                    ? libraryConnection
+                    : undefined
                 }
                 ownConnection={
-                  ownConnection && canManage(ownConnection) ? ownConnection : undefined
+                  libraryLoaded && ownConnection && canManage(ownConnection)
+                    ? ownConnection
+                    : undefined
                 }
               />
             }
@@ -218,6 +225,16 @@ const Tools = ({ agentId, group, onOpenDetail }: Props) => {
         );
       })}
     />
+  );
+  return (
+    <AsyncBoundary
+      data={isInit || undefined}
+      error={error}
+      isLoading={isValidating}
+      onRetry={revalidate}
+    >
+      {list}
+    </AsyncBoundary>
   );
 };
 
