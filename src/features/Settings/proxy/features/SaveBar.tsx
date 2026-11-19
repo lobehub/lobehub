@@ -8,6 +8,8 @@ import * as m from 'motion/react-m';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 const styles = stylex.create({
   container: {
     pointerEvents: 'none',
@@ -23,7 +25,7 @@ const styles = stylex.create({
     gap: '8px',
     alignItems: 'center',
     paddingBlock: '6px',
-    paddingInlineStart: '16px',
+    paddingInlineStart: densityTokens['--lobe-density-card-padding'],
     paddingInlineEnd: '6px',
     borderWidth: '1px',
     borderStyle: 'solid',
@@ -50,7 +52,7 @@ const styles = stylex.create({
   resetButton: {
     height: '28px',
     paddingBlock: 0,
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: '999px',
     color: {
       'default': `${cssVar.colorTextSecondary} !important`,

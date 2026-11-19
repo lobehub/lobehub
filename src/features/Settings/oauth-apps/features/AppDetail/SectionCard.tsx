@@ -5,9 +5,11 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { type FC, type PropsWithChildren, type ReactNode } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 const styles = stylex.create({
   card: {
-    padding: '16px',
+    padding: densityTokens['--lobe-density-card-padding'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,

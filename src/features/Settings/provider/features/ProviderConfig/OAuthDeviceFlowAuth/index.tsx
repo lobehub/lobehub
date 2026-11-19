@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
 import { lambdaQuery } from '@/libs/trpc/client';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import { useOAuthDeviceFlow } from './useOAuthDeviceFlow';
@@ -43,7 +44,7 @@ const styles = stylex.create({
     flex: '1',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBlock: '16px',
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
     paddingInline: '24px',
     borderRadius: '12px',
     fontFamily: 'monospace',
@@ -56,7 +57,7 @@ const styles = stylex.create({
   content: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
+    gap: densityTokens['--lobe-density-section-gap'],
     alignItems: 'center',
     paddingBlockStart: '8px',
     paddingBlockEnd: '4px',
@@ -66,11 +67,11 @@ const styles = stylex.create({
   },
   header: {
     display: 'flex',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBlock: '12px',
-    paddingInline: '16px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   // Prose, so it reads from the left edge rather than being centred with the
   // code box below it.
@@ -86,8 +87,8 @@ const styles = stylex.create({
     gap: '8px',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBlock: '12px',
-    paddingInline: '16px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderRadius: '8px',
     fontSize: '13px',
     color: sxVar.colorTextSecondary,
