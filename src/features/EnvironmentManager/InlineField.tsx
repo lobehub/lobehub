@@ -69,8 +69,8 @@ interface InlineFieldProps {
    * person's text still in it, and the reason goes to a toast.
    */
   onSave: (value: string) => Promise<void>;
-  /** Shown in place of an empty value, muted. */
-  placeholder: string;
+  /** Shown in place of an empty value, muted. Omit when no example fits every case. */
+  placeholder?: string;
   /** Refuse an empty value instead of saving it — for the one field that has no sensible blank. */
   required?: boolean;
   /**
