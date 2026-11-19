@@ -58,74 +58,33 @@ describe('resolveClientSkills', () => {
     vi.clearAllMocks();
   });
 
-  it('carries builtin skill content so pinned builtin skills can be injected', async () => {
-    setToolState({
-      builtinSkills: [
-        {
-          content: '<artifacts_guide>build UI</artifacts_guide>',
-          description: 'Generate interactive UI',
-          identifier: 'artifacts',
-          name: 'Artifacts',
-          source: 'builtin',
-        },
-      ],
-    });
-
-    const result = await resolveClientSkills(['artifacts']);
-
-    expect(result.enabledPluginIds).toEqual(['artifacts']);
-    // activated must be set so SkillContextProvider injects content directly
-    // (the MessagesEngine path consumes these metas without running SkillResolver).
-    expect(findSkill(result.skills, 'artifacts')).toMatchObject({
-      activated: true,
-      content: '<artifacts_guide>build UI</artifacts_guide>',
-      identifier: 'artifacts',
-    });
-  });
-
-  it('fetches DB skill content for pinned skills', async () => {
-    setToolState({
-      agentSkills: [
-        { description: 'A user skill', id: 'db-1', identifier: 'my-skill', name: 'My Skill' },
-      ],
-    });
-    mockedGetById.mockResolvedValue({
-      content: 'full skill body',
-      id: 'db-1',
-      identifier: 'my-skill',
-      name: 'My Skill',
-    } as any);
-
-    const result = await resolveClientSkills(['my-skill']);
-
-    expect(mockedGetById).toHaveBeenCalledWith('db-1');
-    expect(findSkill(result.skills, 'my-skill')).toMatchObject({
-      activated: true,
-      content: 'full skill body',
-      identifier: 'my-skill',
-    });
-  });
-
-  it('appends the resource tree to pinned DB skill content', async () => {
-    setToolState({
-      agentSkills: [{ description: '', id: 'db-1', identifier: 'my-skill', name: 'My Skill' }],
-    });
-    mockedGetById.mockResolvedValue({
-      content: 'body',
-      id: 'db-1',
-      identifier: 'my-skill',
-      name: 'My Skill',
-      resources: { 'kb/readme.md': { fileHash: 'h', size: 1 } },
-    } as any);
-
-    const result = await resolveClientSkills(['my-skill']);
-
-    const skill = findSkill(result.skills, 'my-skill');
-    expect(skill?.content).toContain('body');
-    // resourcesTreePrompt output references the resource tree
-    expect(skill?.content).toContain('Available Resources');
-    expect(skill?.content).toContain('readme.md');
-  });
+  it.each(['legacy pin', 'auto'])(
+    'lists an enabled %s without loading either body',
+    async (mode) => {
+      setToolState({
+        agentSkills: [
+          { description: 'installed', id: 'db-1', identifier: 'my-skill', name: 'Mine' },
+        ],
+        builtinSkills: [
+          { content: 'guide', description: 'builtin', identifier: 'artifacts', name: 'Artifacts' },
+        ],
+      });
+      const ids = ['my-skill', 'artifacts'];
+      const result = await resolveClientSkills(
+        mode === 'legacy pin' ? ids : [],
+        [],
+        'auto',
+        [],
+        mode === 'auto' ? ids : [],
+      );
+      expect(result.skills.map((s) => [s.name, s.description])).toEqual([
+        ['Mine', 'installed'],
+        ['Artifacts', 'builtin'],
+      ]);
+      expect(result.skills.every((s) => !s.content && !s.activated)).toBe(true);
+      expect(mockedGetById).not.toHaveBeenCalled();
+    },
+  );
 
   it('does NOT fetch content for non-pinned DB skills (auto mode bulk exposure)', async () => {
     setToolState({
@@ -144,7 +103,7 @@ describe('resolveClientSkills', () => {
     expect(skill?.activated).toBeFalsy();
   });
 
-  it('leaves out a library skill the agent never turned on, keeping builtin skills', async () => {
+  it('leaves out a library skill the agent never turned on, including builtin skills', async () => {
     setToolState({
       agentSkills: [
         { description: 'A user skill', id: 'db-1', identifier: 'my-skill', name: 'My Skill' },
@@ -157,7 +116,7 @@ describe('resolveClientSkills', () => {
     const result = await resolveClientSkills([]);
 
     expect(findSkill(result.skills, 'my-skill')).toBeUndefined();
-    expect(findSkill(result.skills, 'artifacts')).toBeDefined();
+    expect(findSkill(result.skills, 'artifacts')).toBeUndefined();
   });
 
   it('does NOT pre-activate a pinned DB skill bundled as a ZIP', async () => {
@@ -183,38 +142,6 @@ describe('resolveClientSkills', () => {
     expect(skill?.activated).toBeFalsy();
   });
 
-  it('prefers the cached skill detail over a network fetch', async () => {
-    setToolState({
-      agentSkillDetailMap: {
-        'db-1': { content: 'cached body', id: 'db-1', identifier: 'my-skill', name: 'My Skill' },
-      },
-      agentSkills: [{ description: '', id: 'db-1', identifier: 'my-skill', name: 'My Skill' }],
-    });
-
-    const result = await resolveClientSkills(['my-skill']);
-
-    expect(mockedGetById).not.toHaveBeenCalled();
-    expect(findSkill(result.skills, 'my-skill')).toMatchObject({
-      activated: true,
-      content: 'cached body',
-    });
-  });
-
-  it('degrades gracefully when a pinned DB skill content fetch fails', async () => {
-    setToolState({
-      agentSkills: [{ description: '', id: 'db-1', identifier: 'my-skill', name: 'My Skill' }],
-    });
-    mockedGetById.mockRejectedValue(new Error('network down'));
-
-    const result = await resolveClientSkills(['my-skill']);
-
-    // No throw; skill still listed (available, not activated), just without content.
-    const skill = findSkill(result.skills, 'my-skill');
-    expect(skill).toMatchObject({ identifier: 'my-skill' });
-    expect(skill?.content).toBeUndefined();
-    expect(skill?.activated).toBeFalsy();
-  });
-
   it('keeps a turn skill selectable in manual mode without pinning it', async () => {
     setToolState({
       builtinSkills: [
@@ -230,7 +157,7 @@ describe('resolveClientSkills', () => {
     const result = await resolveClientSkills([], [], 'manual', ['lobehub']);
 
     expect(result.enabledPluginIds).toEqual([]);
-    expect(findSkill(result.skills, 'lobehub')).toMatchObject({ activated: false });
+    expect(findSkill(result.skills, 'lobehub')).toMatchObject({ name: 'lobehub' });
   });
 
   describe('agent skill list loading', () => {
@@ -257,7 +184,7 @@ describe('resolveClientSkills', () => {
         ensureAgentSkillsLoaded: vi.fn().mockRejectedValue(new Error('network down')),
       });
 
-      const result = await resolveClientSkills();
+      const result = await resolveClientSkills(['artifacts']);
 
       expect(findSkill(result.skills, 'artifacts')).toBeDefined();
     });

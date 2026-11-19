@@ -12,7 +12,6 @@ import {
   Flexbox,
   Icon,
   Spin,
-  Text,
 } from '@lobehub/ui';
 import {
   ArrowDownIcon,
@@ -28,6 +27,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { openCustomizeSidebarModal } from '@/features/HomeSidebar/Body/CustomizeSidebarModal';
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -46,6 +46,7 @@ interface RecentsProps {
 
 const Recents = memo<RecentsProps>(({ itemKey }) => {
   const { t } = useTranslation('common');
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const isLogin = useUserStore(authSelectors.isLogin);
   const activeWorkspaceId = useActiveWorkspaceId();
   const recentPageSize = useGlobalStore(systemStatusSelectors.recentPageSize);
@@ -137,11 +138,9 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
     <AccordionItem value={itemKey}>
       <ContextMenuTrigger items={dropdownMenu}>
         <AccordionHeader>
-          <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+          <AccordionTrigger style={sectionTriggerStyle}>
             <Flexbox horizontal align="center" gap={4}>
-              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-                {t('recents')}
-              </Text>
+              <SectionTitle>{t('recents')}</SectionTitle>
               {syncStatus.isValidating && items && <Spin size="small" variant="network" />}
             </Flexbox>
           </AccordionTrigger>

@@ -333,6 +333,32 @@ export default {
   'agentSkillModal.descriptionPlaceholder': 'Briefly describe this skill',
   'agentSkillModal.github.desc':
     'Paste the URL of a skill directory from a public GitHub repository. The directory must contain a SKILL.md file.',
+  'agentSkillModal.github.clear': 'Clear selection',
+  'agentSkillModal.github.collectionHint':
+    'Enter a public GitHub repository or skill directory URL.',
+  'agentSkillModal.github.empty':
+    'No SKILL.md found at this URL. Try another repository or directory.',
+  'agentSkillModal.github.find': 'Find skills',
+  'agentSkillModal.github.findFailed':
+    'Couldn’t read this GitHub link. Check the URL and try again.',
+  'agentSkillModal.github.importFailed':
+    'Couldn’t import the selected skills. Find skills again, then retry.',
+  'agentSkillModal.github.install': 'Import {{count}} ({{updates}} updates)',
+  'agentSkillModal.github.noMatch': 'No matching skills',
+  'agentSkillModal.github.retry': 'Retry failed imports',
+  'agentSkillModal.github.sameName': 'Choose one of the skills with this name.',
+  'agentSkillModal.github.search': 'Search by name, description or path',
+  'agentSkillModal.github.select': 'Select all unambiguous matches',
+  'agentSkillModal.github.status.conflict': 'Conflict · check the library and scan again',
+  'agentSkillModal.github.status.created': 'Imported',
+  'agentSkillModal.github.status.failed': 'Import failed',
+  'agentSkillModal.github.status.forbidden': 'Update requires the creator or a workspace owner',
+  'agentSkillModal.github.status.invalid': 'Invalid SKILL.md',
+  'agentSkillModal.github.status.new': 'New',
+  'agentSkillModal.github.status.unchanged': 'Up to date',
+  'agentSkillModal.github.status.update': 'Update available',
+  'agentSkillModal.github.status.updated': 'Updated',
+  'agentSkillModal.github.summary': '{{success}} imported or up to date · {{failed}} failed',
   'agentSkillModal.github.title': 'Import from GitHub',
   'agentSkillModal.github.urlPlaceholder':
     'https://github.com/username/repo/tree/main/skills/my-skill',
@@ -1512,6 +1538,11 @@ export default {
   'settingAppearance.contextMenuMode.desc': 'Enable the right-click menu for some list items.',
   'settingAppearance.contextMenuMode.disabled': 'Disabled',
   'settingAppearance.contextMenuMode.title': 'Right-Click Menu Mode',
+  'settingAppearance.density.compact': 'Compact',
+  'settingAppearance.density.desc':
+    'Row height and spacing in the sidebars. Compact fits more on screen; Loose gives each row more room.',
+  'settingAppearance.density.loose': 'Loose',
+  'settingAppearance.density.title': 'Interface Density',
   'settingAppearance.desktop.title': 'Desktop',
   'settingAppearance.font.antialiasing.desc':
     'Render text with grayscale antialiasing for a thinner, crisper look. Turn off to use the system default rendering. Only affects macOS.',
@@ -1845,8 +1876,9 @@ export default {
   'serviceModel.systemRecommended': 'System recommended',
   'serviceModel.tierPicker': 'Model',
   'serviceModel.title': 'Service Model',
-  'serviceModel.tier.embedding.desc': 'Memory retrieval',
-  'serviceModel.tier.embedding.title': 'Embedding Model',
+  'serviceModel.tier.embedding.desc':
+    'Embeds memories for semantic search. Not used for files or knowledge bases (set via the DEFAULT_FILES_CONFIG env var)',
+  'serviceModel.tier.embedding.title': 'Memory Embedding Model',
   'serviceModel.tier.flash.desc':
     'Frequent tasks such as naming, translation, compression and memory',
   'serviceModel.tier.flash.title': 'Flash Model',
@@ -4307,6 +4339,7 @@ When I am ___, I need ___
   'tools.builtins.lobe-artifacts.readme':
     'Generate and live-preview interactive UI components, data visualizations, charts, SVG graphics, and web applications. Create rich visual content that users can interact with directly.',
   'tools.builtins.lobe-artifacts.title': 'Artifacts',
+  'tools.builtins.lobe-canvas.title': 'Canvas',
   'tools.builtins.lobe-calculator.title': 'Calculator',
   'tools.builtins.lobe-calculator.description':
     'Perform mathematical calculations, solve equations, and work with symbolic expressions',
@@ -4665,6 +4698,8 @@ When I am ___, I need ___
     'This skill is not currently installed, which may affect agent functionality.',
   'tools.picker.disabled': 'This model does not support tool calling.',
   'tools.picker.management': 'Manage tools',
+  'tools.picker.emptyGroup': 'No tools in this group',
+  'tools.picker.noMatches': 'No matching tools',
   'tools.picker.search': 'Search tools…',
   'tools.picker.title': 'Tools',
   'tools.plugins.enabled': 'Enabled: {{num}}',
@@ -4673,12 +4708,12 @@ When I am ___, I need ___
   'tools.plugins.noEnabled': 'No skills enabled',
   'tools.plugins.store': 'Add skill',
   'tools.search': 'Search skills...',
+  'tools.loading.onDemand': 'Load on demand',
   'tools.activation.action.auto': 'Auto',
-  'tools.activation.action.disable': 'Disable',
+  'tools.loading.never': 'Never load',
   'tools.activation.action.pin': 'Pin',
   'tools.activation.auto': 'Auto',
   'tools.activation.auto.desc': 'Smart',
-  'tools.activation.disabled': 'Disabled',
   'tools.activation.disabled.desc': 'Turned Off',
   'tools.activation.fixed.hint': 'Always on — managed by the app and can’t be turned off',
   'tools.activation.pinned': 'Pinned',
@@ -4801,9 +4836,6 @@ When I am ___, I need ___
   'environments.form.editEnv': 'Edit variable',
   'environments.form.changeRepository': 'Change repository',
   'environments.form.disconnect': 'Disconnect',
-  'environments.detail.tabs.overview': 'Overview',
-  'environments.detail.initializerDesc':
-    'Applied once to a working directory picked for a conversation: the repository is cloned there and the setup command runs.',
   'environments.detail.noRepository': 'No repository',
   'environments.detail.noSetup': 'No setup command',
   'environments.instances.copy': 'Duplicate copy',
@@ -4861,8 +4893,6 @@ When I am ___, I need ___
   'environments.meta.unknownCreator': 'Unknown',
   'environments.meta.createdAt': 'Created {{time}}',
   'environments.meta.storage': 'Using {{size}}',
-  'environments.detail.close': 'Close',
-  'environments.detail.tabs.settings': 'Settings',
   'environments.sessions.title': 'Run history',
   'environments.sessions.desc':
     'The most recent sessions that ran in these copies and the builds of them, newest first, with how each ended and whether what it installed was saved.',
@@ -5350,4 +5380,24 @@ When I am ___, I need ___
   'automations.empty.title': 'No automations yet',
   'automations.empty.desc':
     'Ask an agent to keep an eye on a connector for you, like "Tell me when CI fails on this PR". Subscriptions you approve show up here.',
+  'environments.form.addRepository': 'Add repository',
+  'environments.form.noRepositories': 'No repositories. Conversations start in an empty folder.',
+  'environments.form.noVariables': 'No variables',
+  'environments.github.openIntegrations': 'Open GitHub settings',
+  'environments.form.pasteRepository': 'Or paste a public repository URL',
+  'environments.form.addPastedRepository': 'Add',
+  'environments.form.repositoryUrlInvalid': 'Not a GitHub repository URL',
+  'environments.form.doneEditing': 'Done',
+  'environments.form.repositoryOptional':
+    'Optional \u2014 an environment can start without a repository and get one later.',
+  'environments.form.layoutHint':
+    "Each repository is checked out in a folder of its own, side by side. You can change them later in the environment's settings.",
+  'environments.detail.back': 'Environments',
+  'environments.detail.notFound': "This environment doesn't exist or you can't see it.",
+  'environments.form.editRepositorySettings': 'Edit branch, folder and setup',
+  'environments.form.repositorySetupHint':
+    "Runs inside this repository's folder after it's cloned, before the environment's setup command.",
+  'environments.form.bootstrapAfterRepositories':
+    "Runs at the top of the working directory, after each repository's own setup. Setup for a single repository goes on that repository.",
+  'environments.form.duplicateFolder': 'Another repository already uses this folder.',
 };

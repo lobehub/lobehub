@@ -13,14 +13,17 @@ const mocks = vi.hoisted(() => ({
   findInstanceById: vi.fn(),
   resolveSandboxStorageClaim: vi.fn(),
   resolveScmCloneCredential: vi.fn(),
-  resolveTfsCloneCredential: vi.fn(),
 }));
 
 const { findById, findInstanceById, getAgentVisibility, resolveSandboxStorageClaim } = mocks;
 
 vi.mock('@/server/services/scm/cloneCredential', () => ({
   resolveScmCloneCredential: mocks.resolveScmCloneCredential,
-  resolveTfsCloneCredential: mocks.resolveTfsCloneCredential,
+  // One repository: the single host-wide credential, as a list.
+  resolveScmCloneCredentials: async (params: unknown) => {
+    const credential = await mocks.resolveScmCloneCredential(params);
+    return credential ? [credential] : [];
+  },
 }));
 
 vi.mock('../entitlement', () => ({
@@ -69,7 +72,6 @@ const resolve = (overrides: Record<string, unknown> = {}) =>
 
 describe('resolveSandboxSessionConfig', () => {
   beforeEach(() => {
-    mocks.resolveTfsCloneCredential.mockReset().mockResolvedValue(null);
     resolveSandboxStorageClaim.mockReset();
     findById.mockReset();
     findInstanceById.mockReset();
@@ -676,64 +678,6 @@ describe('resolveSandboxSessionConfig', () => {
 
       expect(config.initialization).toMatchObject({ environmentId: 'env-1' });
       expect(config.initialization).not.toHaveProperty('cloneCredential');
-    });
-
-    it('stops TFS initialization when the caller cannot authorize it without falling back to GitHub', async () => {
-      resolveSandboxStorageClaim.mockResolvedValue(null);
-      findById.mockResolvedValue({ metadata: { sandboxEnvironmentId: 'env-1' } });
-      mocks.resolveTfsCloneCredential.mockRejectedValue(new Error('TFS_NOT_CONNECTED'));
-      const config = await resolve();
-      expect(config.initialization).toMatchObject({ authorizationError: 'unavailable' });
-      expect(config.initialization).not.toHaveProperty('cloneCredential');
-      expect(mocks.resolveScmCloneCredential).not.toHaveBeenCalled();
-    });
-
-    it('does not initialize TFS code on a workspace-public drive', async () => {
-      findById.mockResolvedValue({
-        metadata: { sandboxEnvironmentId: 'env-1', sandboxWorkingDirectory: 'app' },
-      });
-      mocks.findEnvironmentById.mockResolvedValue({ ...environment, visibility: 'public' });
-      mocks.resolveTfsCloneCredential.mockResolvedValue({
-        tfs: { authType: 'ntlm', username: 'user', secret: 'test-secret' },
-        urlPrefix: 'https://tfs.example.com/Collection/',
-      });
-      const config = await resolve({ workspaceId: 'ws-1' });
-      expect(config).toMatchObject({
-        mode: 'drive',
-        drive: 'public',
-        initialization: { authorizationError: 'sharedDrive' },
-      });
-      expect(config.initialization).not.toHaveProperty('cloneCredential');
-    });
-
-    it('recovers an older TFS project checkout on the caller personal drive', async () => {
-      findById.mockResolvedValue({
-        projectId: 'proj-1',
-        metadata: {
-          sandboxDrive: 'public',
-          sandboxEnvironmentId: 'env-1',
-          sandboxWorkingDirectory: 'projects/proj-1/env-1',
-        },
-      });
-      mocks.findEnvironmentById.mockResolvedValue({
-        ...environment,
-        configuration: { sources: [{ kind: 'git', url: 'https://dev.example.com/C/P/_git/R' }] },
-        visibility: 'public',
-      });
-      mocks.resolveTfsCloneCredential.mockResolvedValue({
-        tfs: { authType: 'ntlm', username: 'user', secret: 'test-secret' },
-        urlPrefix: 'https://dev.example.com/C/',
-      });
-      const config = await resolve({ workspaceId: 'ws-1' });
-      expect(config).toMatchObject({
-        mode: 'drive',
-        drive: 'personal',
-        cwd: 'projects/proj-1/env-1',
-      });
-      expect(config.initialization).not.toHaveProperty('authorizationError');
-      expect(resolveSandboxStorageClaim).toHaveBeenCalledWith(
-        expect.objectContaining({ drive: 'personal', userId: 'user_1' }),
-      );
     });
 
     it('initializes a temporary sandbox too, which has no drive at all', async () => {

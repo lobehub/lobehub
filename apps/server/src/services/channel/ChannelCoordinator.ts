@@ -32,6 +32,7 @@ import { SystemAgentService } from '@/server/services/systemAgent';
 import { reportAgentExchange } from './agentExchange';
 import { resolveChannelAttachments } from './attachments';
 import { ChannelRoutingService } from './ChannelRoutingService';
+import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
 import { registerLocalChannelAdvance, wakeChannel } from './queue';
 import { deliverRelayReceipt } from './relayReceipt';
@@ -332,7 +333,6 @@ export class ChannelCoordinator {
         ...attachments,
         hooks: [completion],
         instructions: CHANNEL_INSTRUCTIONS,
-        maxSteps: 32,
         prompt: buildChannelPrompt(job.manifest, input, {
           context: context.messages,
           omitted: context.omitted,
@@ -436,7 +436,26 @@ export class ChannelCoordinator {
       }
       const replyMessageId = await this.executions.publish(channelId, jobId);
       await this.stopWriters([job]);
+      // `@Name` in the reply addresses people and Agents like a person's mention does.
+      const mentioned = await this.executions
+        .deliverReplyMentions(channelId, replyMessageId)
+        .catch((error) => {
+          console.error('[channel:reply-mentions]', error);
+          return undefined;
+        });
       await notifyChannel(this.db, channelId);
+      if (mentioned?.mentions.length && operation.userId)
+        notifyChannelMentions(
+          this.db,
+          {
+            // The Agent wrote it, so the person it ran for is notified like anyone else.
+            includeActor: true,
+            userId: operation.userId,
+            workspaceId: mentioned.workspaceId ?? undefined,
+          },
+          { channelId, id: replyMessageId, mentions: mentioned.mentions },
+        );
+      if (mentioned?.woke) await wakeChannel(channelId);
       // Between Agents, an answer wakes the Agent that asked, and what that Agent concludes from
       // it is posted where its asking began.
       if (await this.executions.deliverAnswerToAsker(channelId, replyMessageId))

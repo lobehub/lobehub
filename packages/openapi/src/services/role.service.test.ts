@@ -7,6 +7,9 @@ import { DeletedResourceSchema, DeletedResourcesSchema } from '../types/common.t
 import { RoleListSchema, RolePermissionsUpdateResultSchema } from '../types/role.type';
 import { RoleService } from './role.service';
 
+// Services return the page's rows and total; the controller adds `hasMore`/`nextCursor`.
+const SERVICE_PAGE_FIELDS = { hasMore: true, nextCursor: true } as const;
+
 vi.mock('@/database/models/rbac', () => ({
   RbacModel: class {
     hasAnyPermission = vi.fn().mockResolvedValue(true);
@@ -60,7 +63,7 @@ describe('RoleService response payloads', () => {
     const result = await service().getRoles({});
 
     expect(result.roles[0]).not.toHaveProperty('workspaceId');
-    expect(() => RoleListSchema.parse(json(result))).not.toThrow();
+    expect(() => RoleListSchema.omit(SERVICE_PAGE_FIELDS).parse(json(result))).not.toThrow();
   });
 
   it('deletes a role and answers with the deleted id', async () => {

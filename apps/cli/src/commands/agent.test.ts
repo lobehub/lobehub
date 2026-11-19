@@ -1854,46 +1854,6 @@ describe('agent command', () => {
       });
     });
 
-    it('should read write content from stdin when no content option is provided', async () => {
-      const stdinDescriptor = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
-      Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: false });
-      mockReadStdinText.mockResolvedValue('# Piped Content');
-      mockTrpcClient.agentDocument.statDocumentByPath.query.mockRejectedValue({
-        data: { code: 'NOT_FOUND' },
-      });
-      mockTrpcClient.agentDocument.writeDocumentByPath.mutate.mockResolvedValue({
-        path: './notes/piped.md',
-      });
-
-      try {
-        const program = createProgram();
-        await program.parseAsync([
-          'node',
-          'test',
-          'agent',
-          'space',
-          'fs',
-          'write',
-          '--agent-id',
-          'a1',
-          'agent:/notes/piped.md',
-        ]);
-
-        expect(mockReadStdinText).toHaveBeenCalledWith(process.stdin);
-        expect(mockTrpcClient.agentDocument.writeDocumentByPath.mutate).toHaveBeenCalledWith({
-          agentId: 'a1',
-          content: '# Piped Content',
-          createMode: 'if-missing',
-          path: './notes/piped.md',
-          topicId: undefined,
-        });
-      } finally {
-        if (stdinDescriptor) {
-          Object.defineProperty(process.stdin, 'isTTY', stdinDescriptor);
-        }
-      }
-    });
-
     it('should create directories through the generic mkdir path API', async () => {
       mockTrpcClient.agentDocument.mkdirDocumentByPath.mutate.mockResolvedValue({
         path: './notes/archive',

@@ -7,6 +7,9 @@ import { DeletedResourceSchema } from '../types/common.type';
 import { PermissionListSchema, PermissionSchema } from '../types/permission.type';
 import { PermissionService } from './permission.service';
 
+// Services return the page's rows and total; the controller adds `hasMore`/`nextCursor`.
+const SERVICE_PAGE_FIELDS = { hasMore: true, nextCursor: true } as const;
+
 vi.mock('@/database/models/rbac', () => ({ RbacModel: class {} }));
 
 const now = new Date('2026-01-01T00:00:00.000Z');
@@ -50,7 +53,7 @@ describe('PermissionService response payloads', () => {
     const list = await service().getPermissions({});
     const detail = await service().getPermissionById(PERMISSION_ROW.id);
 
-    expect(() => PermissionListSchema.parse(json(list))).not.toThrow();
+    expect(() => PermissionListSchema.omit(SERVICE_PAGE_FIELDS).parse(json(list))).not.toThrow();
     expect(() => PermissionSchema.parse(json(detail))).not.toThrow();
   });
 

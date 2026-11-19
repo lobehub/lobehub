@@ -1,4 +1,9 @@
-import type { EnvironmentConfiguration, TfsCredentials } from '@lobechat/types';
+import {
+  type EnvironmentConfiguration,
+  layoutRepositorySources,
+  type TfsCredentials,
+  withRepositorySetup,
+} from '@lobechat/types';
 
 import type { ScmCloneCredential } from '@/server/services/scm/cloneCredential';
 import { tfsGitCredentialConfig } from '@/server/services/tfs/gitCommand';
@@ -31,6 +36,8 @@ export interface SandboxInitialization {
    * a build used to get. Resolved per run and never stored.
    */
   cloneCredential?: ScmCloneCredential | { tfs: TfsCredentials; urlPrefix: string };
+  /** One per repository when the environment checks out several GitHub repositories. */
+  cloneCredentials?: { header: string; urlPrefix: string }[];
   env?: Record<string, string>;
   environmentId: string;
   name: string;
@@ -55,8 +62,10 @@ export const toSandboxInitialization = (environment: {
   id: string;
   name: string;
 }): SandboxInitialization | undefined => {
-  const configuration = environment.configuration ?? {};
-  const sources = (configuration.sources ?? []).flatMap((source) =>
+  // Each repository's own setup folded into the one setup command.
+  const configuration = withRepositorySetup(environment.configuration ?? {});
+  // One repository at the top, several side by side — see `layoutRepositorySources`.
+  const sources = layoutRepositorySources(configuration.sources ?? []).flatMap((source) =>
     source.kind === 'git' && source.url
       ? [
           {
@@ -139,7 +148,6 @@ const safeDestination = (path: string | undefined): string | undefined => {
  * {@link withEnvironmentVariables}, not from this shell.
  */
 export const buildSandboxEnvironmentInitCommand = (init: SandboxInitialization): string => {
-  // Authorization can be repaired on the next turn; do not persist a failed-init marker for it.
   if (init.authorizationError) {
     const message =
       init.authorizationError === 'sharedDrive'
@@ -173,31 +181,46 @@ export const buildSandboxEnvironmentInitCommand = (init: SandboxInitialization):
   // Given to git through its environment for the clones alone, and unset
   // before setup runs: nothing writes it to disk or into the checkout's
   // `.git/config`, and setup — or a command after it — cannot read it back.
-  const config: [string, string][] = [];
-  const auth = init.cloneCredential;
-  const personalTfs = auth && 'tfs' in auth;
-  if (auth && clones.length > 0) {
-    if ('tfs' in auth) {
-      config.push(...tfsGitCredentialConfig(auth));
-    } else config.push([`http.${auth.urlPrefix}.extraHeader`, auth.header]);
-  }
-  const credential = {
-    set: config.length
-      ? [
-          `export GIT_TERMINAL_PROMPT=0`,
-          `export GIT_CONFIG_COUNT=${config.length}`,
-          ...config.flatMap(([key, value], index) => [
-            `export GIT_CONFIG_KEY_${index}=${shellQuote(key)}`,
-            `export GIT_CONFIG_VALUE_${index}=${shellQuote(value)}`,
-          ]),
-        ]
-      : [],
-    unset: config.length
-      ? [
-          `unset GIT_TERMINAL_PROMPT GIT_CONFIG_COUNT ${config.flatMap((_, index) => [`GIT_CONFIG_KEY_${index}`, `GIT_CONFIG_VALUE_${index}`]).join(' ')}`,
-        ]
-      : [],
-  };
+  // One entry per repository when there are several, each scoped to its url.
+  const cloneCredentials = [
+    ...(init.cloneCredentials ?? []),
+    ...(init.cloneCredential && !('tfs' in init.cloneCredential) ? [init.cloneCredential] : []),
+  ];
+  const tfsCredential =
+    init.cloneCredential && 'tfs' in init.cloneCredential ? init.cloneCredential : undefined;
+  const config = tfsCredential ? tfsGitCredentialConfig(tfsCredential) : undefined;
+  const credential =
+    (cloneCredentials.length > 0 || !!config) && clones.length > 0
+      ? {
+          set: [
+            ...(config ? [`export GIT_TERMINAL_PROMPT=0`] : []),
+            ...(config
+              ? config.flatMap(([key, value], index) => [
+                  `export GIT_CONFIG_KEY_${index}=${shellQuote(key)}`,
+                  `export GIT_CONFIG_VALUE_${index}=${shellQuote(value)}`,
+                ])
+              : []),
+            ...(config ? [`export GIT_CONFIG_COUNT=${config.length}`] : []),
+            ...(!config
+              ? [
+                  `export GIT_CONFIG_COUNT=${cloneCredentials.length}`,
+                  ...cloneCredentials.flatMap((item, index) => [
+                    `export GIT_CONFIG_KEY_${index}=${shellQuote(`http.${item.urlPrefix}.extraHeader`)}`,
+                    `export GIT_CONFIG_VALUE_${index}=${shellQuote(item.header)}`,
+                  ]),
+                ]
+              : []),
+          ],
+          unset: [
+            `unset GIT_CONFIG_COUNT GIT_TERMINAL_PROMPT ${[
+              ...cloneCredentials,
+              ...(config ? config : []),
+            ]
+              .map((_, index) => `GIT_CONFIG_KEY_${index} GIT_CONFIG_VALUE_${index}`)
+              .join(' ')}`,
+          ],
+        }
+      : { set: [], unset: [] };
 
   // Only when there is something to clone, and removed however the subshell
   // ends: a second copy of every repository would otherwise stay in the
@@ -206,12 +229,12 @@ export const buildSandboxEnvironmentInitCommand = (init: SandboxInitialization):
     clones.length > 0 ? [`__lobe_tmp="$(mktemp -d)"`, `trap 'rm -rf "$__lobe_tmp"' EXIT`] : [];
 
   const steps = [
-    ...(personalTfs ? ['set +x'] : exports),
+    ...(tfsCredential ? ['set +x'] : exports),
     ...staging,
     ...credential.set,
     ...clones,
     ...credential.unset,
-    ...(personalTfs ? exports : []),
+    ...(tfsCredential ? exports : []),
     ...(init.bootstrapCommand ? [init.bootstrapCommand] : []),
   ];
 
@@ -226,9 +249,9 @@ export const buildSandboxEnvironmentInitCommand = (init: SandboxInitialization):
   // `done` record beside an empty folder is stale: the folder was emptied or
   // made again — a project checkout recreated after someone removed it — while
   // the sandbox lived on. That folder is initialized again. A failed run's
-  // record still holds, so a broken clone is not retried on every call. TFS
-  // credentials can be repaired between calls, so that path intentionally retries.
-  const staleWhenEmpty = personalTfs
+  // record still holds, so a broken clone is not retried on every call, and a
+  // setup with nothing to clone keeps relying on its record alone.
+  const staleWhenEmpty = tfsCredential
     ? ' || true'
     : clones.length > 0
       ? ` || [ "$(cat "$__lobe_state" 2>/dev/null)" = done ]`

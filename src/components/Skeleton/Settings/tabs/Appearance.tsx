@@ -42,6 +42,11 @@ export const CommonSectionSkeleton = () => {
             },
             {
               control: { height: 38, radius: 8, width: 165 },
+              label: text('settingAppearance.density.title', 64, 14),
+              minWidth: undefined,
+            },
+            {
+              control: { height: 38, radius: 8, width: 165 },
               label: text('settingAppearance.contextMenuMode.title', 84, 14),
               minWidth: undefined,
             },

@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { deleteTestUsers } from '../../core/testCleanup';
 import { ProjectRepository } from '../../repositories/project';
 import { agents, projectAgents, projects, topics, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
@@ -30,12 +31,12 @@ describe('project members from project topics', () => {
   const topicModel = new TopicModel(serverDB, userId);
 
   beforeEach(async () => {
-    await serverDB.delete(users);
+    await deleteTestUsers(serverDB);
     await serverDB.insert(users).values({ id: userId });
   });
 
   afterEach(async () => {
-    await serverDB.delete(users);
+    await deleteTestUsers(serverDB);
   });
 
   it('adds the agent of a topic created in the project', async () => {

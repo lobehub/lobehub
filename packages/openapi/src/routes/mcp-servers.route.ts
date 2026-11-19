@@ -1,11 +1,15 @@
 import { Hono } from 'hono';
-import { z } from 'zod';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
 import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { McpServerController } from '../controllers/mcp-server.controller';
+import {
+  LEGACY_ARRAY_LIST_DESCRIPTION,
+  LegacyArrayListQuerySchema,
+} from '../helpers/legacy-array-list';
+import { paginatedListSchema } from '../helpers/pagination';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermissionWithApiKeyScope } from '../middleware/permission-check';
 import { DeletedResourceSchema } from '../types/common.type';
@@ -30,12 +34,14 @@ const requireWrite = requireAnyPermissionWithApiKeyScope(
 app.get(
   '/',
   routeDoc({
-    data: z.array(McpServerSchema),
+    data: paginatedListSchema(McpServerSchema, { total: true }),
+    description: LEGACY_ARRAY_LIST_DESCRIPTION,
     summary: 'List remote MCP servers',
     tags: ['mcp-servers'],
   }),
   requireAuth,
   requireRead,
+  zValidator('query', LegacyArrayListQuerySchema),
   async (c) => new McpServerController().listServers(c),
 );
 

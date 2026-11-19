@@ -144,6 +144,8 @@ export interface ChannelMemberWorktree {
 
 /** Free-form member state that does not need its own column. */
 export type ChannelMemberMetadata = Record<string, unknown> & {
+  /** The member who added this one; absent when they joined on their own or before it was kept. */
+  invitedBy?: string;
   /** Worktree per conversation branch: a Thread id, or `main` for the main timeline. */
   worktrees?: Record<string, ChannelMemberWorktree>;
   /** The configured directory could not host a worktree (e.g. not a git repo); retried later. */
@@ -555,6 +557,13 @@ export interface ChannelAvatarMember {
 
 /** A Channel's newest message as its list row previews it. */
 export interface ChannelLastMessage {
+  /**
+   * The first attachment's MIME type and how many there are, so a message of only an image
+   * still has a preview line; null without attachments.
+   */
+  attachments: { count: number; fileType: string } | null;
+  /** Who sent it, so a list can read "Me: …" or "Alice: …"; `id` is null after deletion. */
+  author: { id: string | null; name: string | null; type: ChannelMemberActorType };
   content: string;
   createdAt: Date;
   /**
@@ -582,6 +591,11 @@ export interface ChannelListItem {
   /** Server-computed for the current member. */
   canDelete: boolean;
   createdAt: Date;
+  /**
+   * The caller hid the conversation from their list; new activity brings it back. Set by the
+   * Channel list. Personal: other members never see it.
+   */
+  hidden?: boolean;
   id: string;
   /**
    * False for a project Channel the caller can read through the project but has not joined; it
@@ -619,6 +633,11 @@ export interface ChannelListItem {
    * show them without loading the conversation; set by the Channel list.
    */
   replyJobs?: ChannelReplyJob[];
+  /**
+   * The caller's own sidebar section holding the conversation; null keeps it in the built-in one.
+   * Set by the Channel list. Personal: other members never see it.
+   */
+  sectionId?: string | null;
   sequence: number;
   /**
    * A direct conversation with another person's Agent, reached through the caller's contact entry
@@ -663,6 +682,8 @@ export interface ChannelPublicMember {
   /** Agent members only; null when the Channel sets no device or directory for it. */
   environment?: ChannelMemberEnvironmentPreview | null;
   id: string;
+  /** The member who added this one; null when they joined on their own or the adder is unknown. */
+  invitedBy: string | null;
   joinedAt: Date;
   /** An Agent that answers only when @mentioned; see `ChannelMemberConfig.muted`. */
   muted?: boolean;
@@ -758,6 +779,12 @@ export type ChannelReplyJob = Pick<
 export interface ChannelPublicThread {
   followerMemberIds: string[];
   id: string;
+  /**
+   * When the newest reply worth reporting as unread was posted: an Agent's acknowledgement before
+   * its run is not, so it does not mark the thread unread while its preview still shows. Null when
+   * the thread holds only acknowledgements; present under the same conditions as `lastReply`.
+   */
+  lastNewsAt?: Date | null;
   /**
    * The newest reply, for threads whose root is on the loaded main-timeline page. Absent in
    * thread views and in views cached before summaries existed.

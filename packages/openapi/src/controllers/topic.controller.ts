@@ -21,7 +21,10 @@ export class TopicController extends BaseController {
 
       const topics = await topicService.getTopics(request);
 
-      return this.success(c, topics, 'Topic list retrieved successfully');
+      return this.list(c, 'topics', topics, {
+        message: 'Topic list retrieved successfully',
+        pagination: request,
+      });
     } catch (error) {
       return this.handleError(c, error);
     }

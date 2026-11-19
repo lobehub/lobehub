@@ -13,6 +13,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
@@ -48,6 +49,7 @@ interface RunListProps {
 }
 
 const RunList = memo<RunListProps>(({ activeKey, benchmarkId, itemKey }) => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation('eval');
   const navigate = useWorkspaceAwareNavigate();
   const runList = useEvalStore(runSelectors.runList(benchmarkId));
@@ -63,12 +65,10 @@ const RunList = memo<RunListProps>(({ activeKey, benchmarkId, itemKey }) => {
 
   return (
     <AccordionItem value={itemKey}>
-      <AccordionHeader style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+      <AccordionHeader style={sectionTriggerStyle}>
         <AccordionTrigger>
           <Flexbox horizontal align="center" gap={4}>
-            <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-              {t('sidebar.runs')}
-            </Text>
+            <SectionTitle>{t('sidebar.runs')}</SectionTitle>
             {runList.length > 0 && (
               <Text fontSize={12} type="secondary">
                 {runList.length}

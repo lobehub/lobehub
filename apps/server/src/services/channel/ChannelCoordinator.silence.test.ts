@@ -7,6 +7,9 @@ const { executions, findLatest } = vi.hoisted(() => ({
   executions: {
     accepted: vi.fn(),
     deliverAnswerToAsker: vi.fn(),
+    deliverReplyMentions: vi
+      .fn()
+      .mockResolvedValue({ mentions: [], woke: false, workspaceId: null }),
     publish: vi.fn(),
     // An untouched reservation short-circuits the physical stop: not what these tests are about.
     retireReservation: vi.fn().mockResolvedValue(true),

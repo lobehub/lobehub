@@ -1,15 +1,7 @@
 'use client';
 
 import type { GitWorkingTreePatch } from '@lobechat/electron-client-ipc';
-import {
-  ActionIcon,
-  Center,
-  type DropdownItem,
-  DropdownMenu,
-  Empty,
-  Flexbox,
-  Spin,
-} from '@lobehub/ui';
+import { ActionIcon, Center, type DropdownItem, DropdownMenu, Empty, Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
@@ -32,8 +24,10 @@ import path from 'path-browserify-esm';
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useFetchGitBranch } from '@/store/device';
+import { sidebarRow } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import type { ComposerTarget } from '../../types';
@@ -188,12 +182,17 @@ const styles = stylex.create({
   subheader: {
     display: 'flex',
     flexShrink: 0,
-    gap: '8px',
+    gap: '4px',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBlockStart: '4px',
-    paddingBlockEnd: '8px',
-    paddingInline: '8px',
+    height: sidebarRow.toolbarHeight,
+    paddingInlineStart: sidebarRow.toolbarPaddingInlineStart,
+    paddingInlineEnd: sidebarRow.toolbarPaddingInlineEnd,
+  },
+  skeleton: {
+    paddingBlockStart: sidebarRow.paneBlockStart,
+    paddingBlockEnd: sidebarRow.paneBlockEnd,
+    paddingInline: sidebarRow.paneInline,
   },
   // Empty submodule group — pointer-only bump where the submodule's own
   // working tree is clean. We still surface the group so the user knows the
@@ -202,7 +201,7 @@ const styles = stylex.create({
   groupEmpty: {
     paddingBlockStart: '6px',
     paddingBlockEnd: '10px',
-    paddingInline: '10px',
+    paddingInline: sidebarRow.paddingInline,
     borderBlockStartWidth: { 'default': '1px', ':first-child': 'medium' },
     borderBlockStartStyle: { 'default': 'solid', ':first-child': 'none' },
     borderBlockStartColor: {
@@ -386,11 +385,7 @@ const Review = memo<ReviewProps>(
     };
 
     if (!data && isLoading) {
-      return (
-        <Center flex={1}>
-          <Spin size="large" />
-        </Center>
-      );
+      return <SkeletonList compact className={stylex.props(styles.skeleton).className} rows={6} />;
     }
 
     const totalEntryCount = allEntries.length;
@@ -587,7 +582,7 @@ const Review = memo<ReviewProps>(
           </Flexbox>
         </div>
         {isEmpty ? (
-          <Center flex={1} gap={8} paddingBlock={24}>
+          <Center flex={1} paddingBlock={24}>
             <Empty description={emptyText} icon={GitCompareIcon} />
           </Center>
         ) : (

@@ -11,17 +11,18 @@ import {
   type SandboxStorageClaim,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { EnvironmentConfiguration } from '@lobechat/types';
+import { type EnvironmentConfiguration, withRepositorySetup } from '@lobechat/types';
 import { hasTfsGitSource } from '@lobechat/utils/tfs';
 import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
 import { EnvironmentModel } from '@/database/models/environment';
 import { EnvironmentInstanceModel } from '@/database/models/environmentInstance';
-import { ProjectModel } from '@/database/models/project';
 import { TopicModel } from '@/database/models/topic';
+import { ProjectEnvironmentRepository } from '@/database/repositories/projectEnvironment';
 import {
   resolveScmCloneCredential,
+  resolveScmCloneCredentials,
   resolveTfsCloneCredential,
 } from '@/server/services/scm/cloneCredential';
 import { isPersonalTfsProjectCheckout } from '@/server/services/tfs/projectCheckout';
@@ -129,9 +130,11 @@ export interface SandboxSessionConfig {
  * session of every environment that gained one.
  */
 const toSessionSpecification = (
-  configuration: EnvironmentConfiguration | null | undefined,
+  stored: EnvironmentConfiguration | null | undefined,
 ): SandboxSessionSpecification | undefined => {
-  if (!configuration) return undefined;
+  if (!stored) return undefined;
+  // Each repository's own setup rides in the one command the plane runs.
+  const configuration = withRepositorySetup(stored);
 
   const specification: SandboxSessionSpecification = {
     ...(configuration.bootstrapCommand && { bootstrapCommand: configuration.bootstrapCommand }),
@@ -246,8 +249,6 @@ const resolvePlacement = async ({
     const instanceId = topic?.metadata?.sandboxInstanceId;
     const folder = topic?.metadata?.sandboxWorkingDirectory;
     if (workspaceId && topic?.metadata?.sandboxDrive === 'personal') drive = 'personal';
-    // Older TFS project topics chose the public drive because their source was
-    // published. Keep the same relative checkout, isolated on the caller's drive.
     if (
       workspaceId &&
       drive === 'public' &&
@@ -414,16 +415,12 @@ const resolvePlacement = async ({
  * none, picked one the caller cannot read (deleted, or another member's
  * private one), or one that asks for nothing.
  */
-export const resolveSandboxInitialization = async ({
+const resolveInitialization = async ({
   serverDB,
   topicId,
   userId,
   workspaceId,
-  sharedDrive,
-  useProjectDefault = false,
-}: { sharedDrive: boolean; useProjectDefault?: boolean } & Required<
-  Pick<SandboxSessionConfigInput, 'serverDB' | 'topicId'>
-> &
+}: Required<Pick<SandboxSessionConfigInput, 'serverDB' | 'topicId'>> &
   Pick<SandboxSessionConfigInput, 'userId' | 'workspaceId'>): Promise<
   SandboxInitialization | undefined
 > => {
@@ -431,19 +428,7 @@ export const resolveSandboxInitialization = async ({
     const topic = await new TopicModel(serverDB, userId, workspaceId ?? undefined).findById(
       topicId,
     );
-    if (!topic || topic.senderId) return undefined;
-    let environmentId = topic.metadata?.sandboxEnvironmentId;
-    if (!environmentId && useProjectDefault && topic.projectId) {
-      const linked = await new ProjectModel(
-        serverDB,
-        userId,
-        workspaceId ?? undefined,
-      ).listEnvironments(topic.projectId);
-      const tfs = linked.filter((environment) =>
-        hasTfsGitSource(environment.configuration ?? undefined),
-      );
-      if (tfs.length === 1) environmentId = tfs[0].id;
-    }
+    const environmentId = topic?.metadata?.sandboxEnvironmentId;
     if (!environmentId) return undefined;
 
     const environment = await new EnvironmentModel(
@@ -479,25 +464,82 @@ export const resolveSandboxInitialization = async ({
     const initialization = toSandboxInitialization(environment);
     if (!initialization || initialization.sources.length === 0) return initialization;
 
+    // The same credential a build used to get, so a private repository the
+    // picker offered still clones. Never throws: without one, a public
+    // repository clones and a private one fails in the report, by name.
     const params = {
       configuration: environment.configuration ?? undefined,
       db: serverDB,
       userId,
       workspaceId,
     };
-    const personal = await resolveTfsCloneCredential(params).catch(() => {
-      log('Personal TFS authorization unavailable for this initialization');
-      return undefined;
-    });
-    if (personal === undefined) return { ...initialization, authorizationError: 'unavailable' };
-    if (personal && sharedDrive) return { ...initialization, authorizationError: 'sharedDrive' };
-    const cloneCredential = personal ?? (await resolveScmCloneCredential(params));
+    if (hasTfsGitSource(params.configuration)) {
+      const tfs = await resolveTfsCloneCredential(params).catch(() => undefined);
+      if (!tfs) return { ...initialization, authorizationError: 'unavailable' };
+      return { ...initialization, cloneCredential: tfs };
+    }
 
-    return cloneCredential ? { ...initialization, cloneCredential } : initialization;
+    const cloneCredentials = await resolveScmCloneCredentials(params);
+
+    if (cloneCredentials.length === 0) return initialization;
+    // One repository keeps the single host-wide credential it always had.
+    return cloneCredentials.length === 1
+      ? { ...initialization, cloneCredential: cloneCredentials[0] }
+      : { ...initialization, cloneCredentials };
   } catch (error) {
     log('Failed to read the environment for topic %s: %O', topicId, error);
     return undefined;
   }
+};
+
+/** Compatibility entry point used by personal-device TFS checkout. */
+export const resolveSandboxInitialization = async ({
+  serverDB,
+  topicId,
+  userId,
+  workspaceId,
+  sharedDrive,
+  useProjectDefault = false,
+}: { sharedDrive: boolean; useProjectDefault?: boolean } & Required<
+  Pick<SandboxSessionConfigInput, 'serverDB' | 'topicId'>
+> & Pick<SandboxSessionConfigInput, 'userId' | 'workspaceId'>): Promise<
+  SandboxInitialization | undefined
+> => {
+  const topic = await new TopicModel(serverDB, userId, workspaceId ?? undefined).findById(topicId);
+  if (!topic || topic.senderId) return undefined;
+  let environmentId = topic.metadata?.sandboxEnvironmentId;
+  if (!environmentId && useProjectDefault && topic.projectId) {
+    const projectEnvironment = await new ProjectEnvironmentRepository(
+      serverDB,
+      userId,
+      workspaceId ?? undefined,
+    ).get(topic.projectId);
+    if (hasTfsGitSource(projectEnvironment.configuration ?? undefined))
+      environmentId = projectEnvironment.id;
+  }
+  if (!environmentId) return undefined;
+  const environment = await new EnvironmentModel(
+    serverDB,
+    userId,
+    workspaceId ?? undefined,
+  ).findById(environmentId);
+  if (!environment) return undefined;
+  const initialization = toSandboxInitialization(environment);
+  if (!initialization || initialization.sources.length === 0) return initialization;
+  const params = {
+    configuration: environment.configuration ?? undefined,
+    db: serverDB,
+    userId,
+    workspaceId,
+  };
+  if (hasTfsGitSource(params.configuration)) {
+    const tfs = await resolveTfsCloneCredential(params).catch(() => undefined);
+    if (!tfs) return { ...initialization, authorizationError: 'unavailable' };
+    if (sharedDrive) return { ...initialization, authorizationError: 'sharedDrive' };
+    return { ...initialization, cloneCredential: tfs };
+  }
+  const credential = await resolveScmCloneCredential(params);
+  return credential ? { ...initialization, cloneCredential: credential } : initialization;
 };
 
 /**
@@ -517,12 +559,7 @@ export const resolveSandboxSessionConfig = async (
   const { serverDB, topicId } = input;
   if (!serverDB || !topicId || config.mode === 'persistent') return config;
 
-  const initialization = await resolveSandboxInitialization({
-    ...input,
-    serverDB,
-    topicId,
-    sharedDrive: config.mode === 'drive' && config.drive === 'public',
-  });
+  const initialization = await resolveInitialization({ ...input, serverDB, topicId });
 
   return initialization ? { ...config, initialization } : config;
 };

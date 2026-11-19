@@ -1,0 +1,270 @@
+---
+title: LobeHub TypeScript 与 Python SDK 及文件上传
+description: >-
+  使用 TypeScript 的 @lobehub/sdk 和即将推出的 Python 包 lobehub 调用 LobeHub
+  公开 API，并通过 REST 上传文件。
+tags:
+  - LobeHub
+  - SDK
+  - TypeScript
+  - Python
+  - 文件上传
+---
+
+# LobeHub TypeScript 与 Python SDK 及文件上传
+
+两个 SDK 都由同一份 OpenAPI 规范生成，因此资源和方法名一致：`agents.list` 在 TypeScript 中是 `lobehub.agents.list()`，在 Python 中是 `client.agents.list()`。
+
+| SDK        | 包                                                                   | 状态                                                            |
+| ---------- | ------------------------------------------------------------------- | ------------------------------------------------------------- |
+| TypeScript | npm 上的 [`@lobehub/sdk`](https://www.npmjs.com/package/@lobehub/sdk) | 已可用                                                           |
+| Python     | PyPI 上的 `lobehub`                                                   | 即将推出（[#23337](https://github.com/lobehub/lobehub/pull/23337)） |
+
+## TypeScript SDK
+
+```bash
+npm install @lobehub/sdk
+```
+
+### 创建客户端
+
+```ts
+import { createLobeHub } from '@lobehub/sdk';
+
+const lobehub = createLobeHub({
+  apiKey: process.env.LOBEHUB_API_KEY!, // an API key (sk-lh-…) or an OIDC access token
+  // baseURL: 'https://lobehub.example.com', // a self-hosted deployment
+});
+```
+
+选项：`apiKey`、`accessToken`（返回当前 token 的函数，优先级高于 `apiKey`）、`baseURL`（默认 `https://app.lobehub.com`），以及任意客户端选项，如自定义 `fetch` 或 `headers`。
+
+### 调用方法
+
+资源与 API 的顶层路径对应（`agents`、`topics`、`messages`、`files`、`knowledgeBases`、`tasks`、`goals`、`responses`……）。方法包括 `list`、`get`、`create`、`update` 和 `delete`，以及 `files.uploadBatch`、`tasks.run`、`users.me` 等具名操作。
+
+方法在 HTTP 出错时不会抛出异常，而是返回 `{ data, error, response }`，其中 `data` 是完整的响应信封：
+
+```ts
+const { data, error } = await lobehub.agents.get({ path: { id: 'agt_xxx' } });
+if (error) {
+  console.error('Request failed', error);
+} else {
+  console.log(data.data.title);
+}
+
+const created = await lobehub.topics.create({
+  body: { agentId: 'agt_xxx', title: 'Weekly review' },
+});
+```
+
+可以在每次调用时发送 `X-Workspace-Id`，也可以通过 `headers` 统一设置：
+
+```ts
+import { createLobeHub } from '@lobehub/sdk';
+
+const team = createLobeHub({
+  apiKey: process.env.LOBEHUB_TOKEN!,
+  headers: { 'X-Workspace-Id': 'ws_xxx' },
+});
+```
+
+### 流式获取响应
+
+```ts
+const { response } = await lobehub.responses.create({
+  body: { model: 'agt_xxx', input: 'Summarize my week', stream: true },
+  parseAs: 'stream',
+});
+if (!response?.ok || !response.body) throw new Error(`Stream failed: ${response?.status}`);
+
+const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+let buffer = '';
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  buffer += value;
+  const frames = buffer.split('\n\n');
+  buffer = frames.pop()!;
+  for (const frame of frames) {
+    const data = frame.split('\n').find((line) => line.startsWith('data: '));
+    if (!data) continue;
+    const event = JSON.parse(data.slice(6));
+    if (event.type === 'response.output_text.delta') process.stdout.write(event.delta);
+  }
+}
+```
+
+事件类型见[流式响应](/zh/docs/development/api/streaming#with-streaming)。
+
+<a id="sign-in-with-oidc-and-pkce" />
+
+### 使用 OIDC 和 PKCE 登录
+
+适用于每位用户通过**公开客户端**（没有客户端密钥，例如 LobeHub 内置客户端）登录的原生应用和桌面应用。这些辅助函数不会发送客户端密钥，因此不适用于在设置中注册的 Web OAuth 应用（机密客户端）；见 [OIDC 与 PKCE](/zh/docs/development/api/authentication#oidc-with-pkce)。
+
+```ts
+import {
+  createAuthorizationUrl,
+  createLobeHub,
+  createPkcePair,
+  exchangeAuthorizationCode,
+  parseAuthorizationCallback,
+  refreshAccessToken,
+} from '@lobehub/sdk';
+
+const client = { clientId: 'your-public-client-id', redirectUri: 'http://127.0.0.1:8765/callback' };
+const state = crypto.randomUUID();
+const pkce = await createPkcePair();
+const url = createAuthorizationUrl({ ...client, codeChallenge: pkce.challenge, state });
+// open `url` in the system browser, then receive `callbackUrl`
+
+const code = parseAuthorizationCallback(callbackUrl, state);
+let tokens = await exchangeAuthorizationCode({ ...client, code, codeVerifier: pkce.verifier });
+
+const lobehub = createLobeHub({
+  accessToken: async () => {
+    if (tokens.expiresAt - Date.now() < 60_000) {
+      tokens = await refreshAccessToken({
+        clientId: client.clientId,
+        refreshToken: tokens.refreshToken!,
+      });
+      // persist tokens.refreshToken: refresh tokens rotate
+    }
+    return tokens.accessToken;
+  },
+});
+```
+
+`code: 'invalid_grant'` 的 `LobeHubOAuthError` 表示用户需要重新登录。
+
+### TypeScript SDK 即将推出的能力
+
+[#23246](https://github.com/lobehub/lobehub/pull/23246) 新增：
+
+```ts
+import { createLobeHub, LobeHubAPIError } from '@lobehub/sdk';
+
+const lobehub = createLobeHub({
+  apiKey: process.env.LOBEHUB_API_KEY!,
+  workspaceId: 'ws_xxx', // sent as X-Workspace-Id
+  maxRetries: 2, // default
+  timeout: 600_000, // default, ms per attempt
+});
+
+// typed errors
+const { error } = await lobehub.agents.get({ path: { id } });
+if (error instanceof LobeHubAPIError && error.code === 'not_found') {
+  // error.status, error.code, error.message, error.details, error.requestId
+}
+
+// a POST that is safe to retry
+await lobehub.agents.create({ body: { title: 'Researcher' }, idempotencyKey: crypto.randomUUID() });
+
+// walk every page
+for await (const agent of lobehub.paginate(lobehub.agents.list, { query: { limit: 100 } })) {
+  console.log(agent.id);
+}
+
+// typed stream events
+const stream = lobehub.responses.stream({ model: 'agt_xxx', input: 'Summarize my week' });
+for await (const event of stream) {
+  if (event.type === 'response.output_text.delta') process.stdout.write(event.delta);
+}
+
+// upload from a path, Blob, File, or bytes
+await lobehub.files.upload('./report.pdf', { knowledgeBaseId: 'kb_xxx' });
+```
+
+它还导出 `LobeHubConnectionError` 和 `LobeHubTimeoutError`，支持传入 `throwOnError: true` 改为抛出异常而不是返回 `error`，并在文档中标注每个方法所需的 API Key scope。
+
+## Python SDK
+
+<Callout type="info">
+  **即将推出**（[#23337](https://github.com/lobehub/lobehub/pull/23337)）。`lobehub` 包尚未发布到
+  PyPI。以下示例展示的是该 PR 中的接口，正式发布前可能调整。
+</Callout>
+
+```bash
+pip install lobehub
+```
+
+需要 Python 3.9 或更高版本。同时提供同步客户端（`LobeHub`）和异步客户端（`AsyncLobeHub`）。方法以普通 dict 返回响应信封中的 `data`，并用 `TypedDict` 标注类型。
+
+```python
+from lobehub import LobeHub, NotFoundError
+
+client = LobeHub(api_key="sk-lh-...")  # or set LOBEHUB_API_KEY; workspace_id="ws_..." for a Workspace
+
+me = client.users.me()
+print(me["id"])
+
+for agent in client.agents.iter_list(limit=50):
+    print(agent["id"], agent["title"])
+
+agent = client.agents.create({"title": "Reviewer"}, idempotency_key="create-reviewer-1")
+
+try:
+    client.agents.get("agt_missing")
+except NotFoundError as error:
+    print(error.status_code, error.code, error.request_id)
+
+with client.responses.stream({"model": "agt_...", "input": "Summarize my week"}) as stream:
+    for event in stream:
+        if event["type"] == "response.output_text.delta":
+            print(event["delta"], end="", flush=True)
+    final = stream.final_response()
+```
+
+```python
+import asyncio
+from lobehub import AsyncLobeHub
+
+
+async def main() -> None:
+    async with AsyncLobeHub() as client:
+        me = await client.users.me()
+        print(me["id"])
+
+
+asyncio.run(main())
+```
+
+选项：`api_key`、`access_token`（字符串或可调用对象）、`base_url`（或 `LOBEHUB_BASE_URL`）、`workspace_id`、`timeout`（秒，默认 600）和 `max_retries`（默认 2）。错误按状态码分为 `APIError` 的各个子类（`BadRequestError`、`AuthenticationError`、`PermissionDeniedError`、`NotFoundError`、`ConflictError`、`UnprocessableEntityError`、`RateLimitError`、`InternalServerError`），未收到响应时抛出 `APIConnectionError` / `APITimeoutError`。`lobehub.oauth` 提供与 TypeScript SDK 相同的 PKCE 辅助函数。
+
+## 文件上传
+
+上传使用 `multipart/form-data`，需要 `file:write` scope。
+
+| 端点                           | 字段                                                                                                        |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/files`         | `file`（必填）；可选 `knowledgeBaseId`、`agentId`、`sessionId`、`directory`、`skipCheckFileType`、`skipDeduplication` |
+| `POST /api/v1/files/batches` | `files`（1–20 个文件）；可选字段同上，但不含 `skipDeduplication`                                                          |
+
+限制：单个文件最大 100 MB，文件名最长 255 个字符，文件类型需在允许列表内，涵盖图片、视频、音频、文本、PDF、Office 文档、YAML、JSON、Markdown 和 CSV。账户超出存储上限时，上传也可能被拒绝。
+
+```bash
+curl https://app.lobehub.com/api/v1/files \
+  -H "Authorization: Bearer $LOBEHUB_API_KEY" \
+  -F "file=@./report.pdf" \
+  -F "knowledgeBaseId=kb_xxx"
+```
+
+```ts
+import { readFile } from 'node:fs/promises';
+
+const bytes = await readFile('./report.pdf');
+const { data, error } = await lobehub.files.create({
+  body: {
+    file: new File([bytes], 'report.pdf', { type: 'application/pdf' }),
+    knowledgeBaseId: 'kb_xxx',
+  },
+});
+if (!error) console.log(data.data.file.id);
+```
+
+响应包含文件记录 `{ file: { id, name, fileType, url, … } }`。上传之后：
+
+- `GET /files/{id}/url?expiresIn=3600` 返回临时下载 URL。
+- `POST /files/{id}/parses` 提取文本；`POST /files/{id}/chunks` 对文本切分并向量化，以便搜索。
+- 上传时附带 `knowledgeBaseId`，文件会直接放入对应资源库。

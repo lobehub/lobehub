@@ -23,10 +23,12 @@ import { useProjectStore } from '@/store/project';
 
 import {
   buildCreateProjectRequest,
+  DEFAULT_MAIN_AGENT_MODE,
   getCreateProjectInput,
   getProjectConflictField,
   getProjectFieldSuggestions,
   isProjectIdentifierValid,
+  type MainAgentMode,
   reserveProjectIds,
 } from '../createProjectForm';
 import MainAgentSection from '../MainAgentSection';
@@ -40,6 +42,8 @@ interface FormState {
   duplicate?: 'identifier' | 'name';
   identifier: string;
   loading: boolean;
+  mainAgentId?: string;
+  mainAgentMode: MainAgentMode;
   name: string;
   nameEdited: boolean;
   url: string;
@@ -60,6 +64,7 @@ const CreateFromGithubContent = ({ provider = 'github' }: { provider?: 'github' 
   const [form, setForm] = useState<FormState>({
     identifier: '',
     loading: false,
+    mainAgentMode: DEFAULT_MAIN_AGENT_MODE,
     name: '',
     nameEdited: false,
     url: '',
@@ -108,16 +113,21 @@ const CreateFromGithubContent = ({ provider = 'github' }: { provider?: 'github' 
     setForm((current) => ({ ...current, loading: true }));
     try {
       const project = await createProject({
-        ...buildCreateProjectRequest(createInput, { ids: reservedIds }),
+        ...buildCreateProjectRequest(createInput, {
+          ids: reservedIds,
+          mainAgentId: form.mainAgentId,
+          mainAgentMode: form.mainAgentMode,
+        }),
         repository: {
           defaultBranch: form.defaultBranch,
           name: repository.fullName,
           url: repository.url,
         },
       });
-      // The project created an agent and maybe the Project label; show both.
-      const { refreshAgentLabels, refreshAgentList } = useHomeStore.getState();
-      void Promise.all([refreshAgentList(), refreshAgentLabels()]);
+      if (form.mainAgentMode === 'dedicated') {
+        const { refreshAgentLabels, refreshAgentList } = useHomeStore.getState();
+        void Promise.all([refreshAgentList(), refreshAgentLabels()]);
+      }
       close();
       navigate(`/project/${project.slug ?? project.id}`);
     } catch (error) {
@@ -225,7 +235,17 @@ const CreateFromGithubContent = ({ provider = 'github' }: { provider?: 'github' 
           </Text>
         )}
         {repository && (
-          <MainAgentSection dedicatedAgentId={reservedIds.agentId} projectName={form.name} />
+          <MainAgentSection
+            agentId={form.mainAgentId}
+            dedicatedAgentId={reservedIds.agentId}
+            disabled={form.loading}
+            mode={form.mainAgentMode}
+            projectName={form.name}
+            onAgentChange={(id) => setForm((current) => ({ ...current, mainAgentId: id }))}
+            onModeChange={(mainAgentMode) =>
+              setForm((current) => ({ ...current, mainAgentMode }))
+            }
+          />
         )}
       </Flexbox>
       <ModalFooter>
