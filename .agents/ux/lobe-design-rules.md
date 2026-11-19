@@ -169,3 +169,35 @@ Enforcement: visual review of the actual icon and localized label at the target 
 On a dedicated instruction-editing page, place view-mode switches alongside the page title, not in an extra toolbar row inside the input boundary. The editor's boundary should identify where to type without becoming the page's strongest visual element on focus. Use the neutral outlined surface; do not turn its entire perimeter into a primary-colored focus frame. Preserve the editor caret and the mode buttons' keyboard focus indicators.
 
 Enforcement: `EditorCanvas/index.test.tsx` checks that both mode controls remain outside the outlined input surface. Inspect the page at rest and while editing. Source: user correction on the Agent instruction editor: moving mode switches into the frame wasted a writing row, and a black focus border was too prominent.
+
+## LOBE-UX-024 — Conversation skill lists are invocation pickers
+
+User, device, project and Agent skill rows share the default skill glyph, not marketplace/custom avatars. This applies to conversation invocation lists; the agent's skill configuration page may show community skills' publisher icons via `MarketSkillIcon`, with the default skill glyph as fallback. Clicking a row in a conversation inserts the skill into the composer. Do not add per-row file counts or view/rename/delete actions, including right-click equivalents; section totals may remain.
+
+The conversation sidebar is not a full capability inventory: do not automatically add builtin instruction bundles when removing them from the Tools picker. Preserve their runtime configuration and existing slash/profile entry points where available; exposing them here is a separate product decision.
+
+Enforcement: `SkillsList` owns the glyph and exposes neither custom icons, file counts nor management-action props. `AgentDocumentsGroup.test.tsx` checks the real list's click/keyboard behavior and the absence of hover/context-menu management controls; `UserLevelSkills.test.ts` guards source-independent row data.
+
+User-skill enablement belongs in a separate management view entered through the section's settings icon (with a tooltip and accessible name). Keep the section collapsible when adding that action: use the Accordion action slot outside its trigger, and keep settings reachable while collapsed. `AgentDocumentsGroup.test.tsx` exercises the real section's collapse/expand and independent settings entry. In that view, checkboxes represent the pending enabled set: keep search, scoped bulk selection, and Save/Cancel; do not add saved-state Enabled/Disabled tabs that duplicate or conflict with the draft. `useUserSkillsManagement.test.ts` guards selection visibility and persistence across search.
+
+The title itself states the task and scope: “Choose the skills this agent can use” / 「选择当前助理可以使用的技能」. Merge useful explanatory copy into that title rather than dropping the scope or repeating it in a subtitle. Counts describe selected skills, not checked boxes; do not foreground checkbox mechanics or add uninstall disclaimers to this selection surface. Fixed-height virtual skill lists use the same row-height constant for the rendered rows, virtualizer, and short-list viewport, rather than reserving an estimated extra row.
+
+Source: user corrections while simplifying the conversation Skills panel, including removal of redundant status tabs, the text management button, and checkbox-centric copy.
+
+## LOBE-UX-025 — Chat tools show existing connector records
+
+The chat Tools picker lists services with connection records. Keep authorization actions on pending or failed connections in their existing activation group. First-time connection discovery belongs in connector management.
+
+Enforcement: `useControls.test.ts` covers missing connection records, cached unconnected providers, and pending or failed authorization rows. Source: user correction while debugging Kai’s chat Tools picker.
+
+## LOBE-UX-026 — Tool menus expose choices, not fixed loaders
+
+Keep fixed Agent infrastructure (the skill loader and tool activator) out of both loading-policy lists. Hiding the loader must not hide individual skills or the optional Skill Store.
+
+Enforcement: the picker metadata excludes always-on identifiers; builtin selector and AgentToolsEngine tests cover the visible list and the runtime defaults.
+
+## LOBE-UX-027 — One agent, one tool configuration
+
+The profile library picker and chat Tools menu are two views of the same agent configuration. Share the tool inventory, translated names, state and agent-scoped write path, **not the popup**. The profile keeps its searchable checklist; chat keeps its loading-policy filters. Derive profile counts from the same unfiltered options. Agent-owned connector provisioning and the Skills invocation picker are separate tasks.
+
+Enforcement: both surfaces use the same tool controls; regression tests cover the profile summary, runtime-backed settings and fixed-loader exclusions.

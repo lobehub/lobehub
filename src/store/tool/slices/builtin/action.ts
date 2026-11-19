@@ -1,4 +1,4 @@
-import { defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
+import { defaultUninstalledBuiltinTools, onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
 import debug from 'debug';
 
 import {
@@ -13,7 +13,9 @@ import { setNamespace } from '@/utils/storeDebug';
 import { type ToolStore } from '../../store';
 import { invokeExecutor } from './executors/index';
 import {
+  confirmedUninstalledBuiltinTools,
   resolveUninstalledBuiltinTools,
+  runtimeUninstalledBuiltinTools,
   UNINSTALLED_BUILTIN_TOOLS_KEY,
   uninstalledBuiltinToolsResource,
 } from './projection';
@@ -145,6 +147,22 @@ export class BuiltinToolActionImpl {
   /** The replica scope a request starts under; its result may only land there. */
   #isCurrentScope = (scope: string): boolean =>
     this.#uninstalledBuiltinTools.resource.scope.get() === scope;
+
+  getUninstalledBuiltinToolsForRun = async (): Promise<string[]> => {
+    const scope = this.#uninstalledBuiltinTools.resource.scope.get();
+    const confirmed = confirmedUninstalledBuiltinTools(this.#get());
+    if (confirmed) return confirmed;
+
+    try {
+      await this.#uninstalledBuiltinTools.fetch({ workspaceId: getActiveWorkspaceId() }, { scope });
+    } catch (error) {
+      log('Failed to read builtin tool settings for this run: %O', error);
+      return onDemandBuiltinToolIds;
+    }
+    return this.#isCurrentScope(scope)
+      ? runtimeUninstalledBuiltinTools(this.#get())
+      : onDemandBuiltinToolIds;
+  };
 
   /**
    * Toggle a builtin tool's installed state for the active scope (personal or

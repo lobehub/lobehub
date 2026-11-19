@@ -31,7 +31,7 @@ A share visitor's run executes as the creator, so owner scope alone cannot separ
 - `workOwnership` applies the scope on every path, so a new query built on it inherits the fence. Do not query `works` without it.
 - Any registration path reachable from a visitor run (skill results, completion scans, anchor stamping) must build its `WorkModel` with the run's scope via `resolveRunWorkAccessScope`. A visitor run without a topic yields `null`: skip registration (fail closed) rather than registering unscoped into the creator's lists.
 - The resource unique indexes include the visitor topic id, so the creator and each visitor topic keep separate rows for the same external resource.
-- Visitor read payloads drop the creator's `userId` / `workspaceId` and gate spend on `showModelInfo` (`toVisitorMessage`).
+- Visitor read payloads always drop the creator's `userId` / `workspaceId` and the spend snapshot (`toVisitorMessage`, `sanitizeVisitorWorks`).
 
 ## Orphaned Works (backing resource deleted)
 
@@ -99,7 +99,7 @@ The whole scan returns `{attempted, failed}` and the completion backstop (`Compl
 ## Key decisions (from the Work PRs)
 
 - **Only successful create/edit results become Works** (LOBE-10967). Read-only queries, comments, merges/closes, and branch/repo operations are excluded — `gh pr view` printing an entity URL must NOT register.
-- **`owner/repo#number` is the canonical github identity**, not node_id: the gh CLI surface never returns node_id, and the same entity touched via REST tools and CLI must land on one Work row.
+- **`owner/repo#number` is the canonical github identity**, not node\_id: the gh CLI surface never returns node\_id, and the same entity touched via REST tools and CLI must land on one Work row.
 - **stdout is the source of truth for identity** on the CLI path (`gh … create/edit` prints the entity URL); the command's edit target is the fallback. The LAST gh create/edit segment of a chained command owns the trailing URL.
 - **Persisted URLs are http(s)-allowlisted** (`sanitizeExternalUrl`): gh stdout / tool results are member-controlled and the URL reaches `shell.openExternal` on desktop.
 - **Partial registrations merge version metadata too.** With `patchFields`, `registerWorkVersion` spreads the new `metadata` over the current version's, so a GitHub PR's `headBranch` / `baseBranch` (from `--head` / `--base` or REST `head.ref` / `base.ref`) survive an edit that names neither. A key cannot be cleared on that path; a provider that needs to unset one must send a complete registration.

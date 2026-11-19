@@ -736,6 +736,9 @@ export interface BuiltinToolContext {
    */
   subAgent?: SubAgentCallbacks;
 
+  /** Agent whose profile is used for this run when it differs from the conversation owner. */
+  subAgentId?: string;
+
   /**
    * Current task identifier or database id when the conversation is scoped to a task detail page.
    */

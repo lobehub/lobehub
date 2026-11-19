@@ -15,6 +15,7 @@ import {
   createReplicaSlice,
   linkReplicaEntity,
   type ReplicaLens,
+  type ReplicaSyncResult,
 } from '@/libs/replica';
 import { subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
 import { useClientDataSWR } from '@/libs/swr';
@@ -159,6 +160,11 @@ export class ConnectorActionImpl {
     });
     this.#agentConnectors = createReplicaSlice(agentConnectorsResource, {
       actionPrefix: 'agentConnectors',
+      effects: {
+        onApplied: (_rows, { agentId }, { scope }) => {
+          this.#confirmed.add(`${scope}|${agentId}`);
+        },
+      },
       entity: connectorsEntity,
       fetcher: fetchAgentConnectorList,
       get,
@@ -173,12 +179,8 @@ export class ConnectorActionImpl {
       this.#agentConnectors,
     ]);
 
-    // These three resources have no `useSync` mount, so nothing re-renders them
-    // on a cache-scope switch and the engine only resets on its *next* dispatch
-    // — which the gated consumers never make, because the init flag they check
-    // is still set. Drop the previous identity's views the moment the scope
-    // changes. The store is an app-lifetime singleton, so the subscription is
-    // never torn down.
+    // Imperative consumers also read these views, even when no sync hook is mounted.
+    // Clear every previous identity's rows and init flags as soon as the scope changes.
     subscribeCacheScope((scope) => this.#dropStaleScope(scope));
   }
 
@@ -262,6 +264,12 @@ export class ConnectorActionImpl {
       { revalidateIfStale: false, revalidateOnFocus: false },
     );
 
+  useFetchAgentConnectors = (agentId: string): ReplicaSyncResult =>
+    this.#agentConnectors.useSync(agentId ? { agentId } : null);
+
+  useFetchAgentBoundConnectors = (enabled: boolean): ReplicaSyncResult =>
+    this.#agentBoundConnectors.useSync(LIST_PARAMS, { enabled });
+
   /**
    * Refresh the connector lists after a mutation. Always refreshes the base
    * list; also refreshes the agent-bound aggregate when it has been loaded (the
@@ -308,13 +316,12 @@ export class ConnectorActionImpl {
     const params = { agentId };
     const pending = this.#agentConnectors.fetch(params, { fresh: true });
     // Awaited together, so a request that fails while storage paints is still handled
-    const [, result] = await Promise.all([
+    await Promise.all([
       this.#get().agentConnectorsInit[agentId]
         ? undefined
         : this.#agentConnectors.hydrate(params, scope),
       pending,
     ]);
-    if (result.applied) this.#confirmed.add(`${scope}|${agentId}`);
   };
 
   /**

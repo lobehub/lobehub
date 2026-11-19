@@ -243,6 +243,8 @@ describe('ConnectorModel agent-scoped resolution', () => {
       expect(all).toHaveLength(2);
       expect(byIdentifier.gmail).toBe('Agent Gmail');
       expect(byIdentifier.notion).toBe('Personal Notion');
+      const optedOut = await model.resolveAll(agentA, undefined, ['gmail']);
+      expect(optedOut.map((r) => r.identifier)).toEqual(['notion']);
     });
   });
 

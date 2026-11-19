@@ -245,7 +245,9 @@ export async function saveAndPublishStep(
         stepIndex,
       };
     } else {
+      // Without group members, like the entry read it is diffed against.
       const settledUiMessages = await deps.queryUiMessages(stepResult.newState, {
+        skipCompressedMembers: true,
         skipWorks: shouldContinue,
       });
       if (settledUiMessages) {
@@ -253,6 +255,7 @@ export async function saveAndPublishStep(
           after: settledUiMessages,
           before: stepStartUiMessages,
           operationId,
+          state: stepResult.newState,
           stepIndex,
         });
       }

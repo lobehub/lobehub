@@ -31,7 +31,6 @@ const PUBLIC_INSTANCE_METHODS = [
   'batchDeleteByAgentId',
   'count',
   'countApproximate',
-  'countByTopic',
   'countGroupByTopic',
   'countUpTo',
   'countWords',

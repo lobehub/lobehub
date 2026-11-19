@@ -16,9 +16,7 @@ export const LinkPullRequestRow = memo<LinkPullRequestRowProps>(({ onLink }) => 
 
   return (
     <OverviewRow
-      weak
       icon={LinkIcon}
-      iconSize={14}
       value={t('workingPanel.overview.pr.link')}
       onClick={() => openLinkPullRequestModal(onLink)}
     />

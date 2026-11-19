@@ -17,10 +17,10 @@ import type { KeyboardEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useHotkeyById } from '@/hooks/useHotkeys/useHotkeyById';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 
 import {
   isTaskFilterValueSelected,
@@ -68,6 +68,7 @@ const matches = (text: string, query: string) => text.toLowerCase().includes(que
  */
 const TaskFilterButton = memo<TaskFilterButtonProps>(({ fields, filter, setFilter }) => {
   const { t } = useTranslation('chat');
+  const headerActionSmallSize = useHeaderActionSize(true);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -203,7 +204,7 @@ const TaskFilterButton = memo<TaskFilterButtonProps>(({ fields, filter, setFilte
       <ActionIcon
         active={open}
         icon={ListFilterIcon}
-        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+        size={headerActionSmallSize}
         title={t('taskList.filter.add')}
         tooltipProps={{ hotkey }}
       />

@@ -1,3 +1,8 @@
+import {
+  getConnectorMode,
+  shouldEnableConnectorOnConnect,
+  upsertConnectorEnabled,
+} from '@lobechat/types';
 import { Checkbox, Flexbox, Icon, Spin, stopPropagation } from '@lobehub/ui';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -191,23 +196,22 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
 
     // Get plugin ID for this server (use identifier as pluginId)
     const pluginId = server ? server.identifier : '';
-    const plugins =
-      useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId))?.plugins || [];
-    const checked = plugins.includes(pluginId);
+    const config = useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId));
+    const plugins = config?.plugins;
+    const checked = getConnectorMode(plugins, pluginId, config?.chatConfig) === 'auto';
     const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
     // Toggle plugin for the effective agent
     const togglePlugin = useCallback(
-      async (pluginIdToToggle: string) => {
+      async (pluginIdToToggle: string, enabled: boolean) => {
         if (!effectiveAgentId) return;
-        const currentPlugins = plugins;
-        const hasPlugin = currentPlugins.includes(pluginIdToToggle);
-        const newPlugins = hasPlugin
-          ? currentPlugins.filter((id) => id !== pluginIdToToggle)
-          : [...currentPlugins, pluginIdToToggle];
+        const current = agentSelectors.getAgentConfigById(effectiveAgentId)(
+          useAgentStore.getState(),
+        );
+        const newPlugins = upsertConnectorEnabled(current?.plugins, pluginIdToToggle, enabled);
         await updateAgentConfigById(effectiveAgentId, { plugins: newPlugins });
       },
-      [effectiveAgentId, plugins, updateAgentConfigById],
+      [effectiveAgentId, updateAgentConfigById],
     );
 
     const handleConnect = async () => {
@@ -233,7 +237,11 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
         if (newServer) {
           // Auto-enable plugin after installation (using identifier)
           const newPluginId = newServer.identifier;
-          await togglePlugin(newPluginId);
+          const current = agentSelectors.getAgentConfigById(effectiveAgentId)(
+            useAgentStore.getState(),
+          );
+          if (shouldEnableConnectorOnConnect(current?.plugins, newPluginId, current?.chatConfig))
+            await togglePlugin(newPluginId, true);
 
           // If already authenticated, refresh tool list directly, skip OAuth
           if (newServer.status === ComposioServerStatus.ACTIVE) {
@@ -253,7 +261,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
     const handleToggle = async () => {
       if (!canEdit || !server) return;
       setIsToggling(true);
-      await togglePlugin(pluginId);
+      await togglePlugin(pluginId, !checked);
       setIsToggling(false);
     };
 

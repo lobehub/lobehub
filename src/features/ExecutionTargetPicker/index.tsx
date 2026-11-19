@@ -51,10 +51,10 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 24px;
-    height: 24px;
+    width: var(--lobe-density-icon-box);
+    height: var(--lobe-density-icon-box);
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
+    border-radius: var(--lobe-density-radius);
 
     color: ${cssVar.colorText};
 
@@ -63,7 +63,7 @@ const styles = createStaticStyles(({ css }) => ({
   optionName: css`
     overflow: hidden;
 
-    font-size: 14px;
+    font-size: var(--lobe-density-font-size);
     font-weight: 500;
     line-height: 20px;
     color: ${cssVar.colorText};
@@ -71,7 +71,7 @@ const styles = createStaticStyles(({ css }) => ({
     white-space: nowrap;
   `,
   selectItem: css`
-    min-height: 40px;
+    min-height: var(--lobe-density-list-row-height);
   `,
   selectPopup: css`
     max-width: calc(100vw - 24px);

@@ -3,6 +3,11 @@
  */
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import {
+  getUnavailableBuiltinToolIds,
+  getUserDisabledToolIds,
+  isOnDemandBuiltinTool,
+} from '@lobechat/builtin-tools';
+import {
   getFeatureDisabledToolIds,
   getLabDisabledToolIds,
 } from '@lobechat/builtin-tools/featureGates';
@@ -15,8 +20,13 @@ import {
 } from '@lobechat/context-engine';
 import { assembleManifestPool, resolveToolRules } from '@lobechat/mecha';
 import {
+  type AgentPluginEntry,
   type BuiltinToolResolveContext,
   type ChatCompletionTool,
+  getActivePluginIds,
+  getOptedInPluginIds,
+  type LobeAgentChatConfig,
+  resolveToolMode,
   type ToolManifest,
   type WorkingModel,
 } from '@lobechat/types';
@@ -37,6 +47,7 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
+import { runtimeUninstalledBuiltinTools } from '@/store/tool/slices/builtin/projection';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
@@ -44,6 +55,11 @@ import { settingsSelectors } from '@/store/user/selectors';
 import { getSearchConfig } from '../getSearchConfig';
 import { isCanUseFC } from '../isCanUseFC';
 import { buildClientConnectorManifests } from './buildClientConnectorManifests';
+import {
+  type AgentConnectorActivation,
+  applyAgentConnectorActivation,
+  resolveAgentConnectorActivation,
+} from './connectorActivation';
 
 /**
  * Tools engine configuration options
@@ -51,6 +67,7 @@ import { buildClientConnectorManifests } from './buildClientConnectorManifests';
 export interface ToolsEngineConfig {
   /** Additional manifests to include beyond the standard ones */
   additionalManifests?: ToolManifest[];
+  agentId?: string;
   /** Default tool IDs that will always be added to the end of the tools list */
   defaultToolIds?: string[];
   /**
@@ -111,7 +128,9 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
         .composioAsLobeTools(toolStoreState)
         .map((tool) => tool.manifest as LobeToolManifest),
       connectors: buildClientConnectorManifests(
-        connectorSelectors.executableMcpConnectors(toolStoreState),
+        config.agentId
+          ? connectorSelectors.connectedMcpConnectorsForAgent(toolStoreState, config.agentId)
+          : connectorSelectors.executableMcpConnectors(toolStoreState),
       ) as LobeToolManifest[],
       installedPlugins: pluginSelectors.installedPluginManifestList(
         toolStoreState,
@@ -155,12 +174,32 @@ export const createAgentToolsEngine = (
      * `readAttachment` so the preview can be paged, as the server's tool discovery does.
      */
     hasOversizedFiles?: boolean;
+    uninstalledBuiltinTools?: string[];
+    /** Resolved for the executing agent, which can differ from the agent open in the UI. */
+    runAgent?: {
+      id?: string;
+      chatConfig?: LobeAgentChatConfig;
+      connectors?: AgentConnectorActivation;
+      enabledPluginIds?: string[];
+      plugins?: AgentPluginEntry[];
+    };
   } = {},
 ) => {
-  const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
+  const searchConfig = getSearchConfig(
+    workingModel.model,
+    workingModel.provider,
+    options.runAgent?.id,
+  );
   const agentState = getAgentStoreState();
-  const activeAgentId = agentState.activeAgentId || '';
-  const chatConfig = agentChatConfigSelectors.currentChatConfig(agentState);
+  const targetAgentId = options.runAgent?.id ?? agentState.activeAgentId ?? '';
+  const agent = options.runAgent ?? {
+    id: targetAgentId,
+    chatConfig: agentChatConfigSelectors.currentChatConfig(agentState),
+    plugins: agentSelectors.currentAgentConfig(agentState)?.plugins,
+  };
+  const chatConfig = agent.chatConfig ?? {};
+  const connectors =
+    options.runAgent?.connectors ?? resolveAgentConnectorActivation(agent, pluginIds);
 
   // The rules — mode, per-tool enablement and defaults — are shared with the
   // server runtime through `@lobechat/mecha`; the browser only assembles its
@@ -169,21 +208,40 @@ export const createAgentToolsEngine = (
   const resolved = resolveToolRules({
     agent: {
       chatConfig,
-      // `currentAgentPlugins` already resolves to pinned-only identifiers.
-      plugins: agentSelectors.currentAgentPlugins(agentState),
+      plugins: applyAgentConnectorActivation(
+        options.runAgent?.enabledPluginIds ??
+          getActivePluginIds(agent.plugins).filter(
+            (id) => resolveToolMode(chatConfig) !== 'agent' || !isOnDemandBuiltinTool(id),
+          ),
+        connectors,
+      ),
     },
     // Feature-flagged tools (e.g. builtin-dashboard) leave the pool while their
     // flag is off for this user.
     disabledPluginIds: [
-      ...agentSelectors.currentAgentDisabledPlugins(agentState),
+      ...getUserDisabledToolIds(agent.plugins, chatConfig),
+      ...connectors.offIds,
+      ...getUnavailableBuiltinToolIds(
+        [
+          ...getOptedInPluginIds(agent.plugins),
+          ...(options.runAgent?.enabledPluginIds ?? []),
+          ...(pluginIds ?? []),
+        ],
+        chatConfig,
+        options.uninstalledBuiltinTools ?? runtimeUninstalledBuiltinTools(getToolStoreState()),
+      ),
       ...getFeatureDisabledToolIds(getServerConfigStoreState()?.featureFlags),
       // Lab-gated tools (e.g. lobe-topic) leave the pool while their Labs switch is off.
       ...getLabDisabledToolIds(useUserStore.getState().preference?.lab),
       // This engine serves runs the browser executes; server-only tools have nothing to run here.
       ...serverOnlyToolIds,
     ],
-    executionTarget: chatConfigByIdSelectors.getExecutionTargetById(activeAgentId)(agentState),
-    hasEnabledKnowledgeBases: agentSelectors.hasEnabledKnowledgeBases(agentState),
+    executionTarget: chatConfigByIdSelectors.getExecutionTargetById(targetAgentId)(agentState),
+    hasEnabledKnowledgeBases: options.runAgent?.id
+      ? agentSelectors
+          .getAgentConfigById(targetAgentId)(agentState)
+          ?.knowledgeBases?.some((kb) => kb.enabled)
+      : agentSelectors.hasEnabledKnowledgeBases(agentState),
     hasOversizedFiles: options.hasOversizedFiles,
     // A `local` target only resolves on the desktop, where the host itself is
     // the machine: local tools are always reachable there.
@@ -202,11 +260,16 @@ export const createAgentToolsEngine = (
   });
 
   return createToolsEngine({
+    agentId: targetAgentId,
     defaultToolIds: resolved.defaultToolIds,
     disabledPluginIds: [...resolved.excludedIdentifiers],
     manifestContext,
     enableChecker: createEnableChecker({
       allowExplicitActivation: resolved.allowExplicitActivation,
+      explicitActivationIds:
+        resolved.toolMode === 'custom'
+          ? new Set(connectors.connectorIds.filter(connectors.activation.isAllowed))
+          : undefined,
       platformFilter: ({ pluginId }) => {
         const toolStoreState = getToolStoreState();
         const installedPlugin = pluginSelectors.getInstalledPluginById(pluginId)(toolStoreState);

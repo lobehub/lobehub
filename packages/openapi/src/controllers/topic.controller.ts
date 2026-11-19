@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
 import { TopicService } from '../services/topic.service';
+import type { DeletedResource } from '../types/common.type';
 import type { TopicCreateRequest, TopicListQuery, TopicUpdateRequest } from '../types/topic.type';
 
 export class TopicController extends BaseController {
@@ -20,7 +21,10 @@ export class TopicController extends BaseController {
 
       const topics = await topicService.getTopics(request);
 
-      return this.success(c, topics, 'Topic list retrieved successfully');
+      return this.list(c, 'topics', topics, {
+        message: 'Topic list retrieved successfully',
+        pagination: request,
+      });
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -101,7 +105,11 @@ export class TopicController extends BaseController {
       const topicService = new TopicService(db, userId, this.getWorkspaceId(c));
       await topicService.deleteTopic(topicId);
 
-      return this.success(c, null, 'Topic deleted successfully');
+      return this.success<DeletedResource>(
+        c,
+        { deleted: true, id: topicId },
+        'Topic deleted successfully',
+      );
     } catch (error) {
       return this.handleError(c, error);
     }

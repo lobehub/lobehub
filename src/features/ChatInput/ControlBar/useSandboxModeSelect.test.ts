@@ -14,7 +14,13 @@ import type { SandboxSelection } from './useSandboxPlacement';
 
 const state = vi.hoisted(() => ({
   driveStatus: 'ready' as 'hidden' | 'loading' | 'ready' | 'upgrade',
+  projectId: undefined as string | undefined,
+  /** Whether the project's environment list has loaded, and what a refetch brings. */
+  projectLoaded: true,
+  refreshProject: vi.fn(),
+  storeEnvironments: {} as Record<string, unknown[]>,
   seedPendingSandboxSelection: vi.fn(),
+  setPendingSandboxSelection: vi.fn(),
   selection: {} as Record<string, unknown>,
   setSelection: vi.fn(),
   topicId: undefined as string | undefined,
@@ -29,6 +35,27 @@ vi.mock('@/store/user', () => ({
 }));
 vi.mock('@/store/chat/pendingSandboxSelection', () => ({
   seedPendingSandboxSelection: state.seedPendingSandboxSelection,
+  setPendingSandboxSelection: state.setPendingSandboxSelection,
+}));
+const PROJECT_ENVIRONMENTS: Record<string, { configuration: unknown; id: string }[]> = {
+  'project-1': [
+    {
+      configuration: { sources: [{ kind: 'git', url: 'https://github.com/lobehub/lobe-write' }] },
+      id: 'env-project',
+    },
+  ],
+  'project-empty': [{ configuration: { sources: [] }, id: 'env-empty' }],
+};
+vi.mock('./useSandboxEnvironmentList', () => ({
+  useIsSharedAgent: () => false,
+  useProjectSandboxEnvironments: (projectId?: string) => ({
+    environments: projectId && state.projectLoaded ? (PROJECT_ENVIRONMENTS[projectId] ?? []) : [],
+    loaded: state.projectLoaded,
+    refresh: state.refreshProject,
+  }),
+}));
+vi.mock('@/store/projectWorkingDirectory', () => ({
+  useProjectDirectoryStore: { getState: () => ({ environmentsMap: state.storeEnvironments }) },
 }));
 vi.mock('./useSandboxStorageAccess', () => ({
   useSandboxDriveStatus: () => state.driveStatus,
@@ -36,6 +63,7 @@ vi.mock('./useSandboxStorageAccess', () => ({
 vi.mock('./useSandboxPlacement', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   useSandboxPlacement: () => ({
+    projectId: state.projectId,
     selection: state.selection,
     setSelection: state.setSelection,
     topicId: state.topicId,
@@ -52,10 +80,15 @@ const renderMode = () =>
 beforeEach(() => {
   localStorage.clear();
   state.driveStatus = 'ready';
+  state.projectId = undefined;
+  state.projectLoaded = true;
+  state.storeEnvironments = {};
+  state.refreshProject.mockReset().mockResolvedValue(undefined);
   state.selection = {};
   state.topicId = undefined;
   state.workspaceId = null;
   state.seedPendingSandboxSelection.mockReset();
+  state.setPendingSandboxSelection.mockReset();
   state.setSelection.mockReset().mockResolvedValue(undefined);
 });
 
@@ -212,5 +245,89 @@ describe('useSandboxModeSelect', () => {
 
     expect(state.setSelection).toHaveBeenCalledWith({});
     expect(prefersTemporarySandbox(ME, 'agent-1')).toBe(true);
+  });
+});
+
+// A project conversation leaving the drive starts from its project's
+// environment, never the agent's repository from elsewhere — which the chip,
+// listing the project's environment only, would call unavailable.
+describe('useSandboxModeSelect in a project conversation', () => {
+  beforeEach(() => {
+    rememberSandboxSelection(ME, 'agent-1', { environmentId: 'env_repo' });
+    state.selection = { workingDirectory: 'notes' };
+  });
+
+  it("moves an open conversation onto the project's environment and remembers nothing", async () => {
+    state.projectId = 'project-1';
+    state.topicId = 'topic-1';
+    const { result } = renderMode();
+
+    await act(() => result.current.toTemporary());
+
+    expect(state.setSelection).toHaveBeenCalledWith({ environmentId: 'env-project' });
+    expect(getRememberedSandboxRepository(ME, 'agent-1')).toEqual({ environmentId: 'env_repo' });
+  });
+
+  // An open topic keeps what is written now; the server applies the project's
+  // environment only when it creates one, so "none" is not written on a guess.
+  it("waits for the project's environment before moving an open conversation", async () => {
+    state.projectId = 'project-1';
+    state.topicId = 'topic-1';
+    state.projectLoaded = false;
+    state.refreshProject.mockImplementation(async () => {
+      state.storeEnvironments['project-1'] = PROJECT_ENVIRONMENTS['project-1'];
+    });
+    const { result } = renderMode();
+
+    await act(() => result.current.toTemporary());
+
+    expect(state.refreshProject).toHaveBeenCalled();
+    expect(state.setSelection).toHaveBeenCalledWith({ environmentId: 'env-project' });
+  });
+
+  it("keeps an open conversation on the drive when the project's environment cannot load", async () => {
+    state.projectId = 'project-1';
+    state.topicId = 'topic-1';
+    state.projectLoaded = false;
+    const { result } = renderMode();
+
+    await expect(act(() => result.current.toTemporary())).rejects.toThrow('could not be loaded');
+
+    expect(state.setSelection).not.toHaveBeenCalled();
+    expect(prefersTemporarySandbox(ME, 'agent-1')).toBe(false);
+  });
+
+  it('moves an open conversation onto no environment when the project checks out none', async () => {
+    state.projectId = 'project-empty';
+    state.topicId = 'topic-1';
+    const { result } = renderMode();
+
+    await act(() => result.current.toTemporary());
+
+    expect(state.setSelection).toHaveBeenCalledWith({});
+  });
+
+  // Before a topic exists, a default rather than a pick: the server still
+  // applies the project's environment.
+  it("gives a project draft the project's environment as a default", async () => {
+    state.projectId = 'project-1';
+    const { result } = renderMode();
+
+    await act(() => result.current.toTemporary());
+
+    expect(state.seedPendingSandboxSelection).toHaveBeenCalledWith('agent-1', {
+      environmentId: 'env-project',
+    });
+    expect(state.setSelection).not.toHaveBeenCalled();
+  });
+
+  it('leaves a project draft to the server when the project checks out none', async () => {
+    state.projectId = 'project-empty';
+    const { result } = renderMode();
+
+    await act(() => result.current.toTemporary());
+
+    expect(state.setPendingSandboxSelection).toHaveBeenCalledWith('agent-1');
+    expect(state.setSelection).not.toHaveBeenCalled();
   });
 });

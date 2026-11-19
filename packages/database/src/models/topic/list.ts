@@ -134,9 +134,8 @@ export const query = async (
   // Heavier columns gated behind `withDetails` and used by the per-agent
   // Topics management page: real aggregates from the `messages` table
   // (firstUserMessage + messageCount), plus the `description` / `trigger`
-  // columns that sidebar paths don't consume. `cost` and `tokenUsage`
-  // intentionally stay undefined here — they need their own schema
-  // migration before they can be backed by real numbers.
+  // columns that sidebar paths don't consume, and the topic's `cost` /
+  // `tokenUsage` totals.
   //
   // The two correlated subqueries are built with Drizzle's query builder
   // (not a raw `sql` template) so the inner `eq(messages.topicId,
@@ -172,11 +171,14 @@ export const query = async (
 
   const detailColumns = withDetails
     ? {
+        // Rolled up on the topic by `recomputeTopicUsage` as messages and runs settle.
+        cost: topics.totalCost,
         description: topics.description,
         firstUserMessage: sql<string | null>`(${firstUserMessageSubquery})`.as(
           'first_user_message',
         ),
         messageCount: sql<number>`(${messageCountSubquery})`.as('message_count'),
+        tokenUsage: topics.totalTokens,
         trigger: topics.trigger,
       }
     : {};

@@ -139,7 +139,9 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
           ),
         }
       : state === 'unconfigured'
-        ? { action: undefined, text: t('environments.github.unconfigured') }
+        ? // Connecting needs the deployment's GitHub App first; the settings
+          // page says what is missing, so the guide still leads somewhere.
+          { action: 'settings', text: t('environments.github.unconfigured') }
         : state === 'disconnected'
           ? { action: 'connect', text: t('environments.github.notConnected') }
           : state === 'empty'
@@ -160,7 +162,9 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
             : t(
                 guide.action === 'connect'
                   ? 'environments.github.connect'
-                  : 'environments.github.reviewAccess',
+                  : guide.action === 'settings'
+                    ? 'environments.github.openIntegrations'
+                    : 'environments.github.reviewAccess',
               )}
           {guide.action !== 'retry' && <Icon icon={ArrowRightIcon} size={12} />}
         </Button>

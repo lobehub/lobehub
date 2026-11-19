@@ -1,6 +1,5 @@
 import { builtinSkills } from '@lobechat/builtin-skills';
 
-import { USER_HIDDEN_BUILTIN_SKILLS } from '@/helpers/skillFilters';
 import { AgentDocumentVfsError } from '@/server/services/agentDocumentVfs/errors';
 
 import type { SkillMountProvider, SkillMountProviderRequest } from '../SkillMount';
@@ -16,11 +15,8 @@ export class ProviderSkillsBuiltin implements SkillMountProvider {
   // No device gating on purpose: the VFS is a read-only file view of skill
   // content, so device-only skills (agent-browser) stay browsable here —
   // executability gating lives in the runtime entry points (SkillEngine /
-  // skills / activator). User-hidden skills stay excluded: that axis is about
-  // visibility, not executability.
-  private readonly skills = builtinSkills.filter(
-    (skill) => !USER_HIDDEN_BUILTIN_SKILLS.has(skill.identifier),
-  );
+  // skills / activator).
+  private readonly skills = builtinSkills;
 
   async get(input: SkillMountProviderRequest): Promise<SkillMountNode> {
     if (!input.resolvedPath.skillName) {

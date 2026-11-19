@@ -1,4 +1,3 @@
-import { DEFAULT_FILE_EMBEDDING_MODEL_ITEM } from '@lobechat/const';
 import { RequestTrigger, SemanticSearchSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -13,11 +12,11 @@ import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { ChunkService } from '@/server/services/chunk';
 import { DocumentService } from '@/server/services/document';
 import { KnowledgeBaseSearchService } from '@/server/services/knowledgeBase';
+import { resolveFileEmbeddingModel } from '@/server/services/knowledgeBase/fileEmbeddingModel';
 
 import { assertFileNotInRestrictedKnowledgeBase } from './_helpers/knowledgeBaseAccess';
 
@@ -133,14 +132,18 @@ export const chunkRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { model, provider } =
-        getServerDefaultFilesConfig().embeddingModel || DEFAULT_FILE_EMBEDDING_MODEL_ITEM;
+      const workspaceId = ctx.workspaceId ?? undefined;
+      const { model, provider } = await resolveFileEmbeddingModel(
+        ctx.serverDB,
+        ctx.userId,
+        workspaceId,
+      );
       // Read user's provider config from database
       const agentRuntime = await initModelRuntimeFromDB(
         ctx.serverDB,
         ctx.userId,
         provider,
-        ctx.workspaceId ?? undefined,
+        workspaceId,
       );
 
       const embeddings = await agentRuntime.embeddings(

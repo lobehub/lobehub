@@ -59,18 +59,23 @@ import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
 import { WebhookManifest } from '@lobechat/builtin-tool-webhook';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
-import { type LobeBuiltinTool } from '@lobechat/types';
+import {
+  type AgentPluginEntry,
+  getDisabledPluginIds,
+  type LobeAgentChatConfig,
+  type LobeBuiltinTool,
+  resolveToolMode,
+} from '@lobechat/types';
 
 import { resolveCloudSandboxInPageScope } from './pageScope';
 
 /**
- * Default tool IDs that will always be added to the tools list.
+ * Default candidates evaluated by the tool enable rules.
  * Shared between frontend (createAgentToolsEngine) and server (createServerAgentToolsEngine).
  */
 export const defaultToolIds = [
   LobeActivatorManifest.identifier,
   SkillsManifest.identifier,
-  SkillStoreManifest.identifier,
   WebBrowsingManifest.identifier,
   KnowledgeBaseManifest.identifier,
   AttachmentsManifest.identifier,
@@ -82,47 +87,35 @@ export const defaultToolIds = [
   TaskManifest.identifier,
   // Only while Labs → Better Coding Experience is on (see `LAB_GATED_TOOLS`).
   TopicToolManifest.identifier,
+  // A runtime media fallback can enable this candidate even without a user pin.
   LobeAgentManifest.identifier,
   CanvasManifest.identifier,
 ];
 
 /**
- * Tool IDs that are always enabled regardless of user selection.
- * These are core system tools that the agent needs to function properly.
- *
- * `lobe-agent` is listed first: its built-in capabilities (plan + todo management,
- * sub-agent dispatch, multimodal fallback) should be available on every agent-mode turn,
- * not gated behind explicit injection. NOTE: these rules only apply in agent mode — chat
- * mode (`enableAgentMode === false`) drops `alwaysOnToolIds` entirely. In manual
- * skill-activate mode the discovery tools in `manualModeExcludeToolIds` are still removed
- * from the defaults before the enable checker runs, so they end up disabled there.
- *
- * This list is also the source for builtin entries in the chat-input Tools popover.
- * They default to pinned but can be explicitly disabled per agent; entries represented by
- * the activation mode control itself are excluded from that menu.
+ * Builtins enabled by default in Agent mode. The activator loads other tools
+ * on demand, and Skills loads skill instructions.
  */
-export const alwaysOnToolIds = [
-  LobeAgentManifest.identifier,
-  LobeActivatorManifest.identifier,
-  SkillsManifest.identifier,
-  SkillStoreManifest.identifier,
-];
+export const alwaysOnToolIds = [LobeActivatorManifest.identifier, SkillsManifest.identifier];
 
-/**
- * Runtime tools represented by the skill activation mode control itself. They remain part
- * of the engine defaults but should not appear as independently configurable tool rows.
- */
-export const activationModeControlledToolIds = [LobeActivatorManifest.identifier];
+/** Ignore stale picker preferences for fixed infrastructure in ordinary Agent mode.
+ * Only use for saved user choices, never for a share allowlist or runtime exclusion. */
+export const getUserDisabledToolIds = (
+  plugins: AgentPluginEntry[] | undefined,
+  chatConfig?: Pick<LobeAgentChatConfig, 'toolMode' | 'enableAgentMode'> | null,
+) => {
+  const disabled = getDisabledPluginIds(plugins);
+  return resolveToolMode(chatConfig) === 'agent'
+    ? disabled.filter((id) => !alwaysOnToolIds.includes(id))
+    : disabled;
+};
 
 /**
  * Tool IDs to exclude from defaults when in manual skill-activate mode.
  * These are the tool/skill discovery tools that should be disabled when user wants precise control.
  * Other default tools (sandbox, web browsing, etc.) remain available if enabled externally.
  */
-export const manualModeExcludeToolIds = [
-  LobeActivatorManifest.identifier,
-  SkillStoreManifest.identifier,
-];
+export const manualModeExcludeToolIds = [LobeActivatorManifest.identifier];
 
 /**
  * Tool IDs allowed when the agent runs in chat mode
@@ -195,7 +188,6 @@ export const runtimeManagedToolIds = [
   LocalSystemManifest.identifier,
   MemoryManifest.identifier,
   RemoteDeviceManifest.identifier,
-  LobeAgentManifest.identifier,
   WebBrowsingManifest.identifier,
 ];
 
@@ -350,7 +342,6 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    hidden: true,
     identifier: SkillStoreManifest.identifier,
     manifest: SkillStoreManifest,
     type: 'builtin',
@@ -628,7 +619,6 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    hidden: true,
     identifier: LobeAgentManifest.identifier,
     manifest: LobeAgentManifest,
     // Context-aware: hides the `callSubAgent` API inside group / sub-agent runs.
@@ -656,17 +646,76 @@ export const builtinTools: LobeBuiltinTool[] = builtinToolRegistry.map((tool) =>
   title: tool.manifest?.meta?.title,
 }));
 
+// A saved pin on a user-selectable tool predates on-demand loading. Runtime additions
+// (mentions, media fallback, exact toolsets) are not user preferences and bypass this filter.
+export const onDemandBuiltinToolIds = builtinTools
+  .filter(
+    (tool) =>
+      (tool.discoverable !== false || tool.identifier === AuvManifest.identifier) &&
+      !alwaysOnToolIds.includes(tool.identifier) &&
+      !runtimeManagedToolIds.includes(tool.identifier),
+  )
+  .map((tool) => tool.identifier);
+const onDemandBuiltinIds = new Set(onDemandBuiltinToolIds);
+
+/** Agent mode discovers installed builtins by default. Other modes keep their configured toolset. */
+export const getUnavailableBuiltinToolIds = (
+  available: Iterable<string>,
+  chatConfig?: Pick<LobeAgentChatConfig, 'toolMode' | 'enableAgentMode'> | null,
+  uninstalled: readonly string[] = [],
+) => {
+  if (resolveToolMode(chatConfig) === 'agent') return uninstalled.filter(isOnDemandBuiltinTool);
+
+  const allowed = new Set(available);
+  return onDemandBuiltinToolIds.filter((id) => !allowed.has(id));
+};
+export const isOnDemandBuiltinTool = (identifier: string) => onDemandBuiltinIds.has(identifier);
+
 const recommendedBuiltinIds = new Set(
   RECOMMENDED_SKILLS.filter((s) => s.type === RecommendedSkillType.Builtin).map((s) => s.id),
 );
 
 /**
- * Non-hidden builtin tools that are NOT in RECOMMENDED_SKILLS.
+ * Non-selectable, non-recommended tools that require installation from the Skill Store.
  * These tools default to uninstalled and must be explicitly installed by the user from the Skill Store.
  */
 export const defaultUninstalledBuiltinTools = builtinTools
-  .filter((t) => !t.hidden && !recommendedBuiltinIds.has(t.identifier))
+  .filter(
+    (t) =>
+      !t.hidden && !isOnDemandBuiltinTool(t.identifier) && !recommendedBuiltinIds.has(t.identifier),
+  )
   .map((t) => t.identifier);
+
+/**
+ * Minimal view of `settings.tool` covering just the builtin-tool install slots.
+ * Typed locally so the helpers accept the loosened shape returned by
+ * `getUserState()` while still spreading the rest of `tool` through at runtime.
+ */
+export interface UninstalledBuiltinToolsScope {
+  uninstalledBuiltinTools?: string[];
+  uninstalledBuiltinToolsByWorkspace?: Record<string, string[] | undefined>;
+}
+
+/**
+ * Resolve the uninstalled-builtin-tools list for the active scope.
+ *
+ * - Personal context (`workspaceId == null`) → the user's personal list.
+ * - Workspace context → the per-workspace list; a workspace with no stored
+ *   entry falls back to the default seed (a clean default state), never the
+ *   user's personal customization.
+ *
+ * `undefined` (never configured) maps to the default seed in both scopes.
+ */
+export const resolveUninstalledBuiltinTools = (
+  tool: UninstalledBuiltinToolsScope | null | undefined,
+  workspaceId?: string | null,
+): string[] => {
+  const stored = workspaceId
+    ? tool?.uninstalledBuiltinToolsByWorkspace?.[workspaceId]
+    : tool?.uninstalledBuiltinTools;
+
+  return stored === undefined ? defaultUninstalledBuiltinTools : stored;
+};
 
 const builtinIdentifierSet = new Set(builtinTools.map((tool) => tool.identifier));
 

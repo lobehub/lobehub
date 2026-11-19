@@ -1,4 +1,4 @@
-import type { ChannelListItem } from '@lobechat/types';
+import type { ChannelListItem, ShareVisitorConversation } from '@lobechat/types';
 
 import type { ChatTopic } from '@/types/topic';
 
@@ -15,8 +15,11 @@ import {
   matchesChannelSearch,
   matchesChannelStatus,
   matchesGroup,
+  matchesShareVisitorSearch,
+  matchesShareVisitorStatus,
   matchesTrigger,
   sortChannelsBy,
+  sortShareVisitorsBy,
 } from './utils';
 
 const createChannel = (overrides: Partial<ChannelListItem> = {}): ChannelListItem => ({
@@ -236,5 +239,30 @@ describe('AgentTopicManager utils', () => {
     expect(matchesChannelSearch(beta, '')).toBe(true);
     expect(sortChannelsBy([alpha, beta], 'updatedAt').map((c) => c.id)).toEqual(['b', 'a']);
     expect(sortChannelsBy([beta, alpha], 'title').map((c) => c.id)).toEqual(['a', 'b']);
+  });
+
+  it('counts share visitors as active, finds them by name or message, and sorts them', () => {
+    const visit = (id: string, name: string | null, content: string, updatedAt: string) =>
+      ({
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        id,
+        lastMessage: { content },
+        totalCost: 0,
+        totalTokens: 0,
+        updatedAt: new Date(updatedAt),
+        visitor: { avatar: null, id: `u_${id}`, name },
+      }) as ShareVisitorConversation;
+    const ada = visit('a', 'Ada', 'Plan my trip', '2026-01-02T00:00:00Z');
+    const bob = visit('b', null, 'Write a poem', '2026-01-03T00:00:00Z');
+
+    expect(['all', 'active'].every((s) => matchesShareVisitorStatus(s as never))).toBe(true);
+    expect(
+      ['running', 'completed', 'archived'].some((s) => matchesShareVisitorStatus(s as never)),
+    ).toBe(false);
+    expect(matchesShareVisitorSearch(ada, ' ada ')).toBe(true);
+    expect(matchesShareVisitorSearch(bob, 'poem')).toBe(true);
+    expect(matchesShareVisitorSearch(bob, 'ada')).toBe(false);
+    expect(sortShareVisitorsBy([ada, bob], 'updatedAt').map((c) => c.id)).toEqual(['b', 'a']);
+    expect(sortShareVisitorsBy([bob, ada], 'title').map((c) => c.id)).toEqual(['b', 'a']);
   });
 });

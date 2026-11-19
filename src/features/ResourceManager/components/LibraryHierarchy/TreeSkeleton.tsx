@@ -9,10 +9,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 6px;
     align-items: center;
 
-    height: 32px;
+    height: var(--lobe-density-row-height);
     padding-block: 4px;
     padding-inline: 8px;
-    border-radius: ${cssVar.borderRadiusSM};
+    border-radius: var(--lobe-density-radius);
   `,
 }));
 

@@ -1,4 +1,5 @@
 import type { ChannelExecutionConfig, ChannelJobBlockCode, LobeAgentConfig } from '@lobechat/types';
+import { channelMessageDeletedAt } from '@lobechat/types';
 import { and, asc, eq, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
@@ -30,10 +31,10 @@ export interface ChannelClaimOptions {
   onlineDeviceIds?: string[];
   /**
    * The device a run with no device picked in the Channel will route to, from the Agent's own
-   * settings as the requester's ordinary conversation would resolve them, and whether it is
-   * online for that requester; undefined when it needs none or would wake it. Lets an offline
-   * Agent-bound device wait like a Channel one. Its presence is the requester's, which may
-   * include their personal device, so it stays out of `onlineDeviceIds`. Only consulted with
+   * settings as the execution identity's ordinary conversation would resolve them, and whether it
+   * is online for that identity; undefined when it needs none or would wake it. Lets an offline
+   * Agent-bound device wait like a Channel one. Its presence is that identity's, which may
+   * include a personal device, so it stays out of `onlineDeviceIds`. Only consulted with
    * `onlineDeviceIds`.
    */
   routedDevice?: (run: ChannelRoutedDeviceInput) => Promise<ChannelRoutedDevice | undefined>;
@@ -54,8 +55,12 @@ export interface ChannelRoutedDeviceInput {
    */
   continuation?: Pick<TopicItem, 'agentId' | 'groupId' | 'metadata' | 'projectWorkingDirectoryId'>;
   executionConfig: ChannelExecutionConfig;
-  /** The requester: the run executes as them, with their device preference for the Agent. */
+  /**
+   * The execution identity, with its device preference for the Agent: the requester, or a shared
+   * Agent's owner, whose device the visitor's run uses.
+   */
   userId: string;
+  /** The run's scope: the Channel's, or a shared Agent's owner scope. */
   workspaceId: string | null;
 }
 
@@ -279,6 +284,12 @@ export const claimJob = async (
     .select()
     .from(channelMessages)
     .where(eq(channelMessages.id, job.messageId));
+  // A request deleted while this job waited must not run: its tombstone carries no text or
+  // mentions, so the run would answer a message that no longer exists.
+  if (channelMessageDeletedAt(request.metadata)) {
+    await cancel(tx, job, 'request_deleted');
+    return null;
+  }
   // An earlier undecided message in this branch may still enqueue this member ahead of it, and
   // so may the Thread's root while it is undecided. Checking only jobs would let a later
   // request overtake it while another worker routes it. Other branches never hold this one.
@@ -437,8 +448,8 @@ export const claimJob = async (
             executionConfig,
           ),
           executionConfig,
-          userId: requester.userId!,
-          workspaceId: channel.workspaceId,
+          userId: scope.userId,
+          workspaceId: scope.workspaceId,
         })
       : undefined;
   const offlineDeviceId = !options.onlineDeviceIds

@@ -62,6 +62,24 @@ describe('toSandboxInitialization', () => {
     });
   });
 
+  it('lays several repositories out side by side, never one inside another', () => {
+    expect(
+      toSandboxInitialization({
+        configuration: {
+          sources: [
+            { kind: 'git', url: 'https://github.com/lobehub/lobehub' },
+            { kind: 'git', path: 'lobe-ui', url: 'https://github.com/lobehub/lobe-ui' },
+          ],
+        },
+        id: 'env-1',
+        name: 'Two',
+      })?.sources,
+    ).toEqual([
+      { path: 'lobehub', url: 'https://github.com/lobehub/lobehub' },
+      { path: 'lobe-ui', url: 'https://github.com/lobehub/lobe-ui' },
+    ]);
+  });
+
   it('asks for nothing when the environment has neither a repository nor setup', () => {
     expect(
       toSandboxInitialization({
@@ -299,6 +317,24 @@ describe('buildSandboxEnvironmentInitCommand', () => {
     expect(readFileSync(join(work, 'seen.txt'), 'utf8').trim()).toBe('[]');
     expect(readFileSync(join(work, '.git', 'config'), 'utf8')).not.toContain('c2VjcmV0');
     expect(result.stdout).not.toContain('c2VjcmV0');
+  });
+
+  it('gives git one credential per repository when there are several, and unsets them all', () => {
+    const command = buildSandboxEnvironmentInitCommand(
+      init({
+        bootstrapCommand: 'echo "[$GIT_CONFIG_COUNT$GIT_CONFIG_VALUE_1]" > seen.txt',
+        cloneCredentials: [
+          { header: 'Authorization: Basic b25l', urlPrefix: 'https://github.com/acme/one' },
+          { header: 'Authorization: Basic dHdv', urlPrefix: 'https://github.com/acme/two' },
+        ],
+      }),
+    );
+
+    expect(command).toContain('GIT_CONFIG_COUNT=2');
+    expect(command).toContain('http.https://github.com/acme/two.extraHeader');
+    const result = run(command, work);
+    expect(environmentInitReport(result.stdout)).toContain('Initialized');
+    expect(readFileSync(join(work, 'seen.txt'), 'utf8').trim()).toBe('[]');
   });
 
   it('keeps the variables out of the shell that runs afterwards', () => {

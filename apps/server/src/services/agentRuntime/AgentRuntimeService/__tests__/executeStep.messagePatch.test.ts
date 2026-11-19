@@ -258,7 +258,10 @@ describe('AgentRuntimeService.executeStep - message patches across inline steps'
 
     await service.executeStep(inlineStep(2, { deferredMessagePatch: patch }));
 
-    expect(queryUiMessages).toHaveBeenCalledWith(patch.state, { skipWorks: true });
+    expect(queryUiMessages).toHaveBeenCalledWith(patch.state, {
+      skipCompressedMembers: true,
+      skipWorks: true,
+    });
     const patchAt = indexOf('message_patch', 1);
     expect(patchAt).toBeLessThan(indexOf('step_start', 2));
     expect(events()[patchAt].data).toMatchObject({
@@ -291,6 +294,7 @@ describe('AgentRuntimeService.executeStep - message patches across inline steps'
     expect(result.nextStepScheduled).toBe(true);
     expect(result.deferredMessagePatch).toBeUndefined();
     expect(queryUiMessages).toHaveBeenCalledWith(expect.objectContaining({ stepCount: 2 }), {
+      skipCompressedMembers: true,
       skipWorks: true,
     });
     const patchAt = indexOf('message_patch', 1);
@@ -456,5 +460,75 @@ describe('AgentRuntimeService.scheduleContinuation - handed-back message patch',
 
     expect(events().some((event) => event.type === 'message_patch')).toBe(false);
     expect(queueService.scheduleMessage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AgentRuntimeService.executeStep - compression groups in step reads', () => {
+  const group = (content: string, compressedMessages: UIChatMessage[] = []) =>
+    ({ ...row('g1', content, 'compressedGroup'), compressedMessages }) as UIChatMessage;
+  const member = row('m1', 'ORIGINAL MESSAGE');
+
+  const patches = (events: () => any[]) =>
+    events()
+      .filter((event) => event.type === 'message_patch')
+      .map((event) => event.data);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    stubRunningDurableOperation();
+    process.env.AGENT_RUNTIME_BASE_URL = 'http://localhost:3010';
+  });
+
+  afterEach(() => {
+    delete process.env.AGENT_RUNTIME_BASE_URL;
+  });
+
+  it('reads without members only for a run that receives message patches', async () => {
+    const { coordinator, query, service } = buildService();
+    coordinator.loadAgentState
+      .mockResolvedValueOnce(runState())
+      .mockResolvedValueOnce(runState({ host: {} }));
+
+    await service.executeStep(inlineStep(1));
+    await service.executeStep(inlineStep(1));
+
+    expect(query.mock.calls[0][0]).toMatchObject({ skipCompressedMembers: true });
+    expect(query.mock.calls[1][0]).toMatchObject({ skipCompressedMembers: false });
+  });
+
+  it('ships a group the step changed with its members', async () => {
+    const { coordinator, events, query, queryUiMessages, service } = buildService();
+    coordinator.loadAgentState.mockResolvedValueOnce(runState({ stepCount: 2 }));
+    query.mockResolvedValueOnce([group('new summary')]);
+    queryUiMessages.mockResolvedValueOnce([group('new summary', [member])]);
+
+    await service.executeStep(
+      inlineStep(2, {
+        deferredMessagePatch: { ...pendingPatch(), before: [group('old summary')] },
+      }),
+    );
+
+    expect(queryUiMessages).toHaveBeenCalledWith(expect.anything(), { skipWorks: true });
+    const [patch] = patches(events);
+    expect(patch.upserts).toHaveLength(1);
+    expect(patch.upserts[0].message).toMatchObject({
+      compressedMessages: [member],
+      content: 'new summary',
+    });
+  });
+
+  it('ships no patch when the members cannot be read', async () => {
+    const { coordinator, events, query, queryUiMessages, service } = buildService();
+    coordinator.loadAgentState.mockResolvedValueOnce(runState({ stepCount: 2 }));
+    query.mockResolvedValueOnce([group('new summary')]);
+    queryUiMessages.mockResolvedValueOnce(undefined);
+
+    await service.executeStep(
+      inlineStep(2, {
+        deferredMessagePatch: { ...pendingPatch(), before: [group('old summary')] },
+      }),
+    );
+
+    expect(patches(events).filter((patch) => patch.revision === 2)).toEqual([]);
   });
 });

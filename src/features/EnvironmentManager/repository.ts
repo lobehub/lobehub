@@ -22,3 +22,11 @@ export const repositoryPath = (configuration?: SourcedConfiguration): string | u
 
   return path || undefined;
 };
+
+/** Every repository an environment checks out, as `owner/name` (or the url when not GitHub). */
+export const repositoryPaths = (configuration?: SourcedConfiguration): string[] =>
+  (configuration?.sources ?? []).flatMap((source) => {
+    if (source.kind !== 'git' || !source.url) return [];
+    const path = source.url.replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, '');
+    return path ? [path] : [];
+  });

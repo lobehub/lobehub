@@ -103,6 +103,22 @@ describe('runCommand', () => {
       expect(result.exit_code).toBe(1);
     });
 
+    // A `(y/N)` prompt (e.g. `lh gen delete` without `--yes`) used to wait on
+    // an open stdin pipe nobody writes to, until the shell timeout.
+    it.skipIf(process.platform === 'win32')(
+      'should give a command reading stdin EOF instead of hanging',
+      async () => {
+        const result = await runCommand(
+          { command: 'read answer; echo "read-exit=$? answer=[$answer]"', timeout: 3_000 },
+          { processManager },
+        );
+
+        expect(result.exit_code).toBe(0);
+        expect(result.stdout).toContain('read-exit=1 answer=[]');
+      },
+      10_000,
+    );
+
     it('should handle command not found', async () => {
       const result = await runCommand(
         { command: 'nonexistent_command_xyz_123' },

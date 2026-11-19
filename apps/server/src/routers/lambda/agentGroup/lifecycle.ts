@@ -119,9 +119,6 @@ export const lifecycleRouter = router({
       // 1. Batch create virtual member agents
       const memberConfigs = input.members.map((member) => ({
         ...member,
-        // See the `batchCreateAgentsInGroup` cast above for why this bridges
-        // to `string[]` instead of failing type-check.
-        plugins: member.plugins as unknown as string[] | undefined,
         tags: member.tags as string[] | undefined,
         virtual: true,
         ...(groupVisibility ? { visibility: groupVisibility } : {}),

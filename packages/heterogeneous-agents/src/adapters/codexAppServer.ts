@@ -392,19 +392,29 @@ export class CodexAppServerAdapter {
   private started = false;
   /** A steered message was read; the next visible output opens a new step. */
   private steerStepPending = false;
-  private stepIndex = 0;
+  private stepIndex: number;
   private terminal = false;
 
   constructor(
-    options: { initialCumulativeUsage?: UsageData; initialModel?: string; sessionId?: string } = {},
+    options: {
+      initialCumulativeUsage?: UsageData;
+      initialModel?: string;
+      initialStepIndex?: number;
+      sessionId?: string;
+    } = {},
   ) {
     this.currentModel = options.initialModel;
     this.lastCumulativeUsage = options.initialCumulativeUsage;
     this.sessionId = options.sessionId;
+    this.stepIndex = options.initialStepIndex ?? 0;
   }
 
   get cumulativeUsage(): UsageData | undefined {
     return this.latestCumulativeUsage ?? this.lastCumulativeUsage;
+  }
+
+  get nextStepIndex(): number {
+    return this.stepIndex + 1;
   }
 
   startUserInput(toolCallId: string, args: unknown): HeterogeneousAgentEvent[] {
@@ -513,7 +523,15 @@ export class CodexAppServerAdapter {
     if (this.started) return [];
     this.started = true;
     this.currentTurnId = params.turn.id;
-    return [this.makeEvent('stream_start', this.streamStartData({ messageId: params.turn.id }))];
+    return [
+      this.makeEvent(
+        'stream_start',
+        this.streamStartData({
+          messageId: params.turn.id,
+          newStep: this.stepIndex > 0 || undefined,
+        }),
+      ),
+    ];
   }
 
   private handleItemStarted({ item }: ItemStartedNotification): HeterogeneousAgentEvent[] {

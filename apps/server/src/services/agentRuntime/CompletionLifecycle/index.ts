@@ -305,6 +305,7 @@ export class CompletionLifecycle {
       ],
       host: { hooks: input.serializedHooks },
       metadata: { assistantMessageId: input.assistantMessageId },
+      ...(input.shareVisitor && { principal: { actor: { shareVisitor: input.shareVisitor } } }),
       origin: {
         agentId: input.agentId,
         lineage: { orchestrationRole: input.orchestrationRole },

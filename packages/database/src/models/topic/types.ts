@@ -99,11 +99,11 @@ export interface CreateTopicParams {
    * attribution) plus the visitor's id here, so creator-facing listings
    * exclude them (`notShareVisitorTopic`, applied by `query`, `count`,
    * `queryTopics`, `queryRecent` and `rank`) while the share surface scopes
-   * reads per visitor (`queryBySender` / `countBySender`).
+   * reads per visitor (`queryBySender` / `countMessagesBySender`).
    *
-   * A future opt-in surface (`allowCreatorViewSessions`) may let a creator
-   * explicitly browse visitor sessions; that is not wired up yet — every
-   * creator-facing read today unconditionally excludes senderId rows.
+   * Topic reads always exclude senderId rows. When a share enables
+   * `allowCreatorViewSessions`, the creator reads the visitor's Channel instead
+   * (`repositories/channel/shareVisitors.ts`), never these run topics.
    */
   senderId?: string | null;
   sessionId?: string | null;
@@ -195,9 +195,8 @@ export interface QueryTopicParams {
   /**
    * When true, the SELECT also returns the heavier card-detail columns used
    * by the per-agent Topics management page: `firstUserMessage` (subquery),
-   * `messageCount` (subquery), `description`, `trigger`. `cost` and
-   * `tokenUsage` are intentionally omitted until a dedicated schema migration
-   * adds real columns to back them. Defaults to false so sidebar paths stay
+   * `messageCount` (subquery), `description`, `trigger`, and the topic's
+   * `cost` / `tokenUsage` totals. Defaults to false so sidebar paths stay
    * cheap.
    */
   withDetails?: boolean;

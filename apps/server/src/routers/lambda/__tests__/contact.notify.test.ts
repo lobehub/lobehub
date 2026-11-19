@@ -11,9 +11,10 @@ const model = vi.hoisted(() => ({
   sendRequest: vi.fn(),
 }));
 const { acceptRequest, sendRequest } = model;
-const { contactsChanged, notify } = vi.hoisted(() => ({
+const { contactsChanged, notify, openConversation } = vi.hoisted(() => ({
   contactsChanged: vi.fn(),
   notify: vi.fn(),
+  openConversation: vi.fn(),
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({
@@ -32,6 +33,10 @@ vi.mock('@/database/models/contact', () => ({
 vi.mock('@/server/services/contact/notify', () => ({
   notifyContactRequestAfterResponse: notify,
   notifyContactsChangedAfterResponse: contactsChanged,
+}));
+
+vi.mock('@/server/services/contact/conversation', () => ({
+  openContactConversation: openConversation,
 }));
 
 const { contactRouter } = await import('../contact');
@@ -78,6 +83,36 @@ describe('contactRouter notifications', () => {
       kind: 'accepted',
       recipientUserId: 'them',
       requestId: REQUEST_ID,
+    });
+  });
+
+  describe('opens the conversation of the new contacts', () => {
+    it('as the requester, in the request scope, on accepting', async () => {
+      acceptRequest.mockResolvedValue({ contactUserId: 'them', workspaceId: 'ws' });
+      await caller().acceptRequest({ requestId: REQUEST_ID });
+      expect(openConversation).toHaveBeenCalledWith({
+        addresseeId: 'me',
+        db: {},
+        requesterId: 'them',
+        workspaceId: 'ws',
+      });
+    });
+
+    it('when sending answers their pending request', async () => {
+      sendRequest.mockResolvedValue({ requestId: REQUEST_ID, status: 'accepted' });
+      await caller().sendRequest({ userId: 'them' });
+      expect(openConversation).toHaveBeenCalledWith({
+        addresseeId: 'me',
+        db: {},
+        requesterId: 'them',
+        workspaceId: null,
+      });
+    });
+
+    it('not for a request still pending', async () => {
+      sendRequest.mockResolvedValue({ requestId: REQUEST_ID, status: 'pending' });
+      await caller().sendRequest({ userId: 'them' });
+      expect(openConversation).not.toHaveBeenCalled();
     });
   });
 
