@@ -1,5 +1,4 @@
 import { DocumentModel } from '@/database/models/document';
-import type { DocumentItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { DocumentService } from '@/server/services/document';
 import {
@@ -24,10 +23,17 @@ import type {
   UpdateDocumentRequest,
 } from '../types/document.type';
 
-type DocumentRow = Pick<
-  DocumentItem,
-  'createdAt' | 'fileType' | 'id' | 'parentId' | 'slug' | 'title' | 'updatedAt'
->;
+/** The stored fields this API exposes; `content` is absent from list rows. */
+interface DocumentRow {
+  content?: string | null;
+  createdAt: Date;
+  fileType: string;
+  id: string;
+  parentId: string | null;
+  slug: string | null;
+  title: string | null;
+  updatedAt: Date;
+}
 
 const toSummary = (row: DocumentRow): DocumentSummary => ({
   createdAt: row.createdAt.toISOString(),
@@ -39,7 +45,7 @@ const toSummary = (row: DocumentRow): DocumentSummary => ({
   updatedAt: row.updatedAt.toISOString(),
 });
 
-const toPublicDocument = (row: DocumentItem): PublicDocument => ({
+const toPublicDocument = (row: DocumentRow): PublicDocument => ({
   ...toSummary(row),
   content: row.content ?? null,
 });

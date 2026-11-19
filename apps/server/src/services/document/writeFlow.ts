@@ -1,4 +1,5 @@
 import { TRPCError } from '@trpc/server';
+import pMap from 'p-map';
 
 import { notifyDocumentMention } from '@/business/server/document-mention/notifyActivity';
 import type { DocumentModel } from '@/database/models/document';
@@ -80,8 +81,11 @@ const notifyDocumentMentionsBestEffort = (
       ]);
       if (!meta) return;
 
-      await Promise.all(
-        recipientUserIds.map(async (recipientUserId) => {
+      // One permission read and one notification write per recipient; a page can
+      // mention many members, so bound the fan-out instead of opening them all at once.
+      await pMap(
+        recipientUserIds,
+        async (recipientUserId) => {
           const grantedPermissions = permissionsByUserId.get(recipientUserId);
           if (!grantedPermissions) return;
 
@@ -102,7 +106,8 @@ const notifyDocumentMentionsBestEffort = (
             savedAt: params.savedAt,
             workspaceId: ctx.workspaceId,
           });
-        }),
+        },
+        { concurrency: 5 },
       );
     } catch (error) {
       console.error('[document] Failed to send mention notification', error);
