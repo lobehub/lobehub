@@ -9703,7 +9703,6 @@ components:
             - "null"
         id:
           type: string
-          description: Device id.
         lastSeen:
           type: string
           description: Last time the device was connected (ISO 8601).
@@ -9827,7 +9826,6 @@ components:
             - "null"
         id:
           type: string
-          description: Device id.
         lastSeen:
           type: string
           description: Last time the device was connected (ISO 8601).

@@ -56,9 +56,7 @@ export const DeviceSchema = z
     defaultCwd: z.string().nullable().describe('Directory runs start in when none is named.'),
     friendlyName: z.string().nullable().describe('Name the user gave the device, if any.'),
     hostname: z.string().nullable(),
-    id: z
-      .string()
-      .describe('Id the machine reports on connect; the `{id}` on every `/devices/{id}` route.'),
+    id: z.string(),
     lastSeen: z.string().describe('Last time the device was connected (ISO 8601).'),
     metadata: z
       .record(z.string(), z.string())
