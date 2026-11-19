@@ -22,7 +22,7 @@ import { useTranslation } from 'react-i18next';
 
 import UserAvatar from '@/components/UserAvatar';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
-import { useInterfaceDensity } from '@/styles/density';
+import { useDensity } from '@/styles/density';
 
 import { describeError } from './errorMessage';
 import { repositoryPath } from './repository';
@@ -149,7 +149,7 @@ const EnvironmentItem = memo<EnvironmentItemProps>((props) => {
   const { t: tCommon } = useTranslation('common');
   const actions = useEnvironmentActions();
   const canEdit = useCanEditEnvironment()(environment);
-  const compact = useInterfaceDensity() === 'compact';
+  const { compact, tokens } = useDensity();
 
   // A row restored from storage carries only its plain `owner/name`.
   const repository = environment.configuration
@@ -238,7 +238,7 @@ const EnvironmentItem = memo<EnvironmentItemProps>((props) => {
       horizontal
       align={'center'}
       className={cx(styles.row, compact && styles.rowCompact, selected && styles.rowActive)}
-      gap={compact ? 12 : 16}
+      gap={tokens.sectionGap}
       role={'button'}
       tabIndex={0}
       onClick={onSelect}

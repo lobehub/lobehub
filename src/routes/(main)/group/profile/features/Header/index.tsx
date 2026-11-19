@@ -15,6 +15,7 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { densityVars } from '@/styles/densityVars';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import AgentBuilderToggle from './AgentBuilderToggle';
@@ -27,7 +28,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: none;
 
     width: 100%;
-    height: var(--lobe-density-header-height);
+    height: ${densityVars.headerHeight};
     padding-block: 0;
     padding-inline: 12px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};

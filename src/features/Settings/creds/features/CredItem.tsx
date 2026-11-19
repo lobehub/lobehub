@@ -26,7 +26,7 @@ import {
 import { type FC, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useInterfaceDensity } from '@/styles/density';
+import { useDensity } from '@/styles/density';
 
 import { styles } from './style';
 
@@ -64,7 +64,7 @@ const typeColors: Record<string, string> = {
 const CredItem: FC<CredItemProps> = memo(
   ({ canManage, cred, extraMenuItems = [], onEdit, onDelete, onView, tags }) => {
     const { t } = useTranslation('setting');
-    const compact = useInterfaceDensity() === 'compact';
+    const { compact, tokens } = useDensity();
 
     const handleDelete = () => {
       if (!canManage) return;
@@ -119,7 +119,7 @@ const CredItem: FC<CredItemProps> = memo(
 
     const renderAvatar = () => {
       if (cred.type === 'oauth' && cred.oauthAvatar) {
-        return <Avatar avatar={cred.oauthAvatar} size={compact ? 28 : 32} />;
+        return <Avatar avatar={cred.oauthAvatar} size={tokens.controlHeight} />;
       }
       return (
         // `display: flex` collapses the inline span's line box so the svg sits
@@ -135,13 +135,13 @@ const CredItem: FC<CredItemProps> = memo(
         horizontal
         align="center"
         className={stylex.props(styles.container, compact && styles.containerCompact).className}
-        gap={compact ? 12 : 16}
+        gap={tokens.sectionGap}
         justify="space-between"
       >
         <Flexbox
           horizontal
           align="center"
-          gap={compact ? 12 : 16}
+          gap={tokens.sectionGap}
           style={{ flex: 1, overflow: 'hidden' }}
         >
           <div {...stylex.props(styles.icon, compact && styles.iconCompact)}>{renderAvatar()}</div>

@@ -8,7 +8,7 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useDensityTokens, useInterfaceDensity } from '@/styles/density';
+import { useDensity, useDensityTokens } from '@/styles/density';
 
 import SkeletonBar from './Bar';
 
@@ -82,8 +82,8 @@ export const AgentViewAllSidebarSectionSkeleton = () => {
  * Also the page's own loading state while the agent list initialises.
  */
 export const AgentViewAllRowsSkeleton = ({ rows = 8 }: { rows?: number }) => {
-  const compact = useInterfaceDensity() === 'compact';
-  const avatarSize = compact ? 24 : 28;
+  const { compact, tokens } = useDensity();
+  const avatarSize = tokens.headerAvatarSize;
 
   return (
     <Flexbox aria-busy gap={2}>

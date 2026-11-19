@@ -3,7 +3,7 @@
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { useInterfaceDensity } from '@/styles/density';
+import { useDensity } from '@/styles/density';
 
 interface ListSkeletonProps {
   /**
@@ -22,7 +22,7 @@ interface ListSkeletonProps {
  * padding, 36px tile), matching a compact 6px-padded row with a 40px text stack.
  */
 const ListSkeleton = memo<ListSkeletonProps>(({ paddingInline = 12, rows = 4 }) => {
-  const compact = useInterfaceDensity() === 'compact';
+  const { compact, tokens } = useDensity();
 
   return (
     <Flexbox gap={2} width={'100%'}>
@@ -30,11 +30,11 @@ const ListSkeleton = memo<ListSkeletonProps>(({ paddingInline = 12, rows = 4 }) 
         <Flexbox
           horizontal
           align={'center'}
-          gap={compact ? 12 : 16}
+          gap={tokens.sectionGap}
           key={index}
           style={{ paddingBlock: compact ? 8 : 12, paddingInline }}
         >
-          <Skeleton.Avatar shape={'square'} size={compact ? 36 : 48} />
+          <Skeleton.Avatar shape={'square'} size={tokens.listRowHeight} />
           <Flexbox flex={1} gap={8}>
             <Skeleton height={14} width={140} />
             <Skeleton height={12} width={200} />

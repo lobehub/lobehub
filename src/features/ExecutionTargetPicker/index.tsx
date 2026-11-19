@@ -6,6 +6,7 @@ import { BoxIcon, LaptopIcon, MonitorOffIcon, SparklesIcon } from 'lucide-react'
 import { memo } from 'react';
 
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   dotOffline: css`
@@ -51,10 +52,10 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: center;
 
-    width: var(--lobe-density-icon-box);
-    height: var(--lobe-density-icon-box);
+    width: ${densityVars.iconBox};
+    height: ${densityVars.iconBox};
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: var(--lobe-density-radius);
+    border-radius: ${densityVars.radius};
 
     color: ${cssVar.colorText};
 
@@ -63,7 +64,7 @@ const styles = createStaticStyles(({ css }) => ({
   optionName: css`
     overflow: hidden;
 
-    font-size: var(--lobe-density-font-size);
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     line-height: 20px;
     color: ${cssVar.colorText};
@@ -71,7 +72,7 @@ const styles = createStaticStyles(({ css }) => ({
     white-space: nowrap;
   `,
   selectItem: css`
-    min-height: var(--lobe-density-list-row-height);
+    min-height: ${densityVars.listRowHeight};
   `,
   selectPopup: css`
     max-width: calc(100vw - 24px);
