@@ -59,6 +59,9 @@ const agentRuntime = (agent: Pick<ChannelAgentConfig, 'agencyConfig' | 'model'>)
   agent.agencyConfig?.heterogeneousProvider?.type ??
   (isHeterogeneousAgentModelId(agent.model) ? agent.model : 'native');
 
+/** Scan guard for a visitor topic transcript, which is read whole (see `shareVisitorTopic`). */
+const SHARE_VISITOR_TRANSCRIPT_ROW_CEILING = 100_000;
+
 export class ChannelService {
   readonly repository: ChannelRepository;
   private readonly agentService: AgentService;
@@ -478,7 +481,9 @@ export class ChannelService {
     if (!topic) throw new ChannelError('NOT_FOUND', 'Topic not found');
     const files = new FileService(this.db, this.userId, this.workspaceId);
     const messages = await new MessageModel(this.db, this.userId, this.workspaceId).query(
-      { agentId: topic.agentId, topicId },
+      // The page holds the transcript without paging, so read it whole rather than the default
+      // newest window: the share's per-visitor message cap already bounds a topic.
+      { agentId: topic.agentId, pageSize: SHARE_VISITOR_TRANSCRIPT_ROW_CEILING, topicId },
       {
         allowShareVisitor: true,
         postProcessUrl: (path, file) => files.getFileAccessUrl({ id: file.id, url: path }),

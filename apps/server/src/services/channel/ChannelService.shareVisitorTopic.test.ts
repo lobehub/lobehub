@@ -52,7 +52,8 @@ describe('reading a share visitor topic', () => {
     const { messages } = await service().shareVisitorTopic('tpc_1');
 
     expect(query).toHaveBeenCalledWith(
-      { agentId: 'agt_1', topicId: 'tpc_1' },
+      // The whole transcript, not the default newest window: the page holds it without paging.
+      { agentId: 'agt_1', pageSize: 100_000, topicId: 'tpc_1' },
       expect.objectContaining({ allowShareVisitor: true }),
     );
     expect(messages).toEqual([
