@@ -18,7 +18,7 @@ import { isComposioConnection, useOwnConnection } from './useOwnConnection';
 interface ConnectionMenuProps {
   agentId: string;
   /** The library offers this tool, so giving up the own connection falls back to it. */
-  hasLibraryConnection: boolean;
+  fallbackConnectionId?: string;
   /** The library's connection, when the agent may take one of its own from it. */
   libraryConnection?: ConnectorWithTools;
   /** The agent's own connection, when the current person may manage it. */
@@ -31,7 +31,7 @@ interface ConnectionMenuProps {
  */
 const ConnectionMenu = ({
   agentId,
-  hasLibraryConnection,
+  fallbackConnectionId,
   libraryConnection,
   ownConnection,
 }: ConnectionMenuProps) => {
@@ -47,7 +47,7 @@ const ConnectionMenu = ({
           label: t('settingAgent.tools.connection.manage'),
           onClick: () => manage(ownConnection),
         },
-        hasLibraryConnection
+        fallbackConnectionId
           ? {
               icon: <Icon icon={LibraryIcon} />,
               key: 'useLibrary',
@@ -56,7 +56,7 @@ const ConnectionMenu = ({
                   ? 'settingAgent.tools.connection.useWorkspace'
                   : 'settingAgent.tools.connection.useLibrary',
               ),
-              onClick: () => revertToLibrary(ownConnection),
+              onClick: () => revertToLibrary(ownConnection, fallbackConnectionId),
             }
           : {
               danger: true,

@@ -1769,6 +1769,7 @@
   "settingAgent.tools.connection.ownTitle": "使用专属连接",
   "settingAgent.tools.connection.removeConfirm.desc": "这个连接只有这个助理在用，它会和凭证一起被删除。",
   "settingAgent.tools.connection.removeConfirm.title": "从这个助理移除 {{name}}？",
+  "settingAgent.tools.connection.switchFailed": "未能切换 {{name}} 的连接。这个助理仍使用自己的专属连接。",
   "settingAgent.tools.connection.useLibrary": "改用库里的连接",
   "settingAgent.tools.connection.useLibraryConfirm.desc": "这个助理的专属连接和凭证会被删除，之后改用你库里的连接。",
   "settingAgent.tools.connection.useLibraryConfirm.title": "不再给 {{name}} 用专属连接？",

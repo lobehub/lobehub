@@ -1769,6 +1769,7 @@
   "settingAgent.tools.connection.ownTitle": "Uses its own connection",
   "settingAgent.tools.connection.removeConfirm.desc": "Only this agent has this connection. It will be deleted together with its credentials.",
   "settingAgent.tools.connection.removeConfirm.title": "Remove {{name}} from this agent?",
+  "settingAgent.tools.connection.switchFailed": "Could not switch connections for {{name}}. This agent still uses its own connection.",
   "settingAgent.tools.connection.useLibrary": "Use the library connection",
   "settingAgent.tools.connection.useLibraryConfirm.desc": "This agent's own connection and its credentials will be deleted. It will use the one in your library from now on.",
   "settingAgent.tools.connection.useLibraryConfirm.title": "Stop using a separate connection for {{name}}?",

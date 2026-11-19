@@ -1431,6 +1431,8 @@ export default {
   'settingAgent.tools.connection.createFailed':
     'Could not set up a separate connection for {{name}}',
   'settingAgent.tools.connection.manage': 'Manage connection',
+  'settingAgent.tools.connection.switchFailed':
+    'Could not switch connections for {{name}}. This agent still uses its own connection.',
   'settingAgent.tools.connection.useLibrary': 'Use the library connection',
   'settingAgent.tools.connection.useWorkspace': 'Use the workspace connection',
   'settingAgent.tools.connection.useLibraryConfirm.title':

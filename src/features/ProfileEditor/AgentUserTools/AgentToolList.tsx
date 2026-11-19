@@ -203,7 +203,7 @@ const Tools = ({ agentId, group, onOpenDetail }: Props) => {
             extra={
               <ConnectionMenu
                 agentId={agentId}
-                hasLibraryConnection={inLibrary && !!libraryConnection}
+                fallbackConnectionId={inLibrary ? libraryConnection?.id : undefined}
                 libraryConnection={
                   !ownConnection &&
                   libraryConnection &&

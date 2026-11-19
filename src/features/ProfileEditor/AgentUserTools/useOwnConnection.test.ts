@@ -13,6 +13,8 @@ const AGENT = 'agt_1';
 
 const mocks = vi.hoisted(() => ({
   calls: [] as string[],
+  connectors: [] as ConnectorWithTools[],
+  fetchConnectors: vi.fn(),
   confirm: vi.fn(),
   copyConnectorToAgent: vi.fn(),
   detachConnectorFromAgent: vi.fn(),
@@ -53,13 +55,19 @@ vi.mock('@/store/agent', () => {
 vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: { getAgentConfigById: () => () => ({ plugins: mocks.plugins }) },
 }));
-vi.mock('@/store/tool', () => ({
-  useToolStore: (selector: (s: unknown) => unknown) =>
-    selector({
-      copyConnectorToAgent: mocks.copyConnectorToAgent,
-      detachConnectorFromAgent: mocks.detachConnectorFromAgent,
+vi.mock('@/store/tool', () => {
+  const state = () => ({
+    connectors: mocks.connectors,
+    copyConnectorToAgent: mocks.copyConnectorToAgent,
+    detachConnectorFromAgent: mocks.detachConnectorFromAgent,
+    fetchConnectors: mocks.fetchConnectors,
+  });
+  return {
+    useToolStore: Object.assign((selector: (s: unknown) => unknown) => selector(state()), {
+      getState: state,
     }),
-}));
+  };
+});
 
 const connector = (overrides: Partial<ConnectorWithTools> = {}): ConnectorWithTools => ({
   agentId: AGENT,
@@ -82,6 +90,8 @@ const setup = () => renderHook(() => useOwnConnection(AGENT)).result.current;
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.calls.length = 0;
+  mocks.connectors = [connector({ agentId: null, id: 'row-lib' })];
+  mocks.fetchConnectors.mockResolvedValue(undefined);
   mocks.plugins = [{ identifier: 'notion', mode: 'auto' }];
   mocks.copyConnectorToAgent.mockResolvedValue('row-own');
   mocks.detachConnectorFromAgent.mockImplementation(async () => {
@@ -126,8 +136,32 @@ describe('useOwnConnection', () => {
     expect(mocks.toastSuccess).not.toHaveBeenCalled();
   });
 
+  it('keeps the own connection if the library connection was mounted elsewhere before confirmation', async () => {
+    mocks.fetchConnectors.mockImplementation(async () => {
+      mocks.connectors = [
+        connector({ agentId: null, id: 'row-lib', metadata: { mountedByAgentId: 'other-agent' } }),
+      ];
+    });
+
+    await setup().revertToLibrary(connector(), 'row-lib');
+
+    expect(mocks.detachConnectorFromAgent).not.toHaveBeenCalled();
+    expect(mocks.updateAgentConfigById).not.toHaveBeenCalled();
+    expect(mocks.toastError).toHaveBeenCalled();
+  });
+
+  it('preserves both the connection and plugin configuration if the fresh read fails', async () => {
+    mocks.fetchConnectors.mockRejectedValueOnce(new Error('offline'));
+
+    await setup().revertToLibrary(connector(), 'row-lib');
+
+    expect(mocks.detachConnectorFromAgent).not.toHaveBeenCalled();
+    expect(mocks.updateAgentConfigById).not.toHaveBeenCalled();
+    expect(mocks.toastError).toHaveBeenCalled();
+  });
+
   it('keeps the tool on when the agent goes back to the library connection', async () => {
-    await setup().revertToLibrary(connector());
+    await setup().revertToLibrary(connector(), 'row-lib');
 
     expect(mocks.detachConnectorFromAgent).toHaveBeenCalledWith('row-own', AGENT, 'delete');
     // Deleting the connection takes the tool off the agent on the server, so the switch is
@@ -141,7 +175,7 @@ describe('useOwnConnection', () => {
   it('leaves the tool off when it was off before going back to the library connection', async () => {
     mocks.plugins = [{ identifier: 'notion', mode: 'disabled' }];
 
-    await setup().revertToLibrary(connector());
+    await setup().revertToLibrary(connector(), 'row-lib');
 
     expect(mocks.updateAgentConfigById).toHaveBeenCalledWith(AGENT, {
       plugins: [{ identifier: 'notion', mode: 'disabled' }],
@@ -161,11 +195,11 @@ describe('useOwnConnection', () => {
   it('closes the details of a tool whose connection just changed, and leaves other details open', async () => {
     const detail = { icon: null, tag: 'Custom connector', title: 'Notion', tools: [] };
     useItemDetailStore.getState().open({ ...detail, identifier: 'notion' });
-    await setup().revertToLibrary(connector());
+    await setup().revertToLibrary(connector(), 'row-lib');
     expect(useItemDetailStore.getState().detail).toBeUndefined();
 
     useItemDetailStore.getState().open({ ...detail, identifier: 'linear' });
-    await setup().revertToLibrary(connector());
+    await setup().revertToLibrary(connector(), 'row-lib');
     expect(useItemDetailStore.getState().detail?.identifier).toBe('linear');
     useItemDetailStore.getState().close();
   });

@@ -1,3 +1,4 @@
+import { hasCallableMcpEndpoint } from '@lobechat/const';
 import { getConnectorMode, upsertConnectorEnabled, upsertPluginMode } from '@lobechat/types';
 import { confirmModal, toast } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +10,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
+import { isLibraryConnectorForAgent } from '@/store/tool/slices/connector/selectors';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 
 /** Where the library lists the agent's own connections, opened on one of them. */
@@ -66,7 +68,7 @@ export const useOwnConnection = (agentId: string) => {
   const manage = (own: ConnectorWithTools) => navigate(ownConnectionSettingsPath(own.id));
 
   /** Drop the agent's own connection; the tool stays on and runs on the library's again. */
-  const revertToLibrary = (own: ConnectorWithTools) =>
+  const revertToLibrary = (own: ConnectorWithTools, fallbackConnectionId: string) =>
     confirmModal({
       cancelText: t('cancel', { ns: 'common' }),
       content: t(
@@ -81,6 +83,27 @@ export const useOwnConnection = (agentId: string) => {
           : 'settingAgent.tools.connection.useLibrary',
       ),
       onOk: async () => {
+        // The library row may have been removed or mounted elsewhere while the dialog was open.
+        const { fetchConnectors } = useToolStore.getState();
+        try {
+          await fetchConnectors();
+        } catch {
+          toast.error(t('settingAgent.tools.connection.switchFailed', { name: own.name }));
+          return;
+        }
+        const fallback = useToolStore
+          .getState()
+          .connectors.find((row) => row.id === fallbackConnectionId);
+        if (
+          !fallback ||
+          fallback.identifier !== own.identifier ||
+          !isLibraryConnectorForAgent(fallback, agentId) ||
+          !(isComposioConnection(fallback) || hasCallableMcpEndpoint(fallback))
+        ) {
+          toast.error(t('settingAgent.tools.connection.switchFailed', { name: own.name }));
+          return;
+        }
+
         const enabled = getConnectorMode(readPlugins(), own.identifier) === 'auto';
         await detachConnectorFromAgent(own.id, agentId, 'delete');
         // Deleting an agent's connection also takes its tool off the agent. The tool is still
