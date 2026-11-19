@@ -1561,6 +1561,13 @@
       "when": 1795064606437,
       "tag": "0222_agent_skill_upstream",
       "breakpoints": true
+    },
+    {
+      "idx": 223,
+      "version": "7",
+      "when": 1795082781704,
+      "tag": "0223_running_operations_and_message_author_indexes",
+      "breakpoints": true
     }
   ],
   "version": "6"
