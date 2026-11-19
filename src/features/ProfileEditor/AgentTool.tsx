@@ -1,8 +1,15 @@
 'use client';
 
-import { isOnDemandBuiltinTool } from '@lobechat/builtin-tools';
+import { isOnDemandBuiltinTool, onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
 import { getConnectorCatalog } from '@lobechat/const';
-import { parsePluginEntry, upsertConnectorEnabled, upsertPluginMode } from '@lobechat/types';
+import {
+  getDisabledPluginIds,
+  getOptedInPluginIds,
+  parsePluginEntry,
+  resolveToolMode,
+  upsertConnectorEnabled,
+  upsertPluginMode,
+} from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
 import { Avatar, Button, cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
@@ -135,19 +142,6 @@ const AgentTool = memo<AgentToolProps>(
     // A connector is two-state: this page turns it on (found on demand) or off, never pinned.
     const connectorIdList = useToolStore(getConnectorIdentifiers, isEqual);
     const connectorIds = useMemo(() => new Set(connectorIdList), [connectorIdList]);
-    // Everything switched on for this agent: pinned entries, plus the entries that carry an
-    // explicit `auto` — a connector turned on here, a library skill set to Auto in the chat input.
-    const enabledIds = useMemo(
-      () =>
-        new Set(
-          (config?.plugins ?? [])
-            .map((entry) => parsePluginEntry(entry))
-            .filter((entry) => entry.mode !== 'disabled')
-            .map((entry) => entry.identifier),
-        ),
-      [config?.plugins],
-    );
-
     const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
     const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
 
@@ -165,6 +159,19 @@ const AgentTool = memo<AgentToolProps>(
         : builtinToolSelectors.metaList,
       isEqual,
     );
+    const implicitToolIds = useMemo(
+      () =>
+        resolveToolMode(config?.chatConfig) === 'agent'
+          ? profileBuiltinList.map((tool) => tool.identifier).filter(isOnDemandBuiltinTool)
+          : [],
+      [config?.chatConfig, profileBuiltinList],
+    );
+    const enabledIds = useMemo(() => {
+      const ids = new Set([...implicitToolIds, ...getOptedInPluginIds(config?.plugins)]);
+      for (const id of getDisabledPluginIds(config?.plugins)) ids.delete(id);
+      return ids;
+    }, [implicitToolIds, config?.plugins]);
+
     const nonProfileConfigurableBuiltinToolIds = useToolStore(
       builtinToolSelectors.nonProfileConfigurableBuiltinToolIds({
         isManualMode: isManualSkillMode,
@@ -266,17 +273,15 @@ const AgentTool = memo<AgentToolProps>(
         const hasEntry = (config?.plugins ?? []).some(
           (entry) => parsePluginEntry(entry).identifier === pluginId,
         );
-        if (shouldEnable ? hasPlugin : !hasEntry) return;
+        if (shouldEnable ? hasPlugin : !hasEntry && !hasPlugin) return;
 
         // upsertPluginMode operates on the raw (possibly mixed-shape) config,
         // so an existing disabled entry is flipped in place instead of being
         // dropped from the array.
         await updateAgentConfigById(effectiveAgentId, {
-          plugins:
-            shouldEnable &&
-            (allSkillIdentifiers.has(pluginId) ||
-              connectorIds.has(pluginId) ||
-              isOnDemandBuiltinTool(pluginId))
+          plugins: isOnDemandBuiltinTool(pluginId)
+            ? upsertConnectorEnabled(config?.plugins, pluginId, shouldEnable)
+            : shouldEnable && (allSkillIdentifiers.has(pluginId) || connectorIds.has(pluginId))
               ? upsertConnectorEnabled(config?.plugins, pluginId, true)
               : upsertPluginMode(config?.plugins, pluginId, shouldEnable ? 'pinned' : 'auto'),
         });
@@ -808,7 +813,7 @@ const AgentTool = memo<AgentToolProps>(
     // ──────────────────────────────────────────────
     // Build the set of all valid identifiers known to the system
     const validIdentifiers = useMemo(() => {
-      const all = new Set<string>();
+      const all = new Set(onDemandBuiltinToolIds);
 
       // 1. Builtin tools (includes Composio metas)
       for (const tool of knownBuiltinList) all.add(tool.identifier);
@@ -893,7 +898,7 @@ const AgentTool = memo<AgentToolProps>(
     const listedTools = useMemo(() => {
       const entries = (config?.plugins ?? []).map((entry) => parsePluginEntry(entry));
       const visible = getVisibleProfileToolIds(
-        entries.map((entry) => entry.identifier),
+        [...new Set([...implicitToolIds, ...entries.map((entry) => entry.identifier)])],
         {
           agentConnectorIdentifiers,
           nonConfigurableBuiltinToolIdentifiers: nonProfileConfigurableBuiltinToolIdentifiers,
@@ -903,6 +908,7 @@ const AgentTool = memo<AgentToolProps>(
         ? visible
         : visible.filter((id) => allSkillIdentifiers.has(id) === (kind === 'skills'));
     }, [
+      implicitToolIds,
       config?.plugins,
       agentConnectorIdentifiers,
       nonProfileConfigurableBuiltinToolIdentifiers,

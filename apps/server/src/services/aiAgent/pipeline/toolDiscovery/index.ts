@@ -9,7 +9,7 @@ import {
   SELF_FEEDBACK_INTENT_IDENTIFIER,
   shouldExposeSelfFeedbackIntentTool,
 } from '@lobechat/builtin-tool-self-iteration';
-import { getUnselectedBuiltinToolIds, runtimeManagedToolIds } from '@lobechat/builtin-tools';
+import { getUnavailableBuiltinToolIds, runtimeManagedToolIds } from '@lobechat/builtin-tools';
 import { getFeatureDisabledToolIds } from '@lobechat/builtin-tools/featureGates';
 import type {
   AgentGroupConfig,
@@ -517,7 +517,10 @@ export const discoverTools = async (
     // Share runs have a separate grant-based discovery pool and allowlist.
     if (!shareGate)
       disabledPluginIds.push(
-        ...getUnselectedBuiltinToolIds([...optedInIds, ...agentPlugins, ...boundConnectorIds]),
+        ...getUnavailableBuiltinToolIds(
+          [...optedInIds, ...agentPlugins, ...boundConnectorIds],
+          agentConfig.chatConfig,
+        ),
       );
 
     // Resolve THE device decision for this run; see `resolveDevicePlan`.
