@@ -22,11 +22,11 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { resolveEffectiveDensity } from '@/styles/density';
 import { compactDensityTheme } from '@/styles/densityTheme';
 import { sx } from '@/styles/sx';
 import { setCookie } from '@/utils/client/cookie';
 import { resolveLang } from '@/utils/client/switchLang';
-import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { resolveFontFamilyOverride } from './fontFamilyOverride';
 
@@ -132,7 +132,7 @@ const AppTheme = memo<AppThemeProps>(
     }, [fontAntialiasing]);
 
     useEffect(() => {
-      const effectiveDensity = isMobileSurface() ? 'loose' : interfaceDensity;
+      const effectiveDensity = resolveEffectiveDensity(interfaceDensity);
       document.documentElement.dataset.density = effectiveDensity;
       if (effectiveDensity !== 'compact') return;
       const classes =

@@ -8,6 +8,7 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import KnowledgeIcon from '@/components/KnowledgeIcon';
 import { buildFilePath, buildLibraryPath } from '@/features/ResourceManager/utils/resourcePath';
 import { useInterfaceDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 import { type KnowledgeItem, KnowledgeType } from '@/types/knowledgeBase';
 
 import Actions from './Action';
@@ -30,7 +31,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   title: css`
     margin: 0 !important;
-    font-size: var(--lobe-density-font-size);
+    font-size: ${densityVars.fontSize};
     line-height: 1;
   `,
 }));

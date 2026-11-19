@@ -2,6 +2,7 @@ import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
+import { toolSetsFrom } from './helpers/connectorToolSets';
 
 const {
   mockResolveAllConnectors,
@@ -74,6 +75,7 @@ vi.mock('@/database/models/connector', () => ({
     return {
       resolveAll: mockResolveAllConnectors,
       resolveByIdentifiers: vi.fn().mockResolvedValue([]),
+      resolveToolSets: toolSetsFrom(vi.fn().mockResolvedValue([]), mockResolveAllConnectors),
     };
   }),
 }));

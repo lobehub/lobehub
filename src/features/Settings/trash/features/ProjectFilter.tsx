@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import type { ProjectListItem } from '@/store/project';
+import { densityVars } from '@/styles/densityVars';
 
 import {
   fromProjectFilterValue,
@@ -107,7 +108,7 @@ export const ProjectFilter = ({
         popupMatchSelectWidth={280}
         prefix={FolderKanbanIcon}
         size={'small'}
-        style={{ maxWidth: 260, minHeight: 'var(--lobe-density-control-height)', minWidth: 160 }}
+        style={{ maxWidth: 260, minHeight: densityVars.controlHeight, minWidth: 160 }}
         // Not `virtual`: the virtual list counts the whole project group as one
         // row and crashes once search shrinks the options; search is the way
         // through a long list.

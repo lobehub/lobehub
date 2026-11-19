@@ -1,5 +1,7 @@
 import { createStaticStyles, keyframes } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 const slideDown = keyframes`
   from {
     transform: translateY(-20px) scale(0.96);
@@ -95,7 +97,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    padding-block: calc(var(--lobe-density-section-gap) - 4px);
+    padding-block: calc(${densityVars.sectionGap} - 4px);
     padding-inline: 16px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
@@ -125,7 +127,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       border: none;
 
       font-family: inherit;
-      font-size: var(--lobe-density-page-title-font-size);
+      font-size: ${densityVars.pageTitleFontSize};
       color: ${cssVar.colorText};
 
       background: transparent;
@@ -146,7 +148,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       padding-block: 32px;
       padding-inline: 16px;
 
-      font-size: var(--lobe-density-font-size);
+      font-size: ${densityVars.fontSize};
       color: ${cssVar.colorTextTertiary};
       text-align: center;
     }
@@ -159,10 +161,10 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       gap: 10px;
       align-items: center;
 
-      min-height: var(--lobe-density-row-height);
-      padding-block: calc((var(--lobe-density-row-height) - 20px) / 2);
-      padding-inline: var(--lobe-density-section-gap);
-      border-radius: var(--lobe-density-radius);
+      min-height: ${densityVars.rowHeight};
+      padding-block: calc((${densityVars.rowHeight} - 20px) / 2);
+      padding-inline: ${densityVars.sectionGap};
+      border-radius: ${densityVars.radius};
 
       color: ${cssVar.colorText};
 
@@ -181,7 +183,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       user-select: none;
 
       padding-block: 6px;
-      padding-inline: var(--lobe-density-section-gap);
+      padding-inline: ${densityVars.sectionGap};
 
       font-size: 12px;
       font-weight: 500;
@@ -203,12 +205,12 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     padding-block: 6px;
-    padding-inline: var(--lobe-density-section-gap);
+    padding-inline: ${densityVars.sectionGap};
   `,
   icon: css`
     flex-shrink: 0;
-    width: var(--lobe-density-icon-size);
-    height: var(--lobe-density-icon-size);
+    width: ${densityVars.iconSize};
+    height: ${densityVars.iconSize};
     color: ${cssVar.colorTextSecondary};
   `,
   inputWrapper: css`
@@ -216,8 +218,8 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 8px;
     align-items: center;
 
-    padding-block: calc(var(--lobe-density-section-gap) - 4px);
-    padding-inline: var(--lobe-density-section-gap);
+    padding-block: calc(${densityVars.sectionGap} - 4px);
+    padding-inline: ${densityVars.sectionGap};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   itemContent: css`
@@ -249,20 +251,20 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    width: var(--lobe-density-icon-size);
-    height: var(--lobe-density-icon-size);
+    width: ${densityVars.iconSize};
+    height: ${densityVars.iconSize};
 
     color: ${cssVar.colorTextSecondary};
   `,
   itemLabel: css`
-    font-size: var(--lobe-density-font-size);
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     line-height: 1.4;
   `,
   itemTitle: css`
     overflow: hidden;
 
-    font-size: var(--lobe-density-font-size);
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     line-height: 1.4;
     text-overflow: ellipsis;

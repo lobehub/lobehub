@@ -21,7 +21,7 @@ import { memo, type MouseEvent, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useInterfaceDensity } from '@/styles/density';
+import { useDensity } from '@/styles/density';
 
 import ItemActions from './ItemActions';
 import LabelTags from './LabelTags';
@@ -161,7 +161,7 @@ const AgentRow = memo<AgentRowProps>(
     const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
     const role = agentSecondaryDisplayName(item);
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-    const compact = useInterfaceDensity() === 'compact';
+    const { compact, tokens } = useDensity();
 
     // Right-click support (Task-List-style): the hook-bearing menu mounts on
     // the ROW's pointer-enter (which always precedes a right-click) and hands
@@ -197,7 +197,7 @@ const AgentRow = memo<AgentRowProps>(
             className={styles.identity}
             to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
           >
-            <SidebarItemAvatar item={item} size={compact ? 24 : 28} />
+            <SidebarItemAvatar item={item} size={tokens.headerAvatarSize} />
             {/* Three single-line columns: who the agent is, the role it plays,
               and what it is responsible for. */}
             <Text ellipsis className={cx('agent-row-title', styles.name)} weight={500}>

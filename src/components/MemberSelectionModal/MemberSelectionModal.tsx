@@ -32,6 +32,7 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 import { useInterfaceDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 import { sx } from '@/styles/sx';
 
 const AvailableAgentItem = memo<{
@@ -462,7 +463,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
                 >
                   <Flexbox flex={1} gap={2}>
                     <Text
-                      style={{ fontSize: 'var(--lobe-density-font-size)', fontWeight: 500 }}
+                      style={{ fontSize: densityVars.fontSize, fontWeight: 500 }}
                       type={isHostRemoved ? 'secondary' : undefined}
                     >
                       {t('groupWizard.host.title')}

@@ -1,5 +1,7 @@
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export const styles = createStaticStyles(({ css }) => ({
   dropZone: css`
     position: relative;
@@ -12,8 +14,8 @@ export const styles = createStaticStyles(({ css }) => ({
   `,
   header: css`
     min-width: 1040px;
-    height: var(--lobe-density-toolbar-height);
-    min-height: var(--lobe-density-toolbar-height);
+    height: ${densityVars.toolbarHeight};
+    min-height: ${densityVars.toolbarHeight};
     color: ${cssVar.colorTextDescription};
   `,
   headerItem: css`
@@ -42,7 +44,7 @@ export const styles = createStaticStyles(({ css }) => ({
   selectAllHint: css`
     position: sticky;
     z-index: 1;
-    inset-block-start: var(--lobe-density-toolbar-height);
+    inset-block-start: ${densityVars.toolbarHeight};
 
     min-width: 1040px;
     padding-block: 8px;

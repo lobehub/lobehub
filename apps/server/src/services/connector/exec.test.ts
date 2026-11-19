@@ -7,7 +7,7 @@ import { mcpService } from '@/server/services/mcp';
 import type * as ContentProcessorModule from '@/server/services/mcp/contentProcessor';
 
 import { callConnectorToolById, readConnectorUiResourceById } from './exec';
-import { scheduleStaleConnectorToolsRefresh } from './refresh';
+import { connectorSyncContextForRow, scheduleStaleConnectorToolsRefresh } from './refresh';
 import { ensureFreshConnectorToken } from './tokens';
 
 vi.mock('@/server/services/mcp', () => ({
@@ -32,6 +32,8 @@ vi.mock('./tokens', () => ({ ensureFreshConnectorToken: vi.fn(async (c) => c) })
 // verify the call site wires it up and stays isolated from it.
 vi.mock('./refresh', () => ({
   buildLastSyncedAtMap: vi.fn(() => new Map()),
+  // The run's own context unless a test hands a personal row its own scope
+  connectorSyncContextForRow: vi.fn((ctx: unknown) => ctx),
   scheduleStaleConnectorToolsRefresh: vi.fn(),
 }));
 
@@ -60,6 +62,10 @@ const makeCtx = (connectors: any[], tools: any[], { agentVisible = true } = {}) 
       getLinkModel: () => ({ listByConnectorIds: async () => [] }),
       queryByIdentifiers: vi.fn().mockResolvedValue(connectors),
       resolveByIdentifiers: vi.fn().mockResolvedValue(connectors),
+      // Every row its own tool set, keyed by its tool prefix
+      resolveToolSets: vi.fn(async () =>
+        connectors.map((row) => ({ ...row, toolIdentifier: row.toolIdentifier ?? row.identifier })),
+      ),
     },
     connectorToolModel: { queryByConnector: vi.fn().mockResolvedValue(tools) },
   }) as any;
@@ -479,6 +485,28 @@ describe('callConnectorToolById', () => {
     });
   });
 
+  it("refreshes a personal row a workspace run resolved through the row's own scope", async () => {
+    // A private agent's workspace run resolves its owner's personal connector;
+    // the run's workspace-scoped models cannot write its tool rows.
+    const personalContext = { connectorModel: {}, connectorToolModel: {} } as any;
+    vi.mocked(connectorSyncContextForRow).mockReturnValueOnce(personalContext);
+    vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
+    const ctx = { ...makeCtx([connector], [tool()]), serverDB: {} as any, userId: 'user-1' };
+
+    await callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx);
+
+    expect(connectorSyncContextForRow).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({ id: 'c1' }),
+      ctx.serverDB,
+    );
+    expect(scheduleStaleConnectorToolsRefresh).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: 'c1' })],
+      expect.anything(),
+      { ...personalContext, userId: 'user-1' },
+    );
+  });
+
   it('still returns the tool result when the background refresh scheduler throws', async () => {
     // The refresh is a pure optimization; a failure in it must never break the
     // tool call the user actually asked for.
@@ -539,7 +567,10 @@ describe('readConnectorUiResourceById', () => {
       ctx,
     );
 
-    expect(ensureFreshConnectorToken).toHaveBeenCalledWith(connector, ctx.connectorModel);
+    expect(ensureFreshConnectorToken).toHaveBeenCalledWith(
+      expect.objectContaining(connector),
+      ctx.connectorModel,
+    );
     expect(mcpService.readUiResource).toHaveBeenCalledWith(
       expect.objectContaining({ url: 'https://mcp.example.com' }),
       'ui://app',
@@ -583,7 +614,12 @@ describe('readConnectorUiResourceById', () => {
       ctx,
     );
 
-    expect(ctx.connectorModel.resolveByIdentifiers).toHaveBeenCalledWith(['my-conn'], 'agt_1');
+    expect(ctx.connectorModel.resolveToolSets).toHaveBeenCalledWith(
+      {
+        agentId: 'agt_1',
+      },
+      ['my-conn'],
+    );
     expect(ctx.connectorModel.queryByIdentifiers).not.toHaveBeenCalled();
   });
 
@@ -611,8 +647,79 @@ describe('callConnectorToolById agent resolution', () => {
     );
 
     expect(ctx.agentModel.existsById).toHaveBeenCalledWith('agt_1');
-    expect(ctx.connectorModel.resolveByIdentifiers).toHaveBeenCalledWith(['my-conn'], 'agt_1');
+    expect(ctx.connectorModel.resolveToolSets).toHaveBeenCalledWith(
+      {
+        agentId: 'agt_1',
+      },
+      ['my-conn'],
+    );
     expect(ctx.connectorModel.queryByIdentifiers).not.toHaveBeenCalled();
+  });
+
+  // A private agent's own private connectors resolve only with the proof that
+  // the call belongs to that agent's own topic.
+  it("resolves within the call's topic so a private agent reaches its own connectors", async () => {
+    vi.mocked(mcpService.callTool).mockResolvedValue({ success: true } as any);
+    const ctx = makeCtx([connector], [tool()]);
+
+    await callConnectorToolById(
+      { agentId: 'agt_1', identifier: 'my-conn', toolName: 'do_thing', topicId: 'tpc_1' },
+      ctx,
+    );
+
+    expect(ctx.connectorModel.resolveToolSets).toHaveBeenCalledWith(
+      {
+        agentId: 'agt_1',
+        topicId: 'tpc_1',
+      },
+      ['my-conn'],
+    );
+  });
+});
+
+// A private agent's own topic resolves the shared row and the owner's private
+// row of one identifier as two tool sets; a call runs the row its prefix names.
+describe('callConnectorToolById with same-identifier rows', () => {
+  const shared = { ...connector, id: 'conn-shared', mcpServerUrl: 'https://shared.example/mcp' };
+  const mine = {
+    ...connector,
+    id: 'conn-mine',
+    mcpServerUrl: 'https://mine.example/mcp',
+    toolIdentifier: 'my-conn-abcd1234',
+    visibility: 'private',
+  };
+
+  it.each([
+    ['my-conn-abcd1234', 'https://mine.example/mcp'],
+    ['my-conn', 'https://shared.example/mcp'],
+  ])('runs %s on its own row', async (identifier, url) => {
+    vi.mocked(mcpService.callTool).mockResolvedValue({ success: true } as any);
+    const ctx = makeCtx([mine, shared], [tool()]);
+
+    await callConnectorToolById(
+      { agentId: 'agt_1', identifier, toolName: 'do_thing', topicId: 'tpc_1' },
+      ctx,
+    );
+
+    expect(vi.mocked(mcpService.callTool).mock.calls[0][0]).toMatchObject({
+      clientParams: expect.objectContaining({ url }),
+    });
+  });
+
+  it('finds nothing for a prefix no row of the run has', async () => {
+    const ctx = makeCtx([shared], [tool()]);
+
+    await expect(
+      callConnectorToolById(
+        {
+          agentId: 'agt_1',
+          identifier: 'my-conn-abcd1234',
+          toolName: 'do_thing',
+          topicId: 'tpc_1',
+        },
+        ctx,
+      ),
+    ).rejects.toHaveProperty('code', 'NOT_FOUND');
   });
 });
 
@@ -630,7 +737,7 @@ describe('agent-scoped connectors of an agent the caller cannot see', () => {
     ).rejects.toHaveProperty('code', 'NOT_FOUND');
 
     expect(ctx.agentModel.existsById).toHaveBeenCalledWith('agt_private');
-    expect(ctx.connectorModel.resolveByIdentifiers).not.toHaveBeenCalled();
+    expect(ctx.connectorModel.resolveToolSets).not.toHaveBeenCalled();
     expect(ensureFreshConnectorToken).not.toHaveBeenCalled();
     expect(mcpService.callTool).not.toHaveBeenCalled();
   });
@@ -646,7 +753,7 @@ describe('agent-scoped connectors of an agent the caller cannot see', () => {
       ),
     ).rejects.toHaveProperty('code', 'NOT_FOUND');
 
-    expect(ctx.connectorModel.resolveByIdentifiers).not.toHaveBeenCalled();
+    expect(ctx.connectorModel.resolveToolSets).not.toHaveBeenCalled();
     expect(mcpService.readUiResource).not.toHaveBeenCalled();
   });
 });

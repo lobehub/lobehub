@@ -272,7 +272,11 @@ export const resolveWidgetEnv = async (
     ...new Set(requirements.map((r) => r.connector).filter((c): c is string => !!c)),
   ];
   const resolved = identifiers.length
-    ? await connectorModel.resolveByIdentifiers(identifiers, scope.agentId ?? undefined)
+    ? // No topic: a widget renders for whoever views it, so it only ever
+      // resolves shared connectors, never a member's private one.
+      await connectorModel.resolveByIdentifiers(identifiers, {
+        agentId: scope.agentId ?? undefined,
+      })
     : [];
 
   const byIdentifier = new Map<string, DecryptedConnector>();
@@ -326,6 +330,7 @@ export const resolveWidgetEnv = async (
     let connector = byIdentifier.get(requirement.connector);
     if (connector) {
       const link = accountOf.get(connector.id);
+      // The refresh writes through the row's own scope (`tokens.refreshSlot`)
       connector = link
         ? withLinkCredentials(connector, await ensureFreshLinkToken(connector, link, model))
         : await ensureFreshConnectorToken(connector, model);

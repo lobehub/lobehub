@@ -15,6 +15,7 @@ import { type ContextSnapshot, gatherContextFacts, runContextEngineering } from 
 import { historySummaryPrompt } from '@lobechat/prompts';
 import {
   agentIdentityLabel,
+  manifestBaseIdentifier,
   type OpenAIChatMessage,
   type RuntimeAdditionalContextFragment,
   type RuntimeInitialContext,
@@ -250,8 +251,15 @@ export const contextEngineering = async ({
     // engine dropped their manifests, so listing them would only invite an
     // activation that cannot succeed.
     const disabledIdSet = new Set(disabledPluginIds ?? []);
+    // The run's discovery pool is scoped to the conversation already; a
+    // connector row's tool set is disabled with its connector
     const availableTools = Object.values(discoveryManifests ?? {})
-      .filter(({ identifier }) => !enabledToolSet.has(identifier) && !disabledIdSet.has(identifier))
+      .filter(
+        (manifest) =>
+          !enabledToolSet.has(manifest.identifier) &&
+          !disabledIdSet.has(manifest.identifier) &&
+          !disabledIdSet.has(manifestBaseIdentifier(manifest)),
+      )
       .map(({ identifier, meta }) => ({
         description: meta?.description ?? '',
         identifier,

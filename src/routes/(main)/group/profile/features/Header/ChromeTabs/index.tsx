@@ -14,6 +14,8 @@ import { type ReactNode } from 'react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css, cssVar: cv }) => ({
   addButton: css`
     cursor: pointer;
@@ -23,9 +25,9 @@ const styles = createStaticStyles(({ css, cssVar: cv }) => ({
     align-items: center;
     justify-content: center;
 
-    width: var(--lobe-density-icon-box);
-    height: var(--lobe-density-icon-box);
-    border-radius: var(--lobe-density-radius);
+    width: ${densityVars.iconBox};
+    height: ${densityVars.iconBox};
+    border-radius: ${densityVars.radius};
 
     color: ${cv.colorTextTertiary};
 
@@ -72,12 +74,12 @@ const styles = createStaticStyles(({ css, cssVar: cv }) => ({
     gap: 6px;
     align-items: center;
 
-    height: var(--lobe-density-control-height);
+    height: ${densityVars.controlHeight};
     padding-block: 4px;
     padding-inline: 12px;
-    border-radius: var(--lobe-density-radius);
+    border-radius: ${densityVars.radius};
 
-    font-size: var(--lobe-density-font-size);
+    font-size: ${densityVars.fontSize};
 
     color: ${cv.colorTextTertiary};
 
