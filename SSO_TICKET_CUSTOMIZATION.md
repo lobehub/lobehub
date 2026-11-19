@@ -8,6 +8,20 @@
 `/api/auth/sso-ticket/callback?ticket=...` → LobeHub 服务端兑换 ticket → 按
 `providerId + userId` 查/建本地用户 → 建立 Better Auth 会话 → 重定向站内首页。
 
+### 1.1 兼容：门户直接传 token
+
+对接现实中平台可能不预先生成 ticket，而是把当前用户 token 放在回调查询串里
+（`?token=...`）。此时 LobeHub 服务端会先调平台的 `ticket/create` 换到 ticket，
+再走同一条 exchange 链路：
+
+```
+?token=xxx → POST ticket/create (Authorization: Bearer xxx)
+           → ticket → exchange → 本地会话
+```
+
+启用该路径需要额外配置 `AUTH_SSO_TICKET_CREATE_URL` 与 `AUTH_SSO_TICKET_REDIRECT_URI`。
+安全约束：token 只在服务端使用，不落日志、不进入任何跳转地址；callback 处理完立即 302。
+
 明确**不做**：
 
 - 不支持 OIDC / OAuth2 标准授权码流程（只实现平台文档里的 `sso_ticket` 直达免登）

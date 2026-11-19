@@ -64,7 +64,7 @@ function createAdapter() {
 
 function createContext(
   adapter: ReturnType<typeof createAdapter>,
-  query: { redirect?: string; ticket?: string },
+  query: { redirect?: string; ticket?: string; token?: string },
 ): { ctx: SsoTicketEndpointContext; redirect: ReturnType<typeof vi.fn>; logger: { error: ReturnType<typeof vi.fn> } } {
   const redirect = vi.fn((url: string) => {
     throw new RedirectSignal(url);
@@ -89,6 +89,7 @@ function createRuntime(overrides: Partial<SsoTicketRuntime> = {}): SsoTicketRunt
   return {
     config,
     exchange: vi.fn(async () => profile),
+    requestTicket: vi.fn(async () => 'ST-from-token'),
     setSessionCookie: vi.fn(async () => {}),
     ...overrides,
   };
@@ -144,6 +145,54 @@ describe('runSsoTicketCallback', () => {
     expect(url).toBe('/auth-error?error=SSO_TICKET_MISSING');
     expect(runtime.setSessionCookie).not.toHaveBeenCalled();
     expect(adapter.createSession).not.toHaveBeenCalled();
+  });
+
+  it('exchanges a ticket created from the token when the platform passes no ticket', async () => {
+    const adapter = createAdapter();
+    adapter.findOAuthUser.mockResolvedValue({ linkedAccount: {}, user: existingUser });
+    const runtime = createRuntime();
+    const { ctx } = createContext(adapter, { token: 'platform-token' });
+
+    const url = await runToRedirect(ctx, runtime);
+
+    expect(url).toBe('/');
+    expect(runtime.requestTicket).toHaveBeenCalledWith('platform-token', config);
+    expect(runtime.exchange).toHaveBeenCalledWith('ST-from-token', config);
+  });
+
+  it('prefers a ticket over a token when both are present', async () => {
+    const adapter = createAdapter();
+    adapter.findOAuthUser.mockResolvedValue({ linkedAccount: {}, user: existingUser });
+    const runtime = createRuntime();
+    const { ctx } = createContext(adapter, { ticket: 'ST-direct', token: 'platform-token' });
+
+    await runToRedirect(ctx, runtime);
+
+    expect(runtime.requestTicket).not.toHaveBeenCalled();
+    expect(runtime.exchange).toHaveBeenCalledWith('ST-direct', config);
+  });
+
+  it('maps a rejected token to SSO_TOKEN_INVALID', async () => {
+    const adapter = createAdapter();
+    const runtime = createRuntime({
+      requestTicket: vi.fn(async () => {
+        throw new SsoTicketError('SSO_TOKEN_INVALID');
+      }),
+    });
+    const { ctx } = createContext(adapter, { token: 'platform-token' });
+
+    expect(await runToRedirect(ctx, runtime)).toBe('/auth-error?error=SSO_TOKEN_INVALID');
+    expect(runtime.exchange).not.toHaveBeenCalled();
+  });
+
+  it('never leaks the token into the redirect URL', async () => {
+    const adapter = createAdapter();
+    adapter.findOAuthUser.mockResolvedValue({ linkedAccount: {}, user: existingUser });
+    const { ctx } = createContext(adapter, { token: 'TOKEN-SECRET-1234' });
+
+    const url = await runToRedirect(ctx, createRuntime());
+
+    expect(url).not.toContain('TOKEN-SECRET');
   });
 
   it.each([

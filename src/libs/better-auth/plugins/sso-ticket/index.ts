@@ -13,6 +13,7 @@ import { z } from 'zod';
 
 import { describeSsoTicketMisconfiguration, getSsoTicketConfig } from './config';
 import { exchangeTicket } from './exchange';
+import { requestTicket } from './requestTicket';
 import { resolveSafeRedirect } from './redirect';
 import {
   SsoTicketError,
@@ -31,6 +32,8 @@ import {
 const callbackQuerySchema = z.object({
   redirect: z.string().optional(),
   ticket: z.string().optional(),
+  /** 部分平台不生成 ticket，直接把当前用户 token 放进 callback。 */
+  token: z.string().optional(),
 });
 
 export interface SsoUserRecord {
@@ -63,7 +66,7 @@ export interface SsoTicketEndpointContext {
     internalAdapter: SsoTicketInternalAdapter;
     logger: { error: (...args: unknown[]) => void };
   };
-  query: { redirect?: string; ticket?: string };
+  query: { redirect?: string; ticket?: string; token?: string };
   /** better-auth 的 ctx.redirect 会抛出 Response，这里按同样语义使用。 */
   redirect: (url: string) => unknown;
 }
@@ -71,6 +74,7 @@ export interface SsoTicketEndpointContext {
 export interface SsoTicketRuntime {
   config: SsoTicketConfig;
   exchange: (ticket: string, config: SsoTicketConfig) => Promise<SsoTicketProfile>;
+  requestTicket: (token: string, config: SsoTicketConfig) => Promise<string>;
   setSessionCookie: (ctx: unknown, payload: { session: unknown; user: SsoUserRecord }) => Promise<void>;
 }
 
@@ -146,8 +150,15 @@ export async function runSsoTicketCallback(
   let failure: SsoTicketErrorCode | undefined;
 
   try {
-    const ticket = ctx.query.ticket?.trim();
-    if (!ticket) throw new SsoTicketError('SSO_TICKET_MISSING');
+    let ticket = ctx.query.ticket?.trim();
+
+    if (!ticket) {
+      const token = ctx.query.token?.trim();
+      if (!token) throw new SsoTicketError('SSO_TICKET_MISSING');
+
+      // 平台直接给 token 的场景：服务端先换 ticket，再走同一条 exchange 链路。
+      ticket = await runtime.requestTicket(token, runtime.config);
+    }
 
     const profile = await runtime.exchange(ticket, runtime.config);
     const { session, user } = await resolveSsoUser(ctx.context.internalAdapter, profile, runtime.config);
@@ -156,7 +167,12 @@ export async function runSsoTicketCallback(
   } catch (error) {
     failure = error instanceof SsoTicketError ? error.code : 'SSO_EXCHANGE_UNAVAILABLE';
 
-    if (failure === 'SSO_CLIENT_AUTH_INVALID' || failure === 'SSO_EXCHANGE_UNAVAILABLE') {
+    if (
+      failure === 'SSO_CLIENT_AUTH_INVALID' ||
+      failure === 'SSO_EXCHANGE_UNAVAILABLE' ||
+      failure === 'SSO_TICKET_CREATE_UNAVAILABLE' ||
+      failure === 'SSO_TOKEN_INVALID'
+    ) {
       ctx.context.logger.error(`[sso-ticket] callback failed: ${failure}`);
     }
   }
@@ -169,6 +185,7 @@ export async function runSsoTicketCallback(
 export interface SsoTicketPluginOptions {
   config?: SsoTicketConfig;
   exchange?: SsoTicketRuntime['exchange'];
+  requestTicket?: SsoTicketRuntime['requestTicket'];
   setSessionCookie?: SsoTicketRuntime['setSessionCookie'];
 }
 
@@ -183,6 +200,7 @@ export const ssoTicket = (options: SsoTicketPluginOptions = {}): BetterAuthPlugi
   const runtime: SsoTicketRuntime = {
     config,
     exchange: options.exchange ?? exchangeTicket,
+    requestTicket: options.requestTicket ?? requestTicket,
     setSessionCookie:
       options.setSessionCookie ??
       ((ctx, payload) =>

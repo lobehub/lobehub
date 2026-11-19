@@ -90,6 +90,17 @@ describe('getSsoTicketConfig', () => {
       5000,
     );
   });
+
+  it('reads the optional token-flow settings', () => {
+    const config = getSsoTicketConfig({
+      ...enabledEnv,
+      AUTH_SSO_TICKET_CREATE_URL: 'https://sso.example.com/auth/sso/ticket/create',
+      AUTH_SSO_TICKET_REDIRECT_URI: 'https://lobehub.example.com/api/auth/sso-ticket/callback',
+    });
+
+    expect(config.createUrl).toBe('https://sso.example.com/auth/sso/ticket/create');
+    expect(config.redirectUri).toBe('https://lobehub.example.com/api/auth/sso-ticket/callback');
+  });
 });
 
 describe('describeSsoTicketMisconfiguration', () => {

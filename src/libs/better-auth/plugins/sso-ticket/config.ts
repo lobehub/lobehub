@@ -42,6 +42,7 @@ export function getSsoTicketConfig(env: EnvSource = process.env): SsoTicketConfi
   return {
     clientId,
     clientSecret,
+    createUrl: read(env, 'AUTH_SSO_TICKET_CREATE_URL'),
     defaultRedirect: read(env, 'AUTH_SSO_TICKET_DEFAULT_REDIRECT') ?? SSO_TICKET_DEFAULT_REDIRECT,
     emailDomain: read(env, 'AUTH_SSO_TICKET_EMAIL_DOMAIN') ?? SSO_TICKET_DEFAULT_EMAIL_DOMAIN,
     enabled: requested && missing.length === 0,
@@ -49,9 +50,15 @@ export function getSsoTicketConfig(env: EnvSource = process.env): SsoTicketConfi
     loginDomain: read(env, 'AUTH_SSO_TICKET_LOGIN_DOMAIN'),
     missing,
     providerId: read(env, 'AUTH_SSO_TICKET_PROVIDER_ID') ?? SSO_TICKET_PROVIDER_ID,
+    redirectUri: read(env, 'AUTH_SSO_TICKET_REDIRECT_URI'),
     requested,
     timeoutMs: parseTimeout(read(env, 'AUTH_SSO_TICKET_TIMEOUT_MS')),
   };
+}
+
+/** 门户直接传 token 时才用得到：需要 ticket/create 地址与回调地址都配好。 */
+export function isSsoTicketTokenFlowConfigured(config: SsoTicketConfig): boolean {
+  return Boolean(config.createUrl && config.redirectUri && config.clientId);
 }
 
 /** 供启动日志使用；未开启或配置完整时返回 undefined。 */

@@ -15,9 +15,11 @@ export type SsoTicketErrorCode =
   | 'SSO_CLIENT_AUTH_INVALID'
   | 'SSO_CLIENT_MISMATCH'
   | 'SSO_EXCHANGE_UNAVAILABLE'
+  | 'SSO_TICKET_CREATE_UNAVAILABLE'
   | 'SSO_TICKET_INVALID'
   | 'SSO_TICKET_MISSING'
   | 'SSO_TICKET_USERINFO_INVALID'
+  | 'SSO_TOKEN_INVALID'
   | 'SSO_USER_DISABLED';
 
 /**
@@ -47,6 +49,8 @@ export interface SsoTicketProfile {
 export interface SsoTicketConfig {
   clientId?: string;
   clientSecret?: string;
+  /** 平台 ticket/create 接口；门户直接给 token 时才需要。 */
+  createUrl?: string;
   defaultRedirect: string;
   emailDomain: string;
   enabled: boolean;
@@ -55,6 +59,8 @@ export interface SsoTicketConfig {
   /** 已开启但缺失的配置项名称，便于启动日志提示。 */
   missing: string[];
   providerId: string;
+  /** 调 ticket/create 时回传的地址，必须与平台白名单一致。 */
+  redirectUri?: string;
   /** 是否通过 AUTH_SSO_TICKET_ENABLED=1 显式开启。 */
   requested: boolean;
   timeoutMs: number;
