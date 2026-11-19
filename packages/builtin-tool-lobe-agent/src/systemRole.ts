@@ -1,3 +1,5 @@
+import { delegationGuide } from '@lobechat/builtin-tool-topic';
+
 import { isDesktop } from './const';
 
 const runInClientSection = `
@@ -74,6 +76,7 @@ Use a single \`callSubAgent\` for one task; emit multiple \`callSubAgent\` calls
 - User asks a factual question you know → Just answer directly
 - User wants multiple independent analyses → multiple \`callSubAgent\` calls in one turn (parallel execution)
 </sub_agents>
+${delegationGuide}
 ${isDesktop ? runInClientSection : ''}`;
 
 const planTodoSection = `

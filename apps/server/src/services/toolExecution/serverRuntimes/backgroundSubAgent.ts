@@ -47,13 +47,13 @@ export const checkBackgroundSubAgentAllowed = async (
   if (groupId) {
     return {
       code: 'BACKGROUND_SUB_AGENT_UNSUPPORTED',
-      message: `Background runs are not supported in group conversations. ${retryHint}`,
+      message: `Background runs are not supported in group conversations. ${retryHint} For background work in a conversation of its own, open a sub-topic with lobe-topic openTopic if you have it.`,
     };
   }
   if (!topicId || threadId) {
     return {
       code: 'BACKGROUND_SUB_AGENT_UNSUPPORTED',
-      message: `Background runs can only report back to a conversation's main line. ${retryHint}`,
+      message: `Background runs can only report back to a conversation's main line. ${retryHint} For background work in a conversation of its own, open a sub-topic with lobe-topic openTopic if you have it.`,
     };
   }
 

@@ -7,7 +7,10 @@ import {
   getUserDisabledToolIds,
   isOnDemandBuiltinTool,
 } from '@lobechat/builtin-tools';
-import { getFeatureDisabledToolIds } from '@lobechat/builtin-tools/featureGates';
+import {
+  getFeatureDisabledToolIds,
+  getLabDisabledToolIds,
+} from '@lobechat/builtin-tools/featureGates';
 import { serverOnlyToolIds } from '@lobechat/builtin-tools/serverOnly';
 import {
   createEnableChecker,
@@ -295,9 +298,10 @@ export const createAgentToolsEngine = (
         options.uninstalledBuiltinTools ?? runtimeUninstalledBuiltinTools(getToolStoreState()),
       ),
       ...getFeatureDisabledToolIds(getServerConfigStoreState()?.featureFlags),
+      // Lab-gated tools (e.g. lobe-topic) leave the pool while their Labs switch is off.
+      ...getLabDisabledToolIds(useUserStore.getState().preference?.lab),
       // This engine serves runs the browser executes; server-only tools have nothing to run here.
       ...serverOnlyToolIds,
-      // This engine serves runs the browser executes; server-only tools have nothing to run here.
     ],
     executionTarget: chatConfigByIdSelectors.getExecutionTargetById(targetAgentId)(agentState),
     hasEnabledKnowledgeBases: options.runAgent?.id

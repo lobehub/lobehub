@@ -59,6 +59,7 @@
     "@lobechat/builtin-tool-skill-store": "workspace:*",
     "@lobechat/builtin-tool-skills": "workspace:*",
     "@lobechat/builtin-tool-task": "workspace:*",
+    "@lobechat/builtin-tool-topic": "workspace:*",
     "@lobechat/builtin-tool-user-interaction": "workspace:*",
     "@lobechat/builtin-tool-verify": "workspace:*",
     "@lobechat/builtin-tool-video-generation": "workspace:*",
