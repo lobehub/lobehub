@@ -7,6 +7,7 @@ import { DotIcon, ExternalLinkIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MarketSkillIcon from '@/components/MarketSkillIcon';
 import PublishedTime from '@/components/PublishedTime';
 import { ArticleSkeleton } from '@/components/Skeleton';
 import SkillAvatar from '@/components/SkillAvatar';
@@ -123,7 +124,16 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
       {skillDetail && (
         <div className={styles.meta}>
           <Flexbox horizontal align={'center'} gap={12}>
-            <SkillAvatar size={40} />
+            {skillDetail.source === 'market' ? (
+              <MarketSkillIcon
+                fallback={<SkillAvatar size={40} />}
+                identifier={skillDetail.identifier}
+                name={skillDetail.name}
+                size={40}
+              />
+            ) : (
+              <SkillAvatar size={40} />
+            )}
             <Flexbox className={styles.headerText} flex={1} justify={'space-between'}>
               <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
                 <Flexbox horizontal align={'center'} className={styles.description} gap={4}>
