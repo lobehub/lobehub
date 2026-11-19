@@ -375,7 +375,7 @@ describe('a contact’s shared Agent in a direct conversation', () => {
         .values({ content: 'two', role: 'user', topicId: otherTopic.id, userId: ownerId });
       await expect(sendText(channel.id, 'c', 'c')).rejects.toMatchObject({
         code: 'TOO_MANY_REQUESTS',
-        message: 'You have reached the limit of 2 messages to this Agent',
+        message: 'ShareMessageLimitExceeded',
       });
     });
   });

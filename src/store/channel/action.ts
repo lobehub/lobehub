@@ -333,7 +333,10 @@ class ChannelActionImpl {
   retrySend = (message: ChannelOutgoingMessage) => {
     if (findOutgoing(useChannelStore.getState().outbox, message)?.status !== 'failed')
       return Promise.resolve(undefined);
-    this.#setOutbox((outbox) => patchOutgoing(outbox, message, { status: 'sending' }), 'retry');
+    this.#setOutbox(
+      (outbox) => patchOutgoing(outbox, message, { errorType: undefined, status: 'sending' }),
+      'retry',
+    );
     return this.#deliver(message);
   };
   discardSend = (message: ChannelOutgoingMessage) => {
@@ -408,7 +411,12 @@ class ChannelActionImpl {
       return data;
     } catch (error) {
       console.error('Failed to send Channel message', error);
-      this.#setOutbox((outbox) => patchOutgoing(outbox, message, { status: 'failed' }), 'failed');
+      // A refusal names its category as the message (`ChannelError`); anything else stays generic.
+      const errorType = error instanceof Error ? error.message : undefined;
+      this.#setOutbox(
+        (outbox) => patchOutgoing(outbox, message, { errorType, status: 'failed' }),
+        'failed',
+      );
     }
   };
   #refreshAfterSend = (input: ChannelSendInput, threadId: string | null) =>

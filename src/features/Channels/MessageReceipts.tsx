@@ -27,6 +27,12 @@ const RECEIPT_ERROR_KEYS = {
 type ReceiptErrorKey =
   (typeof RECEIPT_ERROR_KEYS)[keyof typeof RECEIPT_ERROR_KEYS] | 'receipt.errorUnavailable';
 
+/** The viewer-language text for a known failure category, if it is one. */
+export const receiptErrorKey = (errorType?: string | null) =>
+  errorType && Object.hasOwn(RECEIPT_ERROR_KEYS, errorType)
+    ? RECEIPT_ERROR_KEYS[errorType as keyof typeof RECEIPT_ERROR_KEYS]
+    : undefined;
+
 /**
  * The failure reason under a reply. A known category reads in the viewer's language: a shared
  * Agent's visitor gets no raw text, so the category is all that explains a share's refusal.
@@ -35,10 +41,7 @@ export const receiptErrorText = (
   job: Pick<ChannelPublicJob, 'errorMessage' | 'errorType'>,
   t: (key: ReceiptErrorKey) => string,
 ) => {
-  const key =
-    job.errorType && Object.hasOwn(RECEIPT_ERROR_KEYS, job.errorType)
-      ? RECEIPT_ERROR_KEYS[job.errorType as keyof typeof RECEIPT_ERROR_KEYS]
-      : undefined;
+  const key = receiptErrorKey(job.errorType);
   return key ? t(key) : job.errorMessage?.trim() || t('receipt.errorUnavailable');
 };
 

@@ -2,6 +2,7 @@ import {
   AGENT_SHARE_DEFAULT_MAX_MESSAGES_PER_VISITOR,
   SHARE_VISITOR_PROMPT_MAX_LENGTH,
 } from '@lobechat/const';
+import { ChatErrorType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 
 import { TopicModel } from '../../models/topic';
@@ -48,8 +49,7 @@ export const assertSharedAgentAdmission = async (
     { includeShareVisitor: true },
   ).countMessagesBySender({ agentId, senderId: visitorId });
   if (sent < limit) return;
-  throw new ChannelError(
-    'TOO_MANY_REQUESTS',
-    `You have reached the limit of ${limit} messages to this Agent`,
-  );
+  // The message is the error type, as the share page's refusal is: the composer reads it to
+  // explain the refusal in the visitor's language.
+  throw new ChannelError('TOO_MANY_REQUESTS', ChatErrorType.ShareMessageLimitExceeded);
 };
