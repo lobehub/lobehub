@@ -74,7 +74,7 @@ describe('BotWebhookAdapter.handleWebhook (inbound)', () => {
     const res = await adapter.handleWebhook(signedRequest({ message: MESSAGE, type: 'message' }));
 
     expect(res.status).toBe(200);
-    const threadId = 'webhook:group:room%3A1:t-9';
+    const threadId = 'webhook:bot=my-bot:group:room%3A1:t-9';
     expect(await res.json()).toEqual({ ok: true, threadId });
     expect(processMessage).toHaveBeenCalledTimes(1);
 

@@ -338,7 +338,9 @@ export class BotWebhookAdapter implements Adapter<BotWebhookThread, BotWebhookIn
   // ------------------------------------------------------------------
 
   encodeThreadId(data: BotWebhookThread): string {
-    return encodeWebhookThreadId(data);
+    // Scope every thread to this bot: conversation ids are only unique per bot,
+    // and the Chat SDK + AgentBridgeService key their state by `thread.id`.
+    return encodeWebhookThreadId({ ...data, botId: data.botId ?? this.target.botId });
   }
 
   decodeThreadId(threadId: string): BotWebhookThread {

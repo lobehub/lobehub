@@ -120,31 +120,55 @@ export interface BotWebhookOutboundEvent {
 }
 
 // ---------------------------------------------------------------------------
-// Thread ids: `webhook:<direct|group>:<conversationId>[:<threadId>]`
+// Thread ids: `webhook:[bot=<botId>:]<direct|group>:<conversationId>[:<threadId>]`
+//
+// The bot belongs in the thread identity: two webhook bots that both use
+// conversation `1` would otherwise share one `thread.id`, and the active-thread
+// guard in `AgentBridgeService` silently drops the second bot's message as
+// "already running". The developer still gets their own ids back — `bot=<id>`
+// is a distinct segment, so `conversationId` / `threadId` decode unchanged.
 // ---------------------------------------------------------------------------
 
 export interface BotWebhookThread {
+  /** The bot this thread belongs to; it scopes the internal thread identity. */
+  botId?: string;
   conversationId: string;
   isDirect: boolean;
   threadId?: string;
 }
 
+/** Marks the bot segment, so it never reads like the `direct` / `group` kind. */
+const BOT_SEGMENT = 'bot=';
+
 /** Components are URI-encoded, so ids containing `:` survive the round-trip. */
-export const encodeWebhookThreadId = ({ conversationId, isDirect, threadId }: BotWebhookThread) =>
+export const encodeWebhookThreadId = ({
+  botId,
+  conversationId,
+  isDirect,
+  threadId,
+}: BotWebhookThread) =>
   [
     WEBHOOK_PLATFORM_ID,
+    ...(botId ? [`${BOT_SEGMENT}${encodeURIComponent(botId)}`] : []),
     isDirect ? 'direct' : 'group',
     encodeURIComponent(conversationId),
     ...(threadId ? [encodeURIComponent(threadId)] : []),
   ].join(':');
 
 export const decodeWebhookThreadId = (platformThreadId: string): BotWebhookThread => {
-  const [platform, kind, conversation, thread] = platformThreadId.split(':');
-  if (platform !== WEBHOOK_PLATFORM_ID || !conversation) {
+  const [platform, ...segments] = platformThreadId.split(':');
+  const bare: BotWebhookThread = { conversationId: platformThreadId, isDirect: false };
+  if (platform !== WEBHOOK_PLATFORM_ID || segments.length === 0) {
     // A bare id (e.g. a REST caller's `channelId`) is a group conversation of that name.
-    return { conversationId: platformThreadId, isDirect: false };
+    return bare;
   }
+
+  const bot = segments[0]?.startsWith(BOT_SEGMENT) ? segments.shift()! : undefined;
+  const [kind, conversation, thread] = segments;
+  if (!conversation) return bare;
+
   return {
+    ...(bot ? { botId: decodeURIComponent(bot.slice(BOT_SEGMENT.length)) } : {}),
     conversationId: decodeURIComponent(conversation),
     isDirect: kind === 'direct',
     ...(thread ? { threadId: decodeURIComponent(thread) } : {}),
