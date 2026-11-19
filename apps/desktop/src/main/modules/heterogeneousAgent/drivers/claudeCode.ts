@@ -22,6 +22,7 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
     helpers,
     mcpConfigPath,
     permissionMode,
+    permissionPrompts,
     promptInput,
     resumeSessionId,
   }: HeterogeneousAgentBuildPlanParams) {
@@ -37,7 +38,10 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
         ...DESKTOP_CLAUDE_CODE_ARGS,
         // Lab off (no mode): every action allowed, as before. With a mode the
         // host answers Claude Code's prompts over stdio.
-        ...buildClaudeCodePermissionArgs({ mode: permissionMode }),
+        ...buildClaudeCodePermissionArgs({
+          hostPrompts: permissionPrompts ?? true,
+          mode: permissionMode,
+        }),
         // Wire the controller-managed temp mcp.json (AskUserQuestion server,
         // see ) when present. Path-based config is required — CC
         // does not accept inline JSON for `--mcp-config`.

@@ -302,6 +302,8 @@ interface BuildSpawnArgsParams {
   liveInput?: boolean;
   /** (Claude Code only) Lab permission mode the host answers prompts for. */
   permissionMode?: HeteroPermissionMode;
+  /** (Claude Code only) Someone answers prompts; without, a mode fails closed. */
+  permissionPrompts?: boolean;
   /** Native session id for resume; undefined for fresh runs. */
   resumeSessionId: string | undefined;
 }
@@ -312,12 +314,13 @@ const buildClaudeCodeArgs = ({
   inputArgs,
   liveInput,
   permissionMode,
+  permissionPrompts,
   resumeSessionId,
 }: BuildSpawnArgsParams) => [
   ...CLAUDE_CODE_BASE_ARGS,
   ...(includePartialMessages ? ['--include-partial-messages'] : []),
   ...(liveInput ? ['--replay-user-messages'] : []),
-  ...buildClaudeCodePermissionArgs({ mode: permissionMode }),
+  ...buildClaudeCodePermissionArgs({ hostPrompts: permissionPrompts, mode: permissionMode }),
   ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
   ...inputArgs,
   ...extraArgs,
@@ -560,7 +563,9 @@ const spawnCliAgent = async (
 ): Promise<SpawnAgentHandle> => {
   const liveInput = options.agentType === 'claude-code' && options.liveInput === true;
   // Prompts need someone to answer them: the live stdin and a card bridge.
-  const permissionMode = liveInput && options.askUserBridge ? options.permissionMode : undefined;
+  // Without, a picked mode still applies and fails closed (never bypass).
+  const permissionMode = options.agentType === 'claude-code' ? options.permissionMode : undefined;
+  const permissionPrompts = liveInput && !!options.askUserBridge;
   const args = buildSpawnArgs({
     agentType: options.agentType,
     configArgs:
@@ -572,6 +577,7 @@ const spawnCliAgent = async (
     inputArgs: inputPlan.args,
     liveInput,
     permissionMode,
+    permissionPrompts,
     resumeSessionId: options.resumeSessionId,
   });
   const initialModel =
@@ -668,7 +674,7 @@ const spawnCliAgent = async (
   }
 
   const live = liveInput && proc.stdin ? new ClaudeCodeLiveInput(proc.stdin) : undefined;
-  if (live && permissionMode && options.askUserBridge) {
+  if (live && permissionMode && permissionPrompts && options.askUserBridge) {
     const bridge = options.askUserBridge;
     const isRoot = isRunningAsRoot();
     attachClaudeCodePermissionResponder(live, {

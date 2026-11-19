@@ -45,11 +45,15 @@ export interface HeterogeneousAgentBuildPlanParams {
    */
   mcpConfigPath?: string;
   /**
-   * (Claude Code) Better Coding Experience permission mode, set only when the
-   * host can answer prompts (an AskUserBridge and live stdin). Absent: every
+   * (Claude Code) Better Coding Experience permission mode. Absent: every
    * action is allowed.
    */
   permissionMode?: HeteroPermissionMode;
+  /**
+   * (Claude Code) The host answers prompts (an AskUserBridge is up). Without,
+   * a picked mode fails closed: print mode denies what it would ask about.
+   */
+  permissionPrompts?: boolean;
   promptInput: AgentPromptInput;
   resumeSessionId?: string;
 }

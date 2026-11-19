@@ -136,11 +136,26 @@ describe('spawnAgent — Claude Code permission modes', () => {
     ).toEqual(['plan', 'acceptEdits']);
   });
 
-  it('allows everything, as before, without a mode or a bridge to answer with', async () => {
-    for (const options of [
-      { askUserBridge: new AskUserBridge('op-a') },
-      { permissionMode: 'default' as const },
-    ]) {
+  it('fails closed, never bypassing, when no bridge can answer a picked mode', async () => {
+    const live = createLiveProc();
+    nextProc = live.proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    await spawnAgent({
+      agentType: 'claude-code',
+      liveInput: true,
+      operationId: 'op-nobridge',
+      permissionMode: 'plan',
+      prompt: 'hi',
+    });
+    const { args } = spawnCalls.at(-1)!;
+    expect(args[args.indexOf('--permission-mode') + 1]).toBe('plan');
+    expect(args).not.toContain('--permission-prompt-tool');
+    expect(args).not.toContain('--allow-dangerously-skip-permissions');
+    live.finish();
+  });
+
+  it('allows everything, as before, without a mode', async () => {
+    for (const options of [{ askUserBridge: new AskUserBridge('op-a') }]) {
       const live = createLiveProc();
       nextProc = live.proc;
       const { spawnAgent } = await import('./spawnAgent');

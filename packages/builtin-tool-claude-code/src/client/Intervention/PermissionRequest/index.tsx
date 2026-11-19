@@ -14,6 +14,8 @@ import { memo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
+import { useSubmissionReconcile } from '../useSubmissionReconcile';
+
 const styles = stylex.create({
   detail: { fontSize: '12px', lineHeight: 1.5, color: cssVar.colorTextSecondary },
   plan: {
@@ -60,8 +62,10 @@ const previewOf = (input: Record<string, unknown> | undefined) => {
  */
 const PermissionRequestIntervention = memo<
   BuiltinInterventionProps<ClaudeCodePermissionInterventionArgs>
->(({ actionsPortalTarget, args, disabled, onInteractionAction }) => {
+>(({ actionsPortalTarget, args, disabled, messageId, onInteractionAction }) => {
   const { t } = useTranslation('tool');
+  // A submitted answer whose producer ACK was missed is re-read, not left stuck.
+  useSubmissionReconcile(messageId);
   const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
   const detail = args.claudeCodePermission;

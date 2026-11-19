@@ -41,6 +41,14 @@ describe('claudeCodeDriver', () => {
     expect(args).toContain('--allow-dangerously-skip-permissions');
   });
 
+  it('keeps a picked mode and fails closed when the card bridge is not up', async () => {
+    const { args } = await claudeCodeDriver.buildSpawnPlan(
+      buildParams({ permissionMode: 'default', permissionPrompts: false }),
+    );
+    expect(args[args.indexOf('--permission-mode') + 1]).toBe('default');
+    expect(args).not.toContain('--permission-prompt-tool');
+  });
+
   it('prepares the namespaced server-default model without persisting the operation token', async () => {
     const plan = await claudeCodeDriver.prepareServerDefaultBinding!({
       args: [],

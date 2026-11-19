@@ -35,11 +35,17 @@ export const resolveClaudeCodePermissionMode = (
  *   again"): without it Claude Code silently turns that switch into `default`.
  *   Root never gets it, since Claude Code refuses it there; root's stand-in
  *   for `bypassPermissions` is plain `acceptEdits`, asking before commands.
+ * - With a `mode` but no host to answer prompts (`hostPrompts: false`, e.g.
+ *   the card bridge failed to start): fail closed. The mode still applies and
+ *   print mode denies whatever it would have asked about; it never falls back
+ *   to allowing everything.
  */
 export const buildClaudeCodePermissionArgs = ({
+  hostPrompts = true,
   isRoot = isRunningAsRoot(),
   mode,
 }: {
+  hostPrompts?: boolean;
   isRoot?: boolean;
   mode?: HeteroPermissionMode;
 }): string[] => {
@@ -50,6 +56,7 @@ export const buildClaudeCodePermissionArgs = ({
   }
 
   const resolved = resolveClaudeCodePermissionMode(mode, isRoot);
+  if (!hostPrompts) return ['--permission-mode', resolved.mode];
   return [
     '--permission-mode',
     resolved.mode,

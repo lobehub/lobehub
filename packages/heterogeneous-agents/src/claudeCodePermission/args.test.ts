@@ -49,6 +49,24 @@ describe('buildClaudeCodePermissionArgs', () => {
   });
 });
 
+describe('buildClaudeCodePermissionArgs — no host to answer', () => {
+  it('keeps a restrictive mode and lets print mode deny, never bypassing', () => {
+    for (const mode of ['default', 'acceptEdits', 'auto', 'plan'] as const) {
+      expect(buildClaudeCodePermissionArgs({ hostPrompts: false, isRoot: false, mode })).toEqual([
+        '--permission-mode',
+        mode,
+      ]);
+    }
+    expect(
+      buildClaudeCodePermissionArgs({
+        hostPrompts: false,
+        isRoot: true,
+        mode: 'bypassPermissions',
+      }),
+    ).toEqual(['--permission-mode', 'acceptEdits']);
+  });
+});
+
 describe('resolveClaudeCodePermissionMode', () => {
   it('reports the root fallback only for bypass', () => {
     expect(resolveClaudeCodePermissionMode('bypassPermissions', true)).toEqual({
