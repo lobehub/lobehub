@@ -196,3 +196,49 @@ describe('buildListItems', () => {
     ]);
   });
 });
+
+describe('buildListItems featured and hidden models', () => {
+  const featuredModels = [{ description: 'Daily tasks', modelId: 'auto', providerId: 'lobehub' }];
+
+  it('lists a featured model first with its description, out of its provider list', () => {
+    const items = buildListItems(
+      [provider('lobehub', [model('gpt'), model('auto')]), provider('openai', [model('gpt')])],
+      'byProvider',
+      '',
+      undefined,
+      { featuredModels },
+    );
+
+    expect(items[0]).toMatchObject({
+      description: 'Daily tasks',
+      model: { id: 'auto' },
+      type: 'featured-model-item',
+    });
+    expect(getProviderModelIds(items)).toEqual(['gpt', 'gpt']);
+  });
+
+  it('drops the header of a provider whose only model is featured', () => {
+    const items = buildListItems(
+      [provider('lobehub', [model('auto')]), provider('openai', [model('gpt')])],
+      'byProvider',
+      '',
+      undefined,
+      { featuredModels },
+    );
+
+    expect(items.map((item) => item.type)).toEqual([
+      'featured-model-item',
+      'group-header',
+      'provider-model-item',
+    ]);
+    expect(items[1]).toMatchObject({ provider: { id: 'openai' } });
+  });
+
+  it('skips a featured model that is not enabled', () => {
+    const items = buildListItems([provider('lobehub', [model('gpt')])], 'byModel', '', undefined, {
+      featuredModels,
+    });
+
+    expect(items.some((item) => item.type === 'featured-model-item')).toBe(false);
+  });
+});

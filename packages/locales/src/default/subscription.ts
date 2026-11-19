@@ -143,6 +143,7 @@ export default {
   'limitation.insufficientBudget.rescue.upgrade.benefitUltra': 'Higher Ultra model weekly limit',
   'limitation.insufficientBudget.rescue.upgrade.benefitUltraMultiple':
     '{{multiple}}× the Ultra model weekly limit of your current plan',
+  'limitation.insufficientBudget.rescue.switchToAuto.cta': 'Switch to Auto and continue',
   'limitation.insufficientBudget.rescue.switchModel.hint':
     'Or switch to a standard model to keep chatting.',
   'limitation.insufficientBudget.rescue.wait.hint': "Or wait for the reset and retry, it's free.",
@@ -157,6 +158,9 @@ export default {
     "This request needs more than the limit allows, so waiting won't help.",
   'limitation.insufficientBudget.window.resetNow': 'It has just reset, so you can retry now.',
   'limitation.insufficientBudget.window.resetsIn': 'Resets in {{duration}} ({{time}}).',
+  'limitation.insufficientBudget.window.rule.auto5h': 'Auto 5-hour limit',
+  'limitation.insufficientBudget.window.rule.auto7d': 'Auto weekly limit',
+  'limitation.insufficientBudget.window.rule.autoMonth': 'Auto monthly limit',
   'limitation.insufficientBudget.window.rule.overflowMonth': 'monthly balance limit',
   'limitation.insufficientBudget.window.rule.plan5h': '5-hour limit',
   'limitation.insufficientBudget.window.rule.plan7d': 'weekly limit',
@@ -441,6 +445,9 @@ export default {
   'limitation.insufficientBudget.approximateDesc':
     'This request may need more balance. Top up or upgrade your plan.',
   'limitation.insufficientBudget.available': 'Available balance',
+  'limitation.insufficientBudget.auto.hint':
+    'Pick another model from the model menu to keep going.',
+  'limitation.insufficientBudget.auto.title': 'Auto quota used up',
   'limitation.insufficientBudget.desc':
     'Your balance is not enough to continue. Top up or upgrade your plan.',
   'limitation.insufficientBudget.estimatedDesc':
@@ -604,6 +611,10 @@ export default {
   'plans.compare.noLimit': 'No limit',
   'plans.compare.none': 'None',
   'plans.compare.notIncluded': 'Not included',
+  'plans.compare.autoMonthlySpend': 'Auto monthly limit',
+  'plans.compare.autoMonthlySpend.desc': 'Resets at the start of each billing month',
+  'plans.compare.autoRolling5hSpend': 'Auto 5-hour limit',
+  'plans.compare.autoRolling7dSpend': 'Auto weekly limit',
   'plans.compare.monthlySpend': 'Monthly limit',
   'plans.compare.monthlySpend.desc': 'Resets at the start of each billing month',
   'plans.compare.monthlySpend.runs': 'About {{runs}} agent tasks',
@@ -668,6 +679,17 @@ export default {
   'plans.limits.fileStorage': '{{value}} file storage',
   'plans.limits.monthlyCreditGrant': '{{value}} monthly credit',
   'plans.limits.monthlyCreditGrant.runs': 'About {{runs}} agent tasks a month',
+  'plans.limits.autoMonthlySpend.tooltip':
+    'Auto usage across your billing month has its own limit, separate from other models.',
+  'plans.limits.autoRolling5hSpend': 'Auto 5-hour limit',
+  'plans.limits.autoRolling5hSpend.multiple': 'Auto 5-hour limit: {{multiple}}× that of {{plan}}',
+  'plans.limits.autoRolling5hSpend.tooltip': 'Auto usage within a 5-hour window has its own limit.',
+  'plans.limits.autoRolling5hSpend.unavailable': 'No Auto 5-hour limit',
+  'plans.limits.autoRolling7dSpend': 'Auto weekly limit',
+  'plans.limits.autoRolling7dSpend.multiple': 'Auto weekly limit: {{multiple}}× {{plan}}',
+  'plans.limits.autoRolling7dSpend.tooltip':
+    'Auto picks a suitable model for each conversation. Its usage has its own limits and does not count toward the limits of other models.',
+  'plans.limits.autoRolling7dSpend.unavailable': 'Auto model',
   'plans.limits.monthlySpend.tooltip':
     'Usage across your billing month has a limit too. It resets when the next billing month starts.',
   'plans.limits.rolling5hSpend': '5-hour limit',
@@ -1045,6 +1067,11 @@ export default {
   'usage.window.overflow.save': 'Save',
   'usage.window.overflow.spent': '{{spent}} used this month',
   'usage.window.resetsIn': 'Resets in {{duration}}',
+  'usage.window.rule.auto5h': 'Auto 5-hour limit',
+  'usage.window.rule.auto7d': 'Auto weekly limit',
+  'usage.window.rule.autoMonth': 'Auto monthly limit',
+  'usage.window.pool.auto': 'Auto model',
+  'usage.window.pool.other': 'Other models',
   'usage.window.rule.plan5h': '5-hour limit',
   'usage.window.rule.plan7d': 'Weekly limit',
   'usage.window.rule.agentRunMonth': 'Monthly agent task limit',
@@ -1083,6 +1110,12 @@ export default {
   'plans.quota.none': 'No built-in usage',
   'plans.quota.title': 'Usage',
   'creditUsageReminder.used': "{{percent}} of this billing cycle's subscription usage is used",
+  'autoModelNudge.action': 'Switch to Auto',
+  'autoModelNudge.desc':
+    'This model uses up your plan limits quickly. Auto has its own, more generous limits.',
+  'autoModelNudge.title': 'Try Auto for everyday tasks',
+  'modelSwitch.auto.description':
+    'Balanced quality and speed with generous usage quota, ideal for daily tasks',
   'creditUsageReminder.window.used': '{{rule}}: {{percent}} used',
   'credits.agentShareBudget.saveFailed':
     "Couldn't save the Agent Share budget. Check your connection and try again.",

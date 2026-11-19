@@ -38,6 +38,12 @@ export type ListItem =
       type: 'provider-model-item';
     }
   | {
+      description?: string;
+      model: AiModelForSelect;
+      provider: EnabledProviderWithModels;
+      type: 'featured-model-item';
+    }
+  | {
       provider: EnabledProviderWithModels;
       type: 'empty-model';
     }
