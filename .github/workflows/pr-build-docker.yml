@@ -1,7 +1,7 @@
 name: Docker PR Build
 
 on:
-  pull_request:
+  pull_request_target:
     types: [synchronize, labeled, unlabeled] # PR 更新或标签变化时触发
 
 # 确保同一 PR 同一时间只运行一个相同的 workflow,取消正在进行的旧的运行
@@ -153,10 +153,25 @@ jobs:
 
       - name: Comment on PR with Docker build info
         uses: actions/github-script@v8
+        env:
+          js_path: '.github/scripts/docker-pr-comment.js'
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const prComment = require('${{ github.workspace }}/.github/scripts/docker-pr-comment.js');
+            // Security check
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100,
+            });
+            const isModified = files.some(f => f.filename === '${{ env.js_path }}');
+            if (isModified) {
+              core.setFailed('🚫 Safeguard: ${{ env.js_path }} has been modified. Refuse to proceed.');
+              return;
+            }
+
+            const prComment = require('${{ github.workspace }}/${{ env.js_path }}');
             const result = await prComment({
               github,
               context,
