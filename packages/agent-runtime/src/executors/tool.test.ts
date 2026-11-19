@@ -141,6 +141,7 @@ describe('single tool executors', () => {
       }),
     );
     expect(result.newState.status).toBe('waiting_for_async_tool');
+    expect(result.newState.pendingToolsParentMessageId).toBe('assistant-msg-1');
     expect(result.events).toContainEqual(
       expect.objectContaining({ reason: 'client_tool_execution', type: 'interrupted' }),
     );
@@ -596,6 +597,8 @@ describe('single tool executors', () => {
     // No tool_end for a deferred tool — the completion bridge resolves it later.
     expect(publishEvent).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'tool_end' }));
     expect(result.newState.status).toBe('waiting_for_async_tool');
+    // Scopes the server barrier's tool_call_id lookup to this turn's rows.
+    expect(result.newState.pendingToolsParentMessageId).toBe('assistant-msg-1');
     expect(result.events).toContainEqual(
       expect.objectContaining({ reason: 'async_tool', type: 'interrupted' }),
     );
@@ -630,6 +633,8 @@ describe('single tool executors', () => {
     );
 
     expect(result.newState.status).toBe('waiting_for_async_tool');
+    // The resume reuses the tool row, so the barrier anchors on that row itself.
+    expect(result.newState.pendingToolsParentMessageId).toBe('approved-tool');
     expect(host.transports.messages.deleteMessage).toHaveBeenCalledWith('seeded-placeholder');
     expect(result.newState.pendingAssistantMessageId).toBeUndefined();
   });

@@ -128,6 +128,7 @@ describe('batch tool executors', () => {
     expect(result.newState.pendingToolsCalling).toEqual([
       expect.objectContaining({ id: 'client-call' }),
     ]);
+    expect(result.newState.pendingToolsParentMessageId).toBe('assistant-msg-1');
     expect(result.events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'server-call', type: 'tool_result' }),

@@ -7,7 +7,7 @@ import { AgentOperationModel } from '@/database/models/agentOperation';
 
 import { hookDispatcher } from '../../hooks';
 import { AgentRuntimeService } from '..';
-import { setUpService } from './testUtils';
+import { setUpService, stubPendingToolRows } from './testUtils';
 
 vi.mock('@lobechat/model-runtime', (...args) =>
   import('./testUtils').then((m) =>
@@ -125,18 +125,17 @@ describe('AgentRuntimeService', () => {
   describe('tryResumeParentFromAsyncTool', () => {
     const parentOpId = 'parent-op-async';
 
-    const fulfilledPlugin = { id: 'msg-tc1', state: { status: 'completed' }, toolCallId: 'tc1' };
-
     const stubFulfilled = () => {
       mockCoordinator.loadAgentState.mockResolvedValue({
         pendingToolsCalling: [{ id: 'tc1' }],
         status: 'waiting_for_async_tool',
         stepCount: 3,
       });
-      (service as any).serverDB.query = {
-        messagePlugins: { findFirst: vi.fn().mockResolvedValue(fulfilledPlugin) },
-      };
-      (service as any).messageModel.findById = vi.fn().mockResolvedValue({ content: 'answer' });
+      stubPendingToolRows(service, {
+        content: 'answer',
+        id: 'msg-tc1',
+        state: { status: 'completed' },
+      });
     };
 
     it('wins the CAS and schedules the resume step when all pending tools are fulfilled', async () => {
@@ -165,9 +164,7 @@ describe('AgentRuntimeService', () => {
         status: 'waiting_for_async_tool',
         stepCount: 1,
       });
-      (service as any).serverDB.query = {
-        messagePlugins: { findFirst: vi.fn().mockResolvedValue(null) },
-      };
+      stubPendingToolRows(service, null);
       const casSpy = vi.spyOn(AgentOperationModel.prototype, 'tryResumeFromAsyncTool');
 
       const won = await service.tryResumeParentFromAsyncTool({ parentOperationId: parentOpId });
@@ -231,9 +228,7 @@ describe('AgentRuntimeService', () => {
         status: 'waiting_for_async_tool',
         stepCount: 1,
       });
-      (service as any).serverDB.query = {
-        messagePlugins: { findFirst: vi.fn().mockResolvedValue(null) },
-      };
+      stubPendingToolRows(service, null);
 
       const won = await service.tryResumeParentFromAsyncTool(
         { parentOperationId: parentOpId },
@@ -254,9 +249,7 @@ describe('AgentRuntimeService', () => {
         status: 'waiting_for_async_tool',
         stepCount: 1,
       });
-      (service as any).serverDB.query = {
-        messagePlugins: { findFirst: vi.fn().mockResolvedValue(null) },
-      };
+      stubPendingToolRows(service, null);
 
       // A verify handler running as attempt 2 re-arms attempt 3 (60s).
       await service.tryResumeParentFromAsyncTool(
@@ -278,9 +271,7 @@ describe('AgentRuntimeService', () => {
         status: 'waiting_for_async_tool',
         stepCount: 1,
       });
-      (service as any).serverDB.query = {
-        messagePlugins: { findFirst: vi.fn().mockResolvedValue(null) },
-      };
+      stubPendingToolRows(service, null);
 
       const won = await service.tryResumeParentFromAsyncTool(
         { parentOperationId: parentOpId },
@@ -297,14 +288,8 @@ describe('AgentRuntimeService', () => {
         status: 'waiting_for_async_tool',
         stepCount: 3,
       });
-      // Plugin row exists (created at park) but its state still reads stale.
-      const findById = vi.fn().mockResolvedValue({ content: '' });
-      (service as any).serverDB.query = {
-        messagePlugins: {
-          findFirst: vi.fn().mockResolvedValue({ id: 'msg-tc1', state: null, toolCallId: 'tc1' }),
-        },
-      };
-      (service as any).messageModel.findById = findById;
+      // The row exists (created at park) but its content/state still reads stale.
+      stubPendingToolRows(service, { content: '', id: 'msg-tc1', state: null });
       const casSpy = vi
         .spyOn(AgentOperationModel.prototype, 'tryResumeFromAsyncTool')
         .mockResolvedValue(true);
@@ -316,8 +301,6 @@ describe('AgentRuntimeService', () => {
 
       expect(won).toBe(true);
       expect(casSpy).toHaveBeenCalledWith(parentOpId);
-      // The stale read must be skipped — barrier trusted the local backfill.
-      expect(findById).not.toHaveBeenCalled();
     });
 
     it('arms a fallback verify when a parked op has no pending tools', async () => {
@@ -411,16 +394,11 @@ describe('AgentRuntimeService', () => {
         status: 'waiting_for_async_tool',
         stepCount: 4,
       });
-      (service as any).serverDB.query = {
-        messagePlugins: {
-          findFirst: vi.fn().mockResolvedValue({
-            id: 'msg-tc1',
-            state: { onComplete: 'finish', status: 'completed' },
-            toolCallId: 'tc1',
-          }),
-        },
-      };
-      (service as any).messageModel.findById = vi.fn().mockResolvedValue({ content: 'answer' });
+      stubPendingToolRows(service, {
+        content: 'answer',
+        id: 'msg-tc1',
+        state: { onComplete: 'finish', status: 'completed' },
+      });
       vi.spyOn(AgentOperationModel.prototype, 'tryResumeFromAsyncTool').mockResolvedValue(true);
 
       const won = await service.tryResumeParentFromAsyncTool({ parentOperationId: parentOpId });
