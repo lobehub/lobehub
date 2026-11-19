@@ -48,6 +48,7 @@ export async function executeToolCallInWorker(
       {
         env: { ...process.env, [TOOL_WORKER_ENV]: '1' },
         stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
       },
     );
 
