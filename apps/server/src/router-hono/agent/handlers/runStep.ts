@@ -44,7 +44,7 @@ const log = debug('lobe-server:agent:run-step');
  * models finish LLM steps within ~40s at p99, but some run into several
  * minutes (one model family measured ~317s at p99, ~439s max).
  *
- * 450s leaves 350s of headroom under the 800s invocation. A server LLM call
+ * 450s leaves 1350s of headroom under the 1800s invocation. A server LLM call
  * still streaming 30s before the kill is stopped and fails the operation with
  * `LlmStepTimeout` (see `serverCallLlmAttempt`), so keep this conservative and
  * raise it only alongside `STEP_INVOCATION_MAX_DURATION_MS`. Once past the
