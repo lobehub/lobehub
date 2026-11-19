@@ -10,6 +10,8 @@ import type {
 import type { SerializedAgentHook } from '../agentHook';
 import type { WorkingDirConfig } from '../device';
 import { workingDirConfigSchema } from '../device';
+import type { HeteroPermissionMode, HeteroPermissionModeFallback } from '../heteroPermissionMode';
+import { HETERO_PERMISSION_MODES } from '../heteroPermissionMode';
 import type { BotSenderMetadata } from '../message';
 import type { BaseDataModel } from '../meta';
 import type { OwnedWorktree } from '../ownedWorktree';
@@ -238,6 +240,20 @@ export interface ChatTopicMetadata {
    * agent's effort" by `applyTopicModelToHeterogeneousProvider`.
    */
   heteroEffort?: HeterogeneousReasoningEffort;
+  /**
+   * Claude Code permission mode of this topic (Better Coding Experience lab):
+   * what its next run starts in, and the mode Claude Code last reported, so a
+   * switch Claude Code made itself (leaving plan mode) sticks.
+   */
+  heteroPermissionMode?: HeteroPermissionMode;
+  /** Why the last run was not in the picked mode; cleared by a run that was. */
+  heteroPermissionModeFallback?: HeteroPermissionModeFallback | null;
+  /**
+   * Operation dispatched to `lh hetero exec` with a mode that asks, whose run
+   * has not reported Claude Code's mode yet. Still set when it ends cleanly:
+   * that `lh` predates permission modes (`outdatedCli`). Server-written only.
+   */
+  heteroPermissionModeReportPending?: string | null;
   /** Latest Task run's dispatched settings; no args, credentials or system context. */
   heteroRuntimeConfig?: {
     /** Per-field configuration and provenance captured before dispatch. */
@@ -726,6 +742,8 @@ export const chatTopicMetadataUpdateSchema = z.object({
   heteroSessionBindingKeyByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   heteroSessionId: z.string().optional(),
   heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
+  heteroPermissionMode: z.enum(HETERO_PERMISSION_MODES).optional(),
+  heteroPermissionModeFallback: z.enum(['outdatedCli', 'root']).nullable().optional(),
   heteroSpeed: z.enum(['default', 'normal', 'fast', 'ultrafast']).optional(),
   model: z.string().optional(),
   onboardingFeedback: z
