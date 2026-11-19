@@ -180,8 +180,7 @@ describe('fileRouter.embeddingChunks model', () => {
       caller.embeddingChunks({ fileId: 'file-1', taskId: 'task-1', workspaceId: 'ws-1' }),
     ).resolves.toMatchObject({ success: true });
 
-    // The uploader's own pick decides, not the workspace's or another member's.
-    expect(resolveFileEmbeddingModel).toHaveBeenCalledWith(serverDB, 'user-1');
+    expect(resolveFileEmbeddingModel).toHaveBeenCalledWith(serverDB, 'user-1', 'ws-1');
     expect(initModelRuntimeFromDB).toHaveBeenCalledWith(serverDB, 'user-1', 'azure', 'ws-1');
     expect(embeddings).toHaveBeenCalledWith(
       expect.objectContaining({ dimensions: 1024, model: 'text-embedding-3-large' }),

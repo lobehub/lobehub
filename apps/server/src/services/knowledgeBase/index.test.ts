@@ -271,7 +271,7 @@ describe('KnowledgeBaseSearchService', () => {
       } as any);
     });
 
-    it('embeds the query with the same resolved model that indexed the files', async () => {
+    it('embeds the query with the resolved workspace model', async () => {
       vi.mocked(resolveFileEmbeddingModel).mockResolvedValue({
         model: 'text-embedding-3-large',
         provider: 'azure',
@@ -281,10 +281,11 @@ describe('KnowledgeBaseSearchService', () => {
       chunkModelMock.semanticSearchForChat.mockResolvedValue([]);
       searchRepoMock.searchKnowledgeBaseDocuments.mockResolvedValue([]);
 
-      await service.semanticSearchForChat({ fileIds: ['f1'], query: 'hello' });
+      const scopedService = new KnowledgeBaseSearchService(serverDB, userId, 'workspace-1');
+      await scopedService.semanticSearchForChat({ fileIds: ['f1'], query: 'hello' });
 
-      expect(resolveFileEmbeddingModel).toHaveBeenCalledWith(serverDB, userId);
-      expect(initModelRuntimeFromDB).toHaveBeenCalledWith(serverDB, userId, 'azure', undefined);
+      expect(resolveFileEmbeddingModel).toHaveBeenCalledWith(serverDB, userId, 'workspace-1');
+      expect(initModelRuntimeFromDB).toHaveBeenCalledWith(serverDB, userId, 'azure', 'workspace-1');
       expect(embeddings).toHaveBeenCalledWith(
         expect.objectContaining({ input: 'hello', model: 'text-embedding-3-large' }),
         expect.anything(),

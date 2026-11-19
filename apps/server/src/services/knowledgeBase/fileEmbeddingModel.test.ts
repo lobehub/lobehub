@@ -58,6 +58,17 @@ describe('resolveFileEmbeddingModel', () => {
     });
   });
 
+  it('uses the same default for two members of a workspace with different personal picks', async () => {
+    withSettings({ fileEmbedding: { model: 'text-embedding-3-large', provider: 'azure' } });
+    const indexingModel = await resolveFileEmbeddingModel(serverDB, 'uploader', 'workspace-1');
+
+    withSettings({ fileEmbedding: { model: 'text-embedding-3-small', provider: 'openai' } });
+    const searchModel = await resolveFileEmbeddingModel(serverDB, 'searcher', 'workspace-1');
+
+    expect(indexingModel).toEqual({ model: 'bge-m3', provider: 'ollama' });
+    expect(searchModel).toEqual(indexingModel);
+  });
+
   it('ignores a half-set pick', async () => {
     withSettings({ fileEmbedding: { model: 'text-embedding-3-large' } });
 

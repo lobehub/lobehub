@@ -100,14 +100,10 @@ const PERSONAL_SLOTS = new Set<UserServiceModelConfigKey>(PERSONAL_SYSTEM_AGENT_
 const NO_SLOTS = new Set<UserServiceModelConfigKey>();
 
 interface ServiceModelFormProps {
-  /**
-   * Drop the personal chat-assist rows (follow-up, input completion). The
-   * workspace surface edits them on its own Chat Preferences tab instead.
-   */
-  hidePersonalPreferences?: boolean;
+  scope?: 'personal' | 'workspace';
 }
 
-const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) => {
+const ServiceModelForm = ({ scope = 'personal' }: ServiceModelFormProps) => {
   const { t } = useTranslation('setting');
   const enableChannels = useServerConfigStore(serverConfigSelectors.enableChannels);
   const { allowed: canManage, reason } = usePermission('manage_settings');
@@ -151,7 +147,8 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
     return <ServiceModelFormSkeleton />;
   }
 
-  const skipSlots = hidePersonalPreferences ? PERSONAL_SLOTS : NO_SLOTS;
+  const isWorkspaceSettings = scope === 'workspace';
+  const skipSlots = isWorkspaceSettings ? PERSONAL_SLOTS : NO_SLOTS;
   const tiers = TIERS.map((tier) => ({
     ...tier,
     rows: tier.rows.filter(
@@ -444,11 +441,15 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
           {/* Same picker as a tier: it names the deployment default it falls back to. */}
           <Form.Field label={t('serviceModel.tierPicker')}>
             <TierRow
-              disabled={!canManage}
+              disabled={isWorkspaceSettings || !canManage}
               modelKind={'embedding'}
               recommended={followModelOf(FILE_EMBEDDING_ROW)!}
               title={t(`systemAgent.${FILE_EMBEDDING_ROW}.title`)}
-              value={fileEmbeddingState.kind === 'custom' ? fileEmbeddingState.value : undefined}
+              value={
+                !isWorkspaceSettings && fileEmbeddingState.kind === 'custom'
+                  ? fileEmbeddingState.value
+                  : undefined
+              }
               onChange={(value) =>
                 writeSlot(
                   FILE_EMBEDDING_ROW,
@@ -458,12 +459,20 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
             />
           </Form.Field>
           <Flexbox gap={4} {...stylex.props(styles.note)}>
-            <span {...stylex.props(styles.sectionDesc)}>
-              {t(`systemAgent.${FILE_EMBEDDING_ROW}.precedence`)}
-            </span>
-            <span {...stylex.props(styles.sectionDesc)}>
-              {t(`systemAgent.${FILE_EMBEDDING_ROW}.reindexHint`)}
-            </span>
+            {isWorkspaceSettings ? (
+              <span {...stylex.props(styles.sectionDesc)}>
+                {t(`systemAgent.${FILE_EMBEDDING_ROW}.workspaceDefault`)}
+              </span>
+            ) : (
+              <>
+                <span {...stylex.props(styles.sectionDesc)}>
+                  {t(`systemAgent.${FILE_EMBEDDING_ROW}.precedence`)}
+                </span>
+                <span {...stylex.props(styles.sectionDesc)}>
+                  {t(`systemAgent.${FILE_EMBEDDING_ROW}.reindexHint`)}
+                </span>
+              </>
+            )}
           </Flexbox>
         </>
       ),

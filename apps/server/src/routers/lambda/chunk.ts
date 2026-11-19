@@ -132,13 +132,18 @@ export const chunkRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { model, provider } = await resolveFileEmbeddingModel(ctx.serverDB, ctx.userId);
+      const workspaceId = ctx.workspaceId ?? undefined;
+      const { model, provider } = await resolveFileEmbeddingModel(
+        ctx.serverDB,
+        ctx.userId,
+        workspaceId,
+      );
       // Read user's provider config from database
       const agentRuntime = await initModelRuntimeFromDB(
         ctx.serverDB,
         ctx.userId,
         provider,
-        ctx.workspaceId ?? undefined,
+        workspaceId,
       );
 
       const embeddings = await agentRuntime.embeddings(

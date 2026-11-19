@@ -141,7 +141,11 @@ export class KnowledgeBaseSearchService {
 
     // Path 1: vector search over file chunks
     const vectorPath = async (): Promise<ChatSemanticSearchChunk[]> => {
-      const { model, provider } = await resolveFileEmbeddingModel(this.serverDB, this.userId);
+      const { model, provider } = await resolveFileEmbeddingModel(
+        this.serverDB,
+        this.userId,
+        this.workspaceId,
+      );
       const modelRuntime = await initModelRuntimeFromDB(
         this.serverDB,
         this.userId,
