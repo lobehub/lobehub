@@ -1,6 +1,6 @@
 'use client';
 
-import type { FileShareVisibility } from '@lobechat/types';
+import type { FileShareSettings, FileShareVisibility } from '@lobechat/types';
 import { fileShareUrl } from '@lobechat/utils/fileShare';
 import {
   Button,
@@ -64,7 +64,7 @@ const GenerationShareContent = memo<GenerationShareContentProps>(
     const setVisibility = useCallback(
       async (visibility: FileShareVisibility) => {
         setUpdating(true);
-        let next: Awaited<ReturnType<typeof lambdaClient.fileShare.updateShareSettings.mutate>>;
+        let next: FileShareSettings | null;
         try {
           next = await lambdaClient.fileShare.updateShareSettings.mutate({ fileId, visibility });
           await globalMutate(FILE_SHARE_SETTINGS_KEY(fileId), next, { revalidate: false });
