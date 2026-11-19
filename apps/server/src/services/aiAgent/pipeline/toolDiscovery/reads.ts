@@ -59,13 +59,12 @@ export interface ToolReadsContext {
    * resolution or the stale-tools refresh.
    */
   candidateIds: string[];
+  disabledPluginIds?: string[];
   exclusivePluginIds?: string[];
   isGoalTurn: boolean;
   /**
-   * The identifiers the agent turned on. A connector is opt-in per agent, so
-   * only these are resolved as discoverable; an off connector never has its
-   * credentials decrypted. `undefined` = no opt-in cut (an exact toolset, or a
-   * share run, which reads `shareGrantedExtensionIds` instead).
+   * Explicit connector allowlist for custom toolsets. Ordinary agents use their
+   * scoped connections, and shared agents use their grants.
    */
   optedInExtensionIds?: Set<string>;
   /** Project the run belongs to (`appContext.projectId`). */
@@ -285,11 +284,19 @@ const readDiscoverableConnectors = async (
     const [resolved, installedIds] = await Promise.all([
       unresolvedIds
         ? deps.connectorModel.resolveByIdentifiers(unresolvedIds, ctx.resolvedAgentId, gateKeeper)
-        : deps.connectorModel.resolveAll(ctx.resolvedAgentId, gateKeeper),
+        : deps.connectorModel.resolveAll(ctx.resolvedAgentId, gateKeeper, [
+            ...candidates,
+            ...(ctx.disabledPluginIds ?? []),
+          ]),
       installedPluginIds,
     ]);
     const connectorsMcp = filterInstalledMarketplaceConnectors(resolved, installedIds).filter(
-      (c) => !candidates.has(c.identifier) && hasCallableMcpEndpoint(c),
+      (c) =>
+        !candidates.has(c.identifier) &&
+        !ctx.disabledPluginIds?.includes(c.identifier) &&
+        c.isEnabled &&
+        c.status === 'connected' &&
+        hasCallableMcpEndpoint(c),
     );
     if (connectorsMcp.length === 0) return none;
 

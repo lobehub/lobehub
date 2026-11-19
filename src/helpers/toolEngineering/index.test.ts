@@ -867,7 +867,7 @@ describe('toolEngineering', () => {
     });
   });
 
-  describe('connectors are opt-in per agent', () => {
+  describe('connector discovery', () => {
     const connectorManifest = {
       api: [
         {
@@ -899,9 +899,9 @@ describe('toolEngineering', () => {
       mockInstalledPluginManifestList = () => [connectorManifest];
     });
 
-    it('keeps a connector the agent never turned on out of reach, even for the activator', () => {
+    it('offers an unconfigured connector only after activation', () => {
       expect(generate().enabledToolIds).toEqual([]);
-      expect(generate({ explicit: true }).enabledToolIds).toEqual([]);
+      expect(generate({ explicit: true }).enabledToolIds).toEqual(['gmail-mcp']);
     });
 
     it('leaves a connector that is on to the activator instead of invoking it up front', () => {
@@ -958,7 +958,7 @@ describe('toolEngineering', () => {
         { model: 'gpt-4', provider: 'openai' },
         undefined,
         undefined,
-        { runAgent: { plugins: [] } },
+        { runAgent: { plugins: [{ identifier: 'gmail-mcp', mode: 'disabled' }] } },
       ).generateToolsDetailed({
         context: { isExplicitActivation: true },
         model: 'gpt-4',

@@ -238,8 +238,7 @@ class ChatService {
       // `agentConfig.plugins` is the raw (pre-filter) field — `plugins` below
       // is already pinned-only (resolved upstream in agentConfigResolver).
       autoSkillIds: getAutoPluginIds(agentConfig.plugins),
-      // A connector the agent has not turned on is off for it, so it leaves the
-      // discovery list too; one this turn already enabled (an @-mention) stays.
+      // Apply the executing agent's connector preferences and scope to discovery.
       disabledPluginIds: [
         ...getUserDisabledToolIds(agentConfig.plugins, chatConfig),
         ...getUnavailableBuiltinToolIds(
@@ -249,7 +248,7 @@ class ChatService {
           discoveryManifests ? [] : runtimeUninstalledBuiltinTools(getToolStoreState()),
         ),
         ...resolveAgentConnectorActivation(
-          { chatConfig, plugins: agentConfig.plugins },
+          { id: targetAgentId, chatConfig, plugins: agentConfig.plugins },
           enabledToolIds,
         ).offIds,
       ],

@@ -64,6 +64,7 @@ import {
 export interface ToolsEngineConfig {
   /** Additional manifests to include beyond the standard ones */
   additionalManifests?: ToolManifest[];
+  agentId?: string;
   /** Default tool IDs that will always be added to the end of the tools list */
   defaultToolIds?: string[];
   /**
@@ -124,7 +125,9 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
         .composioAsLobeTools(toolStoreState)
         .map((tool) => tool.manifest as LobeToolManifest),
       connectors: buildClientConnectorManifests(
-        connectorSelectors.executableMcpConnectors(toolStoreState),
+        config.agentId
+          ? connectorSelectors.connectedMcpConnectorsForAgent(toolStoreState, config.agentId)
+          : connectorSelectors.executableMcpConnectors(toolStoreState),
       ) as LobeToolManifest[],
       installedPlugins: pluginSelectors.installedPluginManifestList(
         toolStoreState,
@@ -187,6 +190,7 @@ export const createAgentToolsEngine = (
   const agentState = getAgentStoreState();
   const targetAgentId = options.runAgent?.id ?? agentState.activeAgentId ?? '';
   const agent = options.runAgent ?? {
+    id: targetAgentId,
     chatConfig: agentChatConfigSelectors.currentChatConfig(agentState),
     plugins: agentSelectors.currentAgentConfig(agentState)?.plugins,
   };
@@ -252,6 +256,7 @@ export const createAgentToolsEngine = (
   });
 
   return createToolsEngine({
+    agentId: targetAgentId,
     defaultToolIds: resolved.defaultToolIds,
     disabledPluginIds: [...resolved.excludedIdentifiers],
     manifestContext,

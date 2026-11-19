@@ -70,7 +70,7 @@ describe('internal_createAgentState manifest map', () => {
 });
 
 describe('connectors on the executing client agent', () => {
-  const ids = ['target-connector', 'parent-connector'];
+  const ids = ['target-connector', 'parent-connector', 'new-connector'];
   beforeEach(() => {
     resetTestEnvironment();
     useAgentStore.setState({
@@ -101,7 +101,11 @@ describe('connectors on the executing client agent', () => {
     const chatConfig = createMockChatConfig({ toolMode });
     const agentConfig = createMockAgentConfig({
       chatConfig,
-      plugins: [...pinned, { identifier: ids[0], mode: 'auto' }],
+      plugins: [
+        ...pinned,
+        { identifier: ids[0], mode: 'auto' },
+        { identifier: ids[1], mode: 'disabled' },
+      ],
     });
     useAgentStore.setState((s) => ({ agentMap: { ...s.agentMap, target: agentConfig } }));
     return useChatStore.getState().internal_createAgentState({
@@ -113,11 +117,11 @@ describe('connectors on the executing client agent', () => {
   };
 
   it.each(['agent', 'custom'] as const)(
-    'activates only the target’s connector in %s mode',
+    'applies the target’s overrides and %s mode when activating connectors',
     (mode) => {
       const run = startTarget(mode, mode === 'custom' ? ['lobe-activator'] : []);
       expect(run.agentConfig.enabledToolIds).toContain('lobe-activator');
-      expect(run.agentConfig.enabledToolIds).not.toContain(ids[0]);
+      for (const id of ids) expect(run.agentConfig.enabledToolIds).not.toContain(id);
       const activated = run.toolsEngine.generateToolsDetailed({
         context: { isExplicitActivation: true },
         model: run.agentConfig.agentConfig.model,
@@ -127,6 +131,7 @@ describe('connectors on the executing client agent', () => {
       });
       expect(activated.tools?.map((tool) => tool.function.name)).toEqual([
         'target-connector____read',
+        ...(mode === 'agent' ? ['new-connector____read'] : []),
       ]);
     },
   );

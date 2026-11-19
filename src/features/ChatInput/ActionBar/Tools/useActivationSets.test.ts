@@ -15,12 +15,10 @@ const resolve = (rawPlugins: Parameters<typeof resolveActivationSets>[0]['rawPlu
   });
 
 describe('resolveActivationSets', () => {
-  it('lists a connector the agent never turned on under Disabled', () => {
+  it('puts inherited connectors under Auto and keeps library skills off', () => {
     const { checkedSet, disabledIdSet } = resolve([]);
 
-    expect([...disabledIdSet]).toEqual(
-      expect.arrayContaining(['excalidraw', 'gmail', 'linear', 'slack']),
-    );
+    expect([...disabledIdSet]).toEqual(['excalidraw']);
     expect(disabledIdSet.has('lobe-creds')).toBe(false);
     expect(checkedSet.size).toBe(0);
   });
@@ -48,10 +46,10 @@ describe('resolveActivationSets', () => {
     expect(disabledIdSet.has('slack')).toBe(true);
   });
 
-  it('writes Auto explicitly for a connector, since no entry means off', () => {
+  it('inherits Auto for a connector in agent mode', () => {
     const { optInIds } = resolve([]);
 
-    expect(resolveImplicitMode('gmail', optInIds)).toBe('disabled');
+    expect(resolveImplicitMode('gmail', optInIds)).toBe('auto');
     expect(resolveImplicitMode('lobe-image-generation', optInIds)).toBe('auto');
   });
 });

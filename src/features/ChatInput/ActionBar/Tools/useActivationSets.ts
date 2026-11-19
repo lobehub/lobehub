@@ -15,9 +15,8 @@ export const CONNECTOR_MODES: AgentPluginMode[] = ['auto', 'disabled'];
 /**
  * The identifier sets the Tools popover groups its rows by.
  *
- * Library skills and connectors are opt-in per agent — the profile is where one
- * is turned on — so having no entry means Disabled for them, where it means
- * Auto for a builtin tool or a builtin skill. A connector also has no Pinned
+ * Library skills require an explicit entry. Connected tools default to Auto in
+ * agent mode and require an entry in custom toolsets. A connector also has no Pinned
  * state: an entry pinned before it lost that state reads as on, so it is listed
  * under Auto rather than Pinned.
  */
@@ -37,7 +36,9 @@ export const resolveActivationSets = ({
   rawPlugins: AgentPluginEntry[] | undefined;
 }) => {
   const connectorIds = new Set(connectorIdList);
-  const optInIds = new Set([...librarySkillIds, ...connectorIdList]);
+  const optInIds = new Set(
+    discoverBuiltins ? librarySkillIds : [...librarySkillIds, ...connectorIdList],
+  );
 
   return {
     checkedSet: new Set(
