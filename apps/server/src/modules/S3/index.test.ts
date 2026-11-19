@@ -1,5 +1,4 @@
 // @vitest-environment node
-import type { ListPartsCommandOutput } from '@aws-sdk/client-s3';
 import {
   AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
@@ -9,7 +8,7 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
-  paginateListParts,
+  ListPartsCommand,
   PutObjectCommand,
   S3Client,
   UploadPartCommand,
@@ -588,7 +587,7 @@ describe('FileS3', () => {
         { ETag: 'etag-1', PartNumber: 1 },
       ]);
 
-      expect(paginateListParts).not.toHaveBeenCalled();
+      expect(ListPartsCommand).not.toHaveBeenCalled();
       expect(CompleteMultipartUploadCommand).toHaveBeenCalledWith({
         Bucket: 'test-bucket',
         Key: 'large.bin',
@@ -604,18 +603,15 @@ describe('FileS3', () => {
 
     it('should fall back to listing parts when CORS hides ETag', async () => {
       const s3 = new FileS3();
-      vi.mocked(paginateListParts).mockReturnValue(
-        (async function* (): AsyncGenerator<ListPartsCommandOutput, undefined> {
-          yield {
-            Parts: [
-              { ETag: 'etag-2', PartNumber: 2 },
-              { ETag: 'etag-1', PartNumber: 1 },
-            ],
-          } as ListPartsCommandOutput;
-          return undefined;
-        })(),
-      );
-      mockS3ClientSend.mockResolvedValue({});
+      mockS3ClientSend
+        .mockResolvedValueOnce({
+          IsTruncated: false,
+          Parts: [
+            { ETag: 'etag-2', PartNumber: 2 },
+            { ETag: 'etag-1', PartNumber: 1 },
+          ],
+        })
+        .mockResolvedValueOnce({});
 
       await s3.completeMultipartUpload('large.bin', 'upload-1', 2);
 
@@ -632,14 +628,60 @@ describe('FileS3', () => {
       });
     });
 
+    it('should stop listing parts when the store ends pagination with NextPartNumberMarker="0"', async () => {
+      const s3 = new FileS3();
+
+      // Ceph RGW ends ListParts with IsTruncated=false and
+      // NextPartNumberMarker="0" (meaning "from the start"). The SDK paginator
+      // follows that marker without checking IsTruncated and would list forever.
+      let sends = 0;
+      mockS3ClientSend.mockImplementation(async () => {
+        sends += 1;
+        if (sends === 1) {
+          return {
+            IsTruncated: true,
+            NextPartNumberMarker: '1',
+            Parts: [{ ETag: 'etag-1', PartNumber: 1, Size: 32 }],
+          };
+        }
+        if (sends === 2) {
+          return {
+            IsTruncated: false,
+            NextPartNumberMarker: '0',
+            Parts: [{ ETag: 'etag-2', PartNumber: 2, Size: 5 }],
+          };
+        }
+        if (sends === 3) return {};
+
+        throw new Error('ListParts pagination did not terminate');
+      });
+
+      await s3.completeMultipartUpload('large.bin', 'upload-1', 2, undefined, {
+        partSize: 32,
+        size: 37,
+      });
+
+      expect(ListPartsCommand).toHaveBeenCalledTimes(2);
+      expect(mockS3ClientSend).toHaveBeenCalledTimes(3);
+      expect(CompleteMultipartUploadCommand).toHaveBeenCalledWith({
+        Bucket: 'test-bucket',
+        Key: 'large.bin',
+        MultipartUpload: {
+          Parts: [
+            { ETag: 'etag-1', PartNumber: 1 },
+            { ETag: 'etag-2', PartNumber: 2 },
+          ],
+        },
+        UploadId: 'upload-1',
+      });
+    });
+
     it('should reject completion when a part is missing', async () => {
       const s3 = new FileS3();
-      vi.mocked(paginateListParts).mockReturnValue(
-        (async function* (): AsyncGenerator<ListPartsCommandOutput, undefined> {
-          yield { Parts: [{ ETag: 'etag-1', PartNumber: 1 }] } as ListPartsCommandOutput;
-          return undefined;
-        })(),
-      );
+      mockS3ClientSend.mockResolvedValue({
+        IsTruncated: false,
+        Parts: [{ ETag: 'etag-1', PartNumber: 1 }],
+      });
 
       await expect(s3.completeMultipartUpload('large.bin', 'upload-1', 2)).rejects.toThrow(
         'has 1/2 parts',
@@ -649,18 +691,15 @@ describe('FileS3', () => {
 
     it('validates listed part sizes before completing a reserved upload', async () => {
       const s3 = new FileS3();
-      vi.mocked(paginateListParts).mockReturnValue(
-        (async function* (): AsyncGenerator<ListPartsCommandOutput, undefined> {
-          yield {
-            Parts: [
-              { ETag: 'etag-1', PartNumber: 1, Size: 32 },
-              { ETag: 'etag-2', PartNumber: 2, Size: 5 },
-            ],
-          } as ListPartsCommandOutput;
-          return undefined;
-        })(),
-      );
-      mockS3ClientSend.mockResolvedValue({});
+      mockS3ClientSend
+        .mockResolvedValueOnce({
+          IsTruncated: false,
+          Parts: [
+            { ETag: 'etag-1', PartNumber: 1, Size: 32 },
+            { ETag: 'etag-2', PartNumber: 2, Size: 5 },
+          ],
+        })
+        .mockResolvedValueOnce({});
 
       await s3.completeMultipartUpload('large.bin', 'upload-1', 2, undefined, {
         partSize: 32,
@@ -672,17 +711,13 @@ describe('FileS3', () => {
 
     it('rejects a reserved multipart upload with an unexpected part size', async () => {
       const s3 = new FileS3();
-      vi.mocked(paginateListParts).mockReturnValue(
-        (async function* (): AsyncGenerator<ListPartsCommandOutput, undefined> {
-          yield {
-            Parts: [
-              { ETag: 'etag-1', PartNumber: 1, Size: 31 },
-              { ETag: 'etag-2', PartNumber: 2, Size: 6 },
-            ],
-          } as ListPartsCommandOutput;
-          return undefined;
-        })(),
-      );
+      mockS3ClientSend.mockResolvedValue({
+        IsTruncated: false,
+        Parts: [
+          { ETag: 'etag-1', PartNumber: 1, Size: 31 },
+          { ETag: 'etag-2', PartNumber: 2, Size: 6 },
+        ],
+      });
 
       await expect(
         s3.completeMultipartUpload('large.bin', 'upload-1', 2, undefined, {
