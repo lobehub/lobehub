@@ -223,6 +223,8 @@ git diff --check
 
 覆盖账号一对一、加密存储、不能借用其他用户身份、Collection 变更后解绑、未配置密钥拒绝绑定、受限 Collection、URL 穿越、PAT 本机 HTTP 传输、不跟随重定向、错误脱敏、分页、PR 检查失败与空结果区分、失败构建语义、TFVC 跨项目路径拒绝、日志行数限制、临时 Git helper 清理、未授权恢复重试、公共 drive 拒绝初始化和登出缓存重置。
 
+2026-11-19 上游切换到“一项目一环境、多仓库”后，沙盒统一入口补回了公共盘边界。实际持久公共盘拒绝 TFS 初始化，workspace 默认的临时沙盒仍允许当前用户凭据克隆；新增回归覆盖这两个结果，并确认公共盘拒绝时不会读取 TFS 凭据。
+
 后续 Docker 部署补充：`bash -n scripts/deploy-custom-image.sh` 与 15 项 Python 测试通过，覆盖首次安装自动生成加密密钥、预制公司地址、老部署补缺省值、保留原 Collection/API/ 禁用值、保留原密钥与 `.env`。相关文件 lint 无错误，22 项部署相关 TypeScript 测试通过。Docker 镜像构建和真实 Compose 解析仍未执行。
 
 设计脚本扫描新增 / 相关页面：`lint-lobe.mjs` 无 FAIL，5 条 WARN 来自已有页面间距与 span 点击区域；`check-detail.mjs` 无 FAIL，提示空态 / 禁用说明 / 原表单 label 等启发式 WARN。脚本结果不是渲染验收。

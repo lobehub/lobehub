@@ -13,12 +13,14 @@ const mocks = vi.hoisted(() => ({
   findInstanceById: vi.fn(),
   resolveSandboxStorageClaim: vi.fn(),
   resolveScmCloneCredential: vi.fn(),
+  resolveTfsCloneCredential: vi.fn(),
 }));
 
 const { findById, findInstanceById, getAgentVisibility, resolveSandboxStorageClaim } = mocks;
 
 vi.mock('@/server/services/scm/cloneCredential', () => ({
   resolveScmCloneCredential: mocks.resolveScmCloneCredential,
+  resolveTfsCloneCredential: mocks.resolveTfsCloneCredential,
   // One repository: the single host-wide credential, as a list.
   resolveScmCloneCredentials: async (params: unknown) => {
     const credential = await mocks.resolveScmCloneCredential(params);
@@ -635,6 +637,7 @@ describe('resolveSandboxSessionConfig', () => {
 
     beforeEach(() => {
       mocks.resolveScmCloneCredential.mockReset().mockResolvedValue(null);
+      mocks.resolveTfsCloneCredential.mockReset().mockResolvedValue(null);
       mocks.findEnvironmentById.mockReset().mockResolvedValue(environment);
     });
 
@@ -686,6 +689,62 @@ describe('resolveSandboxSessionConfig', () => {
 
       await expect(resolve()).resolves.toMatchObject({
         initialization: { environmentId: 'env-1' },
+        mode: 'ephemeral',
+      });
+    });
+
+    it('refuses a TFS checkout on a workspace public drive', async () => {
+      const tfsEnvironment = {
+        configuration: {
+          sources: [
+            {
+              kind: 'git',
+              url: 'https://tfs.example.com/Collection/RSMP/_git/service',
+            },
+          ],
+        },
+        id: 'env-1',
+        name: 'RSMP',
+      };
+      resolveSandboxStorageClaim.mockResolvedValue(CLAIM);
+      mocks.findEnvironmentById.mockResolvedValue(tfsEnvironment);
+      findById.mockResolvedValue({
+        metadata: { sandboxEnvironmentId: 'env-1', sandboxWorkingDirectory: 'shared-work' },
+      });
+
+      await expect(resolve({ workspaceId: 'ws-1' })).resolves.toMatchObject({
+        drive: 'public',
+        initialization: { authorizationError: 'sharedDrive' },
+        mode: 'drive',
+      });
+      expect(mocks.resolveTfsCloneCredential).not.toHaveBeenCalled();
+    });
+
+    it('allows a TFS checkout in the workspace temporary sandbox', async () => {
+      const tfsEnvironment = {
+        configuration: {
+          sources: [
+            {
+              kind: 'git',
+              url: 'https://tfs.example.com/Collection/RSMP/_git/service',
+            },
+          ],
+        },
+        id: 'env-1',
+        name: 'RSMP',
+      };
+      const credential = {
+        tfs: { authType: 'pat' as const, secret: 'test-only', username: '' },
+        urlPrefix: 'https://tfs.example.com/Collection/',
+      };
+      resolveSandboxStorageClaim.mockResolvedValue(null);
+      mocks.findEnvironmentById.mockResolvedValue(tfsEnvironment);
+      mocks.resolveTfsCloneCredential.mockResolvedValue(credential);
+      findById.mockResolvedValue({ metadata: { sandboxEnvironmentId: 'env-1' } });
+
+      await expect(resolve({ workspaceId: 'ws-1' })).resolves.toMatchObject({
+        drive: 'public',
+        initialization: { cloneCredential: credential },
         mode: 'ephemeral',
       });
     });

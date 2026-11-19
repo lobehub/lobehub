@@ -420,10 +420,11 @@ const resolveInitialization = async ({
   topicId,
   userId,
   workspaceId,
+  sharedDrive,
 }: Required<Pick<SandboxSessionConfigInput, 'serverDB' | 'topicId'>> &
-  Pick<SandboxSessionConfigInput, 'userId' | 'workspaceId'>): Promise<
-  SandboxInitialization | undefined
-> => {
+  Pick<SandboxSessionConfigInput, 'userId' | 'workspaceId'> & {
+    sharedDrive: boolean;
+  }): Promise<SandboxInitialization | undefined> => {
   try {
     const topic = await new TopicModel(serverDB, userId, workspaceId ?? undefined).findById(
       topicId,
@@ -474,6 +475,7 @@ const resolveInitialization = async ({
       workspaceId,
     };
     if (hasTfsGitSource(params.configuration)) {
+      if (sharedDrive) return { ...initialization, authorizationError: 'sharedDrive' };
       const tfs = await resolveTfsCloneCredential(params).catch(() => undefined);
       if (!tfs) return { ...initialization, authorizationError: 'unavailable' };
       return { ...initialization, cloneCredential: tfs };
@@ -559,7 +561,12 @@ export const resolveSandboxSessionConfig = async (
   const { serverDB, topicId } = input;
   if (!serverDB || !topicId || config.mode === 'persistent') return config;
 
-  const initialization = await resolveInitialization({ ...input, serverDB, topicId });
+  const initialization = await resolveInitialization({
+    ...input,
+    serverDB,
+    sharedDrive: config.mode === 'drive' && config.drive === 'public',
+    topicId,
+  });
 
   return initialization ? { ...config, initialization } : config;
 };
