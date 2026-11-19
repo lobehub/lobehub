@@ -2,11 +2,15 @@ import { modelMappings } from '@lobehub/icons';
 import dayjs from 'dayjs';
 import { useMemo } from 'react';
 
-import { type BusinessFeaturedModel } from '@/business/client/hooks/useBusinessModelListGuard';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 import { isNewReleaseDate } from '@/utils/time';
 
-import { type GroupMode, type ListItem, type ModelWithProviders } from '../types';
+import {
+  type FeaturedModel,
+  type GroupMode,
+  type ListItem,
+  type ModelWithProviders,
+} from '../types';
 
 /**
  * Shares the exact rule behind `NewModelBadge`. Every renderer of this list must keep the badge
@@ -86,7 +90,7 @@ const sortWithPinnedNewModels = <T>(
 
 export interface BuildListItemsOptions {
   /** Models listed first in their own section and left out of their provider's list. */
-  featuredModels?: BusinessFeaturedModel[];
+  featuredModels?: FeaturedModel[];
 }
 
 export const buildListItems = (
