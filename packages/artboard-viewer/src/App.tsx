@@ -9,6 +9,7 @@ import Outline from '@/features/Artboard/Board/Outline';
 import { BoardProvider } from '@/features/Artboard/BoardContext';
 import BoardFrame from '@/features/Artboard/Canvas/BoardFrame';
 import { boardFileUrl } from '@/features/Artboard/model';
+import { useArtboardStore } from '@/features/Artboard/store';
 import Viewport from '@/features/Artboard/Viewport';
 import {
   type BoardCapabilities,
@@ -50,7 +51,8 @@ const App = ({ snapshot }: { snapshot: ArtboardPublishSnapshot }) => {
     }),
     [fileBaseUrl],
   );
-  const showOutline = snapshot.pages.length > 1 || snapshot.groups.length > 0;
+  // Seeded by `initViewerStore`; the viewport keeps boards clear of it only while it is open.
+  const outlineOpen = useArtboardStore((s) => s.outlineOpen);
 
   return (
     <ConfigProvider motion={motion}>
@@ -67,7 +69,7 @@ const App = ({ snapshot }: { snapshot: ArtboardPublishSnapshot }) => {
           <BoardProvider artboard={artboard} fileBaseUrl={fileBaseUrl}>
             <BoardCapabilitiesProvider value={capabilities}>
               <Viewport />
-              {showOutline && <Outline />}
+              {outlineOpen && <Outline />}
             </BoardCapabilitiesProvider>
           </BoardProvider>
         </div>

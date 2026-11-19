@@ -8,6 +8,7 @@ import { createRoot } from 'react-dom/client';
 
 import App from './App';
 import { initViewerI18n } from './i18n';
+import { initViewerStore } from './viewerState';
 
 const followSystemTheme = () => {
   const query = window.matchMedia('(prefers-color-scheme: dark)');
@@ -24,7 +25,9 @@ const boot = async () => {
   if (!data || !root) return;
   followSystemTheme();
   await initViewerI18n(navigator.language);
-  createRoot(root).render(<App snapshot={JSON.parse(data) as ArtboardPublishSnapshot} />);
+  const snapshot = JSON.parse(data) as ArtboardPublishSnapshot;
+  initViewerStore(snapshot);
+  createRoot(root).render(<App snapshot={snapshot} />);
 };
 
 if (document.readyState === 'loading')
