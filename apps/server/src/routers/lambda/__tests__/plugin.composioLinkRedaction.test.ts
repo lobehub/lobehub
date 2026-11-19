@@ -51,6 +51,8 @@ describe('pluginRouter.getPlugins composio link redaction', () => {
     const [row] = await list({ userId: 'user-1', workspaceId: 'ws-1' });
 
     expect(row.customParams?.composio).not.toHaveProperty('redirectUrl');
+    // A teammate's private connection is never listed to the client
+    expect(query).toHaveBeenCalledWith({ forClient: true });
     expect(row.customParams?.composio).toMatchObject({ connectedAccountId: 'ca_1' });
   });
 

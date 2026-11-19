@@ -114,7 +114,14 @@ export class PluginModel {
     return this.db.delete(userInstalledPlugins).where(this.ownership());
   };
 
-  query = async () => {
+  /**
+   * The installed plugins in scope. `forClient` leaves out the Composio
+   * projection of a teammate's private connection: the projection is
+   * workspace-wide, but only its owner may run that connection, so a client
+   * listing it would offer tools whose every call is refused. A projection with
+   * no connection row (a legacy-only connection) stays.
+   */
+  query = async ({ forClient = false }: { forClient?: boolean } = {}) => {
     const data = await this.db
       .select({
         createdAt: userInstalledPlugins.createdAt,
@@ -127,7 +134,22 @@ export class PluginModel {
         updatedAt: userInstalledPlugins.updatedAt,
       })
       .from(userInstalledPlugins)
-      .where(this.visible())
+      .where(
+        and(
+          this.visible(),
+          forClient
+            ? sql`NOT EXISTS (
+                SELECT 1 FROM ${userConnectors}
+                WHERE ${userConnectors.identifier} = ${userInstalledPlugins.identifier}
+                  AND ${userConnectors.visibility} = 'private'
+                  AND ${userConnectors.userId} <> ${this.userId}
+                  AND ${userConnectors.workspaceId} IS NOT DISTINCT FROM ${userInstalledPlugins.workspaceId}
+                  AND ${userConnectors.metadata} -> 'composio' ->> 'connectedAccountId'
+                    = ${userInstalledPlugins.customParams} -> 'composio' ->> 'connectedAccountId'
+              )`
+            : undefined,
+        ),
+      )
       .orderBy(desc(userInstalledPlugins.createdAt));
 
     return data.map<LobeTool>((item) => ({

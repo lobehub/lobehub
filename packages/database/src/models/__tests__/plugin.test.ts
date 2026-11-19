@@ -251,6 +251,34 @@ describe('PluginModel', () => {
       ]);
     });
 
+    it("leaves a teammate's private connection out of a client listing", async () => {
+      // 456's projection mirrors its private connection of the app; the
+      // caller's legacy-only connection has no connection row
+      await serverDB.insert(userConnectors).values({
+        identifier: 'gmail',
+        metadata: { composio: { connectedAccountId: 'acc-private' } },
+        name: 'Gmail',
+        sourceType: 'composio',
+        status: 'connected',
+        userId: '456',
+        visibility: 'private',
+        workspaceId,
+      } as any);
+      const accounts = (rows: { customParams?: any }[]) =>
+        rows.map((row) => row.customParams?.composio?.connectedAccountId).filter(Boolean);
+
+      const caller = new PluginModel(serverDB, userId, workspaceId);
+      expect(accounts(await caller.query({ forClient: true }))).toEqual(['acc-legacy']);
+      // Server runs keep reading every projection row
+      expect(accounts(await caller.query()).sort()).toEqual(['acc-legacy', 'acc-private']);
+      // The owner still lists their own
+      expect(
+        accounts(
+          await new PluginModel(serverDB, '456', workspaceId).query({ forClient: true }),
+        ).sort(),
+      ).toEqual(['acc-legacy', 'acc-private']);
+    });
+
     it("removes a shared connection's projection but keeps a member's private connection", async () => {
       // 456's projection mirrors its private connection of the app
       await serverDB.insert(userConnectors).values({

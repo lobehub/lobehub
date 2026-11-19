@@ -112,7 +112,7 @@ export const pluginRouter = router({
   getPlugins: wsCompatProcedure.use(serverDatabase).query(async ({ ctx }): Promise<LobeTool[]> => {
     const pluginModel = new PluginModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
 
-    return redactForeignComposioLinks(await pluginModel.query(), ctx);
+    return redactForeignComposioLinks(await pluginModel.query({ forClient: true }), ctx);
   }),
 
   removePlugin: pluginProcedure

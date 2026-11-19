@@ -488,7 +488,7 @@ export const composioRouter = router({
     }),
 
   getComposioPlugins: composioDbProcedure.query(async ({ ctx }) => {
-    const allPlugins = await ctx.pluginModel.query();
+    const allPlugins = await ctx.pluginModel.query({ forClient: true });
     return redactForeignComposioLinks(
       allPlugins.filter((plugin) => plugin.customParams?.composio),
       ctx,

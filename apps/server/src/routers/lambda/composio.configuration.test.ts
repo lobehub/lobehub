@@ -69,6 +69,8 @@ describe('composioRouter without a configured API key', () => {
     mocks.pluginQuery.mockResolvedValue([pending('me'), pending('mate')]);
 
     const plugins = await callerFor('me', 'workspace-1').getComposioPlugins();
+    // A teammate's private connection is never listed to the client
+    expect(mocks.pluginQuery).toHaveBeenCalledWith({ forClient: true });
 
     expect(plugins[0].customParams?.composio?.redirectUrl).toBe('https://composio.dev/link/me');
     expect(plugins[1].customParams?.composio).toEqual({
