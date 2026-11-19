@@ -21,8 +21,10 @@ const isCodingPlanProvider = (id: string) => id.endsWith('codingplan');
  * duplicate of the OpenAI one right beside it. Name these providers after the
  * plan instead, the way the detail page header does. Doubao Speech borrows the Doubao
  * mark, whose wordmark reads 豆包大模型 (the Ark models), so it is named too.
+ * Ace Data Cloud has no matching provider icon; keep its name beside the neutral fallback.
  */
-const sharesVendorMark = (id: string) => id === 'chatgpt' || id === 'doubaospeech';
+const needsProviderName = (id: string) =>
+  id === 'chatgpt' || id === 'doubaospeech' || id === 'acedatacloud';
 
 interface ProviderCardProps extends AiProviderListItem {
   loading?: boolean;
@@ -69,7 +71,7 @@ const ProviderCard = memo<ProviderCardProps>(
               <Flexbox horizontal align={'center'} justify={'space-between'}>
                 {source === 'builtin' ? (
                   <Flexbox horizontal align={'center'} gap={8}>
-                    {sharesVendorMark(id) ? (
+                    {needsProviderName(id) ? (
                       <Flexbox horizontal align={'center'} gap={12}>
                         <ProviderIcon
                           provider={id}
