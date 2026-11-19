@@ -14,7 +14,7 @@ export function useDownloadImage() {
     downloadImage: useMemoizedFn(async (url: string, fileName: string) => {
       setIsDownloading(true);
       try {
-        await downloadFile(url, fileName, false);
+        await downloadFile(url, fileName, false, { resolveExtension: true });
       } catch (error) {
         console.error('Failed to download image:', error);
 
