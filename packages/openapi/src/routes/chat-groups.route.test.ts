@@ -178,6 +178,8 @@ describe('GET /chat-groups', () => {
 
     expect(await json(await request('/', { userId: OTHER }))).toEqual({
       chatGroups: [],
+      hasMore: false,
+      nextCursor: null,
       total: 0,
     });
     expect((await request(`/${group.id}`, { userId: OTHER })).status).toBe(404);

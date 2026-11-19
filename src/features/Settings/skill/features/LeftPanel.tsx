@@ -1,20 +1,20 @@
 'use client';
 
 import { Button, DropdownMenu, Flexbox, Icon, SearchBar, Text, Tooltip } from '@lobehub/ui';
-import { GithubIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronDown, FileArchive, Grid2x2Plus, Link, Plus, Store } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { ChevronDown, Grid2x2Plus, Import, Plus, Store } from 'lucide-react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { CustomConnectorModal } from '@/features/Connectors';
-import { createSkillStoreModal } from '@/features/SkillStore';
-import { openImportFromGithubModal } from '@/features/SkillStore/SkillList/ImportFromGithubModal';
-import { openImportFromUrlModal } from '@/features/SkillStore/SkillList/ImportFromUrlModal';
-import { openUploadSkillModal } from '@/features/SkillStore/SkillList/UploadSkillModal';
+import { NavPanelDensityContext } from '@/features/NavPanel/density';
+import { createMarketSkillStoreModal, createSkillStoreModal } from '@/features/SkillStore';
+import { openSkillImportModal } from '@/features/SkillStore/SkillImportModal';
 import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 import { usePermission } from '@/hooks/usePermission';
+import { useInterfaceDensity } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import ConnectorManagePolicy from './ConnectorManagePolicy';
 import { type ToolDetailType } from './SkillDetail';
@@ -66,7 +66,7 @@ const styles = stylex.create({
     gap: '8px',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: '42px',
+    height: sidebarRow.headerHeight,
     paddingInline: '16px',
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
@@ -99,14 +99,12 @@ interface LeftPanelProps {
 const LeftPanel = memo<LeftPanelProps>(
   ({ fullWidth, onDeleteSelected, onSelect, page, selectedIdentifier, viewMode }) => {
     const { t } = useTranslation(['setting', 'tool']);
+    const interfaceDensity = useInterfaceDensity();
     const [showAddConnector, setShowAddConnector] = useState(false);
     const [keyword, setKeyword] = useState('');
 
-    const handleOpenStore = useCallback(() => {
-      createSkillStoreModal();
-    }, []);
-
     const isConnectorView = viewMode === 'connector';
+    const handleOpenStore = isConnectorView ? createSkillStoreModal : createMarketSkillStoreModal;
     const { allowed: canCreate } = usePermission('create_content');
     // Adding a workspace connector follows the same member policy as editing one.
     const { canManage: canAddConnector, isPending: isPolicyPending } = useConnectorManageable();
@@ -132,7 +130,9 @@ const LeftPanel = memo<LeftPanelProps>(
             ]
           : []),
         {
-          desc: t('connectorMarket.add.browseStoreDesc'),
+          desc: t(
+            isConnectorView ? 'connectorMarket.add.browseStoreDesc' : 'skillView.browseStoreDesc',
+          ),
           icon: <Icon icon={Store} />,
           key: 'store',
           label: t('connectorMarket.add.browseStore'),
@@ -141,28 +141,12 @@ const LeftPanel = memo<LeftPanelProps>(
         ...(!isConnectorView
           ? [
               {
-                desc: t('tab.importFromGithub.desc'),
+                desc: t('agentSkillModal.sources'),
                 disabled: !canCreate,
-                icon: <Icon icon={GithubIcon} />,
-                key: 'importGithub',
-                label: t('tab.importFromGithub'),
-                onClick: () => openImportFromGithubModal(),
-              },
-              {
-                desc: t('tab.importFromUrl.desc'),
-                disabled: !canCreate,
-                icon: <Icon icon={Link} />,
-                key: 'importUrl',
-                label: t('tab.importFromUrl'),
-                onClick: () => openImportFromUrlModal(),
-              },
-              {
-                desc: t('tab.uploadZip.desc'),
-                disabled: !canCreate,
-                icon: <Icon icon={FileArchive} />,
-                key: 'uploadZip',
-                label: t('tab.uploadZip'),
-                onClick: () => openUploadSkillModal(),
+                icon: <Icon icon={Import} />,
+                key: 'import',
+                label: t('agentSkillModal.title'),
+                onClick: openSkillImportModal,
               },
             ]
           : []),
@@ -229,13 +213,13 @@ const LeftPanel = memo<LeftPanelProps>(
     }
 
     return (
-      <>
+      <NavPanelDensityContext value={fullWidth ? null : interfaceDensity}>
         <div
           className={stylex.props(styles.root).className}
           style={fullWidth ? { borderInlineEnd: 'none', width: '100%' } : undefined}
         >
           <div {...stylex.props(styles.header)}>
-            <Text strong style={{ fontSize: 14 }}>
+            <Text strong style={{ fontSize: 'var(--lobe-density-font-size)' }}>
               {isConnectorView
                 ? t('skillView.connectors', 'Connectors')
                 : t('skillView.skills', 'Skills')}
@@ -264,54 +248,14 @@ const LeftPanel = memo<LeftPanelProps>(
                   </span>
                 </Tooltip>
               ) : (
-                // Skill view: import a skill from a URL, GitHub, or a zip upload.
-                <DropdownMenu
-                  nativeButton={false}
-                  placement="bottomRight"
-                  items={[
-                    {
-                      icon: <Icon icon={Link} />,
-                      key: 'importUrl',
-                      label: (
-                        <Flexbox gap={2}>
-                          <span>{t('tab.importFromUrl')}</span>
-                          <Text style={{ fontSize: 12 }} type="secondary">
-                            {t('tab.importFromUrl.desc')}
-                          </Text>
-                        </Flexbox>
-                      ),
-                      onClick: () => openImportFromUrlModal(),
-                    },
-                    {
-                      icon: <Icon icon={GithubIcon} />,
-                      key: 'importGithub',
-                      label: (
-                        <Flexbox gap={2}>
-                          <span>{t('tab.importFromGithub')}</span>
-                          <Text style={{ fontSize: 12 }} type="secondary">
-                            {t('tab.importFromGithub.desc')}
-                          </Text>
-                        </Flexbox>
-                      ),
-                      onClick: () => openImportFromGithubModal(),
-                    },
-                    {
-                      icon: <Icon icon={FileArchive} />,
-                      key: 'uploadZip',
-                      label: (
-                        <Flexbox gap={2}>
-                          <span>{t('tab.uploadZip')}</span>
-                          <Text style={{ fontSize: 12 }} type="secondary">
-                            {t('tab.uploadZip.desc')}
-                          </Text>
-                        </Flexbox>
-                      ),
-                      onClick: () => openUploadSkillModal(),
-                    },
-                  ]}
-                >
-                  <Button aria-label={t('connectorMarket.add')} icon={Grid2x2Plus} size="small" />
-                </DropdownMenu>
+                <Button
+                  aria-label={t('agentSkillModal.title')}
+                  disabled={!canCreate}
+                  icon={Import}
+                  size="small"
+                  title={t('agentSkillModal.title')}
+                  onClick={openSkillImportModal}
+                />
               )}
               <Button
                 aria-label={t('skillStore.title')}
@@ -334,7 +278,7 @@ const LeftPanel = memo<LeftPanelProps>(
           </div>
         </div>
         <CustomConnectorModal open={showAddConnector} onClose={() => setShowAddConnector(false)} />
-      </>
+      </NavPanelDensityContext>
     );
   },
 );

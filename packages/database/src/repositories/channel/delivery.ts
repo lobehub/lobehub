@@ -17,6 +17,7 @@ import {
 import type { Transaction } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
 import { ChannelError } from './error';
+import { unhideForActivity } from './sections';
 
 /** Why a deferred `followup` has not started; see {@link deliver} and `claimJob`. */
 export const AWAITING_PRIMARY_REASON = 'Waiting for the first responder to finish';
@@ -186,6 +187,7 @@ export const appendMessage = async (
     .insert(channelMessages)
     .values({ ...values, sequence })
     .returning();
+  await unhideForActivity(tx, values.channelId);
 
   return message;
 };

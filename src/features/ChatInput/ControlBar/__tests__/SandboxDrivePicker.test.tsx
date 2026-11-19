@@ -46,6 +46,13 @@ vi.mock('@/services/sandboxStorage', () => ({
     resolveSessionPlacement: vi.fn(async () => ({})),
   },
 }));
+// A project's environment lives only in the project's own list.
+vi.mock('@/store/projectWorkingDirectory', () => ({
+  useProjectDirectoryStore: (selector: (s: object) => unknown) =>
+    selector({ useFetchEnvironments: (projectId?: string) => ({ hasData: !!projectId }) }),
+  useProjectEnvironments: (projectId?: string) =>
+    projectId ? [{ id: 'env-project', name: 'Lobe Write', visibility: 'private' }] : [],
+}));
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (s: object) => unknown) => selector({}),
 }));
@@ -62,8 +69,10 @@ vi.mock('../SandboxRepositoryMenu', () => ({
     none ? <div data-testid="repository-menu">{none.active ? 'none-active' : 'none'}</div> : null,
 }));
 
-const renderPicker = (value: SandboxSelection, props: { modeInEnvironmentMenu?: boolean } = {}) =>
-  render(<SandboxDrivePicker entitled value={value} onChange={vi.fn()} {...props} />);
+const renderPicker = (
+  value: SandboxSelection,
+  props: { modeInEnvironmentMenu?: boolean; projectId?: string } = {},
+) => render(<SandboxDrivePicker entitled value={value} onChange={vi.fn()} {...props} />);
 
 // T-14161: the sandbox kind is picked in the execution-environment menu, so
 // this menu only asks what is left for that kind.
@@ -97,6 +106,15 @@ describe('SandboxDrivePicker', () => {
     renderPicker({ environmentId: 'env-1' });
 
     expect(screen.getByTestId('repository-menu').textContent).toBe('none');
+  });
+
+  // A project conversation starts in its project's environment, which the
+  // workspace's shared list leaves out: the chip read "unavailable".
+  it("names a project conversation's own environment on the chip", () => {
+    renderPicker({ environmentId: 'env-project' }, { projectId: 'project-1' });
+
+    expect(screen.getByTestId('sandbox-drive-chip').textContent).toContain('Lobe Write');
+    expect(screen.queryByText('sandboxEnvironment.missing')).toBeNull();
   });
 
   // A member of a workspace agent whose author fixed the target sees the

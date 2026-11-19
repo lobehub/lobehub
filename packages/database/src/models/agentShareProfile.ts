@@ -2,6 +2,7 @@ import type { SharedAgentDeliveryStats, SharedAgentWork } from '@lobechat/types'
 import { TRPCError } from '@trpc/server';
 import {
   and,
+  type AnyColumn,
   avg,
   count,
   desc,
@@ -28,6 +29,19 @@ const originTopics = alias(topics, 'share_work_origin_topics');
 const currentTopics = alias(topics, 'share_work_current_topics');
 const historyVersions = alias(workVersions, 'share_work_history_versions');
 const historyTopics = alias(topics, 'share_work_history_topics');
+
+/**
+ * A profile row belongs to the shared agent's own scope: personal rows for a
+ * personal agent, rows of the agent's Workspace for a Workspace agent. The
+ * agent row is the single source of that scope, so a Work or run left in the
+ * other scope (or an agent moved after the fact) never counts. Callers must
+ * join `agents` on the shared agent id; subqueries reference it as an outer
+ * column.
+ */
+const inAgentScope = (workspaceId: AnyColumn) =>
+  sql`${workspaceId} is not distinct from ${agents.workspaceId}`;
+const outsideAgentScope = (workspaceId: AnyColumn) =>
+  sql`${workspaceId} is distinct from ${agents.workspaceId}`;
 
 /** Owner-scoped source for explicitly curated share profiles, not a general resource grant. */
 export class AgentShareProfileModel {
@@ -71,18 +85,17 @@ export class AgentShareProfileModel {
           eq(works.userId, this.userId),
           eq(works.originAgentId, agentId),
           eq(agents.userId, this.userId),
-          isNull(agents.workspaceId),
           sql`${agents.isDeleted} is not true`,
-          isNull(works.workspaceId),
+          inAgentScope(works.workspaceId),
           isNull(works.deletedAt),
           sql`${works.isDeleted} is not true`,
           eq(originTopics.userId, this.userId),
-          isNull(originTopics.workspaceId),
+          inAgentScope(originTopics.workspaceId),
           isNull(originTopics.senderId),
           isNull(originTopics.deletedAt),
           sql`${originTopics.isDeleted} is not true`,
           eq(currentTopics.userId, this.userId),
-          isNull(currentTopics.workspaceId),
+          inAgentScope(currentTopics.workspaceId),
           isNull(currentTopics.senderId),
           isNull(currentTopics.deletedAt),
           sql`${currentTopics.isDeleted} is not true`,
@@ -99,7 +112,7 @@ export class AgentShareProfileModel {
                     isNull(historyTopics.id),
                     isNotNull(historyTopics.senderId),
                     ne(historyTopics.userId, this.userId),
-                    isNotNull(historyTopics.workspaceId),
+                    outsideAgentScope(historyTopics.workspaceId),
                   ),
                 ),
               ),
@@ -117,7 +130,7 @@ export class AgentShareProfileModel {
                     and(
                       eq(documents.id, works.resourceId),
                       eq(documents.userId, this.userId),
-                      isNull(documents.workspaceId),
+                      inAgentScope(documents.workspaceId),
                       isNull(documents.deletedAt),
                       sql`${documents.isDeleted} is not true`,
                     ),
@@ -134,7 +147,7 @@ export class AgentShareProfileModel {
                     and(
                       eq(tasks.id, works.resourceId),
                       eq(tasks.createdByUserId, this.userId),
-                      isNull(tasks.workspaceId),
+                      inAgentScope(tasks.workspaceId),
                       isNull(tasks.deletedAt),
                       sql`${tasks.isDeleted} is not true`,
                     ),
@@ -281,11 +294,10 @@ export class AgentShareProfileModel {
             eq(agentOperations.userId, this.userId),
             eq(agentOperations.agentId, agentId),
             eq(agents.userId, this.userId),
-            isNull(agents.workspaceId),
             sql`${agents.isDeleted} is not true`,
-            isNull(agentOperations.workspaceId),
+            inAgentScope(agentOperations.workspaceId),
             eq(topics.userId, this.userId),
-            isNull(topics.workspaceId),
+            inAgentScope(topics.workspaceId),
             isNull(topics.senderId),
             isNull(topics.deletedAt),
             sql`${topics.isDeleted} is not true`,

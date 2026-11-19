@@ -133,8 +133,8 @@ vi.mock('@/database/models/plugin', () => ({
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn().mockImplementation(function () {
     return {
-      queryByIdentifiers: vi.fn().mockResolvedValue([]),
-      resolveByIdentifiers: reads.connectors,
+      resolveAll: reads.connectors,
+      resolveByIdentifiers: vi.fn().mockResolvedValue([]),
     };
   }),
 }));

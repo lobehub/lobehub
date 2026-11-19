@@ -12,6 +12,8 @@ import { CheckIcon, CircleSlashIcon, EyeIcon, GitCommitHorizontalIcon, XIcon } f
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
@@ -23,23 +25,23 @@ const styles = stylex.create({
   comment: {
     paddingBlock: '6px',
     paddingInline: '8px',
-    borderRadius: '8px',
+    borderRadius: sidebarRow.radius,
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
   commentBody: {
     overflow: 'hidden',
     minWidth: 0,
-    fontSize: '13px',
-    lineHeight: '20px',
+    fontSize: sidebarRow.textFontSize,
+    lineHeight: sidebarRow.textLineHeight,
     overflowWrap: 'anywhere',
   },
   commentBodyWrap: { overflow: 'hidden', minWidth: 0, paddingInlineStart: '26px' },
   commentHead: { fontSize: '12px', color: cssVar.colorTextTertiary },
   commentHeadAuthor: { fontWeight: 500, color: cssVar.colorText },
-  composer: { paddingBlockStart: '4px', paddingBlockEnd: 0, paddingInline: '8px' },
+  composer: { paddingBlockStart: '4px', paddingBlockEnd: 0, paddingInline: '4px' },
   event: {
-    minHeight: '28px',
+    minHeight: sidebarRow.height,
     paddingBlock: '2px',
     paddingInline: '8px',
     fontSize: '12px',
@@ -136,6 +138,7 @@ const ActivityTimeline = memo<ActivityTimelineProps>(
   ({ actionsDisabled, busy, detail, onAction }) => {
     const { t } = useTranslation('chat');
     const tr = t as unknown as TranslateKey;
+    const density = useDensityTokens();
     const [draft, setDraft] = useState('');
     const timeline = useMemo(() => buildTimeline(detail), [detail]);
 
@@ -158,7 +161,7 @@ const ActivityTimeline = memo<ActivityTimelineProps>(
                 </Flexbox>
                 <div {...stylex.props(styles.commentBodyWrap)}>
                   <Markdown
-                    fontSize={13}
+                    fontSize={density.fontSize}
                     variant={'chat'}
                     {...sx(styles.commentBody, fallback.commentBody)}
                   >
@@ -180,12 +183,12 @@ const ActivityTimeline = memo<ActivityTimelineProps>(
               horizontal
               align={'center'}
               {...stylex.props(styles.event)}
-              gap={8}
+              gap={12}
               key={entry.kind === 'commit' ? entry.sha : `review:${entry.author}:${entry.at}`}
             >
               <Icon
                 icon={visual.icon}
-                size={14}
+                size={density.iconSize}
                 style={visual.tone === 'neutral' ? undefined : { color: TONE_COLOR[visual.tone] }}
               />
               <span>

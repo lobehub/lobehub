@@ -30,6 +30,8 @@ import {
 
 vi.mock('@/services/skill', () => ({
   agentSkillService: {
+    applyGitHubUpdate: vi.fn(),
+    checkGitHubUpdates: vi.fn(),
     createSkill: vi.fn(),
     deleteSkill: vi.fn(),
     getById: vi.fn(),
@@ -134,6 +136,28 @@ describe('agentSkills replicas', () => {
         (await agentSkillListResource.storage!.get({ queryKey: LIST_STORAGE_KEY, scope }))?.data,
       ).toEqual([skill('db-1', 'Server')]),
     );
+  });
+
+  it('refreshes the installed package body and resource tree used by chat after an update', async () => {
+    const item = skill('db-1');
+    const latest = { ...item, content: 'New instructions' };
+    const resources = [{ name: 'new.md', path: 'new.md', type: 'file' as const }];
+    vi.mocked(agentSkillService.list).mockResolvedValue({ data: [item], total: 1 });
+    vi.mocked(agentSkillService.getById).mockResolvedValue(latest);
+    vi.mocked(agentSkillService.listResources).mockResolvedValue(resources);
+    vi.mocked(agentSkillService.checkGitHubUpdates).mockResolvedValue({
+      [item.id]: { status: 'current' },
+    });
+    await act(async () => {
+      await useToolStore
+        .getState()
+        .syncGitHubSkill({ id: item.id, commit: 'a'.repeat(40), revision: 'preview' });
+    });
+    expect(useToolStore.getState().agentSkillDetailMap[item.id]).toEqual({
+      skillDetail: latest,
+      resourceTree: resources,
+    });
+    expect(useToolStore.getState().gitHubUpdateMap.all[item.id]).toEqual({ status: 'current' });
   });
 
   it('paints a skill detail page (skill + resource tree) from the persisted copy', async () => {

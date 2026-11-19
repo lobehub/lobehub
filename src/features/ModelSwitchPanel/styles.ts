@@ -22,6 +22,15 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       padding-inline: 8px;
       border-radius: ${cssVar.borderRadiusSM};
     }
+
+    html[data-density='compact'] & [role='menuitem'] {
+      min-height: var(--lobe-density-control-height);
+      padding-block: calc((var(--lobe-density-control-height) - 20px) / 2);
+      border-radius: var(--lobe-density-radius);
+
+      font-size: var(--lobe-density-font-size);
+      line-height: 20px;
+    }
   `,
   groupHeader: css`
     width: 100%;
@@ -46,6 +55,28 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 8px;
     padding-inline: 8px;
     border-radius: ${cssVar.borderRadiusSM};
+
+    html[data-density='compact'] & {
+      min-height: var(--lobe-density-control-height);
+      padding-block: calc((var(--lobe-density-control-height) - 20px) / 2);
+      border-radius: var(--lobe-density-radius);
+
+      font-size: var(--lobe-density-font-size);
+      line-height: 20px;
+    }
+  `,
+  rowTrigger: css`
+    padding-block: 8px;
+    padding-inline: 8px;
+
+    html[data-density='compact'] & {
+      min-height: var(--lobe-density-control-height);
+      padding-block: calc((var(--lobe-density-control-height) - 20px) / 2);
+      border-radius: var(--lobe-density-radius);
+
+      font-size: var(--lobe-density-font-size);
+      line-height: 20px;
+    }
   `,
   menuItemActive: css`
     background: ${cssVar.colorFillTertiary};

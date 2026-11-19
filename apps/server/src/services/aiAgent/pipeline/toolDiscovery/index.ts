@@ -9,7 +9,7 @@ import {
   SELF_FEEDBACK_INTENT_IDENTIFIER,
   shouldExposeSelfFeedbackIntentTool,
 } from '@lobechat/builtin-tool-self-iteration';
-import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
+import { getUnavailableBuiltinToolIds, runtimeManagedToolIds } from '@lobechat/builtin-tools';
 import { getFeatureDisabledToolIds } from '@lobechat/builtin-tools/featureGates';
 import type {
   AgentGroupConfig,
@@ -21,14 +21,16 @@ import type {
 import {
   applyConnectorActivation,
   dropInvalidManifests,
+  getImplicitBuiltinSkillIds,
   hasConnectorActivator,
+  initialToolSelection,
   resolveClientExecutors,
   resolveConnectorActivation,
   resolveDiscoveryPool,
   resolveInvocationToolIds,
 } from '@lobechat/mecha';
 import type { BuiltinToolResolveContext, FrozenCredentialFacts } from '@lobechat/types';
-import { getActivePluginIds } from '@lobechat/types';
+import { getActivePluginIds, resolveToolMode } from '@lobechat/types';
 import debug from 'debug';
 
 import { loadModels } from '@/business/client/model-bank/loadModels';
@@ -216,15 +218,18 @@ export const discoverTools = async (
     agentPlugins = filterPluginsByShareGate(agentPlugins, shareGate);
   }
 
-  // Connectors are opt-in per agent and two-state (see
-  // `resolveConnectorActivation`): on is every entry that is not disabled, off
-  // is everything else. An exact toolset (verify agent, goal supervisor) names
+  // Connected tools are discoverable by default in ordinary agent runs.
+  // An exact toolset (verify agent, goal supervisor) names
   // its tools itself, so the agent's switches do not apply to it.
   const optedInIds = [...getActivePluginIds(agentConfig?.plugins), ...(ctx.autoSkillIds ?? [])];
+  const discoverByDefault =
+    resolveToolMode(agentConfig.chatConfig) === 'agent' && !evalConnectorSnapshots;
   const connectorActivation =
     exclusivePluginIds || isGoalTurn
       ? undefined
       : resolveConnectorActivation({
+          disabledIds: disabledPluginIds,
+          discoverByDefault,
           hasActivator: hasConnectorActivator(
             agentConfig.chatConfig,
             agentPlugins,
@@ -281,8 +286,9 @@ export const discoverTools = async (
           exclusivePluginIds ?? (evalConnectorSnapshots ? agentPlugins : undefined),
         isGoalTurn,
         // A share run reads what the share grants instead.
+        disabledPluginIds,
         optedInExtensionIds:
-          connectorActivation && !shareGate
+          connectorActivation && !shareGate && !discoverByDefault
             ? new Set(optedInIds.filter((identifier) => !disabledPluginIds.includes(identifier)))
             : undefined,
         projectId: appContext?.projectId,
@@ -313,8 +319,7 @@ export const discoverTools = async (
     // A share run keeps only granted plugins, so an ungranted one never reaches
     // the connector permission lookup or the activator pool below.
     const disabledPluginIdSet = new Set(disabledPluginIds);
-    // A connector the agent has not turned on is off for it: it leaves every
-    // connector source here, so neither the engine nor the activator sees it.
+    // Apply per-agent overrides to every connector source.
     // A share run is cut to its grants above instead.
     const isConnectorOn = (identifier: string) =>
       !connectorActivation || !!shareGate || connectorActivation.isAllowed(identifier);
@@ -512,6 +517,16 @@ export const discoverTools = async (
       agentPlugins = filterPluginsByShareGate(agentPlugins, shareGate);
     }
 
+    // The runtime may itself require a tool (e.g. a mention or media fallback).
+    // Share runs have a separate grant-based discovery pool and allowlist.
+    if (!shareGate)
+      disabledPluginIds.push(
+        ...getUnavailableBuiltinToolIds(
+          [...optedInIds, ...agentPlugins, ...boundConnectorIds],
+          agentConfig.chatConfig,
+        ),
+      );
+
     // Resolve THE device decision for this run; see `resolveDevicePlan`.
     const devicePlan = await resolveDevicePlan(deps, ctx, input, {
       boundDeviceId,
@@ -634,14 +649,14 @@ export const discoverTools = async (
     });
     log('execAgent: agent configured plugins: %O', pluginIds);
 
-    const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
-
     toolsResult = toolsEngine.generateToolsDetailed({
-      excludeDefaultToolIds: isManualMode ? manualModeExcludeToolIds : undefined,
       model,
       provider,
-      skipDefaultTools: !!exclusivePluginIds,
-      toolIds: pluginIds,
+      ...initialToolSelection(
+        pluginIds,
+        isGoalTurn ? { toolMode: 'custom' } : agentConfig.chatConfig,
+        !!exclusivePluginIds,
+      ),
     });
 
     tools = toolsResult.tools;
@@ -660,6 +675,7 @@ export const discoverTools = async (
 
     // Start with the scoped manifest map (pluginIds + defaultToolIds)
     const manifestMap = toolsEngine.getEnabledPluginManifests(pluginIds);
+    // Registry discovery must respect the same capability gates as explicit activation.
     const discovery = resolveDiscoveryPool({
       builtinTools: buildAllowedBuiltinTools({
         canUseDevice,
@@ -672,7 +688,10 @@ export const discoverTools = async (
       deviceAccess: { canUseDevice, deviceLocked },
       deviceCapable,
       disableLocalSystem,
-      disabledPluginIds,
+      disabledPluginIds: [
+        ...disabledPluginIds,
+        ...runtimeManagedToolIds.filter((id) => !manifestMap.has(id)),
+      ],
       enabledManifests: manifestMap,
       exclusivePluginIds,
       executionTarget: executionPlan.target,
@@ -838,6 +857,10 @@ export const discoverTools = async (
     executionPlan,
     hasAgentDocuments,
     credentialFactsPromise,
+    implicitBuiltinSkillIds:
+      !disableTools && !exclusivePluginIds && !isGoalTurn && !evalConnectorSnapshots && !shareGate
+        ? getImplicitBuiltinSkillIds(agentConfig.createdAt, agentConfig.chatConfig)
+        : [],
     hasEnabledKnowledgeBases,
     lobehubSkillManifests,
     modelFacts,

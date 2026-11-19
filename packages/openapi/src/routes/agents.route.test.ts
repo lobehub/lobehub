@@ -68,6 +68,21 @@ describe('personal agents', () => {
     expect(agent.personal).toBe(false);
   });
 
+  it('returns the starter tools on create and keeps an explicit opt-out on subsequent reads', async () => {
+    const agent = await json(await request('/', { body: { title: 'Writer' }, method: 'POST' }));
+    expect(agent.plugins.map((plugin: { identifier: string }) => plugin.identifier)).toEqual([
+      'lobe-image-generation',
+      'lobe-video-generation',
+      'lobe-agent-documents',
+      'lobe-agent',
+    ]);
+
+    const plugins = [{ identifier: 'lobe-image-generation', mode: 'disabled' }];
+    const updated = await request(`/${agent.id}`, { body: { plugins }, method: 'PATCH' });
+    expect(updated.status).toBe(200);
+    expect((await json(await request(`/${agent.id}`))).plugins).toEqual(plugins);
+  });
+
   it('filters the list by personal', async () => {
     await request('/', { body: { personal: true, title: 'toby' }, method: 'POST' });
     await request('/', { body: { title: 'Writer' }, method: 'POST' });
@@ -161,5 +176,47 @@ describe('agent detail and deletion', () => {
     expect(deleted).toEqual({ deleted: true, id: agent.id });
     expect(() => DeletedResourceSchema.parse(deleted)).not.toThrow();
     expect(await db.select().from(agents).where(eq(agents.id, agent.id))).toHaveLength(0);
+  });
+});
+
+describe('agent list pagination', () => {
+  const seed = async (count: number) => {
+    for (let i = 0; i < count; i++) {
+      await request('/', { body: { title: `Agent ${i}` }, method: 'POST' });
+    }
+  };
+  const titles = (page: { agents: { title: string }[] }) => page.agents.map((agent) => agent.title);
+
+  it('reports hasMore and a nextCursor that fetches the next offset', async () => {
+    await seed(3);
+
+    const first = await json(await request('/?limit=2'));
+    expect(first).toMatchObject({ hasMore: true, total: 3 });
+    expect(first.agents).toHaveLength(2);
+    expect(() => AgentListSchema.parse(first)).not.toThrow();
+
+    const second = await json(
+      await request(`/?limit=2&cursor=${encodeURIComponent(first.nextCursor)}`),
+    );
+    expect(second).toMatchObject({ hasMore: false, nextCursor: null, total: 3 });
+    expect(second.agents).toHaveLength(1);
+    expect(new Set([...titles(first), ...titles(second)]).size).toBe(3);
+  });
+
+  it('still honors the deprecated page/pageSize and matches the cursor pages', async () => {
+    await seed(3);
+
+    const byCursor = await json(await request('/?limit=2'));
+    const next = await json(await request(`/?limit=2&cursor=${byCursor.nextCursor}`));
+    const byPage = await json(await request('/?page=2&pageSize=2'));
+
+    expect(titles(byPage)).toEqual(titles(next));
+    expect(byPage).toMatchObject({ hasMore: false, nextCursor: null, total: 3 });
+  });
+
+  it('rejects a cursor it did not issue', async () => {
+    const res = await request('/?cursor=garbage');
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ code: 'validation_error' });
   });
 });

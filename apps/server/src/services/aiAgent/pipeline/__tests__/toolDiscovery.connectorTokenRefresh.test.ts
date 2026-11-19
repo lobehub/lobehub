@@ -72,6 +72,7 @@ const oauthConnector = {
   mcpServerUrl: 'https://app.xmind.com/api/mcp',
   metadata: {},
   name: 'XMind',
+  status: 'connected',
   oidcConfig: { clientId: 'client', scheme: 'dcr' },
 };
 
@@ -88,6 +89,7 @@ const connectorTools = [
 interface RunOptions {
   /** The agent's `auto` entries: on without a legacy pin. */
   autoSkillIds?: string[];
+  disabledPluginIds?: string[];
   /** The agent's legacy pinned entries, which also read as on. */
   plugins?: string[];
   /** This turn's @-mention picks. */
@@ -137,7 +139,7 @@ const run = (options: RunOptions = {}) => {
       },
     } as never,
     {
-      disabledPluginIds: [],
+      disabledPluginIds: options.disabledPluginIds ?? [],
       globalMemoryEnabled: false,
       hasMentionedAgents: false,
       isFixedDeviceTarget: false,
@@ -172,13 +174,17 @@ describe('discoverTools — connector OAuth token refresh', () => {
     },
   );
 
-  it('neither resolves nor refreshes a connector the agent never turned on', async () => {
+  it('excludes a disabled connector before refreshing credentials', async () => {
     vi.mocked(refreshExpiredLinkTokens).mockClear();
 
-    const result = await run();
+    const result = await run({ disabledPluginIds: [XMIND] });
 
     expect(result.toolManifestMap[XMIND]).toBeUndefined();
-    expect(connectorModel.resolveAll).not.toHaveBeenCalled();
+    expect(connectorModel.resolveAll).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.arrayContaining([XMIND]),
+    );
     expect(connectorModel.resolveByIdentifiers).not.toHaveBeenCalled();
     expect(refreshExpiredLinkTokens).not.toHaveBeenCalled();
   });

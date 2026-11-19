@@ -20,15 +20,20 @@ interface PanelState {
   target?: ConversationTarget;
 }
 
-/** Keep the selected conversation within this goal's inspection session. */
+/**
+ * Keep the selected conversation within this goal's inspection session.
+ *
+ * The panel starts open on every goal: the conversation is how people talk to
+ * the goal's agent, and a folded panel left them without a visible entry.
+ */
 export const useGoalChatPanel = (
   goalId: string,
   responsibleAgentId?: string,
   /** The goal's supervision record, once its main Agent has one. */
   record?: ConversationTarget,
 ) => {
-  const [state, setState] = useState<PanelState>({ goalId, open: false, request: 0 });
-  let current: PanelState = state.goalId === goalId ? state : { goalId, open: false, request: 0 };
+  const [state, setState] = useState<PanelState>({ goalId, open: true, request: 0 });
+  let current: PanelState = state.goalId === goalId ? state : { goalId, open: true, request: 0 };
 
   // The awaited record landed: the panel follows it, unless it is already there.
   if (current.awaitingRecord && record) {

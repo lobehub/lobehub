@@ -56,9 +56,22 @@ export const useSandboxPlacement = (agentId: string, scopeTopicId?: string | nul
   const topicMetadata = useChatStore((s) =>
     topicId ? topicSelectors.getTopicById(topicId)(s)?.metadata : undefined,
   );
-  const projectId = useChatStore((s) =>
-    topicId ? (topicSelectors.getTopicById(topicId)(s)?.projectId ?? undefined) : undefined,
-  );
+  // The project the conversation belongs to: the topic's, or — before a topic
+  // exists — the blank draft a project sidebar "+" staged for this agent. A
+  // first send mints the topic and drops the draft before this pane moves to
+  // it, so for that moment the topic being created names the project: the
+  // composer would otherwise read as outside it and re-seed its default just
+  // as the send reads it.
+  const projectId = useChatStore((s) => {
+    if (topicId) return topicSelectors.getTopicById(topicId)(s)?.projectId ?? undefined;
+    if (s.pendingNewTopicDirectory?.agentId === agentId)
+      return s.pendingNewTopicDirectory.projectId;
+    for (const creatingId of s.creatingTopicIds) {
+      const creating = topicSelectors.getTopicById(creatingId)(s);
+      if (creating?.sessionId === agentId && creating.projectId) return creating.projectId;
+    }
+    return undefined;
+  });
   // A conversation no loaded list holds — a project conversation opened right
   // after the project home created it — is read by id, or the chip would show
   // a temporary sandbox while the topic works in a repository.

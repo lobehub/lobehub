@@ -27,8 +27,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: none;
 
     width: 100%;
-    height: 44px;
-    padding-block: 8px;
+    height: var(--lobe-density-header-height);
+    padding-block: 0;
     padding-inline: 12px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,

@@ -7,11 +7,11 @@ import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { knowledgeBaseFiles } from '@/database/schemas';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
-import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 
 import { DocumentService } from '../document';
+import { resolveFileEmbeddingModel } from './fileEmbeddingModel';
 import { KnowledgeBaseSearchService } from './index';
 
 vi.mock('@/database/models/agentDocuments', () => ({ AgentDocumentModel: vi.fn() }));
@@ -20,7 +20,7 @@ vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn() }));
 vi.mock('@/database/models/file', () => ({ FileModel: vi.fn() }));
 vi.mock('@/server/services/ftsSearch', () => ({ createFtsSearchRepo: vi.fn() }));
 vi.mock('../document', () => ({ DocumentService: vi.fn() }));
-vi.mock('@/server/globalConfig', () => ({ getServerDefaultFilesConfig: vi.fn() }));
+vi.mock('./fileEmbeddingModel', () => ({ resolveFileEmbeddingModel: vi.fn() }));
 vi.mock('@/server/modules/ModelRuntime', () => ({ initModelRuntimeFromDB: vi.fn() }));
 vi.mock('@/database/utils/workspace', () => ({
   buildWorkspaceWhere: vi.fn(function () {
@@ -295,12 +295,34 @@ describe('KnowledgeBaseSearchService', () => {
 
   describe('semanticSearchForChat', () => {
     beforeEach(() => {
-      vi.mocked(getServerDefaultFilesConfig).mockReturnValue({
-        embeddingModel: { model: 'text-embedding-3-small', provider: 'openai' },
-      } as any);
+      vi.mocked(resolveFileEmbeddingModel).mockResolvedValue({
+        model: 'text-embedding-3-small',
+        provider: 'openai',
+      });
       vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
         embeddings: vi.fn().mockResolvedValue([[0.1, 0.2, 0.3]]),
       } as any);
+    });
+
+    it('embeds the query with the resolved workspace model', async () => {
+      vi.mocked(resolveFileEmbeddingModel).mockResolvedValue({
+        model: 'text-embedding-3-large',
+        provider: 'azure',
+      });
+      const embeddings = vi.fn().mockResolvedValue([[0.1, 0.2, 0.3]]);
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ embeddings } as any);
+      chunkModelMock.semanticSearchForChat.mockResolvedValue([]);
+      searchRepoMock.searchKnowledgeBaseDocuments.mockResolvedValue([]);
+
+      const scopedService = new KnowledgeBaseSearchService(serverDB, userId, 'workspace-1');
+      await scopedService.semanticSearchForChat({ fileIds: ['f1'], query: 'hello' });
+
+      expect(resolveFileEmbeddingModel).toHaveBeenCalledWith(serverDB, userId, 'workspace-1');
+      expect(initModelRuntimeFromDB).toHaveBeenCalledWith(serverDB, userId, 'azure', 'workspace-1');
+      expect(embeddings).toHaveBeenCalledWith(
+        expect.objectContaining({ input: 'hello', model: 'text-embedding-3-large' }),
+        expect.anything(),
+      );
     });
 
     it('forwards the caller agent visibility to the selected BM25 backend', async () => {

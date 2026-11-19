@@ -95,3 +95,26 @@ describe('buildNewTopicMetadata — Claude Code permission mode', () => {
     ).toMatchObject({ heteroPermissionMode: 'default', workingDirectory: '/code/lobehub' });
   });
 });
+
+// A draft's first send in a project: the composer's placement and whether it
+// was picked must both reach `withProjectSandbox`, which decides from them
+// whether the project's environment applies.
+describe('buildNewTopicMetadata — cloud sandbox placement', () => {
+  it('carries a temporary sandbox picked on purpose', () => {
+    expect(
+      buildNewTopicMetadata({
+        appContext: { initialTopicMetadata: { sandboxTemporary: true } } as any,
+      }),
+    ).toMatchObject({ sandboxTemporary: true });
+  });
+
+  it('carries a default environment nobody picked as such', () => {
+    expect(
+      buildNewTopicMetadata({
+        appContext: {
+          initialTopicMetadata: { sandboxEnvironmentId: 'env-1', sandboxSeeded: true },
+        } as any,
+      }),
+    ).toMatchObject({ sandboxEnvironmentId: 'env-1', sandboxSeeded: true });
+  });
+});

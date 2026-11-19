@@ -216,10 +216,7 @@ export async function createOperation(
           // applies the owner-configured visitor redaction policy instead of the
           // fail-closed full strip. See `gatewayVisitorRedaction.ts`.
           visitorRedaction: agentShareVisitor
-            ? {
-                showErrorDetails: agentShareVisitor.showErrorDetails,
-                showModelInfo: agentShareVisitor.showModelInfo,
-              }
+            ? { showErrorDetails: agentShareVisitor.showErrorDetails }
             : undefined,
           mirrorToOperationId,
           modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),

@@ -11,6 +11,7 @@ import {
   formatAgentDocumentChanges,
   noteAgentDocumentChanges,
   resolveAgentDocumentIndex,
+  reusablePinnedAgentDocumentIndex,
   takeAgentDocumentIndexSnapshot,
 } from '../AgentDocumentInjector';
 
@@ -211,6 +212,25 @@ describe('agent-document index snapshot', () => {
 
     expect(pin).toBe(true);
     expect(snapshot.rows).toHaveLength(1);
+  });
+
+  it('lets a later step skip the progressive documents only while its pin holds', () => {
+    const pinned = takeAgentDocumentIndexSnapshot([report()], { takenAt: new Date(at(0)) });
+    const laterStep = [...turn1, assistant('a1', at(0, 30))];
+    const compressed = [
+      ...laterStep,
+      { createdAt: at(1), id: 'compressed-1', role: 'compressedGroup' },
+    ];
+
+    expect(reusablePinnedAgentDocumentIndex({ messages: laterStep, pinned })).toBe(pinned);
+    expect(reusablePinnedAgentDocumentIndex({ messages: laterStep })).toBeUndefined();
+    expect(reusablePinnedAgentDocumentIndex({ messages: compressed, pinned })).toBeUndefined();
+    expect(
+      reusablePinnedAgentDocumentIndex({
+        messages: laterStep,
+        pinned: { [REPORT_ID]: { contentCharCount: 9_400 } },
+      }),
+    ).toBeUndefined();
   });
 
   it('renders deleted documents from their snapshot row and hides newer ones', () => {

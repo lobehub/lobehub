@@ -7,9 +7,11 @@ import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
 import { pageActions } from '@/store/page';
+import { useHeaderActionSize } from '@/styles/density';
 
 const AddButton = memo(() => {
   const { t } = useTranslation('file');
+  const headerActionSize = useHeaderActionSize(true);
   const { allowed: canCreate } = usePermission('create_content');
 
   const handleNewDocument = () => {
@@ -23,7 +25,7 @@ const AddButton = memo(() => {
     <ActionIcon
       disabled={!canCreate}
       icon={SquarePenIcon}
-      size={{ blockSize: 32, size: 18 }}
+      size={headerActionSize}
       title={t('header.newPageButton')}
       onClick={handleNewDocument}
     />

@@ -71,9 +71,18 @@ const styles = stylex.create({
 });
 
 interface RepositoryListProps {
+  /**
+   * Renders nothing unless there is a list to pick from — for a second list in
+   * the same dialog, whose guidance the first one already gives.
+   */
+  hideGuide?: boolean;
+  /** Overrides the list's own label, for a second list in the same dialog. */
+  label?: string;
   /** Leave the dialog for the GitHub integration settings. */
   onConnect: () => void;
   onSelect: (repository: ScmRepositoryListItem) => void;
+  /** More `owner/name`s shown as picked, beside `selected`. */
+  picked?: string[];
   /** `owner/name` of the repository the URL field currently names. */
   selected?: string;
 }
@@ -83,7 +92,14 @@ interface RepositoryListProps {
  * first and searchable. Not being connected is one click from being solved,
  * so that state offers the click instead of only reporting it.
  */
-const RepositoryList = ({ onConnect, onSelect, selected }: RepositoryListProps) => {
+const RepositoryList = ({
+  hideGuide,
+  label: labelText,
+  onConnect,
+  onSelect,
+  picked,
+  selected,
+}: RepositoryListProps) => {
   const { t } = useTranslation(['project', 'common']);
   const { isValidating, repositories, retry, state, truncated } = useScmRepositories();
   const [keyword, setKeyword] = useState('');
@@ -99,12 +115,15 @@ const RepositoryList = ({ onConnect, onSelect, selected }: RepositoryListProps) 
   }, [keyword, repositories]);
 
   const selectedKey = selected?.toLowerCase();
+  const pickedKeys = new Set((picked ?? []).map((item) => item.toLowerCase()));
 
   const label = (
     <Text fontSize={13} weight={500}>
-      {t('createFromGithub.repositoriesLabel')}
+      {labelText ?? t('createFromGithub.repositoriesLabel')}
     </Text>
   );
+
+  if (hideGuide && state !== 'ready') return null;
 
   if (state === 'loading')
     return (
@@ -121,7 +140,9 @@ const RepositoryList = ({ onConnect, onSelect, selected }: RepositoryListProps) 
       disconnected: { action: 'connect', text: t('createFromGithub.disconnected') },
       empty: { action: 'manage', text: t('createFromGithub.empty') },
       error: { action: 'retry', text: t('createFromGithub.loadFailed') },
-      unconfigured: { action: undefined, text: t('createFromGithub.unconfigured') },
+      // Connecting is impossible until the deployment has a GitHub App, but
+      // the settings page says what is missing — a lead, not a dead end.
+      unconfigured: { action: 'settings', text: t('createFromGithub.unconfigured') },
     }[state];
 
     return (
@@ -140,7 +161,9 @@ const RepositoryList = ({ onConnect, onSelect, selected }: RepositoryListProps) 
                 : t(
                     guide.action === 'connect'
                       ? 'createFromGithub.connect'
-                      : 'createFromGithub.manageAccess',
+                      : guide.action === 'settings'
+                        ? 'createFromGithub.openIntegrations'
+                        : 'createFromGithub.manageAccess',
                   )}
               {guide.action !== 'retry' && <Icon icon={ArrowRightIcon} size={12} />}
             </Button>
@@ -166,7 +189,9 @@ const RepositoryList = ({ onConnect, onSelect, selected }: RepositoryListProps) 
       ) : (
         <div {...stylex.props(styles.list)} role={'listbox'}>
           {filtered.map((repo) => {
-            const isSelected = repo.fullName.toLowerCase() === selectedKey;
+            const isSelected =
+              repo.fullName.toLowerCase() === selectedKey ||
+              pickedKeys.has(repo.fullName.toLowerCase());
             return (
               <button
                 aria-selected={isSelected}

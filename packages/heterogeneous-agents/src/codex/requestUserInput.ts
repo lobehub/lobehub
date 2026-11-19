@@ -34,7 +34,9 @@ export const parseCodexUserInput = (params: unknown) => {
   return request;
 };
 
-export const codexUserInputArguments = (request: ReturnType<typeof parseCodexUserInput>) => ({
+type UserInputQuestions = Pick<ReturnType<typeof parseCodexUserInput>, 'questions'>;
+
+export const codexUserInputArguments = (request: UserInputQuestions) => ({
   questions: request.questions.map((question) => ({
     header: question.header,
     multiSelect: false,
@@ -48,7 +50,7 @@ export const codexUserInputArguments = (request: ReturnType<typeof parseCodexUse
 });
 
 export const codexUserInputResponse = (
-  request: ReturnType<typeof parseCodexUserInput>,
+  request: UserInputQuestions,
   answer: InterventionAnswer,
 ): ToolRequestUserInputResponse => {
   if (answer.cancelled || !isRecord(answer.result)) return { answers: {} };

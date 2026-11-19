@@ -1,7 +1,7 @@
 import type { ConnectorVisibility } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import type { SQL } from 'drizzle-orm';
-import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, notInArray, or, sql } from 'drizzle-orm';
 import pMap from 'p-map';
 
 import type { ConnectorCredentials, NewUserConnector, UserConnectorItem } from '../schemas';
@@ -654,12 +654,20 @@ export class ConnectorModel {
   resolveAll = async (
     runTarget: ConnectorRunTargetInput = {},
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
+    excludedIdentifiers: string[] = [],
   ): Promise<DecryptedConnector[]> => {
     const target = toRunTarget(runTarget);
     const rows = await this.db
       .select()
       .from(userConnectors)
-      .where(this.scopePredicate(target))
+      .where(
+        and(
+          this.scopePredicate(target),
+          excludedIdentifiers.length
+            ? notInArray(userConnectors.identifier, excludedIdentifiers)
+            : undefined,
+        ),
+      )
       .orderBy(...this.resolutionOrder());
 
     return pMap(this.pickByPriority(rows, target.agentId), (r) => decryptRow(r, gateKeeper), {

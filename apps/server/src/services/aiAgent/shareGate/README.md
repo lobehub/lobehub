@@ -146,9 +146,9 @@ absence of a known exploit.
   historical activations as already enabled (`shareGate/toolSet.ts:166`). A
   kept activator gets the share-visitor `systemRole`
   (`getSystemPromptForShareVisitor`), which omits the default prompt's push
-  to activate `lobe-skill-store` / `lobe-creds` first (both stay denied
-  above) and keeps its `activateSkill` lines only when `lobe-skills` itself
-  survived the gate.
+  to activate `lobe-skill-store` first and keeps its `activateSkill` lines
+  only when `lobe-skills` itself survived the gate. Credential discovery
+  lives in the `lobe-creds` manifest, which the gate excludes.
 
   1. What it can see. `<available_tools>` is the operation's `manifestMap`
      minus enabled tools (`apps/server/src/modules/AgentRuntime/executorHelpers.ts:644`), and

@@ -147,7 +147,7 @@ describe('gatherContextFacts', () => {
       expect(off.variables.COMPOSIO_SERVICES_LIST).toBe('');
 
       const on = await gatherContextFacts(
-        request({ disabledPluginIds: ['slack'], enabledToolIds: ['lobe-creds'] }),
+        request({ disabledPluginIds: ['slack'], enabledToolIds: ['lobe-creds', 'gmail'] }),
         { listConnectedConnectorIds },
       );
       const list = on.variables.COMPOSIO_SERVICES_LIST as string;
@@ -155,11 +155,11 @@ describe('gatherContextFacts', () => {
       expect(list).not.toContain('slack');
     });
 
-    it('does not offer a connected Composio service the agent has not turned on', async () => {
+    it('lists connected Composio services available for this run to activate', async () => {
       const listConnectedConnectorIds = vi.fn(async () => ['gmail', 'slack']);
 
       const facts = await gatherContextFacts(
-        request({ enabledToolIds: ['lobe-creds'], optedInPluginIds: ['gmail'] }),
+        request({ enabledToolIds: ['lobe-creds'], discoverableTools: [{ identifier: 'gmail' }] }),
         { listConnectedConnectorIds },
       );
       const list = facts.variables.COMPOSIO_SERVICES_LIST as string;

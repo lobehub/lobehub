@@ -1,7 +1,8 @@
+import { layoutRepositorySources } from '@lobechat/types';
 import { eq, max } from 'drizzle-orm';
 
 import { AgentModel } from '../../models/agent';
-import { EnvironmentModel } from '../../models/environment';
+import { normalizeProjectRepository } from '../../models/environment';
 import type { CreateProjectInput, ProjectModelOptions } from '../../models/project';
 import {
   normalizeProjectIdentifier,
@@ -10,8 +11,8 @@ import {
 } from '../../models/project';
 import { createProjectMainAgent } from '../../models/projectMainAgent';
 import { projectAgents, projectCompletionReviews } from '../../schemas/project';
-import { projectEnvironments } from '../../schemas/projectEnvironment';
 import type { LobeChatDatabase } from '../../type';
+import { ProjectEnvironmentRepository } from '../projectEnvironment';
 
 /**
  * Cross-aggregate write flow for projects. Creating a project also creates (or
@@ -32,7 +33,12 @@ export class ProjectRepository {
     return new ProjectModel(db, this.userId, this.workspaceId, this.options);
   }
 
-  async create({ dedicatedAgentId, repository, ...input }: CreateProjectInput) {
+  async create({
+    additionalRepositories,
+    dedicatedAgentId,
+    repository,
+    ...input
+  }: CreateProjectInput) {
     const identifier = normalizeProjectIdentifier(input.identifier);
 
     return this.db.transaction(async (tx) => {
@@ -75,33 +81,25 @@ export class ProjectRepository {
       });
       await this.linkCoordinator(db, project.id, mainAgent.id);
 
-      // The environment belongs to another aggregate too, and a repository the
-      // environment cannot accept must not leave a half-made project behind, so
-      // it is created in the same transaction.
-      //
-      // A workspace-public main agent applies published environments only, so
-      // its repository is published too; reusing the creator's private one
-      // would link a repository the project's conversations never check out.
-      if (repository) {
-        const publish =
-          !!this.workspaceId && (mainAgent as { visibility?: string }).visibility === 'public';
-        const environment = await new EnvironmentModel(
-          db,
-          this.userId,
-          this.workspaceId,
-        ).ensureForRepository({
-          defaultBranch: repository.defaultBranch,
-          name: repository.name,
-          repositoryUrl: repository.url,
-          ...(publish && { visibility: 'public' as const }),
-        });
-        await db.insert(projectEnvironments).values({
-          addedByUserId: this.userId,
-          environmentId: environment.id,
-          projectId: project.id,
-          workspaceId: this.workspaceId,
-        });
-      }
+      // Every project has its own environment, made with it in the same
+      // transaction so a repository it cannot accept leaves no half-made
+      // project behind. One made from a repository checks it out; any other
+      // starts with nothing to check out and is filled in from the project's
+      // settings.
+      const repositories = [...(repository ? [repository] : []), ...(additionalRepositories ?? [])];
+      const seen = new Set<string>();
+      const sources = repositories.flatMap((item) => {
+        const url = normalizeProjectRepository(item.url);
+        if (seen.has(url)) return [];
+        seen.add(url);
+        const ref = item.defaultBranch?.trim();
+        return [{ kind: 'git' as const, url, ...(ref && { ref }) }];
+      });
+      await ProjectEnvironmentRepository.createForProject(
+        db,
+        project,
+        sources.length > 0 ? { sources: layoutRepositorySources(sources) } : {},
+      );
 
       return project;
     });
@@ -119,6 +117,7 @@ export class ProjectRepository {
       const project = await projectModel.findManageableById(id);
       if (!project) return null;
 
+      // Also releases the project's environment (see `ProjectModel.delete`).
       const deleted = await projectModel.delete(id);
       // Asked after the delete, so this project no longer counts as one still using it.
       const agentId = project.coordinatorAgentId;

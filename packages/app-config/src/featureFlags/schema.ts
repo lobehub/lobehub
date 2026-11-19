@@ -66,15 +66,6 @@ export const FeatureFlagsSchema = z.object({
   agent_deferred_hetero_dispatch: FeatureFlagValue.optional(),
 
   /**
-   * Keep the immutable per-operation tool set out of the agent state blob that
-   * is rewritten at every step; it is written once to its own Redis key and
-   * re-attached on load. Off: the blob keeps its inline copy. Server only;
-   * `AGENT_RUNTIME_STRIP_OPERATION_TOOLSET=0|1` overrides it. Array values are
-   * user ids (the operation's owner).
-   */
-  agent_runtime_strip_operation_toolset: FeatureFlagValue.optional(),
-
-  /**
    * Keep copies the per-operation tool set already holds out of the agent state
    * blob rewritten at every step (`initialContext.payload.tools`, the manifests
    * of `activatedStepTools`, the deprecated top-level `expertise` mirror); they
@@ -229,7 +220,6 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   agent_llm_relay: false,
   agent_deferred_init: false,
   agent_deferred_hetero_dispatch: false,
-  agent_runtime_strip_operation_toolset: false,
   agent_runtime_slim_state: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
@@ -295,11 +285,6 @@ export const mapFeatureFlagsEnvToState = (
       config.agent_deferred_hetero_dispatch,
       userId,
       'agent_deferred_hetero_dispatch',
-    ),
-    enableStripOperationToolset: evaluateFeatureFlag(
-      config.agent_runtime_strip_operation_toolset,
-      userId,
-      'agent_runtime_strip_operation_toolset',
     ),
     enableSlimAgentState: evaluateFeatureFlag(
       config.agent_runtime_slim_state,

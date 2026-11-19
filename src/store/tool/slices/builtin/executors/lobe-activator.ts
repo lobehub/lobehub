@@ -9,7 +9,6 @@
  * because the activated state is persisted in message pluginState and accumulated
  * by selectActivatedToolIdsFromMessages at each agentic loop step.
  */
-import { builtinSkills } from '@lobechat/builtin-skills';
 import {
   ActivatorExecutionRuntime,
   type ActivatorRuntimeService,
@@ -17,8 +16,8 @@ import {
 } from '@lobechat/builtin-tool-activator/executionRuntime';
 import { ActivatorExecutor } from '@lobechat/builtin-tool-activator/executor';
 import { SkillsExecutionRuntime } from '@lobechat/builtin-tool-skills/executionRuntime';
+import type { BuiltinToolContext } from '@lobechat/types';
 
-import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import { agentSkillService } from '@/services/skill';
 import { getToolStoreState } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
@@ -26,18 +25,9 @@ import { toolSelectors } from '@/store/tool/selectors/tool';
 import { composioStoreSelectors } from '@/store/tool/slices/composioStore/selectors';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore';
 
-const skillsRuntime = new SkillsExecutionRuntime({
-  builtinSkills: filterBuiltinSkills(builtinSkills),
-  service: {
-    findAll: () => agentSkillService.list(),
-    findById: (id) => agentSkillService.getById(id),
-    findByName: (name) => agentSkillService.getByName(name),
-    readResource: (id, path) => agentSkillService.readResource(id, path),
-  },
-});
+import { clientSkillCatalog } from './clientSkillCatalog';
 
-const service: ActivatorRuntimeService = {
-  activateSkill: (args) => skillsRuntime.activateSkill(args),
+const createService = (discoverableIds?: string[]): ActivatorRuntimeService => ({
   getActivatedToolIds: () => [],
   getToolManifests: async (identifiers: string[]): Promise<ToolManifestInfo[]> => {
     const s = getToolStoreState();
@@ -45,7 +35,7 @@ const service: ActivatorRuntimeService = {
     // Only allow activation of tools that passed discovery filters
     // (discoverable, platform-available, not internal/hidden)
     const discoverable = new Set(
-      toolSelectors.availableToolsForDiscovery(s).map((t) => t.identifier),
+      discoverableIds ?? toolSelectors.availableToolsForDiscovery(s).map((t) => t.identifier),
     );
     const allowedIds = identifiers.filter((id) => discoverable.has(id));
 
@@ -161,14 +151,30 @@ const service: ActivatorRuntimeService = {
   // variants. Reuses `getToolManifests` on the same
   // `availableToolsForDiscovery` allowlist so scoping and manifest mapping
   // cannot drift between the two paths.
-  listToolManifests: async (): Promise<ToolManifestInfo[]> => {
+  async listToolManifests(): Promise<ToolManifestInfo[]> {
     const s = getToolStoreState();
-    const discoveryIds = toolSelectors.availableToolsForDiscovery(s).map((tool) => tool.identifier);
-    return service.getToolManifests(discoveryIds);
+    const discoveryIds =
+      discoverableIds ?? toolSelectors.availableToolsForDiscovery(s).map((tool) => tool.identifier);
+    return this.getToolManifests(discoveryIds);
   },
   markActivated: () => {},
-};
+});
 
-const runtime = new ActivatorExecutionRuntime({ service });
+const runtime = (ctx: BuiltinToolContext) =>
+  new ActivatorExecutionRuntime({
+    service: {
+      ...createService(ctx.stepContext?.discoverableToolIds),
+      activateSkill: (args) => {
+        const { builtinSkills, lookup } = clientSkillCatalog(ctx);
+        return new SkillsExecutionRuntime({
+          builtinSkills,
+          service: {
+            ...lookup,
+            readResource: (id, path) => agentSkillService.readResource(id, path),
+          },
+        }).activateSkill(args);
+      },
+    },
+  });
 
 export const activatorExecutor = new ActivatorExecutor(runtime);

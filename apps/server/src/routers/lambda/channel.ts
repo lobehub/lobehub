@@ -25,6 +25,8 @@ import { channelHistoryProcedures } from './channelHistory';
 
 const channelId = z.string().regex(/^chn_[\dA-Za-z]{12}$/);
 const threadId = z.string().regex(/^cht_[\dA-Za-z]{12}$/);
+const sectionId = z.string().uuid();
+const sectionName = z.string().trim().min(1).max(100);
 const agentSelection = z.object({
   agentId: z.string().min(1),
   description: z.string().max(1000).optional(),
@@ -242,6 +244,16 @@ export const channelRouter = router({
       data: await ctx.channelService.detail(input.channelId, input),
       success: true,
     })),
+  /**
+   * Visitors' conversations with the caller's shared Agent, for its owner to read; empty unless
+   * the share lets the owner read visitor conversations.
+   */
+  shareVisitors: channelProcedure
+    .input(z.object({ agentId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.channelService.shareVisitors(input.agentId),
+      success: true,
+    })),
   /** Messages in a Channel and its Threads containing every word of `query`, newest first. */
   searchMessages: channelProcedure
     .input(
@@ -258,14 +270,15 @@ export const channelRouter = router({
     })),
   /**
    * The caller's direct conversation with an Agent, opened on first use for Agents that predate
-   * direct Channels. Null when the Agent cannot answer in a Channel (no reachable device).
+   * direct Channels; a project's main Agent opens in its project's Channel instead. Null when the
+   * Agent cannot answer in a Channel (no reachable device).
    */
   openDirect: channelProcedure
     .input(z.object({ agentId: z.string().min(1) }))
-    .mutation(async ({ ctx, input }) => {
-      const access = await ctx.channelService.openDirect(input.agentId);
-      return { data: access?.channel.id ?? null, success: true };
-    }),
+    .mutation(async ({ ctx, input }) => ({
+      data: (await ctx.channelService.openAgent(input.agentId)) ?? null,
+      success: true,
+    })),
   /** The direct conversation with another person's Agent, from its share id, handle or link. */
   openShared: channelProcedure
     .input(z.object({ share: z.string().trim().min(1).max(512) }))
@@ -316,6 +329,55 @@ export const channelRouter = router({
       data: await ctx.channelService.repository.setPinned(input.channelId, input.pinned),
       success: true,
     })),
+  /** Files the conversation under one of the caller's own sections; null returns it to the built-in one. */
+  moveToSection: externalChannelProcedure
+    .input(z.object({ channelId, sectionId: sectionId.nullable() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.repository.moveToSection(input.channelId, input.sectionId),
+      success: true,
+    })),
+  /** Hides the conversation from the caller's own list until its next message, or shows it again. */
+  setHidden: externalChannelProcedure
+    .input(z.object({ channelId, hidden: z.boolean() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.repository.setHidden(input.channelId, input.hidden),
+      success: true,
+    })),
+  /** The caller's own sidebar sections in the current scope, in order. */
+  listSections: externalChannelProcedure.query(async ({ ctx }) => ({
+    data: await ctx.channelService.repository.sections.list(),
+    success: true,
+  })),
+  createSection: externalChannelProcedure
+    .input(z.object({ name: sectionName }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.repository.sections.create(input.name),
+      success: true,
+    })),
+  updateSection: externalChannelProcedure
+    .input(
+      z.object({
+        id: sectionId,
+        value: z.object({ collapsed: z.boolean().optional(), name: sectionName.optional() }),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.repository.sections.update(input.id, input.value),
+      success: true,
+    })),
+  reorderSections: externalChannelProcedure
+    .input(z.object({ ids: z.array(sectionId).max(200) }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.channelService.repository.sections.reorder(input.ids);
+      return { success: true };
+    }),
+  /** Deletes a section; its conversations return to the built-in sections. */
+  removeSection: externalChannelProcedure
+    .input(z.object({ id: sectionId }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.channelService.repository.sections.remove(input.id);
+      return { success: true };
+    }),
   remove: channelProcedure.input(z.object({ channelId })).mutation(async ({ ctx, input }) => {
     await ctx.channelService.remove(input.channelId);
     return { success: true };

@@ -90,6 +90,7 @@ const installFromServer = (
   );
 
 interface NextRunOptions {
+  disabledPluginIds?: string[];
   /** Manual skill-activate mode: the run has no activator. */
   manual?: boolean;
   /** The agent's `plugins`; the install pins the MCP on the agent by default. */
@@ -129,7 +130,7 @@ const nextRun = (options: NextRunOptions = {}) =>
       },
     } as never,
     {
-      disabledPluginIds: [],
+      disabledPluginIds: options.disabledPluginIds ?? [],
       globalMemoryEnabled: false,
       hasMentionedAgents: false,
       isFixedDeviceTarget: false,
@@ -233,21 +234,35 @@ describe('resolveOrInstallMarketPlugin — server-side marketplace install', () 
       expect(restored.enabledToolIds).toContain(IDENTIFIER);
       expect(offeredToolNames(restored.tools)).toContain(TOOL_NAME);
 
-      // Manual mode has no activator, so there the run is offered the tool directly
+      // A legacy manual preference keeps the activator, so the install is still deferred
       const manualRun = await nextRun({ manual: true });
-      expect(manualRun.toolsResult.enabledToolIds).toContain(IDENTIFIER);
-      expect(offeredToolNames(manualRun.tools)).toContain(TOOL_NAME);
+      expect(manualRun.toolsResult.enabledToolIds).not.toContain(IDENTIFIER);
+      expect(offeredToolNames(manualRun.tools)).not.toContain(TOOL_NAME);
+      expect(
+        (
+          buildToolDiscoveryConfig(
+            { manifestMap: manualRun.toolManifestMap } as never,
+            manualRun.toolsResult.enabledToolIds,
+          )?.availableTools ?? []
+        ).map((tool) => tool.identifier),
+      ).toContain(IDENTIFIER);
     },
   );
 
-  it('keeps the install out of the run of an agent that has not turned it on', async () => {
+  it('offers an inherited install on demand and honors an explicit opt-out', async () => {
     await installFromServer();
 
     const run = await nextRun({ plugins: [] });
 
-    expect(run.toolManifestMap[IDENTIFIER]).toBeUndefined();
+    expect(run.toolManifestMap[IDENTIFIER]?.api).toEqual([
+      expect.objectContaining({ name: 'fetch' }),
+    ]);
     expect(run.toolsResult.enabledToolIds).not.toContain(IDENTIFIER);
     expect(offeredToolNames(run.tools)).not.toContain(TOOL_NAME);
+
+    const off = await nextRun({ disabledPluginIds: [IDENTIFIER], plugins: [] });
+    expect(off.toolManifestMap[IDENTIFIER]).toBeUndefined();
+    expect(offeredToolNames(off.tools)).not.toContain(TOOL_NAME);
   });
 
   it('refuses a stdio MCP the market does not host, writing nothing', async () => {

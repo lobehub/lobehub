@@ -75,10 +75,8 @@ describe('AgentShareModel', () => {
         shareConfig: {
           allowCreatorViewSessions: false,
           allowReadMemory: false,
-          maxTopicsPerVisitor: 5,
-          maxTurnsPerTopic: 20,
+          maxMessagesPerVisitor: 100,
           showErrorDetails: false,
-          showModelInfo: false,
           toolGrants: [],
         },
         userViewCount: 0,
@@ -193,7 +191,7 @@ describe('AgentShareModel', () => {
         .insert(agentShares)
         .values({
           agentId: workspaceAgentId,
-          shareConfig: { maxTopicsPerVisitor: 3, monthlySpendLimit: 2.5 },
+          shareConfig: { maxMessagesPerVisitor: 3, monthlySpendLimit: 2.5 },
           visibility: 'link',
         })
         .returning();
@@ -208,7 +206,7 @@ describe('AgentShareModel', () => {
       await expect(
         AgentShareModel.readCurrentVisitorCaps(serverDB, workspaceAgentId),
       ).resolves.toMatchObject({
-        maxTopicsPerVisitor: 3,
+        maxMessagesPerVisitor: 3,
         monthlySpendLimit: 2.5,
         shareId: share.id,
         workspaceId,
@@ -241,10 +239,10 @@ describe('AgentShareModel', () => {
         AgentShareModel.forceDisableWorkspaceShare(serverDB, otherWorkspaceId, share.id),
       ).resolves.toBeNull();
       await expect(
-        workspaceAgentShareModel.updateConfig(workspaceAgentId, { maxTopicsPerVisitor: 4 }),
+        workspaceAgentShareModel.updateConfig(workspaceAgentId, { maxMessagesPerVisitor: 4 }),
       ).resolves.toMatchObject({
         id: share.id,
-        shareConfig: { maxTopicsPerVisitor: 4 },
+        shareConfig: { maxMessagesPerVisitor: 4 },
         visibility: 'link',
       });
       await expect(
@@ -342,7 +340,7 @@ describe('AgentShareModel', () => {
         { prompt: 'Review this change', description: 'Identify regression risks' },
       ];
       await agentShareModel.updateConfig(agentId, { demoCases });
-      await agentShareModel.updateConfig(agentId, { maxTurnsPerTopic: 8 });
+      await agentShareModel.updateConfig(agentId, { maxMessagesPerVisitor: 8 });
       expect((await agentShareModel.getByAgentId(agentId))?.shareConfig.demoCases).toEqual(
         demoCases,
       );
@@ -393,11 +391,9 @@ describe('AgentShareModel', () => {
         deviceAllowUserIds: [],
         featuredWorkIds: [],
         maxFileStorage: 512 * 1024 * 1024,
-        maxTopicsPerVisitor: 5,
-        maxTurnsPerTopic: 20,
+        maxMessagesPerVisitor: 100,
         monthlySpendLimit: 10,
         showErrorDetails: false,
-        showModelInfo: false,
         slug: undefined,
         toolGrants: [],
       });
@@ -412,11 +408,9 @@ describe('AgentShareModel', () => {
         deviceAccess: 'allowlist',
         deviceAllowUserIds: ['user_alice'],
         maxFileStorage: 256 * 1024 * 1024,
-        maxTopicsPerVisitor: 10,
-        maxTurnsPerTopic: 40,
+        maxMessagesPerVisitor: 40,
         monthlySpendLimit: 25,
         showErrorDetails: true,
-        showModelInfo: true,
         toolGrants: [{ identifier: 'search' }],
       };
 
@@ -434,18 +428,18 @@ describe('AgentShareModel', () => {
       await agentShareModel.create(agentId);
 
       await agentShareModel.updateConfig(agentId, {
-        maxTopicsPerVisitor: 10,
+        maxMessagesPerVisitor: 10,
         toolGrants: [{ identifier: 'search' }],
       });
       const updated = await agentShareModel.updateConfig(agentId, {
-        maxTurnsPerTopic: 40,
-        showModelInfo: true,
+        maxFileStorage: 1024,
+        showErrorDetails: true,
       });
 
       expect(updated?.shareConfig).toMatchObject({
-        maxTopicsPerVisitor: 10,
-        maxTurnsPerTopic: 40,
-        showModelInfo: true,
+        maxFileStorage: 1024,
+        maxMessagesPerVisitor: 10,
+        showErrorDetails: true,
         toolGrants: [{ identifier: 'search' }],
       });
     });
@@ -456,14 +450,14 @@ describe('AgentShareModel', () => {
 
       const updated = await agentShareModel.updateConfig(agentId, {
         monthlySpendLimit: 0,
-        showModelInfo: true,
+        showErrorDetails: true,
         // smuggled past the type on purpose — must be stripped, not persisted
         ...({ slug: 'sneaky-slug' } as object),
       });
 
       // `0` is a real cap ("stop all visitor runs"), never a cleared one.
       expect(updated?.shareConfig.monthlySpendLimit).toBe(0);
-      expect(updated?.shareConfig.showModelInfo).toBe(true);
+      expect(updated?.shareConfig.showErrorDetails).toBe(true);
       // The seeded profile slug is untouched; the smuggled one never lands.
       expect(updated?.shareConfig.slug).toBe('shareable-agent');
       expect(await AgentShareModel.findBySlugOrId(serverDB, 'sneaky-slug')).toBeNull();
@@ -496,7 +490,7 @@ describe('AgentShareModel', () => {
 
     it('returns null for missing shares', async () => {
       expect(await agentShareModel.getByAgentId(agentId)).toBeNull();
-      expect(await agentShareModel.updateConfig(agentId, { maxTopicsPerVisitor: 5 })).toBeNull();
+      expect(await agentShareModel.updateConfig(agentId, { maxMessagesPerVisitor: 5 })).toBeNull();
       expect(await agentShareModel.updateVisibility(agentId, 'link')).toBeNull();
       expect(await agentShareModel.deleteByAgentId(agentId)).toBeNull();
     });
@@ -506,7 +500,7 @@ describe('AgentShareModel', () => {
 
       expect(await agentShareModel.getByAgentId(otherAgentId)).toBeNull();
       expect(
-        await agentShareModel.updateConfig(otherAgentId, { maxTopicsPerVisitor: 5 }),
+        await agentShareModel.updateConfig(otherAgentId, { maxMessagesPerVisitor: 5 }),
       ).toBeNull();
       expect(await agentShareModel.updateVisibility(otherAgentId, 'link')).toBeNull();
       expect(await agentShareModel.deleteByAgentId(otherAgentId)).toBeNull();
@@ -671,10 +665,7 @@ describe('AgentShareModel', () => {
         agentName: 'Shareable Agent',
         agentTitle: 'Shareable Agent Title',
         ownerId: userId,
-        shareConfig: expect.objectContaining({
-          maxTopicsPerVisitor: 5,
-          maxTurnsPerTopic: 20,
-        }),
+        shareConfig: expect.objectContaining({ maxMessagesPerVisitor: 100 }),
         shareId: created!.id,
         visibility: 'link',
       });
@@ -808,24 +799,36 @@ describe('AgentShareModel', () => {
     it('reads fresh caps and the live shareId', async () => {
       const created = await agentShareModel.create(agentId);
       await agentShareModel.updateConfig(agentId, {
-        maxTopicsPerVisitor: 3,
-        maxTurnsPerTopic: 8,
+        maxMessagesPerVisitor: 3,
         monthlySpendLimit: 2.5,
       });
 
       await expect(AgentShareModel.readCurrentVisitorCaps(serverDB, agentId)).resolves.toEqual({
-        maxTopicsPerVisitor: 3,
-        maxTurnsPerTopic: 8,
+        maxMessagesPerVisitor: 3,
         monthlySpendLimit: 2.5,
         shareId: created!.id,
         workspaceId: null,
       });
     });
 
+    it('ignores retired cap keys left in a stored config', async () => {
+      await serverDB.insert(agentShares).values({
+        agentId,
+        shareConfig: { maxTopicsPerVisitor: 1, maxTurnsPerTopic: 1, showModelInfo: true } as never,
+        visibility: 'link',
+      });
+
+      const caps = await AgentShareModel.readCurrentVisitorCaps(serverDB, agentId);
+      expect(caps).toMatchObject({ maxMessagesPerVisitor: 100, monthlySpendLimit: 10 });
+      expect(caps).not.toHaveProperty('maxTurnsPerTopic');
+      const share = await agentShareModel.getByAgentId(agentId);
+      expect(share?.shareConfig).not.toHaveProperty('maxTopicsPerVisitor');
+      expect(share?.shareConfig).not.toHaveProperty('showModelInfo');
+    });
+
     it('falls back to defaults and a null shareId when there is no share', async () => {
       await expect(AgentShareModel.readCurrentVisitorCaps(serverDB, agentId)).resolves.toEqual({
-        maxTopicsPerVisitor: 5,
-        maxTurnsPerTopic: 20,
+        maxMessagesPerVisitor: 100,
         monthlySpendLimit: 10,
         shareId: null,
         workspaceId: null,
@@ -834,9 +837,15 @@ describe('AgentShareModel', () => {
   });
 
   describe('lockUploadAdmission', () => {
-    const heldAdvisoryLocks = async (db: LobeChatDatabase) => {
+    // Counts only this share's upload lock: other test files run in parallel against the same
+    // database and hold advisory locks of their own, so a database-wide count is flaky. A bigint
+    // advisory key is stored as its high (`classid`) and low (`objid`) 32 bits.
+    const heldUploadLocks = async (db: LobeChatDatabase, shareId: string) => {
       const { rows } = await db.execute(
-        sql`SELECT count(*)::int AS held FROM pg_locks WHERE locktype = 'advisory'`,
+        sql`SELECT count(*)::int AS held FROM pg_locks
+          WHERE locktype = 'advisory' AND objsubid = 1
+            AND ((classid::text::bigint << 32) | objid::text::bigint)
+              = hashtext(${`agent_share_upload:${shareId}`})::bigint`,
       );
       return (rows[0] as { held: number }).held;
     };
@@ -844,12 +853,12 @@ describe('AgentShareModel', () => {
     it('holds a transaction-scoped advisory lock that is released at commit', async () => {
       await serverDB.transaction(async (tx) => {
         await AgentShareModel.lockUploadAdmission(tx, 'share-lock-test');
-        await expect(heldAdvisoryLocks(tx)).resolves.toBe(1);
+        await expect(heldUploadLocks(tx, 'share-lock-test')).resolves.toBe(1);
         // Re-entrant within the same transaction: a retry does not deadlock.
         await AgentShareModel.lockUploadAdmission(tx, 'share-lock-test');
       });
 
-      await expect(heldAdvisoryLocks(serverDB)).resolves.toBe(0);
+      await expect(heldUploadLocks(serverDB, 'share-lock-test')).resolves.toBe(0);
     });
   });
 
