@@ -38,11 +38,15 @@ export interface HeteroDispatchDeps {
 export interface HeteroDispatchInput {
   canManageAgent: boolean;
   effectiveRequestedDeviceId?: string;
+  /** Not a plain composer send; see `shouldDeferHeteroDispatch`. */
+  hasOrchestration?: boolean;
   heterogeneousProvider?: LobeAgentAgencyConfig['heterogeneousProvider'];
   heteroType: HeterogeneousAgentType;
   hooks?: AgentHook[];
   isPublicWorkspaceAgent: boolean;
   localDeviceId?: string;
+  /** Server-only topic-status opt-in, propagated by the event waker. */
+  markTopicRunning?: boolean;
   maxSteps?: number;
   memberDeviceOverride?: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'>;
   onOperationCreated?: InternalExecAgentParams['onOperationCreated'];

@@ -14,6 +14,9 @@ export default {
   'workingDirectory.foldersLoadFailed':
     'Could not load folders. Check the device connection and folder permissions, then retry or enter a path manually.',
   'workingDirectory.foldersLoading': 'Loading folders…',
+  'workingDirectory.deviceWaking': 'Waking the cloud device… This can take up to two minutes.',
+  'workingDirectory.deviceWakeFailed': 'Could not wake this cloud device. Try again.',
+  'workingDirectory.deviceWakeSlow': 'The cloud device is still starting. Try again in a moment.',
   'workingDirectory.home': 'Home folder',
   'workingDirectory.loadMoreFolders': 'Load more folders',
   'workingDirectory.newFolder': 'New folder',
@@ -86,6 +89,8 @@ export default {
   'workingDirectory.pathNotExist': "This path doesn't exist on the device",
   'workingDirectory.placeholder': 'Enter directory path, e.g. /Users/name/projects',
   'workingDirectory.prTooltipWithExtra': '{{title}} (+{{count}} more open PR on this branch)',
+  'workingDirectory.topicPullRequestsTooltip':
+    '{{title}} (+{{count}} more linked to this topic — click to see all)',
   'workingDirectory.pullAction': 'Click to pull {{count}} commit(s) from {{upstream}}',
   'workingDirectory.pullFailed': 'Pull failed',
   'workingDirectory.pullInProgress': 'Pulling…',
@@ -179,4 +184,38 @@ export default {
   'workingDirectory.drive.drives.personal': 'Personal drive',
   'workingDirectory.drive.rebuildInPersonal':
     'Private environment folders ({{names}}) are hidden here. Their owners can rebuild them on their personal drives.',
+  // Better Coding Experience: branch picked for a new topic, switched or forked on send.
+  'workingDirectory.branchCheckedOutHere': 'Checked out here',
+  'workingDirectory.deviceOutdated':
+    'The LobeHub app or lh CLI on this device is too old for this. Update it and try again.',
+  'workingDirectory.occupiedBranchConfirm': 'Create branch and send',
+  'workingDirectory.occupiedBranchDesc':
+    '{{branch}} is checked out in worktree {{name}}, so it cannot be checked out here. A new branch will be created from it instead.',
+  'workingDirectory.occupiedBranchNameLabel': 'New branch name',
+  'workingDirectory.occupiedBranchTitle': 'Create a branch from {{branch}}',
+  'workingDirectory.preparingSwitch': 'Switching to {{branch}}…',
+  'workingDirectory.preparingWorktree': 'Creating worktree…',
+  'workingDirectory.pullCheckedOutElsewhere':
+    '{{branch}} is checked out in worktree {{name}}. Pull it there.',
+  'workingDirectory.pullNoUpstream': '{{branch}} has no upstream branch to pull from',
+  'workingDirectory.scheduleGitUnsupported':
+    "Send later can't switch branches or create a worktree. Send now, or pick the current branch and turn off New worktree.",
+  'workingDirectory.switchFailed': 'Could not switch to {{branch}}',
+  'workingDirectory.switchRiskConfirm': 'Switch and send',
+  'workingDirectory.switchRiskRunning_one':
+    '{{count}} topic is still running in this directory. Switching the branch will affect it.',
+  'workingDirectory.switchRiskRunning_other':
+    '{{count}} topics are still running in this directory. Switching the branch will affect them.',
+  'workingDirectory.switchRiskTitle': 'Switch to {{branch}} and send?',
+  'workingDirectory.switchRiskUncommitted_one': 'Uncommitted changes may be lost ({{count}} file).',
+  'workingDirectory.switchRiskUncommitted_other':
+    'Uncommitted changes may be lost ({{count}} files).',
+  'workingDirectory.worktreeCreateFailed': 'Could not create the worktree',
+  'workingDirectory.worktreeToggle': 'New worktree',
+  'workingDirectory.worktreeToggleOffHint':
+    'Turn on to run this topic in a new branch and worktree',
+  'workingDirectory.worktreeToggleOn': 'New worktree: on',
+  'workingDirectory.worktreeToggleOnHint':
+    'Sending creates a new branch and worktree from {{branch}}; this directory stays as it is',
+  'workingDirectory.worktreeToggleSaveFailed': 'Could not save the New worktree setting',
 };

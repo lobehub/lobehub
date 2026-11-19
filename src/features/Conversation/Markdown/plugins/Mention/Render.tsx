@@ -1,11 +1,11 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Popover, Text } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AgentAvatar from '@/components/AgentAvatar';
+import MentionProfileTrigger from '@/features/MemberProfileCard/MentionProfileTrigger';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
 
@@ -58,47 +58,31 @@ const Render = memo<MarkdownElementProps<MentionProps>>(({ children, node }) => 
     );
   }
 
-  // Find the specific member
+  // A group member resolves to its Agent at once; any other id (a workspace
+  // member, an Agent outside this group) is looked up by the profile card.
   const member = currentGroupMembers?.find((m) => m.id === mentionId);
-
-  if (!member) {
-    // Fallback for unknown member
-    return (
-      <span className={styles.mention}>
-        {'@'}
-        {name || children || 'unknown'}
-      </span>
-    );
-  }
+  const label = member?.title || name || children || 'unknown';
 
   return (
-    <Popover
-      trigger="click"
-      content={
-        <Flexbox gap={12} style={{ overflow: 'hidden' }} width={320}>
-          <Flexbox horizontal align="center" gap={8}>
-            <AgentAvatar
-              agentId={member.id}
-              avatar={member.avatar}
-              background={member.backgroundColor ?? undefined}
-              name={member.title || name}
-              size={40}
-              style={{ flex: 'none' }}
-            />
-            <Flexbox style={{ overflow: 'hidden' }}>
-              <Text ellipsis type={'secondary'}>
-                {member.description}
-              </Text>
-            </Flexbox>
-          </Flexbox>
-        </Flexbox>
+    <MentionProfileTrigger
+      id={mentionId}
+      type={member ? 'agent' : undefined}
+      agent={
+        member
+          ? {
+              avatar: member.avatar,
+              backgroundColor: member.backgroundColor,
+              description: member.description,
+              title: member.title || name,
+            }
+          : { title: name }
       }
     >
       <span className={styles.mention}>
         {'@'}
-        {member.title || name || children}
+        {label}
       </span>
-    </Popover>
+    </MentionProfileTrigger>
   );
 });
 

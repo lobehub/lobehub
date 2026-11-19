@@ -110,6 +110,15 @@ for (const [id, st] of Object.entries(P.stages)) {
   skillMd.includes(st.file) ? ok(`linked:${id}`, `SKILL.md 链接了 ${st.file}`) : fail(`linked:${id}`, `SKILL.md 没有链接 ${st.file}`);
 }
 
+// 4b) 80-review 的输出必须逐路由列截图覆盖，委托产出的页面也不能只凭自述放行。
+{
+  const t = readFileSync(join(skillDir, P.stages['80-review'].file), 'utf8');
+  const out = (t.split(/^## 输出/m)[1] ?? '').split(/^## /m)[0];
+  /截图覆盖：/.test(out) && /委托/.test(out)
+    ? ok('review-coverage', '80-review 输出要求逐路由截图覆盖（含委托产出的页面）')
+    : fail('review-coverage', '80-review 的输出模板缺少「截图覆盖：<路由 → 截图 | 证据缺失>」一行（含委托产出的页面）');
+}
+
 // 5) scenario mapping completeness
 const REQUIRED_SCENARIOS = ['launch-visual', 'product-polish', 'operate-build', 'system-unify', 'screenshot-restore', 'pre-launch'];
 for (const s of REQUIRED_SCENARIOS) {

@@ -7,6 +7,7 @@ import {
   type DropdownItem,
   Flexbox,
   Icon,
+  Tag,
   Text,
   Tooltip,
 } from '@lobehub/ui';
@@ -14,9 +15,12 @@ import { SkillsIcon } from '@lobehub/ui/icons';
 import { ChevronRightIcon, FileIcon, FolderIcon, type LucideIcon } from 'lucide-react';
 import type React from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export interface SkillListItem {
   description?: string;
+  /** Manual invocation only, as declared by the skill; not a disabled state. */
+  disableModelInvocation?: boolean;
   /**
    * File count shown next to the name. Omit (or pass 0) for atomic skills with
    * no embedded files — e.g. user-level skills sourced from MCP servers.
@@ -27,6 +31,8 @@ export interface SkillListItem {
    * empty or omitted the row stays atomic (no chevron, no expansion).
    */
   files?: string[];
+  /** Custom icon; omitted for skills that use the generic skill glyph. */
+  icon?: React.ReactNode;
   id: string;
   name: string;
   /** Filesystem skill scope when the row comes from a device scan. */
@@ -331,6 +337,7 @@ const SkillRow = memo<SkillRowProps>(
     onToggle,
     reserveChevronSlot,
   }) => {
+    const { t } = useTranslation('chat');
     const files = item.files ?? EMPTY_ARRAY;
     const hasFiles = files.length > 0;
     const actions = useMemo(() => getRowActions?.(item) ?? EMPTY_ARRAY, [getRowActions, item]);
@@ -408,7 +415,7 @@ const SkillRow = memo<SkillRowProps>(
         ) : reserveChevronSlot ? (
           <span style={{ flexShrink: 0, height: 20, width: 20 }} />
         ) : null}
-        <Icon className={styles.itemIcon} icon={SkillsIcon} size={14} />
+        {item.icon ?? <Icon className={styles.itemIcon} icon={SkillsIcon} size={14} />}
         {item.description ? (
           <Tooltip
             placement={'left'}
@@ -418,6 +425,11 @@ const SkillRow = memo<SkillRowProps>(
           </Tooltip>
         ) : (
           nameNode
+        )}
+        {item.disableModelInvocation && (
+          <Tag size={'small'} style={{ flexShrink: 0 }}>
+            {t('workingPanel.skills.manualOnly')}
+          </Tag>
         )}
         {typeof item.fileCount === 'number' && item.fileCount > 0 && (
           <span className={cx('skill-row-count', styles.itemCount)}>{item.fileCount}</span>

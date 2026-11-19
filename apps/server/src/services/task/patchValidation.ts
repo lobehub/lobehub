@@ -1,4 +1,4 @@
-import type { TaskContext } from '@lobechat/types';
+import type { TaskContext, TaskProjectMoveRefusal } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
 import type { AgentModel } from '@/database/models/agent';
@@ -84,12 +84,22 @@ export async function assertAssigneeAgentBelongsToUser(
  * same bar `createTask` applies, and the same NOT_FOUND: another workspace's or
  * member's private project is indistinguishable from one that does not exist.
  */
-async function assertProjectReadable(ctx: TaskPatchInvariantContext, projectId: string) {
+export async function assertProjectReadable(
+  ctx: Pick<TaskPatchInvariantContext, 'serverDB' | 'userId' | 'workspaceId'>,
+  projectId: string,
+) {
   const project = await new ProjectModel(ctx.serverDB, ctx.userId, ctx.workspaceId).findById(
     projectId,
   );
   if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
 }
+
+/**
+ * A refused project move, carrying the reason as `errorData.projectMoveRefusal`
+ * so the client can name what blocks it.
+ */
+export const projectMoveRefused = (reason: TaskProjectMoveRefusal, message: string) =>
+  new TRPCError({ cause: { data: { projectMoveRefusal: reason } }, code: 'BAD_REQUEST', message });
 
 /**
  * Moving a task leaves its subtasks and dependencies where they are, and neither
@@ -107,25 +117,25 @@ async function assertProjectMoveKeepsLinks(
   if (!parentChanges && task.parentTaskId) {
     const parent = await model.findById(task.parentTaskId);
     if (parent && parent.projectId !== projectId) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'Subtask must belong to the same project as its parent',
-      });
+      throw projectMoveRefused(
+        'has_parent',
+        'Subtask must belong to the same project as its parent',
+      );
     }
   }
 
   if (await model.hasSubtaskOutsideProject(task.id, projectId)) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: 'Task has subtasks in its current project. Move or detach them first',
-    });
+    throw projectMoveRefused(
+      'split_subtasks',
+      'Task has subtasks in its current project. Move or detach them first',
+    );
   }
 
   if (await model.hasDependencyOutsideProject(task.id, projectId)) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: 'Task dependencies cannot cross project boundaries. Remove them first',
-    });
+    throw projectMoveRefused(
+      'external_dependency',
+      'Task dependencies cannot cross project boundaries. Remove them first',
+    );
   }
 }
 

@@ -24,6 +24,7 @@ export const serverConfigSelectors = {
   enableMagicLink: (s: ServerConfigStore) => s.serverConfig.enableMagicLink || false,
   /** Runtime flag `mcp_apps`: MCP Apps views in the conversation. */
   enableMcpApps: (s: ServerConfigStore) => s.featureFlags.enableMcpApps === true,
+  enableWebhook: (s: ServerConfigStore) => s.featureFlags.enableWebhook === true,
   enableAgentKnowledgeSpace: (s: ServerConfigStore) =>
     s.featureFlags.enableAgentKnowledgeSpace === true,
   enableMarketTrustedClient: (s: ServerConfigStore) =>
@@ -31,9 +32,6 @@ export const serverConfigSelectors = {
   enableWorkspacePageCollab: (s: ServerConfigStore) =>
     s.serverConfig.enableWorkspacePageCollab || false,
   enableUploadFileToServer: (s: ServerConfigStore) => s.serverConfig.enableUploadFileToServer,
-  /** Workspaces are available to this user (business deployment + per-user `workspace` flag). */
-  enableWorkspace: (s: ServerConfigStore) =>
-    (s.serverConfig.enableBusinessFeatures || false) && s.featureFlags.enableWorkspace === true,
   enableMultimodalUnderstanding: (s: ServerConfigStore) =>
     s.serverConfig.enableMultimodalUnderstanding || false,
   enabledTelemetryChat: (s: ServerConfigStore) => s.serverConfig.telemetry.langfuse || false,

@@ -12,8 +12,10 @@ import type { WorkingDirConfig } from '../device';
 import { workingDirConfigSchema } from '../device';
 import type { BotSenderMetadata } from '../message';
 import type { BaseDataModel } from '../meta';
+import type { OwnedWorktree } from '../ownedWorktree';
 import type { OnboardingUnderstandingSession } from '../understanding';
 import type { OnboardingTaskRecommendationSession } from '../user/onboardingTasks';
+import type { TopicPullRequestsMeta } from '../work';
 
 export type ShareVisibility = 'private' | 'link';
 export type TimeGroupId =
@@ -52,6 +54,16 @@ export interface TopicUserMemoryExtractRunState {
   messageCount?: number;
   processedMemoryCount?: number;
   traceId?: string;
+}
+
+/**
+ * The generic webhook thread a Topic was started for. Deliveries of the same
+ * webhook and thread key continue this Topic; `threadKey` is empty for a
+ * webhook that puts every call in one Topic.
+ */
+export interface ChatTopicWebhookContext {
+  threadKey: string;
+  webhookId: string;
 }
 
 export interface ChatTopicBotContext {
@@ -130,13 +142,21 @@ export interface OnboardingSessionSnapshot {
 export interface ChatTopicMetadata {
   /** Watermark written by the background topic-summary workflow. */
   autoSummary?: {
+    /**
+     * Set when the summary model rejected the request for a reason only the user
+     * can fix (invalid key, no balance, missing model). The watermark still moves,
+     * so the topic is retried only after a new message.
+     */
+    failedAt?: string;
+    failureReason?: string;
     lastMessageId: string;
     lastMessageUpdatedAt: string;
-    summarizedAt: string;
+    /** Absent until a summary has been written for this topic. */
+    summarizedAt?: string;
     version: number;
   };
-
   bot?: ChatTopicBotContext;
+
   botCreator?: BotSenderMetadata | null;
   boundDeviceId?: string;
   cronJobId?: string;
@@ -283,8 +303,22 @@ export interface ChatTopicMetadata {
    */
   onboardingFeedback?: OnboardingFeedbackEntry;
   onboardingSession?: OnboardingSessionSnapshot;
+  /**
+   * Worktrees the app created for this topic, and where their automatic
+   * cleanup stands. Server-owned: claimed whenever metadata is written with
+   * `workingDirectoryConfig.git.autoCreated`, and deliberately absent from
+   * the client-writable metadata schema. See `./ownedWorktree`.
+   */
+  ownedWorktrees?: OwnedWorktree[];
   /** Measured dominant provider by token volume — see {@link ChatTopicMetadata.model}. */
   provider?: string;
+  /**
+   * Better Coding Experience: PR links kept on the topic (found on its own
+   * branch, or linked by hand) and the PRs removed from its lists. Server-owned —
+   * written only by the `work.*TopicPullRequest` endpoints, never by a client
+   * metadata patch.
+   */
+  pullRequests?: TopicPullRequestsMeta;
   /**
    * Topic-pinned reasoning effort / mode for the pinned API model
    * (`ChatTopic.model`). Mirrors the model pin: snapshotted from the user's
@@ -462,6 +496,8 @@ export interface ChatTopicMetadata {
   } | null;
   userMemoryExtractRunState?: TopicUserMemoryExtractRunState;
   userMemoryExtractStatus?: 'pending' | 'completed' | 'failed';
+  /** The generic webhook thread this Topic was started for (see `ChatTopicWebhookContext`). */
+  webhook?: ChatTopicWebhookContext;
   /**
    * Topic-level working directory.
    * On desktop: local filesystem path for the CC session cwd.

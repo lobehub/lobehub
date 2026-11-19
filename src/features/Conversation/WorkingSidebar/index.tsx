@@ -4,16 +4,13 @@ import {
   ActionIcon,
   createStaticStyles,
   cssVar,
-  type DropdownItem,
   DropdownMenu,
   Flexbox,
-  Icon,
   Skeleton,
 } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   BoxesIcon,
-  CheckIcon,
   ClipboardListIcon,
   FilesIcon,
   FileTextIcon,
@@ -24,7 +21,6 @@ import {
   PlusIcon,
   SearchIcon,
   Settings2Icon,
-  SquareTerminalIcon,
 } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
@@ -52,6 +48,7 @@ import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
 import { getPortalViewWidth } from '@/features/Portal/portalWidth';
 import TopicCommentsSidebar from '@/features/Portal/TopicComments/Sidebar';
 import RightPanel from '@/features/RightPanel';
+import TopicPullRequestProbes from '@/features/TopicPullRequests/TopicPullRequestProbes';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
@@ -71,6 +68,7 @@ import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { type ComposerTarget, createComposerTarget, resolveThreadComposerTarget } from '../types';
 import DeferredSkeleton from './DeferredSkeleton';
@@ -82,6 +80,7 @@ import {
   isBrowserTab,
   isCanvasTab,
   isDynamicTab,
+  isMcpAppTab,
   type SidebarTabDescriptor,
 } from './dynamicTabs';
 import FilesPane from './Files/FilesPane';
@@ -92,11 +91,13 @@ import Overview from './Overview';
 import { getStatusDeviceId } from './Overview/overviewData';
 import OverviewSlot from './OverviewSlot';
 import PullRequestSidebarTab from './PullRequest/SidebarTab';
-import { useLinkedPullRequest } from './PullRequest/useLinkedPullRequest';
+import { useSidebarPullRequests } from './PullRequest/useSidebarPullRequests';
 import ResourcesSection from './ResourcesSection';
 import Review from './Review';
 import { TopicSearchPane } from './Search';
 import { useExtraWorkingSidebarTabs } from './useExtraWorkingSidebarTabs';
+import { useMcpAppSidebar } from './useMcpAppSidebar';
+import { useOpenMenuItems } from './useOpenMenuItems';
 import { useRetainAfterHide } from './useRetainAfterHide';
 import { useSandboxFilesDirectory } from './useSandboxFilesDirectory';
 import { useTabContextMenuItems } from './useTabContextMenuItems';
@@ -409,15 +410,22 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     repoType === 'github' || (!repoType && !!snapshotConfig?.git?.github?.pullRequest);
   const gitPath = filesystemEnvironmentAvailable && isGithub ? workingDirectory : undefined;
   const {
+    dismissPullRequest,
+    linkPullRequest,
+    pickPullRequest,
+    probes: pullRequestProbes,
     pullRequest,
+    pullRequests,
     refresh: refreshPullRequest,
     ...pullRequestLink // confirmed, confirmError, onRetryConfirm
-  } = useLinkedPullRequest({
+  } = useSidebarPullRequests({
     available: filesystemEnvironmentAvailable && !!workingDirectory,
     deviceId: remoteDeviceId,
     gitPath,
     isGithub,
     snapshot: snapshotConfig?.git,
+    topicId,
+    workingDirectory,
   });
   const paramsAvailable = !isHetero;
   // The in-app browser pages are renderer-retained Electron webviews — desktop only.
@@ -514,6 +522,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       t,
     ],
   );
+  const { enabled: mcpAppsEnabled } = useMcpAppSidebar(composerTarget);
   const availableTabs = useMemo(
     () => new Map(tabDescriptors.map((tab) => [tab.key, tab])),
     [tabDescriptors],
@@ -521,8 +530,11 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const availableTabsSignature = JSON.stringify(tabDescriptors.map((tab) => tab.key));
   const isAvailableTab = useCallback(
     (tab: string) =>
-      availableTabs.has(tab) || (browserAvailable && isBrowserTab(tab)) || isCanvasTab(tab),
-    [availableTabs, browserAvailable],
+      availableTabs.has(tab) ||
+      (browserAvailable && isBrowserTab(tab)) ||
+      isCanvasTab(tab) ||
+      (mcpAppsEnabled && isMcpAppTab(tab)),
+    [availableTabs, browserAvailable, mcpAppsEnabled],
   );
   const openTabsContextKey = topicId
     ? `topic:${topicId}`
@@ -739,6 +751,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
           tab,
           browserTabMetadata[`${openTabsContextKey}:${tab}`],
           t('workingPanel.browser.title'),
+          activeAgentId,
         ) ?? availableTabs.get(tab),
     )
     .filter((tab): tab is SidebarTabDescriptor => Boolean(tab));
@@ -857,90 +870,19 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   // Also cap the drag range so releasing a drag can never persist a width that
   // immediately fails the fit check and hides the panel.
   const maxPanelWidth = Math.min(MAX_PANEL_WIDTH, Math.max(widthBudget, minDisplayWidth));
-  const openMenuItems = useCallback((): DropdownItem[] => {
-    const itemOf = (key: string): DropdownItem | undefined => {
-      const tab = availableTabs.get(key);
-      if (!tab) return undefined;
-
-      if (key === BROWSER_TAB_KEY) {
-        return {
-          icon: <Icon icon={tab.icon} size={14} />,
-          key,
-          label: tab.label,
-          onClick: () => {
-            const browserTab = openBrowserTab();
-            if (browserTab) requestTabFocus(browserTab);
-          },
-        };
-      }
-
-      return {
-        icon: <Icon icon={openedTabs.includes(key) ? CheckIcon : tab.icon} size={14} />,
-        key,
-        label: tab.label,
-        onClick: () => {
-          openTab(key);
-          requestTabFocus(key);
-        },
-      };
-    };
-    const groupLabel = (label: string) => <span style={{ textTransform: 'none' }}>{label}</span>;
-    const group = (key: string, label: string, keys: string[]): DropdownItem | undefined => {
-      const children = keys.map(itemOf).filter((item): item is DropdownItem => Boolean(item));
-      return children.length
-        ? { children, key, label: groupLabel(label), type: 'group' }
-        : undefined;
-    };
-
-    const workspaceGroup = group('workspace', t('workingPanel.openMenu.workspace'), [
-      'search',
-      'review',
-      'pr',
-      'files',
-      'works',
-      'comments',
-      'skills',
-      'documents',
-      'web',
-      ...extraTabs.map((tab) => tab.key),
-    ]);
-    const toolChildren = [itemOf('browser')].filter((item): item is DropdownItem => Boolean(item));
-    if (terminalAvailable) {
-      toolChildren.push({
-        icon: <Icon icon={SquareTerminalIcon} size={14} />,
-        key: 'terminal',
-        label: t('workingPanel.openMenu.terminal'),
-        onClick: () => toggleTerminalPanel(true),
-      });
-    }
-    const toolGroup = toolChildren.length
-      ? {
-          children: toolChildren,
-          key: 'tools',
-          label: groupLabel(t('workingPanel.openMenu.tools')),
-          type: 'group' as const,
-        }
-      : undefined;
-    const configurationGroup = group('configuration', t('workingPanel.openMenu.configuration'), [
-      'params',
-    ]);
-
-    return [workspaceGroup, toolGroup, configurationGroup]
-      .filter((item): item is DropdownItem => Boolean(item))
-      .flatMap((item, index, items) =>
-        index < items.length - 1 ? [item, { type: 'divider' as const }] : [item],
-      );
-  }, [
+  const openMenuItems = useOpenMenuItems({
+    agentId: activeAgentId,
+    mcpAppsAvailable: mcpAppsEnabled && composerTarget.writable,
     availableTabs,
     extraTabs,
     openBrowserTab,
     openTab,
     openedTabs,
     requestTabFocus,
-    t,
+    scope: composerTarget.writable ? composerTarget.contextKey : undefined,
     terminalAvailable,
     toggleTerminalPanel,
-  ]);
+  });
 
   // The floating card keeps a 16px margin on each side.
   const overviewGutter = 32;
@@ -972,12 +914,20 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                   deviceId={remoteDeviceId}
                   environmentAvailable={filesystemEnvironmentAvailable}
                   pullRequest={pullRequest}
+                  pullRequests={pullRequests}
                   repoType={environmentRepoType}
                   sourcePath={sourceWorkingDirectory}
                   statusDeviceId={getStatusDeviceId(effectiveTarget, agencyConfig?.boundDeviceId)}
                   workingDirectory={environmentWorkingDirectory}
+                  onDismissPullRequest={dismissPullRequest}
+                  onLinkPullRequest={linkPullRequest}
                   onOpenTab={openTab}
                   onRefreshPullRequest={refreshPullRequest}
+                  onOpenPullRequest={
+                    pickPullRequest &&
+                    ((view) =>
+                      pickPullRequest(view) ? openTab('pr') : openTrustedExternalUrl(view.url))
+                  }
                 />
               </Flexbox>
             </m.div>
@@ -990,6 +940,11 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   return (
     <>
       {overviewPanel}
+      <TopicPullRequestProbes
+        deviceId={remoteDeviceId}
+        path={environmentWorkingDirectory}
+        probes={pullRequestProbes}
+      />
       <RightPanel
         collapseThreshold={320}
         defaultWidth={renderWidth}
@@ -1143,6 +1098,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                   composerTarget={composerTarget}
                   openedTabs={openedTabs}
                   visible={!!showRightPanel}
+                  onCloseTab={closeTab}
                   onBrowserMetadataChange={(tab, metadata) => {
                     const metadataKey = `${openTabsContextKey}:${tab}`;
                     setBrowserTabMetadata((current) =>

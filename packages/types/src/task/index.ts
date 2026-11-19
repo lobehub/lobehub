@@ -449,6 +449,23 @@ export interface TaskDetailSubtaskRunningTopic {
   operationId?: string | null;
 }
 
+/**
+ * Why the server refused to move a task into or out of a project. Sent as
+ * `errorData.projectMoveRefusal` on the BAD_REQUEST, so the client can say what
+ * blocks the move instead of one generic message.
+ */
+export type TaskProjectMoveRefusal =
+  /** A dependency would link tasks in different projects. */
+  | 'external_dependency'
+  /** A subtask of the tree already belongs to a project. */
+  | 'filed_subtask'
+  /** The task already belongs to a project, so its tree cannot move as a whole. */
+  | 'filed_task'
+  /** The task is a subtask; it shares its parent's project. */
+  | 'has_parent'
+  /** Moving only this task would split it from its subtasks. */
+  | 'split_subtasks';
+
 export interface TaskDetailSubtask {
   /** ISO time the subtask was archived; null when it is not archived. */
   archivedAt?: string | null;

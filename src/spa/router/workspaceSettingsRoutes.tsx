@@ -238,6 +238,32 @@ export const workspaceSettingsContentRoute: RouteObject = {
     },
     {
       element: dynamicElement(
+        () => import('@/routes/(main)/[workspaceSlug]/settings/automations'),
+        'Desktop > Workspace > Settings > Automations',
+      ),
+      handle: {
+        meta: createWorkspaceSettingsRouteMeta(
+          WorkspaceSettingsTabs.Automations,
+          createSurfaceSkeleton('list'),
+        ),
+      },
+      path: 'automations',
+    },
+    {
+      element: dynamicElement(
+        () => import('@/routes/(main)/[workspaceSlug]/settings/webhooks'),
+        'Desktop > Workspace > Settings > Webhooks',
+      ),
+      handle: {
+        meta: createWorkspaceSettingsRouteMeta(
+          WorkspaceSettingsTabs.Webhooks,
+          createSurfaceSkeleton('list'),
+        ),
+      },
+      path: 'webhooks',
+    },
+    {
+      element: dynamicElement(
         () => import('@/routes/(main)/[workspaceSlug]/settings/oauth-apps'),
         'Desktop > Workspace > Settings > OAuth Apps',
       ),

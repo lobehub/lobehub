@@ -33,7 +33,10 @@ afterAll(() => vi.unstubAllEnvs());
 
 let db: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(() => db) }));
-vi.mock('@/server/utils/scheduleAfterResponse', () => ({ after: vi.fn() }));
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  after: vi.fn(),
+  afterUnscoped: vi.fn(),
+}));
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn(function () {
     return { getFileAccessUrl: vi.fn(async () => 'mock-url') };

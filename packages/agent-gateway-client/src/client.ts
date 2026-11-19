@@ -1,3 +1,4 @@
+import { logGatewayLifecycle } from './lifecycleLog';
 import { MirroredTerminalEchoGuard } from './mirroredTerminalEcho';
 import { isSessionTerminalEvent } from './terminalEvent';
 import type {
@@ -98,6 +99,11 @@ export class AgentStreamClient extends TypedEmitter {
     this.resumeOnConnect = options.resumeOnConnect ?? false;
     this.lastEventId = options.lastEventId ?? '';
     this.terminalEchoGuard = new MirroredTerminalEchoGuard(options.operationId);
+  }
+
+  protected override emit(event: string, ...args: unknown[]): void {
+    logGatewayLifecycle('AgentStreamClient', this.operationId, event, args);
+    super.emit(event, ...args);
   }
 
   // ─── Public API ───

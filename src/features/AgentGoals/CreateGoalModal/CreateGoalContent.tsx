@@ -288,7 +288,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
 
   const handleContentChange = useCallback(() => {
     if (!canCreate || !editor) return;
-    instructionRef.current = String(editor.getDocument('markdown') ?? '');
+    instructionRef.current = String(editor.getDocument('markdown', { format: false }) ?? '');
     setPlan((current) => ({ ...current, instruction: instructionRef.current }));
   }, [canCreate, editor]);
 

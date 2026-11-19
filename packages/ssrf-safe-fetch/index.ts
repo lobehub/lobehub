@@ -28,21 +28,79 @@ const NULL_BODY_STATUSES = new Set([101, 103, 204, 205, 304]);
 
 type NodeBody = NodeJS.ReadableStream & { destroy?: (error?: Error) => void };
 
+const SSRF_BLOCKED_PREFIX = 'SSRF blocked';
+
+/**
+ * Thrown when the request (or one of its redirect hops) resolves to a private, loopback,
+ * link-local or otherwise reserved address that the SSRF policy does not allow. The message
+ * keeps its `SSRF blocked:` prefix so callers matching on it keep working.
+ */
+export class SSRFBlockedError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'SSRFBlockedError';
+  }
+}
+
+/**
+ * Whether `error`, or any error in its `cause` chain, is an SSRF block. Callers that wrap
+ * fetch errors (an SDK transport, a retry helper) keep the original as `cause`, so the
+ * chain is walked instead of checking only the outermost error.
+ */
+export const isSSRFBlockedError = (error: unknown): boolean => {
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current instanceof Error && !seen.has(current)) {
+    if (current instanceof SSRFBlockedError || current.message.startsWith(SSRF_BLOCKED_PREFIX))
+      return true;
+    seen.add(current);
+    current = current.cause;
+  }
+  return false;
+};
+
+/** A URL inside an error message (node-fetch puts the full request URL in its errors). */
+const URL_IN_TEXT = /\b[a-z][\d+.a-z-]*:\/\/[^\s"'<>]+/gi;
+
+/** Reduce every URL in `text` to its origin: paths, queries and userinfo can carry credentials. */
+const redactUrls = (text: string) =>
+  text.replaceAll(URL_IN_TEXT, (match) => {
+    try {
+      const { origin } = new URL(match);
+      return origin === 'null' ? '[url]' : origin;
+    } catch {
+      return '[url]';
+    }
+  });
+
+/** What a fetch failure is logged as: never the raw error, whose message and cause hold the URL. */
+const toErrorLog = (error: unknown) => {
+  if (!(error instanceof Error)) return { message: redactUrls(String(error)) };
+  const { code } = error as { code?: unknown };
+  return {
+    ...(typeof code === 'string' && { code }),
+    message: redactUrls(error.message),
+    name: error.name,
+  };
+};
+
 const toFetchError = (error: unknown): Error => {
+  if (error instanceof SSRFBlockedError) return error;
+
   const errorMessage = error instanceof Error ? error.message : String(error);
   // request-filtering-agent errors contain "is not allowed" when blocking private/denied IPs
   const isSSRFBlock = errorMessage.includes('is not allowed');
 
   if (isSSRFBlock) {
-    console.error('SSRF protection blocked request:', error);
-    return new Error(
-      `SSRF blocked: ${errorMessage}. ` +
+    console.error('SSRF protection blocked request:', toErrorLog(error));
+    return new SSRFBlockedError(
+      `${SSRF_BLOCKED_PREFIX}: ${errorMessage}. ` +
         'See: https://lobehub.com/docs/self-hosting/environment-variables/basic#ssrf-allow-private-ip-address',
       { cause: error },
     );
   }
 
-  console.error('Fetch error:', error);
+  console.error('Fetch error:', toErrorLog(error));
   return new Error(`Fetch failed: ${errorMessage}`, { cause: error });
 };
 

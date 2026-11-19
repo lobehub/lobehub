@@ -100,10 +100,28 @@ export abstract class BaseMenuPlatform {
 
   /**
    * File > New Window: ask the window the user is working in to open its current
-   * workspace in a new window. Only full-app windows mount the File-menu bridge,
-   * so popups, devtools, or no focused window fall back to the main window.
+   * workspace in a new window.
    */
   protected openNewWindow(targetWindow?: BaseWindow | null): void {
+    this.resolveAppShellWindow(targetWindow).browser.broadcast('openNewWindow');
+  }
+
+  /**
+   * File > Reopen Closed Tab: each app-shell window keeps its own closed-tab history,
+   * so the window the user is working in reopens its own tab. Falling back to the main
+   * window also brings it forward, since it may be hidden behind a popup or in the tray.
+   */
+  protected reopenClosedTab(targetWindow?: BaseWindow | null): void {
+    const { browser, isFallback } = this.resolveAppShellWindow(targetWindow);
+    if (isFallback) browser.show();
+    browser.broadcast('reopenClosedTab');
+  }
+
+  /**
+   * The full-app window a File-menu command targets. Only full-app windows mount the
+   * File-menu bridge, so popups, devtools, or no focused window fall back to the main window.
+   */
+  private resolveAppShellWindow(targetWindow?: BaseWindow | null) {
     const focused =
       targetWindow && 'webContents' in targetWindow
         ? (targetWindow as BrowserWindow)
@@ -113,11 +131,11 @@ export abstract class BaseMenuPlatform {
           (browser) => browser.webContents === focused.webContents,
         )
       : undefined;
-    const isAppShell = focusedBrowser && !NON_APP_SHELL_PATH.test(focusedBrowser.options.path);
 
-    (isAppShell ? focusedBrowser : this.app.browserManager.getMainWindow()).broadcast(
-      'openNewWindow',
-    );
+    if (focusedBrowser && !NON_APP_SHELL_PATH.test(focusedBrowser.options.path)) {
+      return { browser: focusedBrowser, isFallback: false };
+    }
+    return { browser: this.app.browserManager.getMainWindow(), isFallback: true };
   }
 
   protected closeFocusedTabOrWindow(targetWindow?: BaseWindow | null): void {

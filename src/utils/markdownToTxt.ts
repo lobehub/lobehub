@@ -1,3 +1,4 @@
+import { stripImageRefs } from '@lobechat/const/imageRef';
 import removeMarkdown from 'remove-markdown';
 
 /**
@@ -16,5 +17,11 @@ export const markdownToTxt = (markdown: string): string => {
     return markdown;
   }
 };
+
+/**
+ * Plain text of a user prompt for a topic title. Inline image references such as `[Image #1]`
+ * point at attachments and say nothing about the topic, so they are left out.
+ */
+export const toTitleText = (prompt: string): string => markdownToTxt(stripImageRefs(prompt)).trim();
 
 export default markdownToTxt;

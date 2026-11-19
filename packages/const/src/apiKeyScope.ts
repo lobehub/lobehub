@@ -19,7 +19,7 @@ export const API_KEY_FULL_ACCESS_SCOPE = '*';
 
 /**
  * The selectable scope catalog. `model:invoke` is its own tier because it is
- * the one that burns money (chat/completions, image, video, asr).
+ * the one that burns money (chat/completions, image, video, music, asr).
  *
  * Deliberately absent (a restricted key can never obtain them):
  * - `api_key:*` — keys must not mint keys (self-provisioning)
@@ -231,6 +231,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   changelog: 'open',
   // Sending wakes Agent runs on members' devices; no key-based client drives Channels yet
   channel: 'blocked',
+  // the address book sends and accepts contact requests and grants access to shared Agents
+  contact: 'blocked',
   chunk: rw('knowledge:read', 'knowledge:write'),
   comfyui: rw('model:read', 'model:write'),
   // third-party integrations hold external credentials
@@ -263,6 +265,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   generationBatch: { any: 'model:invoke' },
   generationTopic: { any: 'model:invoke' },
   goal: rw('agent:read', 'agent:write'),
+  // a share link publishes the goal's wrap-up to anyone holding it; restricted
+  // API keys must not flip it (full-access keys still can)
+  goalShare: 'blocked',
   group: rw('agent:read', 'agent:write'),
   healthcheck: 'open',
   home: rw('chat:read', 'chat:write'),
@@ -270,6 +275,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // whole-account backup import can overwrite credential-bearing settings,
   // provider/model config and agents
   importer: 'blocked',
+  // Checks and deletion use stored connector credentials to call external MCP servers.
+  inboundWebhook: 'blocked',
   klavis: 'blocked',
   knowledge: rw('knowledge:read', 'knowledge:write'),
   knowledgeBase: rw('knowledge:read', 'knowledge:write'),
@@ -287,6 +294,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // numeric telemetry attached to a goal / agent / task / project — same
   // domain as the subjects that own it
   metric: rw('agent:read', 'agent:write'),
+  // submits paid music generation tasks
+  music: { any: 'model:invoke' },
   notebook: rw('knowledge:read', 'knowledge:write'),
   notification: rw('user:read', 'user:write'),
   oauthApp: 'blocked',

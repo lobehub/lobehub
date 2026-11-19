@@ -145,6 +145,12 @@ export interface WorkVersionMetadata {
   linesDeleted?: number;
   /** `file` Work — MIME type of the edited file. */
   mimeType?: string;
+  /**
+   * `external` GitHub PR Work — how this version linked the PR: `command` when
+   * a command named it, `push` for a `git push` to a branch that already had
+   * it. Set on every version, since metadata merges over the previous one.
+   */
+  pullRequestLink?: 'command' | 'push';
 }
 
 export interface WorkVersionCumulativeUsage {
@@ -655,3 +661,92 @@ export type WorkRegistrationIntent =
       };
       type: 'canvas';
     };
+
+/**
+ * How a pull request came to be linked to a topic, strongest first:
+ *
+ * - `created` — the topic's agent opened it (`gh pr create`).
+ * - `command` — the agent ran a command naming it (`gh pr edit|ready|merge <n>`).
+ * - `push` — the agent pushed to a branch that already had it.
+ * - `branch` — found on a branch the topic created (run-end lookup).
+ * - `manual` — the person linked it by URL.
+ *
+ * The first three are Work rows the server parsed from the run's own tool
+ * messages; `branch` and `manual` are topic links that only drive the UI.
+ */
+export type TopicPullRequestLinkSource = 'branch' | 'command' | 'created' | 'manual' | 'push';
+
+/**
+ * A link kept on the topic itself (`metadata.pullRequests.links`) rather than
+ * as a Work row: a PR found on the topic's own branch, or linked by hand.
+ * Written only by the server's link endpoints.
+ */
+export interface TopicPullRequestLinkMeta {
+  headRefName?: string;
+  /** `owner/repo#number`. */
+  identifier: string;
+  /** ISO time it was linked. */
+  linkedAt: string;
+  source: 'branch' | 'manual';
+  title?: string;
+  url: string;
+  /** See {@link TopicPullRequestItem.vouched}. */
+  vouched: boolean;
+}
+
+/** Topic-level PR links and the PRs a person removed from the topic's lists. */
+export interface TopicPullRequestsMeta {
+  /** `owner/repo#number` hidden from the topic; the Work rows stay. */
+  dismissed?: string[];
+  links?: TopicPullRequestLinkMeta[];
+}
+
+/**
+ * One GitHub pull request linked to a topic (Better Coding Experience): by any
+ * `work_versions` row of a `github_pull_request` Work with that `topicId`, or by
+ * a topic link (branch match / by hand). A topic can carry several.
+ */
+export interface TopicPullRequestWork {
+  baseBranch?: string;
+  headBranch?: string;
+  /** `owner/repo#number`. */
+  identifier: string;
+  /** Newest version of this Work registered in the topic. */
+  linkedAt: Date;
+  number: number;
+  repoFullName: string;
+  /** See {@link TopicPullRequestLinkSource}. */
+  source: TopicPullRequestLinkSource;
+  /** Status the agent's own commands left it in (`open`, `draft`, `merged`). */
+  status: string | null;
+  title: string | null;
+  url: string | null;
+  /** Null for a topic link with no Work row. */
+  workId: string | null;
+}
+
+/**
+ * What the GitHub App last reported about a linked pull request. Present only
+ * when an installation the viewer can see tracks the repository — that is the
+ * confirmed source; without it the client probes the execution device.
+ */
+export interface TopicPullRequestScmState {
+  ciStatus: 'failure' | 'pending' | 'success' | 'unknown' | null;
+  isDraft: boolean;
+  mergedAt: Date | null;
+  reviewDecision: 'approved' | 'changes_requested' | 'review_required' | null;
+  state: 'closed' | 'merged' | 'open';
+  title: string | null;
+  updatedAt: Date;
+}
+
+export interface TopicPullRequestItem extends TopicPullRequestWork {
+  scm: TopicPullRequestScmState | null;
+  /**
+   * Whether the app can vouch this PR belongs to the topic: the run's own
+   * commands named it, the person linked it, or the branch match found its head
+   * in the repository the topic pushes to. An unvouched PR is listed but its
+   * merge / close stay locked.
+   */
+  vouched: boolean;
+}

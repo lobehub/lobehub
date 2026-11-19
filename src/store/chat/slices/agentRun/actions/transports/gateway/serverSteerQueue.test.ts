@@ -12,10 +12,12 @@ import {
   handOffQueuedMessage,
   reclaimServerQueuedMessages,
   restoreServerQueuedMessages,
+  resumeClientHeldQueue,
   SERVER_QUEUE_POLL_MS,
   watchServerQueue,
   withdrawQueuedMessage,
 } from './serverSteerQueue';
+import { findUntrackedHeteroMarker, resetReleasedMarkers } from './untrackedHeteroRun';
 
 const context = { agentId: 'agt-1', topicId: 'tpc-1' };
 const key = messageMapKey(context);
@@ -48,6 +50,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  resetReleasedMarkers();
   // An emptied tray ends any watch a test left running.
   useChatStore.setState(useChatStore.getInitialState());
   await vi.runOnlyPendingTimersAsync();
@@ -378,9 +381,11 @@ describe('server queue watch while a run delivers', () => {
 
     await handOffQueuedMessage(get, key, context, 'q1', async () => request);
     await vi.advanceTimersByTimeAsync(SERVER_QUEUE_POLL_MS);
-    expect(queue()).toHaveLength(1);
+    expect(queue()).toEqual([expect.objectContaining({ id: 'q1', serverDelivering: true })]);
     await vi.advanceTimersByTimeAsync(SERVER_QUEUE_POLL_MS);
+    // Given back: waiting again, so it can be edited or withdrawn once more.
     expect(queue()).toHaveLength(1);
+    expect(queue()[0].serverDelivering).toBeUndefined();
     await vi.advanceTimersByTimeAsync(SERVER_QUEUE_POLL_MS);
     expect(list).toHaveBeenCalledTimes(3);
     expect(queue()).toHaveLength(0);
@@ -448,7 +453,10 @@ describe('server queue watch while a run delivers', () => {
     });
 
     await expect(withdrawQueuedMessage(get, key, 'q1')).resolves.toBe(false);
-    expect(queue()).toEqual([expect.objectContaining({ id: 'q1', serverDelivery: 'server' })]);
+    // Marked as on its way, so the tray stops offering edit / send now / delete.
+    expect(queue()).toEqual([
+      expect.objectContaining({ id: 'q1', serverDelivering: true, serverDelivery: 'server' }),
+    ]);
   });
 
   it('stores the composer state with the follow-up, so a reload can resend it as typed', async () => {
@@ -549,6 +557,145 @@ describe('server queue watch after the run ended without taking them', () => {
   });
 });
 
+describe('server queue watch behind a hetero run this tab no longer follows', () => {
+  const marker = {
+    assistantMessageId: 'msg-1',
+    heteroType: 'claude-code',
+    operationId: 'op-hetero',
+  };
+
+  beforeEach(() => {
+    useChatStore.setState({ reconnectToGatewayOperation: vi.fn().mockResolvedValue(undefined) });
+    get().internal_dispatchTopic({
+      type: 'addTopic',
+      value: { id: 'tpc-1', metadata: { runningOperation: marker }, title: 't' } as any,
+    });
+    vi.spyOn(aiAgentService, 'appendQueuedFollowUp').mockResolvedValue({
+      id: 'q1',
+      length: 1,
+      queued: true,
+    });
+    vi.spyOn(aiAgentService, 'listQueuedFollowUps').mockResolvedValue([
+      pending('q1', { createdAt: 1, prompt: 'q1' }),
+    ]);
+  });
+
+  // The run failed or its CLI was killed: no stream tells this tab, and a failed
+  // run leaves its queue to the user.
+  it('takes them back once the server no longer names the run', async () => {
+    vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+      id: 'tpc-1',
+      metadata: { runningOperation: null },
+    } as any);
+    const remove = vi
+      .spyOn(aiAgentService, 'removeQueuedFollowUp')
+      .mockResolvedValue({ removed: true, state: 'removed' });
+    get().enqueueMessage(key, queued('q1', { serverDelivery: 'appending' }));
+
+    await handOffQueuedMessage(get, key, context, 'q1', async () => request);
+    await vi.advanceTimersByTimeAsync(SERVER_QUEUE_POLL_MS * 45);
+
+    expect(remove).toHaveBeenCalledWith({ id: 'q1', threadId: null, topicId: 'tpc-1' });
+    expect(queue()[0].serverDelivery).toBeUndefined();
+  });
+
+  // The answer is about the run the follow-up was handed off behind; a run
+  // another client started meanwhile was never checked and stays held.
+  it('releases only the marker it was handed off behind', async () => {
+    vi.spyOn(aiAgentService, 'appendQueuedFollowUp').mockImplementation(async () => {
+      const newer = { ...marker, operationId: 'op-newer' };
+      get().internal_dispatchTopic({
+        id: 'tpc-1',
+        type: 'updateTopic',
+        value: { metadata: { runningOperation: newer } } as any,
+      });
+      return { queued: false, reason: 'idle' } as any;
+    });
+    get().enqueueMessage(key, queued('q1', { serverDelivery: 'appending' }));
+
+    await handOffQueuedMessage(get, key, context, 'q1', async () => request);
+
+    expect(findUntrackedHeteroMarker(get, context)?.operationId).toBe('op-newer');
+  });
+
+  // An unknown append outcome turned the follow-up `serverUnconfirmed`; when
+  // the same-id retry is refused, the marker it was held behind is released
+  // too, or its local resend would queue behind the same run again.
+  it('releases the marker when an unconfirmed follow-up is refused later', async () => {
+    const append = vi
+      .spyOn(aiAgentService, 'appendQueuedFollowUp')
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValue({ queued: false, reason: 'full' } as any);
+    vi.spyOn(aiAgentService, 'listQueuedFollowUps').mockResolvedValue([]);
+    get().enqueueMessage(key, queued('q1', { serverDelivery: 'appending' }));
+
+    await handOffQueuedMessage(get, key, context, 'q1', async () => request);
+    expect(queue()[0]).toMatchObject({ serverDelivery: 'server', serverUnconfirmed: true });
+    expect(findUntrackedHeteroMarker(get, context)?.operationId).toBe('op-hetero');
+
+    await vi.advanceTimersByTimeAsync(SERVER_QUEUE_POLL_MS * 2);
+
+    expect(append).toHaveBeenCalledTimes(2);
+    expect(findUntrackedHeteroMarker(get, context)).toBeUndefined();
+  });
+
+  it('keeps holding them while the server still names the run', async () => {
+    vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+      id: 'tpc-1',
+      metadata: { runningOperation: marker },
+    } as any);
+    const remove = vi.spyOn(aiAgentService, 'removeQueuedFollowUp');
+    get().enqueueMessage(key, queued('q1', { serverDelivery: 'appending' }));
+
+    await handOffQueuedMessage(get, key, context, 'q1', async () => request);
+    await vi.advanceTimersByTimeAsync(SERVER_QUEUE_POLL_MS * 45);
+
+    expect(remove).not.toHaveBeenCalled();
+    expect(queue()[0].serverDelivery).toBe('server');
+    expect(get().reconnectToGatewayOperation).toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: 'op-hetero', topicId: 'tpc-1' }),
+    );
+  });
+});
+
+describe('resumeClientHeldQueue', () => {
+  it('hands a queueable follow-up back to the server', async () => {
+    const append = vi
+      .spyOn(aiAgentService, 'appendQueuedFollowUp')
+      .mockResolvedValue({ id: 'q1', length: 1, queued: true });
+    get().enqueueMessage(key, queued('q1', { serverRequest: request }));
+
+    resumeClientHeldQueue(get, context);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(append).toHaveBeenCalledWith(expect.objectContaining({ id: 'q1', request }));
+    expect(queue()[0].serverDelivery).toBe('server');
+  });
+
+  it('sends the rest once nothing runs here', async () => {
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    useChatStore.setState({ sendMessage });
+    get().enqueueMessage(key, queued('q1'));
+
+    resumeClientHeldQueue(get, context);
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ message: 'q1' }));
+  });
+
+  it('leaves them to a run still going here', async () => {
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    useChatStore.setState({ sendMessage });
+    startRun();
+    get().enqueueMessage(key, queued('q1'));
+
+    resumeClientHeldQueue(get, context);
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+});
+
 describe('restoreServerQueuedMessages', () => {
   // ROOT CAUSE:
   //
@@ -575,6 +722,17 @@ describe('restoreServerQueuedMessages', () => {
 
     await vi.advanceTimersByTimeAsync(SERVER_QUEUE_POLL_MS);
     expect(queue()).toHaveLength(0);
+  });
+
+  it('restores one a run is already delivering as on its way', async () => {
+    vi.spyOn(aiAgentService, 'listQueuedFollowUps')
+      .mockResolvedValueOnce([pending('q1', { delivering: true })])
+      .mockResolvedValue([pending('q1', { delivering: true })]);
+    startRun();
+
+    await restoreServerQueuedMessages(get, context);
+
+    expect(queue()).toEqual([expect.objectContaining({ id: 'q1', serverDelivering: true })]);
   });
 
   it('brings back the composer state and selections it was sent with', async () => {
@@ -736,6 +894,22 @@ describe('withdrawQueuedMessage / reclaimServerQueuedMessages', () => {
     await reclaimServerQueuedMessages(get, key);
 
     expect(queue()).toHaveLength(0);
+  });
+
+  it('after a stop, clears the delivering mark of one it took back', async () => {
+    get().enqueueMessage(
+      key,
+      queued('q1', { serverDelivering: true, serverDelivery: 'server', serverRequest: request }),
+    );
+    vi.spyOn(aiAgentService, 'removeQueuedFollowUp').mockResolvedValue({
+      removed: true,
+      state: 'removed',
+    });
+
+    await reclaimServerQueuedMessages(get, key);
+
+    expect(queue()[0].serverDelivering).toBeUndefined();
+    expect(queue()[0].serverDelivery).toBeUndefined();
   });
 
   it('after a stop, keeps here what the server still had and drops what it took', async () => {

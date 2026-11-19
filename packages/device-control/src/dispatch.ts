@@ -1,3 +1,4 @@
+import type { AntigravityQuotaParams } from '@lobechat/heterogeneous-agents/quota';
 import {
   copyLocalFiles,
   createLocalDirectory,
@@ -9,6 +10,7 @@ import {
 import {
   addGitWorktree,
   checkoutGitBranch,
+  cleanupOwnedWorktree,
   deleteGitBranch,
   getGitAheadBehind,
   getGitBranch,
@@ -28,6 +30,7 @@ import {
   pushGitBranch,
   removeGitWorktree,
   renameGitBranch,
+  restoreOwnedWorktree,
   revertGitFile,
   runPullRequestAction,
 } from '@lobechat/local-file-shell/git';
@@ -38,6 +41,7 @@ import type {
 } from '@lobechat/local-file-shell/types';
 import type { DeviceCliRestartParams } from '@lobechat/types';
 
+import { getAntigravityQuota } from './antigravityQuota';
 import { listClaudeCodeMemory } from './claudeCodeMemory';
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
@@ -57,6 +61,7 @@ import type {
   InitWorkspaceParams,
   ListClaudeCodeMemoryParams,
   ListHeterogeneousAgentModelsParams,
+  ListMcpToolsParams,
   ListProjectSkillsParams,
   LocalFilePreviewUrlParams,
   PrepareSkillDirectoryParams,
@@ -83,6 +88,8 @@ export const DEVICE_RPC_METHODS = [
   'unenrollWorkspace',
   'initWorkspace',
   'listHeterogeneousAgentModels',
+  'listMcpTools',
+  'getAntigravityQuota',
   'getClaudeCodeQuota',
   'getCodexQuota',
   'getKimiCodeQuota',
@@ -123,6 +130,8 @@ export const DEVICE_RPC_METHODS = [
   'deleteGitBranch',
   'removeGitWorktree',
   'addGitWorktree',
+  'cleanupOwnedWorktree',
+  'restoreOwnedWorktree',
   'pullGitBranch',
   'pushGitBranch',
   'revertGitFile',
@@ -151,6 +160,9 @@ export const APP_UPDATE_UNSUPPORTED_MESSAGE = 'This device client does not suppo
 
 export const CLI_UPDATE_UNSUPPORTED_MESSAGE =
   'This device client does not support remote CLI updates';
+
+/** Why a client that runs no MCP servers rejects `listMcpTools`. */
+export const MCP_UNSUPPORTED_MESSAGE = 'This device client does not support MCP servers';
 
 /** Why a client without a recoverable trash (the CLI daemon) rejects `trashLocalFiles`. */
 export const TRASH_UNSUPPORTED_MESSAGE = 'This device does not support moving files to the trash';
@@ -227,8 +239,17 @@ export const executeDeviceRpc = async (
       return deps.listHeterogeneousAgentModels(params as ListHeterogeneousAgentModelsParams);
     }
 
+    case 'listMcpTools': {
+      if (!deps.listMcpTools) throw new Error(MCP_UNSUPPORTED_MESSAGE);
+      return deps.listMcpTools(params as ListMcpToolsParams);
+    }
+
     case 'getClaudeCodeQuota': {
       return getClaudeCodeQuota(params as GetClaudeCodeQuotaParams);
+    }
+
+    case 'getAntigravityQuota': {
+      return getAntigravityQuota(params as AntigravityQuotaParams);
     }
 
     case 'getCodexQuota': {
@@ -358,7 +379,12 @@ export const executeDeviceRpc = async (
 
     case 'getLinkedPullRequest': {
       return getLinkedPullRequest(
-        params as { branch: string; path: string; pullRequestNumber?: number },
+        params as {
+          branch: string;
+          path: string;
+          pullRequestNumber?: number;
+          state?: 'all' | 'open';
+        },
       );
     }
 
@@ -407,7 +433,8 @@ export const executeDeviceRpc = async (
     }
 
     case 'getGitAheadBehind': {
-      return getGitAheadBehind((params as { path: string }).path);
+      const { branch, path } = params as { branch?: string; path: string };
+      return getGitAheadBehind(path, { branch });
     }
 
     case 'listGitBranches': {
@@ -423,7 +450,9 @@ export const executeDeviceRpc = async (
     }
 
     case 'checkoutGitBranch': {
-      return checkoutGitBranch(params as { branch: string; create?: boolean; path: string });
+      return checkoutGitBranch(
+        params as { branch: string; create?: boolean; path: string; startPoint?: string },
+      );
     }
 
     case 'renameGitBranch': {
@@ -439,15 +468,50 @@ export const executeDeviceRpc = async (
     }
 
     case 'addGitWorktree': {
-      return addGitWorktree(params as { branch: string; path: string; worktreePath: string });
+      return addGitWorktree(
+        params as {
+          branch: string;
+          ownerToken?: string;
+          path: string;
+          startPoint?: string;
+          worktreePath: string;
+        },
+      );
+    }
+
+    // Only the named fields are forwarded: the guard root is the device's own
+    // `~/.lobehub/worktrees`, never something a request can widen.
+    case 'cleanupOwnedWorktree': {
+      const { discard, ownerToken, sourcePath, worktreePath } = params as {
+        discard?: boolean;
+        ownerToken?: string;
+        sourcePath: string;
+        worktreePath: string;
+      };
+      return cleanupOwnedWorktree({
+        discard: discard === true,
+        ownerToken,
+        sourcePath,
+        worktreePath,
+      });
+    }
+
+    case 'restoreOwnedWorktree': {
+      const { branch, ownerToken, sourcePath, worktreePath } = params as {
+        branch: string;
+        ownerToken?: string;
+        sourcePath: string;
+        worktreePath: string;
+      };
+      return restoreOwnedWorktree({ branch, ownerToken, sourcePath, worktreePath });
     }
 
     case 'pullGitBranch': {
-      return pullGitBranch(params as { path: string });
+      return pullGitBranch(params as { branch?: string; path: string });
     }
 
     case 'pushGitBranch': {
-      return pushGitBranch(params as { path: string });
+      return pushGitBranch(params as { branch?: string; path: string });
     }
 
     case 'revertGitFile': {

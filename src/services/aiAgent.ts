@@ -462,6 +462,15 @@ class AiAgentService {
   }
 
   /**
+   * Stop one Claude Code background task of a run hosted by `lh hetero exec`.
+   * `accepted` only means Claude Code took the request; the task's `stopped`
+   * snapshot arrives through the run's own stream.
+   */
+  async stopHeteroBackgroundTask(params: { operationId: string; taskId: string }) {
+    return await lambdaClient.aiAgent.stopHeteroBackgroundTask.mutate(params);
+  }
+
+  /**
    * Interrupt a running task
    */
   async interruptTask(params: InterruptTaskParams) {

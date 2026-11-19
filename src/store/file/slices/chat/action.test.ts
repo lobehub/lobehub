@@ -310,12 +310,12 @@ describe('useFileStore:chat', () => {
     const { result } = renderHook(() => useStore());
     const finishes: (() => void)[] = [];
     vi.spyOn(result.current, 'uploadWithProgress').mockImplementation(
-      ({ file, onStatusUpdate }) =>
+      ({ file, onStatusUpdate, uploadId }) =>
         new Promise((resolve) => {
           const n = finishes.length + 1;
           finishes.push(() => {
             onStatusUpdate?.({
-              id: file.name,
+              id: uploadId ?? file.name,
               type: 'updateFile',
               value: { fileUrl: `url-${n}`, id: `server-${n}`, status: 'success' },
             });
@@ -357,12 +357,72 @@ describe('useFileStore:chat', () => {
     expect(lists.topic).toEqual([
       expect.objectContaining({ fileUrl: 'url-1', id: 'server-1', status: 'success' }),
     ]);
-    expect(lists.blank).toEqual([expect.objectContaining({ id: 'notes.txt', status: 'pending' })]);
+    expect(lists.blank).toEqual([expect.objectContaining({ status: 'pending' })]);
 
     await act(async () => {
       finishes[1]();
       await secondUpload;
     });
+  });
+
+  // Regression: pasted images are all named `image.png`. Both pending chips had that name as
+  // their id, so whichever upload finished first claimed the first chip, and a chip could
+  // show one image while sending the other.
+  it('reports each same-named upload to its own chip when they finish out of order', async () => {
+    mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+    const { result } = renderHook(() => useStore());
+    const finishes: (() => void)[] = [];
+    vi.spyOn(result.current, 'uploadWithProgress').mockImplementation(
+      ({ file, onStatusUpdate, uploadId }) =>
+        new Promise((resolve) => {
+          const n = finishes.length + 1;
+          finishes.push(() => {
+            onStatusUpdate?.({
+              id: uploadId ?? file.name,
+              type: 'updateFile',
+              value: { fileUrl: `url-${n}`, id: `server-${n}`, status: 'success' },
+            });
+            resolve({ id: `server-${n}`, url: `url-${n}` } as any);
+          });
+        }),
+    );
+    useStore.setState({ chatUploadFileListByContext: {} });
+
+    let firstUpload!: Promise<void>;
+    let secondUpload!: Promise<void>;
+    await act(async () => {
+      firstUpload = result.current.uploadChatFiles(
+        CONTEXT_KEY,
+        [new File(['a'], 'image.png', { type: 'text/plain' })],
+        AGENT_ID,
+      );
+      await vi.waitFor(() => expect(finishes).toHaveLength(1));
+      secondUpload = result.current.uploadChatFiles(
+        CONTEXT_KEY,
+        [new File(['b'], 'image.png', { type: 'text/plain' })],
+        AGENT_ID,
+      );
+      await vi.waitFor(() => expect(finishes).toHaveLength(2));
+    });
+
+    // The second paste finishes first.
+    await act(async () => {
+      finishes[1]();
+      await secondUpload;
+    });
+    expect(uploadList()).toEqual([
+      expect.objectContaining({ status: 'pending' }),
+      expect.objectContaining({ fileUrl: 'url-2', id: 'server-2', status: 'success' }),
+    ]);
+
+    await act(async () => {
+      finishes[0]();
+      await firstUpload;
+    });
+    expect(uploadList()).toEqual([
+      expect.objectContaining({ fileUrl: 'url-1', id: 'server-1', status: 'success' }),
+      expect.objectContaining({ fileUrl: 'url-2', id: 'server-2', status: 'success' }),
+    ]);
   });
 
   it('uploadChatFiles should reject unsupported files before upload in chat mode', async () => {
@@ -467,7 +527,7 @@ describe('useFileStore:chat', () => {
       expect.objectContaining({
         agentId: AGENT_ID,
         error: 'You do not have permission to upload files in this workspace.',
-        id: 'test.txt',
+        id: expect.stringMatching(/^test\.txt#/),
         status: 'error',
       }),
     ]);
@@ -497,10 +557,90 @@ describe('useFileStore:chat', () => {
     expect(uploadList()).toEqual([
       expect.objectContaining({
         error: 'The upload service is unavailable. (HTTP 502 · Request ID: a4f7-SJC)',
-        id: 'report.docx',
+        id: expect.stringMatching(/^report\.docx#/),
         status: 'error',
       }),
     ]);
+  });
+
+  // Regression: pasting the same image twice showed two cards and uploaded it twice, but
+  // the server kept one file, so the message said [Image #1] [Image #2] with one image.
+  describe('uploadChatFiles with an image already in the draft', () => {
+    const gif = (name = 'image.gif') => new File(['same-pixels'], name, { type: 'image/gif' });
+
+    beforeEach(() => {
+      mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+      useStore.setState({ chatUploadFileListByContext: {} });
+    });
+
+    it('does not add or upload the same image again', async () => {
+      const { result } = renderHook(() => useStore());
+      const uploadWithProgress = vi
+        .spyOn(result.current, 'uploadWithProgress')
+        .mockResolvedValue({ id: 'file-1', url: 'url-1' } as any);
+
+      await act(async () => {
+        await result.current.uploadChatFiles(CONTEXT_KEY, [gif()], AGENT_ID);
+      });
+      await act(async () => {
+        await result.current.uploadChatFiles(CONTEXT_KEY, [gif()], AGENT_ID);
+      });
+
+      expect(uploadWithProgress).toHaveBeenCalledTimes(1);
+      expect(uploadList()).toEqual([
+        expect.objectContaining({
+          contentHash: expect.any(String),
+          repastedAt: expect.any(Number),
+        }),
+      ]);
+    });
+
+    it('keeps one card for the same image pasted twice at once', async () => {
+      const { result } = renderHook(() => useStore());
+      const uploadWithProgress = vi
+        .spyOn(result.current, 'uploadWithProgress')
+        .mockResolvedValue({ id: 'file-1', url: 'url-1' } as any);
+
+      await act(async () => {
+        await result.current.uploadChatFiles(CONTEXT_KEY, [gif('a.gif'), gif('b.gif')], AGENT_ID);
+      });
+
+      expect(uploadWithProgress).toHaveBeenCalledTimes(1);
+      expect(uploadList()).toHaveLength(1);
+    });
+
+    it('still uploads images where hashing is unavailable (insecure context)', async () => {
+      const { result } = renderHook(() => useStore());
+      const uploadWithProgress = vi
+        .spyOn(result.current, 'uploadWithProgress')
+        .mockResolvedValue({ id: 'file-1', url: 'url-1' } as any);
+      vi.spyOn(crypto.subtle, 'digest').mockRejectedValue(new TypeError('no subtle'));
+
+      await act(async () => {
+        await result.current.uploadChatFiles(CONTEXT_KEY, [gif()], AGENT_ID);
+      });
+
+      expect(uploadWithProgress).toHaveBeenCalledTimes(1);
+      expect(uploadList()).toEqual([expect.objectContaining({ contentHash: undefined })]);
+    });
+
+    it('uploads the image again when its earlier upload failed', async () => {
+      const { result } = renderHook(() => useStore());
+      const uploadWithProgress = vi
+        .spyOn(result.current, 'uploadWithProgress')
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValue({ id: 'file-1', url: 'url-1' } as any);
+
+      await act(async () => {
+        await result.current.uploadChatFiles(CONTEXT_KEY, [gif()], AGENT_ID);
+      });
+      await act(async () => {
+        await result.current.uploadChatFiles(CONTEXT_KEY, [gif()], AGENT_ID);
+      });
+
+      expect(uploadWithProgress).toHaveBeenCalledTimes(2);
+      expect(uploadList()).toHaveLength(2);
+    });
   });
 
   describe('uploadChatFiles as an agent-share visitor', () => {
@@ -527,7 +667,11 @@ describe('useFileStore:chat', () => {
       // reach it; the run parses it on the creator's account instead.
       expect(ragService.parseFileContent).not.toHaveBeenCalled();
       expect(uploadList()).toEqual([
-        expect.objectContaining({ agentId: AGENT_ID, id: 'notes.pdf', shareId: SHARE_ID }),
+        expect.objectContaining({
+          agentId: AGENT_ID,
+          id: expect.stringMatching(/^notes\.pdf#/),
+          shareId: SHARE_ID,
+        }),
       ]);
     });
 
@@ -573,7 +717,7 @@ describe('useFileStore:chat', () => {
       expect(uploadList()).toEqual([
         expect.objectContaining({
           error: 'share.visitor.upload.creatorStorageBlocked',
-          id: 'notes.pdf',
+          id: expect.stringMatching(/^notes\.pdf#/),
           status: 'error',
         }),
       ]);

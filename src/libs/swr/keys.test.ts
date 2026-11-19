@@ -1,24 +1,6 @@
-import { replicaKeys } from 'local-replica';
-import { unstable_serialize } from 'swr';
 import { describe, expect, it } from 'vitest';
 
 import { documentCommentKeys, isDocumentCommentKeyForEvent, workKeys } from './keys';
-import { CACHE_TIERS } from './localStorageProvider';
-
-describe('replica sync keys', () => {
-  it('keeps SWR orchestration entries out of the persistence tiers', () => {
-    for (const key of [
-      // Replicas persist through their own storage, never through the SWR tiers.
-      replicaKeys.sync('agentList', 1, 'user-1:personal', 'sidebar', {}),
-      replicaKeys.sync('agentConfig', 1, 'user-1:personal', 'agent-1', { agentId: 'agent-1' }),
-    ]) {
-      const serialized = unstable_serialize(key);
-      expect(
-        [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) => serialized.includes(pattern)),
-      ).toBe(false);
-    }
-  });
-});
 
 describe('workKeys', () => {
   it('keeps the Resources Private and Workspace galleries in separate cache entries', () => {

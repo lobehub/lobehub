@@ -98,6 +98,7 @@ export interface RouteSuccessParams {
 export type RouterRuntimeMethod =
   | 'chat'
   | 'createImage'
+  | 'createMusic'
   | 'createVideo'
   | 'decide'
   | 'embeddings'

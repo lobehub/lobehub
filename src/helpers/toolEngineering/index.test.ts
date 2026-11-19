@@ -1,6 +1,7 @@
 import { AttachmentsManifest } from '@lobechat/builtin-tool-attachments';
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { DashboardManifest } from '@lobechat/builtin-tool-dashboard';
+import { WebhookManifest } from '@lobechat/builtin-tool-webhook';
 import type * as ConstModule from '@lobechat/const';
 import { type ToolManifest } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -32,6 +33,11 @@ vi.mock('@/store/tool', () => ({
       {
         identifier: AttachmentsManifest.identifier,
         manifest: AttachmentsManifest,
+        type: 'builtin' as const,
+      },
+      {
+        identifier: WebhookManifest.identifier,
+        manifest: WebhookManifest,
         type: 'builtin' as const,
       },
       {
@@ -190,7 +196,7 @@ vi.mock('@/store/tool/selectors', () => ({
 }));
 
 let mockServerConfig: { toolNameMaxLength?: number } = {};
-let mockFeatureFlags: { enableDashboard?: boolean } = {};
+let mockFeatureFlags: { enableDashboard?: boolean; enableWebhook?: boolean } = {};
 
 vi.mock('@/store/serverConfig', () => ({
   getServerConfigStoreState: () => ({
@@ -290,6 +296,22 @@ describe('toolEngineering', () => {
       mockCurrentAgentPlugins = [DashboardManifest.identifier];
       mockFeatureFlags = { enableDashboard: true };
       expect(generate().enabledToolIds).toContain(DashboardManifest.identifier);
+    });
+  });
+
+  describe('server-only tools', () => {
+    it('never offers the webhook tools to a run the browser executes, even pinned and flagged on', () => {
+      mockCurrentAgentPlugins = [WebhookManifest.identifier];
+      mockFeatureFlags = { enableWebhook: true };
+      const result = createAgentToolsEngine({
+        model: 'gpt-4',
+        provider: 'openai',
+      }).generateToolsDetailed({
+        model: 'gpt-4',
+        provider: 'openai',
+        toolIds: [WebhookManifest.identifier],
+      });
+      expect(result.enabledToolIds).not.toContain(WebhookManifest.identifier);
     });
   });
 

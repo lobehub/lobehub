@@ -68,6 +68,15 @@ describe('pipelineFor', () => {
     ]);
   });
 
+  it('keeps oxlint from failing when every passed file is ignored', () => {
+    // Vendored skills such as `.agents/skills/lobe-design/scripts/*.mjs` are
+    // ignored by oxlint; without this flag it exits 1 with "No files found".
+    for (const file of ['a.mjs', 'a.js', 'a.ts']) {
+      const oxlint = pipelineFor(lobehubPipelines, file)?.tools.find(([tool]) => tool === 'oxlint');
+      expect(oxlint).toContain('--no-error-on-unmatched-pattern');
+    }
+  });
+
   it('returns null for extensions with no pipeline', () => {
     expect(pipelineFor(lobehubPipelines, '.github/workflows/ci.yml')).toBeNull();
     expect(pipelineFor(lobehubPipelines, 'image.png')).toBeNull();

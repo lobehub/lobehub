@@ -25,9 +25,50 @@ import type {
   DeviceGitWorkingTreeStatus,
   DeviceGitWorktreeListItem,
 } from '@lobechat/types';
+import { DEVICE_GIT_OUTDATED } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import { electronGitService } from '@/services/electron/git';
+
+/**
+ * The device answered without honouring a newer parameter. Device RPCs carry no
+ * version negotiation, so an older `lh connect` / desktop build ignores
+ * `startPoint` / `branch` and acts on HEAD — every caller that passes one checks
+ * the echo and refuses to treat such an answer as success.
+ */
+export class DeviceGitOutdatedError extends Error {
+  readonly reason = DEVICE_GIT_OUTDATED;
+  constructor(what: string) {
+    super(`The device did not honour ${what}; update the LobeHub app or lh CLI on it.`);
+    this.name = 'DeviceGitOutdatedError';
+  }
+}
+
+export const isDeviceGitOutdated = (value: unknown): boolean =>
+  value instanceof DeviceGitOutdatedError ||
+  (!!value &&
+    typeof value === 'object' &&
+    (value as { reason?: string }).reason === DEVICE_GIT_OUTDATED);
+
+/**
+ * Reject a successful result whose echo does not match what was asked for. A
+ * failed result is passed through: git's own error is the better message.
+ */
+const verifyEcho = <T extends { error?: string; reason?: string; success: boolean }>(
+  result: T,
+  field: 'branch' | 'startPoint',
+  requested: string | undefined,
+): T => {
+  if (requested === undefined || !result.success) return result;
+  const echoed = (result as Record<string, unknown>)[field];
+  if (echoed === requested) return result;
+  return {
+    ...result,
+    error: new DeviceGitOutdatedError(`"${field}"`).message,
+    reason: DEVICE_GIT_OUTDATED,
+    success: false,
+  };
+};
 
 /** Current branch + detached-HEAD state for a working directory (cheap read). */
 export interface GitBranchSummary {
@@ -42,6 +83,8 @@ export interface GitLinkedPRSummary {
   ghMissing?: boolean;
   pullRequest?: DeviceGitLinkedPullRequest | null;
   pullRequestStatus?: DeviceGitLinkedPullRequestLookupStatus;
+  /** `owner/repo` of the GitHub remote the branch publishes to. */
+  remoteRepoFullName?: string;
   upstream?: DeviceGitUpstreamRef;
 }
 
@@ -69,21 +112,29 @@ class GitService {
       : electronGitService.listGitBranches(path);
   }
 
-  /** Checkout (or create) a branch in a working directory. */
-  checkoutGitBranch({
+  /**
+   * Checkout (or create) a branch in a working directory. With `startPoint`
+   * (and `create`) the new branch is cut from that branch instead of HEAD; the
+   * device's echo is verified, see {@link DeviceGitOutdatedError}.
+   */
+  async checkoutGitBranch({
     branch,
     create,
     deviceId,
     path,
+    startPoint,
   }: {
     branch: string;
     create?: boolean;
     deviceId?: string;
     path: string;
+    startPoint?: string;
   }): Promise<DeviceGitCheckoutResult> {
-    return deviceId
-      ? lambdaClient.device.checkoutGitBranch.mutate({ branch, create, deviceId, path })
-      : electronGitService.checkoutGitBranch({ branch, create, path });
+    const params = { branch, create, path, ...(startPoint ? { startPoint } : {}) };
+    const result = deviceId
+      ? await lambdaClient.device.checkoutGitBranch.mutate({ ...params, deviceId })
+      : await electronGitService.checkoutGitBranch(params);
+    return verifyEcho(result, 'startPoint', startPoint);
   }
 
   /** Rename a branch in a working directory. */
@@ -139,49 +190,84 @@ class GitService {
    * (never trusting a client-supplied absolute path), so `worktreePath` is only
    * forwarded on the local IPC route where this machine owns the filesystem.
    */
-  addGitWorktree({
+  async addGitWorktree({
     branch,
     deviceId,
+    ownerToken,
     path,
     sourcePath,
+    startPoint,
+    stripBranchPrefix,
     worktreePath,
   }: {
     branch: string;
     deviceId?: string;
+    /** Creation receipt for a worktree the app makes for a conversation; echoed when recorded. */
+    ownerToken?: string;
     path: string;
     /** The repo's main checkout; the server keys the target folder on it. */
     sourcePath?: string;
+    /** Fork the new branch from this branch instead of HEAD; the echo is verified. */
+    startPoint?: string;
+    /**
+     * Remote only: have the server drop the app's branch namespace from the
+     * folder it derives. The local route already passes the final `worktreePath`.
+     */
+    stripBranchPrefix?: boolean;
     worktreePath: string;
   }): Promise<DeviceGitAddWorktreeResult> {
-    return deviceId
-      ? lambdaClient.device.addGitWorktree.mutate({ branch, deviceId, path, sourcePath })
-      : electronGitService.addGitWorktree({ branch, path, worktreePath });
+    const start = {
+      ...(startPoint ? { startPoint } : {}),
+      ...(ownerToken ? { ownerToken } : {}),
+    };
+    const result = deviceId
+      ? await lambdaClient.device.addGitWorktree.mutate({
+          branch,
+          deviceId,
+          path,
+          sourcePath,
+          ...start,
+          ...(stripBranchPrefix ? { stripBranchPrefix } : {}),
+        })
+      : await electronGitService.addGitWorktree({ branch, path, worktreePath, ...start });
+    return verifyEcho(result, 'startPoint', startPoint);
   }
 
-  /** Pull (`--ff-only`) the current branch of a working directory. */
-  pullGitBranch({
+  /**
+   * Fast-forward the current branch of a working directory, or `branch` without
+   * switching to it (the device's echo is verified).
+   */
+  async pullGitBranch({
+    branch,
     deviceId,
     path,
   }: {
+    branch?: string;
     deviceId?: string;
     path: string;
   }): Promise<DeviceGitSyncResult> {
-    return deviceId
-      ? lambdaClient.device.pullGitBranch.mutate({ deviceId, path })
-      : electronGitService.pullGitBranch({ path });
+    const params = { path, ...(branch ? { branch } : {}) };
+    const result = deviceId
+      ? await lambdaClient.device.pullGitBranch.mutate({ ...params, deviceId })
+      : await electronGitService.pullGitBranch(params);
+    return verifyEcho(result, 'branch', branch);
   }
 
-  /** Push the current branch of a working directory. */
-  pushGitBranch({
+  /** Push the current branch of a working directory, or `branch` (echo verified). */
+  async pushGitBranch({
+    branch,
     deviceId,
     path,
   }: {
+    branch?: string;
     deviceId?: string;
     path: string;
   }): Promise<DeviceGitSyncResult> {
-    return deviceId
-      ? lambdaClient.device.pushGitBranch.mutate({ deviceId, path })
-      : electronGitService.pushGitBranch({ path });
+    const params = { path, ...(branch ? { branch } : {}) };
+    const result = deviceId
+      ? await lambdaClient.device.pushGitBranch.mutate({ ...params, deviceId })
+      : await electronGitService.pushGitBranch(params);
+    return verifyEcho(result, 'branch', branch);
   }
 
   /**
@@ -218,11 +304,14 @@ class GitService {
     deviceId,
     path,
     pullRequestNumber,
+    state,
   }: {
     branch: string;
     deviceId?: string;
     path: string;
     pullRequestNumber?: number;
+    /** `open`: discovery of a branch's open PR; default lists every state. */
+    state?: 'all' | 'open';
   }): Promise<GitLinkedPRSummary | undefined> {
     const pr = deviceId
       ? await lambdaClient.device.gitLinkedPullRequest.query({
@@ -230,14 +319,21 @@ class GitService {
           deviceId,
           path,
           pullRequestNumber,
+          ...(state ? { state } : {}),
         })
-      : await electronGitService.getLinkedPullRequest({ branch, path, pullRequestNumber });
+      : await electronGitService.getLinkedPullRequest({
+          branch,
+          path,
+          pullRequestNumber,
+          ...(state ? { state } : {}),
+        });
     if (!pr) return undefined;
     return {
       extraCount: pr.extraCount,
       ghMissing: pr.status === 'gh-missing',
       pullRequest: pr.pullRequest,
       pullRequestStatus: pr.status,
+      remoteRepoFullName: pr.remoteRepoFullName,
       upstream: pr.upstream,
     };
   }
@@ -329,17 +425,32 @@ class GitService {
       : electronGitService.getGitWorkingTreeStatus(path);
   }
 
-  /** Ahead/behind commit counts for the current branch vs its upstream. */
+  /**
+   * Ahead/behind commit counts for the current branch vs its upstream — or for
+   * `branch`, wherever HEAD is. A named-branch answer without the matching echo
+   * came from a device that counted HEAD instead and throws
+   * {@link DeviceGitOutdatedError}; an unreachable device still resolves
+   * `undefined`.
+   */
   async getGitAheadBehind({
+    branch,
     deviceId,
     path,
   }: {
+    branch?: string;
     deviceId?: string;
     path: string;
   }): Promise<DeviceGitAheadBehind | undefined> {
-    return deviceId
-      ? ((await lambdaClient.device.gitAheadBehind.query({ deviceId, path })) ?? undefined)
-      : electronGitService.getGitAheadBehind(path);
+    const result = deviceId
+      ? ((await lambdaClient.device.gitAheadBehind.query({
+          ...(branch ? { branch } : {}),
+          deviceId,
+          path,
+        })) ?? undefined)
+      : await electronGitService.getGitAheadBehind(path, branch);
+    if (branch !== undefined && result && result.branch !== branch)
+      throw new DeviceGitOutdatedError('"branch"');
+    return result;
   }
 
   /** Working-tree (unstaged) per-file patches for a working directory. */

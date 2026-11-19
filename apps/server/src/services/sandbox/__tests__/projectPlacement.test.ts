@@ -49,25 +49,17 @@ describe('resolveProjectTopicSandbox', () => {
     mocks.getAgentVisibility.mockReset().mockResolvedValue('private');
   });
 
-  it("works in the project's repository, checked out in the project's folder", async () => {
-    await expect(resolve()).resolves.toEqual({
-      sandboxEnvironmentId: 'env-repo',
-      sandboxWorkingDirectory: 'projects/proj_1/env-repo',
-    });
+  // Coding belongs in the temporary sandbox: the repository is cloned into a
+  // fresh one, never checked out in a folder on the drive.
+  it("clones the project's repository into a temporary sandbox", async () => {
+    await expect(resolve()).resolves.toEqual({ sandboxEnvironmentId: 'env-repo' });
   });
 
-  // The public drive is every member's; a private checkout stays on the member's own.
-  it('puts a private repository on the personal drive in a workspace', async () => {
-    await expect(resolve({ workspaceId: 'ws-1' })).resolves.toMatchObject({
-      sandboxDrive: 'personal',
-    });
-  });
-
-  it('puts a published repository on the public drive', async () => {
+  it('names no drive or folder in a workspace either', async () => {
     mocks.findEnvironmentById.mockResolvedValue({ ...repository, visibility: 'public' });
 
-    await expect(resolve({ workspaceId: 'ws-1' })).resolves.toMatchObject({
-      sandboxDrive: 'public',
+    await expect(resolve({ workspaceId: 'ws-1' })).resolves.toEqual({
+      sandboxEnvironmentId: 'env-repo',
     });
   });
 
@@ -88,7 +80,6 @@ describe('resolveProjectTopicSandbox', () => {
 
     await expect(resolve({ environmentId: 'env-other' })).resolves.toEqual({
       sandboxEnvironmentId: 'env-other',
-      sandboxWorkingDirectory: 'projects/proj_1/env-other',
     });
   });
 
@@ -110,8 +101,7 @@ describe('resolveProjectTopicSandbox', () => {
     mocks.listEnvironments.mockResolvedValue([repository, published]);
     mocks.findEnvironmentById.mockResolvedValue(published);
 
-    await expect(resolve({ agentId: 'agt-shared', workspaceId: 'ws-1' })).resolves.toMatchObject({
-      sandboxDrive: 'public',
+    await expect(resolve({ agentId: 'agt-shared', workspaceId: 'ws-1' })).resolves.toEqual({
       sandboxEnvironmentId: 'env-pub',
     });
   });

@@ -271,32 +271,6 @@ describe('Operation Actions', () => {
     });
   });
 
-  describe('completeOperation', () => {
-    it('should mark operation as completed with correct metadata', () => {
-      const { result } = renderHook(() => useChatStore());
-
-      let operationId: string;
-
-      act(() => {
-        operationId = result.current.startOperation({
-          type: 'execAgentRuntime',
-          context: { agentId: 'session1' },
-        }).operationId;
-      });
-
-      act(() => {
-        result.current.completeOperation(operationId!);
-      });
-
-      const operation = result.current.operations[operationId!];
-
-      expect(operation.status).toBe('completed');
-      expect(operation.metadata.endTime).toBeDefined();
-      expect(operation.metadata.duration).toBeDefined();
-      expect(operation.metadata.duration).toBeGreaterThanOrEqual(0);
-    });
-  });
-
   describe('cancelOperation', () => {
     it('should cancel operation and abort controller', () => {
       const { result } = renderHook(() => useChatStore());

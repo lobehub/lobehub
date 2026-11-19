@@ -28,6 +28,7 @@ export interface LobeChatPluginApi {
 
 export interface LobeToolManifest {
   api: LobeChatPluginApi[];
+  connectorLinks?: { connectorId: string; param: string };
   identifier: string;
   meta: any;
   systemRole?: string;

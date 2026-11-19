@@ -93,6 +93,28 @@ describe('workspace settings search scope', () => {
     );
   });
 
+  it('sends balance searches to the workspace Credits page, not Usage', () => {
+    const billingGroups: WorkspaceSettingCategoryGroup[] = [
+      ...adminGroups,
+      {
+        items: [
+          { icon: null, key: WorkspaceSettingsTabs.Usage, label: 'Usage' },
+          { icon: null, key: WorkspaceSettingsTabs.Credits, label: 'Credits' },
+        ],
+        key: WorkspaceSettingsGroupKey.Subscription,
+        title: 'Subscription',
+      },
+    ];
+
+    for (const query of ['balance', 'recharge', 'top up']) {
+      const urls = search(query, billingGroups).map((result) => result.url);
+
+      expect(urls).toContain('/acme/settings/credits');
+      // Only the personal Usage page holds the balance
+      expect(urls).not.toContain('/acme/settings/usage');
+    }
+  });
+
   it('indexes only the tab for workspace pages that differ from the personal ones', () => {
     const results = search('notification', memberGroups);
 

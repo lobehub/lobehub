@@ -3,12 +3,22 @@ import { describe, expect, it } from 'vitest';
 import { heteroOperationCapabilities } from './heteroOperationCapabilities';
 
 describe('heteroOperationCapabilities', () => {
-  it('grants history reads only to a Channel dispatch', () => {
-    expect(heteroOperationCapabilities('read the discussion', { channel: true })).toContain(
-      'channel:read',
+  it('grants history reads and Channel messaging only to a Channel dispatch', () => {
+    expect(heteroOperationCapabilities('read the discussion', { channel: true })).toEqual(
+      expect.arrayContaining(['channel:read', 'channel:message']),
     );
     expect(heteroOperationCapabilities('read the discussion')).not.toContain('channel:read');
+    expect(heteroOperationCapabilities('read the discussion')).not.toContain('channel:message');
   });
+  it("lets an owner's bot run message Channels, but not read one", () => {
+    const capabilities = heteroOperationCapabilities('tell the LobeHub agent', {
+      ownerBotTurn: true,
+    });
+    expect(capabilities).toContain('channel:message');
+    expect(capabilities).not.toContain('channel:read');
+    expect(capabilities).not.toContain('goal:manage');
+  });
+
   it('grants goal management to a /goal run', () => {
     expect(heteroOperationCapabilities('/goal ship the report')).toContain('goal:manage');
   });

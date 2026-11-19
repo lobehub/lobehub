@@ -4,10 +4,9 @@ import { cssVar, Flexbox, Text } from '@lobehub/ui';
 import { ChevronDownIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import NavHeader from '@/features/NavHeader';
-
 import SkeletonBar from '../../Bar';
 import { SkeletonItem } from '../../NavPanel/List';
+import { SkillCatalogListSkeleton, SkillCatalogPageSkeleton } from './SkillCatalog';
 import type { SettingsTabSkeleton } from './types';
 
 interface NavSection {
@@ -93,37 +92,9 @@ export const SkillNavListSkeleton = ({
   );
 };
 
-/** The detail pane opened on the first built-in skill: icon + title head over its text. */
-const DetailPane = () => (
-  <Flexbox flex={1} gap={24} padding={24} style={{ minWidth: 0 }}>
-    <Flexbox horizontal align={'center'} gap={12}>
-      <SkeletonBar height={40} radius={cssVar.borderRadius} width={40} />
-      <Flexbox flex={1} gap={6}>
-        <SkeletonBar height={18} width={160} />
-        <SkeletonBar height={12} width={'48%'} />
-      </Flexbox>
-    </Flexbox>
-    <Flexbox gap={12}>
-      {[100, 92, 96, 64, 88, 72].map((width, index) => (
-        <SkeletonBar height={14} key={index} width={`${width}%`} />
-      ))}
-    </Flexbox>
-  </Flexbox>
-);
+const Body = () => <SkillCatalogListSkeleton viewMode={'skill'} />;
 
-/** Mobile shows the list full width under the mobile header. */
-const Body = () => <SkillNavListSkeleton fullWidth />;
-
-/** Desktop is a split pane under an empty navigation header, like `ToolSettings`. */
-const Page = () => (
-  <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
-    <NavHeader />
-    <Flexbox horizontal flex={1} style={{ overflow: 'hidden' }}>
-      <SkillNavListSkeleton />
-      <DetailPane />
-    </Flexbox>
-  </Flexbox>
-);
+const Page = () => <SkillCatalogPageSkeleton viewMode={'skill'} />;
 
 const SkillSkeleton: SettingsTabSkeleton = { Body, Page };
 

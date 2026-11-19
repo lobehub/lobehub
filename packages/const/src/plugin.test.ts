@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { ARTIFACT_TAG_REGEX } from './plugin';
+import {
+  ARTIFACT_TAG_REGEX,
+  hasMandatoryApproval,
+  humanInterventionMayResolveTo,
+  isMarketplaceInstallRunnable,
+  keepsDesktopStdioExecution,
+  marketplaceToolIntervention,
+  marketplaceToolPoliciesOf,
+  mayRequireMandatoryApproval,
+  withMandatoryApprovalMark,
+} from './plugin';
 
 describe('ARTIFACT_TAG_REGEX', () => {
   it('should match a simple lobeArtifact tag', () => {
@@ -76,5 +86,158 @@ OpenAI的存在,就像是一场精心编排的默剧。台上的演员们摆出�
 
     const matches = ARTIFACT_TAG_REGEX.exec(input);
     expect(matches).toHaveLength(2);
+  });
+});
+
+describe('keepsDesktopStdioExecution', () => {
+  it.each([
+    { connector: { sourceType: 'marketplace' }, expected: true },
+    {
+      connector: { metadata: { desktopStdioExecution: true }, sourceType: 'custom' },
+      expected: true,
+    },
+    {
+      connector: { metadata: { desktopStdioExecution: 'true' }, sourceType: 'custom' },
+      expected: false,
+    },
+    { connector: { metadata: null, sourceType: 'custom' }, expected: false },
+  ])('is $expected for $connector', ({ connector, expected }) => {
+    expect(keepsDesktopStdioExecution(connector)).toBe(expected);
+  });
+});
+
+describe('isMarketplaceInstallRunnable', () => {
+  const pending = {
+    mcpConnectionType: 'http',
+    mcpServerUrl: 'https://mcp.example.com',
+    metadata: {},
+    sourceType: 'marketplace',
+    status: 'disconnected',
+  };
+
+  it.each([
+    { case: 'a pending reinstall over a plugin row', connector: pending, plugin: true, ok: false },
+    { case: 'an unfinished install', connector: { ...pending, status: 'connected' }, ok: false },
+    {
+      case: 'a connected row with a plugin row',
+      connector: { ...pending, status: 'connected' },
+      ok: true,
+      plugin: true,
+    },
+    {
+      case: 'a finished install',
+      connector: { ...pending, metadata: { marketplaceInstalled: true }, status: 'connected' },
+      ok: true,
+    },
+    {
+      case: 'a finished install waiting on its authorization',
+      connector: { ...pending, metadata: { marketplaceInstalled: true } },
+      ok: false,
+    },
+    { case: 'an agent-owned copy', connector: { ...pending, agentId: 'agt_1' }, ok: true },
+    {
+      case: 'an endpoint-less projection',
+      connector: { ...pending, mcpConnectionType: null, mcpServerUrl: null },
+      ok: true,
+    },
+    { case: 'a custom connector', connector: { ...pending, sourceType: 'custom' }, ok: true },
+  ])('is $ok for $case', ({ connector, ok, plugin }) => {
+    expect(isMarketplaceInstallRunnable(connector, !!plugin)).toBe(ok);
+  });
+});
+
+describe('mayRequireMandatoryApproval', () => {
+  it('reads a static always', () => {
+    expect(mayRequireMandatoryApproval('always')).toBe(true);
+    expect(mayRequireMandatoryApproval('required')).toBe(false);
+    expect(mayRequireMandatoryApproval('never')).toBe(false);
+    expect(mayRequireMandatoryApproval(undefined)).toBe(false);
+    expect(mayRequireMandatoryApproval(null)).toBe(false);
+  });
+
+  it('counts a rule that can ask for always, whatever its match', () => {
+    expect(
+      mayRequireMandatoryApproval([
+        { match: { path: '/tmp/*' }, policy: 'never' },
+        { match: { recursive: 'true' }, policy: 'always' },
+      ]),
+    ).toBe(true);
+    expect(mayRequireMandatoryApproval([{ policy: 'never' }, { policy: 'required' }])).toBe(false);
+  });
+
+  it('counts either outcome of a dynamic config, whose unset policy is always', () => {
+    expect(mayRequireMandatoryApproval({ dynamic: { default: 'never', type: 'x' } })).toBe(true);
+    expect(
+      mayRequireMandatoryApproval({ dynamic: { default: 'always', policy: 'never', type: 'x' } }),
+    ).toBe(true);
+    expect(
+      mayRequireMandatoryApproval({ dynamic: { default: 'never', policy: 'required', type: 'x' } }),
+    ).toBe(false);
+  });
+});
+
+describe('humanInterventionMayResolveTo', () => {
+  it('matches any of the given policies', () => {
+    expect(humanInterventionMayResolveTo('required', ['required', 'always'])).toBe(true);
+    expect(humanInterventionMayResolveTo([{ policy: 'never' }], ['required', 'always'])).toBe(
+      false,
+    );
+  });
+});
+
+describe('withMandatoryApprovalMark', () => {
+  it('marks the metadata only for a manifest that can ask for always', () => {
+    expect(withMandatoryApprovalMark(null, 'always')).toEqual({ mandatoryApproval: true });
+    expect(withMandatoryApprovalMark({ visibility: ['model'] }, 'always')).toEqual({
+      mandatoryApproval: true,
+      visibility: ['model'],
+    });
+    expect(withMandatoryApprovalMark(null, 'required')).toBeNull();
+    expect(withMandatoryApprovalMark({ visibility: ['app'] }, undefined)).toEqual({
+      visibility: ['app'],
+    });
+  });
+
+  it('is read back by hasMandatoryApproval', () => {
+    expect(hasMandatoryApproval(withMandatoryApprovalMark(null, 'always'))).toBe(true);
+    expect(hasMandatoryApproval({ mandatoryApproval: 'true' })).toBe(false);
+    expect(hasMandatoryApproval(null)).toBe(false);
+  });
+});
+
+describe('marketplace tool policies', () => {
+  it('reads the per-tool market policies a connector stores', () => {
+    expect(
+      marketplaceToolPoliciesOf({ marketplaceToolPolicies: { search: null, send: 'required' } }),
+    ).toEqual(
+      new Map<string, unknown>([
+        ['search', null],
+        ['send', 'required'],
+      ]),
+    );
+    // An empty record is a record: the market declared no tool
+    expect(marketplaceToolPoliciesOf({ marketplaceToolPolicies: {} })).toEqual(new Map());
+    expect(marketplaceToolPoliciesOf({ marketplaceToolPolicies: ['search'] })).toBeUndefined();
+    expect(marketplaceToolPoliciesOf({ marketplaceToolPolicies: 'search' })).toBeUndefined();
+    expect(marketplaceToolPoliciesOf({})).toBeUndefined();
+    expect(marketplaceToolPoliciesOf(null)).toBeUndefined();
+  });
+
+  it('takes a tool its stored policy, or always when the market does not declare it', () => {
+    const policies = new Map<string, unknown>([
+      ['search', null],
+      ['send', 'required'],
+      ['delete', 'always'],
+    ]);
+
+    // The stored policy wins over whatever the listing (or a client) says
+    expect(marketplaceToolIntervention(policies, 'send', undefined)).toBe('required');
+    expect(marketplaceToolIntervention(policies, 'delete', 'never')).toBe('always');
+    expect(marketplaceToolIntervention(policies, 'search', 'always')).toBeUndefined();
+    expect(marketplaceToolIntervention(policies, 'exfiltrate', 'never')).toBe('always');
+    expect(marketplaceToolIntervention(new Map(), 'search', undefined)).toBe('always');
+    // A connector without stored policies (any install but an agent's HTTP one)
+    expect(marketplaceToolIntervention(undefined, 'anything', 'required')).toBe('required');
+    expect(marketplaceToolIntervention(undefined, 'anything', undefined)).toBeUndefined();
   });
 });

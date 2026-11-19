@@ -30,7 +30,8 @@ const buildDbSkillContent = (detail: SkillItem): string | undefined => {
  *
  * Sources:
  * 1. Builtin skills (e.g., Artifacts) - from toolStore.builtinSkills
- * 2. DB skills (user/market) - from the `agentSkillList` replica
+ * 2. DB skills (user/market) - from the `agentSkillList` replica; opt-in per
+ *    agent, so only the ones it pinned or set to `auto` make the pool
  *
  * Pinned skills (ids in `pluginIds`) carry their full `content` so the
  * SkillContextProvider can inject it directly into the system prompt instead of
@@ -48,6 +49,11 @@ export const resolveClientSkills = async (
   skillActivateMode?: 'auto' | 'manual',
   /** Selectable for this turn even in manual mode, without being pinned. */
   turnSkillIds?: string[],
+  /**
+   * Library skills the agent set to `auto`. A library skill is opt-in per
+   * agent: one that is neither here nor pinned is not listed at all.
+   */
+  autoSkillIds?: string[],
 ): Promise<OperationSkillSet> => {
   // The list is only fetched by mounted views (tool popover, side panel), so a
   // send right after a page load would otherwise see no DB skills. A failed
@@ -123,6 +129,7 @@ export const resolveClientSkills = async (
   return assembleSkillPool(
     { builtin: builtinMetas, db: dbMetas },
     {
+      autoSkillIds,
       // The desktop app is itself the execution device.
       canExecuteOnDevice: isDesktop,
       enabledPluginIds: pluginIds,

@@ -37,6 +37,10 @@ vi.mock('../handlers/memoryUserMemoryPersonaUpdateWriting', () => ({
   memoryUserMemoryPersonaUpdateWriting: memoryHandler,
 }));
 vi.mock('../handlers/video', () => ({ videoWebhook: vi.fn() }));
+vi.mock('../handlers/inbound', () => ({
+  inboundWebhook: vi.fn(),
+  inboundWebhookBodyLimit: vi.fn(),
+}));
 
 describe('webhooks hono routes', () => {
   beforeEach(() => {
@@ -102,14 +106,27 @@ describe('webhooks hono routes', () => {
     expect([...new Set(paths)].sort()).toEqual([
       '/api/webhooks/casdoor',
       '/api/webhooks/github',
+      '/api/webhooks/inbound/:id',
       '/api/webhooks/logto',
       '/api/webhooks/memory-extraction',
       '/api/webhooks/memory-extraction/benchmark-locomo',
       '/api/webhooks/memory-user-memory/consolidation',
       '/api/webhooks/memory-user-memory/persona/update-writing',
       '/api/webhooks/memory-user-memory/pipelines/extract/chat-topic/cancel',
+      '/api/webhooks/music/:provider',
       '/api/webhooks/video/:provider',
     ]);
+  });
+
+  it('acknowledges music gateway callbacks without doing any work', async () => {
+    const response = await app.request('/api/webhooks/music/fal', {
+      body: JSON.stringify({ code: 200, data: { callbackType: 'complete' } }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ received: true });
   });
 
   it('serves the GitHub App and Linear install and OAuth redirects as GET', () => {

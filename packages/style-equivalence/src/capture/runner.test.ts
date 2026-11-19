@@ -112,6 +112,23 @@ ${css}
     page(
       `.t { color: black; animation: ${name} 1ms; } @keyframes ${name} { from { opacity: 0; } to { opacity: 1; } }`,
     );
+  await write(
+    'state-animation',
+    `<!doctype html><html><head><style>
+body { margin: 0; font: 14px Arial; }
+.f:focus-visible { animation: ring 120ms; }
+@keyframes ring { from { opacity: 0.25; } to { opacity: 1; } }
+</style></head><body><div id="app" data-synthetic-ready="true"><main data-synthetic-cases="">
+${Array.from({ length: 800 }, (_, index) => `<section data-case="a.tsx|A#${index}|0"><div data-synthetic-element="A#${index}" class="f">x</div></section>`).join('')}
+</main></div></body></html>`,
+  );
+  const paired = (id: string) =>
+    page('.t { color: black; } .lib:disabled { opacity: 0.5; }').replace(
+      '<span data-synthetic-element="A#1" class="t">',
+      `<span data-synthetic-element="${id}" data-synthetic-pair="A#0/0" class="t lib">`,
+    );
+  await write('paired-base', paired('A#0/0'));
+  await write('paired-head', paired('A#1'));
   await write('base-fade', fade('enter'));
   await write('head-fade', fade('lobe-x-enter'));
   server = await serveDirectories(root);
@@ -184,6 +201,16 @@ describe('captureRun + analyzeRun', () => {
     expect(gaps).toEqual({ 'a.tsx|A#0': ['STATE_UNMODELED'] });
   });
 
+  it('matches a library state rule on two paired elements that carry different ids', async () => {
+    const gaps = await inspectCaseGaps(
+      browser,
+      { base: `${server.url}/paired-base/`, head: `${server.url}/paired-head/` },
+      conditionFromLabel('light/1280/default'),
+      [],
+    );
+    expect(gaps).toEqual({});
+  });
+
   it('matches an unmodeled pseudo rule kept verbatim under a different class on the same element', async () => {
     const [same] = await run('base-scrollbar', 'head-scrollbar');
     expect(same.gaps).toEqual([]);
@@ -243,6 +270,24 @@ describe('captureRun + analyzeRun', () => {
   it('marks a case whose base disagrees with itself as unstable', async () => {
     const [result] = await run('noisy', 'head-hover');
     expect(result.status).toBe('unstable');
+  });
+
+  it('holds every animation a forced state starts at its first frame until capture', async () => {
+    const { page, snapshots } = await capturePage(
+      browser,
+      `${server.url}/state-animation/`,
+      conditionFromLabel('light/1280/focus-visible'),
+      [],
+    );
+    await page.close();
+    const settled = Object.values(snapshots).filter(
+      (snapshot) =>
+        'error' in snapshot ||
+        snapshot.animations.length !== 1 ||
+        snapshot.styles[snapshot.nodes[1].style].opacity !== '0.25',
+    );
+    expect(Object.keys(snapshots)).toHaveLength(800);
+    expect(settled).toHaveLength(0);
   });
 
   it('treats renamed keyframes with the same frames as equal after the animation ends', async () => {

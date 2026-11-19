@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { AgentOperationModel } from '../../../models/agentOperation';
@@ -69,6 +69,124 @@ describe('Channel dispatch reservation', () => {
     expect(claimed?.job.operationId).toBeTruthy();
     expect(claimed?.job.blockedCode).toBeNull();
   });
+  it('records the Channel device a job waits for', async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    await fixture.addAgent(channel.id, 'Device agent', deviceConfig());
+    const message = await asOwner.send(channel.id, {
+      content: 'Wait for device',
+      requestKey: 'offline-device-id',
+      routing: 'fallback',
+    });
+    const [job] = await jobsOf(db, message.id);
+    await executions.claim(channel.id, job.id, { ...lease, onlineDeviceIds: [] });
+    expect(await jobById(db, job.id)).toMatchObject({
+      blockedCode: 'device_offline',
+      deviceId: 'device-1',
+    });
+  });
+
+  it('keeps a job queued while the device the Agent itself routes to is offline', async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    // No device picked in the Channel: the Agent's own settings route the run.
+    const member = await fixture.addAgent(channel.id, 'Claude Code', {
+      model: 'claude-code',
+      provider: 'claude-code',
+      runtime: 'claude-code',
+    });
+    const message = await asOwner.send(channel.id, {
+      content: 'Run on the bound device',
+      requestKey: 'agent-bound-offline',
+      routing: 'fallback',
+    });
+    const [job] = await jobsOf(db, message.id);
+    const routedDevice = vi.fn(async () => ({ deviceId: 'agent-device', online: false }));
+
+    expect(
+      await executions.claim(channel.id, job.id, { ...lease, onlineDeviceIds: [], routedDevice }),
+    ).toBeNull();
+    expect(routedDevice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: member.agentId,
+        userId: fixture.ownerId,
+        workspaceId: fixture.workspaceId,
+      }),
+    );
+    expect(await jobById(db, job.id)).toMatchObject({
+      status: 'queued',
+      operationId: null,
+      blockedCode: 'device_offline',
+      deviceId: 'agent-device',
+      writerHeld: false,
+    });
+
+    routedDevice.mockResolvedValue({ deviceId: 'agent-device', online: true });
+    const claimed = await executions.claim(channel.id, job.id, {
+      ...lease,
+      onlineDeviceIds: [],
+      routedDevice,
+    });
+    expect(claimed?.job.operationId).toBeTruthy();
+    // The wait marker does not become the claimed run's Channel device.
+    expect(claimed?.job).toMatchObject({ blockedCode: null, deviceId: null });
+  });
+
+  it('asks for no routed device without a presence snapshot', async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    await fixture.addAgent(channel.id, 'Claude Code', {
+      model: 'claude-code',
+      provider: 'claude-code',
+      runtime: 'claude-code',
+    });
+    const message = await asOwner.send(channel.id, {
+      content: 'Storage-only claim',
+      requestKey: 'agent-bound-storage',
+      routing: 'fallback',
+    });
+    const [job] = await jobsOf(db, message.id);
+    const routedDevice = vi.fn(async () => ({ deviceId: 'agent-device', online: false }));
+    expect(await executions.claim(channel.id, job.id, { ...lease, routedDevice })).not.toBeNull();
+    expect(routedDevice).not.toHaveBeenCalled();
+  });
+
+  it("starts on the requester's own device outside the Channel's device pool", async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    await fixture.addAgent(channel.id, 'Claude Code', {
+      model: 'claude-code',
+      provider: 'claude-code',
+      runtime: 'claude-code',
+    });
+    const message = await asOwner.send(channel.id, {
+      content: 'Run on my laptop',
+      requestKey: 'agent-bound-personal',
+      routing: 'fallback',
+    });
+    const [job] = await jobsOf(db, message.id);
+    // The workspace pool does not list a personal device; the requester reaches it anyway.
+    const claimed = await executions.claim(channel.id, job.id, {
+      ...lease,
+      onlineDeviceIds: ['device-1'],
+      routedDevice: async () => ({ deviceId: 'personal-laptop', online: true }),
+    });
+    expect(claimed?.job).toMatchObject({ blockedCode: null, status: 'running' });
+  });
+
+  it('never lets the routed device stand in for a Channel-picked one', async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    await fixture.addAgent(channel.id, 'Device agent', deviceConfig());
+    const message = await asOwner.send(channel.id, {
+      content: 'Channel device offline',
+      requestKey: 'picked-offline',
+      routing: 'fallback',
+    });
+    const [job] = await jobsOf(db, message.id);
+    const routedDevice = vi.fn(async () => ({ deviceId: 'device-1', online: true }));
+    expect(
+      await executions.claim(channel.id, job.id, { ...lease, onlineDeviceIds: [], routedDevice }),
+    ).toBeNull();
+    expect(routedDevice).not.toHaveBeenCalled();
+    expect(await jobById(db, job.id)).toMatchObject({ blockedCode: 'device_offline' });
+  });
+
   it('fences a dispatcher that resumes after its reservation was retired', async () => {
     const { channel, job, operationId, start } = await reserve();
     expect(await executions.retireReservation(channel.id, job.id)).toBe(true);

@@ -7,10 +7,11 @@ import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorFo
 import { isSuccessLikeCompletionReason } from '../../CompletionLifecycle';
 import { stepChangedCredentials } from '../../credentialFacts';
 import { logToolCallPc } from '../../formalObservation';
-import { buildProjectedMessagePatch } from '../../messagePatch';
 import { buildStepPresentation, formatTokenCount } from '../../stepPresentation';
+import type { DeferredMessagePatch } from '../../types';
 import { INTERVENTION_LIFECYCLE_CHECKPOINT_KEY } from '../constants';
 import type { AgentRuntimeServiceContext, InterventionLifecycleCheckpoint } from '../types';
+import { publishStepMessagePatch, stepMessagesScopeKey } from './messagePatch';
 import type { PreparedStepInput } from './prepare';
 
 const log = debug('lobe-server:agent-runtime-service');
@@ -86,13 +87,13 @@ export async function runAndReconcileStep(
 
   // Check if the operation was interrupted while the step was executing
   // (e.g., user clicked abort during a long LLM call). Prefer the tiny
-  // sentinel, but fall back to the state once at the step boundary while
-  // old workers that only write `status: 'interrupted'` may still be
-  // running during a rolling deployment.
+  // sentinel, then check the persisted status: some stops (share-run gate,
+  // client LLM wait, intervention) persist `status: 'interrupted'` without
+  // the sentinel. Only the status is read, not the whole state blob.
   const sentinelInterrupted = await deps.coordinator.isInterrupted(operationId);
   const wasInterrupted = sentinelInterrupted
     ? true
-    : (await deps.coordinator.loadAgentState(operationId))?.status === 'interrupted';
+    : (await deps.coordinator.loadAgentStatus(operationId)) === 'interrupted';
   logToolCallPc(operationId, stepIndex, 'post.latest_state_loaded', () => ({
     interrupted: wasInterrupted,
   }));
@@ -157,6 +158,7 @@ export async function saveAndPublishStep(
   deps: StepRunStepDeps,
   {
     assertOwnership,
+    deferMessagePatch,
     gatewayMessagePatchEnabled,
     operationId,
     startAt,
@@ -166,6 +168,11 @@ export async function saveAndPublishStep(
   }: {
     /** Throws once this attempt no longer owns the operation; absent when commits are not fenced. */
     assertOwnership?: () => Promise<void>;
+    /**
+     * The next step may run in this invocation, so a continuing step leaves its
+     * message patch to that step's entry read instead of reading the topic.
+     */
+    deferMessagePatch: boolean;
     gatewayMessagePatchEnabled: boolean;
     operationId: string;
     startAt: number;
@@ -177,6 +184,8 @@ export async function saveAndPublishStep(
   },
 ): Promise<{
   content: StepPresentation['content'];
+  /** This step's patch, left unpublished; set only when `deferMessagePatch` applied. */
+  deferredMessagePatch?: DeferredMessagePatch;
   shouldContinue: boolean;
   stepPresentationData: StepPresentation;
   toolsCalling: StepPresentation['toolsCalling'];
@@ -221,20 +230,32 @@ export async function saveAndPublishStep(
   // patch. Publish before saveStepResult because a terminal save emits
   // agent_runtime_end immediately, and the client must apply the patch
   // before completing the run.
+  //
+  // A step that continues in this invocation skips that read: the next step
+  // reads the topic at its entry anyway, a moment later, and its read becomes
+  // this patch's "after" side. It is the fresher of the two, so anything
+  // written in between reaches the client too.
+  let deferredMessagePatch: DeferredMessagePatch | undefined;
   if (gatewayMessagePatchEnabled && stepStartUiMessages) {
-    const settledUiMessages = await deps.queryUiMessages(stepResult.newState, {
-      skipWorks: shouldContinue,
-    });
-    if (settledUiMessages) {
-      // Projected: this branch runs only for a client that asked for
-      // protocol 2, which renders tool view models and can fetch a stored
-      // payload back. The model-facing lists are read elsewhere, straight
-      // off `MessageModel`, and stay whole.
-      await deps.streamManager.publishStreamEvent(operationId, {
-        data: buildProjectedMessagePatch(stepStartUiMessages, settledUiMessages, stepIndex + 1),
+    if (shouldContinue && deferMessagePatch) {
+      deferredMessagePatch = {
+        before: stepStartUiMessages,
+        scopeKey: stepMessagesScopeKey(stepResult.newState),
+        state: stepResult.newState,
         stepIndex,
-        type: 'message_patch',
+      };
+    } else {
+      const settledUiMessages = await deps.queryUiMessages(stepResult.newState, {
+        skipWorks: shouldContinue,
       });
+      if (settledUiMessages) {
+        await publishStepMessagePatch(deps, {
+          after: settledUiMessages,
+          before: stepStartUiMessages,
+          operationId,
+          stepIndex,
+        });
+      }
     }
   }
 
@@ -302,5 +323,5 @@ export async function saveAndPublishStep(
   const toolsCalling = stepPresentationData.toolsCalling;
   const content = stepPresentationData.content;
 
-  return { content, shouldContinue, stepPresentationData, toolsCalling };
+  return { content, deferredMessagePatch, shouldContinue, stepPresentationData, toolsCalling };
 }

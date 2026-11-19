@@ -229,23 +229,23 @@ describe('bot-wake channel lists', () => {
 describe('isFieldReleased', () => {
   it('shows a field that names no rollout flag', () => {
     expect(isFieldReleased({}, undefined)).toBe(true);
-    expect(isFieldReleased({}, { enableBotWake: false })).toBe(true);
+    expect(isFieldReleased({}, { enableExampleRollout: false })).toBe(true);
   });
 
   it('shows a gated field only when its flag is explicitly on', () => {
-    const field = { featureFlag: 'enableBotWake' };
+    const field = { featureFlag: 'enableExampleRollout' };
 
-    expect(isFieldReleased(field, { enableBotWake: true })).toBe(true);
-    expect(isFieldReleased(field, { enableBotWake: false })).toBe(false);
+    expect(isFieldReleased(field, { enableExampleRollout: true })).toBe(true);
+    expect(isFieldReleased(field, { enableExampleRollout: false })).toBe(false);
   });
 
   it('hides a gated field while the flags are unset or have not loaded', () => {
-    const field = { featureFlag: 'enableBotWake' };
+    const field = { featureFlag: 'enableExampleRollout' };
 
     expect(isFieldReleased(field, undefined)).toBe(false);
     expect(isFieldReleased(field, {})).toBe(false);
-    expect(isFieldReleased(field, { enableBotWake: undefined })).toBe(false);
-    expect(isFieldReleased(field, { enableBotWake: 'yes' })).toBe(false);
+    expect(isFieldReleased(field, { enableExampleRollout: undefined })).toBe(false);
+    expect(isFieldReleased(field, { enableExampleRollout: 'yes' })).toBe(false);
   });
 });
 

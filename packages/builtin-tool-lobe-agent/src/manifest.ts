@@ -253,7 +253,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
           },
           subAgentId: {
             description:
-              'Optional. The id from the `<sub_agent id="..." />` tag at the end of an earlier callSubAgent result. Sends `instruction` as a new message to that same sub-agent, which keeps all of its previous work and history — use it to continue a sub-agent that stopped or failed, ask it to hand over what it has found so far, or follow up on its answer. Leave empty (or omit) to start a new sub-agent; never invent an id.',
+              'Optional. The id from the `<sub_agent id="..." />` tag at the end of an earlier callSubAgent result. Sends `instruction` as a new message to that same sub-agent, which keeps all of its previous work and history — use it to continue a sub-agent that stopped or failed, ask it to hand over what it has found so far, or follow up on its answer. If that sub-agent is still running, the instruction is queued and it reads it at its next step to correct course. Leave empty (or omit) to start a new sub-agent; never invent an id.',
             type: 'string',
           },
           runInBackground: {
@@ -274,6 +274,27 @@ export const LobeAgentManifest: BuiltinToolManifest = {
           },
         },
         required: ['description', 'instruction'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Cancel a sub-agent that is still running — typically one started with `runInBackground` — whose work is no longer needed. It stops at its next step, no result is delivered for it, and its history is kept. To correct a sub-agent that has gone off track, do not cancel it: send the correction with `callSubAgent` and the same `subAgentId` while it runs.',
+      name: LobeAgentApiName.cancelSubAgent,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          subAgentId: {
+            description:
+              'The id from the `<sub_agent id="..." />` tag of the sub-agent to cancel. Never invent an id.',
+            type: 'string',
+          },
+          reason: {
+            description: 'Optional. One short sentence on why it is no longer needed.',
+            type: 'string',
+          },
+        },
+        required: ['subAgentId'],
         type: 'object',
       },
     },

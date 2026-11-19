@@ -20,6 +20,8 @@ vi.mock('@/server/utils/scheduleAfterResponse', () => ({
   after: vi.fn(function (callback: () => void) {
     return callback();
   }),
+  // Trash / archive hand the worktree cleanup to the host; nothing to run here.
+  afterUnscoped: vi.fn(),
 }));
 
 const legacyInboxTopic = (userId: string): typeof topics.$inferInsert => ({

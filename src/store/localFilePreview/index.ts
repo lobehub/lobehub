@@ -60,13 +60,14 @@ const fetchSandboxFilePreview = async (
 };
 
 const fetchLocalFilePreview = (key: string): Promise<LocalFilePreview> => {
-  const { allowExternalFile, deviceId, filePath, sandboxTopicId, workingDirectory } =
+  const { accept, allowExternalFile, deviceId, filePath, sandboxTopicId, workingDirectory } =
     localFilePreviewTargetFromKey(key);
   if (sandboxTopicId) return fetchSandboxFilePreview(filePath, sandboxTopicId);
 
   // A local HTML file resolves its relative URLs against sibling files.
   const resourceScope = !deviceId && isHtmlFile({ path: filePath }) ? 'workspace' : undefined;
   return projectFileService.getLocalFilePreview({
+    ...(accept && { accept }),
     allowExternalFile,
     deviceId,
     path: filePath,

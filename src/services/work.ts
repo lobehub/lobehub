@@ -5,6 +5,7 @@ import type {
   RegisterDocumentWorkParams,
   RegisterSkillToolResultWorkParams,
   RegisterTaskWorkParams,
+  TopicPullRequestItem,
   WorkItem,
   WorkListItem,
   WorkSkillProvider,
@@ -15,10 +16,12 @@ import type {
   WorkVisibility,
 } from '@lobechat/types';
 
+import { revalidateReplica } from '@/libs/replica';
 import { mutate } from '@/libs/swr';
 import { matchDomain, workKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 import { revalidateConversationMessages } from '@/services/message/replica';
+import { topicPullRequestsResource } from '@/store/work/projection';
 
 /** One cursor page of the workspace-wide Work list (resource page 产物 gallery). */
 export interface WorkSummaryPage {
@@ -128,6 +131,58 @@ class WorkService {
   }): Promise<{ failed: number; registered: number; rootOperationId: string | null }> =>
     lambdaClient.work.registerShellWorksForRun.mutate(params);
 
+  /** Better Coding Experience: the pull requests a topic's Work rows link, with App state. */
+  listTopicPullRequests = async (topicId: string): Promise<TopicPullRequestItem[]> =>
+    lambdaClient.work.listTopicPullRequests.query({ topicId });
+
+  /**
+   * Better Coding Experience: link the pull requests a `git push` tool call
+   * updated. `pullRequests` is the execution device's `gh pr list --head`
+   * answer; the server re-reads the push itself and prefers the GitHub App.
+   */
+  linkPushedPullRequests = async (params: {
+    pullRequests: {
+      headRefName: string;
+      headRepoFullName?: string;
+      isDraft?: boolean;
+      number: number;
+      state?: string;
+      title?: string;
+      url: string;
+    }[];
+    toolCallId: string;
+    topicId: string;
+  }) => lambdaClient.work.linkPushedPullRequests.mutate(params);
+
+  /**
+   * Better Coding Experience: keep a PR on the topic itself — found on its own
+   * branch (`branch`) or linked by hand (`manual`). Display-only links: they
+   * never feed the SCM links that accept deliveries or wake agents.
+   */
+  linkTopicPullRequest = async (params: {
+    headRefName?: string;
+    source: 'branch' | 'manual';
+    title?: string;
+    topicId: string;
+    url: string;
+    vouched?: boolean;
+  }): Promise<{ identifier: string; linked: boolean }> =>
+    lambdaClient.work.linkTopicPullRequest.mutate(params);
+
+  /** Better Coding Experience: remove a PR from the topic's lists, or bring it back. */
+  setTopicPullRequestDismissed = async (params: {
+    dismissed: boolean;
+    identifier: string;
+    topicId: string;
+  }): Promise<{ updated: boolean }> =>
+    lambdaClient.work.setTopicPullRequestDismissed.mutate(params);
+
+  /** Revalidate a topic's linked pull requests (mounted reads only). */
+  refreshTopicPullRequests = async (topicId?: string | null) => {
+    if (!topicId) return;
+    await revalidateReplica(topicPullRequestsResource, topicId);
+  };
+
   /**
    * Invalidate everything a Work mutation can change for a conversation:
    * - the topic's transcript syncs, since Work summaries (in-message chips
@@ -197,6 +252,8 @@ class WorkService {
     await Promise.all([
       mutate(workKeys.conversation(topicId, threadId ?? null)),
       mutate((key) => Array.isArray(key) && key[0] === workKeys.versions.root),
+      // A run's gh / push commands link pull requests through the same scan.
+      this.refreshTopicPullRequests(topicId),
     ]);
   };
 

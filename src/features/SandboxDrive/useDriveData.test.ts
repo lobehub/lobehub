@@ -52,7 +52,7 @@ describe('useDriveUsage refresh', () => {
     });
   });
 
-  // LOBE-15436: a drive too large to walk in one call answers "still measuring".
+  // A drive too large to walk in one call answers "still measuring".
   it('should report a drive still being measured with what has been counted', async () => {
     vi.mocked(sandboxStorageService.refreshStorageUsage)
       .mockResolvedValueOnce({

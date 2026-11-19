@@ -1,4 +1,4 @@
-import type { AiModelType } from 'model-bank';
+import type { AiModelType, TTSVoice } from 'model-bank';
 
 /**
  * Model types selectable when creating or editing a custom model.
@@ -23,3 +23,10 @@ export const hasDuplicateModelId = (id: string | undefined, existingModelIds: st
 
   return existingModelIds.includes(modelId);
 };
+
+/** Options of the default-voice select: `Kore · Firm`, or the bare name without a description. */
+export const buildTTSVoiceOptions = (voices: TTSVoice[] | undefined) =>
+  voices?.map((voice) => ({
+    label: voice.description ? `${voice.displayName} · ${voice.description}` : voice.displayName,
+    value: voice.id,
+  })) ?? [];

@@ -13,7 +13,19 @@
 export type EnterpriseKbGrantLevel = 'edit' | 'view';
 export type EnterpriseKbLevel = EnterpriseKbGrantLevel | 'owner';
 export type EnterpriseKbPrincipalType = 'department' | 'user';
-export type EnterpriseKbEventAction = 'access_updated' | 'created' | 'deleted' | 'transferred';
+/**
+ * `path`: the caller holds nothing on this library (or folder) itself, but holds a level on
+ * something below it, so only the way down to those items is visible.
+ */
+export type EnterpriseKbAccessLevel = EnterpriseKbLevel | 'path';
+export type EnterpriseKbEventAction =
+  | 'access_updated'
+  | 'created'
+  | 'deleted'
+  | 'moved_in'
+  | 'moved_out'
+  | 'node_access_updated'
+  | 'transferred';
 
 export type EnterpriseKbErrorCode =
   'INVALID_PRINCIPAL' | 'NOT_ENABLED' | 'NOT_ENTERPRISE' | 'STALE_VERSION';
@@ -36,8 +48,13 @@ export interface EnterpriseKbActor {
 }
 
 export interface EnterpriseKbAccess {
+  /**
+   * Some folder, page or file in this library has its own grant list. When false the
+   * library level applies to every item and no per-item work is needed.
+   */
+  hasNodePolicies: boolean;
   knowledgeBaseId: string;
-  level: EnterpriseKbLevel;
+  level: EnterpriseKbAccessLevel;
   /** `knowledge_bases.user_id` — every row inside the knowledge base carries this user id. */
   ownerId: string;
 }
@@ -74,6 +91,11 @@ export interface EnterpriseKbEstimate {
   edit: number;
   /** Members that have access today and would have none. */
   lost: number;
+  /**
+   * Item estimates only: submitted principals that hold nothing on the item's parent, so they
+   * will also see the path down to the item.
+   */
+  pathOnly?: { principalId: string; principalType: EnterpriseKbPrincipalType }[];
   /** Distinct members with access, the owner excluded. */
   total: number;
   view: number;
@@ -137,7 +159,7 @@ export const markEnterpriseKb = async (
   _params: { actor: EnterpriseKbActor; knowledgeBaseId: string; name: string },
 ): Promise<void> => disabled();
 
-/** Drops the grants and uploader records; the change log is kept. */
+/** Drops the library's and every node's grants and the uploader records; keeps the change log. */
 export const unmarkEnterpriseKb = async (
   _db: unknown,
   _params: { actor: EnterpriseKbActor; knowledgeBaseId: string; name: string },
@@ -209,6 +231,24 @@ export const listEnterpriseKbEvents = async (
   _params: { knowledgeBaseId: string; limit?: number },
 ): Promise<EnterpriseKbEvent[]> => disabled();
 
+/** One content move event, in the same transaction as copying and deleting the originals. */
+export interface EnterpriseKbContentMoveItem {
+  kind: 'document' | 'file' | 'folder';
+  name: string;
+  sourceId: string;
+  targetId: string;
+}
+
+export const recordEnterpriseKbContentMove = async (
+  _db: unknown,
+  _params: {
+    actor: EnterpriseKbActor;
+    direction: 'in' | 'out';
+    items: EnterpriseKbContentMoveItem[];
+    knowledgeBaseId: string;
+  },
+): Promise<void> => disabled();
+
 /** Remembers who uploaded or created an item (file id or document id). */
 export const recordEnterpriseKbItemUploaders = async (
   _db: unknown,
@@ -223,4 +263,101 @@ export const getEnterpriseKbItemUploaders = async (
 export const removeEnterpriseKbItemUploaders = async (
   _db: unknown,
   _itemIds: string[],
+): Promise<void> => {};
+
+/* ---------------------------------------------------------------------------------------------
+ * Folders, pages and files with their own grant list.
+ *
+ * A node is identified by the id the library's content list uses for it: the document id of a
+ * folder or page, the file id of a file. The application owns the tree; every function that
+ * needs to know what a node inherits receives the node's ancestors, nearest first (parent first,
+ * the library itself not included).
+ * ------------------------------------------------------------------------------------------- */
+
+export interface EnterpriseKbUserTree {
+  knowledgeBaseId: string;
+  /** What the library's own list grants the user; `null` when it grants nothing. */
+  libraryLevel: EnterpriseKbGrantLevel | null;
+  /** Every node with its own list, and what that list grants the user (`null` = nothing). */
+  nodes: { level: EnterpriseKbGrantLevel | null; nodeId: string }[];
+  /** The user owns the library: full control everywhere, `libraryLevel` and `nodes` unused. */
+  owner: boolean;
+  ownerId: string;
+}
+
+export interface EnterpriseKbNodeAccessState {
+  /**
+   * `custom`: the node's own list. `inherit`: the list of `inheritedFromNodeId` (the nearest
+   * ancestor with its own list), or of the library when that is `null`; read-only.
+   */
+  grants: EnterpriseKbGrant[];
+  inheritedFromNodeId: string | null;
+  mode: 'custom' | 'inherit';
+  /** Optimistic lock of the node's own list; 0 while the node inherits. */
+  version: number;
+}
+
+/** `null` when the library is not an enterprise knowledge base. Never throws for "no access". */
+export const resolveEnterpriseKbUserTree = async (
+  _db: unknown,
+  _userId: string,
+  _knowledgeBaseId: string,
+): Promise<EnterpriseKbUserTree | null> => null;
+
+/** Nodes of the library that have their own list. */
+export const listEnterpriseKbNodePolicies = async (
+  _db: unknown,
+  _knowledgeBaseId: string,
+): Promise<{ nodeId: string; version: number }[]> => [];
+
+export const getEnterpriseKbNodeAccessState = async (
+  _db: unknown,
+  _params: { ancestorIds: string[]; knowledgeBaseId: string; nodeId: string },
+): Promise<EnterpriseKbNodeAccessState> => disabled();
+
+/**
+ * `custom` replaces the node's own list (created on first save); `inherit` removes it, `grants`
+ * ignored. `version` must equal the stored one (0 while inheriting), else `STALE_VERSION`.
+ * Records a `node_access_updated` event unless nothing changed.
+ */
+export const updateEnterpriseKbNodeAccess = async (
+  _db: unknown,
+  _params: {
+    actor: EnterpriseKbActor;
+    ancestorIds: string[];
+    grants: EnterpriseKbGrantInput[];
+    knowledgeBaseId: string;
+    mode: 'custom' | 'inherit';
+    nodeId: string;
+    nodeKind: 'document' | 'file' | 'folder';
+    nodeName: string;
+    version: number;
+  },
+): Promise<EnterpriseKbNodeAccessState> => disabled();
+
+/** Compared with what the node uses today (its own list or the inherited one). Writes nothing. */
+export const estimateEnterpriseKbNodeAccess = async (
+  _db: unknown,
+  _params: {
+    ancestorIds: string[];
+    grants: EnterpriseKbGrantInput[];
+    knowledgeBaseId: string;
+    mode: 'custom' | 'inherit';
+    nodeId: string;
+  },
+): Promise<EnterpriseKbEstimate> => disabled();
+
+/** Drops the own lists of permanently deleted nodes. No event. */
+export const removeEnterpriseKbNodePolicies = async (
+  _db: unknown,
+  _params: { knowledgeBaseId: string; nodeIds: string[] },
+): Promise<void> => {};
+
+/**
+ * A transfer that had to copy shared rows gives some nodes new ids: move their own lists to
+ * the new ids (same versions, no event). Ids not in the map are left alone.
+ */
+export const remapEnterpriseKbNodePolicies = async (
+  _db: unknown,
+  _params: { idMap: Record<string, string>; knowledgeBaseId: string },
 ): Promise<void> => {};

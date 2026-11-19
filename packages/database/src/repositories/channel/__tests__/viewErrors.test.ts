@@ -45,4 +45,38 @@ describe('Channel failure receipts', () => {
     await db.update(channelJobs).set({ status: 'completed' }).where(eq(channelJobs.id, job.id));
     expect((await asOwner.detail(channel.id)).jobs[0].errorMessage).toBeNull();
   });
+
+  it('names the failure type and the device a dispatch could not reach', async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    await fixture.addAgent(channel.id, 'Device Agent');
+    const message = await asOwner.send(channel.id, {
+      content: 'Reply',
+      requestKey: 'device-offline',
+      routing: 'fallback',
+    });
+    const [job] = await jobsOf(db, message.id);
+    const execution = new ChannelExecutionRepository(db);
+    await execution.claim(channel.id, job.id, lease);
+    const [claimed] = await db.select().from(channelJobs).where(eq(channelJobs.id, job.id));
+    await db
+      .update(agentOperations)
+      .set({
+        status: 'error',
+        error: {
+          deviceRoute: { deviceId: 'device-offline-1', userId: 'private-user' },
+          message: 'The device this agent runs on is offline',
+          type: 'DeviceGatewayNotConfigured',
+        },
+      })
+      .where(eq(agentOperations.id, claimed.operationId!));
+    await execution.fail(channel.id, job.id, { message: 'Agent execution ended without a reply' });
+
+    const [failed] = (await asOwner.detail(channel.id)).jobs;
+    expect(failed.errorType).toBe('DeviceGatewayNotConfigured');
+    expect(failed.deviceId).toBe('device-offline-1');
+    expect(JSON.stringify(failed)).not.toMatch(/private-user/);
+
+    await db.update(channelJobs).set({ status: 'completed' }).where(eq(channelJobs.id, job.id));
+    expect((await asOwner.detail(channel.id)).jobs[0].errorType).toBeNull();
+  });
 });

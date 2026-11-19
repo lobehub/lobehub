@@ -30,7 +30,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface GenerationModelNoticeProps {
   notice: GenerationModelNoticeType | undefined;
   /** i18n namespace the notice key resolves against. */
-  ns: 'image' | 'video';
+  ns: 'image' | 'music' | 'video';
 }
 
 const GenerationModelNotice = memo<GenerationModelNoticeProps>(({ notice, ns }) => {

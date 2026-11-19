@@ -24,6 +24,17 @@ export const KeyList = ({ data, onDelete }) => (
     <Button icon={<Icon icon={Trash2} />} title="删除所选密钥" onClick={onDelete}>
       删除 3 个密钥
     </Button>
+    <ProTable loading={q.isFetching && q.isPlaceholderData} />
+    <Button loading={q.isFetching} onClick={() => q.refetch()}>刷新列表</Button>
+    <ActionIcon
+      aria-label="刷新"
+      icon={RefreshCw}
+      loading={q.isFetching && !q.isPending}
+      onClick={() => q.refetch()}
+    />
+    <div role="grid" aria-label="草稿">
+      <div role="row" aria-selected />
+    </div>
     <img alt="模型用量趋势" src="/trend.png" />
     <span>{data?.length ?? '--'}</span>
     <button type="button" onClick={() => toast.success('已复制')}>复制密钥</button>

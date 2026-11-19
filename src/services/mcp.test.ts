@@ -162,6 +162,93 @@ describe('MCPService', () => {
       );
     });
 
+    it('runs a market-hosted (cloud) connector through the server connector route', async () => {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      mockGetToolStoreState.mockReturnValue({
+        connectors: [
+          {
+            id: 'cloud-id',
+            identifier: 'cloud-mcp',
+            isEnabled: true,
+            mcpConnectionType: 'cloud',
+            mcpServerUrl: null,
+          },
+        ],
+      });
+      vi.mocked(lambdaClient.connector.callTool.mutate).mockResolvedValue({
+        content: 'ok',
+        success: true,
+      } as never);
+
+      await mcpService.invokeMcpToolCall(
+        { apiName: 'search', arguments: '{}', identifier: 'cloud-mcp' } as ChatToolPayload,
+        {},
+      );
+
+      expect(lambdaClient.connector.callTool.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ identifier: 'cloud-mcp', toolName: 'search' }),
+        expect.anything(),
+      );
+    });
+
+    describe('a marketplace connector reinstalled over a plugin row', () => {
+      const payload = {
+        apiName: 'search',
+        arguments: '{}',
+        identifier: 'market-mcp',
+      } as ChatToolPayload;
+      const legacyPlugin = {
+        customParams: { mcp: { type: 'http', url: 'https://old.example.com/mcp' } },
+      };
+      const withConnector = (over: Record<string, unknown>) => {
+        mockGetToolStoreState.mockReturnValue({
+          connectors: [
+            {
+              id: 'market-id',
+              identifier: 'market-mcp',
+              isEnabled: true,
+              mcpConnectionType: 'http',
+              mcpServerUrl: 'https://new.example.com/mcp',
+              metadata: {},
+              sourceType: 'marketplace',
+              ...over,
+            },
+          ],
+        });
+        mockPluginSelectors.getInstalledPluginById.mockReturnValue(() => legacyPlugin);
+      };
+
+      // Its tool rows may not match the new endpoint until the install finishes
+      it('keeps calling the plugin while the reinstall is pending', async () => {
+        const { lambdaClient, toolsClient } = await import('@/libs/trpc/client');
+        withConnector({ status: 'disconnected' });
+        vi.mocked(toolsClient.mcp.callTool.mutate).mockResolvedValue('plugin result');
+
+        await expect(mcpService.invokeMcpToolCall(payload, {})).resolves.toBe('plugin result');
+
+        expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();
+        const [request] = vi.mocked(toolsClient.mcp.callTool.mutate).mock.calls[0];
+        expect(request.params).toMatchObject({ url: 'https://old.example.com/mcp' });
+      });
+
+      it('calls the connector once its install has finished', async () => {
+        const { lambdaClient, toolsClient } = await import('@/libs/trpc/client');
+        withConnector({ metadata: { marketplaceInstalled: true }, status: 'connected' });
+        vi.mocked(lambdaClient.connector.callTool.mutate).mockResolvedValue({
+          content: 'ok',
+          success: true,
+        } as never);
+
+        await mcpService.invokeMcpToolCall(payload, {});
+
+        expect(lambdaClient.connector.callTool.mutate).toHaveBeenCalledWith(
+          expect.objectContaining({ identifier: 'market-mcp' }),
+          expect.anything(),
+        );
+        expect(toolsClient.mcp.callTool.mutate).not.toHaveBeenCalled();
+      });
+    });
+
     describe('stdio connectors', () => {
       const payload: ChatToolPayload = {
         id: 'local-call',
@@ -233,6 +320,55 @@ describe('MCPService', () => {
           expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
         },
       );
+
+      // Marketplace and protocol-link stdio servers ran over IPC as plugins;
+      // installed as connectors they still do, while the connector route refuses stdio
+      const marketplace = {
+        metadata: { marketplaceInstalled: true },
+        sourceType: 'marketplace',
+        status: 'connected',
+      };
+      const protocolLink = { metadata: { desktopStdioExecution: true }, sourceType: 'custom' };
+      it.each([
+        { gateway: true, install: 'marketplace', source: marketplace },
+        { gateway: undefined, install: 'marketplace', source: marketplace },
+        { gateway: true, install: 'protocol-link', source: protocolLink },
+      ])(
+        'runs a $install stdio install over local IPC when gateway=$gateway',
+        async ({ gateway, source }) => {
+          environment.deviceGatewayConfigured = gateway;
+          mockGetToolStoreState.mockReturnValue({ connectors: [{ ...connector, ...source }] });
+          const { lambdaClient } = await import('@/libs/trpc/client');
+          const result = {
+            content: 'local result',
+            state: { content: [{ type: 'text', text: 'local result' }] },
+            success: true,
+          };
+          mockElectronIpc.mcp.callTool.mockResolvedValue(superjson.serialize(result));
+
+          await expect(mcpService.invokeMcpToolCall(payload, {})).resolves.toEqual(result);
+          expect(lambdaClient.connector.getForEdit.query).toHaveBeenCalledWith({
+            id: connector.id,
+          });
+          expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();
+        },
+      );
+
+      it('sends a marketplace stdio install to the server route on the web', async () => {
+        environment.isDesktop = false;
+        mockGetToolStoreState.mockReturnValue({
+          connectors: [{ ...connector, ...marketplace }],
+        });
+        const { lambdaClient } = await import('@/libs/trpc/client');
+        vi.mocked(lambdaClient.connector.callTool.mutate).mockResolvedValue({
+          success: true,
+        } as never);
+
+        await mcpService.invokeMcpToolCall(payload, {});
+
+        expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
+        expect(lambdaClient.connector.callTool.mutate).toHaveBeenCalled();
+      });
 
       it.each([
         { ...detail, isEnabled: false },

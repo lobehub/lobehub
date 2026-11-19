@@ -1,4 +1,19 @@
-import { and, asc, desc, eq, getTableColumns, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { channelMessageEditedAt, channelMessageReceipt, channelMessageVia } from '@lobechat/types';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
 
 import {
   agentOperations,
@@ -14,8 +29,10 @@ import {
 import type { Transaction } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
 import { fileIdsByMessage } from './attachments';
+import { isAgentAuthored } from './author';
 import { activeMembers } from './delivery';
 import { ChannelError } from './error';
+import { externalWorksByMessage } from './works';
 
 const publicMessageColumns = {
   ...getTableColumns(channelMessages),
@@ -46,7 +63,7 @@ const publicMessage = (row: MessageRow, fileIds: string[]) => {
     senderUsername,
     ...message
   } = row;
-  const isAgent = message.routingStatus === 'reply';
+  const isAgent = isAgentAuthored(message);
   return {
     ...message,
     fileIds,
@@ -56,6 +73,66 @@ const publicMessage = (row: MessageRow, fileIds: string[]) => {
       name: isAgent ? senderAgentName || senderAgentTitle : senderUserName || senderUsername,
       type: isAgent ? ('agent' as const) : ('user' as const),
     },
+    editedAt: channelMessageEditedAt(message.metadata),
+    // On an Agent's message, the exchange between Agents it reports from.
+    receipt: (() => {
+      const receipt = channelMessageReceipt(message.metadata);
+      if (!receipt) return null;
+      const { agent, ...rest } = receipt;
+      return { ...rest, agent: agent && { ...agent, avatar: null as string | null } };
+    })(),
+    via: isAgent
+      ? null
+      : (() => {
+          const via = channelMessageVia(message.metadata);
+          return via ? { ...via, avatar: null as string | null } : null;
+        })(),
+  };
+};
+
+/**
+ * Avatars of the Agents named in `via` or in a report's `receipt.agent`, which usually are not
+ * members of this Channel. An Agent deleted since keeps the name the message recorded, without
+ * an avatar.
+ */
+const relayAgentAvatars = async (tx: Transaction, rows: MessageRow[]) => {
+  const ids = [
+    ...new Set(
+      rows.flatMap((row) => {
+        const via = row.routingStatus === 'reply' ? undefined : channelMessageVia(row.metadata);
+        const reported = channelMessageReceipt(row.metadata)?.agent;
+        return [...(via ? [via.agentId] : []), ...(reported ? [reported.agentId] : [])];
+      }),
+    ),
+  ];
+  if (!ids.length) return new Map<string, string | null>();
+  const found = await tx
+    .select({ avatar: agents.avatar, id: agents.id })
+    .from(agents)
+    .where(inArray(agents.id, ids));
+  return new Map(found.map(({ avatar, id }) => [id, avatar] as const));
+};
+
+type AvatarAgent = { agentId: string; avatar: string | null };
+const withRelayAvatar = <
+  T extends {
+    receipt?: { agent?: AvatarAgent } | null;
+    via?: AvatarAgent | null;
+  },
+>(
+  message: T,
+  avatars: Map<string, string | null>,
+): T => {
+  const avatarOf = <A extends AvatarAgent>(agent: A): A => ({
+    ...agent,
+    avatar: avatars.get(agent.agentId) ?? null,
+  });
+  return {
+    ...message,
+    ...(message.via && { via: avatarOf(message.via) }),
+    ...(message.receipt?.agent && {
+      receipt: { ...message.receipt, agent: avatarOf(message.receipt.agent) },
+    }),
   };
 };
 
@@ -91,6 +168,99 @@ const sourceTopicsByMessage = async (
   return new Map(rows.map((row) => [row.messageId!, { id: row.topicId, title: row.title }]));
 };
 
+const THREAD_PREVIEW_LENGTH = 240;
+
+type ThreadSummary = {
+  lastReply: Pick<ReturnType<typeof publicMessage>, 'author' | 'content' | 'createdAt' | 'id'>;
+  replyCount: number;
+};
+
+/** Reply count and newest reply per thread, so a root can show what it branched into. */
+const threadSummaries = async (tx: Transaction, channelId: string, threadIds: string[]) => {
+  if (!threadIds.length) return new Map<string, ThreadSummary>();
+  const scope = and(
+    eq(channelMessages.channelId, channelId),
+    inArray(channelMessages.threadId, threadIds),
+  );
+  const [counts, latest] = await Promise.all([
+    tx
+      .select({ replyCount: count(), threadId: channelMessages.threadId })
+      .from(channelMessages)
+      .where(scope)
+      .groupBy(channelMessages.threadId),
+    tx
+      .selectDistinctOn([channelMessages.threadId], publicMessageColumns)
+      .from(channelMessages)
+      .leftJoin(users, eq(users.id, channelMessages.userId))
+      .leftJoin(agents, eq(agents.id, channelMessages.agentId))
+      .where(scope)
+      .orderBy(asc(channelMessages.threadId), desc(channelMessages.sequence)),
+  ]);
+  const replyCounts = new Map(counts.map((row) => [row.threadId, row.replyCount]));
+  return new Map<string, ThreadSummary>(
+    latest.map((row) => {
+      const { author, content, createdAt, id } = publicMessage(row, []);
+      return [
+        row.threadId!,
+        {
+          lastReply: { author, content: content.slice(0, THREAD_PREVIEW_LENGTH), createdAt, id },
+          replyCount: replyCounts.get(row.threadId) ?? 0,
+        },
+      ];
+    }),
+  );
+};
+
+/**
+ * A job as the public view shows it. The repository drops `requesterMemberId`, and keeps
+ * `topicId` only for the viewer who owns that topic (`topicOwnerId`), as replies keep
+ * `sourceTopicId`: the topic belongs to the requester, so other members never learn its id.
+ */
+const publicJobColumns = {
+  id: channelJobs.id,
+  memberId: channelJobs.memberId,
+  messageId: channelJobs.messageId,
+  requesterMemberId: channelJobs.requesterMemberId,
+  threadId: channelJobs.threadId,
+  status: channelJobs.status,
+  blockedCode: channelJobs.blockedCode,
+  // Only a bounded diagnostic message crosses the public boundary, never the raw error.
+  errorMessage: sql<string | null>`CASE WHEN ${channelJobs.status} = 'failed'
+      THEN left(${agentOperations.error}->>'message', 2000) ELSE NULL END`,
+  // The error's category, so a client can explain a known failure in the viewer's language.
+  errorType: sql<string | null>`CASE WHEN ${channelJobs.status} = 'failed'
+      THEN ${agentOperations.error}->>'type' ELSE NULL END`,
+  // The device the reply runs on, waits for, or failed to reach: the claimed device, the
+  // one a failed dispatch was routed to, or the Agent's own bound device.
+  deviceId: sql<string | null>`COALESCE(
+      ${channelJobs.deviceId},
+      ${agentOperations.error}->'deviceRoute'->>'deviceId',
+      ${channelJobs.executionConfig}->'agencyConfig'->>'boundDeviceId'
+    )`,
+  writerHeld: channelJobs.writerHeld,
+  topicId: channelJobs.topicId,
+  // A trashed topic has no owner here, so its link goes with it.
+  topicOwnerId: sql<string | null>`CASE WHEN ${notTrashed(topics.isDeleted)}
+      THEN ${topics.userId} ELSE NULL END`,
+  worktreeBranch: sql<string | null>`${channelJobs.executionConfig}->>'worktreeBranch'`,
+  operationStatus: agentOperations.status,
+  createdAt: channelJobs.createdAt,
+  publicationRevoked: channelJobs.publicationRevoked,
+};
+
+/** At most this many of a main view's threads' jobs still at work ride along with its own. */
+const THREAD_ACTIVE_JOB_LIMIT = 50;
+
+const readJobs = (tx: Transaction, where: SQL | undefined, limit: number) =>
+  tx
+    .select(publicJobColumns)
+    .from(channelJobs)
+    .leftJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
+    .leftJoin(topics, eq(topics.id, channelJobs.topicId))
+    .where(where)
+    .orderBy(desc(channelJobs.createdAt))
+    .limit(limit);
+
 export const readChannelView = async (
   tx: Transaction,
   channelId: string,
@@ -98,7 +268,7 @@ export const readChannelView = async (
   viewerUserId?: string,
 ) => {
   const limit = Math.max(1, Math.min(options.limit ?? 100, 100));
-  const [members, reversed, threads, jobs] = await Promise.all([
+  const [members, reversed, threads, ownJobs, threadJobs] = await Promise.all([
     tx
       .select({
         actorType: channelMembers.actorType,
@@ -109,6 +279,7 @@ export const readChannelView = async (
           string | null
         >`coalesce(nullif(${channelMembers.description}, ''), ${agents.description})`,
         id: channelMembers.id,
+        muted: sql<boolean>`coalesce((${channelMembers.config}->>'muted')::boolean, false)`,
         name: channelMembers.name,
         role: channelMembers.role,
         status: channelMembers.status,
@@ -145,37 +316,37 @@ export const readChannelView = async (
       .from(channelThreads)
       .where(and(eq(channelThreads.channelId, channelId), notTrashed(channelThreads.isDeleted)))
       .orderBy(asc(channelThreads.createdAt)),
-    tx
-      .select({
-        id: channelJobs.id,
-        memberId: channelJobs.memberId,
-        messageId: channelJobs.messageId,
-        requesterMemberId: channelJobs.requesterMemberId,
-        threadId: channelJobs.threadId,
-        status: channelJobs.status,
-        blockedCode: channelJobs.blockedCode,
-        // Only a bounded diagnostic message crosses the public boundary, never the raw error.
-        errorMessage: sql<string | null>`CASE WHEN ${channelJobs.status} = 'failed'
-          THEN left(${agentOperations.error}->>'message', 2000) ELSE NULL END`,
-        writerHeld: channelJobs.writerHeld,
-        worktreeBranch: sql<string | null>`${channelJobs.executionConfig}->>'worktreeBranch'`,
-        operationStatus: agentOperations.status,
-        createdAt: channelJobs.createdAt,
-        publicationRevoked: channelJobs.publicationRevoked,
-      })
-      .from(channelJobs)
-      .leftJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
-      .where(
-        and(
-          eq(channelJobs.channelId, channelId),
-          options.threadId
-            ? eq(channelJobs.threadId, options.threadId)
-            : isNull(channelJobs.threadId),
+    readJobs(
+      tx,
+      and(
+        eq(channelJobs.channelId, channelId),
+        options.threadId
+          ? eq(channelJobs.threadId, options.threadId)
+          : isNull(channelJobs.threadId),
+      ),
+      200,
+    ),
+    // The main timeline also carries its threads' replies still at work, so a thread card and
+    // the header can show an Agent working without loading every thread. Bounded on its own,
+    // so busy threads never push the main conversation's own jobs out of its limit.
+    options.threadId
+      ? []
+      : readJobs(
+          tx,
+          and(
+            eq(channelJobs.channelId, channelId),
+            isNotNull(channelJobs.threadId),
+            or(
+              inArray(channelJobs.status, ['queued', 'running']),
+              eq(channelJobs.writerHeld, true),
+            ),
+          ),
+          THREAD_ACTIVE_JOB_LIMIT,
         ),
-      )
-      .orderBy(desc(channelJobs.createdAt))
-      .limit(200),
   ]);
+  const jobs = [...ownJobs, ...threadJobs].sort(
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+  );
   if (options.threadId && !threads.some((thread) => thread.id === options.threadId))
     throw new ChannelError('NOT_FOUND', 'Thread not found');
   const thread = threads.find((entry) => entry.id === options.threadId);
@@ -193,6 +364,12 @@ export const readChannelView = async (
         )
     : [];
   const page = reversed.slice(0, limit).reverse();
+  // Only main-timeline roots on this page show a thread card; other views skip the scan.
+  const pageIds = new Set(page.map((message) => message.id));
+  const summarized = options.threadId
+    ? []
+    : threads.filter((entry) => pageIds.has(entry.rootMessageId)).map((entry) => entry.id);
+  const summaries = await threadSummaries(tx, channelId, summarized);
   const quoteIds = [
     ...new Set(
       [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
@@ -218,14 +395,14 @@ export const readChannelView = async (
     ...page.map((message) => message.id),
     ...(rootMessage ? [rootMessage.id] : []),
   ]);
-  const sourceTopics = await sourceTopicsByMessage(
-    tx,
-    channelId,
-    [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
-      message.routingStatus === 'reply' ? [message.id] : [],
-    ),
-    viewerUserId,
+  const replyIds = [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
+    message.routingStatus === 'reply' ? [message.id] : [],
   );
+  const [sourceTopics, works, relayAvatars] = await Promise.all([
+    sourceTopicsByMessage(tx, channelId, replyIds, viewerUserId),
+    externalWorksByMessage(tx, channelId, replyIds),
+    relayAgentAvatars(tx, [...page, ...(rootMessage ? [rootMessage] : [])]),
+  ]);
   const ids = [...new Set([...files.values()].flat())];
   const attachments = ids.length
     ? await tx
@@ -244,19 +421,34 @@ export const readChannelView = async (
     hasMore: reversed.length > limit,
     jobs,
     members,
-    threads,
+    threads: threads.map((entry) => {
+      const title = entry.metadata?.title;
+      const named = typeof title === 'string' && title ? { ...entry, title } : entry;
+      return summarized.includes(entry.id)
+        ? {
+            ...named,
+            lastReply: summaries.get(entry.id)?.lastReply ?? null,
+            replyCount: summaries.get(entry.id)?.replyCount ?? 0,
+          }
+        : named;
+    }),
     rootMessage: rootMessage
       ? {
-          ...publicMessage(rootMessage, files.get(rootMessage.id) ?? []),
+          ...withRelayAvatar(
+            publicMessage(rootMessage, files.get(rootMessage.id) ?? []),
+            relayAvatars,
+          ),
           sourceTopicId: sourceTopics.get(rootMessage.id)?.id ?? null,
           sourceTopicTitle: sourceTopics.get(rootMessage.id)?.title ?? null,
+          works: works.get(rootMessage.id) ?? [],
           replyTo: rootMessage.replyToId ? (quotes.get(rootMessage.replyToId) ?? null) : null,
         }
       : null,
     messages: page.map((message) => ({
-      ...publicMessage(message, files.get(message.id) ?? []),
+      ...withRelayAvatar(publicMessage(message, files.get(message.id) ?? []), relayAvatars),
       sourceTopicId: sourceTopics.get(message.id)?.id ?? null,
       sourceTopicTitle: sourceTopics.get(message.id)?.title ?? null,
+      works: works.get(message.id) ?? [],
       replyTo: message.replyToId ? (quotes.get(message.replyToId) ?? null) : null,
     })),
   };

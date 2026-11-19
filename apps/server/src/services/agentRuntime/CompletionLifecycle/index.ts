@@ -19,7 +19,11 @@ import {
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { CriticalHookDeliveryError, hookDispatcher } from '../hooks';
-import { recoverLastAssistantContent, resolveErrorMessageId } from './assistantMessage';
+import {
+  markInterruptedTurn,
+  recoverLastAssistantContent,
+  resolveErrorMessageId,
+} from './assistantMessage';
 import { registerFileWorks } from './fileWorks';
 import {
   CriticalAgentInterventionPersistenceError,
@@ -401,6 +405,12 @@ export class CompletionLifecycle {
 
       // Before the hooks, so a parent resumed by the bridge reads a closed thread.
       await settleRunThread(this.deps(), operationId, state, reason);
+
+      // Every stop (before step 0, during a deferred init, mid-stream, during a
+      // tool call) marks the turn it interrupted; a run that finished is untouched.
+      if (reason === 'interrupted') {
+        await markInterruptedTurn(this.deps(), operationId, state, runOrigin);
+      }
 
       // The run tree no longer works, so its concurrency slot frees now rather
       // than when the lease lapses. A run parked on a human decision frees it

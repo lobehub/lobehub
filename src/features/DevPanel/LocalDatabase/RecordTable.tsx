@@ -10,9 +10,8 @@ import {
   formatLocalDatabaseCellValue,
   type LocalDatabaseColumn,
   type LocalDatabaseTableRow,
+  MAX_RENDERED_ROWS,
 } from './model';
-
-export const MAX_RENDERED_ROWS = 300;
 
 interface RecordTableProps {
   columns: LocalDatabaseColumn[];
@@ -23,7 +22,7 @@ interface RecordTableProps {
   onSelect: (key: string) => void;
   rows: LocalDatabaseTableRow[];
   rowSearch: string;
-  selectedKey: string | undefined;
+  selectedKey: string | null;
   title: string;
   totalCount: number;
 }
@@ -62,7 +61,7 @@ const RecordTable = ({
         <Input
           allowClear
           className={styles.toolbarSearch}
-          placeholder={'Search rows…'}
+          placeholder={'Search keys…'}
           size={'small'}
           style={{ flex: 1 }}
           value={rowSearch}
@@ -101,20 +100,20 @@ const RecordTable = ({
           </thead>
           <tbody>
             {rows.map((row) => {
-              const active = row.entry.key === selectedKey;
+              const active = row.key === selectedKey;
 
               return (
                 <tr
-                  aria-label={row.entry.key}
+                  aria-label={row.key}
                   aria-selected={active}
                   className={active ? styles.rowActive : undefined}
-                  key={row.entry.key}
+                  key={row.key}
                   tabIndex={0}
-                  onClick={() => onSelect(row.entry.key)}
+                  onClick={() => onSelect(row.key)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
-                      onSelect(row.entry.key);
+                      onSelect(row.key);
                     }
                   }}
                 >
@@ -135,13 +134,15 @@ const RecordTable = ({
         </table>
         {rows.length === 0 && (
           <div className={styles.tableEmpty}>
-            {rowSearch ? `No rows match “${rowSearch}”.` : 'This collection is empty.'}
+            {rowSearch ? `No keys match “${rowSearch}”.` : 'This collection is empty.'}
           </div>
         )}
       </div>
       <div className={devDockPanelStyles.statusBar}>
         <span>{rowRange}</span>
-        {matchingCount > MAX_RENDERED_ROWS && <span>Refine the search to inspect later rows.</span>}
+        {matchingCount > MAX_RENDERED_ROWS && (
+          <span>Refine the key search to inspect later rows.</span>
+        )}
       </div>
     </main>
   );

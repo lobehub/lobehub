@@ -1,5 +1,7 @@
 import {
+  PROJECT_AGENT_ID_REGEX,
   PROJECT_DUPLICATE_IDENTIFIER,
+  PROJECT_ID_REGEX,
   PROJECT_IDENTIFIER_REGEX,
   PROJECT_STATUSES,
   PROJECT_VISIBILITIES,
@@ -8,44 +10,26 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
-import {
-  type WorkspaceRole,
-  wsCompatProcedure,
-} from '@/business/server/trpc-middlewares/workspaceAuth';
-import {
-  ProjectIdentifierTakenError,
-  ProjectModel,
-  type ProjectModelOptions,
-} from '@/database/models/project';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { ProjectIdentifierTakenError, ProjectModel } from '@/database/models/project';
 import { ProjectRepository } from '@/database/repositories/project';
 import { ProjectCoordinatorRepository } from '@/database/repositories/projectCoordinator';
+import { ProjectOverviewRepository } from '@/database/repositories/projectOverview';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createDefaultChannel } from '@/server/services/channel/defaultChannel';
+import { leaveProjectChannels } from '@/server/services/channel/projectMembership';
 import { GoalService } from '@/server/services/goal';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import { rethrowDuplicateProjectField } from './_helpers/projectConstraintErrors';
-
-/**
- * Reads `workspaceRole` as an optional context field: the cloud workspace-auth
- * override injects it, while the OSS stub leaves it absent.
- */
-const isWorkspaceAdmin = (ctx: { userId: string; workspaceRole?: WorkspaceRole }) =>
-  ctx.workspaceRole === 'owner' || ctx.workspaceRole === 'admin';
-
-/** Viewers hold no `agent:update` grant, so `projectWriteProcedure` rejects them. */
-const isWorkspaceViewer = (ctx: { workspaceId?: string | null; workspaceRole?: WorkspaceRole }) =>
-  !!ctx.workspaceId && ctx.workspaceRole === 'viewer';
+import { projectModelOptions } from './_helpers/projectRights';
 
 const projectProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const workspaceId = ctx.workspaceId ?? undefined;
-  const options: ProjectModelOptions = {
-    canManageAllMembers: isWorkspaceAdmin(ctx),
-    readOnly: isWorkspaceViewer(ctx),
-  };
+  const options = projectModelOptions(ctx);
   return opts.next({
     ctx: {
       projectCoordinatorRepo: new ProjectCoordinatorRepository(
@@ -55,7 +39,8 @@ const projectProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
         options,
       ),
       projectModel: new ProjectModel(ctx.serverDB, ctx.userId, workspaceId, options),
-      projectRepo: new ProjectRepository(ctx.serverDB, ctx.userId, workspaceId),
+      projectOverviewRepo: new ProjectOverviewRepository(ctx.serverDB, ctx.userId, workspaceId),
+      projectRepo: new ProjectRepository(ctx.serverDB, ctx.userId, workspaceId, options),
     },
   });
 });
@@ -137,7 +122,7 @@ export const projectRouter = router({
       try {
         return {
           data: requireResult(
-            await ctx.projectModel.reviewCompletion(input.id, 'accepted', input.comment),
+            await ctx.projectRepo.reviewCompletion(input.id, 'accepted', input.comment),
           ),
           message: 'Project completion accepted',
           success: true,
@@ -196,7 +181,15 @@ export const projectRouter = router({
       z.object({
         avatar: z.string().optional(),
         coordinatorAgentId: z.string().optional(),
+        /**
+         * Id reserved for the dedicated main agent, so the avatar the form
+         * previewed is the one it keeps. Ignored when `coordinatorAgentId`
+         * picks an existing agent.
+         */
+        dedicatedAgentId: z.string().regex(PROJECT_AGENT_ID_REGEX).optional(),
         description: z.string().optional(),
+        /** Id reserved by the create form; its generated avatar is seeded by it. */
+        id: z.string().regex(PROJECT_ID_REGEX).optional(),
         identifier: projectIdentifierInput.optional(),
         name: z.string().min(1).max(255),
         repository: z
@@ -238,7 +231,7 @@ export const projectRouter = router({
   delete: projectWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {
       return {
-        data: requireResult(await ctx.projectModel.delete(input.id)),
+        data: requireResult(await ctx.projectRepo.delete(input.id)),
         message: 'Project deleted',
         success: true,
       };
@@ -334,6 +327,15 @@ export const projectRouter = router({
   // Re-enabling them must also move the task's acceptances (and those of its
   // run topics): `acceptances.project_id` is copied from the task when filed,
   // unless the publisher named another project explicitly.
+  /** Folder-card content for every visible project, in one batch. */
+  listOverviews: projectProcedure.query(async ({ ctx }) => {
+    try {
+      return { data: await ctx.projectOverviewRepo.list(), success: true };
+    } catch (error) {
+      mapProjectError(error, 'listOverviews');
+    }
+  }),
+
   moveTask: projectWriteProcedure
     .input(idInput.extend({ taskId: z.string() }))
     .mutation(async () => {
@@ -349,7 +351,7 @@ export const projectRouter = router({
       try {
         return {
           data: requireResult(
-            await ctx.projectModel.reviewCompletion(input.id, 'rejected', input.comment),
+            await ctx.projectRepo.reviewCompletion(input.id, 'rejected', input.comment),
           ),
           message: 'Project completion rejected',
           success: true,
@@ -365,6 +367,7 @@ export const projectRouter = router({
       try {
         const removed = await ctx.projectModel.removeAgent(input.id, input.agentId);
         if (!removed) throw new TRPCError({ code: 'NOT_FOUND', message: 'Binding not found' });
+        await leaveProjectChannels(ctx.serverDB, input.id, input.agentId);
         return { message: 'Agent removed from project', success: true };
       } catch (error) {
         mapProjectError(error, 'removeAgent');

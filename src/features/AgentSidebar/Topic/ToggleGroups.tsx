@@ -1,48 +1,15 @@
 import { ActionIcon } from '@lobehub/ui';
-import isEqual from 'fast-deep-equal';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useLocalMachineDeviceIds } from '@/hooks/useLocalMachineDeviceIds';
 import { useTopicGroupCollapse } from '@/hooks/useTopicGroupCollapse';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
-import { useGlobalStore } from '@/store/global';
-import { systemStatusSelectors } from '@/store/global/selectors';
-import { useUserStore } from '@/store/user';
-import { preferenceSelectors } from '@/store/user/selectors';
 
-import { useAgentTopicGroupMode } from './hooks/useAgentTopicGroupMode';
-import { useScopedSidebarTopics } from './useScopedTopics';
+import { useSidebarTopicGroups } from './hooks/useSidebarTopicGroups';
 
 const ToggleGroups = memo(() => {
   const { t } = useTranslation('topic');
-  const topicPageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
-  const topicSortBy = useUserStore(preferenceSelectors.topicSortBy);
-  const topicIncludeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
-  const { topicGroupMode } = useAgentTopicGroupMode();
-
-  const localDeviceIds = useLocalMachineDeviceIds();
-  const groupSelector = useMemo(
-    () =>
-      topicSelectors.groupedTopicsForSidebar(
-        topicPageSize,
-        topicSortBy,
-        topicGroupMode,
-        topicIncludeCompleted,
-        localDeviceIds,
-      ),
-    [topicPageSize, topicSortBy, topicGroupMode, topicIncludeCompleted, localDeviceIds],
-  );
-  const agentGroups = useChatStore(groupSelector, isEqual);
-  const scoped = useScopedSidebarTopics(
-    topicPageSize,
-    topicSortBy,
-    topicGroupMode,
-    topicIncludeCompleted,
-  );
-  const groupTopics = scoped.scope ? scoped.groups : agentGroups;
+  const { groups: groupTopics, topicGroupMode } = useSidebarTopicGroups();
 
   const groupIds = useMemo(() => groupTopics.map((group) => group.id), [groupTopics]);
   const { expandedKeys, setExpandedKeys } = useTopicGroupCollapse(topicGroupMode, groupIds);

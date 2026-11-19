@@ -136,7 +136,7 @@ const CollaborationRequestBanner = () => {
         size={16}
       />
       <Flexbox flex={1} gap={2} style={{ minWidth: 200 }}>
-        <Text fontSize={13} weight={500}>
+        <Text fontSize={14} weight={500}>
           {pending ? t('acceptance.access.pendingTitle') : t('acceptance.access.title')}
         </Text>
         <span {...stylex.props(styles.description)}>

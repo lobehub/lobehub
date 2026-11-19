@@ -1,9 +1,9 @@
 # LOG — 经验日志
 
-> 格式与约束见 [README.md](README.md)。每条一个 ```learning 块；由 `node scripts/check-learnings.mjs` 校验。
+> 格式与约束见 [README.md](README.md)。每条一个 \`\`\`learning 块；由 `node scripts/check-learnings.mjs` 校验。
 > 新条目追加在末尾；复发时不要改旧条目，新开一条并填 `occurrences` / `previous_layer`。
 
-## LRN-20261014-01 · 视觉打磨时仍被架构规范占用注意力
+## LRN-20261014-01・视觉打磨时仍被架构规范占用注意力
 
 ```learning
 id: LRN-20261014-01
@@ -23,7 +23,7 @@ regression: scripts/check-structure.mjs isolation:50-visual
 version: 2.0.0
 ```
 
-## LRN-20261014-02 · components.md 引用了未定义的 K-16
+## LRN-20261014-02・components.md 引用了未定义的 K-16
 
 ```learning
 id: LRN-20261014-02
@@ -42,7 +42,7 @@ regression: scripts/check-structure.mjs no-dangling-ids
 version: 2.0.0
 ```
 
-## LRN-20261014-03 · 豁免注释被当成万能开关
+## LRN-20261014-03・豁免注释被当成万能开关
 
 ```learning
 id: LRN-20261014-03
@@ -61,7 +61,7 @@ regression: tests/fixtures/bad-visual.tsx
 version: 2.1.0
 ```
 
-## LRN-20261014-04 · 字阶挤在一起、字距加宽，页面一眼像模板
+## LRN-20261014-04・字阶挤在一起、字距加宽，页面一眼像模板
 
 ```learning
 id: LRN-20261014-04
@@ -81,7 +81,7 @@ regression: tests/fixtures/bad-visual.tsx
 version: 2.1.0
 ```
 
-## LRN-20261014-05 · 异步动作静默、危险操作没确认
+## LRN-20261014-05・异步动作静默、危险操作没确认
 
 ```learning
 id: LRN-20261014-05
@@ -100,7 +100,7 @@ regression: tests/fixtures/detail-bad.tsx
 version: 2.1.0
 ```
 
-## LRN-20261014-06 · 方向卡写得像任何一家公司
+## LRN-20261014-06・方向卡写得像任何一家公司
 
 ```learning
 id: LRN-20261014-06
@@ -119,7 +119,7 @@ artifacts: A-01
 regression: -
 ```
 
-## LRN-20261014-07 · 在真实代码上跑出误报与截断
+## LRN-20261014-07・在真实代码上跑出误报与截断
 
 ```learning
 id: LRN-20261014-07
@@ -138,7 +138,7 @@ regression: tests/fixtures/bad-visual.tsx (命中) + tests/fixtures/good-visual.
 version: 2.1.0
 ```
 
-## LRN-20261014-08 · 工作区只有一个入口，git 提交里却仍有 6 个
+## LRN-20261014-08・工作区只有一个入口，git 提交里却仍有 6 个
 
 ```learning
 id: LRN-20261014-08
@@ -157,7 +157,7 @@ regression: scripts/check-structure.mjs single-entry-git
 version: 2.1.2
 ```
 
-## LRN-20261014-09 · 组件约束过死：业务组合件被硬套通用组件
+## LRN-20261014-09・组件约束过死：业务组合件被硬套通用组件
 
 ```learning
 id: LRN-20261014-09
@@ -177,7 +177,7 @@ regression: tests/fixtures/bad-composite.tsx (命中) + tests/fixtures/good-comp
 version: 3.0.0
 ```
 
-## LRN-20261014-10 · 抽象指令（体验不好 / 丑 / 难用）没有可执行内容就动手
+## LRN-20261014-10・抽象指令（体验不好 / 丑 / 难用）没有可执行内容就动手
 
 ```learning
 id: LRN-20261014-10
@@ -197,7 +197,7 @@ regression: tests/run.mjs intent 小节（归一化 + clarify）
 version: 3.0.0
 ```
 
-## LRN-20261014-11 · reference 整份加载挤占注意力
+## LRN-20261014-11・reference 整份加载挤占注意力
 
 ```learning
 id: LRN-20261014-11
@@ -216,7 +216,7 @@ regression: scripts/check-structure.mjs refs-meta + tests/run.mjs refs 小节
 version: 3.0.0
 ```
 
-## LRN-20261014-12 · 新项目每次会话都要重新解释纪律
+## LRN-20261014-12・新项目每次会话都要重新解释纪律
 
 ```learning
 id: LRN-20261014-12
@@ -236,7 +236,7 @@ regression: tests/run.mjs bootstrap 小节（块外内容不变 + 幂等 + --che
 version: 3.0.0
 ```
 
-## LRN-20261014-13 · 通用经验回流会带进品牌印记与小众场景
+## LRN-20261014-13・通用经验回流会带进品牌印记与小众场景
 
 ```learning
 id: LRN-20261014-13
@@ -255,7 +255,7 @@ regression: tests/run.mjs upstream 小节（品牌词条目被挡、通用条目
 version: 3.0.0
 ```
 
-## LRN-20261014-14 · 会话页（LobeHub 核心页面类型）没有场景可接
+## LRN-20261014-14・会话页（LobeHub 核心页面类型）没有场景可接
 
 ```learning
 id: LRN-20261014-14
@@ -274,7 +274,7 @@ regression: tests/route-cases.json（做一个 Agent 会话页 / 开发一个对
 version: 3.0.1
 ```
 
-## LRN-20261014-15 · 模型词挂在 stage keywords 上导致双重与不可达
+## LRN-20261014-15・模型词挂在 stage keywords 上导致双重与不可达
 
 ```learning
 id: LRN-20261014-15
@@ -294,7 +294,7 @@ regression: tests/route-cases.json（8 个模型词各一条 + 双钻只归 00�
 version: 3.0.1
 ```
 
-## LRN-20261014-16 · 备份与临时验证脚本会随仓库一起腐化
+## LRN-20261014-16・备份与临时验证脚本会随仓库一起腐化
 
 ```learning
 id: LRN-20261014-16
@@ -313,7 +313,7 @@ regression: tests/run.mjs bootstrap 小节（落盘 + 块外逐字保留 + 幂�
 version: 3.0.1
 ```
 
-## LRN-20261014-17 · 消费方回流（3.1.0）
+## LRN-20261014-17・消费方回流（3.1.0）
 
 ```learning
 id: LRN-20261014-17
@@ -332,7 +332,7 @@ regression: scripts/check-structure.mjs no-dangling-ids
 version: 3.1.0
 ```
 
-## LRN-20261014-18 · 消费方回流（3.1.0）（4.0.0 移除 C-13：非设计，改 rejected）
+## LRN-20261014-18・消费方回流（3.1.0）（4.0.0 移除 C-13：非设计，改 rejected）
 
 ```learning
 id: LRN-20261014-18
@@ -351,7 +351,7 @@ regression: scripts/check-structure.mjs no-dangling-ids
 version: 3.1.0
 ```
 
-## LRN-20261014-19 · 消费方回流（3.1.0）（5.0.0 移除 C-14：组件问题，归 lobe-ui，改 rejected）
+## LRN-20261014-19・消费方回流（3.1.0）（5.0.0 移除 C-14：组件问题，归 lobe-ui，改 rejected）
 
 ```learning
 id: LRN-20261014-19
@@ -370,7 +370,7 @@ regression: scripts/check-structure.mjs no-dangling-ids
 version: 3.1.0
 ```
 
-## LRN-20261014-20 · 消费方回流（3.1.0）（5.0.0 精简 C-15：组件接线部分移除，只留设计判据）
+## LRN-20261014-20・消费方回流（3.1.0）（5.0.0 精简 C-15：组件接线部分移除，只留设计判据）
 
 ```learning
 id: LRN-20261014-20
@@ -389,7 +389,7 @@ regression: scripts/check-structure.mjs no-dangling-ids
 version: 3.1.0
 ```
 
-## LRN-20261014-21 · 消费方回流（3.1.0）（5.0.0 移除 C-16：组件问题，归 lobe-ui，改 rejected）
+## LRN-20261014-21・消费方回流（3.1.0）（5.0.0 移除 C-16：组件问题，归 lobe-ui，改 rejected）
 
 ```learning
 id: LRN-20261014-21
@@ -408,7 +408,7 @@ regression: scripts/check-structure.mjs no-dangling-ids
 version: 3.1.0
 ```
 
-## LRN-20261014-22 · 消费方回流（3.1.0）（5.0.0 精简 C-17：组件接线部分移除，只留设计判据）
+## LRN-20261014-22・消费方回流（3.1.0）（5.0.0 精简 C-17：组件接线部分移除，只留设计判据）
 
 ```learning
 id: LRN-20261014-22
@@ -427,7 +427,7 @@ regression: scripts/check-structure.mjs no-dangling-ids
 version: 3.1.0
 ```
 
-## LRN-20261014-23 · 消费方回流（3.1.0）
+## LRN-20261014-23・消费方回流（3.1.0）
 
 ```learning
 id: LRN-20261014-23
@@ -446,7 +446,7 @@ regression: scripts/check-structure.mjs no-dangling-ids
 version: 3.1.0
 ```
 
-## LRN-20261014-24 · 消费方回流（3.1.0）
+## LRN-20261014-24・消费方回流（3.1.0）
 
 ```learning
 id: LRN-20261014-24
@@ -465,7 +465,7 @@ regression: scripts/check-structure.mjs no-dangling-ids
 version: 3.1.0
 ```
 
-## LRN-20261014-25 · 消费方回流（3.1.0）
+## LRN-20261014-25・消费方回流（3.1.0）
 
 ```learning
 id: LRN-20261014-25
@@ -484,7 +484,7 @@ regression: scripts/check-structure.mjs no-dangling-ids
 version: 3.1.0
 ```
 
-## LRN-20261014-26 · 消费方回流（3.1.0）
+## LRN-20261014-26・消费方回流（3.1.0）
 
 ```learning
 id: LRN-20261014-26
@@ -503,7 +503,7 @@ regression: scripts/check-structure.mjs no-dangling-ids
 version: 3.1.0
 ```
 
-## LRN-20261014-27 · 重排回流：不工作的控件与审核队列顺序（5.0.0）
+## LRN-20261014-27・重排回流：不工作的控件与审核队列顺序（5.0.0）
 
 ```learning
 id: LRN-20261014-27
@@ -522,7 +522,7 @@ regression: scripts/check-structure.mjs no-dangling-ids
 version: 5.0.0
 ```
 
-## LRN-20261014-28 · 重排回流：部分失败只重试失败的查询（5.0.0）
+## LRN-20261014-28・重排回流：部分失败只重试失败的查询（5.0.0）
 
 ```learning
 id: LRN-20261014-28
@@ -541,7 +541,7 @@ regression: scripts/check-structure.mjs no-dangling-ids
 version: 5.0.0
 ```
 
-## LRN-20261014-29 · lint 误报：token 字体与不可聚焦 SVG 的 outline（5.0.0）
+## LRN-20261014-29・lint 误报：token 字体与不可聚焦 SVG 的 outline（5.0.0）
 
 ```learning
 id: LRN-20261014-29
@@ -560,7 +560,7 @@ regression: tests/fixtures/bad-focus.tsx（good-fp-copyable.tsx / good-fp-model.
 version: 5.0.0
 ```
 
-## LRN-20261015-01 · 比较画面只给差值或只给两个值，评测控制台缺原型（5.1.0）
+## LRN-20261015-01・比较画面只给差值或只给两个值，评测控制台缺原型（5.1.0）
 
 ```learning
 id: LRN-20261015-01
@@ -580,7 +580,7 @@ regression: scripts/check-structure.mjs no-dangling-ids
 version: 5.1.0
 ```
 
-## LRN-20261016-01 · 规则仍按 lobe-ui 5.x 的导入入口与主题写法（5.3.0）
+## LRN-20261016-01・规则仍按 lobe-ui 5.x 的导入入口与主题写法（5.3.0）
 
 ```learning
 id: LRN-20261016-01
@@ -600,7 +600,7 @@ regression: tests/fixtures/bad.tsx
 version: 5.3.0
 ```
 
-## LRN-20261016-02 · 界面文案没有按产品类型分口吻，中文排版无人负责（5.4.0）
+## LRN-20261016-02・界面文案没有按产品类型分口吻，中文排版无人负责（5.4.0）
 
 ```learning
 id: LRN-20261016-02
@@ -620,7 +620,7 @@ regression: tests/route-cases.json, tests/fixtures/bad-copy.tsx
 version: 5.4.0
 ```
 
-## LRN-20261016-03 · init 识别出 mobile，lint 与托管块仍按 Web 执行（5.5.0）
+## LRN-20261016-03・init 识别出 mobile，lint 与托管块仍按 Web 执行（5.5.0）
 
 ```learning
 id: LRN-20261016-03
@@ -640,7 +640,7 @@ regression: tests/fixtures/bad-rn.tsx
 version: 5.5.0
 ```
 
-## LRN-20261019-01 · RN 宿主里工具函数被当成 DOM 组件，托管块篇幅与语言不贴宿主（5.6.0）
+## LRN-20261019-01・RN 宿主里工具函数被当成 DOM 组件，托管块篇幅与语言不贴宿主（5.6.0）
 
 ```learning
 id: LRN-20261019-01
@@ -660,7 +660,7 @@ regression: tests/fixtures/bad-rn.tsx
 version: 5.6.0
 ```
 
-## LRN-20261022-01 · 按环境配置的凭证平铺成一张表，看不出归属（5.7.0）
+## LRN-20261022-01・按环境配置的凭证平铺成一张表，看不出归属（5.7.0）
 
 ```learning
 id: LRN-20261022-01
@@ -680,7 +680,7 @@ regression: scripts/check-structure.mjs no-dangling-ids
 version: 5.7.0
 ```
 
-## LRN-20261023-01 · 从现有页面和组件清单出发修补（5.8.0）
+## LRN-20261023-01・从现有页面和组件清单出发修补（5.8.0）
 
 ```learning
 id: LRN-20261023-01
@@ -700,7 +700,7 @@ regression: scripts/check-structure.mjs no-dangling-ids
 version: 5.8.0
 ```
 
-## LRN-20261023-02 · 示意图画整个应用、密度高（5.8.0）
+## LRN-20261023-02・示意图画整个应用、密度高（5.8.0）
 
 ```learning
 id: LRN-20261023-02
@@ -720,7 +720,7 @@ regression: tests/run.mjs wording: SKILL.md 输出契约有示意图约定
 version: 5.8.0
 ```
 
-## LRN-20261023-03 · 设置页用 badge 和额外按钮复述状态（5.8.0）
+## LRN-20261023-03・设置页用 badge 和额外按钮复述状态（5.8.0）
 
 ```learning
 id: LRN-20261023-03
@@ -740,7 +740,7 @@ regression: scripts/check-structure.mjs no-dangling-ids
 version: 5.8.0
 ```
 
-## LRN-20261023-04 · 滚动边缘的模糊吃进正文；移动端被实底栏框住（5.8.0）
+## LRN-20261023-04・滚动边缘的模糊吃进正文；移动端被实底栏框住（5.8.0）
 
 ```learning
 id: LRN-20261023-04
@@ -758,4 +758,157 @@ layer_reason: 要看渲染与结构判断；落 C-19（web 用 ProgressiveBlur�
 artifacts: references/components.md, C-19, C-20, C-02, stages/30-structure.md
 regression: tests/run.mjs wording: C-19 / C-20
 version: 5.8.0
+```
+
+## LRN-20261024-01・记录列表用 div 网格手拼（5.9.0）
+
+```learning
+id: LRN-20261024-01
+date: 2026-10-24
+status: landed
+symptom: 内容后台重做时，博文、用户等记录列表是 div 网格手拼的表头和行，没有分页、刷新、列宽和批量选择的统一行为，用户问「为啥不用 ProTable」
+source: user-correction
+scenario: product-polish
+stage: 30-structure
+occurrences: 2
+previous_layer: rule
+root_cause: C-08 已写「请求驱动的列表用 ProTable」，但只在 30 选型时靠自觉对照；重做时为了「自定义行样式」绕开了它，没有任何检查报出来
+layer: lint
+layer_reason: 手拼表格必有表头，role="columnheader" / "rowheader" 能直接识别（只认表头，主从页列表栏的 grid / row 不算）；规则层已经被绕过一次，按 L-01 升到 lint
+artifacts: LOBE-HANDROLLED-TABLE, C-08, references/components.md, stages/30-structure.md
+regression: tests/fixtures/bad.tsx:38
+version: 5.9.0
+```
+
+## LRN-20261024-02・后台刷新给表格盖遮罩（5.9.0）
+
+```learning
+id: LRN-20261024-02
+date: 2026-10-24
+status: landed
+symptom: 列表每隔一会儿整块变暗一下：轮询、窗口聚焦和写操作后的重取都触发了表格的 loading 遮罩
+source: system-scan
+scenario: product-polish
+stage: 70-detail
+occurrences: 1
+root_cause: K-05 只写了「整块骨架只给第一次加载」，没写遮罩该在什么时候出现；常见写法 loading={isFetching && !isLoading} 排除了首屏，却把所有后台刷新都算进去了，同一写法在 5 个列表页出现
+layer: lint
+layer_reason: 写法固定（loading 绑 isFetching 并用 && ! 排除首屏，且没有 isPlaceholderData），单行正则可以识别；只查非按钮组件，Button / ActionIcon 上刷新按钮自己的 loading 不报
+artifacts: LOBE-REFETCH-OVERLAY, K-05, references/craft.md, stages/70-detail.md
+regression: tests/fixtures/bad.tsx:40
+version: 5.9.0
+```
+
+## LRN-20261024-03・双层留白让滚动条内缩（5.9.0）
+
+```learning
+id: LRN-20261024-03
+date: 2026-10-24
+status: landed
+symptom: 控制台每个页面的滚动条离窗口右边缘缩进一截，内容两侧留白翻倍，用户指出「右侧容器内有一层没必要的 padding，所有页面都有」
+source: user-correction
+scenario: product-polish
+stage: 30-structure
+occurrences: 1
+root_cause: 外壳内容区自带内边距，页面组件又自己加了一层；内边距写在滚动容器的父级上，滚动条被夹在里面。K-10 只覆盖了定高 flex 的压缩，没写留白该由哪一层负责
+layer: rule
+layer_reason: 是否双层留白取决于外壳和页面组件的组合，要看渲染结果（滚动条位置、父级 padding 计算值），单文件正则看不出来；判据是数值，写进 K-10 并待浏览器检查脚本
+artifacts: references/craft.md, K-10, stages/30-structure.md
+regression: scripts/check-structure.mjs no-dangling-ids
+version: 5.9.0
+```
+
+## LRN-20261024-04・列表工具栏换行、单元格铺标签、同一标题重复 N 行（5.9.0）
+
+```learning
+id: LRN-20261024-04
+date: 2026-10-24
+status: landed
+symptom: 覆盖矩阵的语言列在一格里铺了 17 个标签，行高被撑成几倍；筛选下拉独占一行把表格往下推；一篇文章的 16 种译文平铺成 16 行同一标题；窄列的表头被挤成竖排
+source: user-correction
+scenario: product-polish
+stage: 40-flow
+occurrences: 1
+root_cause: P-02 只写了列优先级和状态，没有写单元格里集合怎么汇总、同一对象的多行怎么分组、工具栏在一行里怎么分配宽度
+layer: rule
+layer_reason: 「集合超过 3 项」「同一对象多行」要结合数据形状和渲染结果判断，代码里是 map 出来的，正则不能确定性识别；落 P-02 的工具栏 / 单元格 / 分组三行，并在 40-flow 症状表登记
+artifacts: references/admin-archetypes.md, P-02, stages/40-flow.md
+regression: scripts/check-structure.mjs no-dangling-ids
+version: 5.9.0
+```
+
+## LRN-20261024-05・委托产出的页面没打开看就放行（5.9.0）
+
+```learning
+id: LRN-20261024-05
+date: 2026-10-24
+status: landed
+symptom: 并行子代理改完的 AI 概览和任务页，类型检查和单测都过了，交付后用户一眼看到标签墙、工具栏换行和竖排表头：「这就是你设计的页面？」
+source: user-correction
+scenario: product-polish
+stage: 80-review
+occurrences: 1
+root_cause: 80 的证据要求只写了「明暗各一张截图」，没有要求覆盖每个改动路由；委托出去的页面以对方的完成自述代替了界面证据
+layer: structure
+layer_reason: 能让漏项不可能发生：80 的输出模板必须逐路由列「截图 | 证据缺失」并点名委托产出的页面，check-structure 校验模板里有这一行；是否真的截了图仍要人核对
+artifacts: stages/80-review.md, references/evaluator.md, scripts/check-structure.mjs
+regression: scripts/check-structure.mjs review-coverage
+version: 5.9.0
+```
+
+## LRN-20261024-06・设置页一功能一卡、主从页空两栏（5.9.0）
+
+```learning
+id: LRN-20261024-06
+date: 2026-10-24
+status: landed
+symptom: AI 设置里每个功能一张卡、卡里第一行是开关，关闭的功能也铺满配置项；每个字段下一行「恢复默认」文字链接；Webhook 一条都没有时画出空列表和空详情两栏
+source: review
+scenario: product-polish
+stage: 40-flow
+occurrences: 1
+root_cause: P-05 只区分了开关和保存表单，没写功能开关放在哪、关闭时配置项是否出现；P-03 没写主从两栏在零记录时的画面
+layer: rule
+layer_reason: 是否属于「一个功能一个开关」、是否零记录，要读页面结构和数据状态判断，正则不能确定性识别；落 P-05「功能开关」与 P-03「主从两栏」；恢复默认交互与 C-17 对齐
+artifacts: references/admin-archetypes.md, P-03, P-05, stages/40-flow.md
+regression: scripts/check-structure.mjs no-dangling-ids
+version: 5.9.0
+```
+
+## LRN-20261024-07・未配置被写成「已齐」，指标标签缺对象（5.9.0）
+
+```learning
+id: LRN-20261024-07
+date: 2026-10-24
+status: landed
+symptom: 没有配置任何目标语言时，覆盖矩阵显示「已齐」「0 缺口」；指标标签只有「缺口」，仪表盘计数只有一个「72」
+source: review
+scenario: product-polish
+stage: 75-copy
+occurrences: 1
+root_cause: T-31 只规定了状态词的词形，没有要求状态词区分「未配置 / 已完成 / 待生成」三种下一步不同的情况，也没要求计数带对象
+layer: rule
+layer_reason: 「是否未配置」取决于数据语义，文案字符串本身无法判断；落 T-31 并在 75-copy 症状表登记
+artifacts: references/copy-admin.md, T-31, stages/75-copy.md
+regression: scripts/check-structure.mjs no-dangling-ids
+version: 5.9.0
+```
+
+## LRN-20261024-08・业务描述里的「停用」关掉了原型规则（5.9.0）
+
+```learning
+id: LRN-20261024-08
+date: 2026-10-24
+status: landed
+symptom: lint 报告头显示「项目层不适用：P-02, P-05」，而这两个原型恰是项目要强调的；起因是页面地图里一行写着「邀请或停用账号」
+source: system-scan
+scenario: -
+stage: 05-init
+occurrences: 1
+root_cause: 适用性解析把整行里出现的「停用」「关闭」都当成不适用标记，后台产品的页面地图和对象表里这两个词是常见业务动作
+layer: structure
+layer_reason: 解析规则写进 platform.mjs：表格行必须有一格整格是标记，散文行只认「不适用 / N/A」，误关不会再发生；tests/run.mjs 用业务行做回归
+artifacts: scripts/platform.mjs, tests/run.mjs
+regression: tests/run.mjs platform: 业务描述里的「停用」不关规则
+version: 5.9.0
 ```

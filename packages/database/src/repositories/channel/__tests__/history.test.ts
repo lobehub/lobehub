@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../../core/getTestDB';
 import {
   agentOperations,
+  agents,
   channelJobs,
   channelMembers,
   channels,
@@ -250,4 +251,64 @@ describe('Channel on-demand history', () => {
       });
     },
   );
+});
+
+describe('Channel relay source', () => {
+  it('relays a Channel run from its own Channel and request', async () => {
+    const state = await setup();
+    const { operationId } = await state.run();
+    expect(await state.history.relaySource(operationId, { allowBotRun: true })).toEqual({
+      channelRun: expect.objectContaining({ channelId: state.channel.id }),
+      origin: { channelId: state.channel.id, threadId: null },
+      requestVia: undefined,
+      self: { agentId: expect.any(String), name: 'Reader' },
+    });
+  });
+
+  it("relays an owner's live bot run only when the caller opts in", async () => {
+    const history = new ChannelHistoryRepository(db, fixture.memberId, fixture.workspaceId);
+    const [agent] = await db
+      .insert(agents)
+      .values({
+        name: 'Telegram Agent',
+        userId: fixture.memberId,
+        workspaceId: fixture.workspaceId,
+      })
+      .returning();
+    const operation = async (id: string, values: Partial<typeof agentOperations.$inferInsert>) => {
+      await db.insert(agentOperations).values({
+        agentId: agent.id,
+        id,
+        status: 'running',
+        trigger: 'bot',
+        userId: fixture.memberId,
+        workspaceId: fixture.workspaceId,
+        ...values,
+      });
+      return id;
+    };
+    try {
+      const bot = await operation('op-relay-bot', {});
+      // The native tool path never opts in, so a bot run without a Channel stays refused there.
+      await expect(history.relaySource(bot)).rejects.toThrow('Channel operation not found');
+      expect(await history.relaySource(bot, { allowBotRun: true })).toEqual({
+        self: { agentId: agent.id, name: 'Telegram Agent' },
+      });
+
+      const chat = await operation('op-relay-chat', { trigger: 'chat' });
+      await expect(history.relaySource(chat, { allowBotRun: true })).rejects.toThrow(
+        'Channel operation not found',
+      );
+      const other = await operation('op-relay-other', { userId: fixture.ownerId });
+      await expect(history.relaySource(other, { allowBotRun: true })).rejects.toThrow(
+        'Channel operation not found',
+      );
+      const ended = await operation('op-relay-ended', { status: 'completed' });
+      await expect(history.relaySource(ended, { allowBotRun: true })).rejects.toThrow(
+        'no longer active',
+      );
+    } finally {
+      await db.delete(agentOperations).where(eq(agentOperations.agentId, agent.id));
+    }
+  });
 });

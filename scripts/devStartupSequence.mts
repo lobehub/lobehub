@@ -7,6 +7,8 @@ import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
 
+import { buildFileParseWorker } from './buildFileParseWorker.mts';
+
 interface DevProcessHandle {
   directPid?: number;
   groupPid?: number;
@@ -48,7 +50,9 @@ const findFreePort = async (startPort: number): Promise<number> => {
   for (let port = startPort; port < startPort + MAX_PORT_SCAN_ATTEMPTS; port++) {
     if (await isPortFree(port)) return port;
   }
-  throw new Error(`No free port found in range ${startPort}-${startPort + MAX_PORT_SCAN_ATTEMPTS - 1}`);
+  throw new Error(
+    `No free port found in range ${startPort}-${startPort + MAX_PORT_SCAN_ATTEMPTS - 1}`,
+  );
 };
 
 /**
@@ -291,6 +295,8 @@ const watchChildExit = (child: ChildProcess, name: 'next' | 'vite') => {
 
 const main = async () => {
   loadEnv();
+  // Parsing runs in a prebuilt worker thread file; a stale or missing one would fail every parse.
+  await buildFileParseWorker();
   nextPort = await resolveNextPort();
   process.env.PORT = String(nextPort);
   nextRootUrl = `http://${NEXT_HOST}:${nextPort}/`;

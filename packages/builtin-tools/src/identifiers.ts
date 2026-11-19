@@ -29,6 +29,7 @@ import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { McpEventsManifest } from '@lobechat/builtin-tool-mcp-events';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
@@ -40,8 +41,11 @@ import { VerifyToolManifest } from '@lobechat/builtin-tool-verify';
 import { VideoGenerationManifest } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
+import { WebhookManifest } from '@lobechat/builtin-tool-webhook';
 
 export const builtinToolIdentifiers: string[] = [
+  McpEventsManifest.identifier,
+  WebhookManifest.identifier,
   ChannelManifest.identifier,
   AcceptanceEvidenceManifest.identifier,
   AgentBuilderManifest.identifier,

@@ -1,3 +1,8 @@
+import {
+  goalClarificationIslandKey,
+  goalDecisionIslandKey,
+  goalSignOffIslandKey,
+} from '@lobechat/const/goal';
 import type {
   GoalDecisionOption,
   GoalEventEntityType,
@@ -11,6 +16,7 @@ import { TRPCError } from '@trpc/server';
 import pMap from 'p-map';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { UserModel } from '@/database/models/user';
 
 import { classifyRunFailure, QUOTA_RESET_MARGIN_MS } from '../recoveryPolicy';
 import { GoalReportStore } from '../reportStore';
@@ -284,20 +290,35 @@ export const status = async (
  * waiting on the person (clarification rounds have their own form) and the
  * finished goals waiting for their sign-off.
  */
+/**
+ * The asks this user waved off the island, on any of their clients. Only the
+ * island reads leave them out; the goal page and the Home inbox still show them.
+ */
+const islandDismissals = async (ctx: GoalServiceContext): Promise<Set<string>> =>
+  new Set(await new UserModel(ctx.db, ctx.userId).getIslandDismissals());
+
 export const pendingForIsland = async (ctx: GoalServiceContext) => {
-  const [decisions, signOffs] = await Promise.all([
+  const [decisions, signOffs, dismissed] = await Promise.all([
     ctx.goalModel.listPendingDecisions(),
     ctx.briefs.listOpenSignOffs(),
+    islandDismissals(ctx),
   ]);
   return {
-    decisions: decisions.map((row) => ({ ...row, options: row.options ?? [] })),
-    signOffs,
+    decisions: decisions
+      .filter((row) => !dismissed.has(goalDecisionIslandKey(row.decisionId)))
+      .map((row) => ({ ...row, options: row.options ?? [] })),
+    signOffs: signOffs.filter(
+      (signOff) => !dismissed.has(goalSignOffIslandKey(signOff.acceptanceId)),
+    ),
   };
 };
 
 /** Pending clarifications grouped by goal, for surfaces outside the goal page. */
 export const pendingClarifications = async (ctx: GoalServiceContext) => {
-  const rows = await ctx.goalModel.listPendingClarifications();
+  const [rows, dismissed] = await Promise.all([
+    ctx.goalModel.listPendingClarifications(),
+    islandDismissals(ctx),
+  ]);
   const byGoal = new Map<
     string,
     {
@@ -329,7 +350,7 @@ export const pendingClarifications = async (ctx: GoalServiceContext) => {
     });
     byGoal.set(row.goalId, group);
   }
-  return [...byGoal.values()];
+  return [...byGoal.values()].filter((group) => !dismissed.has(goalClarificationIslandKey(group)));
 };
 
 export const requireGraph = async (ctx: GoalServiceContext, goalId: string) => {

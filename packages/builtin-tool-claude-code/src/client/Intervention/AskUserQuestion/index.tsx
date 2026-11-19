@@ -102,7 +102,13 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     supplementPlaceholder: t('claudeCode.askUserQuestion.supplement.placeholder'),
     timeExpired: t('claudeCode.askUserQuestion.timeExpired'),
     timeExpiredNoAnswer: t('claudeCode.askUserQuestion.timeExpiredNoAnswer'),
-    timeRemaining: (time: string) => t('claudeCode.askUserQuestion.timeRemaining', { time }),
+    timeRemaining: (time: string) =>
+      t(
+        form.autoSubmitOnTimeout
+          ? 'claudeCode.askUserQuestion.timeRemaining'
+          : 'claudeCode.askUserQuestion.timeRemainingNoAnswer',
+        { time },
+      ),
   };
 
   return (

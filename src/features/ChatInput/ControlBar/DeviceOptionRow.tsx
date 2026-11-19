@@ -21,9 +21,15 @@ const styles = stylex.create({
 
 interface DeviceOptionRowProps {
   active: boolean;
+  /**
+   * Why this device cannot be picked for the current agent. The row is
+   * disabled and the reason replaces its status line, so the user learns why
+   * before trying instead of meeting a generic save error after.
+   */
+  blockedReason?: string;
   device: DeviceListItem;
-  /** This app's own machine: described as the local process instead of by status. */
-  isCurrentMachine: boolean;
+  /** Replaces the machine name, e.g. "This computer" for this desktop's own row. */
+  label?: string;
   onReconnect: () => void;
   onSelect: () => void;
   reconnecting: boolean;
@@ -36,8 +42,9 @@ interface DeviceOptionRowProps {
  */
 const DeviceOptionRow = ({
   active,
+  blockedReason,
   device,
-  isCurrentMachine,
+  label,
   onReconnect,
   onSelect,
   reconnecting,
@@ -48,7 +55,7 @@ const DeviceOptionRow = ({
   const presenceUnknown = isDevicePresenceUnknown(device);
   const { offlineLabelKey, reconnectLabelKey, selectable, showReconnect } = getDeviceOptionState(
     device,
-    { presenceUnknown },
+    { blocked: !!blockedReason, presenceUnknown },
   );
 
   return (
@@ -61,13 +68,11 @@ const DeviceOptionRow = ({
           active={active}
           disabled={!selectable}
           icon={<ExecutionTargetIcon devicePlatform={device.platform} target={'device'} />}
-          label={device.friendlyName || device.hostname || device.deviceId}
+          label={label ?? (device.friendlyName || device.hostname || device.deviceId)}
           tags={tags}
           desc={
-            <>
-              {isCurrentMachine ? (
-                t('heteroAgent.executionTarget.gatewayDesc')
-              ) : (
+            blockedReason || (
+              <>
                 <ExecutionTargetDeviceStatus
                   offlineLabel={t(offlineLabelKey)}
                   online={device.online}
@@ -77,23 +82,23 @@ const DeviceOptionRow = ({
                     count: device.channels.length,
                   })}
                 />
-              )}
-              {showReconnect ? (
-                <Button
-                  className={stylex.props(styles.reconnectButton).className}
-                  icon={<Icon icon={RefreshCwIcon} size={10} />}
-                  loading={reconnecting}
-                  size={'small'}
-                  type={'text'}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onReconnect();
-                  }}
-                >
-                  {t(reconnectLabelKey)}
-                </Button>
-              ) : null}
-            </>
+                {showReconnect ? (
+                  <Button
+                    className={stylex.props(styles.reconnectButton).className}
+                    icon={<Icon icon={RefreshCwIcon} size={10} />}
+                    loading={reconnecting}
+                    size={'small'}
+                    type={'text'}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onReconnect();
+                    }}
+                  >
+                    {t(reconnectLabelKey)}
+                  </Button>
+                ) : null}
+              </>
+            )
           }
           onClick={onSelect}
         />

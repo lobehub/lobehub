@@ -175,8 +175,8 @@ state sync (they aren't). Two correct patterns:
 agent-browser --session s9223 --cdp 9223 snapshot -i
 agent-browser --session s9224 --cdp 9224 snapshot -i
 
-# ✅ or reset between targets (slower, serial)
-agent-browser close --all && agent-browser --cdp 9223 get url
+# ✅ or reset one session between targets (slower, serial; never `close --all`)
+agent-browser --session s9223 close && agent-browser --session s9223 --cdp 9223 get url
 ```
 
 Raw `curl http://localhost:<port>/json/list` always shows a port's true target
@@ -255,7 +255,7 @@ electron-dev.sh stop --all # stop every instance
 
 ### Round 1 — concurrency, login reuse, isolation (Model A)
 
-Golden profile `lobehub-desktop-dev` (logged in, user_2gmT…); 3 userData copies
+Golden profile `lobehub-desktop-dev` (logged in, user\_2gmT…); 3 userData copies
 (27 MB each), app name constant. inst1 = `electron-vite dev` (CDP 9223, Vite
 5173\), inst2/inst3 = raw electron (CDP 9224/9225) sharing Vite.
 
