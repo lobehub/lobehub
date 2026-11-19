@@ -1,0 +1,96 @@
+---
+title: 在 Claude Code、Cursor 和 Codex 中使用 LobeHub（MCP）
+description: >-
+  让任意 MCP 客户端连接 LobeHub 的 MCP 服务 /api/v1/mcp，列出并运行你的助理、搜索历史对话、读取和上传文件。
+tags:
+  - LobeHub
+  - MCP
+  - Claude Code
+  - Cursor
+  - Codex
+  - API Key
+---
+
+# 在 Claude Code、Cursor 和 Codex 中使用 LobeHub（MCP）
+
+**LobeHub 本身就是一个 MCP 服务。** 任何支持 Streamable HTTP 的 [Model Context Protocol](https://modelcontextprotocol.io) 客户端 —— Claude Code、Cursor、Codex 等 —— 都可以连接它，使用你在 LobeHub 中的助理、对话和文件：
+
+```plaintext
+https://app.lobehub.com/api/v1/mcp
+```
+
+自部署时换成你自己的域名：`https://<你的域名>/api/v1/mcp`。
+
+## 创建 API Key
+
+1. 打开 **设置 → API Keys**，创建一个 Key。
+2. 选择它的权限范围（scope）。客户端只能看到这些 scope 覆盖到的工具（见 [工具](#工具)）；完全访问的 Key 能看到全部工具。
+3. 复制 Key（`sk-lh-…`），它以 Bearer Token 的方式认证。
+
+如果要在工作区中使用，请在该工作区的设置里创建 Key：工作区 Key 访问的是该工作区的助理和数据；个人 Key 只能访问你的个人空间。
+
+## Claude Code
+
+```bash
+claude mcp add --transport http lobehub https://app.lobehub.com/api/v1/mcp \
+  --header "Authorization: Bearer sk-lh-your-key"
+```
+
+在 Claude Code 中运行 `/mcp`，确认 `lobehub` 已连接。
+
+## Cursor
+
+把服务加到 `~/.cursor/mcp.json`（所有项目）或 `.cursor/mcp.json`（单个项目）：
+
+```json
+{
+  "mcpServers": {
+    "lobehub": {
+      "url": "https://app.lobehub.com/api/v1/mcp",
+      "headers": { "Authorization": "Bearer sk-lh-your-key" }
+    }
+  }
+}
+```
+
+## Codex
+
+把服务加到 `~/.codex/config.toml`，并把 Key 设为环境变量 `LOBEHUB_API_KEY`：
+
+```toml
+[mcp_servers.lobehub]
+url = "https://app.lobehub.com/api/v1/mcp"
+bearer_token_env_var = "LOBEHUB_API_KEY"
+```
+
+## 其他客户端
+
+把客户端指向上面的地址，并带上请求头 `Authorization: Bearer sk-lh-your-key`。也可以用 LobeHub 签发的 OIDC Access Token 代替 API Key；使用个人 OIDC Token 时，加上 `X-Workspace-Id: <工作区 ID>` 即可在工作区内操作。
+
+该服务是无状态的：每次请求都是一个返回 JSON 的 POST，调用之间不保留会话。
+
+## 工具
+
+| 工具                     | 作用                                        | 需要的 scope                  |
+| ---------------------- | ----------------------------------------- | -------------------------- |
+| `list_agents`          | 列出你可以运行的助理，可按标题关键词筛选                      | `agent:read`               |
+| `get_agent`            | 读取一个助理的配置                                 | `agent:read`               |
+| `run_agent`            | 给助理发送消息并运行它；返回回复，仍在运行时返回运行 ID             | `run:write`、`model:invoke` |
+| `get_run`              | 查询 `run_agent` 启动的运行的状态和回复                | `run:read`                 |
+| `search_topics`        | 按标题关键词查找对话                                | `chat:read`                |
+| `get_topic`            | 读取一个对话及其最近的消息                             | `chat:read`                |
+| `search_messages`      | 在你可读的对话中搜索消息内容（工作区内包括所有成员的对话）             | `chat:read`                |
+| `list_files`           | 列出你的文件                                    | `file:read`                |
+| `read_file`            | 读取文件详情、下载链接和解析后的文本                        | `file:read`                |
+| `upload_file`          | 以文本上传文件，或以 base64 加 `mimeType` 上传，可选放入知识库 | `file:write`               |
+| `list_knowledge_bases` | 列出你的知识库                                   | `knowledge:read`           |
+
+`write` scope 包含对应的 `read` scope。你自己的角色权限仍然生效：Key 的权限永远不会超过创建它的人。
+
+`run_agent` 最多等待 `waitSeconds` 秒（默认 50，最多 120）获取回复。运行时间更长时会返回运行的 `id` 和 `status`，用这个 id 调用 `get_run`，直到状态变为 `completed`。通常需要你审批的工具调用会直接执行，助理想向你提的问题会被跳过，让运行继续下去。
+
+## 资源与提示词
+
+- `lobehub://agents` —— 你的助理列表；`lobehub://agents/{agentId}` —— 单个助理的配置（需要 `agent:read`）。
+- `lobehub://topics/{topicId}` —— 一个对话及其消息（需要 `chat:read`）。
+- 提示词 `summarize_topic` —— 让客户端的模型总结一个对话：做出的决定、待解决的问题和下一步（需要 `chat:read`）。

@@ -36,6 +36,10 @@ const SPEC_EXEMPT = new Set([
   'GET /api/v1/docs',
   'GET /api/v1/openapi.json',
   'POST /api/v1/anthropic/v1/messages',
+  // MCP (JSON-RPC over Streamable HTTP), documented in docs/usage/integrations/mcp-server.mdx
+  'DELETE /api/v1/mcp',
+  'GET /api/v1/mcp',
+  'POST /api/v1/mcp',
   'POST /api/v1/openai/v1/responses',
 ]);
 

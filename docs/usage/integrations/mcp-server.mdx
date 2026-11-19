@@ -1,0 +1,97 @@
+---
+title: Use LobeHub from Claude Code, Cursor and Codex (MCP)
+description: >-
+  Connect any MCP client to LobeHub's MCP server at /api/v1/mcp to list and run
+  your Agents, search past conversations, and read and upload files.
+tags:
+  - LobeHub
+  - MCP
+  - Claude Code
+  - Cursor
+  - Codex
+  - API Key
+---
+
+# Use LobeHub from Claude Code, Cursor and Codex (MCP)
+
+**LobeHub is an MCP server.** Any client that speaks the [Model Context Protocol](https://modelcontextprotocol.io) over Streamable HTTP — Claude Code, Cursor, Codex and others — can connect to it and work with your LobeHub Agents, conversations and files:
+
+```plaintext
+https://app.lobehub.com/api/v1/mcp
+```
+
+For a self-hosted deployment, use your own domain: `https://<your-domain>/api/v1/mcp`.
+
+## Create an API Key
+
+1. Open **Settings → API Keys** and create a key.
+2. Choose its scopes. The client only sees the tools those scopes reach (see [Tools](#tools)); a full-access key sees them all.
+3. Copy the key (`sk-lh-…`). It authenticates as a Bearer token.
+
+To work inside a Workspace, create the key in that Workspace's settings: a Workspace key reaches that Workspace's Agents and data. A personal key reaches your personal space only.
+
+## Claude Code
+
+```bash
+claude mcp add --transport http lobehub https://app.lobehub.com/api/v1/mcp \
+  --header "Authorization: Bearer sk-lh-your-key"
+```
+
+Run `/mcp` inside Claude Code to check that `lobehub` is connected.
+
+## Cursor
+
+Add the server to `~/.cursor/mcp.json` (all projects) or `.cursor/mcp.json` (one project):
+
+```json
+{
+  "mcpServers": {
+    "lobehub": {
+      "url": "https://app.lobehub.com/api/v1/mcp",
+      "headers": { "Authorization": "Bearer sk-lh-your-key" }
+    }
+  }
+}
+```
+
+## Codex
+
+Add the server to `~/.codex/config.toml` and export the key as `LOBEHUB_API_KEY`:
+
+```toml
+[mcp_servers.lobehub]
+url = "https://app.lobehub.com/api/v1/mcp"
+bearer_token_env_var = "LOBEHUB_API_KEY"
+```
+
+## Other clients
+
+Point the client at the URL above with the header `Authorization: Bearer sk-lh-your-key`. An OIDC access token issued by LobeHub works in place of an API key. With a personal OIDC token, add `X-Workspace-Id: <workspace id>` to act inside a Workspace.
+
+The server is stateless: every request is a POST that answers with JSON, so no session is kept between calls.
+
+## Tools
+
+| Tool                   | What it does                                                                                 | Scopes needed               |
+| ---------------------- | -------------------------------------------------------------------------------------------- | --------------------------- |
+| `list_agents`          | List the Agents you can run, filtered by a title keyword                                     | `agent:read`                |
+| `get_agent`            | Read one Agent's configuration                                                               | `agent:read`                |
+| `run_agent`            | Send a message to an Agent and run it; returns the reply, or the run id if it is still going | `run:write`, `model:invoke` |
+| `get_run`              | Status and reply of a run started with `run_agent`                                           | `run:read`                  |
+| `search_topics`        | Find conversations by a title keyword                                                        | `chat:read`                 |
+| `get_topic`            | Read a conversation and its latest messages                                                  | `chat:read`                 |
+| `search_messages`      | Search message text across the conversations you can read (in a Workspace, every member's)   | `chat:read`                 |
+| `list_files`           | List your files                                                                              | `file:read`                 |
+| `read_file`            | Read a file's details, download URL and parsed text                                          | `file:read`                 |
+| `upload_file`          | Upload a file as text, or as base64 with its `mimeType`, optionally into a Knowledge Base    | `file:write`                |
+| `list_knowledge_bases` | List your Knowledge Bases                                                                    | `knowledge:read`            |
+
+A `write` scope includes its `read` scope. Your own role still applies on top: a key never reaches more than the person who created it.
+
+`run_agent` waits up to `waitSeconds` (default 50, at most 120) for the reply. A longer run returns its `id` and `status`; call `get_run` with the id until the status is `completed`. Tool calls that would normally ask for your approval run without asking, and questions the Agent would ask you are declined so the run carries on.
+
+## Resources and prompts
+
+- `lobehub://agents` — your Agents; `lobehub://agents/{agentId}` — one Agent's configuration (needs `agent:read`).
+- `lobehub://topics/{topicId}` — a conversation and its messages (needs `chat:read`).
+- Prompt `summarize_topic` — asks the client's model to summarize a conversation: decisions, open questions and next steps (needs `chat:read`).
