@@ -10,7 +10,7 @@ import {
   startObservation,
 } from '@langfuse/tracing';
 import { CURRENT_VERSION } from '@lobechat/const';
-import { BasicTracerProvider } from '@opentelemetry/sdk-trace-base';
+import { AlwaysOnSampler, BasicTracerProvider } from '@opentelemetry/sdk-trace-base';
 
 import { getLangfuseConfig } from '@/envs/langfuse';
 import { TraceEventClient } from '@/libs/traces/event';
@@ -31,13 +31,18 @@ let runtime: LangfuseRuntime | undefined;
  * The tracer provider is registered only with the Langfuse SDK, not as the global OpenTelemetry
  * provider. Langfuse tracing therefore works whether or not ENABLE_TELEMETRY starts the app's own
  * OpenTelemetry SDK, and the app's HTTP and Postgres spans are not sent to Langfuse.
+ *
+ * Chat requests run inside the incoming trace context (see the auth middleware), so a parent-based
+ * sampler would drop a chat whose `traceparent` is unsampled. Langfuse samples every observation.
  */
 const getRuntime = (config: { baseUrl: string; publicKey: string; secretKey: string }) => {
   const configKey = [config.baseUrl, config.publicKey, config.secretKey].join('\n');
   if (runtime?.configKey === configKey) return runtime;
 
   const processor = new LangfuseSpanProcessor({ ...config, release: CURRENT_VERSION });
-  setLangfuseTracerProvider(new BasicTracerProvider({ spanProcessors: [processor] }));
+  setLangfuseTracerProvider(
+    new BasicTracerProvider({ sampler: new AlwaysOnSampler(), spanProcessors: [processor] }),
+  );
 
   runtime = { client: new LangfuseClient(config), configKey, processor };
   return runtime;

@@ -30,6 +30,14 @@ const toModelParameters = (parameters: Record<string, unknown>): ModelParameters
   return result;
 };
 
+const describeError = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object' && 'errorType' in error) {
+    return String((error as { errorType: unknown }).errorType);
+  }
+  return String(error);
+};
+
 /** Usage keys as Langfuse ingests them for OpenTelemetry generations. */
 const toUsageDetails = (usage?: ModelUsage): Record<string, number> | undefined => {
   if (!usage) return;
@@ -76,6 +84,15 @@ export const createTraceOptions = (
 
   const headers = new Headers();
 
+  const flushAfterResponse = () =>
+    after(async () => {
+      try {
+        await traceClient.flush();
+      } catch (e) {
+        console.error('TraceClient flush error:', e);
+      }
+    });
+
   if (trace?.id) {
     headers.set(LOBE_CHAT_TRACE_ID, trace.id);
   }
@@ -111,14 +128,7 @@ export const createTraceOptions = (
         // Spans are exported only once they end, including when the stream ended without a
         // completion.
         trace?.end();
-
-        after(async () => {
-          try {
-            await traceClient.flush();
-          } catch (e) {
-            console.error('TraceClient flush error:', e);
-          }
-        });
+        flushAfterResponse();
       },
 
       onStart: () => {
@@ -129,6 +139,17 @@ export const createTraceOptions = (
         trace?.setTags([...(tracePayload?.tags || []), TraceTagMap.ToolsCalling]);
       },
     } as ChatStreamCallbacks,
+    /**
+     * For a chat that fails before or instead of streaming, when no stream callback runs:
+     * records the error on the generation, ends the observations and flushes them.
+     */
+    endOnError: (error: unknown) => {
+      if (generation?.otelSpan.isRecording()) {
+        generation.update({ level: 'ERROR', statusMessage: describeError(error) });
+      }
+      trace?.end();
+      flushAfterResponse();
+    },
     headers,
   };
 };

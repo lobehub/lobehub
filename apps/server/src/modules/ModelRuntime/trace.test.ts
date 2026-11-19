@@ -148,6 +148,22 @@ describe('createTraceOptions', () => {
     });
   });
 
+  it('records a chat that fails before streaming and flushes it', async () => {
+    const { endOnError } = createTraceOptions(payload, { provider: 'newapi', trace });
+
+    endOnError({ errorType: 'InvalidProviderAPIKey' });
+
+    const { generation, root } = spans();
+    expect(root).toBeDefined();
+    expect(generation!.attributes).toMatchObject({
+      'langfuse.observation.level': 'ERROR',
+      'langfuse.observation.status_message': 'InvalidProviderAPIKey',
+    });
+    expect(afterWork).toHaveLength(1);
+    await afterWork[0]();
+    expect(clientFlush).toHaveBeenCalledTimes(1);
+  });
+
   it('exports the trace when the stream ends without a completion', () => {
     const { callback } = createTraceOptions(payload, { provider: 'newapi', trace });
     callback.onFinal!({} as any);

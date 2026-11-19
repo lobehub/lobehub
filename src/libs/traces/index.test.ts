@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { createHash } from 'node:crypto';
 
+import { getLangfuseTracer } from '@langfuse/tracing';
+import { context, trace } from '@lobechat/observability-otel/api';
 import type * as SdkTraceBase from '@opentelemetry/sdk-trace-base';
 import type { InMemorySpanExporter } from '@opentelemetry/sdk-trace-base';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -171,6 +173,22 @@ describe('TraceClient', () => {
     trace.end();
 
     expect(finishedSpans()).toHaveLength(2);
+  });
+
+  it('records observations under an unsampled incoming trace context', () => {
+    enableLangfuse();
+    new TraceClient();
+
+    // The auth middleware runs each request inside the incoming trace context.
+    const unsampled = trace.setSpanContext(context.active(), {
+      spanId: 'd'.repeat(16),
+      traceFlags: 0,
+      traceId: 'c'.repeat(32),
+    });
+    const span = getLangfuseTracer().startSpan('probe', {}, unsampled);
+
+    expect(span.isRecording()).toBe(true);
+    span.end();
   });
 
   it('flushes spans and scores', async () => {
