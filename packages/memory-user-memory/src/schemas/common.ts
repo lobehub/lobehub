@@ -26,6 +26,7 @@ export const MEMORY_TYPES = [
   'context',
   'activity',
   'event',
+  'experience',
   'location',
   'people',
   'topic',
