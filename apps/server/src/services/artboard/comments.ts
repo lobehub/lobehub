@@ -82,8 +82,13 @@ export class ArtboardCommentService {
   private async deliverable(id: string) {
     const structure = await this.structureOf(id);
     const held = this.awaitingSubmit(structure);
-    const threads = await this.deps.comments.listThreads(id, { unresolvedOnly: true });
-    return { structure, threads: threads.filter((thread) => !held(thread)) };
+    const threads = await this.deps.comments.listThreads(id);
+    return {
+      structure,
+      threads: threads.filter(
+        (thread) => !held(thread) && (!thread.root.resolvedAt || isThreadUnread(thread)),
+      ),
+    };
   }
 
   async list(id: string): Promise<ArtboardCommentThreadView[]> {

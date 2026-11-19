@@ -151,6 +151,29 @@ describe('ArtboardService comment delivery', () => {
     expect(await asAgent().takeUndeliveredComments(artboard.id)).toEqual([]);
   });
 
+  it("still hands the agent the user's answer when the user resolves its question first", async () => {
+    const { artboard } = await create();
+    const question = await asAgent().askQuestion(artboard.id, { content: '入口放哪？' });
+    await asUser().replyComment(question.id, { clientId: 'c1', content: '标题旁' });
+    await asUser().resolveComment(question.id);
+
+    expect((await threadOf(artboard.id, question.id)).unread).toBe(true);
+    expect(await asUser().countUndeliveredComments(artboard.id)).toBe(1);
+    const taken = await asAgent().takeUndeliveredComments(artboard.id);
+    expect(taken.map((thread) => thread.id)).toEqual([question.id]);
+    expect(taken[0].replies.map((reply) => reply.content)).toEqual(['标题旁']);
+    expect(await asUser().countUndeliveredComments(artboard.id)).toBe(0);
+  });
+
+  it('keeps a question the user resolved without answering away from the agent', async () => {
+    const { artboard } = await create();
+    const question = await asAgent().askQuestion(artboard.id, { content: '入口放哪？' });
+    await asUser().resolveComment(question.id);
+
+    expect(await asUser().countUndeliveredComments(artboard.id)).toBe(0);
+    expect(await asAgent().takeUndeliveredComments(artboard.id)).toEqual([]);
+  });
+
   it('keeps comments on the options of an open round from the agent until it is submitted', async () => {
     const { artboard, journey, option, round } = await create();
     const quiet = await asUser().addComment(artboard.id, {

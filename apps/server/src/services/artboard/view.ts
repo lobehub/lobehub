@@ -38,8 +38,9 @@ export const toCommentView = (row: ArtboardCommentRow): ArtboardCommentView => (
   id: row.id,
 });
 
+// A user may close an agent's question right after answering it; the answer still reaches the agent.
 export const isThreadUnread = ({ replies, root }: ArtboardCommentThread) =>
-  !root.resolvedAt &&
+  (!root.resolvedAt || !!root.authorAgentId) &&
   [root, ...replies].some((comment) => !comment.authorAgentId && !comment.deliveredAt);
 
 const anchorOf = ({ anchor, boardId, groupId, metadata }: ArtboardCommentThread['root']) => {

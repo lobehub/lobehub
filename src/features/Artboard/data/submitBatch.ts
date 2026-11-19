@@ -6,6 +6,7 @@ import { artboardService } from '@/services/artboard';
 
 import type { BoardModel } from '../model';
 import { sendToBoardConversation } from './boardConversation';
+import { isQuestion } from './commentModel';
 import { mutateArtboard } from './useArtboard';
 import { mutateArtboardComments } from './useArtboardComments';
 
@@ -39,7 +40,10 @@ const waitsOnOpenRound = (model: BoardModel, thread: ArtboardCommentThreadView) 
 
 export const pendingThreads = (model: BoardModel, threads: ArtboardCommentThreadView[]) =>
   threads.filter(
-    (thread) => thread.unread && !thread.resolvedAt && !waitsOnOpenRound(model, thread),
+    (thread) =>
+      thread.unread &&
+      (!thread.resolvedAt || isQuestion(thread)) &&
+      !waitsOnOpenRound(model, thread),
   );
 
 const placeTitle = (model: BoardModel, thread: ArtboardCommentThreadView) => {

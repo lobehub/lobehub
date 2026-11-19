@@ -90,9 +90,10 @@ describe('pendingThreads', () => {
       thread('t2', comment('二'), [], { boardId: 'b2' }),
       thread('t3', comment('三'), [], { unread: false }),
       thread('t4', comment('四'), [], { resolvedAt: new Date() }),
+      thread('t5', comment('放哪？', true), [comment('标题旁')], { resolvedAt: new Date() }),
     ];
 
-    expect(pendingThreads(open, threads).map((item) => item.id)).toEqual(['t1']);
+    expect(pendingThreads(open, threads).map((item) => item.id)).toEqual(['t1', 't5']);
   });
 });
 
