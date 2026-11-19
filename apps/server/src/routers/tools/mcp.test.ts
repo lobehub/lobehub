@@ -3,22 +3,40 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mcpRouter } from './mcp';
 
-const { mockCallTool, mockGetStreamableManifest, mockMcpAppsEnabled, mockReadUiResource } =
-  vi.hoisted(() => ({
-    mockCallTool: vi.fn(),
-    mockGetStreamableManifest: vi.fn(),
-    mockMcpAppsEnabled: vi.fn(),
-    mockReadUiResource: vi.fn(),
-  }));
+const {
+  mockCallTool,
+  mockGetStreamableManifest,
+  mockMcpAppsEnabled,
+  mockReadUiResource,
+  mockResolveByIdentifiers,
+  mockQueryByConnector,
+} = vi.hoisted(() => ({
+  mockQueryByConnector: vi.fn().mockResolvedValue([]),
+  mockResolveByIdentifiers: vi.fn().mockResolvedValue([]),
+  mockCallTool: vi.fn(),
+  mockGetStreamableManifest: vi.fn(),
+  mockMcpAppsEnabled: vi.fn(),
+  mockReadUiResource: vi.fn(),
+}));
 
 vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: mockMcpAppsEnabled }));
 
 vi.mock('./_helpers', () => ({ scheduleToolCallReport: vi.fn() }));
 
-// Not a connector: the call skips the connector permission gate
+// Not a connector unless a test says so: the call skips the permission gate
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn(function () {
-    return { queryByIdentifiers: vi.fn().mockResolvedValue([]) };
+    return { resolveByIdentifiers: mockResolveByIdentifiers };
+  }),
+}));
+vi.mock('@/database/models/connectorTool', () => ({
+  ConnectorToolModel: vi.fn(function () {
+    return { queryByConnector: mockQueryByConnector };
+  }),
+}));
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn(function () {
+    return { existsById: vi.fn().mockResolvedValue(true) };
   }),
 }));
 
@@ -85,6 +103,41 @@ describe('tools mcpRouter.callTool', () => {
       expect(mockCallTool).toHaveBeenCalledWith(expect.objectContaining({ fromApp }));
     },
   );
+});
+
+describe('tools mcpRouter.callTool permission gate', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockResolveByIdentifiers.mockResolvedValue([]);
+    mockQueryByConnector.mockResolvedValue([]);
+  });
+
+  it("blocks a view's call the conversation's ranked row disables", async () => {
+    // Regression: the gate read the first base row of the identifier, so the
+    // owner's private row that a private agent's own topic runs on — and its
+    // `disabled` setting — was never consulted.
+    mockMcpAppsEnabled.mockResolvedValue(true);
+    mockResolveByIdentifiers.mockResolvedValue([{ id: 'c-private', identifier: 'notes' }]);
+    mockQueryByConnector.mockResolvedValue([{ permission: 'disabled', toolName: 'delete_note' }]);
+    const caller = mcpRouter.createCaller({ serverDB: {}, userId: 'user-1' } as any);
+
+    const result = await caller.callTool({
+      agentId: 'agt-private',
+      args: '{}',
+      fromApp: true,
+      meta: { sessionId: 'tpc-own' },
+      params: { name: 'notes', type: 'http', url: 'https://mcp.example.com/mcp' },
+      toolName: 'delete_note',
+    });
+
+    expect(mockResolveByIdentifiers).toHaveBeenCalledWith(['notes'], {
+      agentId: 'agt-private',
+      topicId: 'tpc-own',
+    });
+    expect(mockQueryByConnector).toHaveBeenCalledWith('c-private');
+    expect(String(result.content)).toContain('has been disabled');
+    expect(mockCallTool).not.toHaveBeenCalled();
+  });
 });
 
 describe('tools mcpRouter.getStreamableMcpServerManifest', () => {

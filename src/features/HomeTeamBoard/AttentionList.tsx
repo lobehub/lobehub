@@ -10,7 +10,7 @@ import AgentAvatar from '@/components/AgentAvatar';
 import AuthorChip from '@/features/HomeInbox/AuthorChip';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useInterfaceDensity } from '@/styles/density';
+import { useDensity } from '@/styles/density';
 import { sx } from '@/styles/sx';
 
 import { formatDuration } from './layout';
@@ -96,7 +96,7 @@ const styles = stylex.create({
 const Item = ({ item, now }: { item: AgentRunBoardAttentionItem; now: Date }) => {
   const { t } = useTranslation('home');
   const openDrawer = useOpenRunDrawer();
-  const compact = useInterfaceDensity() === 'compact';
+  const { compact } = useDensity();
   const failed = item.kind === 'failed';
   const canAct = item.isMine && !failed;
   const elapsed = formatDuration(now.getTime() - item.since.getTime());
@@ -177,7 +177,7 @@ const Section = ({
 
 const AttentionList = ({ items, now }: { items: AgentRunBoardAttentionItem[]; now: Date }) => {
   const { t } = useTranslation('home');
-  const compact = useInterfaceDensity() === 'compact';
+  const { compact, tokens } = useDensity();
   const collapsed = useGlobalStore(systemStatusSelectors.teamBoardAttentionCollapsed);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const setCollapsed = (next: boolean) =>
@@ -194,7 +194,7 @@ const AttentionList = ({ items, now }: { items: AgentRunBoardAttentionItem[]; no
 
   const card = (
     <Flexbox
-      gap={compact ? 12 : 16}
+      gap={tokens.sectionGap}
       {...stylex.props(styles.card, compact && styles.cardCompact)}
       data-testid={'team-board-attention'}
     >

@@ -22,6 +22,7 @@ import {
   collectBorrowedConnectors,
 } from '@/server/utils/connectorAttribution';
 
+import { toolSetsFrom } from '../../__tests__/helpers/connectorToolSets';
 import { discoverTools } from '.';
 
 vi.mock('@/business/client/model-bank/loadModels', () => ({
@@ -160,6 +161,9 @@ const run = (options: RunOptions = {}) => {
       connectorModel: {
         resolveAll: vi.fn().mockResolvedValue([]),
         resolveByIdentifiers: vi.fn(async (ids: string[]) => options.connectorResolve?.(ids) ?? []),
+        resolveToolSets: toolSetsFrom(
+          async (ids: string[]) => options.connectorResolve?.(ids) ?? [],
+        ),
       },
       connectorToolModel: {
         queryAllByConnectorIds: vi.fn().mockResolvedValue([]),

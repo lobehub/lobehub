@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import NavHeader from '@/features/NavHeader';
 import SettingContainer from '@/features/Setting/SettingContainer';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
-import { useInterfaceDensity } from '@/styles/density';
+import { useDensity } from '@/styles/density';
 import { sx } from '@/styles/sx';
 
 import SkeletonBar from '../Bar';
@@ -791,12 +791,12 @@ const PageTabs = ({ count }: { count: number }) => (
  * compact 20px / 31px) 24px (compact 16px) above the divider.
  */
 const PageTitle = () => {
-  const compact = useInterfaceDensity() === 'compact';
+  const { compact, tokens } = useDensity();
 
   return (
     <Flexbox gap={compact ? 16 : 24} style={{ paddingTop: 12 }}>
       <Flexbox height={compact ? 31 : 38} justify={'center'}>
-        <SkeletonBar height={compact ? 24 : 28} width={96} />
+        <SkeletonBar height={tokens.iconBox} width={96} />
       </Flexbox>
       <div {...stylex.props(styles.divider)} />
     </Flexbox>
@@ -808,7 +808,7 @@ const PageTitle = () => {
  * directly where a layout already draws the header and padded container.
  */
 export const SettingsSectionsBody = ({ shape }: { shape: SettingsSectionsShape }) => {
-  const compact = useInterfaceDensity() === 'compact';
+  const { compact } = useDensity();
   const sections = (
     <Flexbox
       aria-busy

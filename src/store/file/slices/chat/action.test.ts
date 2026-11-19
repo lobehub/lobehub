@@ -266,6 +266,24 @@ describe('useFileStore:chat', () => {
     expect(uploadList()).toEqual([newerFile, submittedFile]);
   });
 
+  it('restoreChatUploadFileList puts restored uploads back around a retained failed one', () => {
+    const { result } = renderHook(() => useStore());
+    const a = { id: 'a', status: 'success' };
+    const failed = { id: 'b', status: 'error' };
+    const c = { id: 'c', status: 'success' };
+    const newer = { id: 'new', status: 'uploading' };
+
+    // The send took a and c; the failed b stayed, and a newer draft arrived meanwhile.
+    act(() => {
+      useStore.setState({
+        chatUploadFileListByContext: { [CONTEXT_KEY]: [failed, newer] } as any,
+      });
+      result.current.restoreChatUploadFileList(CONTEXT_KEY, [a, c] as any, ['a', 'b', 'c']);
+    });
+
+    expect(uploadList()).toEqual([a, failed, c, newer]);
+  });
+
   // Regression: one global upload list showed a conversation's attachments in
   // every other conversation, while its text draft stayed behind.
   it('keeps the uploads of each conversation to itself', () => {

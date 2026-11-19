@@ -35,7 +35,7 @@ import { UsageBar } from '@/features/DeviceManager/DeviceHealth/UsageMeter';
 import { type QuotaAccount, useAgentQuotaStore } from '@/store/agentQuota';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import { useInterfaceDensity } from '@/styles/density';
+import { useDensity } from '@/styles/density';
 
 import {
   type AccountStatus,
@@ -193,7 +193,7 @@ interface AccountRowProps {
 
 const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
   const { t } = useTranslation('setting');
-  const compact = useInterfaceDensity() === 'compact';
+  const { compact, tokens } = useDensity();
   const { t: tCommon } = useTranslation('common');
   const [
     useFetchQuotaReadings,
@@ -333,7 +333,7 @@ const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
           opacity: view.status === 'disabled' ? 0.55 : undefined,
         }}
       >
-        <span style={{ display: 'flex', flex: 'none' }}>{meta.icon(compact ? 24 : 28)}</span>
+        <span style={{ display: 'flex', flex: 'none' }}>{meta.icon(tokens.iconBox)}</span>
         <Flexbox gap={2} style={{ minWidth: 0 }}>
           {editing ? (
             <Flexbox horizontal align={'center'} gap={4} {...stop}>

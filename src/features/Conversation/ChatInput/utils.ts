@@ -18,6 +18,7 @@ import {
 } from '@/store/chat/slices/operation/types';
 import type { ChatStore } from '@/store/chat/store';
 import { isLocalOnlyMessage, LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
+import type { FileStore } from '@/store/file/store';
 import type { UploadFileItem } from '@/types/files/upload';
 import { isMachineErrorMessage } from '@/utils/machineErrorMessage';
 
@@ -210,6 +211,22 @@ export const partitionSendableUploads = <T extends Pick<UploadFileItem, 'status'
     else sendable.push(file);
   }
   return { failed, sendable };
+};
+
+/**
+ * Empty the composer of what a send took: the sent attachments and the context
+ * selections. A failed or cancelled upload was not sent, so it stays to retry or remove.
+ */
+export const clearSentAttachments = (
+  fileStore: Pick<FileStore, 'clearChatContextSelections' | 'clearChatUploadFileList'>,
+  contextKey: string,
+  sentFiles: Pick<UploadFileItem, 'id'>[],
+) => {
+  fileStore.clearChatUploadFileList(
+    contextKey,
+    sentFiles.map((file) => file.id),
+  );
+  fileStore.clearChatContextSelections(contextKey);
 };
 
 export interface ConversationChatInputUiState {

@@ -847,6 +847,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     scope: composerTarget.writable ? composerTarget.contextKey : undefined,
     terminalAvailable,
     toggleTerminalPanel,
+    topicId: topicId ?? undefined,
   });
 
   // The floating card keeps a 16px margin on each side.
@@ -1074,6 +1075,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                   browserSessionId={browserSessionId}
                   composerTarget={composerTarget}
                   openedTabs={openedTabs}
+                  topicId={topicId ?? undefined}
                   visible={!!showRightPanel}
                   onCloseTab={closeTab}
                   onBrowserMetadataChange={(tab, metadata) => {

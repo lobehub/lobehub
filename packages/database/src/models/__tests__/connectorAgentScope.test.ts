@@ -243,7 +243,14 @@ describe('ConnectorModel agent-scoped resolution', () => {
       expect(all).toHaveLength(2);
       expect(byIdentifier.gmail).toBe('Agent Gmail');
       expect(byIdentifier.notion).toBe('Personal Notion');
-      const optedOut = await model.resolveAll(agentA, undefined, ['gmail']);
+    });
+
+    it('resolveToolSets skips the excluded identifiers', async () => {
+      await insertConnector({ agentId: agentA, identifier: 'gmail', name: 'Agent Gmail' });
+      await insertConnector({ identifier: 'notion', name: 'Personal Notion' });
+
+      const model = new ConnectorModel(serverDB, userId);
+      const optedOut = await model.resolveToolSets(agentA, undefined, undefined, ['gmail']);
       expect(optedOut.map((r) => r.identifier)).toEqual(['notion']);
     });
   });

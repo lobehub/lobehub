@@ -1,5 +1,6 @@
 'use client';
 
+import type { ConnectorVisibility } from '@lobechat/types';
 import { Breadcrumb, Icon, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -28,36 +29,40 @@ interface DetailBreadcrumbProps {
   listLabel: string;
   onBack: () => void;
   type: ToolDetailType;
+  /** The workspace connector tab the detail was opened from (names that tab's row). */
+  visibility?: ConnectorVisibility;
 }
 
 /** `Connectors › <entry>`: the second-level page names where it returns to. */
-const DetailBreadcrumb = memo<DetailBreadcrumbProps>(({ identifier, listLabel, onBack, type }) => {
-  const name = useToolDisplayName(identifier, type);
+const DetailBreadcrumb = memo<DetailBreadcrumbProps>(
+  ({ identifier, listLabel, onBack, type, visibility }) => {
+    const name = useToolDisplayName(identifier, type, visibility);
 
-  return (
-    <div {...stylex.props(styles.root)}>
-      <Breadcrumb
-        separator={<Icon icon={ChevronRight} size={14} />}
-        items={[
-          {
-            title: (
-              <button type={'button'} {...stylex.props(styles.back)} onClick={onBack}>
-                {listLabel}
-              </button>
-            ),
-          },
-          {
-            title: (
-              <Text ellipsis as={'span'} style={{ maxWidth: 320 }} weight={500}>
-                {name}
-              </Text>
-            ),
-          },
-        ]}
-      />
-    </div>
-  );
-});
+    return (
+      <div {...stylex.props(styles.root)}>
+        <Breadcrumb
+          separator={<Icon icon={ChevronRight} size={14} />}
+          items={[
+            {
+              title: (
+                <button type={'button'} {...stylex.props(styles.back)} onClick={onBack}>
+                  {listLabel}
+                </button>
+              ),
+            },
+            {
+              title: (
+                <Text ellipsis as={'span'} style={{ maxWidth: 320 }} weight={500}>
+                  {name}
+                </Text>
+              ),
+            },
+          ]}
+        />
+      </div>
+    );
+  },
+);
 
 DetailBreadcrumb.displayName = 'DetailBreadcrumb';
 
