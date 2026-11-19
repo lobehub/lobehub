@@ -6,8 +6,8 @@ import { ragService } from '@/services/rag';
 import { useAgentStore } from '@/store/agent';
 
 import { chatService } from './index';
-import * as mechaModule from './mecha';
 import type { ResolvedAgentConfig } from './mecha';
+import * as mechaModule from './mecha';
 
 vi.hoisted(() => {
   const storage = new Map<string, string>();
