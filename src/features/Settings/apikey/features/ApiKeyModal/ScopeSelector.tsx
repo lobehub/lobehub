@@ -59,12 +59,14 @@ const styles = stylex.create({
 
 /**
  * Scope groups shown to the user. Most domains carry read and write scopes;
- * usage is intentionally read-only, while two domains carry an additional
- * high-risk tier that is separate from plain write:
+ * usage is intentionally read-only, while two domains carry additional
+ * high-risk tiers that are separate from plain write:
  *
  * - `model:invoke` burns money;
  * - `agent:credential:write` installs a secret into one of an agent's
- *   accounts — managing the agent's accounts must not imply that.
+ *   accounts — managing the agent's accounts must not imply that;
+ * - `agent:transfer` moves an agent out of its workspace or to another
+ *   member — editing an agent must not imply taking it away.
  */
 type ScopeGroupKey =
   'agent' | 'chat' | 'file' | 'knowledge' | 'mcp' | 'model' | 'usage' | 'user' | 'workspace';
@@ -74,20 +76,23 @@ type ScopeGroupKey =
  * `t()` calls stay inside the generated key union.
  */
 type ScopeExtraLabel =
-  'apikey.scopes.agentCredential' | 'apikey.scopes.invoke' | 'apikey.scopes.modelInvoke';
+  | 'apikey.scopes.agentCredential'
+  | 'apikey.scopes.agentTransfer'
+  | 'apikey.scopes.invoke'
+  | 'apikey.scopes.modelInvoke';
 
 interface ScopeGroup {
   /**
-   * A higher-risk scope in the same domain. It gets its own checkbox in the
+   * Higher-risk scopes in the same domain. Each gets its own checkbox in the
    * creation grid and its own entry in the granted-scopes overview; the two
    * labels differ because the grid spells the act out while the overview lists
    * grants next to "Read" / "Write".
    */
-  readonly extra?: {
+  readonly extras?: readonly {
     readonly createLabel: ScopeExtraLabel;
     readonly overviewLabel: ScopeExtraLabel;
     readonly scope: ApiKeyScope;
-  };
+  }[];
   readonly key: ScopeGroupKey;
   readonly label: `apikey.scopes.groups.${ScopeGroupKey}`;
   readonly read: ApiKeyScope;
@@ -100,11 +105,18 @@ const SCOPE_GROUPS: readonly ScopeGroup[] = [
     label: 'apikey.scopes.groups.agent',
     read: 'agent:read',
     write: 'agent:write',
-    extra: {
-      createLabel: 'apikey.scopes.agentCredential',
-      overviewLabel: 'apikey.scopes.agentCredential',
-      scope: 'agent:credential:write',
-    },
+    extras: [
+      {
+        createLabel: 'apikey.scopes.agentCredential',
+        overviewLabel: 'apikey.scopes.agentCredential',
+        scope: 'agent:credential:write',
+      },
+      {
+        createLabel: 'apikey.scopes.agentTransfer',
+        overviewLabel: 'apikey.scopes.agentTransfer',
+        scope: 'agent:transfer',
+      },
+    ],
   },
   { key: 'chat', label: 'apikey.scopes.groups.chat', read: 'chat:read', write: 'chat:write' },
   {
@@ -112,11 +124,13 @@ const SCOPE_GROUPS: readonly ScopeGroup[] = [
     label: 'apikey.scopes.groups.model',
     read: 'model:read',
     write: 'model:write',
-    extra: {
-      createLabel: 'apikey.scopes.modelInvoke',
-      overviewLabel: 'apikey.scopes.invoke',
-      scope: 'model:invoke',
-    },
+    extras: [
+      {
+        createLabel: 'apikey.scopes.modelInvoke',
+        overviewLabel: 'apikey.scopes.invoke',
+        scope: 'model:invoke',
+      },
+    ],
   },
   { key: 'file', label: 'apikey.scopes.groups.file', read: 'file:read', write: 'file:write' },
   {
@@ -158,7 +172,7 @@ export const ScopeOverview: FC<ScopeOverviewProps> = ({ scopes }) => {
     const actions = [
       scopeSet.has(group.read) && t('apikey.scopes.read'),
       group.write && scopeSet.has(group.write) && t('apikey.scopes.write'),
-      group.extra && scopeSet.has(group.extra.scope) && t(group.extra.overviewLabel),
+      ...(group.extras ?? []).map((extra) => scopeSet.has(extra.scope) && t(extra.overviewLabel)),
     ].filter(Boolean) as string[];
 
     return actions.length > 0 ? [{ actions, key: group.key, label: t(group.label) }] : [];
@@ -197,6 +211,7 @@ export const ScopeOverview: FC<ScopeOverviewProps> = ({ scopes }) => {
  */
 const SCOPE_PREREQUISITES: Partial<Record<ApiKeyScope, readonly ApiKeyScope[]>> = {
   'agent:credential:write': ['agent:write'],
+  'agent:transfer': ['agent:write'],
 };
 
 /** Each scope's prerequisites, with every `:write` needing its `:read` twin when one exists. */
@@ -296,15 +311,16 @@ const ScopeSelector: FC<ScopeSelectorProps> = ({
                       {t('apikey.scopes.write')}
                     </Checkbox>
                   )}
-                  {group.extra && (
+                  {group.extras?.map((extra) => (
                     <Checkbox
-                      checked={selectedSet.has(group.extra.scope)}
+                      checked={selectedSet.has(extra.scope)}
                       disabled={fullAccess}
-                      onChange={(checked) => group.extra && toggle(group.extra.scope, checked)}
+                      key={extra.scope}
+                      onChange={(checked) => toggle(extra.scope, checked)}
                     >
-                      {t(group.extra.createLabel)}
+                      {t(extra.createLabel)}
                     </Checkbox>
-                  )}
+                  ))}
                 </Flexbox>
               </Flexbox>
             ))}

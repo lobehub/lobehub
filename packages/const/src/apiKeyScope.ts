@@ -38,6 +38,14 @@ export const API_KEY_SCOPES = [
    * required alongside it, so this can only ever narrow, never widen.
    */
   'agent:credential:write',
+  /**
+   * Moving an agent out of its scope — to another workspace, to the personal
+   * space, or handing it to another member. Its own tier because it removes
+   * the agent (and its conversations) from everyone who could reach it, which
+   * "may edit the agent" must not imply. Like the credential tier it is
+   * required alongside `agent:write`, so it only ever narrows.
+   */
+  'agent:transfer',
   'eval:read',
   'eval:write',
   'chat:read',
@@ -425,6 +433,12 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   // with no read-back: `agent:write` alone ("may manage this agent's accounts")
   // must not be able to set a password/token on one.
   'agentAccount.setCredential': ['agent:credential:write'],
+  // moving an agent (or a group with its member agents) to another workspace,
+  // the personal space or another member takes it away from everyone who could
+  // reach it — the same `agent:transfer` tier the REST transfer route requires
+  'agent.transferAgent': ['agent:transfer'],
+  'agent.transferAgents': ['agent:transfer'],
+  'group.transferGroup': ['agent:transfer'],
   // notify's user/continue paths call `aiAgentService.execAgent` — another run entry
   'agentNotify.notify': AGENT_RUN_SCOPES,
   // signal triggers enqueue analyze-intent workflows whose judges call

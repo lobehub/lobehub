@@ -8,12 +8,17 @@ import { ChatGroupController } from '../controllers/chat-group.controller';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission } from '../middleware/permission-check';
 import {
+  BatchCreateChatGroupAgentsRequestSchema,
   ChatGroupIdParamSchema,
   ChatGroupListQuerySchema,
   ChatGroupListSchema,
+  ChatGroupMemberParamSchema,
   ChatGroupMembersRequestSchema,
   ChatGroupSchema,
   CreateChatGroupRequestSchema,
+  CreatedChatGroupAgentsSchema,
+  DuplicateChatGroupRequestSchema,
+  UpdateChatGroupMemberRequestSchema,
   UpdateChatGroupRequestSchema,
 } from '../types/chat-group.type';
 import { DeletedResourceSchema } from '../types/common.type';
@@ -137,6 +142,66 @@ ChatGroupRoutes.delete(
   zValidator('param', ChatGroupIdParamSchema),
   zValidator('json', ChatGroupMembersRequestSchema),
   async (c) => new ChatGroupController().removeMembers(c),
+);
+
+// ---------------------------------------------------------------------------
+// Advanced group operations, run through the shared `agentGroup` procedures
+// (duplicateGroup / batchCreateAgentsInGroup / updateAgentInGroup).
+// ---------------------------------------------------------------------------
+const GROUP_SCOPE_NOTE =
+  'Resolved in the workspace named by `X-Workspace-Id` (or the personal space without it); a group outside that scope answers 404. Needs edit access to the group in a workspace.';
+
+ChatGroupRoutes.post(
+  '/:id/duplicate',
+  routeDoc({
+    data: ChatGroupSchema,
+    description: `Copy the group with its configuration and a new supervisor. Members the group owns (created inside it) are copied; agents it only references are referenced again, not copied. ${GROUP_SCOPE_NOTE}`,
+    errors: [404],
+    operationId: 'chatGroups.duplicate',
+    status: 201,
+    summary: 'Duplicate a chat group',
+    tags: ['chat-groups'],
+  }),
+  requireAuth,
+  chatGroupWrite,
+  zValidator('param', ChatGroupIdParamSchema),
+  zValidator('json', DuplicateChatGroupRequestSchema),
+  async (c) => new ChatGroupController().duplicateChatGroup(c),
+);
+
+ChatGroupRoutes.post(
+  '/:id/agents',
+  routeDoc({
+    data: CreatedChatGroupAgentsSchema,
+    description: `Create several member agents inside the group in one call. They belong to the group (virtual agents) and inherit its workspace access level; they do not appear in the agent list on their own. ${GROUP_SCOPE_NOTE}`,
+    errors: [404],
+    operationId: 'chatGroups.createAgents',
+    status: 201,
+    summary: 'Create member agents in a chat group',
+    tags: ['chat-groups'],
+  }),
+  requireAuth,
+  chatGroupWrite,
+  zValidator('param', ChatGroupIdParamSchema),
+  zValidator('json', BatchCreateChatGroupAgentsRequestSchema),
+  async (c) => new ChatGroupController().batchCreateAgents(c),
+);
+
+ChatGroupRoutes.patch(
+  '/:id/members/:agentId',
+  routeDoc({
+    data: ChatGroupSchema,
+    description: `Enable or disable one member, change its speaking \`order\`, or switch it between \`participant\` and \`assistant\`. The supervisor's role cannot change. ${GROUP_SCOPE_NOTE}`,
+    errors: [404],
+    operationId: 'chatGroups.updateMember',
+    summary: 'Update a chat group member',
+    tags: ['chat-groups'],
+  }),
+  requireAuth,
+  chatGroupWrite,
+  zValidator('param', ChatGroupMemberParamSchema),
+  zValidator('json', UpdateChatGroupMemberRequestSchema),
+  async (c) => new ChatGroupController().updateMember(c),
 );
 
 export default ChatGroupRoutes;

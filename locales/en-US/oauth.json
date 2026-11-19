@@ -36,6 +36,7 @@
   "consent.redirecting": "Authorization successful, redirecting...",
   "consent.scope.acceptance-review": "Comment on this acceptance and accept or send it back from its preview page",
   "consent.scope.acceptance-review-site": "Comment on this site’s acceptance from the site itself, for 8 hours",
+  "consent.scope.agent-transfer": "Move your agents to another workspace or hand them to another member",
   "consent.scope.email": "Access your email address",
   "consent.scope.offline_access": "Allow the client to access your data",
   "consent.scope.openid": "Authenticate using your LobeHub account",

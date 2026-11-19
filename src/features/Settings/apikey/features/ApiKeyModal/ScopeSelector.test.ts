@@ -23,6 +23,12 @@ describe('toggleScopeSelection', () => {
     expect(toggleScopeSelection(granted, 'agent:read', false)).toEqual(['chat:read']);
   });
 
+  it('treats agent transfer as an agent write that is dropped with it', () => {
+    const granted = toggleScopeSelection([], 'agent:transfer', true);
+    expect(sorted(granted)).toEqual(['agent:read', 'agent:transfer', 'agent:write']);
+    expect(toggleScopeSelection(granted, 'agent:write', false)).toEqual(['agent:read']);
+  });
+
   it('keeps write implying read, and a standalone scope standalone', () => {
     expect(sorted(toggleScopeSelection([], 'chat:write', true))).toEqual([
       'chat:read',

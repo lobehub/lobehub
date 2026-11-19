@@ -11,6 +11,7 @@ import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { isWorkspaceNonOwner } from '@/server/routers/lambda/_helpers/assertWorkspaceRowManageable';
 import { getResourceConfigAccess } from '@/server/routers/lambda/_helpers/resourceConfigGuard';
+import { agentGroupRouter } from '@/server/routers/lambda/agentGroup';
 import { EditLockService } from '@/server/services/editLock';
 import {
   assertCanEditResource,
@@ -20,11 +21,15 @@ import {
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
 import { projectPublicChatGroup, type PublicChatGroup } from '../helpers/public-fields';
+import { rethrowCallerError } from '../helpers/trpc-caller';
 import type { ServiceResult } from '../types';
 import type {
+  BatchCreateChatGroupAgentsRequest,
   ChatGroupListResponse,
   CreateChatGroupRequest,
+  DuplicateChatGroupRequest,
   GetChatGroupsRequest,
+  UpdateChatGroupMemberRequest,
   UpdateChatGroupRequest,
 } from '../types/chat-group.type';
 
@@ -255,6 +260,71 @@ export class ChatGroupService extends BaseService {
       return await this.getChatGroup(id);
     } catch (error) {
       this.rethrow(error, 'remove chat group members');
+    }
+  }
+
+  // ==================== Advanced operations ====================
+  // These run the `agentGroup` tRPC procedures server-side so REST keeps their
+  // rules (edit gate, virtual-member copy, permission inheritance, supervisor
+  // invariant). The group is resolved with the caller's scope first, so a
+  // group in another account or workspace reads as 404.
+
+  private get groupCaller() {
+    return agentGroupRouter.createCaller({ userId: this.userId, workspaceId: this.workspaceId });
+  }
+
+  async duplicateChatGroup(
+    id: string,
+    request: DuplicateChatGroupRequest,
+  ): ServiceResult<PublicChatGroup> {
+    try {
+      await this.assertGroupExists(id);
+      const result = await this.groupCaller.duplicateGroup({
+        groupId: id,
+        newTitle: request.title,
+      });
+      if (!result) throw this.createNotFoundError('Chat group not found');
+      return await this.getChatGroup(result.groupId);
+    } catch (error) {
+      return rethrowCallerError(error, (cause) => this.rethrow(cause, 'duplicate chat group'));
+    }
+  }
+
+  async batchCreateAgents(
+    id: string,
+    request: BatchCreateChatGroupAgentsRequest,
+  ): ServiceResult<{ agentIds: string[]; chatGroup: PublicChatGroup }> {
+    try {
+      await this.assertGroupExists(id);
+      const { agentIds } = await this.groupCaller.batchCreateAgentsInGroup({
+        agents: request.agents,
+        groupId: id,
+      });
+      return { agentIds, chatGroup: await this.getChatGroup(id) };
+    } catch (error) {
+      return rethrowCallerError(error, (cause) => this.rethrow(cause, 'create chat group agents'));
+    }
+  }
+
+  async updateMember(
+    id: string,
+    agentId: string,
+    request: UpdateChatGroupMemberRequest,
+  ): ServiceResult<PublicChatGroup> {
+    try {
+      await this.assertGroupExists(id);
+      const member = (await this.chatGroupModel.getGroupAgents(id)).find(
+        (item) => item.agentId === agentId,
+      );
+      if (!member) throw this.createNotFoundError('Agent is not a member of this chat group');
+      if (request.role && member.role === 'supervisor') {
+        throw this.createValidationError("The group supervisor's role cannot be changed");
+      }
+
+      await this.groupCaller.updateAgentInGroup({ agentId, groupId: id, updates: request });
+      return await this.getChatGroup(id);
+    } catch (error) {
+      return rethrowCallerError(error, (cause) => this.rethrow(cause, 'update chat group member'));
     }
   }
 

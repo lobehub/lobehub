@@ -834,9 +834,17 @@ describe('AgentShareModel', () => {
   });
 
   describe('lockUploadAdmission', () => {
-    const heldAdvisoryLocks = async (db: LobeChatDatabase) => {
+    // `pg_locks` is server-wide and the database suite runs files in parallel
+    // against one Postgres, so count only the lock on this share's key. A
+    // single bigint advisory key is split into classid (high 32 bits) and
+    // objid (low 32 bits).
+    const heldAdvisoryLocks = async (db: LobeChatDatabase, shareId: string) => {
+      const key = sql`hashtext(${`agent_share_upload:${shareId}`})::bigint`;
       const { rows } = await db.execute(
-        sql`SELECT count(*)::int AS held FROM pg_locks WHERE locktype = 'advisory'`,
+        sql`SELECT count(*)::int AS held FROM pg_locks
+            WHERE locktype = 'advisory' AND objsubid = 1
+              AND classid::bigint = ((${key} >> 32) & 4294967295)
+              AND objid::bigint = (${key} & 4294967295)`,
       );
       return (rows[0] as { held: number }).held;
     };
@@ -844,12 +852,12 @@ describe('AgentShareModel', () => {
     it('holds a transaction-scoped advisory lock that is released at commit', async () => {
       await serverDB.transaction(async (tx) => {
         await AgentShareModel.lockUploadAdmission(tx, 'share-lock-test');
-        await expect(heldAdvisoryLocks(tx)).resolves.toBe(1);
+        await expect(heldAdvisoryLocks(tx, 'share-lock-test')).resolves.toBe(1);
         // Re-entrant within the same transaction: a retry does not deadlock.
         await AgentShareModel.lockUploadAdmission(tx, 'share-lock-test');
       });
 
-      await expect(heldAdvisoryLocks(serverDB)).resolves.toBe(0);
+      await expect(heldAdvisoryLocks(serverDB, 'share-lock-test')).resolves.toBe(0);
     });
   });
 
