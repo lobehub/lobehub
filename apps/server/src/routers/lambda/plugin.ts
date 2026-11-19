@@ -9,6 +9,7 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import { redactForeignComposioLinks } from './_helpers/composioProjection';
 import { recordLegacyPluginWrite } from './_helpers/legacyPluginWriteMetrics';
 
 const pluginProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -111,7 +112,7 @@ export const pluginRouter = router({
   getPlugins: wsCompatProcedure.use(serverDatabase).query(async ({ ctx }): Promise<LobeTool[]> => {
     const pluginModel = new PluginModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
 
-    return pluginModel.query();
+    return redactForeignComposioLinks(await pluginModel.query(), ctx);
   }),
 
   removePlugin: pluginProcedure

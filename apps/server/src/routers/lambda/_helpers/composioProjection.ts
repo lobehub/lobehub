@@ -25,3 +25,27 @@ export const removeComposioProjection = async (
     await pluginModel.deleteComposioMirrors(connection.identifier, connection.connectedAccountId);
   }
 };
+
+/**
+ * The legacy plugin projection is workspace-wide, but a pending hosted OAuth
+ * link (`customParams.composio.redirectUrl`) is a live capability of whoever
+ * started it: a teammate redeeming it would bind their own provider account to
+ * that connection (a private one included). Every read that returns plugin
+ * rows to a client keeps the link only for its linker; outside a workspace
+ * every row is the caller's own.
+ */
+export const redactForeignComposioLinks = <
+  T extends {
+    customParams?: { composio?: { linkedByUserId?: string; redirectUrl?: string } } | null;
+  },
+>(
+  plugins: T[],
+  ctx: { userId: string; workspaceId?: string | null },
+): T[] =>
+  plugins.map((plugin) => {
+    const composio = plugin.customParams?.composio;
+    if (!composio?.redirectUrl || !ctx.workspaceId || composio.linkedByUserId === ctx.userId)
+      return plugin;
+    const { redirectUrl: _redirectUrl, ...rest } = composio;
+    return { ...plugin, customParams: { ...plugin.customParams, composio: rest } };
+  });
