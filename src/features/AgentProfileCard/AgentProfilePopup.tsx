@@ -62,6 +62,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       opacity: 1;
     }
   `,
+  // A replaced card (another card opened, its trigger was pressed, the route changed)
+  // leaves at once instead of fading out over whatever replaced it.
+  instantClose: css`
+    &[data-ending-style],
+    &[data-closed] {
+      visibility: hidden;
+      transition: none;
+    }
+  `,
   footer: css`
     padding-block: 12px;
     padding-inline: 16px;
@@ -105,7 +114,11 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
     const { t } = useTranslation('chat');
     const navigate = useWorkspaceAwareNavigate();
     const [open, setOpen] = useState(false);
-    const { detached, triggerProps } = useAutoClosePopup({ open, setOpen });
+    const { detached, instant, onOpenChange, triggerProps } = useAutoClosePopup({
+      open,
+      setOpen,
+      trigger,
+    });
     const [loading, setLoading] = useState(false);
     const { allowed: canEditContent } = usePermission('edit_own_content');
     const { canEditResource: canEditAgent, isAccessResolved: isAgentAccessResolved } =
@@ -292,6 +305,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
 
     return (
       <Popover
+        className={instant ? styles.instantClose : undefined}
         classNames={trigger === 'click' ? { trigger: styles.trigger } : undefined}
         nativeButton={false}
         open={open}
@@ -318,7 +332,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
         styles={{
           content: { borderRadius: 12, overflow: 'hidden', padding: 0 },
         }}
-        onOpenChange={setOpen}
+        onOpenChange={onOpenChange}
       >
         {children}
       </Popover>

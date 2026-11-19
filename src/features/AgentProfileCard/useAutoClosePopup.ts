@@ -1,6 +1,7 @@
 import {
   type FocusEvent,
   type PointerEvent,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -12,6 +13,8 @@ import { useLocation } from 'react-router';
 interface UseAutoClosePopupOptions {
   open: boolean;
   setOpen: (open: boolean) => void;
+  /** Only a hover card closes on press: a click card opens on that very press. */
+  trigger?: 'click' | 'hover';
 }
 
 /**
@@ -32,14 +35,48 @@ interface UseAutoClosePopupOptions {
  * - Escape: a hover-opened card never takes focus, and an editor that holds it
  *   (the chat composer) stops the key before Base UI's dismiss sees it, so it
  *   is caught in the capture phase and still reaches the editor.
+ * - Only one card is open at a time: opening one closes the previous one, and
+ *   pressing a trigger (to enter that Agent) closes its card and keeps it shut
+ *   until the pointer leaves, so the card never lingers over the next page.
+ *
+ * Closes that replace the card (another card, a press, a navigation) set
+ * `instant`, which the caller turns into a popup without its exit transition,
+ * so the old card is gone in the same frame instead of fading out.
  */
-export const useAutoClosePopup = ({ open, setOpen }: UseAutoClosePopupOptions) => {
+
+interface ActiveCard {
+  close: () => void;
+}
+
+// The card that is open right now, across every AgentProfilePopup.
+let activeCard: ActiveCard | null = null;
+
+export const useAutoClosePopup = ({
+  open,
+  setOpen,
+  trigger = 'hover',
+}: UseAutoClosePopupOptions) => {
   // Every navigation gets a new key, query- and hash-only ones included.
   const { key: locationKey } = useLocation();
   const setOpenRef = useRef(setOpen);
   setOpenRef.current = setOpen;
   const triggerRef = useRef<Element | null>(null);
   const [detached, setDetached] = useState(false);
+  const [instant, setInstant] = useState(false);
+  // Set by pressing the trigger; blocks hover from reopening the card until the pointer leaves.
+  const pressedRef = useRef(false);
+
+  const closeInstantly = useCallback(() => {
+    setInstant(true);
+    setOpenRef.current(false);
+  }, []);
+
+  // Base UI asks to open or close through here.
+  const onOpenChange = useCallback((next: boolean) => {
+    if (next && pressedRef.current) return;
+    if (next) setInstant(false);
+    setOpenRef.current(next);
+  }, []);
 
   // Layout effects are cleaned up both when an <Activity> hides the trigger
   // and when it unmounts, and set up again when it is shown.
@@ -55,8 +92,18 @@ export const useAutoClosePopup = ({ open, setOpen }: UseAutoClosePopupOptions) =
   useEffect(() => {
     if (lastLocationKeyRef.current === locationKey) return;
     lastLocationKeyRef.current = locationKey;
-    setOpenRef.current(false);
-  }, [locationKey]);
+    closeInstantly();
+  }, [locationKey, closeInstantly]);
+
+  useEffect(() => {
+    if (!open) return;
+    const self: ActiveCard = { close: closeInstantly };
+    if (activeCard) activeCard.close();
+    activeCard = self;
+    return () => {
+      if (activeCard === self) activeCard = null;
+    };
+  }, [open, closeInstantly]);
 
   useEffect(() => {
     if (!open) return;
@@ -88,12 +135,20 @@ export const useAutoClosePopup = ({ open, setOpen }: UseAutoClosePopupOptions) =
       onFocus: (event: FocusEvent<Element>) => {
         triggerRef.current = event.currentTarget;
       },
+      onPointerDown: () => {
+        if (trigger !== 'hover') return;
+        pressedRef.current = true;
+        closeInstantly();
+      },
       onPointerEnter: (event: PointerEvent<Element>) => {
         triggerRef.current = event.currentTarget;
       },
+      onPointerLeave: () => {
+        pressedRef.current = false;
+      },
     }),
-    [],
+    [closeInstantly, trigger],
   );
 
-  return { detached, triggerProps };
+  return { detached, instant, onOpenChange, triggerProps };
 };

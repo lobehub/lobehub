@@ -29,6 +29,11 @@ const setup = ({ open = true }: { open?: boolean } = {}) => {
     ...hook,
     navigate: (to: string) => router!.navigate(to),
     setOpen,
+    // A second card in the same app shares the router.
+    wrapperForTest: ({ children }: { children: ReactNode }) =>
+      createElement(RouterProvider, {
+        router: createMemoryRouter([{ element: children, path: '*' }]),
+      }),
   };
 };
 
@@ -126,6 +131,66 @@ describe('useAutoClosePopup', () => {
     editor.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
 
     expect(setOpen).toHaveBeenCalledWith(false);
+  });
+
+  it('closes the open card instantly when another card opens', () => {
+    const first = setup();
+    const secondSetOpen = vi.fn();
+    const second = renderHook(({ open }) => useAutoClosePopup({ open, setOpen: secondSetOpen }), {
+      initialProps: { open: false },
+      wrapper: first.wrapperForTest,
+    });
+
+    second.rerender({ open: true });
+
+    expect(first.setOpen).toHaveBeenCalledWith(false);
+    expect(first.result.current.instant).toBe(true);
+    expect(secondSetOpen).not.toHaveBeenCalled();
+  });
+
+  it('closes on trigger press and keeps hover from reopening until the pointer leaves', () => {
+    const { result, setOpen } = setup();
+
+    act(() => result.current.triggerProps.onPointerDown());
+    expect(setOpen).toHaveBeenLastCalledWith(false);
+    expect(result.current.instant).toBe(true);
+
+    setOpen.mockClear();
+    act(() => result.current.onOpenChange(true));
+    expect(setOpen).not.toHaveBeenCalled();
+
+    act(() => result.current.triggerProps.onPointerLeave());
+    act(() => result.current.onOpenChange(true));
+    expect(setOpen).toHaveBeenCalledWith(true);
+    // A normal open restores the regular exit transition.
+    expect(result.current.instant).toBe(false);
+  });
+
+  it('leaves a click card alone on press, since that press opens it', () => {
+    const setOpen = vi.fn();
+    const { result } = renderHook(
+      () => useAutoClosePopup({ open: false, setOpen, trigger: 'click' }),
+      {
+        wrapper: ({ children }: { children: ReactNode }) =>
+          createElement(RouterProvider, {
+            router: createMemoryRouter([{ element: children, path: '*' }]),
+          }),
+      },
+    );
+
+    act(() => result.current.triggerProps.onPointerDown());
+    act(() => result.current.onOpenChange(true));
+
+    expect(setOpen).toHaveBeenCalledTimes(1);
+    expect(setOpen).toHaveBeenCalledWith(true);
+  });
+
+  it('closes instantly on navigation', async () => {
+    const { navigate, result } = setup();
+
+    await act(() => navigate('/agent/agt_coder'));
+
+    expect(result.current.instant).toBe(true);
   });
 
   it('listens for nothing while the card is closed', () => {
