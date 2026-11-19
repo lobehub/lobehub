@@ -142,7 +142,10 @@ const Actions = ({
       key: 'delete',
       title: editReason,
       danger: true,
-      disabled: !editable || !manageable || !access.canManageResource,
+      // Server `canManage` covers the author, the Owner and — for another
+      // member's shared agent — an Admin, whose delete the confirmation warns
+      // about and the server accepts only with that acknowledgment.
+      disabled: !editable || !access.canManageResource || (item.type === 'group' && !manageable),
       icon: <Icon icon={Trash} />,
       label: t('delete', { ns: 'common' }),
       onClick: () => {

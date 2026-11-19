@@ -1,4 +1,5 @@
-import { Button, createModal, ModalFooter, Skeleton, useModalContext } from '@lobehub/ui';
+import { type AgentDeleteImpact } from '@lobechat/types';
+import { Alert, Button, createModal, ModalFooter, Skeleton, useModalContext } from '@lobehub/ui';
 import { t } from 'i18next';
 import { type ReactNode, Suspense, use, useState } from 'react';
 
@@ -14,8 +15,6 @@ interface ConfirmRemoveAgentOptions {
   onConfirm: (options: RemoveAgentOptions) => Promise<void> | void;
 }
 
-type AgentDeleteImpact = Awaited<ReturnType<typeof agentService.getAgentDeleteImpact>>;
-
 /**
  * Pick the confirmation copy for an agent delete. The cascade trashes every
  * topic under the agent, teammates' included, so the dialog must say so when
@@ -25,7 +24,9 @@ type AgentDeleteImpact = Awaited<ReturnType<typeof agentService.getAgentDeleteIm
  * warns that every topic goes rather than showing the plain copy: workspace
  * owners skip the server guard and would otherwise delete it unwarned.
  */
-export const getRemoveAgentAlert = (impact: AgentDeleteImpact | null): string => {
+export const getRemoveAgentAlert = (
+  impact: Pick<AgentDeleteImpact, 'foreignTopicCount' | 'hasForeignContent'> | null,
+): string => {
   if (impact === null) return t('confirmRemoveSessionItemAlertImpactUnknown', { ns: 'chat' });
   if (impact && impact.foreignTopicCount > 0)
     return t('confirmRemoveSessionItemAlertWithOthersCount', {
@@ -38,6 +39,18 @@ export const getRemoveAgentAlert = (impact: AgentDeleteImpact | null): string =>
 };
 
 /**
+ * The strong warning shown when someone other than the caller created the
+ * agent — a workspace Admin or Owner deleting a member's agent. `null` when
+ * the caller created it.
+ */
+export const getOtherCreatorWarning = (impact: AgentDeleteImpact | null): string | null => {
+  if (!impact?.createdByOther) return null;
+  return impact.creatorName
+    ? t('confirmRemoveAgentOtherCreator', { name: impact.creatorName, ns: 'chat' })
+    : t('confirmRemoveAgentOtherCreatorUnknown', { ns: 'chat' });
+};
+
+/**
  * The dialog's state for an impact lookup: `undefined` while it is in flight,
  * `null` once it failed. Delete stays disabled until the lookup settles, so no
  * one — workspace owners included — can confirm before reading the warning.
@@ -47,11 +60,19 @@ export const getRemoveAgentAlert = (impact: AgentDeleteImpact | null): string =>
  */
 export const getRemoveAgentConfirmState = (impact: AgentDeleteImpact | null | undefined) => {
   if (impact === undefined)
-    return { acknowledgeForeignContent: false, alert: null, canConfirm: false } as const;
+    return {
+      acknowledgeForeignContent: false,
+      acknowledgeOtherCreator: false,
+      alert: null,
+      canConfirm: false,
+      otherCreatorWarning: null,
+    } as const;
   return {
     acknowledgeForeignContent: !!impact?.hasForeignContent,
+    acknowledgeOtherCreator: !!impact?.createdByOther,
     alert: getRemoveAgentAlert(impact),
     canConfirm: true,
+    otherCreatorWarning: getOtherCreatorWarning(impact),
   } as const;
 };
 
@@ -103,10 +124,23 @@ interface LoadedConfirmProps {
 const LoadedConfirm = ({ impact, onConfirm }: LoadedConfirmProps) => {
   const state = getRemoveAgentConfirmState(use(impact));
 
+  // Someone else's agent: both facts go into one error alert, so the creator
+  // and the other members' topics cannot be skimmed past as routine copy.
+  const content = state.otherCreatorWarning ? (
+    <Alert showIcon description={state.alert} title={state.otherCreatorWarning} type={'error'} />
+  ) : (
+    state.alert
+  );
+
   return (
     <ConfirmLayout
-      content={state.alert}
-      onConfirm={() => onConfirm({ acknowledgeForeignContent: state.acknowledgeForeignContent })}
+      content={content}
+      onConfirm={() =>
+        onConfirm({
+          acknowledgeForeignContent: state.acknowledgeForeignContent,
+          acknowledgeOtherCreator: state.acknowledgeOtherCreator,
+        })
+      }
     />
   );
 };

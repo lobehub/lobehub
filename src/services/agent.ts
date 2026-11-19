@@ -1,4 +1,9 @@
-import { type AgentItem, type AgentRankItem, type LobeAgentConfig } from '@lobechat/types';
+import {
+  type AgentDeleteImpact,
+  type AgentItem,
+  type AgentRankItem,
+  type LobeAgentConfig,
+} from '@lobechat/types';
 import { type PartialDeep } from 'type-fest';
 
 import { lambdaClient } from '@/libs/trpc/client';
@@ -112,6 +117,8 @@ interface AgentGroupMembershipImpactRef {
 export interface RemoveAgentOptions {
   /** The user confirmed a warning that other members' content goes with the agent. */
   acknowledgeForeignContent?: boolean;
+  /** The user confirmed a warning that someone else created the agent. */
+  acknowledgeOtherCreator?: boolean;
 }
 
 class AgentService {
@@ -307,9 +314,7 @@ class AgentService {
    * members' topics (counted) and any other foreign content — for the delete
    * confirmation.
    */
-  getAgentDeleteImpact = async (
-    agentId: string,
-  ): Promise<{ foreignTopicCount: number; hasForeignContent: boolean }> => {
+  getAgentDeleteImpact = async (agentId: string): Promise<AgentDeleteImpact> => {
     return lambdaClient.agent.getAgentDeleteImpact.query({ agentId });
   };
 

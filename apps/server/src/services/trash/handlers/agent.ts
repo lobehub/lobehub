@@ -61,7 +61,8 @@ export const softDeleteAgent = async (
   const sessionIds = await agentModel.findSessionIdsByAgentIds([agentId]);
   // The cascade is scope-wide on purpose (no `restrictToCreator`): the router
   // only lets a non-owner through when nothing foreign rides along, or when
-  // the agent's author acknowledged that teammates' topics go with it.
+  // the agent's author (or an Admin overriding on another member's agent)
+  // acknowledged that teammates' topics go with it.
   const topics = await topicModel.softDeleteByParents(
     { agentIds: [agentId], sessionIds },
     { deletedAt: options.deletedAt },

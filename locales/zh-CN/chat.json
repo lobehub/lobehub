@@ -235,6 +235,8 @@
   "compression.history": "原始对话",
   "compression.summary": "历史记录摘要",
   "confirmClearCurrentMessages": "确认清空当前会话消息吗？清空后无法恢复",
+  "confirmRemoveAgentOtherCreator": "这是 {{name}} 创建的助手，不是你的。删除后，创建者和工作区里的其他人都将无法再使用它。",
+  "confirmRemoveAgentOtherCreatorUnknown": "这是其他成员创建的助手，不是你的。删除后，创建者和工作区里的其他人都将无法再使用它。",
   "confirmRemoveChatGroupItemAlert": "确认删除该群组吗？群组专有助理将会被同样删除，外部助理不受影响",
   "confirmRemoveGroupItemAlert": "确认删除该分类吗？分类内的助理会移回默认列表",
   "confirmRemoveGroupSuccess": "群组已删除",

@@ -172,6 +172,10 @@ export const useAgentDropdownMenu = ({
   // Row-level ownership: delete/transfer/visibility management stays scoped
   // to the creator or a workspace owner, separate from collaborative editing.
   const canManage = useResourceManageable(userId);
+  // Delete also opens to a workspace Admin on another member's shared agent
+  // (server `canManage`); the confirmation then warns that someone else created
+  // it, and the server only accepts the delete with that acknowledgment.
+  const canDelete = canManage || canManageResource;
 
   // Cross-workspace Transfer to… / Copy to… items (null when workspace
   // feature is off or the viewer lacks permission for this agent)
@@ -576,7 +580,7 @@ export const useAgentDropdownMenu = ({
                     },
                   ]
                 : []),
-              ...(canManage
+              ...(canDelete
                 ? [
                     { type: 'divider' as const },
                     {
@@ -612,8 +616,8 @@ export const useAgentDropdownMenu = ({
       canCreate,
       canConfigure,
       canEdit,
-      canManage,
       canManageResource,
+      canDelete,
       navigate,
       pinned,
       id,

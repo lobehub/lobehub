@@ -235,6 +235,8 @@
   "compression.history": "Original conversation",
   "compression.summary": "History summary",
   "confirmClearCurrentMessages": "You are about to clear the current conversation messages. Once cleared, they cannot be retrieved. Please confirm your action.",
+  "confirmRemoveAgentOtherCreator": "This agent was created by {{name}}, not you. Deleting it takes it away from its creator and everyone in the workspace.",
+  "confirmRemoveAgentOtherCreatorUnknown": "This agent was created by another member, not you. Deleting it takes it away from its creator and everyone in the workspace.",
   "confirmRemoveChatGroupItemAlert": "This Group will be deleted. Group-specific assistants will also be deleted, while external assistants will not be affected.",
   "confirmRemoveGroupItemAlert": "You are about to delete this category. After deletion, its agents will be moved to the default list. Please confirm your action.",
   "confirmRemoveGroupSuccess": "Group deleted successfully",

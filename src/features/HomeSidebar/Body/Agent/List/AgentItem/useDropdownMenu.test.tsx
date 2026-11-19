@@ -403,6 +403,33 @@ describe('useAgentDropdownMenu', () => {
     expect(mocks.toastError).toHaveBeenCalledWith('deleteHistoryMigrating');
   });
 
+  const findDeleteItem = (items: unknown[]) =>
+    items.find(
+      (item) => item && typeof item === 'object' && 'key' in item && item.key === 'delete',
+    );
+
+  it("offers delete to a workspace Admin on another member's shared agent", () => {
+    // Admin: not the creator and not the Owner (client `canManage` false), but
+    // the server's `canManage` (AGENT_UPDATE:all) is true.
+    mocks.canEditResource = true;
+    mocks.canManage = false;
+    mocks.canManageResource = true;
+
+    const { result } = renderPublicAgentMenu('member-1');
+
+    expect(findDeleteItem(result.current() ?? [])).toBeDefined();
+  });
+
+  it("hides delete from a member on another member's agent", () => {
+    mocks.canEditResource = true;
+    mocks.canManage = false;
+    mocks.canManageResource = false;
+
+    const { result } = renderPublicAgentMenu('member-1');
+
+    expect(findDeleteItem(result.current() ?? [])).toBeUndefined();
+  });
+
   it('stays native-eligible (string labels only, including the Move to Category submenu)', () => {
     mocks.canEditResource = true;
 
