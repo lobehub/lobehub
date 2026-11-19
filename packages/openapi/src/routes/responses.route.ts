@@ -30,7 +30,7 @@ ResponsesRoutes.post(
     // OpenResponses clients parse `error.message`/`error.type`, so HTTP errors
     // keep the protocol's shape (plus `requestId`) instead of `ApiError`.
     errorSchema: OpenResponsesHttpErrorSchema,
-    errors: [400],
+    errors: [400, 403, 404],
     streamContent: { 'text/event-stream': { schema: { type: 'string' } } },
     summary: 'Create a model response',
     tags: ['responses'],

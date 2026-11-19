@@ -1,11 +1,14 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 
+import { TopicModel } from '@/database/models/topic';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { InMemoryStreamEventManager } from '@/server/modules/AgentRuntime/InMemoryStreamEventManager';
 import type {
   StreamChunkData,
   StreamEvent,
 } from '@/server/modules/AgentRuntime/StreamEventManager';
+import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
+import { assertCanUseAgentRunConversation } from '@/server/routers/lambda/aiAgent/guards';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
 
@@ -265,6 +268,52 @@ export class ResponsesService extends BaseService {
   }
 
   /**
+   * Authorize a run before anything is created or read, mirroring the tRPC
+   * `aiAgent.execAgent` chain: workspace `message:create` capability (denies a
+   * viewer), `use` on the agent and every parent group, and `use` on the
+   * conversation a `previous_response_id` continues.
+   *
+   * The topic lookup fails closed on ids the caller cannot see at all: in
+   * personal mode `TopicModel` only resolves the caller's own rows, and in
+   * workspace mode — where every member's topic is readable — the resource
+   * guard still has to pass, so a colleague's private conversation cannot be
+   * pulled into context or written back.
+   */
+  async assertRunAuthorized(params: CreateResponseRequest): Promise<void> {
+    const permission = await this.resolveOperationPermission('MESSAGE_CREATE');
+    if (!permission.isPermitted) {
+      throw this.createAuthorizationError(
+        permission.message || 'No permission to create a response',
+      );
+    }
+
+    const previousTopicId = params.previous_response_id
+      ? this.extractTopicIdFromResponseId(params.previous_response_id)
+      : null;
+    if (previousTopicId) {
+      const topic = await new TopicModel(this.db, this.userId, this.workspaceId).findById(
+        previousTopicId,
+      );
+      if (!topic) {
+        throw this.createNotFoundError('The previous response was not found');
+      }
+    }
+
+    await assertCanUseWorkspaceAgent({
+      agentId: params.model,
+      db: this.db,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
+    await assertCanUseAgentRunConversation({
+      db: this.db,
+      topicId: previousTopicId,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
+  }
+
+  /**
    * Start the run a request asks for. Function call outputs for a run parked on
    * the caller's tools resume that same run; anything else creates a new
    * operation (model field = agent id) without auto-start.
@@ -349,6 +398,10 @@ export class ResponsesService extends BaseService {
   async createResponse(params: CreateResponseRequest): Promise<ResponseObject> {
     const createdAt = Math.floor(Date.now() / 1000);
 
+    // Kept outside the `try` below: an authorization refusal is an HTTP error,
+    // not a `status: "failed"` response object.
+    await this.assertRunAuthorized(params);
+
     try {
       const agentRuntimeService = new AgentRuntimeService(this.db, this.userId, {
         queueService: null,
@@ -419,6 +472,11 @@ export class ResponsesService extends BaseService {
     let releaseStream: (() => Promise<void>) | undefined;
 
     try {
+      // Inside the generator the refusal can only degrade to a `response.failed`
+      // event; the controller repeats this check before opening SSE so a denied
+      // request never sees a 200.
+      await this.assertRunAuthorized(params);
+
       // 1. Run the operation on the gateway-aware stream pipeline, with this
       // generator's own subscription on a private in-memory manager.
       //
