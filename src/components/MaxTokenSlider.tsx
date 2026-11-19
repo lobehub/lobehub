@@ -48,18 +48,22 @@ const MaxTokenSlider = memo<MaxTokenSliderProps>(({ value, onChange, defaultValu
   const isMobile = useIsMobile();
 
   const options = useMemo(
-    () => [
-      { label: '0', value: exponent(2) },
-      { label: isMobile ? '4' : '4K', value: exponent(4) }, // 4 Kibi = 4096
-      { label: isMobile ? '8' : '8K', value: exponent(8) },
-      { label: isMobile ? '16' : '16K', value: exponent(16) },
-      { label: isMobile ? '32' : '32K', value: exponent(32) },
-      { label: isMobile ? '64' : '64K', value: exponent(64) },
-      { ariaLabel: '128k', label: ' ', value: exponent((128 / Kibi) * 1000) }, // hide tick label
-      { label: isMobile ? '200' : '200k', value: exponent((200 / Kibi) * 1000) },
-      { label: '1M', value: exponent(Kibi) },
-      { label: '2M', value: exponent(2 * Kibi) },
-    ],
+    () =>
+      [
+        { label: '0', value: exponent(2) },
+        { label: isMobile ? '4' : '4K', value: exponent(4) }, // 4 Kibi = 4096
+        { label: isMobile ? '8' : '8K', value: exponent(8) },
+        { label: isMobile ? '16' : '16K', value: exponent(16) },
+        { label: isMobile ? '32' : '32K', value: exponent(32) },
+        { label: isMobile ? '64' : '64K', value: exponent(64) },
+        { ariaLabel: '128k', label: ' ', value: exponent((128 / Kibi) * 1000) }, // hide tick label
+        { label: isMobile ? '200' : '200k', value: exponent((200 / Kibi) * 1000) },
+        { label: '1M', value: exponent(Kibi) },
+        { label: '2M', value: exponent(2 * Kibi) },
+      ].map((option) => ({
+        ...option,
+        style: { overflowWrap: 'normal' as const, whiteSpace: 'nowrap' as const },
+      })),
     [isMobile],
   );
 
