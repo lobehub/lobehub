@@ -9,7 +9,7 @@ import {
   SELF_FEEDBACK_INTENT_IDENTIFIER,
   shouldExposeSelfFeedbackIntentTool,
 } from '@lobechat/builtin-tool-self-iteration';
-import { getUnselectedBuiltinToolIds } from '@lobechat/builtin-tools';
+import { getUnselectedBuiltinToolIds, runtimeManagedToolIds } from '@lobechat/builtin-tools';
 import { getFeatureDisabledToolIds } from '@lobechat/builtin-tools/featureGates';
 import type {
   AgentGroupConfig,
@@ -22,6 +22,7 @@ import {
   applyConnectorActivation,
   dropInvalidManifests,
   hasConnectorActivator,
+  initialToolSelection,
   resolveClientExecutors,
   resolveConnectorActivation,
   resolveDiscoveryPool,
@@ -644,8 +645,11 @@ export const discoverTools = async (
     toolsResult = toolsEngine.generateToolsDetailed({
       model,
       provider,
-      skipDefaultTools: !!exclusivePluginIds,
-      toolIds: pluginIds,
+      ...initialToolSelection(
+        pluginIds,
+        isGoalTurn ? { toolMode: 'custom' } : agentConfig.chatConfig,
+        !!exclusivePluginIds,
+      ),
     });
 
     tools = toolsResult.tools;
@@ -664,6 +668,7 @@ export const discoverTools = async (
 
     // Start with the scoped manifest map (pluginIds + defaultToolIds)
     const manifestMap = toolsEngine.getEnabledPluginManifests(pluginIds);
+    // Registry discovery must respect the same capability gates as explicit activation.
     const discovery = resolveDiscoveryPool({
       builtinTools: buildAllowedBuiltinTools({
         canUseDevice,
@@ -676,7 +681,10 @@ export const discoverTools = async (
       deviceAccess: { canUseDevice, deviceLocked },
       deviceCapable,
       disableLocalSystem,
-      disabledPluginIds,
+      disabledPluginIds: [
+        ...disabledPluginIds,
+        ...runtimeManagedToolIds.filter((id) => !manifestMap.has(id)),
+      ],
       enabledManifests: manifestMap,
       exclusivePluginIds,
       executionTarget: executionPlan.target,
