@@ -30,14 +30,12 @@ describe('TopicModel - sub-topics (metadata.openedBy)', () => {
         agentId: 'agent-a',
         id: 'child-same',
         metadata: openedBy('parent'),
-        trigger: 'sub_topic',
         userId,
       },
       {
         agentId: 'agent-b',
         id: 'child-cross',
         metadata: openedBy('parent'),
-        trigger: 'sub_topic',
         userId,
       },
       {
@@ -51,7 +49,6 @@ describe('TopicModel - sub-topics (metadata.openedBy)', () => {
         agentId: 'agent-b',
         id: 'grandchild',
         metadata: openedBy('child-cross', { agentId: 'agent-b' }),
-        trigger: 'sub_topic',
         userId,
       },
       {
@@ -66,16 +63,12 @@ describe('TopicModel - sub-topics (metadata.openedBy)', () => {
         id: 'archived-child',
         metadata: openedBy('parent'),
         status: 'completed',
-        trigger: 'sub_topic',
         userId,
       },
-      // Same jsonb shape but an unrelated trigger: never a sub-topic.
-      { agentId: 'agent-a', id: 'chat-row', metadata: openedBy('parent'), userId },
       {
         agentId: 'agent-other',
         id: 'foreign',
         metadata: openedBy('parent'),
-        trigger: 'sub_topic',
         userId: otherUserId,
       },
     ]);
@@ -131,7 +124,6 @@ describe('TopicModel - sub-topics (metadata.openedBy)', () => {
         agentId: 'agent-a',
         id,
         metadata: openedBy(previous),
-        trigger: 'sub_topic',
         userId,
       });
       previous = id;
@@ -179,12 +171,11 @@ describe('TopicModel - sub-topics (metadata.openedBy)', () => {
     ).toBeNull();
   });
 
-  it('detaches sub-topics and turns a sub_topic trigger back into a normal topic', async () => {
+  it('detaches sub-topics: they keep the link as their origin but no longer list under it', async () => {
     const changed = await topicModel.detachOpenedTopics(['child-cross', 'child-task']);
     expect(changed.map((row) => row.id).sort()).toEqual(['child-cross', 'child-task']);
 
     const [cross] = await serverDB.select().from(topics).where(eq(topics.id, 'child-cross'));
-    expect(cross.trigger).toBeNull();
     expect((cross.metadata as any).openedBy.detachedAt).toEqual(expect.any(String));
     expect((cross.metadata as any).openedBy.topicId).toBe('parent');
 
@@ -196,14 +187,14 @@ describe('TopicModel - sub-topics (metadata.openedBy)', () => {
   });
 
   it('hides sub-topics from the target agent list but falls back to the top level once the opener is gone', async () => {
-    const excludeTriggers = ['task', 'sub_topic'];
+    const filter = { excludeOpenedTopics: true, excludeTriggers: ['task'] };
 
-    const before = await topicModel.query({ agentId: 'agent-b', excludeTriggers });
+    const before = await topicModel.query({ agentId: 'agent-b', ...filter });
     expect(before.items.map((row: any) => row.id)).toEqual([]);
 
     await serverDB.delete(topics).where(eq(topics.id, 'parent'));
 
-    const after = await topicModel.query({ agentId: 'agent-b', excludeTriggers });
+    const after = await topicModel.query({ agentId: 'agent-b', ...filter });
     // The cross-agent child lost its opener; the grandchild's opener still exists.
     expect(after.items.map((row: any) => row.id)).toEqual(['child-cross']);
   });
@@ -211,13 +202,9 @@ describe('TopicModel - sub-topics (metadata.openedBy)', () => {
   it('treats an opener in the recycle bin as gone', async () => {
     await topicModel.softDelete(['parent'], { deletedAt: new Date() });
 
-    const result = await topicModel.query({
-      agentId: 'agent-a',
-      excludeTriggers: ['sub_topic'],
-    });
+    const result = await topicModel.query({ agentId: 'agent-a', excludeOpenedTopics: true });
     expect(result.items.map((row: any) => row.id).sort()).toEqual([
       'archived-child',
-      'chat-row',
       'child-same',
       'detached',
     ]);
@@ -228,7 +215,8 @@ describe('TopicModel - sub-topics (metadata.openedBy)', () => {
 
     const result = await topicModel.query({
       agentId: 'agent-b',
-      excludeTriggers: ['task', 'sub_topic'],
+      excludeOpenedTopics: true,
+      excludeTriggers: ['task'],
     });
     expect(result.items.map((row: any) => row.id)).toEqual(['child-cross']);
   });
@@ -259,5 +247,18 @@ describe('TopicModel - sub-topics (metadata.openedBy)', () => {
 
     expect(rows.find((row) => row.id === 'child-cross')?.latestRunStatus).toBe('running');
     expect(rows.find((row) => row.id === 'child-same')?.latestRunStatus).toBeNull();
+  });
+
+  it('without the filter, an agent list shows its sub-topics as plain rows', async () => {
+    const result = await topicModel.query({ agentId: 'agent-b', excludeTriggers: ['task'] });
+
+    expect(result.items.map((row: any) => row.id).sort()).toEqual(['child-cross', 'grandchild']);
+  });
+
+  it('tells whether a topic is a linked sub-topic of another, at any depth', async () => {
+    expect(await topicModel.isOpenedBy('grandchild', 'parent')).toBe(true);
+    expect(await topicModel.isOpenedBy('child-same', 'parent')).toBe(true);
+    expect(await topicModel.isOpenedBy('detached', 'parent')).toBe(false);
+    expect(await topicModel.isOpenedBy('parent', 'child-same')).toBe(false);
   });
 });

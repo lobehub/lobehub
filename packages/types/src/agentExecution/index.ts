@@ -384,6 +384,17 @@ export interface ExecAgentParams {
    * sub-tree back to its root.
    */
   parentOperationId?: string;
+  /**
+   * With `openedByTopicId`: where the new topic works, relative to its parent.
+   * `inherit` shares the parent's directory or cloud-sandbox placement (never
+   * its ownership of a worktree), `new-worktree` cuts a fresh branch and
+   * worktree from the parent's repository on its device, `none` sets no
+   * directory. Any of them keeps the parent's device unless `deviceId` names
+   * another. Unset: the topic starts with nothing of the parent's.
+   */
+  parentWorkspace?: 'inherit' | 'new-worktree' | 'none';
+  /** With `parentWorkspace: 'new-worktree'`: the branch the worktree forks from (HEAD otherwise). */
+  parentWorkspaceBaseBranch?: string;
   /** The user input/prompt */
   prompt: string;
   /** Override the agent's default provider */

@@ -132,24 +132,6 @@ describe('requiredApiKeyScopeForTrpc', () => {
     expect(requiredApiKeyScopeForTrpc('agentSteerQueue.append', 'mutation')).toEqual({
       scopes: ['agent:write', 'chat:write', 'model:invoke'],
     });
-    // opening or sending to a sub-topic starts a run, like execAgent
-    for (const path of ['subTopic.open', 'subTopic.send']) {
-      expect(requiredApiKeyScopeForTrpc(path, 'mutation')).toEqual({
-        scopes: ['agent:write', 'chat:write', 'model:invoke'],
-      });
-    }
-    // stopping or retiring one writes conversation state without a run
-    for (const path of ['subTopic.archive', 'subTopic.detach', 'subTopic.stop', 'subTopic.trash']) {
-      expect(requiredApiKeyScopeForTrpc(path, 'mutation')).toEqual({
-        scopes: ['agent:write', 'chat:write'],
-      });
-    }
-    // reading one returns conversation content
-    for (const path of ['subTopic.get', 'subTopic.read']) {
-      expect(requiredApiKeyScopeForTrpc(path, 'query')).toEqual({
-        scopes: ['agent:read', 'chat:read'],
-      });
-    }
     // provider connectivity test sends a real model request
     expect(requiredApiKeyScopeForTrpc('aiProvider.checkProviderConnectivity', 'mutation')).toEqual({
       scopes: ['model:write', 'model:invoke'],

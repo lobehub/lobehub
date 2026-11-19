@@ -1,5 +1,6 @@
+import type { OpenedSubTopic } from '@lobechat/types';
+
 import { defineReplica } from '@/libs/replica';
-import type { OpenedSubTopic } from '@/services/subTopic';
 
 /** One sidebar page's openers, as a stable key (order-free). */
 export const subTopicTreeKey = (openerTopicIds: readonly string[]) =>

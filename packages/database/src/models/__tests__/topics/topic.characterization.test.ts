@@ -78,6 +78,7 @@ const PUBLIC_METHODS = [
   'findWaitingCleanupTopicsUnder',
   'getCronTopicsGroupedByCronJob',
   'getLatestRunStatus',
+  'isOpenedBy',
   'isRunningOperationAlive',
   'listChildTopicAgentIds',
   'listOpenedDescendants',
@@ -140,7 +141,6 @@ describe('TopicModel - public surface', () => {
 
   it('keeps the runtime exports of the module', () => {
     expect(Object.keys(topicModule).sort()).toEqual([
-      'OPENED_BY_TRIGGERS',
       'TopicModel',
       'getTopicDeviceId',
       'hasLiveTaskCallbackReservation',

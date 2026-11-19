@@ -10,7 +10,6 @@ const { client, mockGetTrpcClient, mockResolveLocalDeviceId } = vi.hoisted(() =>
     agentSteerQueue: { append: { mutate: vi.fn() } },
     aiAgent: { execAgent: { mutate: vi.fn() } },
     device: { listDevices: { query: vi.fn() } },
-    subTopic: { open: { mutate: vi.fn() } },
     topic: { getTopicDetail: { query: vi.fn() } },
   },
   mockGetTrpcClient: vi.fn(),
@@ -214,13 +213,12 @@ describe('sending into a new conversation', () => {
   });
 
   describe('as a sub-topic', () => {
+    const request = () => client.aiAgent.execAgent.mutate.mock.calls[0][0];
+
     beforeEach(() => {
       vi.stubEnv('LOBEHUB_TOPIC_ID', 'tpc-here');
-      client.subTopic.open.mutate.mockResolvedValue({
-        agentId: 'agt-codex',
-        branch: 'lobehub/202611181200-brave-river',
-        operationId: 'op-child',
-        topicId: 'tpc-child',
+      client.topic.getTopicDetail.query.mockResolvedValue({
+        metadata: { workingDirectoryConfig: { git: { branch: 'lobehub/brave-river' } } },
       });
     });
 
@@ -240,47 +238,52 @@ describe('sending into a new conversation', () => {
         '--json',
       );
 
-      expect(client.subTopic.open.mutate).toHaveBeenCalledWith({
+      // An ordinary new topic with a parent: the server sets up its workspace.
+      expect(request()).toEqual({
         agentId: 'agt-codex',
-        baseBranch: 'canary',
-        openerTopicId: 'tpc-here',
+        openedByTopicId: 'tpc-here',
+        parentWorkspace: 'new-worktree',
+        parentWorkspaceBaseBranch: 'canary',
         prompt: 'Fix the flaky test',
         sourceOperationId: 'op-sender',
-        workspace: 'new-worktree',
+        trigger: 'cli',
       });
-      expect(client.aiAgent.execAgent.mutate).not.toHaveBeenCalled();
+      // The branch the server named is read back to show it.
       expect(JSON.parse(logged[0])).toMatchObject({
-        branch: 'lobehub/202611181200-brave-river',
+        branch: 'lobehub/brave-river',
         delivery: 'created',
-        topicId: 'tpc-child',
+        topicId: 'tpc-new',
       });
+    });
+
+    it("shares the parent's directory by default, asking for approvals like the user's own chats", async () => {
+      await run('topic', 'send', '--new', '-c', 'x');
+
+      expect(request()).toMatchObject({ openedByTopicId: 'tpc-here', parentWorkspace: 'inherit' });
+      // No headless override: the server applies the user's approval mode.
+      expect(request()).not.toHaveProperty('userInterventionConfig');
     });
 
     it('takes the parent from --parent-topic-id over LOBEHUB_TOPIC_ID', async () => {
       await run('topic', 'send', '--new', '-c', 'x', '--parent-topic-id', 'tpc-other');
 
-      expect(client.subTopic.open.mutate).toHaveBeenCalledWith(
-        expect.objectContaining({ openerTopicId: 'tpc-other' }),
-      );
+      expect(request().openedByTopicId).toBe('tpc-other');
     });
 
-    it('opens a parent-less topic with --parent-topic-id even outside a conversation', async () => {
+    it('opens a sub-topic with --parent-topic-id even outside a conversation', async () => {
       vi.stubEnv('LOBEHUB_TOPIC_ID', '');
 
       await run('topic', 'send', '--new', '-c', 'x', '--parent-topic-id', 'tpc-other');
 
-      expect(client.subTopic.open.mutate).toHaveBeenCalledWith(
-        expect.objectContaining({ openerTopicId: 'tpc-other' }),
-      );
+      expect(request().openedByTopicId).toBe('tpc-other');
     });
 
     it('opens a plain, unlinked topic with --detach, even from inside a conversation', async () => {
       await run('topic', 'send', '--new', '-c', 'Stand-alone work', '--detach');
 
-      expect(client.subTopic.open.mutate).not.toHaveBeenCalled();
-      const request = client.aiAgent.execAgent.mutate.mock.calls[0][0];
-      expect(request.openedByTopicId).toBeUndefined();
-      expect(request.trigger).toBe('cli');
+      expect(request().openedByTopicId).toBeUndefined();
+      expect(request().parentWorkspace).toBeUndefined();
+      expect(request().userInterventionConfig).toEqual({ approvalMode: 'headless' });
     });
 
     it('refuses --detach with --parent-topic-id, and --where without a parent', async () => {
@@ -290,7 +293,6 @@ describe('sending into a new conversation', () => {
       vi.mocked(log.error).mockClear();
       await run('topic', 'send', '--new', '-c', 'x', '--detach', '--where', 'new-worktree');
       expect(errorLogged()).toMatch(/--where and --base-branch apply to a sub-topic/);
-      expect(client.subTopic.open.mutate).not.toHaveBeenCalled();
       expect(client.aiAgent.execAgent.mutate).not.toHaveBeenCalled();
     });
 
@@ -298,7 +300,7 @@ describe('sending into a new conversation', () => {
       await run('topic', 'send', '--new', '-c', 'x', '--where', 'elsewhere');
 
       expect(errorLogged()).toMatch(/--where must be one of/);
-      expect(client.subTopic.open.mutate).not.toHaveBeenCalled();
+      expect(client.aiAgent.execAgent.mutate).not.toHaveBeenCalled();
     });
   });
 });

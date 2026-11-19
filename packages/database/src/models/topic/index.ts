@@ -18,7 +18,6 @@ import * as trash from './trash';
 import * as update from './update';
 
 export type { ListOpenedTopicsParams, OpenedTopicItem } from './openedBy';
-export { OPENED_BY_TRIGGERS } from './openedBy';
 export type { OwnedWorktreeTopicRow } from './ownedWorktree';
 export { getTopicDeviceId } from './runningOperation';
 export { hasLiveTaskCallbackReservation } from './taskCallback';
@@ -158,6 +157,7 @@ export class TopicModel {
   listOpenedDescendants = this.withContext(openedBy.listOpenedDescendants);
   detachOpenedTopics = this.withContext(openedBy.detachOpenedTopics);
   getLatestRunStatus = this.withContext(openedBy.getLatestRunStatus);
+  isOpenedBy = this.withContext(openedBy.isOpenedBy);
 
   // **************** Agent Share (visitor-scoped) *************** //
 

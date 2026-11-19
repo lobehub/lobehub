@@ -13,10 +13,6 @@
  * its messages are surfaced through the Channel UI.
  * `Webhook` marks a topic a generic inbound webhook call started; it is read
  * from Inbox, the topic manager and the webhook's delivery log.
- * `SubTopic` marks a topic another topic opened for an agent through
- * `lobe-topic.openTopic` / `lh topic send --new` from inside a conversation. It is listed under its
- * opener (`metadata.openedBy`), not in the target agent's own history, unless
- * that agent's list asks to show sessions others opened for it.
  */
 export const TopicTrigger = {
   Channel: 'channel',
@@ -25,14 +21,13 @@ export const TopicTrigger = {
   Eval: 'eval',
   GoalSupervision: 'goal_supervision',
   RunTask: 'task',
-  SubTopic: 'sub_topic',
   Webhook: 'webhook',
 } as const;
 
 /**
  * Triggers to exclude from the main chat sidebar so system-owned topics
  * (channel runs, cron jobs, evals, task runs, doc chats, goal supervision,
- * webhook calls, sub-topics opened by another topic) don't
+ * webhook calls) don't
  * pollute the user's main history.
  */
 export const MAIN_SIDEBAR_EXCLUDE_TRIGGERS: string[] = [
@@ -42,13 +37,5 @@ export const MAIN_SIDEBAR_EXCLUDE_TRIGGERS: string[] = [
   TopicTrigger.Eval,
   TopicTrigger.GoalSupervision,
   TopicTrigger.RunTask,
-  TopicTrigger.SubTopic,
   TopicTrigger.Webhook,
 ];
-
-/**
- * The main sidebar's exclusions when the agent's list asks to show the
- * sub-topics other conversations opened for it.
- */
-export const MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME: string[] =
-  MAIN_SIDEBAR_EXCLUDE_TRIGGERS.filter((trigger) => trigger !== TopicTrigger.SubTopic);

@@ -4,7 +4,7 @@ import type {
   OpenedTopicItem,
   TopicOpenedBy,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull, not, notExists, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNull, not, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
 import { agentOperations, taskTopics, topics } from '../../schemas';
@@ -12,15 +12,6 @@ import { notTrashed } from '../../utils/softDelete';
 import { topicRunStartedAtColumn } from '../../utils/topicRunStartedAt';
 import { topicsOwnership } from '../task/context';
 import type { TopicModelContext } from './context';
-
-/**
- * The triggers a topic opened by another topic can carry: a sub-topic
- * (`lobe-topic.openTopic` / `lh topic send --new` from a conversation), a task run started from a
- * conversation, or a `lh topic send --new`. Sub-topic queries filter on these
- * first so `topics_trigger_idx` / the ownership index narrow the rows before
- * the unindexed jsonb comparison runs.
- */
-export const OPENED_BY_TRIGGERS = ['sub_topic', 'task', 'cli'] as const;
 
 /** How many generations below the openers a listing walks; deeper ones stay where they are. */
 const MAX_OPENED_BY_DEPTH = 4;
@@ -82,7 +73,9 @@ const walkOpenedTopics = async (
         topicsOwnership({ db: ctx.db, userId: ctx.userId, workspaceId: ctx.workspaceId }),
       ),
     );
+  // `trigger` is null for most topics, and `NOT (null = 'task')` is null: say so explicitly.
   const taskVisibilityCondition = or(
+    isNull(topics.trigger),
     not(eq(topics.trigger, 'task')),
     sql`exists (${visibleTaskRun})`,
   );
@@ -123,7 +116,6 @@ const walkOpenedTopics = async (
       .where(
         and(
           ctx.ownership(),
-          inArray(topics.trigger, [...OPENED_BY_TRIGGERS]),
           inArray(openedByTopicId, frontier),
           taskVisibilityCondition,
           // Never a jsonb null test in a qual — see the note on `TopicModel`.
@@ -205,10 +197,9 @@ export const getLatestRunStatus = async (
 };
 
 /**
- * Move sub-topics to the top level: stamp `openedBy.detachedAt`, and turn a
- * `sub_topic` trigger back into an ordinary conversation so the topic shows
- * up in its own agent's list. Task runs keep their trigger — they belong to
- * their task. Returns the rows that changed.
+ * Move sub-topics to the top level: stamp `openedBy.detachedAt`, so the topic
+ * no longer lists under its parent and shows in its own agent's list. Returns
+ * the rows that changed.
  */
 export const detachOpenedTopics = async (
   ctx: TopicModelContext,
@@ -221,7 +212,6 @@ export const detachOpenedTopics = async (
     .update(topics)
     .set({
       metadata: sql`jsonb_set(${topics.metadata}, '{openedBy,detachedAt}', to_jsonb(${detachedAt}::text), true)`,
-      trigger: sql`CASE WHEN ${topics.trigger} = 'sub_topic' THEN NULL ELSE ${topics.trigger} END`,
     })
     .where(
       and(
@@ -237,16 +227,17 @@ export const detachOpenedTopics = async (
 };
 
 /**
- * A `sub_topic` row whose opener is gone — deleted, in the recycle bin, or
- * archived (by a path that did not ask what to do with its sub-topics):
- * nothing lists it under that opener any more, so the target agent's own list
- * shows it at the top level instead of hiding it.
+ * A topic opened from a parent that is still there — linked (not detached),
+ * the parent neither deleted, in the recycle bin nor archived. Such a topic
+ * lists under its parent, so an agent's own list can leave it out
+ * (`QueryTopicParams.excludeOpenedTopics`); once its parent is gone it shows
+ * at the top level again.
  *
- * The opener's columns go through `sql.identifier`: inside a correlated
- * subquery a bare `${topics.metadata}` renders unqualified and would resolve
- * against the inner alias.
+ * The outer columns go through `sql.identifier`: inside a correlated subquery
+ * a bare `${topics.metadata}` renders unqualified and would resolve against
+ * the inner alias.
  */
-export const orphanSubTopicCondition = (ctx: TopicModelContext) => {
+export const openedFromLiveParentCondition = (ctx: TopicModelContext) => {
   const opener = alias(topics, 'opened_by_opener');
   const outerOpenedBy = sql`${sql.identifier('topics')}.${sql.identifier('metadata')} -> 'openedBy' ->> 'topicId'`;
   const liveOpener = ctx.db
@@ -260,5 +251,35 @@ export const orphanSubTopicCondition = (ctx: TopicModelContext) => {
       ),
     );
 
-  return and(eq(topics.trigger, 'sub_topic'), notExists(liveOpener));
+  return and(
+    sql`COALESCE(${topics.metadata} -> 'openedBy' ->> 'detachedAt', '') = ''`,
+    exists(liveOpener),
+  );
+};
+
+/**
+ * Whether `topicId` is a linked sub-topic, at any depth, of `ancestorTopicId`:
+ * walks `openedBy` up through the caller's topics until it reaches the
+ * ancestor, an unlinked topic, or a topic it has already seen.
+ */
+export const isOpenedBy = async (
+  ctx: TopicModelContext,
+  topicId: string,
+  ancestorTopicId: string,
+): Promise<boolean> => {
+  const seen = new Set<string>();
+  let cursor: string | undefined = topicId;
+  while (cursor && !seen.has(cursor)) {
+    seen.add(cursor);
+    const rows: { openedBy: TopicOpenedBy | null }[] = await ctx.db
+      .select({ openedBy: sql<TopicOpenedBy | null>`${topics.metadata} -> 'openedBy'` })
+      .from(topics)
+      .where(and(eq(topics.id, cursor), ctx.ownership()))
+      .limit(1);
+    const openedBy: TopicOpenedBy | null | undefined = rows[0]?.openedBy;
+    if (!openedBy?.topicId || openedBy.detachedAt) return false;
+    if (openedBy.topicId === ancestorTopicId) return true;
+    cursor = openedBy.topicId;
+  }
+  return false;
 };

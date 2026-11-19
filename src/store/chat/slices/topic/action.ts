@@ -1428,6 +1428,7 @@ export class ChatTopicActionImpl {
 
     await this.#topicList.loadMore(key, {
       agentId: activeAgentId,
+      excludeOpenedTopics: currentData?.excludeOpenedTopics,
       excludeStatuses: currentData?.excludeStatuses,
       excludeTriggers: currentData?.excludeTriggers,
       groupId: activeGroupId,
@@ -1976,6 +1977,7 @@ export class ChatTopicActionImpl {
 
         return {
           currentPage,
+          excludeOpenedTopics: currentData?.excludeOpenedTopics,
           excludeStatuses: currentData?.excludeStatuses,
           excludeTriggers: currentData?.excludeTriggers,
           hasMore: total > nextItems.length,

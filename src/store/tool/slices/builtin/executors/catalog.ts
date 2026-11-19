@@ -14,7 +14,6 @@ import { knowledgeBaseExecutor } from '@lobechat/builtin-tool-knowledge-base/cli
 import { lobeAgentExecutor } from '@lobechat/builtin-tool-lobe-agent/client/executor';
 import { memoryExecutor } from '@lobechat/builtin-tool-memory/executor';
 import { taskExecutor } from '@lobechat/builtin-tool-task/client/executor';
-import { topicToolExecutor } from '@lobechat/builtin-tool-topic/client/executor';
 import { videoGenerationExecutor } from '@lobechat/builtin-tool-video-generation/executor';
 
 import type { IBuiltinToolExecutor } from '../types';
@@ -90,7 +89,6 @@ export const builtinToolExecutors = [
   skillStoreExecutor,
   withPageEditHooks(skillsExecutor),
   taskExecutor,
-  topicToolExecutor,
   dashboardExecutor,
   videoGenerationExecutor,
   activatorExecutor,

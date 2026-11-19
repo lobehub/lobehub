@@ -27,6 +27,7 @@ import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import { toClientExecAgentResult } from '@/server/routers/lambda/_helpers/groupMemberContinuationResult';
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { startComposerRun } from '@/server/services/aiAgent/composerRun';
+import { ParentWorkspaceError } from '@/server/services/aiAgent/pipeline/parentWorkspace';
 import { createAgentConfigResolver } from '@/server/services/aiAgent/pipeline/precreatedTopic';
 import { wakeWorktreeTurn } from '@/server/services/aiAgent/pipeline/scheduledTopicDispatch';
 import { submitWorktreeTurn } from '@/server/services/aiAgent/pipeline/submitWorktreeTurn';
@@ -354,6 +355,12 @@ export const execRouter = router({
       // execution target; nothing was written.
       if (error instanceof RequestedDeviceIgnoredError) {
         throw new TRPCError({ cause: error, code: 'PRECONDITION_FAILED', message: error.message });
+      }
+
+      // The parent's workspace could not be set up (no repository on a device,
+      // a failed worktree); nothing was written.
+      if (error instanceof ParentWorkspaceError) {
+        throw new TRPCError({ cause: error, code: 'BAD_REQUEST', message: error.message });
       }
 
       // An agent → agent send past the relay bound: the sending agent has to

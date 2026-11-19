@@ -32,7 +32,7 @@ export interface OpenedTopicItem {
   updatedAt: Date;
 }
 
-/** One live sub-topic row of the sidebar hierarchy (`subTopic.listOpened`). */
+/** One live sub-topic row of the sidebar hierarchy (`topic.listChildTopics`). */
 export interface OpenedSubTopic {
   agent?: SubTopicAgentDisplay;
   agentId: null | string;
@@ -59,12 +59,12 @@ export interface SubTopicMove {
   trigger: null | string;
 }
 
-/** `subTopic.detach`: the sub-topics moved to the top level. */
+/** Sub-topics moved to the top level (`topic.updateTopic({ detachFromParent })`). */
 export interface SubTopicDetachResult {
   detached: SubTopicMove[];
 }
 
-/** `subTopic.archive` / `subTopic.trash`: what was retired and what moved up. */
+/** An archive / delete of a topic tree: what was retired and what moved up. */
 export interface SubTopicRetireResult extends SubTopicDetachResult {
   /** Retired topic ids, deepest first, the topic itself last. */
   retired: string[];

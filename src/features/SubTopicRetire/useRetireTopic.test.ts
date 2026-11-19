@@ -5,14 +5,16 @@ import { useRetireTopicWithSubTopics } from './useRetireTopic';
 
 const mocks = vi.hoisted(() => ({
   ask: vi.fn(),
-  describe: vi.fn(),
+  listChildTopics: vi.fn(),
   labOn: true,
   navigate: vi.fn(),
   notify: vi.fn(),
   retireTopicTree: vi.fn(),
 }));
 
-vi.mock('@/services/subTopic', () => ({ subTopicService: { describe: mocks.describe } }));
+vi.mock('@/services/topic', () => ({
+  topicService: { listChildTopics: mocks.listChildTopics },
+}));
 vi.mock('./Dialog', () => ({ askRetireSubTopics: mocks.ask }));
 vi.mock('./notifyMoved', () => ({ notifyMovedSubTopics: mocks.notify }));
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
@@ -36,7 +38,11 @@ describe('useRetireTopicWithSubTopics', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.labOn = true;
-    mocks.describe.mockResolvedValue({ descendants: 2, direct: 2, running: 1, topicId: 'tpc_a' });
+    // Two sub-topics, one of them running.
+    mocks.listChildTopics.mockResolvedValue([
+      { id: 'tpc_b', openedBy: { topicId: 'tpc_a' }, state: 'running', trigger: null },
+      { id: 'tpc_c', openedBy: { topicId: 'tpc_a' }, state: 'idle', trigger: null },
+    ]);
     mocks.retireTopicTree.mockResolvedValue({
       detached: [{ agentId: 'agt_x' }],
       retired: ['tpc_a'],
@@ -47,11 +53,11 @@ describe('useRetireTopicWithSubTopics', () => {
     mocks.labOn = false;
 
     expect(await run()).toHaveBeenCalled();
-    expect(mocks.describe).not.toHaveBeenCalled();
+    expect(mocks.listChildTopics).not.toHaveBeenCalled();
   });
 
   it('archives as before when the topic has no sub-topics', async () => {
-    mocks.describe.mockResolvedValue({ descendants: 0, direct: 0, running: 0, topicId: 'tpc_a' });
+    mocks.listChildTopics.mockResolvedValue([]);
 
     expect(await run()).toHaveBeenCalled();
     expect(mocks.ask).not.toHaveBeenCalled();

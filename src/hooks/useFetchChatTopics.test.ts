@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME } from '@/const/topic';
+import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
 
 import { useFetchAgentChatTopics, useFetchChatTopics } from './useFetchChatTopics';
 
@@ -103,7 +103,8 @@ describe('chat topic list fetches', () => {
       sortBy: sidebarArgs.sortBy,
     });
     // With Better Coding Experience off (as mocked) the list is the one it always was.
-    expect(panelArgs.excludeTriggers).toEqual(MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME);
+    expect(panelArgs.excludeTriggers).toEqual(MAIN_SIDEBAR_EXCLUDE_TRIGGERS);
+    expect(panelArgs.excludeOpenedTopics).toBeUndefined();
   });
 
   it('forwards the per-agent only-mine filter from both the sidebar and the panel', () => {

@@ -114,6 +114,7 @@ export class TopicService {
       current: params.current,
       editingAgentId: params.editingAgentId,
       editingGroupId: params.editingGroupId,
+      excludeOpenedTopics: params.excludeOpenedTopics,
       excludeStatuses: params.excludeStatuses,
       // Filter before pagination so internal Channel runs consume neither rows nor totals.
       excludeTriggers: [...new Set([TopicTrigger.Channel, ...(params.excludeTriggers ?? [])])],
@@ -243,6 +244,28 @@ export class TopicService {
 
   removeTopic = (id: string, removeFiles?: boolean) =>
     this.retiring(lambdaClient.topic.removeTopic.mutate({ id, removeFiles }));
+
+  /** The sub-topics under `parentTopicIds` (and, by default, theirs), for the sidebar tree. */
+  listChildTopics = (parentTopicIds: string[], includeDescendants = true) =>
+    lambdaClient.topic.listChildTopics.query({ includeDescendants, parentTopicIds });
+
+  /** Archive a topic with its sub-topics (`all`) or moving them to the top level (`detach`). */
+  archiveTopicTree = async (id: string, childTopics: 'all' | 'detach') => {
+    await lambdaClient.topic.updateTopic.mutate({
+      childTopics,
+      id,
+      value: { completedAt: new Date(), status: 'completed' },
+    });
+    afterTopicsRetired();
+  };
+
+  /** Delete a topic with its sub-topics (`all`) or moving them to the top level (`detach`). */
+  removeTopicTree = (id: string, childTopics: 'all' | 'detach', removeFiles?: boolean) =>
+    this.retiring(lambdaClient.topic.removeTopic.mutate({ childTopics, id, removeFiles }));
+
+  /** Move a sub-topic to the top level: it stops listing under, and reporting to, its parent. */
+  detachFromParent = (id: string) =>
+    lambdaClient.topic.updateTopic.mutate({ detachFromParent: true, id, value: {} });
 
   removeTopics = (sessionId: string, scope: TopicBatchDeleteScope = 'own') =>
     this.retiring(

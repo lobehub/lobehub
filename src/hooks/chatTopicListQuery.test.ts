@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
-  MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME,
-} from '@/const/topic';
+import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
 
 import { deriveSidebarTopicListQuery, getSidebarTopicListParams } from './chatTopicListQuery';
 
@@ -151,7 +148,7 @@ describe('getSidebarTopicListParams', () => {
     expect(getSidebarTopicListParams({ agentId: 'agent-7' })).toEqual({
       agentId: 'agent-7',
       excludeStatuses: ['completed'],
-      excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME,
+      excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
       isInbox: false,
       pageSize: 20,
     });
@@ -200,7 +197,7 @@ describe('getSidebarTopicListParams', () => {
     expect(getSidebarTopicListParams({ groupId: 'grp_1' })).toEqual({
       groupId: 'grp_1',
       excludeStatuses: ['completed'],
-      excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME,
+      excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
       isInbox: false,
       pageSize: 20,
     });
@@ -213,7 +210,7 @@ describe('sub-topics opened for this agent', () => {
     globalStateMock.topicShowOpenedForMeByAgent = {};
   });
 
-  it('hides them by default and lists them when the agent asks to', () => {
+  it('hides them only when asked to, never in a group list', () => {
     const base = {
       includeCompleted: false,
       isGroupSession: false,
@@ -221,31 +218,31 @@ describe('sub-topics opened for this agent', () => {
       topicGroupMode: 'byTime' as const,
     };
 
-    expect(deriveSidebarTopicListQuery(base).excludeTriggers).toContain('sub_topic');
     expect(
-      deriveSidebarTopicListQuery({ ...base, showSubTopicTopics: true }).excludeTriggers,
-    ).toEqual(MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME);
-    expect(MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME).not.toContain('sub_topic');
+      deriveSidebarTopicListQuery({ ...base, showSubTopicTopics: false }).excludeOpenedTopics,
+    ).toBe(true);
+    expect(
+      deriveSidebarTopicListQuery({ ...base, showSubTopicTopics: true }).excludeOpenedTopics,
+    ).toBeUndefined();
     // A group's list never holds sub-topics: it keeps the list it always asked for.
-    expect(deriveSidebarTopicListQuery({ ...base, isGroupSession: true }).excludeTriggers).toEqual(
-      MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME,
+    expect(
+      deriveSidebarTopicListQuery({ ...base, isGroupSession: true, showSubTopicTopics: false })
+        .excludeOpenedTopics,
+    ).toBeUndefined();
+    // The trigger list is the canary one either way.
+    expect(deriveSidebarTopicListQuery(base).excludeTriggers).toEqual(
+      MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
     );
   });
 
   it('asks the route loader for the same rows: hidden only under the lab with the filter off', () => {
-    // Lab off: no hierarchy to show them under their opener, so they are plain rows.
-    expect(getSidebarTopicListParams({ agentId: 'agent-1' })?.excludeTriggers).not.toContain(
-      'sub_topic',
-    );
+    // Lab off: no hierarchy to show them under their parent, so they are plain rows.
+    expect(getSidebarTopicListParams({ agentId: 'agent-1' })?.excludeOpenedTopics).toBeUndefined();
 
     userStateMock.betterCoding = true;
-    expect(getSidebarTopicListParams({ agentId: 'agent-1' })?.excludeTriggers).toContain(
-      'sub_topic',
-    );
+    expect(getSidebarTopicListParams({ agentId: 'agent-1' })?.excludeOpenedTopics).toBe(true);
 
     globalStateMock.topicShowOpenedForMeByAgent = { 'agent-1': true };
-    expect(getSidebarTopicListParams({ agentId: 'agent-1' })?.excludeTriggers).not.toContain(
-      'sub_topic',
-    );
+    expect(getSidebarTopicListParams({ agentId: 'agent-1' })?.excludeOpenedTopics).toBeUndefined();
   });
 });

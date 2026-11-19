@@ -598,6 +598,42 @@ describe('Topic Router Integration Tests', () => {
   });
 
   describe('updateTopic', () => {
+    it('archives a parent and moves its sub-topics to the top level, or moves one up on its own', async () => {
+      const caller = topicRouter.createCaller(createTestContext(userId));
+      const link = (topicId: string) => ({
+        openedBy: { at: '2026-11-19T00:00:00.000Z', topicId },
+      });
+      const [parent] = await serverDB
+        .insert(topics)
+        .values({ agentId: testAgentId, title: 'Parent', userId })
+        .returning();
+      const [child, other] = await serverDB
+        .insert(topics)
+        .values([
+          { agentId: testAgentId, metadata: link(parent.id), title: 'Child', userId },
+          { agentId: testAgentId, metadata: link(parent.id), title: 'Other', userId },
+        ])
+        .returning();
+
+      // Move one up on its own: nothing else is written.
+      await caller.updateTopic({ detachFromParent: true, id: other.id, value: {} });
+      const [moved] = await serverDB.select().from(topics).where(eq(topics.id, other.id));
+      expect((moved.metadata as any).openedBy.detachedAt).toEqual(expect.any(String));
+      expect(moved.title).toBe('Other');
+
+      // Archive the parent, moving the rest up.
+      await caller.updateTopic({
+        childTopics: 'detach',
+        id: parent.id,
+        value: { completedAt: new Date(), status: 'completed' },
+      });
+      const [archived] = await serverDB.select().from(topics).where(eq(topics.id, parent.id));
+      const [kept] = await serverDB.select().from(topics).where(eq(topics.id, child.id));
+      expect(archived.status).toBe('completed');
+      expect(kept.status).not.toBe('completed');
+      expect((kept.metadata as any).openedBy.detachedAt).toEqual(expect.any(String));
+    });
+
     it('should update topic with agentId in value', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 

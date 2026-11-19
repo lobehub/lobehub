@@ -1,9 +1,12 @@
+import type {
+  OpenedSubTopic,
+  SubTopicDetachResult,
+  SubTopicMove,
+  SubTopicRetireResult,
+} from '@lobechat/types';
+
 import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
-import {
-  type SubTopicDetachResult,
-  type SubTopicRetireResult,
-  subTopicService,
-} from '@/services/subTopic';
+import { topicService } from '@/services/topic';
 import type { ChatStore } from '@/store/chat/store';
 import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
@@ -17,6 +20,42 @@ const n = setNamespace('subTopic');
 
 type Setter = StoreSetter<ChatStore>;
 
+/** A sub-topic that moved to the top level, and whose list it went back to. */
+const toMove = (row: OpenedSubTopic): SubTopicMove => ({
+  agentId: row.agentId,
+  agentTitle: row.agent?.title ?? null,
+  id: row.id,
+  // Another agent's sub-topic goes back to that agent's own list.
+  movedToOwnAgent: !!row.agentId && row.agentId !== row.openedBy?.agentId,
+  trigger: row.trigger,
+});
+
+/**
+ * What an "archive / delete all" takes along — the server's rule
+ * (`retirableDescendants`): every descendant except task runs and what they opened.
+ */
+export const retirableSubTopics = (rootId: string, rows: OpenedSubTopic[]) => {
+  const kept = new Set<string>([rootId]);
+  const result: OpenedSubTopic[] = [];
+  let pending = rows;
+  while (pending.length > 0) {
+    const next: OpenedSubTopic[] = [];
+    for (const row of pending) {
+      const parent = row.openedBy?.topicId;
+      if (!parent || !kept.has(parent)) {
+        next.push(row);
+        continue;
+      }
+      if (row.trigger === 'task') continue;
+      kept.add(row.id);
+      result.push(row);
+    }
+    if (next.length === pending.length) break;
+    pending = next;
+  }
+  return result;
+};
+
 export class ChatSubTopicActionImpl {
   readonly #get: () => ChatStore;
   readonly #tree;
@@ -28,7 +67,7 @@ export class ChatSubTopicActionImpl {
     this.#get = get;
     this.#tree = createReplicaSlice(subTopicTreeResource, {
       actionPrefix: n('tree'),
-      fetcher: (openerTopicIds) => subTopicService.listOpened(openerTopicIds),
+      fetcher: (openerTopicIds) => topicService.listChildTopics(openerTopicIds),
       get,
       set,
       stateKey: 'subTopicTreeReplica',
@@ -81,10 +120,21 @@ export class ChatSubTopicActionImpl {
     mode: 'all' | 'self',
     options: { removeFiles?: boolean } = {},
   ): Promise<SubTopicRetireResult> => {
-    const result =
-      action === 'archive'
-        ? await subTopicService.archive(topicId, mode)
-        : await subTopicService.trash(topicId, mode, options.removeFiles);
+    // What this touches, read fresh: the moves to announce, the topics retired.
+    const tree = await topicService.listChildTopics([topicId]);
+    const childTopics = mode === 'all' ? 'all' : 'detach';
+    if (action === 'archive') await topicService.archiveTopicTree(topicId, childTopics);
+    else await topicService.removeTopicTree(topicId, childTopics, options.removeFiles);
+    const result: SubTopicRetireResult =
+      mode === 'all'
+        ? {
+            detached: [],
+            retired: [...retirableSubTopics(topicId, tree).map((row) => row.id), topicId],
+          }
+        : {
+            detached: tree.filter((row) => row.openedBy?.topicId === topicId).map(toMove),
+            retired: [topicId],
+          };
     // Whatever was retired — the topic or, with "all", one of its sub-topics —
     // must not stay the open conversation.
     const activeTopicId = this.#get().activeTopicId;
@@ -95,9 +145,15 @@ export class ChatSubTopicActionImpl {
 
   /** Move sub-topics to the top level. */
   detachSubTopics = async (topicIds: string[]): Promise<SubTopicDetachResult> => {
-    const result = await subTopicService.detach(topicIds);
+    const known = Object.values(this.#get().subTopicTreeMap).flat();
+    const detached: SubTopicMove[] = [];
+    for (const id of topicIds) {
+      await topicService.detachFromParent(id);
+      const row = known.find((item) => item.id === id);
+      if (row) detached.push(toMove(row));
+    }
     await Promise.all([this.#get().refreshTopic(), this.refreshSubTopics()]);
-    return result;
+    return { detached };
   };
 }
 

@@ -52,14 +52,8 @@ const currentTopics = (s: ChatStoreState): ChatTopic[] | undefined => currentTop
 const currentTopicsWithoutSystemTriggers = (s: ChatStoreState): ChatTopic[] | undefined => {
   const topics = currentTopics(s);
   if (!topics) return undefined;
-  // Sub-topics reach the list only when the server means them to: orphans of
-  // a deleted opener, or the agent's "show sessions others opened for me"
-  // filter. Rows nested under a visible opener are hidden by the hierarchy.
   return topics.filter(
-    (topic) =>
-      !topic.trigger ||
-      topic.trigger === TopicTrigger.SubTopic ||
-      !MAIN_SIDEBAR_EXCLUDE_TRIGGERS.includes(topic.trigger),
+    (topic) => !topic.trigger || !MAIN_SIDEBAR_EXCLUDE_TRIGGERS.includes(topic.trigger),
   );
 };
 

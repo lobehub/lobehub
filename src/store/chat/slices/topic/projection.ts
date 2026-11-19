@@ -10,6 +10,8 @@ import { type ChatTopicDispatch, topicReducer } from './reducer';
 
 export interface TopicListParams {
   agentId?: string;
+  /** Leave out topics opened from a live parent; see `QueryTopicParams.excludeOpenedTopics`. */
+  excludeOpenedTopics?: boolean;
   excludeStatuses?: string[];
   excludeTriggers?: string[];
   groupId?: string;
@@ -42,6 +44,7 @@ export const normalizeTopicListParams = (
 ): TopicListParams | null => {
   const {
     agentId,
+    excludeOpenedTopics,
     excludeStatuses,
     excludeTriggers,
     groupId,
@@ -56,6 +59,7 @@ export const normalizeTopicListParams = (
 
   return {
     agentId,
+    excludeOpenedTopics: excludeOpenedTopics || undefined,
     excludeStatuses: excludeStatuses?.length ? excludeStatuses : undefined,
     excludeTriggers: excludeTriggers?.length ? excludeTriggers : undefined,
     groupId,
@@ -85,7 +89,17 @@ export const topicListResource = definePagedReplica<TopicListParams, ChatTopic, 
   key: ({ agentId, groupId }) => topicMapKey({ agentId, groupId }),
   name: 'topicList',
   paging: topicPaging,
-  query: ({ excludeStatuses, excludeTriggers, isInbox, onlyMine, sortBy, withDetails }) => ({
+  query: ({
+    excludeOpenedTopics,
+    excludeStatuses,
+    excludeTriggers,
+    isInbox,
+    onlyMine,
+    sortBy,
+    withDetails,
+  }) => ({
+    // Omitted when off so pages persisted before the filter existed still match.
+    excludeOpenedTopics: excludeOpenedTopics || undefined,
     excludeStatuses,
     excludeTriggers,
     isInbox: Boolean(isInbox),
@@ -100,6 +114,7 @@ export const topicListResource = definePagedReplica<TopicListParams, ChatTopic, 
 
 /** Query descriptors a fetched page stamps onto its `topicDataMap` bucket. */
 export const topicListViewFields = ({
+  excludeOpenedTopics,
   excludeStatuses,
   excludeTriggers,
   isInbox,
@@ -107,6 +122,7 @@ export const topicListViewFields = ({
   sortBy,
   withDetails,
 }: TopicListParams): Partial<TopicData> => ({
+  excludeOpenedTopics,
   excludeStatuses,
   excludeTriggers,
   isInbox: Boolean(isInbox),
@@ -126,9 +142,11 @@ export const topicListFilterOf = (
   data: TopicData | undefined,
 ): SendMessageServerParams['topicFilter'] => {
   if (!data) return undefined;
-  const { excludeStatuses, excludeTriggers, onlyMine } = data;
-  if (!excludeStatuses?.length && !excludeTriggers?.length && !onlyMine) return undefined;
+  const { excludeOpenedTopics, excludeStatuses, excludeTriggers, onlyMine } = data;
+  if (!excludeStatuses?.length && !excludeTriggers?.length && !onlyMine && !excludeOpenedTopics)
+    return undefined;
   return {
+    ...(excludeOpenedTopics ? { excludeOpenedTopics } : {}),
     ...(excludeStatuses?.length ? { excludeStatuses } : {}),
     ...(excludeTriggers?.length ? { excludeTriggers } : {}),
     ...(onlyMine ? { onlyMine } : {}),

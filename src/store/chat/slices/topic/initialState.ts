@@ -14,6 +14,7 @@ export type PendingNewTopicDirectory =
  */
 export interface TopicData extends ReplicaPagedData<ChatTopic, number> {
   currentPage: number;
+  excludeOpenedTopics?: boolean;
   excludeStatuses?: string[];
   excludeTriggers?: string[];
   hasMore: boolean;

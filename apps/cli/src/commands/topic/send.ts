@@ -196,28 +196,6 @@ export const sendToNewConversation = async (
     );
   }
 
-  // A sub-topic of the parent: listed under it, reporting back to it, working
-  // where `--where` says.
-  if (parentTopicId) {
-    const opened = await client.subTopic.open.mutate({
-      ...(agentId && { agentId }),
-      ...(params.baseBranch && { baseBranch: params.baseBranch }),
-      ...(deviceId && { deviceId }),
-      openerTopicId: parentTopicId,
-      prompt: params.content,
-      ...(sourceOperationId && { sourceOperationId }),
-      ...(params.title && { title: params.title }),
-      ...(params.where && { workspace: params.where as (typeof SUB_TOPIC_WHERE)[number] }),
-    });
-    return {
-      agentId: opened.agentId,
-      branch: opened.branch,
-      delivery: 'created',
-      operationId: opened.operationId,
-      topicId: opened.topicId,
-    };
-  }
-
   if (!agentId) {
     throw new Error(
       'No agent to start the new conversation with: pass --agent-id (LOBEHUB_AGENT_ID is not set).',
@@ -228,9 +206,18 @@ export const sendToNewConversation = async (
     agentId,
     prompt: params.content,
     trigger: 'cli',
-    // Nobody is at the new conversation's composer to approve tool calls.
-    userInterventionConfig: { approvalMode: 'headless' },
   };
+  if (parentTopicId) {
+    // A sub-topic of the parent: listed under it, reporting back to it, working
+    // where `--where` says (default: the parent's directory), and asking for
+    // approvals the way the user's own conversations do.
+    request.openedByTopicId = parentTopicId;
+    request.parentWorkspace = params.where ?? 'inherit';
+    if (params.baseBranch) request.parentWorkspaceBaseBranch = params.baseBranch;
+  } else {
+    // Nobody is at the new conversation's composer to approve tool calls.
+    request.userInterventionConfig = { approvalMode: 'headless' };
+  }
   if (deviceId) {
     request.deviceId = deviceId;
     // The server refuses (nothing written) when the agent's effective execution
@@ -252,8 +239,21 @@ export const sendToNewConversation = async (
     );
   }
 
+  // A new worktree's branch is named by the server: read it back to show it.
+  const branch =
+    params.where === 'new-worktree'
+      ? (
+          (await client.topic.getTopicDetail
+            .query({ id: started.topicId })
+            .catch(() => undefined)) as {
+            metadata?: { workingDirectoryConfig?: { git?: { branch?: string } } };
+          } | null
+        )?.metadata?.workingDirectoryConfig?.git?.branch
+      : undefined;
+
   return {
     agentId,
+    ...(branch && { branch }),
     delivery: 'created',
     operationId: started.operationId,
     topicId: started.topicId,

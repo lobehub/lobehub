@@ -5,8 +5,9 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { subTopicService } from '@/services/subTopic';
+import { topicService } from '@/services/topic';
 import { useChatStore } from '@/store/chat';
+import { retirableSubTopics } from '@/store/chat/slices/subTopic/action';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
@@ -34,8 +35,14 @@ export const useRetireTopicWithSubTopics = () => {
     }) => {
       if (!enabled) return params.proceed();
 
-      const summary = await subTopicService.describe(params.topicId).catch(() => undefined);
-      if (!summary || summary.descendants === 0) return params.proceed();
+      // What retiring it would touch: its sub-topics, task runs left to their task.
+      const tree = await topicService.listChildTopics([params.topicId]).catch(() => undefined);
+      const retirable = tree ? retirableSubTopics(params.topicId, tree) : [];
+      if (retirable.length === 0) return params.proceed();
+      const summary = {
+        descendants: retirable.length,
+        running: retirable.filter((row) => row.state === 'running').length,
+      };
 
       const decision = await askRetireSubTopics({
         action: params.action,

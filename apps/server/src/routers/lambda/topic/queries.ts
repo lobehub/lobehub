@@ -121,6 +121,8 @@ export const queryRouter = router({
          */
         editingAgentId: z.string().nullish(),
         editingGroupId: z.string().nullish(),
+        /** Leave out topics opened from a parent that is still there; they list under it. */
+        excludeOpenedTopics: z.boolean().optional(),
         excludeStatuses: z.array(z.string()).optional(),
         excludeTriggers: z.array(z.string()).optional(),
         groupId: z.string().nullish(),

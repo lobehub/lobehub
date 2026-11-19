@@ -347,6 +347,9 @@ export const ExecAgentFieldsSchema = z.object({
    * under it. Needs `use` on that topic.
    */
   openedByTopicId: z.string().optional(),
+  /** See `ExecAgentParams.parentWorkspace`. */
+  parentWorkspace: z.enum(['inherit', 'new-worktree', 'none']).optional(),
+  parentWorkspaceBaseBranch: z.string().min(1).max(1024).optional(),
   /**
    * User intervention configuration for tool approvals.
    * Pass `{ approvalMode: 'headless' }` from headless clients (CLI, cron, bots)

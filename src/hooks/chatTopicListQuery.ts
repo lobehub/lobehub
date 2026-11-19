@@ -1,10 +1,7 @@
 import type { TopicQuerySortBy } from '@lobechat/types';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import {
-  MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
-  MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME,
-} from '@/const/topic';
+import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
 import { resolveAgentTopicGroupMode } from '@/features/AgentSidebar/Topic/utils/topicGroupMode';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
@@ -25,6 +22,7 @@ const EXCLUDE_STATUSES_COMPLETED = ['completed'];
  * `query`, which decides which persisted row may hydrate the bucket.
  */
 export interface SidebarTopicListQuery {
+  excludeOpenedTopics?: boolean;
   excludeStatuses?: string[];
   excludeTriggers?: string[];
   onlyMine?: boolean;
@@ -53,7 +51,7 @@ export const deriveSidebarTopicListQuery = ({
   isGroupSession: boolean;
   onlyMine: boolean;
   /**
-   * List the agent's sub-topics (`sub_topic`) as its own rows: when it asks
+   * List the agent's sub-topics (topics opened from a live parent) as its own rows: when it asks
    * to show the ones others opened for it, and whenever Better Coding
    * Experience is off — there is no hierarchy then to show them under their
    * opener. See {@link resolveShowSubTopicTopics}.
@@ -62,12 +60,9 @@ export const deriveSidebarTopicListQuery = ({
   topicGroupMode: TopicGroupMode;
 }): SidebarTopicListQuery => ({
   excludeStatuses: includeCompleted ? undefined : EXCLUDE_STATUSES_COMPLETED,
-  // A group's list never holds sub-topics (they belong to agents), so it keeps
-  // the list it always asked for.
-  excludeTriggers:
-    showSubTopicTopics || isGroupSession
-      ? MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME
-      : MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
+  // A sub-topic lists under its parent; a group's list keeps the list it always asked for.
+  excludeOpenedTopics: showSubTopicTopics === false && !isGroupSession ? true : undefined,
+  excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
   onlyMine: onlyMine || undefined,
   sortBy: !isGroupSession && topicGroupMode === 'byStatus' ? 'status' : undefined,
 });

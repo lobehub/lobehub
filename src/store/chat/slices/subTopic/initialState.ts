@@ -1,5 +1,6 @@
+import type { OpenedSubTopic } from '@lobechat/types';
+
 import { createReplicaState, type ReplicaState } from '@/libs/replica';
-import type { OpenedSubTopic } from '@/services/subTopic';
 
 export interface ChatSubTopicState {
   /**
