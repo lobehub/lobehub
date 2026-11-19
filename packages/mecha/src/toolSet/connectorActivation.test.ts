@@ -28,7 +28,19 @@ describe('hasConnectorActivator', () => {
 });
 
 describe('resolveConnectorActivation', () => {
-  it('leaves a connector the agent never turned on out of reach', () => {
+  it('offers inherited connections on demand and respects an explicit opt-out', () => {
+    const activation = resolveConnectorActivation({
+      disabledIds: ['slack'],
+      discoverByDefault: true,
+      hasActivator: true,
+      optedInIds: [],
+    });
+    expect(activation.isAllowed('notion')).toBe(true);
+    expect(activation.isInjected('notion')).toBe(false);
+    expect(activation.isAllowed('slack')).toBe(false);
+  });
+
+  it('requires an explicit entry for a custom toolset', () => {
     const activation = resolveConnectorActivation({ hasActivator: true, optedInIds: ['gmail'] });
 
     expect(activation.isAllowed('gmail')).toBe(true);

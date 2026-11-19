@@ -185,7 +185,7 @@ describe('Agent first-turn tool payload', () => {
   );
 });
 
-describe('discoverTools — installed plugins are opt-in per agent', () => {
+describe('discoverTools — installed plugin discovery', () => {
   // This server fixture has no device and no optional feature flags.
   const availableBuiltins = onDemandBuiltinToolIds.filter(
     (id) => id !== AuvManifest.identifier && isToolEnabledByFeatureFlags(id, {}),
@@ -213,8 +213,8 @@ describe('discoverTools — installed plugins are opt-in per agent', () => {
     expect(activate(off.toolsEngine).enabledToolIds).not.toContain(id);
   });
 
-  it('keeps an installed plugin the agent never turned on out of the run', async () => {
-    const result = await run();
+  it('keeps a disabled installed plugin out of the run', async () => {
+    const result = await run({ disabledPluginIds: [FEISHU] });
 
     expect(result.toolManifestMap[FEISHU]).toBeUndefined();
     expect(result.toolsResult.enabledToolIds).not.toContain(FEISHU);
@@ -225,6 +225,7 @@ describe('discoverTools — installed plugins are opt-in per agent', () => {
   });
 
   it.each([
+    { label: 'inherits', options: {} },
     { label: 'turned on', options: ON },
     { label: 'turned on with an old manual preference', options: { ...ON, ...MANUAL } },
     { label: 'pinned with an old manual preference', options: { ...MANUAL, plugins: [FEISHU] } },
@@ -268,7 +269,7 @@ describe('discoverTools — installed plugins are opt-in per agent', () => {
   });
 
   it('keeps an installed plugin that is off out of a manual-mode run', async () => {
-    const result = await run(MANUAL);
+    const result = await run({ ...MANUAL, disabledPluginIds: [FEISHU] });
 
     expect(result.toolManifestMap[FEISHU]).toBeUndefined();
     expect(result.toolsResult.enabledToolIds).not.toContain(FEISHU);

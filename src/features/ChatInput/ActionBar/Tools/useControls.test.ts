@@ -227,8 +227,7 @@ describe('chat input tool picker', () => {
       },
     ];
     mocks.plugins = [
-      { identifier: 'gmail', mode: 'auto' },
-      { identifier: 'vercel', mode: 'auto' },
+      { identifier: 'slack', mode: 'auto' },
       { identifier: 'google-drive', mode: 'disabled' },
     ];
     const { result } = renderHook(() => useControls());

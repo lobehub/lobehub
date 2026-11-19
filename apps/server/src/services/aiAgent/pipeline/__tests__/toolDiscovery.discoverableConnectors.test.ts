@@ -74,6 +74,7 @@ interface RunOptions {
   chatConfig?: Record<string, unknown>;
   /** Override the connector's transport (`http` by default). */
   connection?: { mcpConnectionType: string; mcpServerUrl: string | null };
+  disabledPluginIds?: string[];
   installed?: boolean;
   metadata?: Record<string, unknown>;
   /** The agent's legacy pinned entries, which also read as on. */
@@ -139,7 +140,7 @@ const run = (options: RunOptions = {}) => {
       shareGate: options.shareGate,
     } as never,
     {
-      disabledPluginIds: [],
+      disabledPluginIds: options.disabledPluginIds ?? [],
       globalMemoryEnabled: false,
       hasMentionedAgents: false,
       isFixedDeviceTarget: false,
@@ -165,7 +166,7 @@ const offeredToolNames = (result: { tools?: { function: { name: string } }[] }) 
 /** The agent turned the connector on: an `auto` entry in its plugins. */
 const ON = { autoSkillIds: [YINGMI] };
 
-describe('discoverTools — custom MCP connectors are opt-in per agent', () => {
+describe('discoverTools — custom MCP connector discovery', () => {
   it.each([
     ON,
     { plugins: [YINGMI] },
@@ -295,14 +296,17 @@ describe('discoverTools — custom MCP connectors are opt-in per agent', () => {
     expect(result.toolManifestMap[YINGMI]).toBeUndefined();
   });
 
-  it('keeps a connector the agent never turned on out of the run', async () => {
-    const result = await run();
+  it('keeps an explicitly disabled connector out of the run', async () => {
+    const result = await run({ disabledPluginIds: [YINGMI] });
 
     expect(result.toolManifestMap[YINGMI]).toBeUndefined();
     expect(result.toolSourceMap[YINGMI]).toBeUndefined();
     expect(result.toolsResult.enabledToolIds).not.toContain(YINGMI);
-    // Off means never read: its credentials are not decrypted for this run.
-    expect(connectorModel.resolveAll).not.toHaveBeenCalled();
+    expect(connectorModel.resolveAll).toHaveBeenCalledWith(
+      expect.anything(),
+      gateKeeper,
+      expect.arrayContaining([YINGMI]),
+    );
     expect(connectorModel.resolveByIdentifiers).not.toHaveBeenCalled();
     // …and a previous turn's activation cannot bring it back.
     const restored = result.toolsEngine!.generateToolsDetailed(explicitConnectorInput(YINGMI));
@@ -310,17 +314,13 @@ describe('discoverTools — custom MCP connectors are opt-in per agent', () => {
   });
 
   it.each([
+    { label: 'inherits', options: {} },
     { label: 'turned on', options: ON },
     { label: 'pinned', options: { plugins: [YINGMI] } },
   ])('keeps a connector the agent $label discoverable without enabling it', async ({ options }) => {
     // The follow-up turn after an @-mention: no mention this turn. The
     // activator used to answer "Not found: yingmi" here.
     const result = await run(options);
-
-    // Resolved by identifier only — never the user's whole connector list.
-    expect(connectorModel.resolveAll).not.toHaveBeenCalled();
-    expect(connectorModel.resolveByIdentifiers).toHaveBeenCalledTimes(1);
-    expect(connectorModel.resolveByIdentifiers.mock.calls[0][0]).toEqual([YINGMI]);
 
     expect(result.toolManifestMap[YINGMI]).toBeDefined();
     expect(result.toolSourceMap[YINGMI]).toBe('mcp');
@@ -374,10 +374,10 @@ describe('discoverTools — custom MCP connectors are opt-in per agent', () => {
     ).toEqual([]);
   });
 
-  it('keeps a connector the agent never turned on out of a manual-mode run too', async () => {
+  it('keeps an inherited connector discoverable with the retired manual preference', async () => {
     const result = await run({ chatConfig: { skillActivateMode: 'manual' } });
 
-    expect(result.toolManifestMap[YINGMI]).toBeUndefined();
+    expect(result.toolManifestMap[YINGMI]).toBeDefined();
     expect(result.toolsResult.enabledToolIds).not.toContain(YINGMI);
   });
 
