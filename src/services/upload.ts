@@ -452,12 +452,17 @@ class UploadService {
         onProgress(end);
       }
 
-      await lambdaClient.upload.completeS3MultipartUpload.mutate({
-        partCount,
-        parts: parts.length === partCount ? parts : undefined,
-        pathname,
-        uploadId,
-      });
+      if (signal?.aborted) throw signal.reason ?? new Error('Upload cancelled by user');
+      // Removing the chip while the parts are being merged cancels this request too.
+      await lambdaClient.upload.completeS3MultipartUpload.mutate(
+        {
+          partCount,
+          parts: parts.length === partCount ? parts : undefined,
+          pathname,
+          uploadId,
+        },
+        { signal },
+      );
     } catch (error) {
       try {
         await lambdaClient.upload.abortS3MultipartUpload.mutate({ pathname, uploadId });

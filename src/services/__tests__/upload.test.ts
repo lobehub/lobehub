@@ -486,15 +486,18 @@ describe('UploadService', () => {
       expect(slice).toHaveBeenCalledTimes(2);
       expect(xhr.send).toHaveBeenCalledTimes(2);
       expect(arrayBuffer).not.toHaveBeenCalled();
-      expect(lambdaClient.upload.completeS3MultipartUpload.mutate).toHaveBeenCalledWith({
-        partCount: 2,
-        parts: [
-          { etag: 'etag-value', partNumber: 1 },
-          { etag: 'etag-value', partNumber: 2 },
-        ],
-        pathname: expect.stringContaining('mock-uuid.bin'),
-        uploadId: 'upload-1',
-      });
+      expect(lambdaClient.upload.completeS3MultipartUpload.mutate).toHaveBeenCalledWith(
+        {
+          partCount: 2,
+          parts: [
+            { etag: 'etag-value', partNumber: 1 },
+            { etag: 'etag-value', partNumber: 2 },
+          ],
+          pathname: expect.stringContaining('mock-uuid.bin'),
+          uploadId: 'upload-1',
+        },
+        { signal: undefined },
+      );
       expect(lambdaClient.upload.abortS3MultipartUpload.mutate).not.toHaveBeenCalled();
     });
 
