@@ -278,3 +278,70 @@ describe('skillRouter.getSkillCategories', () => {
     },
   );
 });
+
+/**
+ * A Market token that went stale (expired M2M cookie token, or a Market login
+ * token in user settings that was never refreshed) made every catalog read
+ * fail with `invalid_token` until the cookie expired: the client trusts the
+ * `mp_token_status` cookie and never re-registers while it says `active`.
+ */
+describe('skillRouter stale Market token', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const createCallerWithToken = async (resHeaders = new Headers()) => {
+    const { skillRouter } = await import('./skill');
+    return skillRouter.createCaller({
+      marketAccessToken: 'stale-token',
+      resHeaders,
+      userId: 'user-1',
+    } as any);
+  };
+
+  it('answers a catalog query anonymously when Market rejects the token', async () => {
+    const { MarketService } = await import('@/server/services/market');
+    const list = { items: [{ identifier: 'skill-a' }], totalCount: 1 };
+    mockSearchSkill
+      .mockRejectedValueOnce(new MarketAPIError(401, 'invalid_token', undefined))
+      .mockResolvedValueOnce(list);
+    const resHeaders = new Headers();
+    const caller = await createCallerWithToken(resHeaders);
+
+    await expect(caller.getSkillList({ page: 1 })).resolves.toEqual(list);
+
+    expect(mockSearchSkill).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(MarketService).mock.calls.map(([options]) => options?.accessToken)).toEqual([
+      'stale-token',
+      undefined,
+    ]);
+  });
+
+  it('expires the token cookies so the client registers a fresh token', async () => {
+    mockSearchSkill
+      .mockRejectedValueOnce(new MarketAPIError(401, 'invalid_token', undefined))
+      .mockResolvedValueOnce({ items: [], totalCount: 0 });
+    const resHeaders = new Headers();
+    const caller = await createCallerWithToken(resHeaders);
+
+    await caller.getSkillList({ page: 1 });
+
+    const cookies = resHeaders.getSetCookie();
+    expect(cookies).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^mp_token=;.*Max-Age=-1.*Path=\//),
+        expect.stringMatching(/^mp_token_status=;.*Max-Age=-1.*Path=\//),
+      ]),
+    );
+  });
+
+  it('does not retry a failure that is not a token rejection', async () => {
+    mockSearchSkill.mockRejectedValue(new MarketAPIError(503, 'Service Unavailable', undefined));
+    const caller = await createCallerWithToken();
+
+    await expect(caller.getSkillList({ page: 1 })).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+    expect(mockSearchSkill).toHaveBeenCalledTimes(1);
+  });
+});

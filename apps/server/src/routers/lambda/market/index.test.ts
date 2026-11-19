@@ -6,6 +6,7 @@ const mockDiscover = vi.hoisted(() => ({
   getAssistantDetail: vi.fn(),
   getGroupAgentDetail: vi.fn(),
   getMcpDetail: vi.fn(),
+  getMcpList: vi.fn(),
   getMcpManifest: vi.fn(),
   getModelDetail: vi.fn(),
   getPluginDetail: vi.fn(),
@@ -95,5 +96,44 @@ describe('marketRouter detail procedures keep the upstream Market status', () =>
       code: 'INTERNAL_SERVER_ERROR',
       message: 'Failed to fetch group agent detail',
     });
+  });
+});
+
+/**
+ * `getMcpList` dropped the Market error, so a rejected token surfaced only as
+ * "Failed to fetch mcp list" and the MCP store stayed empty until the stale
+ * token cookie expired.
+ */
+describe('marketRouter catalog queries with a stale Market token', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('retries getMcpList without the token Market rejected', async () => {
+    const { DiscoverService } = await import('@/server/services/discover');
+    const list = { currentPage: 1, items: [{ identifier: 'mcp-a' }], totalCount: 1 };
+    mockDiscover.getMcpList
+      .mockRejectedValueOnce(new MarketAPIError(401, 'invalid_token'))
+      .mockResolvedValueOnce(list);
+    const { marketRouter } = await import('./index');
+    const caller = marketRouter.createCaller({
+      marketAccessToken: 'stale-token',
+      resHeaders: new Headers(),
+      userId: 'user-1',
+    } as any);
+
+    await expect(caller.getMcpList({ page: 1 })).resolves.toEqual(list);
+    expect(vi.mocked(DiscoverService).mock.calls.map(([options]) => options?.accessToken)).toEqual([
+      'stale-token',
+      undefined,
+    ]);
+  });
+
+  it('still fails when there was no token to drop', async () => {
+    mockDiscover.getMcpList.mockRejectedValue(new MarketAPIError(401, 'invalid_token'));
+
+    await expect((await createCaller()).getMcpList({ page: 1 })).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to fetch mcp list',
+    });
+    expect(mockDiscover.getMcpList).toHaveBeenCalledTimes(1);
   });
 });
