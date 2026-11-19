@@ -250,6 +250,7 @@ export class AgentCouncilFlattenProcessor extends BaseProcessor {
         type: tool.type,
       },
       pluginError: tool.result.error || undefined,
+      pluginIntervention: tool.intervention || undefined,
       pluginState: tool.result.state || undefined,
       role: 'tool',
       tool_call_id: tool.id,

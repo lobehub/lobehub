@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { PipelineContext } from '../../types';
 import type { ToolCallConfig } from '../ToolCall';
-import { PENDING_TOOL_RESULT_CONTENT, ToolCallProcessor } from '../ToolCall';
+import {
+  AWAITING_USER_TOOL_RESULT_CONTENT,
+  DISMISSED_TOOL_RESULT_CONTENT,
+  PENDING_TOOL_RESULT_CONTENT,
+  ToolCallProcessor,
+} from '../ToolCall';
 
 describe('ToolCallProcessor', () => {
   const createContext = (messages: any[]): PipelineContext => ({
@@ -380,6 +385,56 @@ describe('ToolCallProcessor', () => {
 
       expect(result.messages[0].content).toBe('Rome was founded in 753 BC.');
       expect(result.messages[1].content).toBe('');
+    });
+
+    // T-14098: a call parked on an approval or in-app form (e.g. the secure
+    // credential form) is persisted empty until the user answers. A new turn
+    // from a surface that cannot show the card read it as `<empty_content>`.
+    describe('unanswered human interventions', () => {
+      const credsForm = (pluginIntervention: Record<string, unknown>, content = '') => ({
+        content,
+        id: 'msg-tool-1',
+        plugin: { apiName: 'requestCredsInput', identifier: 'lobe-creds', type: 'builtin' },
+        pluginIntervention,
+        role: 'tool',
+        tool_call_id: 'call_1',
+      });
+
+      it('should say a pending intervention is waiting for the user', async () => {
+        const processor = new ToolCallProcessor(defaultConfig);
+
+        const result = await processor.process(createContext([credsForm({ status: 'pending' })]));
+
+        expect(result.messages[0].content).toBe(AWAITING_USER_TOOL_RESULT_CONTENT);
+      });
+
+      it('should say a dismissed intervention produced no result', async () => {
+        const processor = new ToolCallProcessor(defaultConfig);
+
+        const result = await processor.process(
+          createContext([credsForm({ status: 'aborted' }), credsForm({ status: 'rejected' })]),
+        );
+
+        expect(result.messages[0].content).toBe(DISMISSED_TOOL_RESULT_CONTENT);
+        expect(result.messages[1].content).toBe(DISMISSED_TOOL_RESULT_CONTENT);
+      });
+
+      it('should keep a written result and an approved empty result as they are', async () => {
+        const processor = new ToolCallProcessor(defaultConfig);
+        const rejectedWithReason = credsForm(
+          { status: 'rejected' },
+          'User reject this tool calling with reason: not now',
+        );
+
+        const result = await processor.process(
+          createContext([rejectedWithReason, credsForm({ status: 'approved' })]),
+        );
+
+        expect(result.messages[0].content).toBe(
+          'User reject this tool calling with reason: not now',
+        );
+        expect(result.messages[1].content).toBe('');
+      });
     });
 
     it('should use custom genToolCallingName for tool messages', async () => {
