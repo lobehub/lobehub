@@ -566,7 +566,7 @@ describe('git', () => {
     expect(params).toMatchObject({ deviceId: DEVICE.ownerPersonal, userId: OWNER });
     expect(toolCall).toMatchObject({ apiName: 'runCommand', identifier: 'lobe-local-system' });
     expect(JSON.parse(toolCall.arguments).command).toBe(
-      `git -C '${REPO}' log --max-count=5 --format=%H%x1f%h%x1f%an%x1f%ae%x1f%aI%x1f%s HEAD --`,
+      `git -C "${REPO}" log --max-count=5 --format=%H%x1f%h%x1f%an%x1f%ae%x1f%aI%x1f%s HEAD --`,
     );
 
     const diff = await call(`/devices/${DEVICE.ownerPersonal}/git/diff?path=${REPO}`, {
@@ -671,6 +671,43 @@ describe('git', () => {
 
     expect(res.status).toBe(413);
     expect((await json(res)).message).toContain('limit');
+  });
+
+  it('quotes the log path so cmd.exe and PowerShell read it as one argument', async () => {
+    // cmd.exe does not treat single quotes as delimiters: single-quoted, this
+    // repository arrives at git as two arguments and the log fails
+    const spaced = 'C:\\Users\\owner\\my repo';
+    await serverDB
+      .update(devices)
+      .set({ workingDirs: [{ path: spaced }] })
+      .where(eq(devices.deviceId, DEVICE.ownerPersonal));
+    gateway.executeToolCall.mockResolvedValue(commandState(''));
+
+    const res = await call(
+      `/devices/${DEVICE.ownerPersonal}/git/log?path=${encodeURIComponent(spaced)}`,
+      { key: KEYS.read },
+    );
+    expect(res.status).toBe(200);
+    expect(JSON.parse(gateway.executeToolCall.mock.calls[0][1].arguments).command).toContain(
+      `git -C "${spaced}" log `,
+    );
+
+    // a trailing separator would escape the closing quote in sh; git takes the
+    // directory either way, so it is dropped rather than refused
+    const trailing = `${spaced}\\`;
+    await serverDB
+      .update(devices)
+      .set({ workingDirs: [{ path: trailing }] })
+      .where(eq(devices.deviceId, DEVICE.ownerPersonal));
+
+    const res2 = await call(
+      `/devices/${DEVICE.ownerPersonal}/git/log?path=${encodeURIComponent(trailing)}`,
+      { key: KEYS.read },
+    );
+    expect(res2.status).toBe(200);
+    expect(JSON.parse(gateway.executeToolCall.mock.calls.at(-1)![1].arguments).command).toContain(
+      `git -C "${spaced}" log `,
+    );
   });
 
   it('answers 422 when git exits non-zero, though the device says the shell ran', async () => {

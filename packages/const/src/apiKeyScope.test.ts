@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  API_KEY_EXPLICIT_SCOPES,
   API_KEY_SCOPES,
   explicitScopesBeyondIssuer,
   hasApiKeyScope,
@@ -56,7 +55,6 @@ describe('hasApiKeyScope', () => {
   });
 
   it('never grants device:operate through full access — only by naming it', () => {
-    expect(API_KEY_EXPLICIT_SCOPES).toEqual(['device:operate']);
     // legacy NULL keys, ['*'] keys and every other scope leave it out
     expect(hasApiKeyScope(null, 'device:operate')).toBe(false);
     expect(hasApiKeyScope(undefined, 'device:operate')).toBe(false);

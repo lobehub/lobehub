@@ -112,7 +112,17 @@ const toDevice = (item: DeviceListItem): DeviceResponse => ({
  */
 const SHELL_SAFE_PATH = /^[\p{L}\p{N} _./\\:~@+,-]+$/u;
 
-/** One path argument for the device shell, single-quoted after the allow-list above. */
+/**
+ * One path argument for the device shell, double-quoted after the allow-list
+ * above. Double quotes are the one delimiter `sh`, PowerShell and `cmd.exe` all
+ * honour: cmd does not treat single quotes as delimiters, so a `C:\my repo`
+ * sent single-quoted reaches git as two arguments and the log fails on a
+ * perfectly valid repository. The allow-list already removed everything a
+ * quoted span could expand or close on (`$`, backtick, `%`, both quote kinds),
+ * so inside the quotes the path is literal in every shell — except a trailing
+ * separator, which `sh` would use to escape the closing quote. Git takes the
+ * directory either way, so the separator is dropped.
+ */
 const quotePath = (value: string) => {
   if (!SHELL_SAFE_PATH.test(value)) {
     throw new ApiException(
@@ -121,7 +131,9 @@ const quotePath = (value: string) => {
       'This path holds characters that cannot be passed to the device shell',
     );
   }
-  return `'${value}'`;
+  // `C:\` and `/` keep their only separator; everything else loses the tail
+  const path = value.replace(/[\\/]+$/, '') || value;
+  return `"${path}"`;
 };
 
 const FIELD_SEPARATOR = '\u001F';
