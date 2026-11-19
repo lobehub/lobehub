@@ -1,0 +1,48 @@
+---
+title: Using OfoxAI in LobeHub
+description: >-
+  Learn how to configure and use your OfoxAI API Key in LobeHub to access 100+
+  LLMs through a single unified gateway.
+tags:
+  - LobeHub
+  - OfoxAI
+  - API Key
+  - Web UI
+  - LLM Gateway
+---
+
+# Using OfoxAI in LobeHub
+
+[OfoxAI](https://ofox.ai) is a unified LLM API gateway that provides access to 100+ models — including OpenAI GPT, Anthropic Claude, Google Gemini, DeepSeek, Qwen, Mistral, and Llama — through a single API key. It is wire-compatible with the OpenAI, Anthropic, and Gemini protocols, so you can switch between models without changing your client code.
+
+This guide will walk you through how to use OfoxAI within LobeHub.
+
+<Steps>
+  ### Step 1: Get Your OfoxAI API Key
+
+  - Visit the [OfoxAI Console](https://app.ofox.ai/auth) and create an account or sign in.
+  - Open the **API Keys** section in your dashboard.
+  - Click **Create Key**, then copy and securely store the generated key — you will not be able to view it again.
+
+  ### Step 2: Configure OfoxAI in LobeHub
+
+  - Open the **Settings** panel in LobeHub.
+  - Under **AI Service Provider**, find the **OfoxAI** section.
+  - Enable **OfoxAI** and paste in your API key.
+  - The default API endpoint is `https://api.ofox.ai/v1` — you can leave it as-is unless you have a custom routing setup.
+
+  ### Step 3: Pick a Model and Start Chatting
+
+  - In the model picker, select an OfoxAI model such as `gpt-4o`, `claude-sonnet-4-20250514`, `gemini-2.5-pro`, or `deepseek-v3`.
+  - Start a conversation. Streaming, tool use (where the underlying model supports it), and vision input all work out of the box.
+
+  <Callout type={'info'}>
+    OfoxAI offers a free tier for evaluation and pay-per-token usage afterwards. China users are routed via Hong Kong express by default. See [docs.ofox.ai](https://docs.ofox.ai) for the full model catalog and pricing.
+  </Callout>
+
+  <Callout type={'warning'}>
+    Make sure to store your API key securely. If you lose it, you'll need to generate a new one.
+  </Callout>
+</Steps>
+
+And that's it! You're now ready to use OfoxAI models within LobeHub for conversations and interactions.
