@@ -95,10 +95,20 @@ export const selectMcpAppEntrypoints = (
           ...(agentId ? (state.agentConnectors[agentId] ?? []) : []).map(prefixOf),
         ]),
   ]);
-  const connectorOf = (identifier: string) =>
-    runRows
-      ? runRows.find((row) => row.toolIdentifier === identifier)
-      : connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(state);
+  // A listed row the local lists also hold reads their copy's tools: a
+  // discovery sync updates those after the listing, so its entries show
+  const localRows = new Map(
+    [...state.connectors, ...(agentId ? (state.agentConnectors[agentId] ?? []) : [])].map(
+      (row) => [row.id, row] as const,
+    ),
+  );
+  const connectorOf = (identifier: string) => {
+    if (!runRows)
+      return connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(state);
+    const row = runRows.find((listed) => listed.toolIdentifier === identifier);
+    const local = row && localRows.get(row.id);
+    return row && local ? { ...row, isEnabled: local.isEnabled, tools: local.tools } : row;
+  };
   return [...identifiers].flatMap((identifier) => {
     const connector = connectorOf(identifier);
     if (connector && !connector.isEnabled) return [];

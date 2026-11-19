@@ -79,6 +79,28 @@ describe('sidebar app entries', () => {
       selectMcpAppEntrypoints(state, true, 'agent').some((e) => e.identifier === 'docs-personal'),
     ).toBe(false);
   });
+  it("shows a listed row's entries once a later sync discovers them locally", () => {
+    const listedRow = {
+      id: 'shared-row',
+      identifier: 'docs',
+      isEnabled: true,
+      mcpServerUrl: 'https://docs.example.com',
+      toolIdentifier: 'docs',
+      tools: [{ toolName: 'open', permission: 'auto' }],
+    };
+    // The listing predates discovery; the local copy has since been synced
+    const synced = {
+      ...state,
+      connectors: [
+        { ...listedRow, tools: [{ ...listedRow.tools[0], metadata: { threadEntry: entry } }] },
+      ],
+    } as unknown as ToolStore;
+    expect(selectMcpAppEntrypoints(synced, true, 'agent', [listedRow] as any)).toContainEqual({
+      ...entry,
+      connectorIdentifier: 'docs',
+      identifier: 'docs',
+    });
+  });
   it('lists a private row mounted on the agent once, under the prefix its calls run by', () => {
     // Regression: the mounted row is in both the base and the agent list; the
     // agent list added its bare identifier, a second entry the server refuses.
