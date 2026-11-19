@@ -1948,7 +1948,7 @@ export type RemoteModel = {
     settings?: {
         [key: string]: unknown;
     };
-    type?: 'chat' | 'embedding' | 'tts' | 'asr' | 'image' | 'text2video' | 'text2music' | 'realtime' | 'decision';
+    type?: 'chat' | 'embedding' | 'tts' | 'asr' | 'image' | 'video' | 'text2music' | 'realtime' | 'decision';
     video?: boolean;
     vision?: boolean;
 };
@@ -11887,7 +11887,35 @@ export type PostApiV1ModelsBatchData = {
         action: 'upsert';
         models: Array<{
             /**
-             * Capability flags, e.g. `{ "vision": true }`.
+             * Folded into `abilities.files`.
+             */
+            files?: boolean;
+            /**
+             * Folded into `abilities.functionCall`.
+             */
+            functionCall?: boolean;
+            /**
+             * Folded into `abilities.imageOutput`.
+             */
+            imageOutput?: boolean;
+            /**
+             * Folded into `abilities.reasoning`.
+             */
+            reasoning?: boolean;
+            /**
+             * Folded into `abilities.search`.
+             */
+            search?: boolean;
+            /**
+             * Folded into `abilities.video`.
+             */
+            video?: boolean;
+            /**
+             * Folded into `abilities.vision`.
+             */
+            vision?: boolean;
+            /**
+             * Capability flags, e.g. `{ "vision": true }`. Wins over a top-level flag.
              */
             abilities?: {
                 [key: string]: unknown;

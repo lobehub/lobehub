@@ -6512,7 +6512,7 @@ components:
             - tts
             - asr
             - image
-            - text2video
+            - video
             - text2music
             - realtime
             - decision
@@ -33255,8 +33255,30 @@ paths:
                       items:
                         type: object
                         properties:
+                          files:
+                            description: Folded into `abilities.files`.
+                            type: boolean
+                          functionCall:
+                            description: Folded into `abilities.functionCall`.
+                            type: boolean
+                          imageOutput:
+                            description: Folded into `abilities.imageOutput`.
+                            type: boolean
+                          reasoning:
+                            description: Folded into `abilities.reasoning`.
+                            type: boolean
+                          search:
+                            description: Folded into `abilities.search`.
+                            type: boolean
+                          video:
+                            description: Folded into `abilities.video`.
+                            type: boolean
+                          vision:
+                            description: Folded into `abilities.vision`.
+                            type: boolean
                           abilities:
-                            description: 'Capability flags, e.g. `{ "vision": true }`.'
+                            description: 'Capability flags, e.g. `{ "vision": true }`. Wins over a top-level
+                              flag.'
                             type: object
                             propertyNames:
                               type: string

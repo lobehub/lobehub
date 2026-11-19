@@ -1,3 +1,4 @@
+import { AiModelTypeSchema } from 'model-bank';
 import { z } from 'zod';
 
 import { example } from '../common/examples';
@@ -8,18 +9,6 @@ import { example } from '../common/examples';
  * `checkProviderConnectivity`, `updateAiProviderConfig`, `updateAiProviderOrder`
  * and of `GET /webapi/models/{provider}`.
  */
-
-const MODEL_TYPES = [
-  'chat',
-  'embedding',
-  'tts',
-  'asr',
-  'image',
-  'text2video',
-  'text2music',
-  'realtime',
-  'decision',
-] as const;
 
 // ==================== Connectivity check ====================
 
@@ -83,7 +72,7 @@ export const RemoteModelSchema = z
     releasedAt: z.string().optional(),
     search: z.boolean().optional(),
     settings: jsonRecord.optional(),
-    type: z.enum(MODEL_TYPES).optional(),
+    type: AiModelTypeSchema.optional(),
     video: z.boolean().optional(),
     vision: z.boolean().optional(),
   })

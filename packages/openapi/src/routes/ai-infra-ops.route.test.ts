@@ -202,6 +202,23 @@ describe('POST /models/batch', () => {
     expect(row).toMatchObject({ displayName: 'Remote One', source: 'remote', type: 'chat' });
   });
 
+  it('keeps the capability flags of a card sent back from remote-models', async () => {
+    const res = await send('POST', '/models/batch', WRITE_KEY, {
+      action: 'upsert',
+      models: [
+        { functionCall: true, id: 'r-vision', source: 'remote', vision: true },
+        { abilities: { vision: false }, id: 'r-explicit', source: 'remote', vision: true },
+      ],
+      providerId: 'mine',
+    });
+    expect(res.status).toBe(200);
+
+    expect((await ownerModel('r-vision'))?.abilities).toEqual({ functionCall: true, vision: true });
+    // An explicit `abilities` entry wins over the top-level flag; a set with no
+    // true capability is stored as no abilities at all.
+    expect((await ownerModel('r-explicit'))?.abilities).toBeNull();
+  });
+
   it('rejects an invalid body with 400', async () => {
     const unknownAction = await send('POST', '/models/batch', FULL_KEY, {
       action: 'explode',

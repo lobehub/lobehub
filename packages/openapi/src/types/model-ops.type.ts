@@ -25,9 +25,34 @@ const MAX_BATCH_MODELS = 500;
 
 const jsonRecord = z.record(z.string(), z.unknown());
 
+/**
+ * Capability flags as `GET /providers/{id}/remote-models` returns them, at the
+ * top level of each card. An upsert folds them into `abilities`, like the
+ * in-app remote import, so a fetched list can be sent back unchanged.
+ */
+export const MODEL_ABILITY_FLAGS = [
+  'files',
+  'functionCall',
+  'imageOutput',
+  'reasoning',
+  'search',
+  'video',
+  'vision',
+] as const;
+
+const abilityFlagShape = Object.fromEntries(
+  MODEL_ABILITY_FLAGS.map((flag) => [
+    flag,
+    z.boolean().optional().describe(`Folded into \`abilities.${flag}\`.`),
+  ]),
+) as Record<(typeof MODEL_ABILITY_FLAGS)[number], z.ZodOptional<z.ZodBoolean>>;
+
 /** One model written by an `upsert` batch — the provider model-list item shape. */
 export const BatchModelItemSchema = z.object({
-  abilities: jsonRecord.optional().describe('Capability flags, e.g. `{ "vision": true }`.'),
+  ...abilityFlagShape,
+  abilities: jsonRecord
+    .optional()
+    .describe('Capability flags, e.g. `{ "vision": true }`. Wins over a top-level flag.'),
   config: jsonRecord.optional(),
   contextWindowTokens: z.number().int().nonnegative().optional(),
   description: z.string().optional(),
@@ -43,6 +68,8 @@ export const BatchModelItemSchema = z.object({
   source: z.enum(['remote', 'custom', 'builtin']).optional(),
   type: AiModelTypeSchema.default('chat'),
 });
+
+export type BatchModelItem = z.infer<typeof BatchModelItemSchema>;
 
 export const BatchModelsRequestSchema = z.discriminatedUnion('action', [
   z.object({

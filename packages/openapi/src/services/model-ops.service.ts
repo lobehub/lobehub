@@ -8,13 +8,14 @@ import { aiModelRouter } from '@/server/routers/lambda/aiModel';
 import { BaseService } from '../common/base.service';
 import type { DeletedResource } from '../types/common.type';
 import type {
+  BatchModelItem,
   BatchModelsRequest,
   BatchModelsResult,
   ModelReasoningConfig,
   ModelReasoningConfigResult,
   ReorderModelsRequest,
 } from '../types/model-ops.type';
-import { ModelReasoningConfigSchema } from '../types/model-ops.type';
+import { MODEL_ABILITY_FLAGS, ModelReasoningConfigSchema } from '../types/model-ops.type';
 import { ProviderOpsService } from './provider-ops.service';
 
 /**
@@ -29,6 +30,21 @@ import { ProviderOpsService } from './provider-ops.service';
  * `ProviderOpsService.assertProvidersKnown`); a model row outside the caller's
  * scope is 404.
  */
+/**
+ * Move top-level capability flags (the remote-models card shape) into
+ * `abilities`, which is the only place the model row reads them from.
+ */
+const foldAbilityFlags = (model: BatchModelItem) => {
+  const rest: Record<string, unknown> = { ...model };
+  const flags: Record<string, boolean> = {};
+  for (const flag of MODEL_ABILITY_FLAGS) {
+    if (model[flag] !== undefined) flags[flag] = model[flag];
+    delete rest[flag];
+  }
+  if (Object.keys(flags).length === 0) return rest as BatchModelItem;
+  return { ...rest, abilities: { ...flags, ...model.abilities } } as BatchModelItem;
+};
+
 export class ModelOpsService extends BaseService {
   private readonly ctx: { userId: string; workspaceId?: string };
 
@@ -75,7 +91,7 @@ export class ModelOpsService extends BaseService {
       if (request.action === 'upsert') {
         await this.models.batchUpdateAiModels({
           id: request.providerId,
-          models: request.models,
+          models: request.models.map(foldAbilityFlags),
         });
         return {
           action: 'upsert',
