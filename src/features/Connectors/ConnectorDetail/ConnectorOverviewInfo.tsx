@@ -10,13 +10,14 @@ import { ConnectorSourceType, ConnectorStatus } from '@/database/schemas';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
+import { densityTokens } from '@/styles/density.stylex';
 
 // A quiet key–value list: labels in a fixed column, no boxes or row rules.
 const styles = stylex.create({
   label: {
     color: cssVar.colorTextTertiary,
     flexShrink: 0,
-    fontSize: 14,
+    fontSize: densityTokens['--lobe-density-font-size'],
     width: 160,
   },
   list: {

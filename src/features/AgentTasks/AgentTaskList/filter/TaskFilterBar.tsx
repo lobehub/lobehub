@@ -21,6 +21,8 @@ import type { KeyboardEvent, ReactNode } from 'react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import {
   isTaskFilterValueSelected,
   removeTaskFilterField,
@@ -41,7 +43,7 @@ const styles = stylex.create({
     flexWrap: 'wrap',
     paddingBlockEnd: 8,
     paddingBlockStart: 4,
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   chip: {
     alignItems: 'stretch',

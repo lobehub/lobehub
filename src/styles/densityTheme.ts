@@ -5,6 +5,10 @@ import * as stylex from '@stylexjs/stylex';
 import { densityTokens } from './density.stylex';
 
 export const compactDensityTheme = stylex.createTheme(densityTokens, {
+  '--lobe-density-badge-height': '16px',
+  '--lobe-density-badge-min-width': '18px',
+  '--lobe-density-card-padding': '12px',
+  '--lobe-density-content-gap': '8px',
   '--lobe-density-control-height': '28px',
   '--lobe-density-font-size': '13px',
   '--lobe-density-gap': '8px',
@@ -14,9 +18,14 @@ export const compactDensityTheme = stylex.createTheme(densityTokens, {
   '--lobe-density-header-small-icon-size': '14px',
   '--lobe-density-icon-box': '24px',
   '--lobe-density-icon-size': '16px',
+  '--lobe-density-large-icon-size': '20px',
   '--lobe-density-line-height': '20px',
   '--lobe-density-list-row-height': '40px',
+  '--lobe-density-modal-padding': '16px',
   '--lobe-density-padding-inline': '4px',
+  '--lobe-density-page-padding-block-end': '16px',
+  '--lobe-density-page-padding-block-start': '24px',
+  '--lobe-density-page-padding-inline': '16px',
   '--lobe-density-page-title-font-size': '14px',
   '--lobe-density-panel-padding-inline': '6px',
   '--lobe-density-radius': '6px',

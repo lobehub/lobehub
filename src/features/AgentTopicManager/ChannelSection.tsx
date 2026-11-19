@@ -12,12 +12,13 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { densityTokens } from '@/styles/density.stylex';
 
 export const channelCardStyles = stylex.create({
   // Same column rules as the topic grid, so Channel cards line up with the topics below them.
   grid: {
     display: 'grid',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
     gridTemplateColumns: {
       default: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))',
       [media.md]: 'repeat(auto-fill, minmax(min(240px, 100%), 1fr))',

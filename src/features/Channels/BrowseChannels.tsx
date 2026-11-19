@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { channelActions, channelSelectors, useChannelStore } from '@/store/channel';
 import { useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   list: {
@@ -30,7 +31,7 @@ const styles = stylex.create({
   row: {
     display: 'flex',
     alignItems: 'center',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
     paddingBlock: 8,
     paddingInline: 8,
     borderRadius: cssVar.borderRadius,

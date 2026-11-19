@@ -26,6 +26,7 @@ import { acceptanceRouter } from './acceptance';
 import { acceptanceCommentRouter } from './acceptanceComment';
 import { agentRouter } from './agent';
 import { agentAccountRouter } from './agentAccount';
+import { agentAvailabilityRouter } from './agentAvailability';
 import { agentBotProviderRouter } from './agentBotProvider';
 import { agentBotWakeRouter } from './agentBotWake';
 import { agentDocumentRouter } from './agentDocument';
@@ -161,6 +162,7 @@ export const lambdaRouter = router({
   aiAgent: aiAgentRouter,
   aiChat: aiChatRouter,
   aiModel: aiModelRouter,
+  agentAvailability: agentAvailabilityRouter,
   agentQuota: agentQuotaRouter,
   agentShare: agentShareRouter,
   aiProvider: aiProviderRouter,

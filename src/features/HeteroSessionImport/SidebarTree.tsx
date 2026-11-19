@@ -16,6 +16,8 @@ import { ChevronRight, Eye, EyeOff, Folder, FolderGit2, Timer, X } from 'lucide-
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import { baseName, dirKeyOf } from './utils';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -62,7 +64,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   sidebar: css`
     width: 100%;
     height: 100%;
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 8px;
   `,
 }));

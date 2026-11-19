@@ -91,7 +91,6 @@
   "events.youInvited": "당신이 {{names}}을(를) 채널에 초대했습니다",
   "events.youInvitedMembers": "당신이 <members/>을(를) 채널에 초대했습니다",
   "failure.locate": "메시지 표시",
-  "failure.messageLabel": "응답 실패: {{names}}",
   "failure.title": "실패한 응답 · {{count}}",
   "followers": "응답자: {{names}}",
   "invite.directHint": "여기에서 초대하면 {{name}} 및 선택한 멤버와 함께 새 채널이 시작됩니다. {{name}}과의 이 대화는 그대로 유지됩니다.",

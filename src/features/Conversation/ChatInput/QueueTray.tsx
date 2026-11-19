@@ -22,6 +22,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useFileStore } from '@/store/file';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../store';
@@ -108,7 +109,7 @@ const styles = stylex.create({
   imageThumbImage: { width: '28px', height: '28px', objectFit: 'cover' },
   item: {
     paddingBlock: '6px',
-    paddingInlineStart: '12px',
+    paddingInlineStart: densityTokens['--lobe-density-content-gap'],
     paddingInlineEnd: '8px',
   },
   itemDivider: {

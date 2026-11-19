@@ -8,6 +8,7 @@ import { memo, type MouseEvent, type ReactNode, useCallback } from 'react';
 import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { messageStateSelectors, useConversationStore } from '../store';
 import { messageSelectionMarker } from './markers.stylex';
@@ -30,7 +31,7 @@ const styles = stylex.create({
   bandSelected: { backgroundColor: cssVar.colorFillQuaternary },
   // Pinned to the band's leading edge; vertical centering is handled by the
   // band's cross-axis alignment.
-  checkbox: { flex: 'none', paddingInlineStart: '16px' },
+  checkbox: { flex: 'none', paddingInlineStart: densityTokens['--lobe-density-card-padding'] },
   content: {
     // Content is non-interactive while selecting — the whole row is the toggle.
     pointerEvents: 'none',
@@ -47,7 +48,7 @@ const styles = stylex.create({
   disabledBand: { cursor: 'not-allowed', inlineSize: '100%', opacity: 0.4 },
   // Centered reading column inside the full-bleed band — the width preference the
   // rest of the conversation follows.
-  lane: { paddingInline: '16px' },
+  lane: { paddingInline: densityTokens['--lobe-density-card-padding'] },
 });
 
 interface MessageSelectionWrapperProps {

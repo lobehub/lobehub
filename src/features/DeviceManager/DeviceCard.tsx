@@ -30,6 +30,7 @@ import UserAvatar from '@/components/UserAvatar';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import { DeviceRunningSummaryValue } from './DeviceActivity/RunningUsers';
 import { canOfferDeviceShare, removeConfirmDescKey } from './deviceCardActions';
@@ -89,7 +90,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   footer: css`
     margin-block-start: auto;
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 20px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
@@ -112,7 +113,7 @@ const styles = createStaticStyles(({ css }) => ({
   infoGrid: css`
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
   `,
   // Presence dot leading the footer's status text, so "online" reads as one
   // unit in the corner rather than a badge on the icon plus a label below.

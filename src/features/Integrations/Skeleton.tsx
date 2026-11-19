@@ -6,19 +6,20 @@ import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 
 import SkeletonBar from '@/components/Skeleton/Bar';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   // `IntegrationCard`: filled, 14px/16px padding, 40px icon tile.
   card: {
     paddingBlock: '14px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderRadius: cssVar.borderRadiusLG,
     backgroundColor: cssVar.colorFillQuaternary,
   },
   // `Connections` card: filled, rows 10px apart from its 2px inset.
   connections: {
     paddingBlock: '2px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderRadius: cssVar.borderRadiusLG,
     backgroundColor: cssVar.colorFillQuaternary,
   },

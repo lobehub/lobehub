@@ -3,6 +3,8 @@ import { FileTextIcon, ListTodoIcon, SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import { homeType } from './components/homeType';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -19,7 +21,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: calc(100% + 20px);
     height: auto;
-    min-height: 58px;
+    min-height: calc(${densityVars.listRowHeight} + 10px);
     margin-inline: -10px;
     padding-block: 9px;
     padding-inline: 10px;

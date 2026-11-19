@@ -5,6 +5,8 @@ import { ChevronDown, ChevronRight, SearchIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css }) => ({
   apiDesc: css`
     overflow: hidden;
@@ -44,7 +46,7 @@ const styles = createStaticStyles(({ css }) => ({
   paramGrid: css`
     display: grid;
     grid-template-columns: 1fr 2fr;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     margin-block-end: 12px;

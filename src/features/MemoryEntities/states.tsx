@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import MemoryAnalysis from '@/routes/(main)/memory/features/MemoryAnalysis';
 import { useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import KindIcon from './components/KindIcon';
 import { useEntityFormat } from './format';
@@ -33,7 +34,12 @@ const styles = stylex.create({
     textAlign: 'center',
   },
   title: { fontSize: '20px', fontWeight: 600, margin: 0 },
-  desc: { color: cssVar.colorTextSecondary, fontSize: '14px', lineHeight: '22px', margin: 0 },
+  desc: {
+    color: cssVar.colorTextSecondary,
+    fontSize: densityTokens['--lobe-density-font-size'],
+    lineHeight: '22px',
+    margin: 0,
+  },
   analysis: { maxWidth: '320px', width: '100%' },
   kinds: {
     display: 'grid',
@@ -50,9 +56,9 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderWidth: '1px',
     display: 'flex',
-    gap: '12px',
-    paddingBlock: '12px',
-    paddingInline: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   kindText: { display: 'flex', flexDirection: 'column', minWidth: 0 },
   kindLabel: { fontSize: '13px', fontWeight: 500 },
@@ -64,14 +70,18 @@ const styles = stylex.create({
     borderInlineEndWidth: '1px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
+    gap: densityTokens['--lobe-density-section-gap'],
     paddingBlock: '20px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     width: '320px',
   },
   // Compact entity rows are 4px shorter (6px block padding), so the skeleton pitch follows.
   loadingListCompact: { gap: '12px' },
-  loadingRow: { alignItems: 'flex-start', display: 'flex', gap: '12px' },
+  loadingRow: {
+    alignItems: 'flex-start',
+    display: 'flex',
+    gap: densityTokens['--lobe-density-content-gap'],
+  },
   loadingPage: {
     display: 'flex',
     flex: '1',

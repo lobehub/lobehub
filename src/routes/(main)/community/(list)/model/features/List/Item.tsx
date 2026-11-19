@@ -14,6 +14,7 @@ import { ModelInfoTags } from '@/components/ModelSelect';
 import PublishedTime from '@/components/PublishedTime';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { densityTokens } from '@/styles/density.stylex';
 import { type DiscoverModelItem } from '@/types/discover';
 
 import ModelTypeIcon from './ModelTypeIcon';
@@ -32,7 +33,7 @@ const styles = stylex.create({
   secondaryDesc: { fontSize: '12px', color: cssVar.colorTextDescription },
   title: {
     margin: '0',
-    fontSize: '16px',
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
     fontWeight: 500,
     color: { 'default': null, ':hover': cssVar.colorLink },
   },

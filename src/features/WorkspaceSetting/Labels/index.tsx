@@ -38,6 +38,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useHomeStore } from '@/store/home';
 import { agentLabelSelectors } from '@/store/home/selectors';
 import { useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { LABEL_COLUMN_WIDTHS } from './constants';
 import { openDeleteLabelModal } from './DeleteLabelModal';
@@ -55,7 +56,7 @@ const styles = stylex.create({
   },
   row: {
     paddingBlock: '10px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadius,
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },

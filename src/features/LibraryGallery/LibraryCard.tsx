@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import LibraryStatusIcon from '@/components/LibIcon/StatusIcon';
 import LibraryCover, { libraryCoverOf } from '@/features/LibraryCover';
+import { densityTokens } from '@/styles/density.stylex';
 import type { KnowledgeBaseItem } from '@/types/knowledgeBase';
 
 export const libraryCardStyles = stylex.create({
@@ -62,11 +63,11 @@ export const libraryCardStyles = stylex.create({
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-    gap: '16px',
+    gap: densityTokens['--lobe-density-section-gap'],
   },
   name: {
     overflow: 'hidden',
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 600,
     color: cssVar.colorText,
     textOverflow: 'ellipsis',

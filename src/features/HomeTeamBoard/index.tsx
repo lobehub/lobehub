@@ -11,6 +11,7 @@ import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { agentRunBoardService } from '@/services/agentRunBoard';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import ActivityPanel from './ActivityPanel';
 import AttentionList from './AttentionList';
@@ -28,7 +29,7 @@ const styles = stylex.create({
   root: { paddingBlockStart: 24 },
   columns: {
     display: 'grid',
-    gap: 16,
+    gap: densityTokens['--lobe-density-section-gap'],
     gridTemplateColumns: {
       'default': 'minmax(0, 1fr) 340px',
       '@media (max-width: 1100px)': 'minmax(0, 1fr)',
@@ -48,9 +49,9 @@ const styles = stylex.create({
     borderStyle: 'dashed',
     borderWidth: 1,
     color: cssVar.colorTextTertiary,
-    fontSize: 14,
+    fontSize: densityTokens['--lobe-density-font-size'],
     paddingBlock: 48,
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     textAlign: 'center',
   },
 });

@@ -3,7 +3,7 @@ import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { useInterfaceDensity } from '@/styles/density';
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 import KindIcon from '../components/KindIcon';
 import { useEntityFormat } from '../format';
@@ -21,7 +21,7 @@ const styles = stylex.create({
     color: cssVar.colorText,
     cursor: 'pointer',
     display: 'flex',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     paddingBlock: '8px',
     paddingInline: '8px',
     textAlign: 'start',

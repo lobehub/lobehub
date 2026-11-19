@@ -6,12 +6,14 @@ import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 const styles = stylex.create({
   group: {
     backgroundColor: cssVar.colorFillQuaternary,
     borderRadius: cssVar.borderRadiusLG,
-    paddingBlock: 12,
-    paddingInline: 12,
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   option: {
     cursor: 'pointer',

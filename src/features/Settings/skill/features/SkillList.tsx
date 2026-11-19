@@ -32,6 +32,7 @@ import {
 } from '@/store/tool/slices/connector';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
+import { densityTokens } from '@/styles/density.stylex';
 import { type LobeToolType } from '@/types/tool/tool';
 
 import AgentConnectorItem from './AgentConnectorItem';
@@ -62,7 +63,7 @@ const styles = stylex.create({
     display: 'flex',
     gap: '4px',
     alignItems: 'center',
-    paddingBlockStart: '12px',
+    paddingBlockStart: densityTokens['--lobe-density-content-gap'],
     paddingBlockEnd: '4px',
     paddingInline: '4px',
     fontSize: '12px',
@@ -88,7 +89,7 @@ const styles = stylex.create({
     cursor: 'default',
     gap: '8px',
     paddingBlock: '0',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     fontSize: cssVar.fontSizeHeading5,
     fontWeight: 600,
     color: { 'default': cssVar.colorText, ':hover': cssVar.colorText },

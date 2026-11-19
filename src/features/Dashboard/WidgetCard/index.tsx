@@ -18,6 +18,7 @@ import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { DashboardTrendSeries, DashboardWidgetItem } from '@/services/dashboard';
+import { densityVars } from '@/styles/densityVars';
 
 import { ErrorLine } from '../ErrorLine';
 import { getWidgetCardBody, getWidgetHealth, getWidgetUpdatedAt } from '../utils/widgetHealth';
@@ -57,7 +58,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     height: 100%;
     padding-block: 14px 12px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 

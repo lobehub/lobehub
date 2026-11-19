@@ -15,6 +15,8 @@ import {
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css }) => ({
   backLink: css`
     cursor: pointer;
@@ -41,8 +43,8 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   header: css`
-    padding-block: 16px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.cardPadding};
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   metricCard: css`

@@ -10,12 +10,13 @@ import { useTranslation } from 'react-i18next';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import AsyncError from '@/components/AsyncError';
 import { useEvalStore } from '@/store/eval';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   row: {
     cursor: 'pointer',
     paddingBlock: 8,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadius,
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
   },

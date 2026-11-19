@@ -4,6 +4,10 @@ import { densityTokens } from './density.stylex';
 
 /** camelCase handles over the same variables, for stylesheets and inline styles. */
 export const densityVars = {
+  badgeHeight: densityTokens['--lobe-density-badge-height'],
+  badgeMinWidth: densityTokens['--lobe-density-badge-min-width'],
+  cardPadding: densityTokens['--lobe-density-card-padding'],
+  contentGap: densityTokens['--lobe-density-content-gap'],
   controlHeight: densityTokens['--lobe-density-control-height'],
   fontSize: densityTokens['--lobe-density-font-size'],
   gap: densityTokens['--lobe-density-gap'],
@@ -13,9 +17,14 @@ export const densityVars = {
   headerSmallIconSize: densityTokens['--lobe-density-header-small-icon-size'],
   iconBox: densityTokens['--lobe-density-icon-box'],
   iconSize: densityTokens['--lobe-density-icon-size'],
+  largeIconSize: densityTokens['--lobe-density-large-icon-size'],
   lineHeight: densityTokens['--lobe-density-line-height'],
   listRowHeight: densityTokens['--lobe-density-list-row-height'],
+  modalPadding: densityTokens['--lobe-density-modal-padding'],
   paddingInline: densityTokens['--lobe-density-padding-inline'],
+  pagePaddingBlockEnd: densityTokens['--lobe-density-page-padding-block-end'],
+  pagePaddingBlockStart: densityTokens['--lobe-density-page-padding-block-start'],
+  pagePaddingInline: densityTokens['--lobe-density-page-padding-inline'],
   pageTitleFontSize: densityTokens['--lobe-density-page-title-font-size'],
   panelPaddingInline: densityTokens['--lobe-density-panel-padding-inline'],
   radius: densityTokens['--lobe-density-radius'],
