@@ -59,4 +59,39 @@ describe('TFS picker pagination', () => {
     expect(result.current.items).toEqual([{ name: 'main' }]);
     expect(result.current.next).toBe('second');
   });
+
+  it('auto loads every branch page without pressing load more', async () => {
+    mocks.data[tfsQueryKey({ ...query, cursor: 'second' })] = {
+      branches: { items: [{ name: 'main' }, { name: 'release' }] },
+    };
+
+    const { result } = renderHook(() => useTfsPickerPages(query, true, { autoLoadAll: true }));
+
+    await act(async () => {});
+
+    expect(result.current.items).toEqual([{ name: 'main' }, { name: 'release' }]);
+    expect(result.current.next).toBeUndefined();
+    expect(result.current.truncated).toBe(false);
+  });
+
+  it('stops auto loading at the page cap and reports truncation', async () => {
+    const { result } = renderHook(() =>
+      useTfsPickerPages(query, true, { autoLoadAll: true, maxAutoPages: 1 }),
+    );
+
+    await act(async () => {});
+
+    expect(result.current.items).toEqual([{ name: 'main' }]);
+    expect(result.current.next).toBe('second');
+    expect(result.current.truncated).toBe(true);
+  });
+
+  it('does not auto load when the picker is disabled', async () => {
+    const { result } = renderHook(() => useTfsPickerPages(query, false, { autoLoadAll: true }));
+
+    await act(async () => {});
+
+    expect(result.current.items).toEqual([{ name: 'main' }]);
+    expect(result.current.next).toBe('second');
+  });
 });

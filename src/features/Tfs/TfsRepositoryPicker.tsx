@@ -43,6 +43,7 @@ export const TfsRepositoryPicker = ({
   const branches = useTfsPickerPages(
     { binding, kind: 'branches', project, repository },
     connected && Boolean(repository),
+    { autoLoadAll: true },
   );
   const selected = manual ?? repos.data?.repositories?.items.find((r) => r.id === repository);
   const failure = status.error || projects.error || repos.error || branches.error || error;
@@ -174,7 +175,7 @@ export const TfsRepositoryPicker = ({
               }}
             />
           )}
-          {selected && branches.next && (
+          {selected && branches.truncated && (
             <Button
               size="small"
               loading={branches.isValidating}
