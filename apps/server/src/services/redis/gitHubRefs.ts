@@ -1,6 +1,5 @@
-import { RedisKeys } from '@/server/modules/Redis';
+import { getJSONFromRedis, RedisKeys } from '@/server/modules/Redis';
 
-import { readThroughRedis } from './cache';
 import { getRedisServiceClient } from './client';
 
 const TTL_MS = 5 * 60 * 1000;
@@ -23,13 +22,25 @@ export const gitHubRefs = {
    * check resolves live.
    */
   async remember(ref: GitHubRef, resolve: () => Promise<string>): Promise<string> {
-    return readThroughRedis(await getClient(), keyOf(ref), resolve, { ttlMs: TTL_MS });
+    const redis = await getClient();
+    if (!redis) return resolve();
+
+    const key = keyOf(ref);
+    const readCached = () => getJSONFromRedis<string>(redis, key).catch(() => null);
+    const cached = await readCached();
+    if (cached !== null) return cached;
+
+    const commit = await resolve();
+    // An import may have recorded a newer ref while GitHub was responding.
+    const stored = await redis
+      .set(key, JSON.stringify(commit), { nx: true, px: TTL_MS })
+      .catch(() => undefined);
+    if (stored === null) return (await readCached()) ?? commit;
+    return commit;
   },
 
   /**
-   * Replace the remembered commit with one just resolved live. An import
-   * records what it installed before saving, so a check can never offer an
-   * older commit as an update.
+   * An import records its live ref before saving the installation.
    */
   async record(ref: GitHubRef, commit: string): Promise<void> {
     const redis = await getClient();

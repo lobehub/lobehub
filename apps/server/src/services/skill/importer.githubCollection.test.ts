@@ -221,6 +221,49 @@ describe('GitHub skill collection import', () => {
     expect(GitHub.prototype.downloadCommitZip).toHaveBeenLastCalledWith(expect.anything(), next);
   });
 
+  it('requires a branch choice for a legacy CLI install whose URL omitted --branch', async () => {
+    const rootZip = (name: string) => Buffer.from(zipSync({ 'repo/SKILL.md': doc(name) }));
+    vi.mocked(GitHub.prototype.downloadCommitZip).mockResolvedValue(rootZip('original'));
+    const { skill } = await importer.importFromGitHub({ branch: 'release', gitUrl: repo });
+    await model.replaceImportedSkill(skill, { upstream: null });
+
+    vi.mocked(GitHub.prototype.resolveCommit).mockClear().mockResolvedValue('9'.repeat(40));
+    vi.mocked(GitHub.prototype.downloadCommitZip).mockResolvedValue(rootZip('changed'));
+    const check = (await importer.checkGitHubUpdates())[skill.id];
+    expect(check.status).toBe('chooseRef');
+    if (check.status !== 'chooseRef') throw new Error('Expected branch choice');
+    expect(GitHub.prototype.resolveCommit).not.toHaveBeenCalled();
+    await expect(
+      importer.applyGitHubUpdate({
+        id: skill.id,
+        revision: check.revision,
+        commit,
+        overwriteLocal: true,
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    const tracked = await importer.trackLegacyGitHubSkill(skill.id, check.revision, 'release');
+    expect(tracked.upstream?.ref).toBe('release');
+    expect(tracked.upstream?.installedCommit).toBeUndefined();
+    expect(tracked.name).toBe('original');
+    const update = (await importer.checkGitHubUpdates())[skill.id];
+    expect(update).toMatchObject({ commit: '9'.repeat(40), localChanges: true, status: 'update' });
+    expect(GitHub.prototype.resolveCommit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ branch: 'release' }),
+    );
+  });
+
+  it('checks the branch explicitly named by a legacy source URL', async () => {
+    const { skill } = await importer.importFromGitHub({ gitUrl: repo + '/tree/release/' + review });
+    await model.replaceImportedSkill(skill, { upstream: null });
+    vi.mocked(GitHub.prototype.resolveCommit).mockClear();
+
+    expect((await importer.checkGitHubUpdates())[skill.id]).toEqual({ status: 'current' });
+    expect(GitHub.prototype.resolveCommit).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: 'release' }),
+    );
+  });
+
   it('keeps explicit commit installs pinned and lets a legacy snapshot opt into a branch', async () => {
     const { skill } = await importer.importFromGitHub({
       gitUrl: repo + '/tree/' + commit + '/' + review,

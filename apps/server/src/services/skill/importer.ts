@@ -38,6 +38,7 @@ import {
   checkGitHubRows,
   installedFingerprint,
   isCommit,
+  needsTrackingRef,
   revisionOf as installedRevision,
 } from './githubUpdates';
 import { SkillParser } from './parser';
@@ -294,9 +295,10 @@ export class SkillImporter {
     }
     if (skill.source !== 'market' || !skill.manifest.sourceUrl) return;
     // A manifest may contain an author's repository link. Match the importer's
-    // identity as well before adopting a legacy row.
+    // identity as well before adopting a legacy row. Preserve a missing ref:
+    // older clients could send the branch separately from the URL.
     try {
-      const info = this.github.parseRepoUrl(skill.manifest.sourceUrl, 'HEAD');
+      const info = this.github.parseRepoUrl(skill.manifest.sourceUrl, '');
       const { identifier, legacy } = this.gitHubIdentifiers(info);
       if (skill.identifier === identifier || skill.identifier === legacy) return info;
     } catch {
@@ -331,8 +333,9 @@ export class SkillImporter {
 
   async trackLegacyGitHubSkill(id: string, revision: string, ref: string) {
     const { info, skill } = await this.installedForUpdate(id, revision);
-    if (skill.upstream || !isCommit(info.branch))
+    if (!needsTrackingRef(skill, info))
       throw new SkillImportError('This skill already has a tracking ref', 'CONFLICT');
+    if (isCommit(ref)) throw new SkillImportError('Choose a tracking branch', 'INVALID_URL');
     const tracking = { ...info, branch: ref };
     const archive = await this.resolveCommit(tracking)
       .then(async (commit) =>
@@ -347,7 +350,7 @@ export class SkillImporter {
         repo: info.repo,
         path: info.path ?? '',
         ref,
-        installedCommit: info.branch,
+        installedCommit: info.branch || undefined,
       },
     });
     if (!row) throw new SkillImportError('The installed skill changed', 'CONFLICT');
@@ -361,6 +364,8 @@ export class SkillImporter {
     overwriteLocal?: boolean;
   }) {
     const { info, skill } = await this.installedForUpdate(input.id, input.revision);
+    if (needsTrackingRef(skill, info))
+      throw new SkillImportError('Choose a tracking branch before updating', 'CONFLICT');
     if (isCommit(info.branch))
       throw new SkillImportError('This installation is pinned', 'CONFLICT');
     if (

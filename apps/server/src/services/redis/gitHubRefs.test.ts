@@ -8,7 +8,8 @@ vi.mock('./client', () => ({ getRedisServiceClient: async () => redis.client }))
 
 const memoryClient = {
   get: vi.fn(async (key: string) => store.get(key) ?? null),
-  set: vi.fn(async (key: string, value: string) => {
+  set: vi.fn(async (key: string, value: string, options?: { nx?: boolean }) => {
+    if (options?.nx && store.has(key)) return null;
     store.set(key, value);
     return 'OK';
   }),
@@ -38,7 +39,7 @@ describe('redisService.gitHubRefs', () => {
     expect(memoryClient.set).toHaveBeenCalledWith(
       'github_ref_commit:v1:lobehub/skills:main',
       JSON.stringify(first),
-      { px: 5 * 60 * 1000 },
+      { nx: true, px: 5 * 60 * 1000 },
     );
   });
 
@@ -49,6 +50,20 @@ describe('redisService.gitHubRefs', () => {
     const resolve = vi.fn();
     expect(await gitHubRefs.remember(ref, resolve)).toBe(next);
     expect(resolve).not.toHaveBeenCalled();
+  });
+
+  it('keeps the import ref when an earlier cache miss finishes later', async () => {
+    const lookup = Promise.withResolvers<string>();
+    const resolve = vi.fn(() => lookup.promise);
+    const checking = gitHubRefs.remember(ref, resolve);
+    await vi.waitFor(() => expect(resolve).toHaveBeenCalledOnce());
+
+    await gitHubRefs.record(ref, next);
+    lookup.resolve(first);
+
+    expect(await checking).toBe(next);
+    expect(await gitHubRefs.remember(ref, resolve)).toBe(next);
+    expect(resolve).toHaveBeenCalledOnce();
   });
 
   it('does not remember a failed resolution', async () => {

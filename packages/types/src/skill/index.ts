@@ -133,7 +133,8 @@ export interface SkillResourceContent {
 // ===== Skill Item (full structure, for detail queries) =====
 
 export interface GitHubSkillUpstream {
-  installedCommit: string;
+  /** Absent when a legacy import did not record its installed revision. */
+  installedCommit?: string;
   /** Fingerprint of editable fields when this package was installed. */
   installedFingerprint?: string;
   owner: string;

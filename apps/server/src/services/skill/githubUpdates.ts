@@ -11,6 +11,11 @@ import type { SkillParser } from './parser';
 
 export const isCommit = (ref: string) => /^[a-f0-9]{40}$/i.test(ref);
 
+// A legacy URL can identify the installed snapshot without identifying its branch.
+// A bare URL may also have been imported with a separate CLI --branch argument.
+export const needsTrackingRef = (skill: SkillItem, info: GitHubRepoInfo) =>
+  !skill.upstream && (!info.branch || isCommit(info.branch));
+
 export const revisionOf = (skill: Pick<SkillItem, 'id' | 'updatedAt'>) =>
   skill.id + '/' + skill.updatedAt.toISOString();
 
@@ -82,10 +87,12 @@ export async function checkGitHubRows(rows: TrackedRow[], github: GitHub, parser
   const groups = new Map<string, TrackedRow[]>();
   for (const row of rows) {
     const { skill, info } = row;
+    if (needsTrackingRef(skill, info)) {
+      results[skill.id] = { revision: revisionOf(skill), status: 'chooseRef' };
+      continue;
+    }
     if (isCommit(info.branch)) {
-      results[skill.id] = skill.upstream
-        ? { status: 'pinned' }
-        : { revision: revisionOf(skill), status: 'chooseRef' };
+      results[skill.id] = { status: 'pinned' };
       continue;
     }
     const key = JSON.stringify([info.owner.toLowerCase(), info.repo.toLowerCase(), info.branch]);
