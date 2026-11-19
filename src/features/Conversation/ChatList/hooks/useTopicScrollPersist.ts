@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import type { VListHandle } from 'virtua';
 
 import { AT_BOTTOM_THRESHOLD } from '../components/AutoScroll/const';
@@ -12,6 +12,7 @@ import {
   saveScrollSnapshot,
 } from '../utils/scrollSnapshotStore';
 import { settleScrollTarget } from '../utils/settleScrollTarget';
+import { isTranscriptSwap } from '../utils/transcriptSwap';
 
 const FLUSH_THROTTLE_MS = 200;
 const DEEP_LINK_MAX_ATTEMPTS = 30;
@@ -64,6 +65,8 @@ interface UseTopicScrollPersistOptions {
    * position, or the end of the conversation; `top` always opens at the start.
    */
   initialPosition?: InitialScrollPosition;
+  /** Whether the user scrolled away from the bottom to read earlier rows. */
+  isDetached?: () => boolean;
   messageDeepLink?: ResolvedMessageDeepLink;
   virtuaRef: RefObject<VListHandle | null>;
 }
@@ -123,6 +126,7 @@ export const useTopicScrollPersist = ({
   getScroller,
   headerOffset = 0,
   initialPosition = 'bottom',
+  isDetached,
   messageDeepLink,
   virtuaRef,
 }: UseTopicScrollPersistOptions) => {
@@ -151,6 +155,13 @@ export const useTopicScrollPersist = ({
   const restoringRef = useRef(false);
   const handledDeepLinkRef = useRef<string | undefined>(undefined);
   const restoreSequenceRef = useRef(0);
+  const prevRowsRef = useRef(dataSource);
+  const swapContextKeyRef = useRef(contextKey);
+  // Where to land after a transcript swap, consumed by the restore below.
+  const swapTargetRef = useRef<ScrollPosition | null>(null);
+  // A reader's position whose row was folded away. A failed compression brings
+  // the row back, so it is kept until then rather than overwritten by the clamp.
+  const heldReaderPositionRef = useRef<ScrollPosition | null>(null);
 
   const resolvePosition = useCallback(
     (offset: number, atBottom: boolean): ScrollPosition => {
@@ -245,6 +256,40 @@ export const useTopicScrollPersist = ({
     needsRestoreRef.current = true;
   }, [contextKey, persistFresh]);
 
+  // A swapped transcript leaves the offset clamped to wherever the shorter list
+  // ended, and it stays there when the rows come back: the top of the history.
+  // Layout effect: runs before the clamp's scroll event can be recorded as the
+  // user's position.
+  useLayoutEffect(() => {
+    const prevRows = prevRowsRef.current;
+    prevRowsRef.current = dataSource;
+    if (swapContextKeyRef.current !== contextKey) {
+      swapContextKeyRef.current = contextKey;
+      heldReaderPositionRef.current = null;
+      swapTargetRef.current = null;
+      return;
+    }
+    if (initialPosition === 'top' || needsRestoreRef.current) return;
+    if (!isTranscriptSwap(prevRows, dataSource)) return;
+
+    const held = heldReaderPositionRef.current;
+    const detached = !!isDetached?.();
+    let reader = held ?? (detached ? lastKnownRef.current : null);
+    if (reader && !reader.atBottom && reader.anchorId && !dataSource.includes(reader.anchorId)) {
+      if (!held || detached) {
+        heldReaderPositionRef.current = reader;
+        return;
+      }
+      // The row stayed folded and the user has since moved on.
+      reader = null;
+    }
+
+    heldReaderPositionRef.current = null;
+    swapTargetRef.current = reader ?? { atBottom: true, offset: 0 };
+    needsRestoreRef.current = true;
+    restoringRef.current = true;
+  }, [contextKey, dataSource, initialPosition, isDetached]);
+
   // Restore (or fall back to scroll-to-bottom) once data is available for
   // the active contextKey. Re-runs on contextKey or data length change.
   useEffect(() => {
@@ -256,6 +301,8 @@ export const useTopicScrollPersist = ({
     if (!needsRestoreRef.current && !shouldHandleDeepLink) return;
     if (!virtuaRef.current || dataSourceLength === 0) return;
 
+    const swapTarget = swapTargetRef.current;
+    swapTargetRef.current = null;
     needsRestoreRef.current = false;
     restoringRef.current = true;
     const restoreSequence = ++restoreSequenceRef.current;
@@ -354,7 +401,7 @@ export const useTopicScrollPersist = ({
       return;
     }
 
-    const snapshot = loadScrollSnapshot(contextKey);
+    const snapshot = swapTarget ?? loadScrollSnapshot(contextKey);
     const anchorIndex =
       snapshot && !snapshot.atBottom && snapshot.anchorId
         ? dataSourceRef.current.indexOf(snapshot.anchorId)
@@ -506,6 +553,7 @@ export const useTopicScrollPersist = ({
   }, [
     containerRef,
     contextKey,
+    dataSource,
     dataSourceLength,
     flushNow,
     getScroller,

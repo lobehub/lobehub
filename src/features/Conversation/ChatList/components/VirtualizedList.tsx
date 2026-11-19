@@ -114,6 +114,11 @@ const VirtualizedList = memo<VirtualizedListProps>(
         containerRef.current?.querySelector<HTMLElement>(`:scope > .${VLIST_CLASS_NAME}`) ?? null,
       [],
     );
+    const storeApi = useConversationStoreApi();
+    const isAutoScrollDetached = useCallback(
+      () => storeApi.getState().autoScrollDetached,
+      [storeApi],
+    );
     const { recordScroll } = useTopicScrollPersist({
       contextKey,
       containerRef,
@@ -121,6 +126,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
       getScroller,
       headerOffset: LEADING_ROWS,
       initialPosition: isForward ? 'top' : initialScrollPosition,
+      isDetached: isAutoScrollDetached,
       messageDeepLink,
       virtuaRef,
     });
@@ -155,7 +161,6 @@ const VirtualizedList = memo<VirtualizedListProps>(
     const isSelectionMode = useConversationStore(messageStateSelectors.isSelectionMode);
 
     // Store actions
-    const storeApi = useConversationStoreApi();
     const loadEarlierMessages = useConversationStore((s) => s.loadEarlierMessages);
     const loadLaterMessages = useConversationStore((s) => s.loadLaterMessages);
     const registerVirtuaScrollMethods = useConversationStore((s) => s.registerVirtuaScrollMethods);
