@@ -57,6 +57,28 @@ describe('sidebar app entries', () => {
     const scoped = { ...state, agentConnectors: { agent: [connector] } } as unknown as ToolStore;
     expect(selectMcpAppEntrypoints(scoped, true, 'agent')).toEqual([]);
   });
+  it("lists a personal row the conversation's listing holds, under its listed prefix", () => {
+    // A private agent's own topic runs its owner's personal connector: no local
+    // list holds that row, only the server's listing for the conversation
+    const personal = {
+      id: 'personal-row',
+      identifier: 'docs',
+      isEnabled: true,
+      mcpServerUrl: 'https://docs.example.com',
+      toolIdentifier: 'docs-personal',
+      tools: [{ toolName: 'open', permission: 'auto', metadata: { threadEntry: entry } }],
+    };
+    const listed = selectMcpAppEntrypoints(state, true, 'agent', [personal] as any);
+    expect(listed).toContainEqual({
+      ...entry,
+      connectorIdentifier: 'docs',
+      identifier: 'docs-personal',
+    });
+    // Without the listing the local lists stand in, which do not hold it
+    expect(
+      selectMcpAppEntrypoints(state, true, 'agent').some((e) => e.identifier === 'docs-personal'),
+    ).toBe(false);
+  });
   it('lists a private row mounted on the agent once, under the prefix its calls run by', () => {
     // Regression: the mounted row is in both the base and the agent list; the
     // agent list added its bare identifier, a second entry the server refuses.

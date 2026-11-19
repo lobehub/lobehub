@@ -8,6 +8,7 @@ import {
 } from '@lobechat/utils/mcpEndpoint';
 
 import { isInstalledPluginAvailableInCurrentEnv } from '@/helpers/toolAvailability';
+import type { RunConnectorRow } from '@/services/runConnectors';
 import { getServerConfigStoreState } from '@/store/serverConfig/store';
 import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 import type { ToolStore } from '@/store/tool/store';
@@ -70,6 +71,13 @@ export const selectMcpAppEntrypoints = (
   state: ToolStore,
   enabled: boolean,
   agentId?: string,
+  /**
+   * The rows the server listed for the conversation (`connector.listForRun`),
+   * each under its authoritative tool prefix. They are the conversation's
+   * connectors when present: only they hold the owner's personal rows a
+   * private agent's own topic runs.
+   */
+  runRows?: RunConnectorRow[],
 ): AppEntrypoint[] => {
   if (!enabled) return [];
   // Each row under its tool prefix, as the server names it: a private row is
@@ -80,11 +88,19 @@ export const selectMcpAppEntrypoints = (
     connectorToolIdentifier(connector, undefined, reserved);
   const identifiers = new Set([
     ...state.installedPlugins.map((plugin) => plugin.identifier),
-    ...state.connectors.map(prefixOf),
-    ...(agentId ? (state.agentConnectors[agentId] ?? []) : []).map(prefixOf),
+    ...(runRows
+      ? runRows.map((row) => row.toolIdentifier)
+      : [
+          ...state.connectors.map(prefixOf),
+          ...(agentId ? (state.agentConnectors[agentId] ?? []) : []).map(prefixOf),
+        ]),
   ]);
+  const connectorOf = (identifier: string) =>
+    runRows
+      ? runRows.find((row) => row.toolIdentifier === identifier)
+      : connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(state);
   return [...identifiers].flatMap((identifier) => {
-    const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(state);
+    const connector = connectorOf(identifier);
     if (connector && !connector.isEnabled) return [];
     const isMcp = connector && (connector.mcpServerUrl || connector.mcpConnectionType === 'stdio');
     const plugin = state.installedPlugins.find((item) => item.identifier === identifier);

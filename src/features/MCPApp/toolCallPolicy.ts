@@ -14,9 +14,10 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { getToolStoreState } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
-import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 import { getUserStoreState } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
+
+import { connectorForTool } from './connectorForTool';
 
 /**
  * What LobeHub does with a `tools/call` a view sends. A view can call tools on
@@ -275,10 +276,7 @@ export const getAppToolCallPolicy = async (
     getDisabledPluginIds(
       agentSelectors.getAgentConfigById(agentId)(getAgentStoreState())?.plugins,
       // The agent disables a connector, not one row's tool prefix
-    ).includes(
-      connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(getToolStoreState())
-        ?.identifier ?? identifier,
-    )
+    ).includes(connectorForTool(identifier, agentId)(getToolStoreState())?.identifier ?? identifier)
   )
     return 'deny';
   if (fromEntrypoint) {

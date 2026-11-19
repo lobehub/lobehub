@@ -7,13 +7,13 @@ import type { TFunction } from 'i18next';
 
 import { mcpService } from '@/services/mcp';
 import { getToolStoreState } from '@/store/tool';
-import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 
 import { anySignal } from './abortSignal';
 import { mcpAppNameSelector } from './appName';
 import type { AppDisplayContext, McpAppBridgeHost } from './bridge';
 import { buildHostContext, connectMcpAppBridge } from './bridge';
 import { confirmAppMessage, confirmAppOpenLink, confirmAppToolCall } from './confirm';
+import { connectorForTool } from './connectorForTool';
 import { isAppFrameNavigatedNotice } from './frameDocument';
 import { sendAppMessage } from './sendAppMessage';
 import { getAppToolCallPolicy } from './toolCallPolicy';
@@ -342,10 +342,7 @@ export const getMcpAppLinkId = (
   agentId?: string,
   args?: string,
 ): string | undefined => {
-  const connector = connectorSelectors.connectorByIdentifierForAgent(
-    identifier,
-    agentId,
-  )(getToolStoreState());
+  const connector = connectorForTool(identifier, agentId)(getToolStoreState());
   const param = resolveConnectorLinkParam(connector?.tools.map((tool) => tool.inputSchema) ?? []);
   const input: unknown = safeParseJSON(args ?? '{}');
   return isRecord(input) && typeof input[param] === 'string' ? (input[param] as string) : undefined;

@@ -40,7 +40,7 @@ export const useOpenMenuItems = ({
   topicId,
 }: OpenMenuOptions) => {
   const { t } = useTranslation(['chat', 'setting', 'plugin']);
-  const entries = useMcpAppEntrypoints(agentId);
+  const entries = useMcpAppEntrypoints(agentId, topicId);
   return useCallback((): DropdownItem[] => {
     const itemOf = (key: string): DropdownItem | undefined => {
       const tab = availableTabs.get(key);
