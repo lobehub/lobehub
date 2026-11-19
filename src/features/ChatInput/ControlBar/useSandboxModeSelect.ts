@@ -5,6 +5,7 @@ import {
   seedPendingSandboxSelection,
   setPendingSandboxSelection,
 } from '@/store/chat/pendingSandboxSelection';
+import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -14,7 +15,7 @@ import {
   getRememberedSandboxRepository,
   rememberSandboxSelection,
 } from './rememberedSandboxDirectory';
-import { projectStartEnvironmentId } from './sandboxEnvironmentOptions';
+import { pickableEnvironments, projectStartEnvironmentId } from './sandboxEnvironmentOptions';
 import { setPrefersTemporarySandbox } from './temporarySandboxPreference';
 import { useIsSharedAgent, useProjectSandboxEnvironments } from './useSandboxEnvironmentList';
 import {
@@ -62,12 +63,30 @@ export const useSandboxModeSelect = (
   } = useSandboxPlacement(agentId, topicId);
   const onDrive = isPersistentSelection(selection);
   const sharedAgent = useIsSharedAgent();
-  const { environments: projectEnvironments } = useProjectSandboxEnvironments(
-    projectId,
-    sharedAgent,
-    enabled,
-  );
+  const {
+    environments: projectEnvironments,
+    loaded: projectEnvironmentsLoaded,
+    refresh: refreshProjectEnvironments,
+  } = useProjectSandboxEnvironments(projectId, sharedAgent, enabled);
   const projectEnvironmentId = projectStartEnvironmentId(projectEnvironments);
+
+  // A topic that exists keeps whatever is written now: the server applies the
+  // project's environment only when it creates one. Until the project's list
+  // has loaded, "none" is not known to be right, so it is asked for once more;
+  // still unknown, the move fails and the conversation stays on the drive.
+  const resolveProjectEnvironmentId = useCallback(async () => {
+    if (projectEnvironmentsLoaded || !projectId) return projectEnvironmentId;
+    await refreshProjectEnvironments();
+    const rows = useProjectDirectoryStore.getState().environmentsMap[projectId];
+    if (!rows) throw new Error(`The environment of project ${projectId} could not be loaded`);
+    return projectStartEnvironmentId(pickableEnvironments(rows, sharedAgent));
+  }, [
+    projectEnvironmentId,
+    projectEnvironmentsLoaded,
+    projectId,
+    refreshProjectEnvironments,
+    sharedAgent,
+  ]);
 
   const toTemporary = useCallback(async () => {
     // Without a drive there is only one sandbox, and nothing to remember.
@@ -82,11 +101,11 @@ export const useSandboxModeSelect = (
       // agent's repository from elsewhere, and is not remembered for it. Before
       // a topic exists it is a default, so the server still applies the
       // project's; with none, the server decides.
-      const next: SandboxSelection = projectEnvironmentId
-        ? { environmentId: projectEnvironmentId }
-        : {};
-      if (scopeTopicId) await setSelection(next);
-      else if (next.environmentId) seedPendingSandboxSelection(agentId, next);
+      if (scopeTopicId) {
+        const environmentId = await resolveProjectEnvironmentId();
+        await setSelection(environmentId ? { environmentId } : {});
+      } else if (projectEnvironmentId)
+        seedPendingSandboxSelection(agentId, { environmentId: projectEnvironmentId });
       else setPendingSandboxSelection(agentId);
     } else if (onDrive) {
       const next =
@@ -104,6 +123,7 @@ export const useSandboxModeSelect = (
     onDrive,
     projectEnvironmentId,
     projectId,
+    resolveProjectEnvironmentId,
     scopeTopicId,
     selection,
     setSelection,

@@ -112,9 +112,11 @@ export const useSeedTemporaryRepository = (
   // Registered as soon as the run is known to use the sandbox — before the
   // entitlement — so a first send that turns out to have no drive still
   // starts from the remembered repository. Cleared on unmount, like the drive
-  // default.
+  // default. Only a conversation not created yet registers one: the entry is
+  // the agent's, and a split pane already on a topic — a project's, say —
+  // would hand its environment to another pane's first send, or clear it.
   useEffect(() => {
-    if (!eligible) return;
+    if (!eligible || hasTopic) return;
     const environmentId = inProject
       ? projectEnvironmentId
       : getRememberedSandboxRepository({ userId, workspaceId }, agentId)?.environmentId;
