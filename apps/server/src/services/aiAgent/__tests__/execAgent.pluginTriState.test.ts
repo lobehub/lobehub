@@ -1,3 +1,4 @@
+import { onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -202,9 +203,11 @@ const toolManifestMapArg = () =>
 
 describe('AiAgentService.execAgent - agent plugin entries (on / off / disabled)', () => {
   let service: AiAgentService;
+  const readUserSettings = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    readUserSettings.mockResolvedValue(undefined);
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
     mockCreateOperation.mockResolvedValue({
       autoStarted: true,
@@ -218,7 +221,23 @@ describe('AiAgentService.execAgent - agent plugin entries (on / off / disabled)'
       pluginManifest('plugin-c'),
       pluginManifest('plugin-d'),
     ]);
-    service = new AiAgentService({} as any, 'test-user-id');
+    service = new AiAgentService(
+      { query: { userSettings: { findFirst: readUserSettings } } } as never,
+      'test-user-id',
+    );
+  });
+
+  it('withholds all on-demand builtins when the settings read fails', async () => {
+    readUserSettings.mockRejectedValue(new Error('settings unavailable'));
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: [],
+      provider: 'openai',
+    });
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+    expect(disabledPluginIdsArg()).toEqual(expect.arrayContaining(onDemandBuiltinToolIds));
   });
 
   it('keeps only the installed plugins that are on, in a mixed-shape array: a disabled entry and a missing entry are both left out', async () => {

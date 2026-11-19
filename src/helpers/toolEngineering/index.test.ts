@@ -19,6 +19,11 @@ afterEach(() => {
   desktopEnv.enabled = false;
 });
 
+vi.mock(import('@/store/tool/slices/builtin/projection'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  runtimeUninstalledBuiltinTools: () => [],
+}));
+
 // Mock the store and helper dependencies
 vi.mock('@/store/tool', () => ({
   getToolStoreState: () => ({
