@@ -201,7 +201,8 @@ const ModelItem = memo<ModelItemProps>(
         className={stylex.props(styles.container, stylex.defaultMarker()).className}
         gap={24}
         justify={'space-between'}
-        padding={compact ? '4px 12px' : 12}
+        paddingBlock={compact ? 4 : 12}
+        paddingInline={12}
         style={compact ? { minHeight: 40 } : undefined}
         width={'100%'}
       >
