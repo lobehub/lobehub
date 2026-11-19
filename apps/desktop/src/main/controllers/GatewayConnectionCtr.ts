@@ -5,10 +5,6 @@ import path from 'node:path';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
 import type { DeviceControlDeps } from '@lobechat/device-control';
-import {
-  COMPUTER_USE_IDENTIFIER as AuvIdentifier,
-  toAuvToolOutput,
-} from '@lobechat/device-control/computer-use';
 import type { AgentRunRequestMessage, GatewayMcpParams } from '@lobechat/device-gateway-client';
 import { deviceGatewayServerKey } from '@lobechat/device-gateway-client/endpoint';
 import type {
@@ -34,7 +30,6 @@ import { withEmbeddedCliEnv } from '@/modules/cliEmbedding';
 import { createDesktopGatewayIdentityProvider } from '@/modules/tenantAuth/gatewayIdentity';
 import { updaterConfig } from '@/modules/updater/configs';
 import { createRemoteAppUpdateDeps } from '@/modules/updater/remoteUpdate';
-import AuvService, { type AuvRunCommandParams } from '@/services/auvSrv';
 import { backfillDeviceArchitecture } from '@/services/deviceArchitectureBackfill';
 import GatewayConnectionService, {
   type WorkspaceDeviceRegistration,
@@ -200,10 +195,6 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   private get service() {
     return this.app.getService(GatewayConnectionService);
-  }
-
-  private get auvService() {
-    return this.app.getService(AuvService);
   }
 
   private get remoteServerConfigCtr() {
@@ -547,7 +538,6 @@ export default class GatewayConnectionCtr extends ControllerModule {
     signal?: AbortSignal,
   ): Promise<BuiltinServerRuntimeOutput> {
     signal?.throwIfAborted();
-    if (identifier === AuvIdentifier) return this.executeAuvToolCall(apiName, args);
 
     // Browser is a renderer-resident tool: forward to the client executor via
     // BrowserControlCtr instead of the local-system apiName switch below.
@@ -662,32 +652,6 @@ export default class GatewayConnectionCtr extends ControllerModule {
         );
       }
     }
-  }
-
-  /**
-   * Executes the stable LobeHub CLI tool against the app-owned AUV daemon.
-   *
-   * Triggering workflow:
-   *
-   * {@link GatewayConnectionCtr.executeToolCall}
-   *   -> `lobe-computer-use/runCommand`
-   *     -> {@link GatewayConnectionCtr.executeAuvToolCall}
-   *
-   * Upstream:
-   * - {@link GatewayConnectionCtr.executeToolCall}
-   *
-   * Downstream:
-   * - {@link AuvService.runCommand}
-   */
-  private async executeAuvToolCall(
-    apiName: string,
-    args: unknown,
-  ): Promise<BuiltinServerRuntimeOutput> {
-    if (apiName !== 'runCommand') {
-      throw new Error(`AUV tool "${apiName}" is not available on this device`);
-    }
-
-    return toAuvToolOutput(await this.auvService.runCommand(args as AuvRunCommandParams));
   }
 
   /**

@@ -1865,8 +1865,6 @@
   "tools.builtins.lobe-cloud-sandbox.description": "Python-, JavaScript- und TypeScript-Code in einer isolierten Cloud-Umgebung ausführen. Shell-Befehle ausführen, Dateien verwalten, Inhalte mit Regex durchsuchen und Ergebnisse sicher exportieren.",
   "tools.builtins.lobe-cloud-sandbox.readme": "Führen Sie Python-, JavaScript- und TypeScript-Code in einer isolierten Cloud-Umgebung aus. Führen Sie Shell-Befehle aus, verwalten Sie Dateien, durchsuchen Sie Inhalte mit regulären Ausdrücken und exportieren Sie Ergebnisse sicher.",
   "tools.builtins.lobe-cloud-sandbox.title": "Cloud-Sandbox",
-  "tools.builtins.lobe-computer-use.description": "Desktop-Anwendungen verwenden, mit Steuerelementen interagieren und den Bildschirm erfassen.",
-  "tools.builtins.lobe-computer-use.title": "Computerbenutzung",
   "tools.builtins.lobe-creds.description": "Benutzeranmeldedaten für Authentifizierung, Umgebungsvariablen und API‑Verifikation verwalten – API‑Schlüssel, OAuth‑Tokens und Secrets für Integrationen Dritter handhaben.",
   "tools.builtins.lobe-creds.title": "Zugangsdaten",
   "tools.builtins.lobe-dashboard.description": "Erstellen Sie Live-Überwachungs-Widgets aus isolierten Skripten, testen Sie sie mit echten Daten und platzieren Sie sie auf Dashboards.",

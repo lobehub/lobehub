@@ -1,4 +1,3 @@
-import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -9,7 +8,6 @@ export const DEVICE_TOOL_MANIFESTS = [
   LocalSystemManifest,
   RemoteDeviceManifest,
   BrowserManifest,
-  AuvManifest,
 ] as const;
 
 export const DEVICE_TOOL_IDENTIFIERS: ReadonlySet<string> = new Set(
@@ -41,11 +39,6 @@ export interface DeviceToolWallParams {
   /** The run is committed to one device (routed, or bound but offline). */
   deviceLocked?: boolean;
   disableLocalSystem?: boolean;
-  /**
-   * Tools the routed device reports supporting. `undefined` means no device
-   * gateway is involved, so the opt-in check does not apply.
-   */
-  supportedDeviceTools?: readonly string[];
 }
 
 /**
@@ -54,18 +47,8 @@ export interface DeviceToolWallParams {
  * so a tool the policy denies must not be resolvable at all.
  */
 export const isBuiltinToolAllowed = (identifier: string, params: DeviceToolWallParams): boolean => {
-  const { canUseDevice, deviceLocked, disableLocalSystem, supportedDeviceTools } = params;
-  if (
-    identifier === AuvManifest.identifier &&
-    supportedDeviceTools !== undefined &&
-    !supportedDeviceTools.includes(identifier)
-  )
-    return false;
-  if (
-    disableLocalSystem &&
-    (identifier === LocalSystemManifest.identifier || identifier === AuvManifest.identifier)
-  )
-    return false;
+  const { canUseDevice, deviceLocked, disableLocalSystem } = params;
+  if (disableLocalSystem && identifier === LocalSystemManifest.identifier) return false;
   if (!canUseDevice && DEVICE_TOOL_IDENTIFIERS.has(identifier)) return false;
   if (deviceLocked && REMOTE_DEVICE_TOOL_IDENTIFIERS.has(identifier)) return false;
   return true;

@@ -1865,8 +1865,6 @@
   "tools.builtins.lobe-cloud-sandbox.description": "اجرای کدهای Python، JavaScript و TypeScript در محیط ابری ایزوله. اجرای دستورات شِل، مدیریت فایل‌ها، جستجوی محتوا با regex و خروجی‌گیری امن از نتایج.",
   "tools.builtins.lobe-cloud-sandbox.readme": "کدهای Python، JavaScript و TypeScript را در محیطی ایزوله در فضای ابری اجرا کنید. دستورات شِل را اجرا کرده، فایل‌ها را مدیریت کنید، با استفاده از regex محتوا را جستجو کرده و نتایج را به‌صورت ایمن صادر نمایید.",
   "tools.builtins.lobe-cloud-sandbox.title": "محیط آزمایشی ابری",
-  "tools.builtins.lobe-computer-use.description": "از برنامه‌های دسکتاپ استفاده کنید، با کنترل‌ها تعامل داشته باشید و از صفحه‌نمایش عکس بگیرید.",
-  "tools.builtins.lobe-computer-use.title": "استفاده از کامپیوتر",
   "tools.builtins.lobe-creds.description": "مدیریت اعتبارنامه‌های کاربر برای احراز هویت، تزریق متغیرهای محیطی و تأیید API — مدیریت کلیدهای API، توکن‌های OAuth و اسرار برای یکپارچه‌سازی سرویس‌های ثالث.",
   "tools.builtins.lobe-creds.title": "اعتبارنامه‌ها",
   "tools.builtins.lobe-dashboard.description": "ویجت‌های نظارت زنده را از اسکریپت‌های ایزوله بسازید، آن‌ها را با داده‌های واقعی پیش‌نمایش کنید و روی داشبوردها قرار دهید",

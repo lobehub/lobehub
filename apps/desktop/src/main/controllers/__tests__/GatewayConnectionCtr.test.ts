@@ -8,7 +8,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
 import type * as DesktopEnvModule from '@/env';
-import AuvService from '@/services/auvSrv';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
 
@@ -372,14 +371,6 @@ const mockImessageBridgeSrv = {
   handleGatewayMessageApi: vi.fn().mockResolvedValue({ ok: true }),
 } as unknown as ImessageBridgeService;
 
-const mockAuvSrv = {
-  runCommand: vi.fn().mockResolvedValue({
-    argv: ['invoke', 'display.capture'],
-    exitCode: 0,
-    output: { artifacts: [{ file_path: '/tmp/capture.png' }] },
-  }),
-} as unknown as AuvService;
-
 const mockMcpCtr = {
   runStdioMcpTool: vi.fn().mockResolvedValue({ content: 'mcp result', state: {}, success: true }),
 } as unknown as McpCtr;
@@ -415,7 +406,6 @@ const mockApp = {
     return null;
   }),
   getService: vi.fn((Cls) => {
-    if (Cls === AuvService) return mockAuvSrv;
     if (Cls === GatewayConnectionService) return mockGatewayConnectionSrv;
     if (Cls === ImessageBridgeService) return mockImessageBridgeSrv;
     return null;
@@ -1265,61 +1255,6 @@ describe('GatewayConnectionCtr', () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect((controller as any)[methodName]).toHaveBeenCalled();
-    });
-
-    it('should route AUV CLI commands to the app-owned runtime', async () => {
-      const client = await connectAndOpen();
-
-      client.simulateToolCallRequest(
-        'runCommand',
-        { argv: ['invoke', 'display.capture'] },
-        'auv-command',
-        'lobe-computer-use',
-      );
-      await vi.advanceTimersByTimeAsync(0);
-
-      expect(mockAuvSrv.runCommand).toHaveBeenCalledWith({
-        argv: ['invoke', 'display.capture'],
-      });
-      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
-        attemptId: 'attempt-original',
-        requestId: 'auv-command',
-        result: expect.objectContaining({
-          content: JSON.stringify({
-            argv: ['invoke', 'display.capture'],
-            exitCode: 0,
-            output: { artifacts: [{ file_path: '/tmp/capture.png' }] },
-          }),
-          success: true,
-        }),
-      });
-    });
-
-    it('preserves AUV failure details in the gateway response', async () => {
-      const client = await connectAndOpen();
-      const result = {
-        argv: ['invoke', 'input.typeText'],
-        exitCode: 1,
-        output: { command_id: 'input.typeText', failure: { kind: 'target_resolution' } },
-        stderr: 'target not found',
-      };
-      vi.mocked(mockAuvSrv.runCommand).mockResolvedValueOnce(result);
-      client.simulateToolCallRequest(
-        'runCommand',
-        { argv: result.argv },
-        'auv-failure',
-        'lobe-computer-use',
-      );
-      await vi.advanceTimersByTimeAsync(0);
-      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
-        attemptId: 'attempt-original',
-        requestId: 'auv-failure',
-        result: expect.objectContaining({
-          content: JSON.stringify(result),
-          state: result,
-          success: false,
-        }),
-      });
     });
 
     it('should send tool_call_response with content + state envelope on success', async () => {

@@ -13,6 +13,7 @@ import { vendorLink } from '@/utils/vendorLink';
 import AboutList from './AboutList';
 import ItemCard from './ItemCard';
 import ItemLink from './ItemLink';
+import OssNoticeEntry from './OssNotice/OssNoticeEntry';
 import Version from './Version';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -59,6 +60,9 @@ const withLinks = (items: AboutItem[]): LinkedAboutItem[] =>
 
 const About = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t } = useTranslation('common');
+
+  // The open-source notice is a TITU Work (CPC) disclosure; other brandings do not show it.
+  const showOssNotice = BRANDING_NAME === 'TITU Work';
 
   const contactItems = withLinks([
     { href: vendorLink(OFFICIAL_SITE), label: t('officialSite'), value: 'officialSite' },
@@ -110,11 +114,14 @@ const About = memo<{ mobile?: boolean }>(({ mobile }) => {
             <AboutList grid ItemRender={ItemCard} items={informationItems} />
           </>
         )}
-        {legalItems.length > 0 && (
+        {(legalItems.length > 0 || showOssNotice) && (
           <>
             <Divider style={{ marginBlock: 0 }} />
             <div className={styles.title}>{t('legal')}</div>
-            <AboutList ItemRender={ItemLink} items={legalItems} />
+            <Flexbox horizontal align={'center'} gap={24} wrap={'wrap'}>
+              {legalItems.length > 0 && <AboutList ItemRender={ItemLink} items={legalItems} />}
+              {showOssNotice && <OssNoticeEntry />}
+            </Flexbox>
           </>
         )}
       </Flexbox>

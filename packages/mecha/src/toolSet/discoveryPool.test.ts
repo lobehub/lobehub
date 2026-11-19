@@ -2,7 +2,6 @@ import {
   AgentManagementManifest,
   resolveAgentManagementManifest,
 } from '@lobechat/builtin-tool-agent-management';
-import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -48,7 +47,6 @@ describe('resolveInvocationToolIds', () => {
     expect(ids).toEqual([
       'a',
       LocalSystemManifest.identifier,
-      AuvManifest.identifier,
       RemoteDeviceManifest.identifier,
       'linear',
       'gmail',
@@ -80,19 +78,19 @@ describe('resolveDiscoveryPool', () => {
   it('keeps the sandbox only when reachable and drops device tools for a non-device gateway run', () => {
     const none = resolveDiscoveryPool(
       request({
-        device: {},
         enabledManifests: new Map([
           [CloudSandboxManifest.identifier, manifest(CloudSandboxManifest.identifier)],
           [LocalSystemManifest.identifier, manifest(LocalSystemManifest.identifier)],
         ]),
         executionTarget: 'none',
+        hasDeviceProxy: true,
       }),
     );
     expect(none.manifestMap[CloudSandboxManifest.identifier]).toBeUndefined();
     expect(none.manifestMap[LocalSystemManifest.identifier]).toBeUndefined();
     expect(none.manifestMap[RemoteDeviceManifest.identifier]).toBeUndefined();
 
-    const auto = resolveDiscoveryPool(request({ device: {}, executionTarget: 'auto' }));
+    const auto = resolveDiscoveryPool(request({ executionTarget: 'auto', hasDeviceProxy: true }));
     expect(auto.manifestMap[CloudSandboxManifest.identifier]).toBeDefined();
   });
 
@@ -101,41 +99,28 @@ describe('resolveDiscoveryPool', () => {
     // exactly what resolves it.
     const unrouted = resolveDiscoveryPool(
       request({
-        device: {},
         deviceAccess: { canUseDevice: true, deviceLocked: false },
         deviceCapable: true,
         enabledManifests: new Map([
           [RemoteDeviceManifest.identifier, manifest(RemoteDeviceManifest.identifier)],
         ]),
         executionTarget: 'auto',
+        hasDeviceProxy: true,
       }),
     );
     expect(unrouted.manifestMap[RemoteDeviceManifest.identifier]).toBeDefined();
   });
 
-  it('injects local-system and Computer Use for a local target behind a gateway', () => {
+  it('injects local-system for a local target behind a gateway', () => {
     const local = resolveDiscoveryPool(
       request({
-        device: { supportedTools: [AuvManifest.identifier] },
         deviceAccess: { canUseDevice: true, deviceLocked: false },
         deviceCapable: true,
         executionTarget: 'local',
+        hasDeviceProxy: true,
       }),
     );
     expect(local.manifestMap[LocalSystemManifest.identifier]).toBeDefined();
-    expect(local.manifestMap[AuvManifest.identifier]).toBeDefined();
-
-    // An older device that does not report Computer Use never sees it.
-    const older = resolveDiscoveryPool(
-      request({
-        device: { supportedTools: [] },
-        deviceAccess: { canUseDevice: true, deviceLocked: false },
-        deviceCapable: true,
-        executionTarget: 'local',
-      }),
-    );
-    expect(older.manifestMap[AuvManifest.identifier]).toBeUndefined();
-    expect(older.manifestMap[LocalSystemManifest.identifier]).toBeDefined();
   });
 
   it('walls every ingest source: exclusive set, disabled ids, denied devices, locked picker', () => {
@@ -159,10 +144,10 @@ describe('resolveDiscoveryPool', () => {
 
     const locked = resolveDiscoveryPool(
       request({
-        device: {},
         deviceAccess: { canUseDevice: true, deviceLocked: true },
         deviceCapable: true,
         executionTarget: 'device',
+        hasDeviceProxy: true,
       }),
     );
     expect(locked.manifestMap[RemoteDeviceManifest.identifier]).toBeUndefined();

@@ -49,12 +49,12 @@ describe('lh agent run', () => {
       '--prompt',
       'Check the build',
       '--tool',
-      'lobe-computer-use',
+      'my-tool',
       '--tool',
       'my-mcp',
     );
 
-    expect(input.selectedToolIds).toEqual(['lobe-computer-use', 'my-mcp']);
+    expect(input.selectedToolIds).toEqual(['my-tool', 'my-mcp']);
   });
 
   it('selects each --skill for the run, as picking it in chat does', async () => {
@@ -118,7 +118,7 @@ describe('lh agent run', () => {
       settings: {
         tool: {
           humanIntervention: {
-            allowList: ['lobe-computer-use', 'my-mcp'],
+            allowList: ['my-tool', 'my-mcp'],
             approvalMode: 'allow-list',
           },
         },
@@ -130,7 +130,7 @@ describe('lh agent run', () => {
     // GeneralChatAgent defaults an omitted allowList to [], which would park
     // again every tool the user previously approved.
     expect(input.userInterventionConfig).toEqual({
-      allowList: ['lobe-computer-use', 'my-mcp'],
+      allowList: ['my-tool', 'my-mcp'],
       approvalMode: 'allow-list',
     });
   });

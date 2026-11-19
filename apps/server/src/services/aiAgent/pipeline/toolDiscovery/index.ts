@@ -334,7 +334,7 @@ export const discoverTools = async (
     executionPlan = devicePlan.executionPlan;
     activeDeviceId = devicePlan.activeDeviceId;
     activeDeviceScope = devicePlan.activeDeviceScope;
-    const { deviceCapable, deviceLocked, supportedDeviceTools } = devicePlan;
+    const { deviceCapable, deviceLocked } = devicePlan;
 
     const group = await resolveOperationGroup(deps, ctx, botContext);
     const { isGroupSupervisor } = group;
@@ -412,7 +412,6 @@ export const discoverTools = async (
             boundDeviceId,
             deviceOnline,
             gatewayConfigured: true,
-            supportedTools: supportedDeviceTools,
           }
         : undefined,
       disableLocalSystem,
@@ -472,10 +471,8 @@ export const discoverTools = async (
         canUseDevice,
         deviceLocked,
         disableLocalSystem,
-        supportedDeviceTools: gatewayConfigured ? (supportedDeviceTools ?? []) : undefined,
       }),
       composio: activeComposioManifests,
-      device: gatewayConfigured ? { supportedTools: supportedDeviceTools } : undefined,
       deviceAccess: { canUseDevice, deviceLocked },
       deviceCapable,
       disableLocalSystem,
@@ -483,6 +480,7 @@ export const discoverTools = async (
       enabledManifests: manifestMap,
       exclusivePluginIds,
       executionTarget: executionPlan.target,
+      hasDeviceProxy: gatewayConfigured,
       // Installed-but-not-pinned plugins (`auto` in the three-state plugin
       // config): the model must be able to discover and activate them mid-run,
       // exactly as the client runtime lists them from `installedPlugins`.

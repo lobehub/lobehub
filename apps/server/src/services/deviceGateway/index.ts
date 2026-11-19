@@ -148,10 +148,9 @@ export class DeviceGateway {
   }
 
   /**
-   * The device's system info, preferring the desktop app's answer: its
-   * `supportedTools` gate desktop-only tools, and when `lh connect` is up on the
-   * same device an unconstrained read is answered by the CLI, which reports
-   * none. When the desktop read fails for any reason, ask whichever client the
+   * The device's system info, preferring the desktop app's answer when
+   * `lh connect` is also running on the same device. When the desktop read
+   * fails for any reason, ask whichever client the
    * device has: a device without the desktop app answers `NO_CAPABLE_CONNECTION`,
    * and a desktop that timed out or whose socket is closing (`TIMEOUT`,
    * `DEVICE_OFFLINE`) may still sit beside a live `lh connect`, which is the
@@ -193,9 +192,8 @@ export class DeviceGateway {
   }
 
   /**
-   * Like {@link queryDeviceSystemInfo}, but a failed read says why. Use it when
-   * "the device did not answer" must not be mistaken for "the device answered
-   * without this capability" — e.g. gating a tool on `supportedTools`.
+   * Reads system info from the requested client kinds and preserves the
+   * gateway's reason when the device does not answer.
    */
   async readDeviceSystemInfo(
     userId: string,

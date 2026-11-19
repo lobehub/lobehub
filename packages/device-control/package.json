@@ -5,7 +5,6 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./computer-use": "./src/computerUse.ts",
     "./file-preview": "./src/filePreview.ts",
     "./metrics": "./src/metrics/index.ts",
     "./project-file-index": "./src/projectFileIndex.ts",

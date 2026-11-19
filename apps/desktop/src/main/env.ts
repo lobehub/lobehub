@@ -59,7 +59,6 @@ const getRuntimeEnv = () => ({
   ...process.env,
   DESKTOP_APP_ID: process.env.DESKTOP_APP_ID,
   DESKTOP_CLI_BIN_NAMES: process.env.DESKTOP_CLI_BIN_NAMES,
-  DESKTOP_COMPUTER_USE_HELPER: process.env.DESKTOP_COMPUTER_USE_HELPER,
   DESKTOP_PRODUCT_NAME: process.env.DESKTOP_PRODUCT_NAME,
   DESKTOP_PROTOCOL_SCHEME: process.env.DESKTOP_PROTOCOL_SCHEME,
   DESKTOP_BACKEND_PROXY_RETHROW_ERRORS: process.env.DESKTOP_BACKEND_PROXY_RETHROW_ERRORS,
@@ -108,11 +107,6 @@ export const getDesktopEnv = memoize(() =>
        * Unset keeps the built-in `lobehub,lh,lobe`.
        */
       DESKTOP_CLI_BIN_NAMES: z.string().optional(),
-      /**
-       * 'false' when the macOS package was built without the Computer Use
-       * helper, so computer use is not offered there. Unset ships it.
-       */
-      DESKTOP_COMPUTER_USE_HELPER: z.string().optional(),
       /**
        * Display name for menus and packaging. pre-app-init separately reads
        * DESKTOP_APP_NAME and DESKTOP_USER_DATA_NAME to preserve stable identity

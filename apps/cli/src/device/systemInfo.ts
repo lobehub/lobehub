@@ -1,7 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
 
-import { COMPUTER_USE_IDENTIFIER } from '@lobechat/device-control/computer-use';
 import type { DeviceSystemInfo } from '@lobechat/device-gateway-client';
 import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import type { RuntimeProbeCache } from '@lobechat/heterogeneous-agents/runtimeProbeCache';
@@ -10,7 +9,6 @@ import { getShellInfo } from '@lobechat/local-file-shell';
 
 import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
 import { cliVersion } from '../pkg';
-import type { ComputerUseDevice } from '../tools/computerUse';
 
 /**
  * Checks the currently resolved Codex binary without creating a conversation.
@@ -76,8 +74,6 @@ export async function probeNativeRuntimes(): Promise<string[]> {
 
 /**
  * The answer to a gateway `system_info_request`: host paths and live native capabilities.
- * `supportedTools` lists the opt-in tools this device can run; the server refuses those
- * tools on a device that does not list them.
  *
  * Use when: a gateway requests this connection's current system information.
  * Expects: local paths and binary resolution belong to this connect process.
@@ -89,7 +85,6 @@ export async function probeNativeRuntimes(): Promise<string[]> {
  */
 export async function collectSystemInfo(
   nativeRuntimes: RuntimeProbeCache,
-  computerUse?: ComputerUseDevice,
 ): Promise<DeviceSystemInfo> {
   const home = os.homedir();
   const platform = process.platform;
@@ -106,7 +101,6 @@ export async function collectSystemInfo(
     musicPath: path.join(home, 'Music'),
     picturesPath: path.join(home, 'Pictures'),
     supportedAgentRuntimes: await nativeRuntimes.get(),
-    ...(computerUse && { supportedTools: [COMPUTER_USE_IDENTIFIER] }),
     userDataPath: path.join(home, CLI_CONFIG_DIR_NAME),
     videosPath: path.join(home, videosDir),
     workingDirectory: process.cwd(),

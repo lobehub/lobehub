@@ -87,11 +87,11 @@ describe('GatewayHttpClient clientKinds', () => {
 
       await kindsClient.executeToolCall(
         { deviceId: 'device-1', userId: 'user-1' },
-        { apiName: 'runCommand', arguments: '{}', identifier: 'lobe-computer-use' },
+        { apiName: 'runCommand', arguments: '{}', identifier: 'lobe-local-system' },
       );
 
       expect(resolveClientKinds).toHaveBeenCalledWith({
-        identifier: 'lobe-computer-use',
+        identifier: 'lobe-local-system',
         kind: 'tool',
         type: 'tool',
       });
@@ -129,7 +129,7 @@ describe('GatewayHttpClient clientKinds', () => {
 
       await kindsClient.executeToolCall(
         { clientKinds: ['cli'], deviceId: 'device-1', userId: 'user-1' },
-        { apiName: 'runCommand', arguments: '{}', identifier: 'lobe-computer-use' },
+        { apiName: 'runCommand', arguments: '{}', identifier: 'lobe-local-system' },
       );
 
       expect(bodyOf()).toMatchObject({ clientKinds: ['cli'] });

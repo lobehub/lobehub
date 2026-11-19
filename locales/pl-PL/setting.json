@@ -1865,8 +1865,6 @@
   "tools.builtins.lobe-cloud-sandbox.description": "Uruchamiaj kod w Pythonie, JavaScripcie i TypeScripcie w izolowanym środowisku chmurowym. Wykonuj polecenia powłoki, zarządzaj plikami, przeszukuj treści za pomocą wyrażeń regularnych i bezpiecznie eksportuj wyniki.",
   "tools.builtins.lobe-cloud-sandbox.readme": "Uruchamiaj kod w Pythonie, JavaScript i TypeScript w izolowanym środowisku chmurowym. Wykonuj polecenia powłoki, zarządzaj plikami, przeszukuj treści za pomocą wyrażeń regularnych i bezpiecznie eksportuj wyniki.",
   "tools.builtins.lobe-cloud-sandbox.title": "Piaskownica w chmurze",
-  "tools.builtins.lobe-computer-use.description": "Używaj aplikacji desktopowych, wchodź w interakcje z kontrolkami i przechwytuj ekran.",
-  "tools.builtins.lobe-computer-use.title": "Użycie komputera",
   "tools.builtins.lobe-creds.description": "Zarządzaj danymi uwierzytelniającymi użytkownika do autoryzacji, wstrzykiwania zmiennych środowiskowych i weryfikacji API — obsługuj klucze API, tokeny OAuth i sekrety do integracji z usługami zewnętrznymi.",
   "tools.builtins.lobe-creds.title": "Dane Uwierzytelniające",
   "tools.builtins.lobe-dashboard.description": "Twórz widżety do monitorowania na żywo z oskryptowanych środowisk, podglądaj je z rzeczywistymi danymi i umieszczaj na pulpitach nawigacyjnych",

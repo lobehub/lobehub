@@ -9,8 +9,6 @@ export interface ToolRuleDeviceFacts {
   /** A device was auto-routed for this run. */
   autoActivated?: boolean;
   deviceOnline?: boolean;
-  /** Tools the routed device reports supporting (Computer Use opts in). */
-  supportedTools?: readonly string[];
 }
 
 /** The run's device policy and plan, independent of whether a gateway exists. */
@@ -30,8 +28,7 @@ export interface ToolRuleRequest {
   };
   /**
    * Gateway device facts. A host without a gateway (the browser runtime, a
-   * self-hosted server without one) leaves this out: the device picker never
-   * exists and Computer Use is not gated on device support.
+   * self-hosted server without one) leaves this out and omits the device picker.
    */
   device?: ToolRuleDeviceFacts;
   /**
@@ -43,7 +40,7 @@ export interface ToolRuleRequest {
   /** Plugin identifiers the agent explicitly disabled. */
   disabledPluginIds?: readonly string[];
   /**
-   * The host cannot run `local-system` / `auv` for this run regardless of the
+   * The host cannot run `local-system` for this run regardless of the
    * target (external senders, no local executor).
    */
   disableLocalSystem?: boolean;

@@ -1,5 +1,4 @@
 import { AttachmentsManifest } from '@lobechat/builtin-tool-attachments';
-import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
@@ -34,8 +33,6 @@ export const deviceToolWallParams = (request: ToolRuleRequest): DeviceToolWallPa
         canUseDevice: request.deviceAccess.canUseDevice,
         deviceLocked: request.deviceAccess.deviceLocked,
         disableLocalSystem: request.disableLocalSystem,
-        // Only a gateway device can report what it supports.
-        supportedDeviceTools: request.device ? (request.device.supportedTools ?? []) : undefined,
       }
     : undefined;
 
@@ -112,11 +109,8 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
     [WebBrowsingManifest.identifier]: isSearchEnabled,
   };
 
-  // Walls follow the policy and the plan, with or without a gateway; the
-  // Computer Use opt-in is a gateway device's own report.
+  // Walls follow the policy and the plan, with or without a gateway.
   const excludedIdentifiers = new Set(request.disabledPluginIds ?? []);
-  if (device && !device.supportedTools?.includes(AuvManifest.identifier))
-    excludedIdentifiers.add(AuvManifest.identifier);
   if (deviceAccess) {
     if (!deviceAccess.canUseDevice) {
       for (const identifier of DEVICE_TOOL_IDENTIFIERS) excludedIdentifiers.add(identifier);

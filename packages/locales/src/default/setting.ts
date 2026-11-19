@@ -3979,9 +3979,6 @@ When I am ___, I need ___
   'tools.builtins.find-skills.description':
     'Helps users discover and install agent skills when they ask "how do I do X", "find a skill for X", or want to extend capabilities',
   'tools.builtins.find-skills.title': 'Find Skills',
-  'tools.builtins.lobe-computer-use.title': 'Computer Use',
-  'tools.builtins.lobe-computer-use.description':
-    'Use desktop applications, interact with controls, and capture the screen.',
   'tools.builtins.lobe-agent-browser.description':
     'Browser automation CLI for AI agents. Use when tasks involve website or Electron interaction such as navigation, form filling, clicking, screenshot capture, scraping data, login flows, and end-to-end app testing.',
   'tools.builtins.lobe-agent-browser.title': 'Agent Browser',

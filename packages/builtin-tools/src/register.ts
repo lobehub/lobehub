@@ -23,7 +23,6 @@ import {
   AgentManagementRenders,
   AgentManagementStreamings,
 } from '@lobechat/builtin-tool-agent-management/client';
-import { AuvIdentifier, AuvInspectors } from '@lobechat/builtin-tool-auv/client';
 import {
   BrowserInspectors,
   BrowserManifest,
@@ -312,10 +311,6 @@ export const registerBuiltinToolSurfaces = (): void => {
   });
 
   registerBuiltinInspectors({
-    [AuvIdentifier]: AuvInspectors as Record<string, BuiltinInspector>,
-    // Read-only alias for messages recorded by the original private desktop PR.
-    // New manifests and execution routes only advertise lobe-computer-use.
-    'lobe-auv': AuvInspectors as Record<string, BuiltinInspector>,
     [AgentBuilderManifest.identifier]: AgentBuilderInspectors as Record<string, BuiltinInspector>,
     [AgentDocumentsManifest.identifier]: AgentDocumentsInspectors as Record<
       string,
@@ -377,7 +372,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [OPENCODE_IDENTIFIER]: heterogeneousCliInspectors,
     [PI_IDENTIFIER]: heterogeneousCliInspectors,
     [KIMI_CODE_IDENTIFIER]: KimiCodeInspectors,
-    'codex': CodexInspectors,
+    codex: CodexInspectors,
     [GithubIdentifier]: GithubInspectors,
     [LinearIdentifier]: LinearInspectors,
     [TwitterIdentifier]: TwitterInspectors,

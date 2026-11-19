@@ -1,4 +1,3 @@
-import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -13,7 +12,7 @@ import {
 } from '@lobechat/types';
 
 import { isDeviceToolIdentifier, REMOTE_DEVICE_TOOL_IDENTIFIERS } from './deviceTools';
-import type { ToolRuleDeviceAccess, ToolRuleDeviceFacts } from './types';
+import type { ToolRuleDeviceAccess } from './types';
 
 export interface InvocationToolIdsRequest {
   /** The run's candidate plugin identifiers (pinned, additional, selected, mention-driven). */
@@ -37,9 +36,7 @@ export const resolveInvocationToolIds = (request: InvocationToolIdsRequest): str
   return [
     ...new Set([
       ...request.agentPlugins,
-      ...(request.disableLocalSystem
-        ? []
-        : [LocalSystemManifest.identifier, AuvManifest.identifier]),
+      ...(request.disableLocalSystem ? [] : [LocalSystemManifest.identifier]),
       RemoteDeviceManifest.identifier,
       ...(request.lobehubSkillIds ?? []),
       ...(request.composioIds ?? []),
@@ -56,8 +53,6 @@ export interface DiscoveryPoolRequest {
   >[];
   /** Disabled-filtered Composio manifests. */
   composio?: readonly LobeToolManifest[];
-  /** Gateway device facts; absent without a gateway. */
-  device?: Pick<ToolRuleDeviceFacts, 'supportedTools'>;
   deviceAccess?: ToolRuleDeviceAccess;
   /**
    * The run may still reach a device: routed, or device-targeted but not
@@ -72,6 +67,8 @@ export interface DiscoveryPoolRequest {
   enabledManifests: ReadonlyMap<string, LobeToolManifest>;
   exclusivePluginIds?: readonly string[];
   executionTarget: DeviceExecutionTarget;
+  /** A device gateway is configured for this run. */
+  hasDeviceProxy?: boolean;
   /**
    * Installed plugins the run may DISCOVER but must never enable by itself —
    * the three-state plugin config's `auto` mode (installed, not pinned, not
@@ -111,8 +108,7 @@ export interface DiscoveryPool {
  * reachable must not be discoverable at all.
  */
 export const resolveDiscoveryPool = (request: DiscoveryPoolRequest): DiscoveryPool => {
-  const { device, deviceAccess, executionTarget } = request;
-  const hasDeviceProxy = !!device;
+  const { deviceAccess, executionTarget, hasDeviceProxy } = request;
   const disabled = new Set(request.disabledPluginIds ?? []);
   const exclusive = request.exclusivePluginIds ? new Set(request.exclusivePluginIds) : undefined;
   const canUseDevice = deviceAccess?.canUseDevice ?? true;
@@ -125,12 +121,6 @@ export const resolveDiscoveryPool = (request: DiscoveryPoolRequest): DiscoveryPo
   const isManifestIngestAllowed = (identifier: string): boolean => {
     if (exclusive && !exclusive.has(identifier)) return false;
     if (disabled.has(identifier)) return false;
-    if (
-      hasDeviceProxy &&
-      identifier === AuvManifest.identifier &&
-      !device.supportedTools?.includes(identifier)
-    )
-      return false;
     if (!canUseDevice && isDeviceToolIdentifier(identifier)) return false;
     if (deviceLocked && REMOTE_DEVICE_TOOL_IDENTIFIERS.has(identifier)) return false;
     return true;
@@ -155,7 +145,6 @@ export const resolveDiscoveryPool = (request: DiscoveryPoolRequest): DiscoveryPo
   // desktop client owns the tool gate and routes in-process.
   const stripDeviceTools = hasDeviceProxy && !deviceCapable;
   if (stripDeviceTools) {
-    delete manifestMap[AuvManifest.identifier];
     delete manifestMap[RemoteDeviceManifest.identifier];
     delete manifestMap[LocalSystemManifest.identifier];
   }
@@ -175,18 +164,16 @@ export const resolveDiscoveryPool = (request: DiscoveryPoolRequest): DiscoveryPo
     if (manifest) manifestMap[tool.identifier] = manifest as LobeToolManifest;
   }
 
-  // Local-system and Computer Use are only `discoverable` on the desktop, so
-  // a gateway server injects them explicitly for a `local` target.
-  for (const manifest of [LocalSystemManifest, AuvManifest]) {
-    if (
-      !request.disableLocalSystem &&
-      isManifestIngestAllowed(manifest.identifier) &&
-      hasDeviceProxy &&
-      runtimeMode === 'local' &&
-      !manifestMap[manifest.identifier]
-    ) {
-      manifestMap[manifest.identifier] = manifest as LobeToolManifest;
-    }
+  // Local-system is discoverable by default on the desktop. A gateway server
+  // injects it explicitly for a local target.
+  if (
+    !request.disableLocalSystem &&
+    isManifestIngestAllowed(LocalSystemManifest.identifier) &&
+    hasDeviceProxy &&
+    runtimeMode === 'local' &&
+    !manifestMap[LocalSystemManifest.identifier]
+  ) {
+    manifestMap[LocalSystemManifest.identifier] = LocalSystemManifest as LobeToolManifest;
   }
 
   // Connector families, with the source the runtime executes them through.

@@ -1865,8 +1865,6 @@
   "tools.builtins.lobe-cloud-sandbox.description": "Ejecuta código en Python, JavaScript y TypeScript en un entorno aislado en la nube. Ejecuta comandos de terminal, gestiona archivos, busca contenido con expresiones regulares y exporta resultados de forma segura.",
   "tools.builtins.lobe-cloud-sandbox.readme": "Ejecuta código en Python, JavaScript y TypeScript en un entorno aislado en la nube. Ejecuta comandos de terminal, gestiona archivos, busca contenido con expresiones regulares y exporta resultados de forma segura.",
   "tools.builtins.lobe-cloud-sandbox.title": "Sandbox en la Nube",
-  "tools.builtins.lobe-computer-use.description": "Usa aplicaciones de escritorio, interactúa con controles y captura la pantalla.",
-  "tools.builtins.lobe-computer-use.title": "Uso del ordenador",
   "tools.builtins.lobe-creds.description": "Gestiona credenciales de usuario para autenticación, inyección de variables de entorno y verificación de API — administra claves API, tokens OAuth y secretos para integraciones de terceros.",
   "tools.builtins.lobe-creds.title": "Credenciales",
   "tools.builtins.lobe-dashboard.description": "Crea widgets de monitoreo en vivo a partir de scripts aislados, prévisualízalos con datos reales y colócalos en tableros",

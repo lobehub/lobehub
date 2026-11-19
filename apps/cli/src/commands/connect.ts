@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
-import path from 'node:path';
 
 import type {
   GatewayIdentityProvider,
@@ -78,7 +77,6 @@ import {
   resolveDeviceMetricsBacklogPath,
   resolveServerUrl,
 } from '../settings';
-import { executeComputerUseCall, resolveComputerUseDevice } from '../tools/computerUse';
 import { cleanupAllProcesses, getActiveShellCount, probeSandbox } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
 import { sweepLocalTraces } from '../utils/traceMaintenance';
@@ -88,8 +86,6 @@ const SHUTDOWN_METRICS_FLUSH_MS = 3000;
 const CONNECT_SERVICE_NAME = CLI_CONNECT_SERVICE_NAME;
 
 interface ConnectOptions {
-  /** `auv` binary that runs Computer Use on this device; see `resolveComputerUseDevice`. */
-  auv?: string;
   daemon?: boolean;
   daemonChild?: boolean;
   deviceId?: string;
@@ -110,7 +106,6 @@ export function registerConnectCommand(program: Command) {
     .option('--token <jwt>', 'JWT access token')
     .option('--gateway <url>', 'Device gateway URL')
     .option('--device-id <id>', 'Device ID (auto-generated if not provided)')
-    .option('--auv <binary>', 'Offer Computer Use by running this AUV binary (`auv invoke`)')
     .option('--workspace <id>', 'Enroll as a device of this workspace (workspace administrators)')
     .option(
       '--public',
@@ -201,7 +196,6 @@ export function registerConnectCommand(program: Command) {
     .option('--token <jwt>', 'JWT access token')
     .option('--gateway <url>', 'Device gateway URL')
     .option('--device-id <id>', 'Device ID')
-    .option('--auv <binary>', 'Offer Computer Use by running this AUV binary (`auv invoke`)')
     .option('-v, --verbose', 'Enable verbose logging')
     .action(async (options: ConnectOptions) => {
       const wasStopped = stopDaemon();
@@ -223,7 +217,6 @@ export function registerConnectCommand(program: Command) {
       '--public',
       'With --workspace: enroll into the shared pool visible to every member (default: private, visible only to you)',
     )
-    // TODO: `--auv` is not forwarded to the service unit; add it when a service-mode device needs Computer Use.
     .action((options: Pick<ConnectOptions, 'public' | 'workspace'>) => {
       installConnectService({ public: options.public, workspace: options.workspace });
       log.info(
@@ -347,7 +340,6 @@ function buildDaemonArgs(options: ConnectOptions): string[] {
   if (options.deviceId) args.push('--device-id', options.deviceId);
   if (options.workspace) args.push('--workspace', options.workspace);
   if (options.public) args.push('--public');
-  if (options.auv) args.push('--auv', path.resolve(options.auv));
   if (options.verbose) args.push('--verbose');
 
   return args;
@@ -403,13 +395,6 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
       `Saved ${resolvedGatewayUrl} as the device gateway for ${auth.serverUrl}; later runs use it ahead of the server's own address.`,
     );
   }
-
-  // Fail before connecting rather than advertise a tool this device cannot run.
-  const computerUse = await resolveComputerUseDevice(options.auv).catch((err: Error) => {
-    log.error(err.message);
-    process.exit(1);
-    throw err;
-  });
 
   // Workspace enrollment: the device joins a workspace pool (reachable by all
   // members) instead of the personal pool. It authenticates with a minted
@@ -575,7 +560,6 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   const nativeRuntimes = createRuntimeProbeCache(probeNativeRuntimes);
 
   const handlerContext: GatewayHandlerContext = {
-    computerUse,
     deps: deviceControlDeps,
     error,
     // Read at dispatch time — `auth` may be refreshed mid-session.

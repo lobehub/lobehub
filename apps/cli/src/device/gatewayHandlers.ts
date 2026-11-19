@@ -1,5 +1,4 @@
 import { type DeviceControlDeps, executeDeviceRpc } from '@lobechat/device-control';
-import { COMPUTER_USE_IDENTIFIER } from '@lobechat/device-control/computer-use';
 import type {
   AgentRunRequestMessage,
   GatewayClient,
@@ -13,7 +12,6 @@ import type { resolveToken } from '../auth/resolveToken';
 import type { CliMaintenance } from '../daemon/maintenance';
 import { appendLog } from '../daemon/manager';
 import { executeToolCall } from '../tools';
-import { type ComputerUseDevice, executeComputerUseCall } from '../tools/computerUse';
 import { log } from '../utils/logger';
 import { spawnHeteroAgentRun } from './agentRun';
 import { collectSystemInfo } from './systemInfo';
@@ -34,8 +32,6 @@ const assertExecutionCurrent = (request: ExecutionRequest) => {
 
 /** Everything a gateway connection's request handlers need from the host process. */
 export interface GatewayHandlerContext {
-  /** Present when `--auv` enabled Computer Use on this device. */
-  computerUse?: ComputerUseDevice;
   deps: DeviceControlDeps;
   error: (msg: string) => void;
   /** Read at dispatch time — the underlying auth may be refreshed mid-session. */
@@ -59,15 +55,14 @@ export function bindGatewayClientHandlers(
   ctx: GatewayHandlerContext,
   connectionWorkspaceId?: string,
 ) {
-  const { computerUse, deps, error, getAuth, info, isDaemonChild, maintenance, recordRequest } =
-    ctx;
+  const { deps, error, getAuth, info, isDaemonChild, maintenance, recordRequest } = ctx;
 
   // Handle system info requests
   client.on('system_info_request', async (request: SystemInfoRequestMessage) => {
     if (!executionCurrent(request)) return;
     info(`Received system_info_request: requestId=${request.requestId}`);
     try {
-      const systemInfo = await collectSystemInfo(ctx.nativeRuntimes, computerUse);
+      const systemInfo = await collectSystemInfo(ctx.nativeRuntimes);
       if (!executionCurrent(request)) return;
       client.sendSystemInfoResponse({
         attemptId: request.attemptId,
@@ -107,17 +102,12 @@ export function bindGatewayClientHandlers(
     const result = await maintenance
       .run(() => {
         assertExecutionCurrent(request);
-        return (
-          // Computer Use's `runCommand` shares its apiName with the shell tool.
-          toolCall.identifier === COMPUTER_USE_IDENTIFIER
-            ? executeComputerUseCall(computerUse, toolCall.apiName, toolCall.arguments, timeout)
-            : executeToolCall(
-                toolCall.apiName,
-                toolCall.arguments,
-                timeout,
-                getAuth(),
-                request.executionSignal,
-              )
+        return executeToolCall(
+          toolCall.apiName,
+          toolCall.arguments,
+          timeout,
+          getAuth(),
+          request.executionSignal,
         );
       })
       .catch((err: Error) => ({

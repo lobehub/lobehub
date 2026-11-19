@@ -1865,8 +1865,6 @@
   "tools.builtins.lobe-cloud-sandbox.description": "Exécutez du code Python, JavaScript et TypeScript dans un environnement cloud isolé. Lancez des commandes shell, gérez des fichiers, recherchez du contenu avec des expressions régulières et exportez les résultats en toute sécurité.",
   "tools.builtins.lobe-cloud-sandbox.readme": "Exécutez du code Python, JavaScript et TypeScript dans un environnement cloud isolé. Lancez des commandes shell, gérez des fichiers, effectuez des recherches avec des expressions régulières et exportez les résultats en toute sécurité.",
   "tools.builtins.lobe-cloud-sandbox.title": "Bac à sable cloud",
-  "tools.builtins.lobe-computer-use.description": "Utilisez les applications de bureau, interagissez avec les contrôles et capturez l'écran.",
-  "tools.builtins.lobe-computer-use.title": "Utilisation de l'ordinateur",
   "tools.builtins.lobe-creds.description": "Gérer les identifiants utilisateur pour l’authentification, l’injection de variables d’environnement et la vérification d’API — gérer clés API, jetons OAuth et secrets pour intégrations tierces.",
   "tools.builtins.lobe-creds.title": "Identifiants",
   "tools.builtins.lobe-dashboard.description": "Créez des widgets de surveillance en direct à partir de scripts isolés, prévisualisez-les avec des données réelles et placez-les sur des tableaux de bord",

@@ -11,7 +11,6 @@ import {
 } from '@/helpers/executionTarget';
 
 import type { ExecRunContext } from '../../types';
-import { traceDiscoveryStage } from '../discoveryTracing';
 import type { ToolDiscoveryDeps, ToolDiscoveryInput } from './types';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -40,17 +39,10 @@ const log = debug('lobe-server:ai-agent-service');
  */
 export const resolveDevicePlan = async (
   deps: ToolDiscoveryDeps,
-  ctx: Pick<
-    ExecRunContext,
-    'agentConfig' | 'assistantMessageId' | 'canUseDevice' | 'runFacts' | 'topicId'
-  >,
+  ctx: Pick<ExecRunContext, 'agentConfig' | 'assistantMessageId' | 'canUseDevice' | 'topicId'>,
   input: Pick<
     ToolDiscoveryInput,
-    | 'disableLocalSystem'
-    | 'isFixedDeviceTarget'
-    | 'localDeviceId'
-    | 'requestedDeviceId'
-    | 'requestTrigger'
+    'isFixedDeviceTarget' | 'localDeviceId' | 'requestedDeviceId' | 'requestTrigger'
   >,
   devices: {
     boundDeviceId?: string | null;
@@ -59,13 +51,7 @@ export const resolveDevicePlan = async (
   },
 ) => {
   const { agentConfig, assistantMessageId, canUseDevice, topicId } = ctx;
-  const {
-    disableLocalSystem,
-    isFixedDeviceTarget,
-    localDeviceId,
-    requestTrigger,
-    requestedDeviceId,
-  } = input;
+  const { isFixedDeviceTarget, localDeviceId, requestTrigger, requestedDeviceId } = input;
   const { boundDeviceId, gatewayConfigured, onlineDevices } = devices;
 
   const executionPlan = resolveExecutionPlan({
@@ -157,23 +143,11 @@ export const resolveDevicePlan = async (
     });
   }
 
-  // Opt-in capability from the existing system-info RPC. Older desktop and CLI
-  // clients omit it, so they must never receive the new Computer Use manifest.
-  const systemInfoDeviceId = canUseDevice && !disableLocalSystem ? activeDeviceId : undefined;
-  const supportedDeviceTools = systemInfoDeviceId
-    ? (
-        await traceDiscoveryStage('device_system_info', () =>
-          ctx.runFacts.deviceSystemInfo(systemInfoDeviceId, activeDeviceScope),
-        )
-      )?.supportedTools
-    : undefined;
-
   return {
     activeDeviceId,
     activeDeviceScope,
     deviceCapable,
     deviceLocked,
     executionPlan,
-    supportedDeviceTools,
   };
 };

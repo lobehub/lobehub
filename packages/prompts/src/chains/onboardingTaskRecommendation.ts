@@ -80,7 +80,6 @@ export const DEFAULT_ONBOARDING_TASK_RECOMMENDATION_PROMPT_CONFIG = {
     github: {
       examples: [
         'Title: Analyze mobile lifecycle risk in Godot Kirie. Instruction: Work in the background from the linked pull request: inspect the diff, CI state, and review discussion; compare Android and iOS attach-detach behavior with the existing lifecycle; then return a private risk summary, missing-test list, and recommended next step. Do not comment, approve, merge, or push changes.',
-        'Title: Prepare the next auv-cli architecture milestone. Instruction: Read the linked issue and related repository activity, turn the proposal into a bounded milestone plan, and return compatibility risks plus the smallest independently reviewable implementation slice. Keep the result as a private plan and do not modify repository state.',
         'Title: Assess maintenance options for the dormant example repository. Instruction: Inspect repository activity, dependency metadata, and CI configuration in the background, then return a prioritized maintenance brief with evidence and an optional patch plan. Do not open issues, create pull requests, or push changes.',
       ],
       principles: [

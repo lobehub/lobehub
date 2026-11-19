@@ -168,11 +168,6 @@ docs/superpowers/
 # runtime-injected custom branding assets (BRANDING_LOGO_URL deployments)
 /public/branding/
 
-# AUV computer-use runtime: run records plus captured screenshots, written
-# relative to whatever directory the CLI was invoked from, so this can appear
-# at the repo root or inside an app.
-.auv/
-
 # Amp agent runtime
 .amp/
 

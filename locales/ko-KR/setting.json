@@ -1865,8 +1865,6 @@
   "tools.builtins.lobe-cloud-sandbox.description": "보안된 클라우드 환경에서 코드 실행, 명령어 실행 및 파일 관리",
   "tools.builtins.lobe-cloud-sandbox.readme": "격리된 클라우드 환경에서 Python, JavaScript, TypeScript 코드를 실행하세요. 셸 명령 실행, 파일 관리, 정규식으로 콘텐츠 검색, 결과 안전하게 내보내기를 지원합니다.",
   "tools.builtins.lobe-cloud-sandbox.title": "클라우드 샌드박스",
-  "tools.builtins.lobe-computer-use.description": "데스크톱 애플리케이션을 사용하고, 컨트롤과 상호작용하며, 화면을 캡처합니다.",
-  "tools.builtins.lobe-computer-use.title": "컴퓨터 사용",
   "tools.builtins.lobe-creds.description": "인증, 환경 변수 주입, API 검증을 위한 사용자 자격 증명을 관리합니다 — API 키, OAuth 토큰, 서드파티 연동 비밀키 등을 처리합니다.",
   "tools.builtins.lobe-creds.title": "자격 증명",
   "tools.builtins.lobe-dashboard.description": "샌드박스 스크립트로 실시간 모니터링 위젯을 생성하고 실제 데이터를 사용하여 미리보기한 후 대시보드에 추가하세요",

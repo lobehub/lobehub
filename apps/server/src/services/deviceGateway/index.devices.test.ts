@@ -410,7 +410,7 @@ describe('DeviceGateway', () => {
 
     it('returns systemInfo on success', async () => {
       configure();
-      const systemInfo = { arch: 'arm64', supportedTools: ['lobe-computer-use'] };
+      const systemInfo = { arch: 'arm64', supportedTools: ['lobe-browser'] };
       mockClient.getDeviceSystemInfo.mockResolvedValue({ success: true, systemInfo });
 
       const result = await new DeviceGateway().readDeviceSystemInfo('user-1', 'dev-1', 'ws-1');

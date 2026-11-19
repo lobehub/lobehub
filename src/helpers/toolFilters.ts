@@ -2,7 +2,6 @@
  * Shared tool filtering logic used across both runtime (ToolsEngine)
  * and display layer (selectors)
  */
-import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { isToolEnabledByFeatureFlags } from '@lobechat/builtin-tools/featureGates';
 import { isDesktop } from '@lobechat/const';
@@ -19,7 +18,7 @@ export const shouldEnableTool = (toolId: string): boolean => {
   if (!isToolEnabledByFeatureFlags(toolId, getServerConfigStoreState()?.featureFlags)) return false;
 
   // These executors call Electron IPC and cannot run in a plain web client.
-  if (toolId === LocalSystemManifest.identifier || toolId === AuvManifest.identifier) {
+  if (toolId === LocalSystemManifest.identifier) {
     return isDesktop;
   }
 

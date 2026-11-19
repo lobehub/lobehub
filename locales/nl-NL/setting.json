@@ -1865,8 +1865,6 @@
   "tools.builtins.lobe-cloud-sandbox.description": "Voer Python-, JavaScript- en TypeScript-code uit in een geïsoleerde cloudomgeving. Voer shellopdrachten uit, beheer bestanden, doorzoek inhoud met regex en exporteer resultaten veilig.",
   "tools.builtins.lobe-cloud-sandbox.readme": "Voer Python-, JavaScript- en TypeScript-code uit in een geïsoleerde cloudomgeving. Voer shellcommando’s uit, beheer bestanden, doorzoek inhoud met regex en exporteer resultaten veilig.",
   "tools.builtins.lobe-cloud-sandbox.title": "Cloud Sandbox",
-  "tools.builtins.lobe-computer-use.description": "Gebruik desktopapplicaties, interacteer met bedieningselementen en maak een screenshot.",
-  "tools.builtins.lobe-computer-use.title": "Computergebruik",
   "tools.builtins.lobe-creds.description": "Beheer gebruikersreferenties voor authenticatie, omgevingsvariabel‑injectie en API‑verificatie — beheer API‑sleutels, OAuth‑tokens en geheimen voor integraties van derden.",
   "tools.builtins.lobe-creds.title": "Referenties",
   "tools.builtins.lobe-dashboard.description": "Bouw live monitoring-widgets van gesandboxte scripts, bekijk ze met echte gegevens en plaats ze op dashboards",

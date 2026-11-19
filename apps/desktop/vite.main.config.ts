@@ -122,11 +122,6 @@ export default defineConfig(async (env) => {
       // shortcut.
       'process.env.DESKTOP_APP_ID': JSON.stringify(process.env.DESKTOP_APP_ID),
       'process.env.DESKTOP_CLI_BIN_NAMES': JSON.stringify(process.env.DESKTOP_CLI_BIN_NAMES),
-      // Packaging leaves the macOS Computer Use helper out when 'false'; the
-      // runtime must then stop advertising computer use to the server.
-      'process.env.DESKTOP_COMPUTER_USE_HELPER': JSON.stringify(
-        process.env.DESKTOP_COMPUTER_USE_HELPER,
-      ),
       // Names the per-user data directory. `electron-builder.mjs` reads this
       // too, for the executable and installer, but that never reaches the
       // packaged manifest Electron resolves `app.getName()` from — so the app

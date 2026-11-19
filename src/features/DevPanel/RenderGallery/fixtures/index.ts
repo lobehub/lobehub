@@ -33,7 +33,6 @@ import lobeUserInteraction from './lobe-user-interaction';
 import lobeUserMemory from './lobe-user-memory';
 import lobeWebBrowsing from './lobe-web-browsing';
 import lobeWebOnboarding from './lobe-web-onboarding';
-import { lobeAuv } from './lobeAuv';
 
 export type { ToolRenderFixture, ToolRenderFixtureVariant } from '../lifecycleMode';
 
@@ -95,7 +94,6 @@ const toolsetModules: ToolsetFixtureModule[] = [
   lobeAgentBuilder,
   lobeAgentDocuments,
   lobeAgentManagement,
-  lobeAuv,
   lobeBrowser,
   lobeCloudSandbox,
   lobeGroupAgentBuilder,

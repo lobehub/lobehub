@@ -1865,8 +1865,6 @@
   "tools.builtins.lobe-cloud-sandbox.description": "クラウド上の隔離環境でPython、JavaScript、TypeScriptのコードを実行します。シェルコマンドの実行、ファイル管理、正規表現によるコンテンツ検索、結果の安全なエクスポートが可能です。",
   "tools.builtins.lobe-cloud-sandbox.readme": "Python、JavaScript、TypeScriptのコードを隔離されたクラウド環境で実行します。シェルコマンドの実行、ファイル管理、正規表現によるコンテンツ検索、結果の安全なエクスポートが可能です。",
   "tools.builtins.lobe-cloud-sandbox.title": "クラウドサンドボックス",
-  "tools.builtins.lobe-computer-use.description": "デスクトップアプリケーションを使用し、コントロールと対話し、画面をキャプチャします。",
-  "tools.builtins.lobe-computer-use.title": "コンピュータ使用",
   "tools.builtins.lobe-creds.description": "認証、環境変数の注入、API 検証のためにユーザー認証情報を管理します。API キー、OAuth トークン、サードパーティ連携用の秘密情報などを扱います。",
   "tools.builtins.lobe-creds.title": "認証情報",
   "tools.builtins.lobe-dashboard.description": "サンドボックス化されたスクリプトからライブモニタリングウィジェットを作成し、実際のデータでプレビューしてダッシュボードに配置します",

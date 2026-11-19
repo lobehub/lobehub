@@ -1,4 +1,3 @@
-import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { groupSupervisorToolIds } from '@lobechat/builtin-tools';
 import { describe, expect, it } from 'vitest';
 
@@ -134,7 +133,7 @@ describe('resolveToolRules', () => {
 
     const open = resolveToolRules(
       request({
-        device: { supportedTools: [AuvManifest.identifier] },
+        device: {},
         deviceAccess: { canUseDevice: true, deviceLocked: false },
         executionTarget: 'device',
       }),
@@ -143,7 +142,7 @@ describe('resolveToolRules', () => {
 
     const locked = resolveToolRules(
       request({
-        device: { supportedTools: [AuvManifest.identifier] },
+        device: {},
         deviceAccess: { canUseDevice: true, deviceLocked: true },
         executionTarget: 'device',
       }),
@@ -162,23 +161,8 @@ describe('resolveToolRules', () => {
       }),
     );
     expect(denied.excludedIdentifiers).toEqual(
-      new Set([
-        'my-plugin',
-        'lobe-local-system',
-        'lobe-remote-device',
-        'lobe-browser',
-        AuvManifest.identifier,
-      ]),
+      new Set(['my-plugin', 'lobe-local-system', 'lobe-remote-device', 'lobe-browser']),
     );
-    // Computer Use also disappears when the routed device does not support it.
-    const unsupported = resolveToolRules(
-      request({
-        device: {},
-        deviceAccess: { canUseDevice: true, deviceLocked: false },
-        executionTarget: 'local',
-      }),
-    );
-    expect(unsupported.excludedIdentifiers.has(AuvManifest.identifier)).toBe(true);
   });
 
   it('enables the message tool in bot conversations and search per the decision', () => {
@@ -196,7 +180,6 @@ describe('filterAllowedBuiltinTools', () => {
   const tools = [
     { identifier: 'lobe-local-system' },
     { identifier: 'lobe-remote-device' },
-    { identifier: AuvManifest.identifier },
     { identifier: 'lobe-web-browsing' },
   ];
   it('keeps non-device tools and drops device tools per the walls', () => {
@@ -205,10 +188,9 @@ describe('filterAllowedBuiltinTools', () => {
     expect(ids({ canUseDevice: false, deviceLocked: false })).toEqual(['lobe-web-browsing']);
     expect(ids({ canUseDevice: true, deviceLocked: true })).toEqual([
       'lobe-local-system',
-      AuvManifest.identifier,
       'lobe-web-browsing',
     ]);
-    expect(ids({ canUseDevice: true, deviceLocked: false, supportedDeviceTools: [] })).toEqual([
+    expect(ids({ canUseDevice: true, deviceLocked: false })).toEqual([
       'lobe-local-system',
       'lobe-remote-device',
       'lobe-web-browsing',

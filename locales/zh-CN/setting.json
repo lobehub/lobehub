@@ -1876,8 +1876,6 @@
   "tools.builtins.lobe-cloud-sandbox.description": "在安全的云端环境中执行代码、运行命令和管理文件",
   "tools.builtins.lobe-cloud-sandbox.readme": "在隔离的云端环境中执行 Python、JavaScript 和 TypeScript 代码。运行 Shell 命令、管理文件、使用正则搜索内容并安全导出结果。",
   "tools.builtins.lobe-cloud-sandbox.title": "云沙盒",
-  "tools.builtins.lobe-computer-use.description": "使用桌面应用、操作控件和截取屏幕。",
-  "tools.builtins.lobe-computer-use.title": "使用电脑",
   "tools.builtins.lobe-creds.description": "管理用于身份验证、环境变量注入和 API 调用的用户凭据 — 处理 API 密钥、OAuth 令牌以及第三方集成所需的密钥。",
   "tools.builtins.lobe-creds.title": "凭据管理",
   "tools.builtins.lobe-dashboard.description": "用沙箱脚本构建实时监控组件，用真实数据试运行预览，并添加到看板",

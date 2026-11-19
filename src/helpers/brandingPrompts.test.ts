@@ -4,7 +4,6 @@ import { applyBrandStrings } from '@/locales/brandPostProcessor';
 
 import { systemRoleTemplate } from '../../packages/builtin-agents/src/agents/agent-builder/systemRole';
 import { systemPrompt as builder } from '../../packages/builtin-tool-agent-builder/src/systemRole';
-import { systemPrompt as computer } from '../../packages/builtin-tool-auv/src/systemRole';
 import { buildCanvasGuide } from '../../packages/builtin-tool-canvas/src/guide';
 import { CanvasManifest } from '../../packages/builtin-tool-canvas/src/manifest';
 import { systemPrompt as canvas } from '../../packages/builtin-tool-canvas/src/systemRole';
@@ -25,7 +24,6 @@ it('does not teach builtin agents an upstream product identity', () => {
     [
       systemRoleTemplate,
       builder,
-      computer,
       canvas,
       buildCanvasGuide(),
       String(CanvasManifest.meta?.description ?? ''),

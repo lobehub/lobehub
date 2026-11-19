@@ -1876,8 +1876,6 @@
   "tools.builtins.lobe-cloud-sandbox.description": "Execute code, run commands, and manage files in a secure cloud environment",
   "tools.builtins.lobe-cloud-sandbox.readme": "Execute Python, JavaScript, and TypeScript code in an isolated cloud environment. Run shell commands, manage files, search content with regex, and export results securely.",
   "tools.builtins.lobe-cloud-sandbox.title": "Cloud Sandbox",
-  "tools.builtins.lobe-computer-use.description": "Use desktop applications, interact with controls, and capture the screen.",
-  "tools.builtins.lobe-computer-use.title": "Computer Use",
   "tools.builtins.lobe-creds.description": "Manage user credentials for authentication, environment variable injection, and API verification — handle API keys, OAuth tokens, and secrets for third-party integrations.",
   "tools.builtins.lobe-creds.title": "Credentials",
   "tools.builtins.lobe-dashboard.description": "Build live monitoring widgets from sandboxed scripts, preview them with real data and put them on dashboards",

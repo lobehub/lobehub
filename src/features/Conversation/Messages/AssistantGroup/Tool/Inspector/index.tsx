@@ -1,6 +1,5 @@
 import type { ActivateToolsState } from '@lobechat/builtin-tool-activator';
 import { ActivatorApiName, LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
-import { AuvApiName, AuvIdentifier } from '@lobechat/builtin-tool-auv';
 import { LocalSystemApiName, LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
 import { getBuiltinInspector } from '@lobechat/builtin-tools/inspectors';
 import { getFilePathDisplayInfo } from '@lobechat/shared-tool-ui/components';
@@ -29,8 +28,8 @@ interface InspectorProps {
    * Whether the tool detail is expanded. Collapsed rows show the plain
    * "<action> <keyword>" title; an expanded row restores the tool's own rich
    * inspector (full command, per-tool chips) since expanding means "show me
-   * the details". Computer Use and image reads keep their action-specific
-   * inspector visible in both states.
+   * the details". Image reads keep their action-specific inspector visible
+   * in both states.
    */
   isExpanded?: boolean;
   /**
@@ -98,12 +97,7 @@ const Inspectors = memo<InspectorProps>(
     // Collapsed rows read as one plain sentence ("<action> <keyword>") so a
     // finished run scans as prose; expanding a row is an explicit ask for the
     // details, so it restores the tool's own rich inspector when one exists.
-    // Computer Use multiplexes distinct actions behind runCommand; its inspector
-    // carries the action/purpose even in the compact row. Image reads likewise
-    // need their viewing label instead of the generic read-file title.
-    const isComputerUse =
-      (identifier === AuvIdentifier || identifier === 'lobe-auv') &&
-      apiName === AuvApiName.runCommand;
+    // Image reads need their viewing label in both states.
     const readPath =
       args?.path ||
       args?.filePath ||
@@ -118,9 +112,7 @@ const Inspectors = memo<InspectorProps>(
       ((typeof readPath === 'string' && getFilePathDisplayInfo(readPath).isImage) ||
         (Array.isArray(result?.state?.images) && result.state.images.length > 0));
     const CustomInspector =
-      isExpanded || isComputerUse || isImageRead
-        ? getBuiltinInspector(identifier, apiName)
-        : undefined;
+      isExpanded || isImageRead ? getBuiltinInspector(identifier, apiName) : undefined;
 
     return (
       <Flexbox allowShrink horizontal align={'center'} gap={6}>

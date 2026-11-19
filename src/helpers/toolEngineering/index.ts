@@ -1,7 +1,6 @@
 /**
  * Tools Engineering - Unified tools processing using ToolsEngine
  */
-import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { getFeatureDisabledToolIds } from '@lobechat/builtin-tools/featureGates';
 import {
   createEnableChecker,
@@ -125,17 +124,11 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
     },
   );
 
-  // A plain Web client must not acquire the Electron IPC executor: Computer
-  // Use only exists where the platform can run it.
-  const allManifests = manifests.filter(
-    (m) => m.identifier !== AuvManifest.identifier || isToolAvailableInCurrentEnv(m.identifier),
-  );
-
   return new ToolsEngine({
     defaultToolIds,
     enableChecker,
     functionCallChecker: isCanUseFC,
-    manifestSchemas: allManifests as ToolManifest[],
+    manifestSchemas: manifests as ToolManifest[],
   });
 };
 

@@ -30,14 +30,6 @@ packages:
   - apps/workbench
 
 minimumReleaseAgeExclude:
-  - '@auv-js/api-client@0.0.25'
-  - '@auv-js/cli-darwin-arm64@0.0.25'
-  - '@auv-js/cli-darwin-x64@0.0.25'
-  - '@auv-js/cli-linux-arm64-gnu@0.0.25'
-  - '@auv-js/cli-linux-x64-gnu@0.0.25'
-  - '@auv-js/cli-win32-x64-msvc@0.0.25'
-  - '@auv-js/cli@0.0.25'
-  - '@auv-js/sdk@0.0.25'
   - '@lobehub/*'
   - virtua@0.53.5
 

@@ -1,4 +1,3 @@
-import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import type * as ModelBankModule from 'model-bank';
@@ -259,45 +258,6 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
     });
   });
 
-  // https://github.com/lobehub/lobehub/pull/19051
-  it('exposes Computer Use for Web activation through an online desktop', async () => {
-    const { deviceGateway } = await import('@/server/services/deviceGateway');
-    vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
-    mockQueryDeviceList.mockResolvedValue([
-      { deviceId: 'dev-1', hostname: 'Mac', online: true, platform: 'darwin' },
-    ]);
-    mockQueryDeviceSystemInfo.mockResolvedValue({ supportedTools: [AuvManifest.identifier] });
-    mockGetAgentConfig.mockResolvedValue(
-      createBaseAgentConfig({
-        agencyConfig: { executionTarget: 'local' },
-        plugins: [AuvManifest.identifier],
-      }),
-    );
-    mockGetEnabledPluginManifests.mockReturnValue(new Map([[AuvManifest.identifier, AuvManifest]]));
-    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', deviceId: 'dev-1' });
-    expect(
-      mockCreateOperation.mock.calls[0][0].toolSet.manifestMap[AuvManifest.identifier],
-    ).toBeDefined();
-  });
-
-  it.each([undefined, ['lobe-computer-use']])(
-    'gates Computer Use discovery on reported support %j',
-    async (supportedTools) => {
-      const { deviceGateway } = await import('@/server/services/deviceGateway');
-      vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
-      mockQueryDeviceList.mockResolvedValue([
-        { deviceId: 'dev-1', hostname: 'Mac', online: true, platform: 'darwin' },
-      ]);
-      mockQueryDeviceSystemInfo.mockResolvedValue({ supportedTools });
-      mockGetAgentConfig.mockResolvedValue(
-        createBaseAgentConfig({ agencyConfig: { executionTarget: 'local' } }),
-      );
-      await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', deviceId: 'dev-1' });
-      const map = mockCreateOperation.mock.calls[0][0].toolSet.manifestMap;
-      expect(Boolean(map[AuvManifest.identifier])).toBe(Boolean(supportedTools));
-    },
-  );
-
   describe('deviceContext forwarded to createServerAgentToolsEngine', () => {
     it('should pass deviceContext when gateway is configured', async () => {
       // Override deviceGateway.isConfigured
@@ -440,21 +400,6 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
 
       const executorMap = mockCreateOperation.mock.calls[0][0].toolSet.executorMap;
       expect(executorMap[LocalSystemManifest.identifier]).toBe('client');
-    });
-
-    it('keeps Computer Use client-routed in standalone Electron', async () => {
-      const { deviceGateway } = await import('@/server/services/deviceGateway');
-      vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(false);
-      mockGetEnabledPluginManifests.mockReturnValue(
-        new Map([[AuvManifest.identifier, AuvManifest]]),
-      );
-      mockGetAgentConfig.mockResolvedValue(
-        createBaseAgentConfig({ plugins: [AuvManifest.identifier] }),
-      );
-      await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
-      const toolSet = mockCreateOperation.mock.calls[0][0].toolSet;
-      expect(toolSet.manifestMap[AuvManifest.identifier]).toBeDefined();
-      expect(toolSet.executorMap[AuvManifest.identifier]).toBe('client');
     });
 
     it('should NOT mark local-system as client when gateway IS configured (cloud)', async () => {

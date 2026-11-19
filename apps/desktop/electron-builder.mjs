@@ -1,11 +1,9 @@
 import { execSync } from 'node:child_process';
 import fs from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { Arch } from 'builder-util';
 import dotenv from 'dotenv';
 
 import { copyExternalRuntimeModulesToSource } from './external-runtime-deps.config.mjs';
@@ -16,13 +14,6 @@ import {
   getAsarUnpackPatterns,
   getNativeModulesFilesConfig,
 } from './native-deps.config.mjs';
-import {
-  COMPUTER_USE_HELPER_BUNDLE_PATH,
-  COMPUTER_USE_HELPER_SIGN_IGNORE,
-  embedComputerUseHelper,
-  resolveComputerUseHelperVersion,
-  verifyComputerUseHelper,
-} from './scripts/computerUseHelper.mjs';
 import { notarizeMacApp } from './scripts/notarizeMacApp.mjs';
 import { packBuiltinCore } from './scripts/packBuiltinCore.mjs';
 import { toSparkleBuildVersion } from './scripts/sparkleBuildVersion.mjs';
@@ -34,18 +25,6 @@ dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const packageJSON = JSON.parse(await fs.readFile(path.join(__dirname, 'package.json'), 'utf8'));
-
-const computerUseHelperVersion = resolveComputerUseHelperVersion(packageJSON);
-
-/**
- * Whether the macOS build embeds the upstream-signed Computer Use helper.
- *
- * The helper is built, signed and notarized under the upstream vendor's name
- * and team; a distribution cannot rename it without breaking that signature,
- * so a rebranded build that does not want another product's name in the
- * user's Privacy & Security list leaves it out and loses computer use on macOS.
- */
-const shipComputerUseHelper = process.env.DESKTOP_COMPUTER_USE_HELPER !== 'false';
 
 const channel = process.env.UPDATE_CHANNEL;
 const arch = os.arch();
@@ -274,26 +253,6 @@ const config = {
     await copyNativeModulesToSource();
     await copyExternalRuntimeModulesToSource();
 
-    // Resolve the target, not the build host: binaryPath() selects the host
-    // binary and would silently ship a macOS daemon in a Windows installer.
-    const targetPlatform =
-      context.electronPlatformName === 'mas' ? 'darwin' : context.electronPlatformName;
-    const targetArch = Arch[context.arch];
-    const suffix = targetPlatform === 'win32' ? '-msvc' : targetPlatform === 'linux' ? '-gnu' : '';
-    const auvExecutable = targetPlatform === 'win32' ? 'auv.exe' : 'auv';
-    const require = createRequire(import.meta.url);
-    const auvSource = require.resolve(
-      `@auv-js/cli-${targetPlatform}-${targetArch}${suffix}/bin/${auvExecutable}`,
-    );
-    const auvDestination = path.resolve(__dirname, 'resources/bin', auvExecutable);
-    await fs.mkdir(path.dirname(auvDestination), { recursive: true });
-    await fs.rm(
-      path.resolve(__dirname, 'resources/bin', auvExecutable === 'auv' ? 'auv.exe' : 'auv'),
-      { force: true },
-    );
-    await fs.copyFile(auvSource, auvDestination);
-    if (targetPlatform !== 'win32') await fs.chmod(auvDestination, 0o755);
-
     // agent-browser is no longer bundled in the installer — BinaryManager
     // lazily downloads it on first use into the per-user cache dir. See
     // apps/desktop/src/main/modules/binaries/agentBrowserBinaries.ts.
@@ -376,16 +335,6 @@ const config = {
     const appPath = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`);
     const resourcesPath = path.join(appPath, 'Contents', 'Resources');
 
-    // The Mac App Store sandbox cannot register the helper's LaunchAgent.
-    if (context.electronPlatformName === 'darwin' && shipComputerUseHelper) {
-      await embedComputerUseHelper({
-        appPath,
-        arch: arch === 'arm64' ? 'arm64' : 'x64',
-        cacheDir: path.join(__dirname, 'node_modules', '.cache', 'lobehub-computer-use'),
-        version: computerUseHelperVersion,
-      });
-    }
-
     const iconFileName = getIconFileName();
     const assetsCarSource = path.join(__dirname, 'build', `${iconFileName}.Assets.car`);
     const assetsCarDest = path.join(resourcesPath, 'Assets.car');
@@ -403,26 +352,10 @@ const config = {
   afterSign: async (context) => {
     await verifyFontListSignature(context);
 
-    if (context.electronPlatformName === 'darwin') {
-      if (shipComputerUseHelper) {
-        verifyComputerUseHelper(
-          path.join(
-            context.appOutDir,
-            `${context.packager.appInfo.productFilename}.app`,
-            COMPUTER_USE_HELPER_BUNDLE_PATH,
-          ),
-          { version: computerUseHelperVersion },
-        );
-        console.info('✅ Computer Use helper kept its notarized signature');
-      } else {
-        console.info('⏭️  Computer Use helper not shipped (DESKTOP_COMPUTER_USE_HELPER=false)');
-      }
-
-      if (hasAppleCertificate) {
-        await notarizeMacApp(
-          path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`),
-        );
-      }
+    if (context.electronPlatformName === 'darwin' && hasAppleCertificate) {
+      await notarizeMacApp(
+        path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`),
+      );
     }
   },
   appId,
@@ -493,10 +426,7 @@ const config = {
     target: ['AppImage', 'snap', 'deb', 'rpm', 'tar.gz'],
   },
   mac: {
-    binaries: [
-      'Contents/Resources/app.asar.unpacked/node_modules/font-list/libs/darwin/fontlist',
-      'Contents/Resources/bin/auv',
-    ],
+    binaries: ['Contents/Resources/app.asar.unpacked/node_modules/font-list/libs/darwin/fontlist'],
     compression: 'maximum',
     entitlementsInherit: 'build/entitlements.mac.plist',
     ...(macCommunicationEntitlements
@@ -538,8 +468,6 @@ const config = {
     },
     gatekeeperAssess: false,
     hardenedRuntime: hasAppleCertificate,
-    // Ship the notarized helper as built; re-signing drops its stapled ticket.
-    signIgnore: [COMPUTER_USE_HELPER_SIGN_IGNORE],
     // Notarized in afterSign so a transient staple failure retries instead of failing the build.
     notarize: false,
     ...(hasAppleCertificate ? {} : { identity: null }),
@@ -589,7 +517,6 @@ const config = {
       }
     : {}),
   extraResources: [
-    { from: 'resources/bin', to: 'bin' },
     { from: 'core.asar', to: 'core.asar' },
     { from: 'core.asar.unpacked', to: 'core.asar.unpacked' },
     // The Sparkle bridge addon is loaded by an explicit path outside app.asar; pnpm's
@@ -624,6 +551,10 @@ const config = {
     {
       from: 'node_modules/@anthropic-ai/sandbox-runtime/package.json',
       to: 'sandbox-runtime/package.json',
+    },
+    {
+      from: 'node_modules/@anthropic-ai/sandbox-runtime/LICENSE',
+      to: 'sandbox-runtime/LICENSE',
     },
   ],
 

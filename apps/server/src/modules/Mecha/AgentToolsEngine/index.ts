@@ -151,7 +151,6 @@ export const createServerAgentToolsEngine = (
       ? {
           autoActivated: deviceContext?.autoActivated,
           deviceOnline: deviceContext?.deviceOnline,
-          supportedTools: deviceContext?.supportedTools ?? [],
         }
       : undefined,
     deviceAccess: { canUseDevice, deviceLocked },
@@ -194,7 +193,6 @@ export const createServerAgentToolsEngine = (
       canUseDevice,
       deviceLocked,
       disableLocalSystem,
-      supportedDeviceTools: hasDeviceProxy ? (deviceContext?.supportedTools ?? []) : undefined,
     }),
     defaultToolIds: resolved.defaultToolIds,
     // Post-merge wall: a plugin or Skill/Composio manifest claiming a device

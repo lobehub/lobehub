@@ -422,6 +422,17 @@ export default {
   'manageOnlyCreator': 'Only the creator or a workspace owner can do this',
   'openOnRight': 'Open on the right',
   'openOnRightHint': 'Release to open side-by-side on the right',
+  'openSourceNotice.desc':
+    'View the main open-source components used by {{appName}} and their licenses.',
+  'openSourceNotice.group.desktop': 'Desktop app',
+  'openSourceNotice.group.runtime': 'Web and runtime libraries',
+  'openSourceNotice.note.chromium':
+    'See LICENSES.chromium.html in the desktop installation for notices on included third-party code.',
+  'openSourceNotice.note.nodeScreenshots':
+    'The bundled LICENSE file states MIT. The npm release metadata states Apache-2.0.',
+  'openSourceNotice.title': 'Open-Source Notices',
+  'openSourceNotice.viewLicense': 'License text',
+  'openSourceNotice.viewLicenseAria': '{{name}} license text, opens in a new tab',
   'operationFailed': 'Operation failed, please try again',
   'addNew': 'Add new',
   'gotIt': 'Got it',

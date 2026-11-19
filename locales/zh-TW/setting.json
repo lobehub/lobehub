@@ -1867,8 +1867,6 @@
   "tools.builtins.lobe-cloud-sandbox.description": "在隔離的雲端環境中執行 Python、JavaScript 和 TypeScript 程式碼。可執行 shell 指令、管理檔案、使用正規表達式搜尋內容，並安全地匯出結果。",
   "tools.builtins.lobe-cloud-sandbox.readme": "在隔離的雲端環境中執行 Python、JavaScript 和 TypeScript 程式碼。執行 Shell 指令、管理檔案、使用正規表示式搜尋內容，並安全地匯出結果。",
   "tools.builtins.lobe-cloud-sandbox.title": "雲端沙盒",
-  "tools.builtins.lobe-computer-use.description": "使用桌面應用程式、與控制項互動以及擷取螢幕。",
-  "tools.builtins.lobe-computer-use.title": "電腦使用",
   "tools.builtins.lobe-creds.description": "管理使用者憑證以進行驗證、環境變數注入與 API 驗證 — 處理 API 金鑰、OAuth Token 與第三方整合所需的密鑰。",
   "tools.builtins.lobe-creds.title": "憑證",
   "tools.builtins.lobe-dashboard.description": "從沙盒腳本建立即時監控小工具，使用真實數據預覽並將其放置在儀表板上",

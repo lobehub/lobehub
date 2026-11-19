@@ -1865,8 +1865,6 @@
   "tools.builtins.lobe-cloud-sandbox.description": "تنفيذ تعليمات برمجية بلغة بايثون، جافاسكريبت، وتايب سكريبت في بيئة سحابية معزولة. شغّل أوامر الصدفة، إدارة الملفات، البحث باستخدام تعبيرات regex، وتصدير النتائج بأمان.",
   "tools.builtins.lobe-cloud-sandbox.readme": "نفّذ تعليمات برمجية بلغة Python وJavaScript وTypeScript في بيئة سحابية معزولة. شغّل أوامر الصدفة، وأدر الملفات، وابحث في المحتوى باستخدام regex، وصدّر النتائج بأمان.",
   "tools.builtins.lobe-cloud-sandbox.title": "بيئة سحابية تجريبية",
-  "tools.builtins.lobe-computer-use.description": "استخدام تطبيقات سطح المكتب، التفاعل مع عناصر التحكم، والتقاط الشاشة.",
-  "tools.builtins.lobe-computer-use.title": "استخدام الكمبيوتر",
   "tools.builtins.lobe-creds.description": "إدارة بيانات اعتماد المستخدم للمصادقة، وحقن متغيرات البيئة، والتحقق من واجهات API — التعامل مع مفاتيح API، رموز OAuth، والأسرار للتكامل مع الخدمات الخارجية.",
   "tools.builtins.lobe-creds.title": "بيانات الاعتماد",
   "tools.builtins.lobe-dashboard.description": "قم بإنشاء أدوات مراقبة مباشرة من نصوص محمية، معاينتها باستخدام بيانات حقيقية ووضعها على لوحات التحكم",

@@ -17,12 +17,6 @@ importers:
 
   .:
     dependencies:
-      '@auv-js/cli':
-        specifier: 0.0.33
-        version: 0.0.33
-      '@auv-js/sdk':
-        specifier: 0.0.33
-        version: 0.0.33
       '@lobehub/fluent-emoji':
         specifier: ^5.0.0
         version: 5.0.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -1003,54 +997,6 @@ packages:
       zod:
         optional: true
 
-  '@auv-js/api-client@0.0.33':
-    resolution: {integrity: sha512-arcCp/DlfKZb2ZPuHxM3GUs5Ehi2ZgW152CGhKKjXdopzWkGus0esFS8L+vbpTqzq0B1P9kNGxVSTFepFJ9dhw==}
-
-  '@auv-js/cli-darwin-arm64@0.0.33':
-    resolution: {integrity: sha512-Djp1dglnU6a3Hgi07zv0dTT7OBbONFJ/lxb65vIJ0vUWBziQSFlKqAOWUo3zwkaSTy5N/Wy5uOHBPhSZwO6gtg==}
-    engines: {node: '>=20.19.0'}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@auv-js/cli-darwin-x64@0.0.33':
-    resolution: {integrity: sha512-oyBJdXg8thX+jX5vAo085PzibCgVazRIbYjckgL6NAlFej5rj1Xkh7Q+Z3iqag4c3tAonLcGS2nlfL6arkNY8g==}
-    engines: {node: '>=20.19.0'}
-    cpu: [x64]
-    os: [darwin]
-
-  '@auv-js/cli-linux-arm64-gnu@0.0.33':
-    resolution: {integrity: sha512-LFlsLTUozhvAnJhdimEt16RbJYYWZxqpnrsr9YQS/u7l5dUetJgvDignNp2Ey61a620U1LfwinCsCyBqmfbPQA==}
-    engines: {node: '>=20.19.0'}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  '@auv-js/cli-linux-x64-gnu@0.0.33':
-    resolution: {integrity: sha512-Tjkgd2UUbiL36fuKoKi1VQDD/66KIzMIIn4RAbm36ThbjpLcy3mQ39zI4+5UqQp7HZ/hBv21R8UUGwviaYH9eA==}
-    engines: {node: '>=20.19.0'}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  '@auv-js/cli-win32-arm64-msvc@0.0.33':
-    resolution: {integrity: sha512-3qekgM/FGSeU0yFbTakhY5EJBGFE3N26isJUN+fUJO1oT1HWy//JDWCB7Yn38FcBp+eH+wM8zJIQpLuS1Se0BA==}
-    engines: {node: '>=20.19.0'}
-    cpu: [arm64]
-    os: [win32]
-
-  '@auv-js/cli-win32-x64-msvc@0.0.33':
-    resolution: {integrity: sha512-kz62T+9OxdH0w/y8WqiLGayGM0L2mXdR3hCr5nrhwB9pzp28jT5fhtfTznwu0GC5nfT2MFL93tmkhckVxmfPUg==}
-    engines: {node: '>=20.19.0'}
-    cpu: [x64]
-    os: [win32]
-
-  '@auv-js/cli@0.0.33':
-    resolution: {integrity: sha512-mAMGRwrrC+UUTEK5hdBrYhPsamuR+6sRF8eEO9GJABXmvYfsSE6BifY8WrlfepSrEi6JUcTNEVEucxcaC3+KkQ==}
-    hasBin: true
-
-  '@auv-js/sdk@0.0.33':
-    resolution: {integrity: sha512-9Oadm9bNLPEOcHNC9NoXPL1I5njz5eKfLGN7KhcbA2yenPjigSoT0WIvO3TuEvVubRqHykZLZQdGD11AM2xJUA==}
-
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
     engines: {node: '>=6.9.0'}
@@ -1198,9 +1144,6 @@ packages:
 
   '@borewit/text-codec@0.2.2':
     resolution: {integrity: sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ==}
-
-  '@bufbuild/protobuf@2.13.0':
-    resolution: {integrity: sha512-acq7c49vxfm1ggJ95P70TX7ABDM0vxr1SYD3BB0o0jnBLB4OAqeHyKuN+cD3w80gXEDQ2zxHpR6CUeA+O/aU9g==}
 
   '@cacheable/memory@2.2.0':
     resolution: {integrity: sha512-CTLKqLItRCEixEAewD3/j9DB3/o96gpTPD4eJ1v+DGOlxZRZncRQkGYqqnAGCscYd6RNeXfGeiuCphsPtqyIfQ==}
@@ -2076,15 +2019,6 @@ packages:
       react: 19.2.7
       react-dom: 19.2.7
 
-  '@grpc/grpc-js@1.14.4':
-    resolution: {integrity: sha512-k9Dj3DV/itK9D06Y8f190Qgop7/Ui+D0njFV3LHMPwPT75DpXLQohE9Wmz0QElrJnzsjB7KPWiKJbOl7IPDArQ==}
-    engines: {node: '>=12.10.0'}
-
-  '@grpc/proto-loader@0.8.1':
-    resolution: {integrity: sha512-wtF6h+DY6M3YaDBPAmvuuA6jV8Sif9MjtOI5euKFWRgCDl5PeDpPsHR9u2l6St5ceY8AZgoNDww5+HvEsXFsGg==}
-    engines: {node: '>=6'}
-    hasBin: true
-
   '@hono/node-server@2.1.3':
     resolution: {integrity: sha512-TA//nWMqPhbfdfneACk6t5a9eqbS9lABEPyKn0/xZTah3H3U2XaVg85rJFl0/Fyit0I552YDHgXGVSf3GwqbUw==}
     engines: {node: '>=20'}
@@ -2139,9 +2073,6 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
-
-  '@js-sdsl/ordered-map@4.4.2':
-    resolution: {integrity: sha512-iUKgm52T8HOE/makSxjqoWhe95ZJA1/G1sYsGev2JDKUSS14KAgg1LHb+Ba+IPow0xflbnSkOsZcO08C7w1gYw==}
 
   '@keyv/bigmap@1.3.1':
     resolution: {integrity: sha512-WbzE9sdmQtKy8vrNPa9BRnwZh5UF4s1KTmSK0KUVLo3eff5BlQNNWDnFOouNpKfPKDnms9xynJjsMYjMaT/aFQ==}
@@ -2267,9 +2198,6 @@ packages:
     peerDependenciesMeta:
       '@cfworker/json-schema':
         optional: true
-
-  '@moeru/std@0.1.0-beta.20':
-    resolution: {integrity: sha512-09Nunc5dLT0+oAaLV18nIGHLkQO3LOUGOpGcQ2VIFTqWybJojT9geawhTVtuclYcJtIApgIt+3BLWI1K9dYpFw==}
 
   '@napi-rs/canvas-android-arm64@0.1.100':
     resolution: {integrity: sha512-hjhCKhntPv9+t4ckHymdx0phYNcVW+GKQR6Lzw2zE+pOVjOplSmtx9nNNknTjbEDLcuLZqA1y8ufKg1XfgftzQ==}
@@ -2523,33 +2451,6 @@ packages:
 
   '@primer/octicons@19.38.0':
     resolution: {integrity: sha512-YUU2R66aDm72CdjlTyD663sCAjILrHWK2czw+BdTUkzZfcB7bXfO6GNXm22sepLOWKPkLHezVjIHch/KNd8rMg==}
-
-  '@protobufjs/aspromise@1.1.2':
-    resolution: {integrity: sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ==}
-
-  '@protobufjs/base64@1.1.2':
-    resolution: {integrity: sha512-AZkcAA5vnN/v4PDqKyMR5lx7hZttPDgClv83E//FMNhR2TMcLUhfRUBHCmSl0oi9zMgDDqRUJkSxO3wm85+XLg==}
-
-  '@protobufjs/codegen@2.0.5':
-    resolution: {integrity: sha512-zgXFLzW3Ap33e6d0Wlj4MGIm6Ce8O89n/apUaGNB/jx+hw+ruWEp7EwGUshdLKVRCxZW12fp9r40E1mQrf/34g==}
-
-  '@protobufjs/eventemitter@1.1.1':
-    resolution: {integrity: sha512-vW1GmwMZNnL+gMRaovlh9yZX74kc+TTU3FObkkurpMaRtBfLP3ldjS9KQWlwZgraRE0+dheEEoAxdzcJQ8eXZg==}
-
-  '@protobufjs/fetch@1.1.1':
-    resolution: {integrity: sha512-GpptLrs57adMSuHi3VNj0mAF8dwh36LMaYF6XyJ6JMWlVsc+t42tm1HSEDmOs3A8fC9yyeisgLhsTVQokOZ0zw==}
-
-  '@protobufjs/float@1.0.2':
-    resolution: {integrity: sha512-Ddb+kVXlXst9d+R9PfTIxh1EdNkgoRe5tOX6t01f1lYWOvJnSPDBlG241QLzcyPdoNTsblLUdujGSE4RzrTZGQ==}
-
-  '@protobufjs/path@1.1.2':
-    resolution: {integrity: sha512-6JOcJ5Tm08dOHAbdR3GrvP+yUUfkjG5ePsHYczMFLq3ZmMkAD98cDgcT2iA1lJ9NVwFd4tH/iSSoe44YWkltEA==}
-
-  '@protobufjs/pool@1.1.0':
-    resolution: {integrity: sha512-0kELaGSIDBKvcgS4zkjz1PeddatrjYcmMWOlAuAPwAeccUrPHdUqo/J6LiymHHEiJT5NrF1UVwxY14f+fy4WQw==}
-
-  '@protobufjs/utf8@1.1.2':
-    resolution: {integrity: sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug==}
 
   '@quansync/fs@1.1.0':
     resolution: {integrity: sha512-qAPG/t3HqML1TlN7sY/pTbEjzFVAKsMjNNMGheyDosro+kT4iw2KCUoHcVdmliwWjorm4elZbgNQyU2eD97eDg==}
@@ -5875,9 +5776,6 @@ packages:
   lodash-es@4.18.1:
     resolution: {integrity: sha512-J8xewKD/Gk22OZbhpOVSwcs60zhd95ESDwezOFuA3/099925PdHJ7OFHNTGtajL3AlZkykD32HykiMo+BIBI8A==}
 
-  lodash.camelcase@4.3.0:
-    resolution: {integrity: sha512-TwuEnCnxbc3rAvhf/LbG7tJUDzhqXyFnv3dtzLOPgCG/hODL7WFnsbwktkD7yUV0RrreP/l1PALq/YSg6VvjlA==}
-
   lodash.escaperegexp@4.1.2:
     resolution: {integrity: sha512-TM9YBvyC84ZxE3rgfefxUWiQKLilstD6k7PTGt6wfbtXF8ixIJLOL3VYyV/z+ZiPLsVxAsKAFVwWlWeb2Y8Yyw==}
 
@@ -5890,9 +5788,6 @@ packages:
 
   lodash@4.18.1:
     resolution: {integrity: sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q==}
-
-  long@5.3.2:
-    resolution: {integrity: sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA==}
 
   longest-streak@3.1.0:
     resolution: {integrity: sha512-9Ri+o0JYgehTaVBBDoMqIl8GXtbWg711O3srftcHhZ0dqnETqLaoIK0x17fUw9rFSlK/0NlsKe0Ahhyl5pXE2g==}
@@ -6857,10 +6752,6 @@ packages:
   proto-list@1.2.4:
     resolution: {integrity: sha512-vtK/94akxsTMhe0/cbfpR+syPuszcuwhqVjJq26CuNDgFGj682oRBXOP5MJpv2r7JtE8MsiepGIqvvOTBwn2vA==}
 
-  protobufjs@7.6.6:
-    resolution: {integrity: sha512-dYDWdjSl5RNb7SgPxGQcRU+GtvP7s2fpkrY0r432PcOIaZ0/rBcxEZnQN67iJhFuQiVw754JDoPruPCNdGsbjg==}
-    engines: {node: '>=12.0.0'}
-
   proxy-addr@2.0.8:
     resolution: {integrity: sha512-5nnx0yGyVUcY6t9RnWcARWtwT9F1D8O9rt08htPvnd49W1IgZtmLkhu9WfMzQj1cFxjHIO6connUNVW5k7AVyQ==}
     engines: {node: '>= 0.10'}
@@ -7433,9 +7324,6 @@ packages:
   statuses@2.0.2:
     resolution: {integrity: sha512-DvEy55V3DB7uknRo+4iOGT5fP1slR8wQohVdknigZPMpMstaKJQWhwiYBACJE3Ul2pTnATihhBYnRhZQHGBiRw==}
     engines: {node: '>= 0.8'}
-
-  std-env@4.2.0:
-    resolution: {integrity: sha512-oCUKSupKTHX53EyjDtuZQ64pjLJ6yYCtpmEw0goYxtjG9KpbRe8KAsl2tBUGU9DyMcJ0RwJ8GqJAFzMXcXW1Rw==}
 
   std-env@4.3.0:
     resolution: {integrity: sha512-OtU/EgQ1kIm5KwqQpBC6ZEMXrZRui11w8zgfTWp8cdO9B8OaPsbA8bTHO2P+HNo1VlUTGMVBwPhydu6poeXiag==}
@@ -8438,48 +8326,6 @@ snapshots:
     optionalDependencies:
       zod: 4.6.5
 
-  '@auv-js/api-client@0.0.33': {}
-
-  '@auv-js/cli-darwin-arm64@0.0.33':
-    optional: true
-
-  '@auv-js/cli-darwin-x64@0.0.33':
-    optional: true
-
-  '@auv-js/cli-linux-arm64-gnu@0.0.33':
-    optional: true
-
-  '@auv-js/cli-linux-x64-gnu@0.0.33':
-    optional: true
-
-  '@auv-js/cli-win32-arm64-msvc@0.0.33':
-    optional: true
-
-  '@auv-js/cli-win32-x64-msvc@0.0.33':
-    optional: true
-
-  '@auv-js/cli@0.0.33':
-    dependencies:
-      std-env: 4.2.0
-    optionalDependencies:
-      '@auv-js/cli-darwin-arm64': 0.0.33
-      '@auv-js/cli-darwin-x64': 0.0.33
-      '@auv-js/cli-linux-arm64-gnu': 0.0.33
-      '@auv-js/cli-linux-x64-gnu': 0.0.33
-      '@auv-js/cli-win32-arm64-msvc': 0.0.33
-      '@auv-js/cli-win32-x64-msvc': 0.0.33
-
-  '@auv-js/sdk@0.0.33':
-    dependencies:
-      '@auv-js/api-client': 0.0.33
-      '@bufbuild/protobuf': 2.13.0
-      '@grpc/grpc-js': 1.14.4
-      '@moeru/std': 0.1.0-beta.20
-      date-fns: 4.4.0
-      es-toolkit: 1.52.0
-      std-env: 4.2.0
-      tinyexec: 1.3.1
-
   '@babel/code-frame@7.29.7':
     dependencies:
       '@babel/helper-validator-identifier': 7.29.7
@@ -8649,8 +8495,6 @@ snapshots:
       '@types/react': 19.3.0
 
   '@borewit/text-codec@0.2.2': {}
-
-  '@bufbuild/protobuf@2.13.0': {}
 
   '@cacheable/memory@2.2.0':
     dependencies:
@@ -9298,18 +9142,6 @@ snapshots:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
 
-  '@grpc/grpc-js@1.14.4':
-    dependencies:
-      '@grpc/proto-loader': 0.8.1
-      '@js-sdsl/ordered-map': 4.4.2
-
-  '@grpc/proto-loader@0.8.1':
-    dependencies:
-      lodash.camelcase: 4.3.0
-      long: 5.3.2
-      protobufjs: 7.6.6
-      yargs: 17.7.3
-
   '@hono/node-server@2.1.3(hono@4.13.12)':
     dependencies:
       hono: 4.13.12
@@ -9365,8 +9197,6 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
-
-  '@js-sdsl/ordered-map@4.4.2': {}
 
   '@keyv/bigmap@1.3.1(keyv@5.6.0)':
     dependencies:
@@ -9680,8 +9510,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@moeru/std@0.1.0-beta.20': {}
-
   '@napi-rs/canvas-android-arm64@0.1.100':
     optional: true
 
@@ -9922,26 +9750,6 @@ snapshots:
   '@primer/octicons@19.38.0':
     dependencies:
       object-assign: 4.1.1
-
-  '@protobufjs/aspromise@1.1.2': {}
-
-  '@protobufjs/base64@1.1.2': {}
-
-  '@protobufjs/codegen@2.0.5': {}
-
-  '@protobufjs/eventemitter@1.1.1': {}
-
-  '@protobufjs/fetch@1.1.1':
-    dependencies:
-      '@protobufjs/aspromise': 1.1.2
-
-  '@protobufjs/float@1.0.2': {}
-
-  '@protobufjs/path@1.1.2': {}
-
-  '@protobufjs/pool@1.1.0': {}
-
-  '@protobufjs/utf8@1.1.2': {}
 
   '@quansync/fs@1.1.0':
     dependencies:
@@ -11585,7 +11393,8 @@ snapshots:
 
   data-uri-to-buffer@4.0.1: {}
 
-  date-fns@4.4.0: {}
+  date-fns@4.4.0:
+    optional: true
 
   dayjs@1.11.23: {}
 
@@ -13340,8 +13149,6 @@ snapshots:
 
   lodash-es@4.18.1: {}
 
-  lodash.camelcase@4.3.0: {}
-
   lodash.escaperegexp@4.1.2: {}
 
   lodash.isequal@4.5.0: {}
@@ -13349,8 +13156,6 @@ snapshots:
   lodash.truncate@4.4.2: {}
 
   lodash@4.18.1: {}
-
-  long@5.3.2: {}
 
   longest-streak@3.1.0: {}
 
@@ -14531,20 +14336,6 @@ snapshots:
 
   proto-list@1.2.4: {}
 
-  protobufjs@7.6.6:
-    dependencies:
-      '@protobufjs/aspromise': 1.1.2
-      '@protobufjs/base64': 1.1.2
-      '@protobufjs/codegen': 2.0.5
-      '@protobufjs/eventemitter': 1.1.1
-      '@protobufjs/fetch': 1.1.1
-      '@protobufjs/float': 1.0.2
-      '@protobufjs/path': 1.1.2
-      '@protobufjs/pool': 1.1.0
-      '@protobufjs/utf8': 1.1.2
-      '@types/node': 24.19.1
-      long: 5.3.2
-
   proxy-addr@2.0.8:
     dependencies:
       forwarded: 0.2.0
@@ -15285,8 +15076,6 @@ snapshots:
   stat-mode@1.0.0: {}
 
   statuses@2.0.2: {}
-
-  std-env@4.2.0: {}
 
   std-env@4.3.0: {}
 

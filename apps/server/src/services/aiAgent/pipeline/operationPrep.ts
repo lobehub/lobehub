@@ -471,9 +471,7 @@ export const prepareOperation = async (
   ): Promise<Record<string, string>> => {
     if (!deviceId) return {};
     try {
-      // Tool discovery already asked this device for the same answer earlier
-      // in the send window, so the run's fact reader serves it from there
-      // (it also owns the personal / workspace scoping of the lookup).
+      // The run's fact reader owns the personal / workspace scoping of this lookup.
       const systemInfo = await ctx.runFacts.deviceSystemInfo(deviceId, activeDeviceScope);
       if (!systemInfo) return {};
       const device = onlineDevices.find((d) => d.deviceId === deviceId);

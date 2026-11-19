@@ -1,9 +1,6 @@
-import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { type TFunction } from 'i18next';
 import { describe, expect, it, vi } from 'vitest';
 
-import enUS from '../../../../../../locales/en-US/setting.json';
-import zhCN from '../../../../../../locales/zh-CN/setting.json';
 import { getLocalizedBuiltinSkillDetail, getNoPermissionsTitle } from './localization';
 
 const createTranslator = (translations: Record<string, string> = {}) =>
@@ -13,26 +10,6 @@ const createTranslator = (translations: Record<string, string> = {}) =>
   ) as unknown as TFunction<'setting'>;
 
 describe('SkillDetail localization helpers', () => {
-  it.each([
-    [enUS, 'Computer Use'],
-    [zhCN, '使用电脑'],
-  ] as const)(
-    'localizes the Computer Use skill from shipped translations',
-    (translations, title) => {
-      const result = getLocalizedBuiltinSkillDetail(
-        {
-          description: AuvManifest.meta.description ?? '',
-          identifier: AuvManifest.identifier,
-          name: AuvManifest.meta.title,
-          source: 'builtin',
-        },
-        AuvManifest.identifier,
-        createTranslator(translations),
-      );
-      expect(result.title).toBe(title);
-    },
-  );
-
   it('localizes builtin skill title and description', () => {
     const t = createTranslator({
       'tools.builtins.lobe-agent-browser.description': '浏览器自动化命令行工具',

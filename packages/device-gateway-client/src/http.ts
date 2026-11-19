@@ -447,8 +447,8 @@ export class GatewayHttpClient {
   }
 
   /**
-   * `options.clientKinds` asks for the info of a connection of those clients —
-   * e.g. the desktop app's `supportedTools` when `lh connect` is up as well.
+   * `options.clientKinds` selects the clients that can answer, such as the
+   * desktop app when `lh connect` is also running.
    */
   async getDeviceSystemInfo(
     userId: string,

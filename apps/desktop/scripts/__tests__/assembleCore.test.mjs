@@ -34,7 +34,7 @@ const setup = async () => {
   await write('desktop/dist/renderer/assets/app.js');
   await write('desktop/resources/tray.png');
   await write('desktop/resources/sounds/ping.mp3');
-  await write('desktop/resources/bin/auv');
+  await write('desktop/resources/bin/helper');
   await write('desktop/resources/bin/lobe-cli.js');
   await write('desktop/resources/dmg.png');
   await write('desktop/resources/cli-package.json');

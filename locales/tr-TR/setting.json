@@ -1865,8 +1865,6 @@
   "tools.builtins.lobe-cloud-sandbox.description": "Kod çalıştırın, komutlar yürütün ve dosyaları güvenli bir bulut ortamında yönetin",
   "tools.builtins.lobe-cloud-sandbox.readme": "Python, JavaScript ve TypeScript kodlarını izole bir bulut ortamında çalıştırın. Kabuk komutları çalıştırın, dosyaları yönetin, regex ile içerik arayın ve sonuçları güvenli bir şekilde dışa aktarın.",
   "tools.builtins.lobe-cloud-sandbox.title": "Bulut Sandbox",
-  "tools.builtins.lobe-computer-use.description": "Masaüstü uygulamalarını kullan, kontrollerle etkileşim kur ve ekran görüntüsü al.",
-  "tools.builtins.lobe-computer-use.title": "Bilgisayar Kullanımı",
   "tools.builtins.lobe-creds.description": "Kimlik doğrulama, ortam değişkeni ekleme ve API doğrulaması için kullanıcı kimlik bilgilerini yönetin — üçüncü taraf entegrasyonları için API anahtarları, OAuth belirteçleri ve gizli bilgileri işleyin.",
   "tools.builtins.lobe-creds.title": "Kimlik Bilgileri",
   "tools.builtins.lobe-dashboard.description": "Korumalı betiklerden canlı izleme widget'ları oluşturun, bunları gerçek verilerle önizleyin ve panolara yerleştirin",

@@ -1865,8 +1865,6 @@
   "tools.builtins.lobe-cloud-sandbox.description": "Thực thi mã Python, JavaScript và TypeScript trong môi trường đám mây cách ly. Chạy lệnh shell, quản lý tệp, tìm kiếm nội dung bằng regex và xuất kết quả một cách an toàn.",
   "tools.builtins.lobe-cloud-sandbox.readme": "Thực thi mã Python, JavaScript và TypeScript trong môi trường đám mây cách ly. Chạy lệnh shell, quản lý tệp, tìm kiếm nội dung bằng regex và xuất kết quả một cách an toàn.",
   "tools.builtins.lobe-cloud-sandbox.title": "Hộp cát đám mây",
-  "tools.builtins.lobe-computer-use.description": "Sử dụng các ứng dụng trên máy tính để bàn, tương tác với các điều khiển và chụp màn hình.",
-  "tools.builtins.lobe-computer-use.title": "Sử Dụng Máy Tính",
   "tools.builtins.lobe-creds.description": "Quản lý thông tin xác thực của người dùng để xác thực, chèn biến môi trường và xác minh API — xử lý khóa API, token OAuth và bí mật cho các tích hợp bên thứ ba.",
   "tools.builtins.lobe-creds.title": "Thông Tin Xác Thực",
   "tools.builtins.lobe-dashboard.description": "Tạo các widget giám sát trực tiếp từ các script được cách ly, xem trước chúng với dữ liệu thực và đặt chúng trên bảng điều khiển",
