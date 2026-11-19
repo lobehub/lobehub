@@ -1287,6 +1287,7 @@ export default {
   'notification.item.topic_comment_mentioned': 'Mentioned in a comment',
   'notification.item.video_generation_completed': 'Video generation completed',
   'notification.item.workspace_credit_balance_low': 'Workspace balance running low',
+  'notification.item.workspace_member_budget_exceeded': 'Member budget used up',
   'notification.item.workspace_member_invited': 'Workspace invitation',
   'notification.item.workspace_member_joined': 'New member joined',
   'notification.item.workspace_member_removed': 'Removed from workspace',
@@ -2042,6 +2043,7 @@ export default {
   'skillStore.button': 'Skill Store',
   'skillStore.empty': 'Browse the Skill Store. Install one to get started, add more later.',
   'skillStore.emptySearch': 'No matching Skills',
+  'skillStore.marketEmpty': 'No skills are available in the store yet.',
   'skillStore.networkError': 'Network error, please try again',
   'skillStore.rateLimited': 'Too many requests just now. Please wait a moment and try again.',
   'skillStore.search': 'Search skills by name or keyword, press Enter to search…',
@@ -2071,6 +2073,7 @@ When I am ___, I need ___
   'skillStore.wantMore.feedback.title':
     '[Skill Request] Summarize the skill you need in one sentence',
   'skillStore.wantMore.reachedEnd': "You've reached the end. Can't find what you need?",
+  'skillView.browseStoreDesc': 'Find and install skills for your agents',
   'skillView.connectors': 'Connectors',
   'skillView.connectorsDesc':
     'Connect the apps and tools your agents can use. Open one to see its account and tools.',

@@ -130,7 +130,7 @@ interface ProjectDirectoryStore extends ProjectDirectoryStoreState {
   /** Fetch orchestration only; read the rows with `useDirectoryTopics`. */
   useFetchDirectoryTopics: (id?: string) => ProjectListSyncResult;
   /** Fetch orchestration only; read the rows with `useProjectEnvironments`. */
-  useFetchEnvironments: (projectId?: string) => ProjectListSyncResult;
+  useFetchEnvironments: (projectId?: string, enabled?: boolean) => ProjectListSyncResult;
   /** Fetch orchestration only; read the rows with `useEnvironmentTopics`. */
   useFetchEnvironmentTopics: (directoryIds: string[]) => ProjectListSyncResult;
   /** Fetch orchestration only; read the rows with `useProjectTopics`. */
@@ -338,9 +338,9 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
       const hasData = useProjectDirectoryStore((state) => state.directoriesMap[key] !== undefined);
       return { ...sync, hasData };
     },
-    useFetchEnvironments: (projectId) => {
+    useFetchEnvironments: (projectId, enabled = true) => {
       const key = projectId ?? ALL_PROJECTS_KEY;
-      const sync = environments.useSync(key);
+      const sync = environments.useSync(key, { enabled });
       const hasData = useProjectDirectoryStore((state) => state.environmentsMap[key] !== undefined);
       return { ...sync, hasData };
     },

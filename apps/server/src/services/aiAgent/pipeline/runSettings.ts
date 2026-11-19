@@ -3,6 +3,7 @@ import {
   resolveUninstalledBuiltinTools,
   type UninstalledBuiltinToolsScope,
 } from '@lobechat/builtin-tools';
+import { legacyBuiltinSkillIds } from '@lobechat/mecha/builtinSkillGate';
 import debug from 'debug';
 
 import type { AgentConfigWithId } from '@/server/services/agent';
@@ -38,7 +39,7 @@ export const resolveRunSettings = async ({
   let globalMemoryEnabled = agentMemoryEnabled ?? false;
   let enableExpertise = false;
   // A failed settings read cannot confirm any optional builtin is installed.
-  let uninstalledBuiltinIds = onDemandBuiltinToolIds;
+  let uninstalledBuiltinIds = [...onDemandBuiltinToolIds, ...legacyBuiltinSkillIds];
   let userTimezone: string | undefined;
   try {
     const settings = await runFacts.userSettings();

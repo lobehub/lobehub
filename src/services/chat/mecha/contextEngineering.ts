@@ -36,6 +36,8 @@ import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { getChatStoreState } from '@/store/chat';
 import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
+import { getToolStoreState } from '@/store/tool';
+import { installedImplicitBuiltinSkillIds } from '@/store/tool/slices/builtin/projection';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
@@ -316,11 +318,18 @@ export const contextEngineering = async ({
       await resolveClientSkills(
         plugins,
         disabledPluginIds,
-        agentChatConfigSelectors.skillActivateMode(agentStoreState),
+        respondingChatConfig.skillActivateMode,
         // Reading another topic (`<refer_topic>` or a raw `tpc_` id) goes through `lh topic view`,
         // which the lobehub skill teaches.
         mentionsTopic(messages) ? [LobeHubIdentifier] : undefined,
         autoSkillIds,
+        !shareVisitor && enableAgentMode !== false
+          ? installedImplicitBuiltinSkillIds(
+              getToolStoreState(),
+              agentItem?.createdAt,
+              respondingChatConfig,
+            )
+          : [],
       )
     ).skills;
   }

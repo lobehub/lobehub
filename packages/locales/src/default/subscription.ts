@@ -462,6 +462,18 @@ export default {
   'limitation.workspace.insufficientBudget.upgradeToPro': 'Upgrade to Pro',
   'limitation.workspace.memberBudget.desc':
     'You have reached the personal budget set by this workspace. Contact a workspace admin to adjust your quota — top-up and plan upgrades do not change member limits.',
+  'limitation.workspace.memberBudget.adminDesc':
+    'You have reached your member budget in this workspace. As an admin, you can raise it in budget settings — top-ups and plan upgrades do not change member limits.',
+  'limitation.workspace.memberBudget.notify.action': 'Notify admins',
+  'limitation.workspace.memberBudget.notify.error': "Couldn't notify admins. Please try again.",
+  'limitation.workspace.memberBudget.notify.manage': 'Adjust in budget settings',
+  'limitation.workspace.memberBudget.notify.noAdmin':
+    'This workspace has no other admin to notify.',
+  'limitation.workspace.memberBudget.notify.sent': 'Admins notified',
+  'limitation.workspace.memberBudget.notify.sentHint':
+    'Retry once an admin has raised your budget.',
+  'limitation.workspace.memberBudget.notifyDesc':
+    'You have reached the member budget this workspace set for you. Let the workspace admins know so they can raise it — top-ups and plan upgrades do not change member limits.',
   'limitation.workspace.memberBudget.retry': 'Retry',
   'limitation.workspace.memberBudget.title': 'Member budget reached',
   'limitation.hobby.action': 'Configured, continue chatting',

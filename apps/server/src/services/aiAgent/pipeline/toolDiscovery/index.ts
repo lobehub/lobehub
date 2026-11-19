@@ -21,6 +21,7 @@ import type {
 import {
   applyConnectorActivation,
   dropInvalidManifests,
+  getImplicitBuiltinSkillIds,
   hasConnectorActivator,
   initialToolSelection,
   resolveClientExecutors,
@@ -856,6 +857,10 @@ export const discoverTools = async (
     executionPlan,
     hasAgentDocuments,
     credentialFactsPromise,
+    implicitBuiltinSkillIds:
+      !disableTools && !exclusivePluginIds && !isGoalTurn && !evalConnectorSnapshots && !shareGate
+        ? getImplicitBuiltinSkillIds(agentConfig.createdAt, agentConfig.chatConfig)
+        : [],
     hasEnabledKnowledgeBases,
     lobehubSkillManifests,
     modelFacts,

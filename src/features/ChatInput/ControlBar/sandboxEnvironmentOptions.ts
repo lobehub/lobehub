@@ -1,5 +1,7 @@
 import type { EnvironmentConfiguration } from '@lobechat/types';
 
+import { getProjectSettingsPath } from '@/features/Projects/Layout/navigation';
+
 import type { SandboxSelection } from './useSandboxPlacement';
 
 /**
@@ -75,6 +77,28 @@ export const environmentChipState = ({
 
   return failed ? { kind: 'loadFailed' } : { kind: 'loading' };
 };
+
+/**
+ * The environment the server applies to a project conversation nobody placed:
+ * the project's, when it checks out a repository (see
+ * `resolveProjectTopicSandbox`). Undefined while it loads, or when there is none.
+ */
+export const projectStartEnvironmentId = (
+  environments: readonly {
+    configuration?: Pick<EnvironmentConfiguration, 'sources'> | null;
+    id: string;
+  }[],
+) =>
+  environments.find((environment) =>
+    (environment.configuration?.sources ?? []).some((source) => source.kind === 'git'),
+  )?.id;
+
+/**
+ * Where a conversation's environments are managed: a project's one on the
+ * project's settings, anything else in the workspace's list.
+ */
+export const environmentSettingsPath = (projectId?: string) =>
+  projectId ? getProjectSettingsPath(projectId, 'environments') : '/settings/environments';
 
 /**
  * Where a conversation works once a repository is picked: a fresh temporary
