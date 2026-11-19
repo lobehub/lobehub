@@ -39,6 +39,24 @@ describe('OIDC default clients', () => {
     expect(names['lobehub-mobile']).toBe('Acme Mobile');
   });
 
+  it('give Lobot its own desktop client that signs in through the desktop handoff', async () => {
+    vi.resetModules();
+    const { defaultClients } = await import('./config');
+    const desktop = defaultClients.find((c) => c.client_id === 'lobehub-desktop');
+    const lobot = defaultClients.find((c) => c.client_id === 'lobot-desktop');
+
+    expect(lobot).toMatchObject({
+      client_name: 'Lobot',
+      logo_uri: 'https://hub-apac-1.lobeobjects.space/lobot-desktop-icon.png',
+      grant_types: ['authorization_code', 'refresh_token'],
+      response_types: ['code'],
+      token_endpoint_auth_method: 'none',
+    });
+    expect(lobot?.redirect_uris).toEqual(desktop?.redirect_uris);
+    expect(lobot?.redirect_uris?.every((uri) => uri.endsWith('/oidc/callback/desktop'))).toBe(true);
+    expect(lobot?.post_logout_redirect_uris).toEqual(desktop?.post_logout_redirect_uris);
+  });
+
   it('register the browser extension as a public PKCE client that can stay signed in', async () => {
     vi.resetModules();
     const { defaultClients } = await import('./config');
