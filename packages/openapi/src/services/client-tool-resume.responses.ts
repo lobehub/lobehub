@@ -7,6 +7,7 @@ import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { agentOperations } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import type { AgentRuntimeService } from '@/server/services/agentRuntime';
 
 import type { FunctionCallOutputItem, OutputItem } from '../types/responses.type';
@@ -112,6 +113,18 @@ export const resumeParkedClientTools = async ({
   const pending = (state.pendingToolsCalling ?? []) as ChatToolPayload[];
   const callerCalls = pending.filter(isCallerTool);
   if (callerCalls.length === 0) return;
+
+  // The run that resumes is the parked operation's, whose agent can differ
+  // from the request's `model` — authorize that agent (and its parent groups)
+  // before the claim below hands the caller its results slot, or a revoked
+  // `use` grant would still let tool outputs drive another agent's run.
+  await assertCanUseWorkspaceAgent({
+    agentId: state.origin?.agentId ?? operation.agentId ?? undefined,
+    db,
+    groupId: state.origin?.groupId ?? undefined,
+    userId,
+    workspaceId,
+  });
 
   const outputByCallId = new Map(outputs.map((item) => [item.call_id, item.output]));
   for (const item of outputs) {
