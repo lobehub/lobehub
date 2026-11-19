@@ -2802,9 +2802,6 @@ export type Device = {
      */
     friendlyName: string | null;
     hostname: string | null;
-    /**
-     * Device id.
-     */
     id: string;
     /**
      * Last time the device was connected (ISO 8601).
@@ -2868,9 +2865,6 @@ export type DeviceDetail = {
      */
     friendlyName: string | null;
     hostname: string | null;
-    /**
-     * Device id.
-     */
     id: string;
     /**
      * Last time the device was connected (ISO 8601).
