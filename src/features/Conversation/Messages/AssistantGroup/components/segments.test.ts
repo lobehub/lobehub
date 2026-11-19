@@ -5,7 +5,7 @@ import { LOADING_FLAT } from '@/const/message';
 import {
   countAssistantLlmCalls,
   hasRenderableFinalAnswer,
-  liftMcpAppSegments,
+  liftInteractiveToolSegments,
   resolveWorkflowExpandLevel,
   shouldFoldProcess,
 } from './segments';
@@ -247,7 +247,7 @@ describe('resolveWorkflowExpandLevel', () => {
   });
 });
 
-describe('liftMcpAppSegments', () => {
+describe('liftInteractiveToolSegments', () => {
   const mcpView = (id: string) => ({
     apiName: 'get_weather',
     id,
@@ -280,7 +280,7 @@ describe('liftMcpAppSegments', () => {
       kind: 'answer' as const,
     };
 
-    const { folded, lifted } = liftMcpAppSegments([steps, prose, view]);
+    const { folded, lifted } = liftInteractiveToolSegments([steps, prose, view], true);
 
     expect(folded).toEqual([steps, prose]);
     expect(lifted).toEqual([view]);
@@ -291,7 +291,7 @@ describe('liftMcpAppSegments', () => {
     const reasoning = { content: '', id: 's2', reasoning: { content: 'Thinking.' } } as any;
     const shared = { blocks: [view, reasoning], kind: 'workflow' as const };
 
-    expect(liftMcpAppSegments([shared])).toEqual({
+    expect(liftInteractiveToolSegments([shared], true)).toEqual({
       folded: [{ blocks: [reasoning], kind: 'workflow' }],
       lifted: [{ blocks: [view], kind: 'workflow' }],
     });
@@ -303,7 +303,7 @@ describe('liftMcpAppSegments', () => {
       kind: 'workflow' as const,
     };
 
-    expect(liftMcpAppSegments([mixed])).toEqual({ folded: [mixed], lifted: [] });
+    expect(liftInteractiveToolSegments([mixed], true)).toEqual({ folded: [mixed], lifted: [] });
   });
 
   it('does not lift a tool from an MCP server without a view', () => {
@@ -312,6 +312,24 @@ describe('liftMcpAppSegments', () => {
       kind: 'workflow' as const,
     };
 
-    expect(liftMcpAppSegments([noView])).toEqual({ folded: [noView], lifted: [] });
+    expect(liftInteractiveToolSegments([noView], true)).toEqual({ folded: [noView], lifted: [] });
+  });
+
+  it('keeps an async Codex question visible even with the MCP Apps flag disabled', () => {
+    const view = {
+      blocks: [{ id: 's1', tools: [mcpView('a')] } as any],
+      kind: 'workflow' as const,
+    };
+    const question = {
+      blocks: [
+        { id: 's2', tools: [{ apiName: 'askUserQuestionAsync', identifier: 'codex' }] } as any,
+      ],
+      kind: 'workflow' as const,
+    };
+
+    expect(liftInteractiveToolSegments([view, question], false)).toEqual({
+      folded: [view],
+      lifted: [question],
+    });
   });
 });

@@ -29,6 +29,47 @@ const loadParityFixture = async () => {
 };
 
 describe('CodexAppServerAdapter', () => {
+  it('streams a completed async question as a tool while Codex continues the turn', () => {
+    const adapter = new CodexAppServerAdapter({});
+    const thread = { threadId: 'thread-1', turnId: 'turn-1' };
+    adapter.adapt('turn/started', { ...thread, turn: { id: 'turn-1' } });
+
+    const questions = [{ options: ['Staging', 'Production'], title: 'Which environment?' }];
+    const item = {
+      delivery: 'async',
+      id: 'question-1',
+      questions,
+      text: 'Which environment?\n- Staging\n- Production',
+      type: 'agentMessage',
+    };
+    expect(adapter.adapt('item/started', { ...thread, item })).toEqual([]);
+
+    const events = adapter.adapt('item/completed', { ...thread, item });
+    expect(events.map(({ type }) => type)).toEqual([
+      'stream_chunk',
+      'tool_start',
+      'tool_result',
+      'tool_end',
+    ]);
+    expect(events[0].data).toMatchObject({
+      toolsCalling: [
+        {
+          apiName: 'askUserQuestionAsync',
+          arguments: JSON.stringify({ questions }),
+          id: 'question-1',
+          identifier: 'codex',
+        },
+      ],
+    });
+    expect(events[2].data).toMatchObject({ isError: false, toolCallId: 'question-1' });
+
+    const followUp = adapter.adapt('item/completed', {
+      ...thread,
+      item: { delivery: 'async', id: 'progress-1', text: 'Work continues.', type: 'agentMessage' },
+    });
+    expect(followUp.at(-1)?.data).toMatchObject({ chunkType: 'text', content: 'Work continues.' });
+  });
+
   it('reports a steered user message and answers it in a step of its own', () => {
     const adapter = new CodexAppServerAdapter({ sessionId: 'thread-1' });
     const item = (type: string, extra: Record<string, unknown>) => ({

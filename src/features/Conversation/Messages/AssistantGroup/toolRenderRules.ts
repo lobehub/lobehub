@@ -6,6 +6,7 @@ import {
   WebOnboardingApiName,
   WebOnboardingIdentifier,
 } from '@lobechat/builtin-tool-web-onboarding';
+import { isCodexAsyncQuestion } from '@lobechat/heterogeneous-agents/client';
 import type { ChatToolPayloadWithResult } from '@lobechat/types';
 
 import { getMcpAppFromState } from '@/libs/mcp/mcpApp';
@@ -73,7 +74,7 @@ export const isMcpAppTool = (tool: ChatToolPayloadWithResult): boolean =>
 
 /** Tools that surface on their own between collapsed workflow runs. */
 export const isBreakoutTool = (tool: ChatToolPayloadWithResult): boolean =>
-  isImageBearingTool(tool) || isMcpAppTool(tool);
+  isCodexAsyncQuestion(tool) || isImageBearingTool(tool) || isMcpAppTool(tool);
 
 /**
  * A tool that only READ an image (Claude Code `Read`, `readFile`, a browser
@@ -102,5 +103,6 @@ export const getBreakoutPredicate = ({
 }: BreakoutToolOptions): ((tool: ChatToolPayloadWithResult) => boolean) => {
   const isImageBreakout = showImageReads ? isImageBearingTool : isImageOutputTool;
 
-  return enableMcpApps ? (tool) => isImageBreakout(tool) || isMcpAppTool(tool) : isImageBreakout;
+  return (tool) =>
+    isCodexAsyncQuestion(tool) || isImageBreakout(tool) || (!!enableMcpApps && isMcpAppTool(tool));
 };

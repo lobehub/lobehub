@@ -28,6 +28,14 @@ import {
 import { DROID_AVATAR_URL, DroidIcon } from './DroidIcon';
 
 export { DROID_AVATAR_URL, DroidIcon, isLocalRuntimeHeterogeneousType, isRemoteHeterogeneousType };
+export {
+  codexAsyncQuestionId,
+  codexAsyncQuestionsSchema,
+  displayCodexAsyncReplies,
+  formatCodexAsyncReplies,
+  isCodexAsyncQuestion,
+  parseCodexAsyncReplies,
+} from '../codex/asyncUserInput';
 
 export type HeterogeneousAgentClientConfig = (typeof HETEROGENEOUS_AGENT_CONFIGS)[number] & {
   avatar: string;

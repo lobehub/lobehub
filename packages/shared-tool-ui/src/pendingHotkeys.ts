@@ -11,7 +11,7 @@
  * Instead the arbiter owns the ONE window listener and dispatches each
  * keypress to exactly one card:
  *   1. the card containing the event target (focus/containment wins), else
- *   2. the most recently registered card.
+ *   2. the most recently registered card accepting page-level shortcuts.
  *
  * Registration order only matters as the fallback, and is stable as long as
  * cards register once per mount.
@@ -19,6 +19,8 @@
 export interface PendingHotkeyCard {
   /** Whether the node lives inside this card (root or portaled footer). */
   contains: (node: Node) => boolean;
+  /** Restrict shortcuts to focus within this card. */
+  focusOnly?: boolean;
   /** Handle a keypress this card owns; apply per-card guards inside. */
   onKeyDown: (event: KeyboardEvent) => void;
 }
@@ -27,7 +29,9 @@ const cards: PendingHotkeyCard[] = [];
 
 const dispatch = (event: KeyboardEvent) => {
   const target = event.target as Node | null;
-  const owner = (target && cards.find((card) => card.contains(target))) ?? cards.at(-1);
+  const owner =
+    (target && cards.find((card) => card.contains(target))) ??
+    cards.findLast((card) => !card.focusOnly);
   owner?.onKeyDown(event);
 };
 

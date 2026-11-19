@@ -1,6 +1,7 @@
 import { formatPatch, structuredPatch } from 'diff';
 
 import type { InterventionAnswer } from '../askUser';
+import { CODEX_ASYNC_QUESTION, codexAsyncQuestionsSchema } from '../codex/asyncUserInput';
 import type {
   AgentMessageDeltaNotification,
   CodexErrorInfo,
@@ -555,9 +556,34 @@ export class CodexAppServerAdapter {
 
   private handleItemCompleted({ item }: ItemCompletedNotification): HeterogeneousAgentEvent[] {
     if (item.type === 'agentMessage') {
-      const message = item as AgentMessageItem;
+      const message = item as AgentMessageItem & { delivery?: unknown; questions?: unknown };
       const streamed = this.streamedAgentText.get(message.id);
       this.streamedAgentText.delete(message.id);
+      // Unlike requestUserInput RPC, Codex's async question is a completed
+      // message item. Its answer is sent in a later user message.
+      if (message.delivery === 'async') {
+        const questions = codexAsyncQuestionsSchema.safeParse(message.questions);
+        if (questions.success) {
+          const opening = this.openStepAfterSteer();
+          this.hasToolActivity = true;
+          return [
+            ...opening,
+            ...this.startLateTool({
+              apiName: CODEX_ASYNC_QUESTION,
+              arguments: JSON.stringify({ questions: questions.data }),
+              id: message.id,
+              identifier: CODEX_IDENTIFIER,
+              type: 'default',
+            }),
+            this.makeEvent('tool_result', {
+              content: message.text,
+              isError: false,
+              toolCallId: message.id,
+            } satisfies ToolResultData),
+            this.makeEvent('tool_end', { isSuccess: true, toolCallId: message.id }),
+          ];
+        }
+      }
       if (streamed !== undefined) {
         const remainder = message.text.startsWith(streamed)
           ? message.text.slice(streamed.length)

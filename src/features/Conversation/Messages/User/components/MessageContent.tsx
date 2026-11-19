@@ -1,3 +1,4 @@
+import { displayCodexAsyncReplies } from '@lobechat/heterogeneous-agents/client';
 import { Flexbox } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
@@ -39,8 +40,9 @@ const UserMessageContent = memo<UIChatMessage>(
 
     // A Channel run's prompt shows as the request it answers, its context folded away.
     const channelPrompt = useMemo(() => parseChannelPrompt(content), [content]);
+    const text = useMemo(() => displayCodexAsyncReplies(displayContent), [displayContent]);
 
-    const hasEditorData = hasRenderableEditorData(editorData);
+    const hasEditorData = text === displayContent && hasRenderableEditorData(editorData);
 
     const textBody = channelPrompt ? (
       <ChannelPromptContent markdownProps={markdownProps} prompt={channelPrompt} />
@@ -51,7 +53,7 @@ const UserMessageContent = memo<UIChatMessage>(
         <RichTextMessage editorState={editorData} />
       </StartTopicConversationContext>
     ) : (
-      displayContent && <MarkdownMessage {...markdownProps}>{displayContent}</MarkdownMessage>
+      text && <MarkdownMessage {...markdownProps}>{text}</MarkdownMessage>
     );
 
     return (

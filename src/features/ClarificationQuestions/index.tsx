@@ -39,6 +39,8 @@ export interface ClarificationQuestionsProps {
    * page, reloading). Identify the round, so a new round starts blank.
    */
   draftKey?: string;
+  /** Inline questions can limit shortcuts to focus within their card. */
+  globalHotkeys?: boolean;
   /** Mirror the answers the draft would submit, for hosts that own the result. */
   onAnswersChange?: (answers: ClarificationAnswer[]) => void;
   /**
@@ -76,6 +78,7 @@ const ClarificationQuestions = memo<ClarificationQuestionsProps>(
   ({
     actionsPortalTarget,
     draftKey,
+    globalHotkeys,
     onAnswersChange,
     onSkip,
     onSubmit,
@@ -150,6 +153,7 @@ const ClarificationQuestions = memo<ClarificationQuestionsProps>(
         <AskUserQuestionView
           {...form}
           actionsPortalTarget={actionsPortalTarget}
+          globalHotkeys={globalHotkeys}
           labels={labels}
           showCountdown={false}
         />
