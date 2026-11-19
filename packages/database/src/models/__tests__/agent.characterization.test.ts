@@ -90,6 +90,7 @@ const PUBLIC_METHODS = [
   'queryAgents',
   'queryBoundToDevice',
   'rank',
+  'resetInboxAgent',
   'resolveIdBySlug',
   'restore',
   'setVisibility',

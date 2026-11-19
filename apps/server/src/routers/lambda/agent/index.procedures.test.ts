@@ -50,6 +50,7 @@ function expected(): Array<
     ['rankAgents', 'query', 12],
     ['releaseAgentLock', 'mutation', 13],
     ['removeAgent', 'mutation', 13],
+    ['resetInboxAgent', 'mutation', 13],
     ['resolveAgentIdBySlug', 'query', 12],
     ['resolveAgentRoute', 'query', 12],
     ['setAgentVisibility', 'mutation', 13],

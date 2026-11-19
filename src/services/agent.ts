@@ -294,6 +294,14 @@ class AgentService {
   };
 
   /**
+   * Restore the default assistant (inbox) to its provisioned name, avatar,
+   * prompt, model and chat settings. Returns the refreshed agent.
+   */
+  resetInboxAgent = async (agentId: string) => {
+    return lambdaClient.agent.resetInboxAgent.mutate({ agentId });
+  };
+
+  /**
    * Remove an agent and its associated session
    */
   removeAgent = async (agentId: string) => {

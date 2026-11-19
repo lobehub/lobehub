@@ -1508,6 +1508,12 @@ export default {
   'agent.publishToWorkspaceErrorFixedPrivateDevice':
     'Publish the fixed device to the workspace, or let members choose a device, before publishing this Agent.',
   'agent.publishToWorkspaceSuccess': 'Published to workspace',
+  'agent.restoreDefault': 'Restore defaults',
+  'agent.restoreDefault.confirm.content':
+    'The name, avatar, core instructions, model and skill settings return to their defaults. Conversations, files and knowledge bases are kept.',
+  'agent.restoreDefault.confirm.ok': 'Restore',
+  'agent.restoreDefault.confirm.title': 'Restore defaults?',
+  'agent.restoreDefault.success': 'Defaults restored',
   'resources.publishToWorkspace.menu': 'Publish to Workspace',
   'resources.publishToWorkspace.confirm':
     'Other workspace members will be able to see this file. You will not be able to make it private again.',

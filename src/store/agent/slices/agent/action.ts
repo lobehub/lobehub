@@ -1006,6 +1006,29 @@ export class AgentSliceActionImpl {
     }
   };
 
+  /**
+   * Restore the default assistant (inbox) to its provisioned state.
+   *
+   * The server response replaces the cached config instead of merging into it:
+   * a reset clears fields, and a merge would keep each cleared one alive
+   * locally until the next full fetch. Saves still in flight for this agent are
+   * aborted first, so an older edit cannot land on top of the reset. Throws on
+   * failure; the caller owns the feedback.
+   */
+  resetInboxAgent = async (id: string): Promise<void> => {
+    const scope = getCacheScope();
+    this.#updateAgentConfigControllers.get(id)?.abort(MESSAGE_CANCEL_FLAT);
+    this.#updateAgentMetaControllers.get(id)?.abort(MESSAGE_CANCEL_FLAT);
+
+    const result = await agentService.resetInboxAgent(id);
+    if (!result?.success || !result.agent || scope !== getCacheScope()) return;
+
+    this.#replaceConfirmedAgentConfig(id, scope, result.agent);
+    await this.#get().internal_refreshAgentConfig(id, result.agent, scope);
+    void revalidateReplica(agentListResource);
+    this.#get().invalidateAvailableAgents();
+  };
+
   internal_refreshAgentConfig = async (
     id: string,
     updatedAgent?: LobeAgentConfig,
