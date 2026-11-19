@@ -33,18 +33,9 @@ export const summarizeRounds = (open: ArtboardRoundView[]): RoundSummary => {
   };
 };
 
-const waitsOnOpenRound = (model: BoardModel, thread: ArtboardCommentThreadView) => {
-  const roundId = thread.boardId ? model.boardById[thread.boardId]?.roundId : undefined;
-  return !!roundId && model.openRounds.some((round) => round.id === roundId);
-};
-
-export const pendingThreads = (model: BoardModel, threads: ArtboardCommentThreadView[]) =>
-  threads.filter(
-    (thread) =>
-      thread.unread &&
-      (!thread.resolvedAt || isQuestion(thread)) &&
-      !waitsOnOpenRound(model, thread),
-  );
+// The submit bar submits every open round, so comments held on their options go out with it.
+export const pendingThreads = (threads: ArtboardCommentThreadView[]) =>
+  threads.filter((thread) => thread.unread && (!thread.resolvedAt || isQuestion(thread)));
 
 const placeTitle = (model: BoardModel, thread: ArtboardCommentThreadView) => {
   const board = thread.boardId ? model.boardById[thread.boardId] : undefined;

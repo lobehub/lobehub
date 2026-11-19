@@ -83,8 +83,7 @@ describe('summarizeRounds', () => {
 });
 
 describe('pendingThreads', () => {
-  it('counts unread threads except those waiting on an open round', () => {
-    const open = { ...model, openRounds: [{ id: 'r1' }] } as unknown as BoardModel;
+  it('counts every unread thread the next submit sends, including those on open-round options', () => {
     const threads = [
       thread('t1', comment('一')),
       thread('t2', comment('二'), [], { boardId: 'b2' }),
@@ -93,7 +92,7 @@ describe('pendingThreads', () => {
       thread('t5', comment('放哪？', true), [comment('标题旁')], { resolvedAt: new Date() }),
     ];
 
-    expect(pendingThreads(open, threads).map((item) => item.id)).toEqual(['t1', 't5']);
+    expect(pendingThreads(threads).map((item) => item.id)).toEqual(['t1', 't2', 't5']);
   });
 });
 

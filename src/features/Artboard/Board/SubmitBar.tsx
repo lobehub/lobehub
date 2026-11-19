@@ -82,7 +82,7 @@ const SubmitBar = ({ narrow }: { narrow: boolean }) => {
   const { data: threads } = useArtboardComments(board.artboard.id);
   const [submitting, setSubmitting] = useState(false);
   const summary = useMemo(() => summarizeRounds(board.openRounds), [board.openRounds]);
-  const comments = useMemo(() => pendingThreads(board, threads ?? []).length, [board, threads]);
+  const comments = useMemo(() => pendingThreads(threads ?? []).length, [threads]);
   if (!summary.total && !comments) return null;
 
   const submit = async () => {
