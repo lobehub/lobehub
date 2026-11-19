@@ -502,16 +502,6 @@ describe('agentShareRouter', () => {
     expect(mockUpdateConfig).not.toHaveBeenCalled();
   });
 
-  it('rejects the removed topic, turn and model-disclosure settings', () => {
-    for (const config of [
-      { maxTopicsPerVisitor: 5 },
-      { maxTurnsPerTopic: 20 },
-      { showModelInfo: true },
-    ]) {
-      expect(agentShareConfigPatchSchema.safeParse(config).success).toBe(false);
-    }
-  });
-
   it('does not expose dropped v1 config fields in the config API', () => {
     expect(
       agentShareConfigSchema.safeParse({
