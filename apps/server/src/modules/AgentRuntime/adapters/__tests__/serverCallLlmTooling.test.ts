@@ -31,7 +31,7 @@ const searchTool = {
 
 describe('resolveServerCallLlmTooling', () => {
   it.each([false, true])(
-    'limits active-device tools to the operation pool (allowed=%s)',
+    'limits tools after mid-run device selection to the operation pool (allowed=%s)',
     (allowed) => {
       const callerTool = {
         type: 'function' as const,
@@ -41,7 +41,9 @@ describe('resolveServerCallLlmTooling', () => {
         { operationId: 'op-1', stepIndex: 0 },
         buildState({
           binding: { device: { id: 'device-1' } },
-          plan: { execution: { deviceId: 'device-1', kind: 'device', target: 'device' } },
+          plan: {
+            execution: { kind: 'device-unrouted', reason: 'no-bound-device', target: 'device' },
+          },
           operationToolSet: {
             enabledToolIds: ['lobe-client-fn'],
             executorMap: {},
@@ -57,6 +59,26 @@ describe('resolveServerCallLlmTooling', () => {
       else expect(result.tools!.length).toBeGreaterThan(1);
     },
   );
+
+  it('defers the local system functions when a device is already routed at start', () => {
+    const result = resolveServerCallLlmTooling(
+      { operationId: 'op-1', stepIndex: 0 },
+      buildState({
+        binding: { device: { id: 'device-1' } },
+        plan: { execution: { deviceId: 'device-1', kind: 'device', target: 'local' } },
+        operationToolSet: {
+          enabledToolIds: ['lobe-activator'],
+          manifestMap: { 'lobe-local-system': LocalSystemManifest },
+          sourceMap: {},
+          tools: [],
+        },
+      }),
+    );
+    expect(result.resolved.enabledToolIds).not.toContain('lobe-local-system');
+    expect(result.toolDiscoveryConfig?.availableTools.map((t) => t.identifier)).toEqual([
+      'lobe-local-system',
+    ]);
+  });
 
   // Regression: `serverCallLlmContextBuilder` needs this to compute
   // `creds_sandbox_reachable` — `sandbox_enabled` alone (whether the
