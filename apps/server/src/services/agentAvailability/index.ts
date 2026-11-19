@@ -6,6 +6,7 @@ import pMap from 'p-map';
 
 import { agentDispatchPolicy } from '@/business/server/agentDispatchPolicy';
 import { managedDeviceProvider } from '@/business/server/managedDevice';
+import { AgentModel } from '@/database/models/agent';
 import {
   AgentAccountBindingModel,
   AgentDeviceAccountBindingModel,
@@ -70,7 +71,16 @@ export class AgentAvailabilityService {
     agentIds: string[],
     now: number = Date.now(),
   ): Promise<Record<string, AgentAvailability>> => {
-    const ids = [...new Set(agentIds)];
+    const requested = [...new Set(agentIds)];
+    if (requested.length === 0) return {};
+
+    // Only agents the caller can see: every read below trusts these ids.
+    const visible = await new AgentModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).queryAgencyRoutingByIds(requested);
+    const ids = visible.map((agent) => agent.id);
     if (ids.length === 0) return {};
 
     const deviceByAgent = await loadAgentDeviceBindings({
@@ -183,17 +193,18 @@ export class AgentAvailabilityService {
     const entries = await pMap(
       agentIds,
       async (agentId): Promise<[string, string[]]> => {
+        const usable = (await bindings.listByAgent(agentId))
+          .filter((row) => row.enabled && row.role !== 'disabled')
+          .map((row) => row.accountId);
         const deviceId = deviceByAgent[agentId];
         if (deviceId) {
           const rowId = await rowIdOf(deviceId);
           const pinned = rowId && (await deviceBindings.find(agentId, rowId))?.accountId;
-          if (pinned) return [agentId, [pinned]];
+          // A pin counts only while its account is still in the agent's rotation, as the run's
+          // own account choice (`AgentQuotaService.deviceChoiceOf`) decides it.
+          if (pinned && usable.includes(pinned)) return [agentId, [pinned]];
         }
-        const rows = await bindings.listByAgent(agentId);
-        return [
-          agentId,
-          rows.filter((row) => row.enabled && row.role !== 'disabled').map((row) => row.accountId),
-        ];
+        return [agentId, usable];
       },
       { concurrency: 5 },
     );
