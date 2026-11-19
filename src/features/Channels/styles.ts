@@ -1,6 +1,8 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 const HOVER = '@media (hover: hover)';
 
 export const styles = stylex.create({
@@ -82,7 +84,7 @@ export const styles = stylex.create({
   messageRow: {
     position: 'relative',
     marginInline: -16,
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     backgroundColor: {
       default: 'transparent',
       [HOVER]: { 'default': 'transparent', ':hover': cssVar.colorFillQuaternary },
@@ -129,7 +131,7 @@ export const styles = stylex.create({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBlock: 12,
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     fontSize: cssVar.fontSizeSM,
     color: cssVar.colorTextSecondary,
   },
@@ -240,7 +242,7 @@ export const styles = stylex.create({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
     minWidth: 0,
     minHeight: 24,
     paddingInline: 4,
@@ -269,10 +271,10 @@ export const styles = stylex.create({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
     marginBlockEnd: 12,
     paddingBlock: 8,
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderWidth: 1,
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,

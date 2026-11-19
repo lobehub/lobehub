@@ -7,19 +7,21 @@ import { CheckCircle2, Clock, DollarSign, Hash } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import { formatDuration } from '../../../../../../utils';
 import { attemptRates } from './attemptRates';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
   `,
   grid: css`
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
   `,
   // Pass rate hero — the run's headline outcome, given the most visual weight.
   hero: css`
@@ -68,7 +70,7 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorFillSecondary};
   `,
   attemptRates: css`
-    padding-block-start: 12px;
+    padding-block-start: ${densityVars.contentGap};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   attemptValue: css`

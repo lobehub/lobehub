@@ -22,6 +22,7 @@ import { messengerActions, messengerSelectors, useMessengerStore } from '@/store
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import AgentSelect from '../AgentSelect';
 import { type MessengerPlatform, PlatformAvatar } from '../constants';
@@ -49,13 +50,13 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   card: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorder};
     border-radius: ${cssVar.borderRadius};
   `,
   emptyRow: css`
     padding-block: 32px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border: 1px dashed ${cssVar.colorBorder};
     border-radius: ${cssVar.borderRadius};
 

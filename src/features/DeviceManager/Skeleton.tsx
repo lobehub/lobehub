@@ -5,6 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SkeletonBar from '@/components/Skeleton/Bar';
+import { densityVars } from '@/styles/densityVars';
 
 import DeviceGrid from './DeviceGrid';
 import { UsageMeterSkeleton } from './DeviceHealth/UsageMeter';
@@ -27,19 +28,19 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   detailCardHeader: css`
     padding-block: 10px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     background: ${cssVar.colorFillQuaternary};
   `,
   detailGrid: css`
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
   `,
   detailRow: css`
     min-height: 48px;
     padding-block: 10px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
 
     & + & {
       border-block-start: 1px solid ${cssVar.colorBorderSecondary};
@@ -61,7 +62,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   footer: css`
     margin-block-start: auto;
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 20px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
@@ -70,7 +71,7 @@ const styles = createStaticStyles(({ css }) => ({
   infoGrid: css`
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
   `,
   meterGroup: css`
     display: grid;

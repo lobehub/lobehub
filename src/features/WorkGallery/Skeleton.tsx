@@ -2,11 +2,12 @@ import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import ArticleSkeleton from '@/components/Skeleton/Article';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
     aspect-ratio: 0.9;
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 16px;
 
@@ -15,7 +16,7 @@ const styles = createStaticStyles(({ css }) => ({
   grid: css`
     display: grid;
     grid-template-columns: repeat(3, minmax(280px, 1fr));
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     width: 100%;
 
     @media (width >= 1600px) {

@@ -24,6 +24,7 @@ import RingLoadingIcon from '@/components/RingLoading';
 import type { VerifyCheckResultItem } from '@/database/schemas/verify';
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useVerifyResults, useVerifyState } from '../hooks';
 import { countResults, phaseFromStatus } from '../utils';
@@ -37,8 +38,8 @@ const styles = stylex.create({
   },
   body: {
     paddingBlockStart: '0',
-    paddingBlockEnd: '12px',
-    paddingInline: '12px',
+    paddingBlockEnd: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockStartWidth: '1px',
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,
@@ -49,7 +50,7 @@ const styles = stylex.create({
     gridTemplateColumns: '20px minmax(0, 1fr) auto',
     gap: '8px',
     alignItems: 'start',
-    paddingBlock: '12px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     borderBlockEndWidth: { 'default': null, ':not(:last-child)': '1px' },
     borderBlockEndStyle: { 'default': null, ':not(:last-child)': 'solid' },
     borderBlockEndColor: { 'default': null, ':not(:last-child)': cssVar.colorBorderSecondary },
@@ -79,11 +80,11 @@ const styles = stylex.create({
   head: {
     cursor: 'pointer',
     display: 'flex',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingBlock: '11px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   inputPanel: {
     marginBlockStart: '10px',

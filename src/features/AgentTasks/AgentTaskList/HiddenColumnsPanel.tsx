@@ -4,6 +4,8 @@ import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import TaskStatusIcon from '../features/TaskStatusIcon';
 
 export const HIDDEN_PANEL_WIDTH = {
@@ -40,7 +42,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 8px;
     align-items: center;
 
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 6px;
 
     color: ${cssVar.colorTextSecondary};

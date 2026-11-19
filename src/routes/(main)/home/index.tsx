@@ -8,9 +8,7 @@ import HomeNavHeader from '@/features/Home/HomeNavHeader';
 import HomeViewTabs from '@/features/Home/HomeViewTabs';
 import { useHomeView } from '@/features/Home/useHomeView';
 import WideScreenContainer from '@/features/WideScreenContainer';
-
-// Keep in sync with NavHeader's height so the track starts at its bottom edge.
-const HOME_NAV_HEADER_HEIGHT = 44;
+import { useDensityTokens } from '@/styles/density';
 
 const HomeTeamBoard = lazy(() => import('@/features/HomeTeamBoard'));
 
@@ -19,6 +17,7 @@ const Home: FC = () => {
   // have to sit on the item itself — the dashboard never wants them.
   const minimal = useHomeMinimalLayout();
   const { isWorkspace, setView, view } = useHomeView();
+  const density = useDensityTokens();
   const teamBoard = view === 'team';
 
   return (
@@ -31,7 +30,8 @@ const Home: FC = () => {
       <ScrollArea
         disableContentFit
         scrollFade
-        scrollbarProps={{ style: { marginBlockStart: HOME_NAV_HEADER_HEIGHT } }}
+        // Keep in sync with NavHeader's height so the track starts at its bottom edge.
+        scrollbarProps={{ style: { marginBlockStart: density.headerHeight } }}
         style={{ height: '100%', overflow: 'hidden', width: '100%' }}
         viewportProps={{ tabIndex: -1 }}
         contentProps={{
@@ -40,8 +40,8 @@ const Home: FC = () => {
             display: 'flex',
             flexDirection: 'column',
             minHeight: '100%',
-            paddingBlock: '32px 24px',
-            paddingInline: 24,
+            paddingBlock: `${density.pagePaddingBlockStart}px ${density.pagePaddingBlockEnd}px`,
+            paddingInline: density.pagePaddingInline,
           },
         }}
       >

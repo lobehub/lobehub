@@ -17,6 +17,7 @@ import {
 } from '@/store/documentComment';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import { resolveDocumentSectionState } from '../isDocumentUnavailableError';
 
@@ -92,7 +93,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   caption: css`
     display: flex;
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     align-items: center;
 
     color: ${cssVar.colorTextTertiary};

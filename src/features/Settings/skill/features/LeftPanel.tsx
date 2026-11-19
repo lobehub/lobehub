@@ -15,7 +15,7 @@ import { openSkillImportModal } from '@/features/SkillStore/SkillImportModal';
 import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 import { usePermission } from '@/hooks/usePermission';
 import { useInterfaceDensity } from '@/styles/density';
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 import { densityVars } from '@/styles/densityVars';
 
 import ConnectorManagePolicy from './ConnectorManagePolicy';
@@ -48,15 +48,15 @@ const styles = stylex.create({
     display: 'flex',
     flexShrink: 0,
     flexWrap: 'wrap',
-    gap: '16px',
+    gap: densityTokens['--lobe-density-section-gap'],
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingBlockStart: '32px',
     paddingBlockEnd: '8px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   pageSearch: { width: '240px' },
-  pageTabs: { paddingInline: '12px' },
+  pageTabs: { paddingInline: densityTokens['--lobe-density-content-gap'] },
   pageTitle: {
     marginBlock: 0,
     fontSize: cssVar.fontSizeHeading3,
@@ -71,7 +71,7 @@ const styles = stylex.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     height: sidebarRow.headerHeight,
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorBorderSecondary,

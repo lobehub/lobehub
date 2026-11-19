@@ -14,6 +14,7 @@ import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useBriefStore } from '@/store/brief';
 import { useInterfaceDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import NewsChatActions from './NewsChatActions';
 
@@ -47,7 +48,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: ${cssVar.borderRadius};
   `,
   body: css`
-    padding-block-end: 12px;
+    padding-block-end: ${densityVars.contentGap};
     padding-inline: ${ROW_PADDING_INLINE + HEADLINE_INSET}px ${ROW_PADDING_INLINE}px;
   `,
   bodyCompact: css`

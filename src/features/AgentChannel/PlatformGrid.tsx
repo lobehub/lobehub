@@ -9,6 +9,7 @@ import { Trans, useTranslation } from 'react-i18next';
 import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
+import { densityVars } from '@/styles/densityVars';
 import { type BotRuntimeStatus } from '@/types/botRuntimeStatus';
 
 import { type ChannelPlatformDefinition } from './const';
@@ -18,7 +19,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   grid: css`
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
+    gap: ${densityVars.contentGap};
 
     width: 100%;
     min-width: 0;

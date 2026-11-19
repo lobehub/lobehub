@@ -21,6 +21,7 @@ import { useHotkeyById } from '@/hooks/useHotkeys/useHotkeyById';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { useHeaderActionSize } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import {
   isTaskFilterValueSelected,
@@ -36,7 +37,7 @@ const styles = stylex.create({
     display: 'flex',
     gap: 8,
     paddingBlock: 6,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   searchInput: {
     'backgroundColor': 'transparent',

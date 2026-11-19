@@ -14,6 +14,7 @@ import LinearIcon from '@/features/Integrations/Linear/LinearIcon';
 import { linearKeys } from '@/features/Integrations/Linear/swrKeys';
 import { type LinearIssueFilterParams, linearService } from '@/services/linear';
 import { useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import StateIcon from './StateIcon';
 import { linearIssueListCounts, linearSyncErrorMessage } from './utils';
@@ -47,7 +48,7 @@ const styles = stylex.create({
     borderBlockEndStyle: 'solid',
     borderBlockEndWidth: 1,
     height: 40,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   // Total and loaded counts sit at the far end of the header, apart from the selection.
   headNote: {
@@ -64,7 +65,7 @@ const styles = stylex.create({
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     cursor: 'pointer',
     height: 40,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   rowDisabled: {
     cursor: 'default',

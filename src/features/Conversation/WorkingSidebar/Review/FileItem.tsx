@@ -24,7 +24,7 @@ import { gitService } from '@/services/git';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { useDensityTokens } from '@/styles/density';
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 import type { ComposerTarget } from '../../types';
 import { reviewFileRowMarker } from './markers.stylex';
@@ -62,9 +62,9 @@ const styles = stylex.create({
   // so the resting colour is restated here.
   revertDanger: { color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorError } },
   deletions: { color: cssVar.colorError },
-  pending: { paddingBlock: '8px', paddingInline: '12px' },
+  pending: { paddingBlock: '8px', paddingInline: densityTokens['--lobe-density-content-gap'] },
   empty: {
-    paddingBlock: '12px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     color: cssVar.colorTextTertiary,
     textAlign: 'center',
   },

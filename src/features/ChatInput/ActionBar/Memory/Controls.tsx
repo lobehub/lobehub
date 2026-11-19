@@ -12,6 +12,7 @@ import LevelSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Lev
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
@@ -40,7 +41,11 @@ const styles = stylex.create({
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
-  title: { fontSize: '14px', fontWeight: 500, color: cssVar.colorText },
+  title: {
+    fontSize: densityTokens['--lobe-density-font-size'],
+    fontWeight: 500,
+    color: cssVar.colorText,
+  },
 });
 
 interface ToggleOption {

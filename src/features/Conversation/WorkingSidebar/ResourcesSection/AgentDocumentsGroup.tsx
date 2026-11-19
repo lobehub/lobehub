@@ -47,7 +47,7 @@ import {
 } from '@/store/agentDocument';
 import { useChatStore } from '@/store/chat';
 import { useDensityTokens } from '@/styles/density';
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 import { standardizeIdentifier } from '@/utils/identifier';
 
 import DeviceLevelSkills from './DeviceLevelSkills';
@@ -134,7 +134,7 @@ const styles = stylex.create({
     cursor: 'pointer',
     userSelect: 'none',
     paddingBlock: '4px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: '999px',
     fontSize: '12px',
     lineHeight: 1.4,

@@ -10,6 +10,7 @@ import { Trans, useTranslation } from 'react-i18next';
 
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
+import { densityTokens } from '@/styles/density.stylex';
 
 import type { ChannelFormValues, CurrentConfig, TestResult } from './index';
 
@@ -24,19 +25,19 @@ const styles = stylex.create({
     alignItems: 'center',
     display: 'flex',
     justifyContent: 'space-between',
-    paddingBlockStart: 16,
+    paddingBlockStart: densityTokens['--lobe-density-card-padding'],
   },
   bottom: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 16,
+    gap: densityTokens['--lobe-density-section-gap'],
     maxWidth: 1024,
     width: '100%',
   },
   notices: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
     marginBlockStart: { ':empty': 0, 'default': 8 },
     maxWidth: 1024,
     width: '100%',
@@ -61,7 +62,7 @@ const styles = stylex.create({
     height: cssVar.controlHeight,
     lineHeight: cssVar.controlHeight,
     overflow: 'hidden',
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },

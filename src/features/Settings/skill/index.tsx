@@ -13,6 +13,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import NavHeader from '@/features/NavHeader';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import DetailBreadcrumb from './features/DetailBreadcrumb';
@@ -39,7 +40,7 @@ const styles = stylex.create({
     alignItems: 'flex-start',
     justifyContent: 'center',
     height: '100%',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   /**
    * The connector list insets its rows and intro 12px, so the body is 12px wider

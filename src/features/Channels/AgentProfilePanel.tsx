@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { MemberAvatar } from './MemberAvatar';
 import { memberName } from './memberName';
@@ -22,15 +23,15 @@ const styles = stylex.create({
     whiteSpace: 'pre-wrap',
   },
   detail: {
-    paddingBlock: '16px',
-    paddingInline: '16px',
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderBlockStartWidth: '1px',
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,
   },
   hero: {
     paddingBlockStart: '28px',
-    paddingBlockEnd: '16px',
+    paddingBlockEnd: densityTokens['--lobe-density-card-padding'],
     paddingInline: '40px',
     textAlign: 'center',
   },

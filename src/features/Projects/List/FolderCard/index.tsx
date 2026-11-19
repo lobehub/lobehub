@@ -13,6 +13,7 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useIsDark } from '@/hooks/useIsDark';
 import type { ProjectListItem } from '@/store/project';
 import { useProjectOverview } from '@/store/project';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { projectFavoriteTarget } from '../../projectFavorite';
 import { useProjectMenuItems } from '../useProjectMenuItems';
@@ -89,7 +90,7 @@ const styles = stylex.create({
   },
   name: {
     color: cssVar.colorText,
-    fontSize: 16,
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
     fontWeight: 600,
     letterSpacing: '-0.01em',
     minWidth: 0,
@@ -164,7 +165,7 @@ const styles = stylex.create({
     insetInline: 0,
     justifyContent: 'space-between',
     paddingBlockEnd: 14,
-    paddingBlockStart: 16,
+    paddingBlockStart: densityTokens['--lobe-density-card-padding'],
     paddingInline: 18,
     position: 'absolute',
   },

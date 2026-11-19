@@ -3,13 +3,19 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
 import { type DiscoverMcpItem } from '@/types/discover';
 
 const styles = stylex.create({
-  desc: { flex: '1', margin: '0', fontSize: '14px', color: cssVar.colorTextSecondary },
+  desc: {
+    flex: '1',
+    margin: '0',
+    fontSize: densityTokens['--lobe-density-font-size'],
+    color: cssVar.colorTextSecondary,
+  },
   title: {
     margin: '0',
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 500,
     color: { 'default': null, ':hover': cssVar.colorLink },
   },
