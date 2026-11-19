@@ -61,6 +61,6 @@
     "url-join": "^5.0.0"
   },
   "peerDependencies": {
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   }
 }
