@@ -148,7 +148,7 @@ export class ChannelRepository {
     /** Callers check that the project is readable in this scope. */
     projectId?: string;
     title: string;
-    /** Workspace people a group starts with, checked the same way as adding them later. */
+    /** People a group starts with, checked the same way as adding them later. */
     userIds?: string[];
     /** The direct conversation binds another person's Agent through its live link share. */
     sharedAgent?: boolean;
@@ -207,7 +207,7 @@ export class ChannelRepository {
   /**
    * Inviting into a direct conversation starts a group instead, and the direct conversation stays
    * as it is. The group holds its person and Agent, the Agent keeping its channel-local
-   * environment, joined by the invited Agents and workspace people.
+   * environment, joined by the invited Agents and people.
    */
   createGroupFromDirect = async (
     channelId: string,
@@ -420,15 +420,11 @@ export class ChannelRepository {
       { allowArchived: true },
     );
 
-  /** People a new Channel in this workspace can start with. */
-  newChannelUserCandidates = async (search?: string) => {
-    const { workspaceId } = this;
-    if (!workspaceId)
-      throw new ChannelError('BAD_REQUEST', 'People can only be added to workspace group channels');
-    return this.db.transaction((tx) =>
-      newChannelUserCandidates(tx, workspaceId, this.userId, search),
+  /** People a new Channel in this scope can start with. */
+  newChannelUserCandidates = async (search?: string) =>
+    this.db.transaction((tx) =>
+      newChannelUserCandidates(tx, this.workspaceId, this.userId, search),
     );
-  };
 
   userCandidates = async (channelId: string, search?: string) =>
     this.write(channelId, (tx, access) => channelUserCandidates(tx, access, search), {

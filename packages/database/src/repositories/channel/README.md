@@ -39,8 +39,9 @@ name, with the Agent on the device and directory a new Channel would give it
 (`createAgentDirectChannel`).
 Inviting from a direct conversation leaves it as it is and starts a group instead
 (`createGroupFromDirect`): its person and Agent, the Agent in the same channel-local environment,
-plus the invited Agents and, in a workspace, people. `userCandidates` lists those people from a
-workspace direct conversation; `addUser` still refuses it.
+plus the invited Agents and people. `userCandidates` lists those people from a direct
+conversation; `addUser` still refuses it. People a group takes are those its inviter can talk with
+one-on-one: in a workspace, its members; in the personal space, the inviter's mutual contacts.
 
 Group history survives deletion of an author or Agent. Message sender references use `SET NULL`;
 new writes require exactly one actual sender. Human requests have `userId`, Agent replies have
