@@ -36,6 +36,7 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { getToolStoreState } from '@/store/tool';
+import { runtimeUninstalledBuiltinTools } from '@/store/tool/slices/builtin/projection';
 import { getUserStoreState, useUserStore } from '@/store/user';
 import {
   settingsSelectors,
@@ -244,7 +245,8 @@ class ChatService {
         ...getUnavailableBuiltinToolIds(
           [...getOptedInPluginIds(agentConfig.plugins), ...(enabledToolIds ?? [])],
           chatConfig,
-          getToolStoreState().uninstalledBuiltinTools,
+          // A running conversation already has a scope-filtered manifest map.
+          discoveryManifests ? [] : runtimeUninstalledBuiltinTools(getToolStoreState()),
         ),
         ...resolveAgentConnectorActivation(
           { chatConfig, plugins: agentConfig.plugins },

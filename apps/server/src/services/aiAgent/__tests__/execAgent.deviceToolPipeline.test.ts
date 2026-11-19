@@ -218,7 +218,9 @@ const createBaseAgentConfig = (overrides: Record<string, any> = {}) => ({
 
 describe('AiAgentService.execAgent - device tool pipeline ()', () => {
   let service: AiAgentService;
-  const mockDb = {} as any;
+  const mockDb = {
+    query: { userSettings: { findFirst: vi.fn().mockResolvedValue(undefined) } },
+  } as never;
   const userId = 'test-user-id';
 
   beforeEach(() => {

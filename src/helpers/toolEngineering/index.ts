@@ -44,6 +44,7 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
+import { runtimeUninstalledBuiltinTools } from '@/store/tool/slices/builtin/projection';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
@@ -167,6 +168,7 @@ export const createAgentToolsEngine = (
      * `readAttachment` so the preview can be paged, as the server's tool discovery does.
      */
     hasOversizedFiles?: boolean;
+    uninstalledBuiltinTools?: string[];
     /** Resolved for the executing agent, which can differ from the agent open in the UI. */
     runAgent?: {
       id?: string;
@@ -219,7 +221,7 @@ export const createAgentToolsEngine = (
           ...(pluginIds ?? []),
         ],
         chatConfig,
-        getToolStoreState().uninstalledBuiltinTools,
+        options.uninstalledBuiltinTools ?? runtimeUninstalledBuiltinTools(getToolStoreState()),
       ),
       ...getFeatureDisabledToolIds(getServerConfigStoreState()?.featureFlags),
       // This engine serves runs the browser executes; server-only tools have nothing to run here.

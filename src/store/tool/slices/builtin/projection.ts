@@ -1,4 +1,8 @@
+import { onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
+
 import { defineReplica } from '@/libs/replica';
+
+import type { BuiltinToolState } from './initialState';
 
 export { resolveUninstalledBuiltinTools } from '@lobechat/builtin-tools';
 
@@ -35,3 +39,20 @@ export const uninstalledBuiltinToolsResource = defineReplica<
   storage: 'indexedDB',
   version: 1,
 });
+
+/** A persisted or previous scope's projection may paint the UI before this scope is confirmed. */
+export const confirmedUninstalledBuiltinTools = (state: BuiltinToolState) => {
+  if (!state.isUninstalledBuiltinToolsInit) return undefined;
+  const replica = state.uninstalledBuiltinToolsReplica;
+  const entry = replica.entries[UNINSTALLED_BUILTIN_TOOLS_KEY];
+  if (entry?.source !== 'server' || replica.scope !== uninstalledBuiltinToolsResource.scope.get()) {
+    return undefined;
+  }
+  // Apply an uninstall immediately, but keep an installation unavailable until its write commits.
+  return entry.base
+    ? [...new Set([...entry.base, ...state.uninstalledBuiltinTools])]
+    : state.uninstalledBuiltinTools;
+};
+
+export const runtimeUninstalledBuiltinTools = (state: BuiltinToolState) =>
+  confirmedUninstalledBuiltinTools(state) ?? onDemandBuiltinToolIds;

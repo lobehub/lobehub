@@ -1,4 +1,5 @@
 import {
+  onDemandBuiltinToolIds,
   resolveUninstalledBuiltinTools,
   type UninstalledBuiltinToolsScope,
 } from '@lobechat/builtin-tools';
@@ -36,7 +37,8 @@ export const resolveRunSettings = async ({
   const agentMemoryEnabled = agentConfig.chatConfig?.memory?.enabled;
   let globalMemoryEnabled = agentMemoryEnabled ?? false;
   let enableExpertise = false;
-  let uninstalledBuiltinIds: string[] = [];
+  // A failed settings read cannot confirm any optional builtin is installed.
+  let uninstalledBuiltinIds = onDemandBuiltinToolIds;
   let userTimezone: string | undefined;
   try {
     const settings = await runFacts.userSettings();

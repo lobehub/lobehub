@@ -134,7 +134,9 @@ export class StreamingExecutorActionImpl {
     isSubAgent,
     modelOverride,
     chatConfigOverride,
+    uninstalledBuiltinTools,
   }: {
+    uninstalledBuiltinTools?: string[];
     messages: UIChatMessage[];
     parentMessageId: string;
     agentId?: string;
@@ -293,7 +295,11 @@ export class StreamingExecutorActionImpl {
       // sub-agent runs. Desktop client runs also need the local environment so
       // local-system can advertise IPC-only capabilities such as direct image reads.
       { executionEnv: isDesktop ? 'local' : undefined, isSubAgent, scope },
-      { hasOversizedFiles: hasPreviewableFiles(messages), runAgent: { ...runAgent, connectors } },
+      {
+        hasOversizedFiles: hasPreviewableFiles(messages),
+        runAgent: { ...runAgent, connectors },
+        uninstalledBuiltinTools,
+      },
     );
     const toolsDetailed = toolsEngine.generateToolsDetailed({
       model: agentConfigData.model,
@@ -477,6 +483,8 @@ export class StreamingExecutorActionImpl {
   };
 
   executeClientAgent = async (params: {
+    /** Already resolved for a resumed run and its initial operation tool set. */
+    uninstalledBuiltinTools?: string[];
     context: ConversationContext;
     disableTools?: boolean;
     initialContext?: AgentRuntimeContext;
@@ -604,11 +612,15 @@ export class StreamingExecutorActionImpl {
     // bodies, so put the stored payloads back first. Ids come from the raw
     // store list too: a folded tool result no longer carries `payloadOmitted`.
     // Also returns a new array, so the caller's messages are never mutated.
-    const messages = await hydrateProjectedConversation(
-      [...originalMessages],
-      this.#get().dbMessagesMap[messageKey],
-      messageService.getToolResultPayloads,
-    );
+    const [messages, uninstalledBuiltinTools] = await Promise.all([
+      hydrateProjectedConversation(
+        [...originalMessages],
+        this.#get().dbMessagesMap[messageKey],
+        messageService.getToolResultPayloads,
+      ),
+      params.uninstalledBuiltinTools ??
+        (disableTools ? undefined : getToolStoreState().getUninstalledBuiltinToolsForRun()),
+    ]);
 
     // Decide tool / function-calling capability from real data, not a guess.
     // The enabled-model list hydrates asynchronously (auth session → aiProvider
@@ -633,6 +645,7 @@ export class StreamingExecutorActionImpl {
       messages,
       parentMessageId: params.parentMessageId,
       agentId,
+      uninstalledBuiltinTools,
       disableTools,
       topicId,
       threadId: threadId ?? undefined,
