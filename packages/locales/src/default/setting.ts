@@ -2043,6 +2043,7 @@ export default {
   'skillStore.button': 'Skill Store',
   'skillStore.empty': 'Browse the Skill Store. Install one to get started, add more later.',
   'skillStore.emptySearch': 'No matching Skills',
+  'skillStore.marketEmpty': 'No skills are available in the store yet.',
   'skillStore.networkError': 'Network error, please try again',
   'skillStore.rateLimited': 'Too many requests just now. Please wait a moment and try again.',
   'skillStore.search': 'Search skills by name or keyword, press Enter to search…',
@@ -2072,6 +2073,7 @@ When I am ___, I need ___
   'skillStore.wantMore.feedback.title':
     '[Skill Request] Summarize the skill you need in one sentence',
   'skillStore.wantMore.reachedEnd': "You've reached the end. Can't find what you need?",
+  'skillView.browseStoreDesc': 'Find and install skills for your agents',
   'skillView.connectors': 'Connectors',
   'skillView.connectorsDesc':
     'Connect the apps and tools your agents can use. Open one to see its account and tools.',

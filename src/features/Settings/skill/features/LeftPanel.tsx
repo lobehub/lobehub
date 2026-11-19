@@ -4,12 +4,12 @@ import { Button, DropdownMenu, Flexbox, Icon, SearchBar, Text, Tooltip } from '@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { ChevronDown, Grid2x2Plus, Import, Plus, Store } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { CustomConnectorModal } from '@/features/Connectors';
 import { NavPanelDensityContext } from '@/features/NavPanel/density';
-import { createSkillStoreModal } from '@/features/SkillStore';
+import { createMarketSkillStoreModal, createSkillStoreModal } from '@/features/SkillStore';
 import { openSkillImportModal } from '@/features/SkillStore/SkillImportModal';
 import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 import { usePermission } from '@/hooks/usePermission';
@@ -103,11 +103,8 @@ const LeftPanel = memo<LeftPanelProps>(
     const [showAddConnector, setShowAddConnector] = useState(false);
     const [keyword, setKeyword] = useState('');
 
-    const handleOpenStore = useCallback(() => {
-      createSkillStoreModal();
-    }, []);
-
     const isConnectorView = viewMode === 'connector';
+    const handleOpenStore = isConnectorView ? createSkillStoreModal : createMarketSkillStoreModal;
     const { allowed: canCreate } = usePermission('create_content');
     // Adding a workspace connector follows the same member policy as editing one.
     const { canManage: canAddConnector, isPending: isPolicyPending } = useConnectorManageable();
@@ -133,7 +130,9 @@ const LeftPanel = memo<LeftPanelProps>(
             ]
           : []),
         {
-          desc: t('connectorMarket.add.browseStoreDesc'),
+          desc: t(
+            isConnectorView ? 'connectorMarket.add.browseStoreDesc' : 'skillView.browseStoreDesc',
+          ),
           icon: <Icon icon={Store} />,
           key: 'store',
           label: t('connectorMarket.add.browseStore'),
