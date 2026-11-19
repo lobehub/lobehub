@@ -21,9 +21,12 @@ type AgentDeleteImpact = Awaited<ReturnType<typeof agentService.getAgentDeleteIm
  * topic under the agent, teammates' included, so the dialog must say so when
  * they exist — with a count when other members started topics, or the generic
  * "includes other members' content" line when only comments or messages are
- * foreign.
+ * foreign. A failed lookup (`null`) cannot rule teammates' content out, so it
+ * warns that every topic goes rather than showing the plain copy: workspace
+ * owners skip the server guard and would otherwise delete it unwarned.
  */
 export const getRemoveAgentAlert = (impact: AgentDeleteImpact | null): string => {
+  if (impact === null) return t('confirmRemoveSessionItemAlertImpactUnknown', { ns: 'chat' });
   if (impact && impact.foreignTopicCount > 0)
     return t('confirmRemoveSessionItemAlertWithOthersCount', {
       count: impact.foreignTopicCount,
@@ -38,9 +41,9 @@ export const getRemoveAgentAlert = (impact: AgentDeleteImpact | null): string =>
  * The dialog's state for an impact lookup: `undefined` while it is in flight,
  * `null` once it failed. Delete stays disabled until the lookup settles, so no
  * one — workspace owners included — can confirm before reading the warning.
- * A failed lookup falls back to the plain copy and acknowledges nothing, which
- * keeps the server guard on for non-owners while an older server without the
- * lookup can still delete.
+ * A failed lookup shows the "can't tell, every topic goes" warning and
+ * acknowledges nothing, which keeps the server guard on for non-owners while an
+ * older server without the lookup can still delete.
  */
 export const getRemoveAgentConfirmState = (impact: AgentDeleteImpact | null | undefined) => {
   if (impact === undefined)
@@ -120,7 +123,7 @@ const LoadedConfirm = ({ impact, onConfirm }: LoadedConfirmProps) => {
  */
 export const confirmRemoveAgent = ({ agentId, onConfirm }: ConfirmRemoveAgentOptions): void => {
   // Built inside a promise executor so a lookup that throws synchronously
-  // still settles as "failed" and the dialog opens with the plain copy.
+  // still settles as "failed" and the dialog opens with the impact-unknown copy.
   const impact = new Promise<AgentDeleteImpact>((resolve) =>
     resolve(agentService.getAgentDeleteImpact(agentId)),
   ).catch((error) => {

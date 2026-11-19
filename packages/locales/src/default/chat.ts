@@ -405,6 +405,8 @@ export default {
   'confirmRemoveGroupSuccess': 'Group deleted successfully',
   'confirmRemoveSessionItemAlert':
     'You are about to delete this agent and its topics. They will be moved to the trash and can be restored within 30 days.',
+  'confirmRemoveSessionItemAlertImpactUnknown':
+    "Couldn't check whether this agent holds other members' content. Deleting it moves every topic under it to the trash, including other members' topics. They can be restored within 30 days.",
   'confirmRemoveSessionItemAlertWithOthers':
     'This agent includes comments or messages from other members. Deleting the agent moves them to the trash too, not just your own. They can be restored within 30 days.',
   'confirmRemoveSessionItemAlertWithOthersCount_one':

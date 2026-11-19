@@ -34,11 +34,14 @@ describe('getRemoveAgentAlert', () => {
     );
   });
 
-  it('keeps the plain copy when only the caller owns content or the lookup failed', () => {
+  it('keeps the plain copy when only the caller owns content', () => {
     expect(getRemoveAgentAlert({ foreignTopicCount: 0, hasForeignContent: false })).toBe(
       'confirmRemoveSessionItemAlert',
     );
-    expect(getRemoveAgentAlert(null)).toBe('confirmRemoveSessionItemAlert');
+  });
+
+  it("warns that teammates' topics may go too when the lookup failed", () => {
+    expect(getRemoveAgentAlert(null)).toBe('confirmRemoveSessionItemAlertImpactUnknown');
   });
 });
 
@@ -67,10 +70,10 @@ describe('getRemoveAgentConfirmState', () => {
     });
   });
 
-  it('falls back to the plain copy without acknowledging anything when the lookup failed', () => {
+  it('warns about unknown impact without acknowledging anything when the lookup failed', () => {
     expect(getRemoveAgentConfirmState(null)).toEqual({
       acknowledgeForeignContent: false,
-      alert: 'confirmRemoveSessionItemAlert',
+      alert: 'confirmRemoveSessionItemAlertImpactUnknown',
       canConfirm: true,
     });
   });
