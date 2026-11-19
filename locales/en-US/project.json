@@ -70,6 +70,7 @@
   "createFromGithub.duplicateIdentifier": "Another project already uses this identifier. Choose a different one.",
   "createFromGithub.duplicateName": "A project with this name already exists, including in the trash. Choose a different name.",
   "createFromGithub.empty": "The connected GitHub accounts haven't given LobeHub access to any repositories yet.",
+  "createFromGithub.environmentHint": "Selected repositories will be checked out into this project environment.",
   "createFromGithub.extraRepositoriesLabel": "More repositories",
   "createFromGithub.layoutHint": "Each repository is checked out in a folder of its own, side by side. You can change them later in the project's settings.",
   "createFromGithub.loadFailed": "Couldn't load repositories from GitHub.",

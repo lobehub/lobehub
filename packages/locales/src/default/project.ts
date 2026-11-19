@@ -211,6 +211,8 @@ export default {
     'A project with this name already exists, including in the trash. Choose a different name.',
   'createFromGithub.empty':
     "The connected GitHub accounts haven't given LobeHub access to any repositories yet.",
+  'createFromGithub.environmentHint':
+    'Selected repositories will be checked out into this project environment.',
   'createFromGithub.loadFailed': "Couldn't load repositories from GitHub.",
   'createFromGithub.manageAccess': 'Manage access',
   'createFromGithub.private': 'Private',

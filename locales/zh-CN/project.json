@@ -70,6 +70,7 @@
   "createFromGithub.duplicateIdentifier": "其他项目已在使用这个标识，请换一个。",
   "createFromGithub.duplicateName": "已存在同名项目（包括回收站中的项目），请换一个名称。",
   "createFromGithub.empty": "已连接的 GitHub 账号还没有授权 LobeHub 访问任何仓库。",
+  "createFromGithub.environmentHint": "选中的仓库会检出到这个项目环境中。",
   "createFromGithub.extraRepositoriesLabel": "更多仓库",
   "createFromGithub.layoutHint": "每个仓库各放在一个文件夹里，并排检出。之后可以在项目设置里调整。",
   "createFromGithub.loadFailed": "无法从 GitHub 加载仓库。",
