@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- Icon renders its svg without a slot
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- Icon renders its svg without a slot; TabBar has no tab/title slot
   createStaticStyles,
   Icon,
 } from '@lobehub/ui';
@@ -18,6 +18,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useMobileNavigation } from '@/hooks/useMobileNavigation';
 import { SidebarTabKey } from '@/store/global/initialState';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { sx } from '@/styles/sx';
 
 const styles = stylex.create({
   container: {
@@ -32,6 +33,20 @@ const fallback = createStaticStyles(({ css, cssVar }) => ({
   active: css`
     svg {
       fill: color-mix(in srgb, ${cssVar.colorPrimary} 33%, transparent);
+    }
+  `,
+  /**
+   * @lobehub/ui fixes every tab at 48px and ellipsizes its 12px label, which
+   * cuts "Marketplace" (~69px) to "Market…". Each tab takes an equal share of
+   * the bar instead: the icons keep the space-around positions (1/6, 1/2, 5/6),
+   * the tap target spans the column, and the label gets ~125px at 375px.
+   */
+  tabBar: css`
+    .lobe-mobile-tab-bar__tab {
+      flex: 1 1 0;
+      min-width: 0;
+      width: auto;
+      padding-inline: 4px;
     }
   `,
 }));
@@ -85,7 +100,7 @@ const NavBar = memo(() => {
   return (
     <TabBar
       activeKey={activeKey}
-      className={stylex.props(styles.container).className}
+      {...sx(styles.container, fallback.tabBar)}
       height={MOBILE_TABBAR_HEIGHT}
       items={items}
     />

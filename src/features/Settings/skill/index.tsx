@@ -164,6 +164,7 @@ export const ToolSettings = memo<ToolSettingsProps>(({ headerExtra, viewMode }) 
     <Activity mode={stackedSelected ? 'hidden' : 'visible'}>
       <LeftPanel
         fullWidth
+        compact={mobile}
         headerExtra={headerExtra}
         page={!mobile || viewMode === 'skill'}
         viewMode={viewMode}
@@ -176,10 +177,13 @@ export const ToolSettings = memo<ToolSettingsProps>(({ headerExtra, viewMode }) 
   );
 
   // Mobile: the route shell (`mobileShellHeader`) owns the header; list and detail take turns
-  // full-width instead of a 300px list squeezing the detail.
+  // full-width instead of a 300px list squeezing the detail. The shell centers its
+  // children, so the page claims the full width: sized by its content it shrank
+  // the connector list to a 260px column and centered the wider skill header
+  // off both screen edges.
   if (mobile)
     return (
-      <Flexbox flex={1} style={{ minHeight: 0, overflowY: 'auto' }}>
+      <Flexbox flex={1} style={{ minHeight: 0, overflowY: 'auto' }} width={'100%'}>
         {list}
         {stackedSelected && (
           <Flexbox className={stylex.props(styles.detail).className}>

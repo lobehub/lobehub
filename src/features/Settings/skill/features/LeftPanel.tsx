@@ -41,6 +41,7 @@ import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 import { densityVars } from '@/styles/densityVars';
 
 import ConnectorManagePolicy from './ConnectorManagePolicy';
+import { getPageSearchPlacement } from './pageHeaderLayout';
 import { type ToolDetailType } from './SkillDetail';
 import SkillList, { type SkillListHeaderContext, type SkillViewMode } from './SkillList';
 import { SkillListVariantProvider } from './SkillListRow';
@@ -76,6 +77,8 @@ const styles = stylex.create({
     paddingBlockEnd: '8px',
     paddingInline: densityTokens['--lobe-density-content-gap'],
   },
+  // Mobile: the shell's top bar sits right above, so the title needs less air.
+  pageHeaderCompact: { paddingBlockStart: '16px' },
   pageHeadRow: {
     display: 'flex',
     flexWrap: 'wrap',
@@ -85,6 +88,9 @@ const styles = stylex.create({
   },
   // No radius token reaches a pill; the Codex search field and Add button are pills.
   pageSearch: { width: '240px' },
+  // Mobile: a 240px field beside refresh and Add is ~390px of toolbar that
+  // cannot wrap, wider than a 375px screen; the field takes its own row.
+  pageSearchCompact: { width: '100%' },
   // SearchBar draws its border on the inner input box, so the pill goes there.
   pageSearchInput: { borderRadius: '999px' },
   // 8px under the header + 12px: the Codex 20px from description to view tabs.
@@ -125,6 +131,11 @@ const styles = stylex.create({
 });
 
 interface LeftPanelProps {
+  /**
+   * Page only: lay the header out for a phone. The search field moves under
+   * the title row, which keeps just refresh and Add, so nothing overflows.
+   */
+  compact?: boolean;
   /** Fill the page instead of sitting as a 300px column beside the detail (mobile). */
   fullWidth?: boolean;
   /** Rendered under the page header, e.g. the Marketplace Discover / Installed tabs. */
@@ -145,6 +156,7 @@ interface LeftPanelProps {
 
 const LeftPanel = memo<LeftPanelProps>(
   ({
+    compact,
     fullWidth,
     headerExtra,
     onDeleteSelected,
@@ -259,24 +271,31 @@ const LeftPanel = memo<LeftPanelProps>(
         isConnectorView ? 'connectorMarket.search.placeholder' : 'skillView.search.placeholder',
       );
 
+      const searchBelowTitle = getPageSearchPlacement(compact) === 'below-title';
+      const search = (
+        <SearchBar
+          allowClear
+          aria-label={searchPlaceholder}
+          classNames={{ input: stylex.props(styles.pageSearchInput).className }}
+          placeholder={searchPlaceholder}
+          value={keyword}
+          variant={'outlined'}
+          className={
+            stylex.props(searchBelowTitle ? styles.pageSearchCompact : styles.pageSearch).className
+          }
+          onInputChange={setKeyword}
+        />
+      );
+
       const renderHeader = ({ onRefresh, refreshing }: SkillListHeaderContext) => (
         <>
-          <div {...stylex.props(styles.pageHeader)}>
+          <div {...stylex.props(styles.pageHeader, compact && styles.pageHeaderCompact)}>
             <div {...stylex.props(styles.pageHeadRow)}>
               <h1 {...stylex.props(styles.pageTitle)}>
                 {t(isConnectorView ? 'skillView.connectors' : 'skillView.skills')}
               </h1>
               <Flexbox horizontal align={'center'} flex={'none'} gap={12}>
-                <SearchBar
-                  allowClear
-                  aria-label={searchPlaceholder}
-                  className={stylex.props(styles.pageSearch).className}
-                  classNames={{ input: stylex.props(styles.pageSearchInput).className }}
-                  placeholder={searchPlaceholder}
-                  value={keyword}
-                  variant={'outlined'}
-                  onInputChange={setKeyword}
-                />
+                {!searchBelowTitle && search}
                 {/* The member policy governs the shared pool only */}
                 {isConnectorView && !isPrivateTab && <ConnectorManagePolicy variant={'toolbar'} />}
                 <ActionIcon
@@ -299,6 +318,7 @@ const LeftPanel = memo<LeftPanelProps>(
                 </DropdownMenu>
               </Flexbox>
             </div>
+            {searchBelowTitle && search}
             <Text type={'secondary'}>
               {isConnectorView ? connectorsDesc : t('skillView.skillsDesc')}
             </Text>
