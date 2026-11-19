@@ -8,7 +8,7 @@ import { useToolStore } from '@/store/tool';
 export interface GithubSkillImportFailure {
   /** Raw message from the server, folded behind "Show details". */
   details: string;
-  stage: 'find' | 'import';
+  stage: 'find' | 'import' | 'refresh';
 }
 
 const detailsOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -20,7 +20,8 @@ const detailsOf = (err: unknown) => (err instanceof Error ? err.message : String
 export const useGithubSkillImport = () => {
   const refresh = useToolStore((s) => s.refreshAgentSkills);
   const { allowed: canCreate } = usePermission('create_content');
-  const [loading, setLoading] = useState(false);
+  const [pending, setPending] = useState<GithubSkillImportFailure['stage']>();
+  const loading = !!pending;
   const [failure, setFailure] = useState<GithubSkillImportFailure>();
   const [url, setUrlValue] = useState('');
   const [query, setQuery] = useState('');
@@ -40,7 +41,7 @@ export const useGithubSkillImport = () => {
 
   const discover = async () => {
     if (!canCreate || !url.trim() || loading) return;
-    setLoading(true);
+    setPending('find');
     setFailure(undefined);
     try {
       const next = await agentSkillService.discoverGitHubSkills(url.trim());
@@ -53,13 +54,25 @@ export const useGithubSkillImport = () => {
     } catch (err) {
       setFailure({ details: detailsOf(err), stage: 'find' });
     } finally {
-      setLoading(false);
+      setPending(undefined);
+    }
+  };
+
+  const refreshLibrary = async () => {
+    setPending('refresh');
+    setFailure(undefined);
+    try {
+      await refresh();
+    } catch (err) {
+      setFailure({ details: detailsOf(err), stage: 'refresh' });
+    } finally {
+      setPending(undefined);
     }
   };
 
   const install = async (paths: string[]) => {
     if (!canCreate || !scan || !paths.length || loading) return;
-    setLoading(true);
+    setPending('import');
     setFailure(undefined);
     try {
       const batch = await agentSkillService.importGitHubSkills({
@@ -72,12 +85,12 @@ export const useGithubSkillImport = () => {
       });
       setResults((prev) => [...prev.filter((item) => !paths.includes(item.path)), ...batch]);
       setQuery('');
-      await refresh();
     } catch (err) {
       setFailure({ details: detailsOf(err), stage: 'import' });
-    } finally {
-      setLoading(false);
+      setPending(undefined);
+      return;
     }
+    await refreshLibrary();
   };
 
   return {
@@ -87,7 +100,9 @@ export const useGithubSkillImport = () => {
     failure,
     install,
     loading,
+    pending,
     query,
+    refreshLibrary,
     results,
     scan,
     selected,

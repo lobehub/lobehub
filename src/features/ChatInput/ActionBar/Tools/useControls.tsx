@@ -3,7 +3,7 @@ import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { VideoGenerationIdentifier } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { getConnectorCatalog } from '@lobechat/const';
-import { parsePluginEntry, upsertPluginMode } from '@lobechat/types';
+import { parsePluginEntry, resolveToolMode, upsertPluginMode } from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
 import { Avatar, confirmModal, Icon, Popover, Tag, Tooltip } from '@lobehub/ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
@@ -155,7 +155,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   );
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
-  const activationSets = useActivationSets(checked, rawPlugins);
+  const discoverBuiltins = useAgentStore(
+    (s) =>
+      resolveToolMode(agentByIdSelectors.getAgentConfigById(agentId)(s)?.chatConfig) === 'agent',
+  );
+  const activationSets = useActivationSets(checked, rawPlugins, discoverBuiltins);
   const { disabledIdSet, optInIds } = activationSets;
   const builtinList = useToolStore(builtinToolSelectors.metaListIncludingHidden, isEqual);
 
@@ -209,12 +213,12 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             plugins,
             id,
             pinMediaTool ? 'pinned' : mode,
-            resolveImplicitMode(id, optInIds),
+            mode === 'auto' && !discoverBuiltins ? 'disabled' : resolveImplicitMode(id, optInIds),
           ),
         });
       }
     },
-    [agentId, canEdit, optInIds, updateAgentConfig],
+    [agentId, canEdit, discoverBuiltins, optInIds, updateAgentConfig],
   );
 
   const openSkillPolicyMenu = useCallback((id: string) => {

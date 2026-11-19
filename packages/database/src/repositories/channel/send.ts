@@ -3,10 +3,11 @@ import { CHANNEL_LIMITS } from '@lobechat/types';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 
 import type { ChannelMessageItem } from '../../schemas';
-import { agents, channelMembers, channelMessages, channelThreads, files } from '../../schemas';
+import { channelMembers, channelMessages, channelThreads, files } from '../../schemas';
 import type { Transaction } from '../../type';
 import { isUuid } from '../../utils/uuid';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+import { sharedAgentOwner } from './agent';
 import { attachFiles, fileIdsByMessage } from './attachments';
 import {
   activeMembers,
@@ -19,6 +20,7 @@ import {
 } from './delivery';
 import { ChannelError } from './error';
 import { isWorkspaceMember, peerOf, requirePeerRelation } from './peer';
+import { assertSharedAgentAdmission } from './shareLimits';
 import { audit } from './transaction';
 import type { ChannelAccess } from './types';
 import { createChannelThread } from './view';
@@ -172,14 +174,22 @@ export const sendMessage = async (
       peerOf(channel, member.userId)!,
     );
 
-  if (fileIds.length && channel.agentId) {
-    // Another person's shared Agent runs as its owner, who cannot read the sender's files.
-    const [bound] = await tx
-      .select({ ownerId: agents.userId })
-      .from(agents)
-      .where(eq(agents.id, channel.agentId));
-    if (bound?.ownerId !== member.userId && !channel.workspaceId)
-      throw new ChannelError('BAD_REQUEST', 'Attachments cannot be sent to a shared Agent');
+  if (channel.agentId) {
+    // The same test the Channel list uses, so a workspace conversation with a shared Agent is
+    // treated like a personal one, while a colleague's public workspace Agent (the workspace's
+    // own) is not.
+    const agentOwnerId = await sharedAgentOwner(tx, channel, member.userId!);
+    if (agentOwnerId) {
+      // Another person's shared Agent runs as its owner, who cannot read the sender's files.
+      if (fileIds.length)
+        throw new ChannelError('BAD_REQUEST', 'Attachments cannot be sent to a shared Agent');
+      await assertSharedAgentAdmission(tx, {
+        agentId: channel.agentId,
+        content: input.content,
+        ownerId: agentOwnerId,
+        visitorId: member.userId!,
+      });
+    }
   }
 
   if (fileIds.length) {

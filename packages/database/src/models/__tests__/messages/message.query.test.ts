@@ -1887,23 +1887,6 @@ describe('MessageModel Query Tests', () => {
         expect(works[0]).not.toHaveProperty('workspaceId');
       });
 
-      it('keeps the spend snapshot when the share exposes model info', async () => {
-        const result = await messageModel.queryForVisitor(
-          { includeFileWorks: true, topicId: visitorTopicId },
-          {
-            redaction: { showModelInfo: true },
-            workAccessScope: agentShareWorkAccessScope(provenance),
-          },
-        );
-
-        const works = findAnchor(result).works;
-        expect(works[0]).toMatchObject({ totalCost: 0.42 });
-        expect(works[0].event.cumulativeUsage).toMatchObject({ usage: { totalTokens: 9 } });
-        // `showModelInfo` exposes spend only, never the creator's identity.
-        expect(works[0]).not.toHaveProperty('userId');
-        expect(works[0]).not.toHaveProperty('workspaceId');
-      });
-
       it('never resolves the visitor Works through the creator scope', async () => {
         const result = await messageModel.query(
           { includeFileWorks: true, topicId: visitorTopicId },
@@ -1940,28 +1923,6 @@ describe('MessageModel Query Tests', () => {
       });
 
       expect(ownTranscript.items.map((item) => item.id)).toEqual(['creator-direct-msg']);
-    });
-
-    it('keeps countByTopic working for the visitor turn cap when the runtime opts in', async () => {
-      // The per-topic turn cap depends on counting visitor messages, and after
-      // the ownership() flip the default scope excludes visitor rows. The
-      // share runtime (`reserveShareVisitorTurn` in
-      // `shareVisitorAbuseGuards.ts`) constructs `MessageModel` with
-      // `includeShareVisitor: true`; mirror that opt-in here.
-      const defaultCount = await messageModel.countByTopic({
-        role: 'user',
-        topicId: visitorTopicId,
-      });
-      expect(defaultCount).toBe(0);
-
-      const shareRuntimeMessageModel = new MessageModel(serverDB, userId, undefined, undefined, {
-        includeShareVisitor: true,
-      });
-      const optedInCount = await shareRuntimeMessageModel.countByTopic({
-        role: 'user',
-        topicId: visitorTopicId,
-      });
-      expect(optedInCount).toBe(1);
     });
 
     it('hides synthetic message-group nodes when the creator reads a visitor topic', async () => {
@@ -2071,18 +2032,9 @@ describe('MessageModel Query Tests', () => {
       expect(child.council[0].sender).toBeNull();
       expect(child.council[0].usage).toBeUndefined();
       expect(child.council[0].model).toBeUndefined();
-
-      // With `showModelInfo` the model snapshot survives on both the child
-      // and the recursed council members, and children stay attached.
-      const kept = toVisitorMessage(compressedGroupNode, { showModelInfo: true });
-      const keptChild = (kept.compressedMessages as any[])[0].children[0];
-      expect(keptChild.model).toBe('gpt-4o');
-      expect(keptChild.usage).toEqual({ totalTokens: 42 });
-      expect(keptChild.council[0].model).toBe('gpt-4o');
-      expect(keptChild.council[0].usage).toEqual({ totalTokens: 7 });
     });
 
-    it('keeps the narrow snapshot for compareGroup children in both modes', async () => {
+    it('strips model and provider from compareGroup children', async () => {
       const compareGroupNode = {
         children: [
           {
@@ -2102,10 +2054,6 @@ describe('MessageModel Query Tests', () => {
       expect((stripped.children as any[])[0].model).toBeNull();
       expect((stripped.children as any[])[0].provider).toBeNull();
       expect((stripped.children as any[])[0].content).toBe('variant');
-
-      const kept = toVisitorMessage(compareGroupNode, { showModelInfo: true });
-      expect((kept.children as any[])[0].model).toBe('gpt-4o');
-      expect((kept.children as any[])[0].provider).toBe('openai');
     });
   });
 

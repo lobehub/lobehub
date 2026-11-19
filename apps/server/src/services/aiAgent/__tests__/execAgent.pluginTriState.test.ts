@@ -1,4 +1,3 @@
-import { onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -273,9 +272,9 @@ describe('AiAgentService.execAgent - agent plugin entries (on / off / disabled)'
     expect(installedPluginsArg().map((p) => p.identifier)).toEqual(['plugin-a']);
     expect(toolManifestMapArg()).toHaveProperty('plugin-a');
     expect(disabledPluginIdsArg()).toContain('plugin-b');
-    // The pinned builtin stays discoverable; only builtins the agent never chose are cut.
+    // Both the legacy pin and the implicit default remain discoverable.
     expect(disabledPluginIdsArg()).not.toContain('lobe-image-generation');
-    expect(disabledPluginIdsArg()).toContain('lobe-video-generation');
+    expect(disabledPluginIdsArg()).not.toContain('lobe-video-generation');
   });
 
   it('offers a pinned media tool up front in Chat mode, which has no activator', async () => {
@@ -333,9 +332,9 @@ describe('AiAgentService.execAgent - agent plugin entries (on / off / disabled)'
     const installed = installedPluginsArg().map((p) => p.identifier);
     expect(installed).toEqual(['plugin-a']);
     expect(agentConfigPluginsArg()).toEqual([]);
-    // Only builtins the agent never opted into are cut; the string entry is on.
+
     expect(disabledPluginIdsArg()).not.toContain('plugin-a');
-    expect(disabledPluginIdsArg().every((id) => onDemandBuiltinToolIds.includes(id))).toBe(true);
+    expect(disabledPluginIdsArg()).not.toContain('lobe-creds');
   });
 
   it('brings in a plugin the agent has off on the turn that @-mentions it', async () => {

@@ -1,4 +1,4 @@
-import { defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
+import { defaultUninstalledBuiltinTools, onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createServerContextFactProviders } from './index';
@@ -247,7 +247,9 @@ describe('createServerContextFactProviders', () => {
         state: {} as never,
       }).listUninstalledBuiltinIds!(),
     ).resolves.toEqual(defaultUninstalledBuiltinTools);
-    expect(defaultUninstalledBuiltinTools.length).toBeGreaterThan(0);
+    expect(
+      defaultUninstalledBuiltinTools.filter((id) => onDemandBuiltinToolIds.includes(id)),
+    ).toEqual([]);
   });
 
   it('returns the app origin and the workspace slug when it resolves', async () => {
