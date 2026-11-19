@@ -91,7 +91,6 @@
   "events.youInvited": "Je hebt {{names}} uitgenodigd voor het kanaal",
   "events.youInvitedMembers": "Je hebt <members/> uitgenodigd voor het kanaal",
   "failure.locate": "Toon bericht",
-  "failure.messageLabel": "Reactie mislukt: {{names}}",
   "failure.title": "Mislukte reacties · {{count}}",
   "followers": "Reacties van: {{names}}",
   "invite.directHint": "Als je hier uitnodigt, wordt een nieuw kanaal gestart met {{name}} en de leden die je kiest. Dit gesprek met {{name}} blijft zoals het is.",

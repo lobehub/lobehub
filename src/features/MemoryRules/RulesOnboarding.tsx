@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   actions: css`
@@ -62,7 +63,7 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 14px;
     align-items: center;
 
-    padding-block: 16px;
+    padding-block: ${densityVars.cardPadding};
     padding-inline: 20px;
 
     & + & {

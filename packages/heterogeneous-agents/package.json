@@ -7,6 +7,8 @@
     ".": "./src/index.ts",
     "./askUser": "./src/askUser/index.ts",
     "./builtinMcp": "./src/builtinMcp/index.ts",
+    "./claudeCodePermission": "./src/claudeCodePermission/index.ts",
+    "./claudeCodePermission/shared": "./src/claudeCodePermission/shared.ts",
     "./errors": "./src/errors/index.ts",
     "./client": "./src/client/index.ts",
     "./codexAppServerParams": "./src/codex/appServerParams.ts",

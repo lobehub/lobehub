@@ -133,21 +133,24 @@ describe('AgentShareModel coverage edges', () => {
     it('keeps the stored config when the patch carries no defined field', async () => {
       const model = new AgentShareModel(serverDB, userId);
       await model.create(agentId);
-      await model.updateConfig(agentId, { maxTurnsPerTopic: 7, showModelInfo: true });
+      await model.updateConfig(agentId, { maxMessagesPerVisitor: 7, showErrorDetails: true });
 
       const updated = await model.updateConfig(agentId, {
-        maxTurnsPerTopic: undefined,
-        showModelInfo: undefined,
+        maxMessagesPerVisitor: undefined,
+        showErrorDetails: undefined,
       });
 
       expect(updated?.shareConfig).toMatchObject({
-        maxTurnsPerTopic: 7,
-        showModelInfo: true,
+        maxMessagesPerVisitor: 7,
+        showErrorDetails: true,
         slug: 'ascov-agent-slug',
       });
 
       const empty = await model.updateConfig(agentId, {});
-      expect(empty?.shareConfig).toMatchObject({ maxTurnsPerTopic: 7, showModelInfo: true });
+      expect(empty?.shareConfig).toMatchObject({
+        maxMessagesPerVisitor: 7,
+        showErrorDetails: true,
+      });
     });
   });
 

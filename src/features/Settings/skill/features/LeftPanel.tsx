@@ -1,20 +1,22 @@
 'use client';
 
-import { Button, DropdownMenu, Flexbox, Icon, SearchBar, Text, Tooltip } from '@lobehub/ui';
-import { GithubIcon } from '@lobehub/ui/icons';
+import type { ConnectorVisibility } from '@lobechat/types';
+import { Button, DropdownMenu, Flexbox, Icon, SearchBar, Tabs, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronDown, FileArchive, Grid2x2Plus, Link, Plus, Store } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { ChevronDown, Grid2x2Plus, Import, LockIcon, Plus, Store, UsersIcon } from 'lucide-react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { CustomConnectorModal } from '@/features/Connectors';
-import { createSkillStoreModal } from '@/features/SkillStore';
-import { openImportFromGithubModal } from '@/features/SkillStore/SkillList/ImportFromGithubModal';
-import { openImportFromUrlModal } from '@/features/SkillStore/SkillList/ImportFromUrlModal';
-import { openUploadSkillModal } from '@/features/SkillStore/SkillList/UploadSkillModal';
+import { NavPanelDensityContext } from '@/features/NavPanel/density';
+import { createMarketSkillStoreModal, createSkillStoreModal } from '@/features/SkillStore';
+import { openSkillImportModal } from '@/features/SkillStore/SkillImportModal';
 import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 import { usePermission } from '@/hooks/usePermission';
+import { useInterfaceDensity } from '@/styles/density';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
+import { densityVars } from '@/styles/densityVars';
 
 import ConnectorManagePolicy from './ConnectorManagePolicy';
 import { type ToolDetailType } from './SkillDetail';
@@ -38,6 +40,7 @@ const styles = stylex.create({
     },
   },
   body: { overflowY: 'auto', flex: '1', paddingBlock: '4px', paddingInline: '8px' },
+  columnTabs: { paddingInline: '8px' },
   pageBody: { paddingBlockStart: '0', paddingBlockEnd: '24px', paddingInline: '0' },
   // Title and one line of what connectors do on the left; search and the page
   // actions on the right, the primary Add last.
@@ -45,14 +48,15 @@ const styles = stylex.create({
     display: 'flex',
     flexShrink: 0,
     flexWrap: 'wrap',
-    gap: '16px',
+    gap: densityTokens['--lobe-density-section-gap'],
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingBlockStart: '32px',
     paddingBlockEnd: '8px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   pageSearch: { width: '240px' },
+  pageTabs: { paddingInline: densityTokens['--lobe-density-content-gap'] },
   pageTitle: {
     marginBlock: 0,
     fontSize: cssVar.fontSizeHeading3,
@@ -66,8 +70,8 @@ const styles = stylex.create({
     gap: '8px',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: '42px',
-    paddingInline: '16px',
+    height: sidebarRow.headerHeight,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorBorderSecondary,
@@ -90,26 +94,67 @@ interface LeftPanelProps {
   fullWidth?: boolean;
   onDeleteSelected: () => void;
   onSelect: (identifier: string, type: ToolDetailType) => void;
+  onVisibilityChange?: (visibility: ConnectorVisibility) => void;
   /** Render as the page-level list a row opens a second-level detail from. */
   page?: boolean;
   selectedIdentifier?: string;
   viewMode: SkillViewMode;
+  /**
+   * Workspace connectors only: the active tab — the shared pool (`public`) or
+   * the caller's private connectors. Unset outside a workspace (no tabs).
+   */
+  visibility?: ConnectorVisibility;
 }
 
 const LeftPanel = memo<LeftPanelProps>(
-  ({ fullWidth, onDeleteSelected, onSelect, page, selectedIdentifier, viewMode }) => {
+  ({
+    fullWidth,
+    onDeleteSelected,
+    onSelect,
+    onVisibilityChange,
+    page,
+    selectedIdentifier,
+    viewMode,
+    visibility,
+  }) => {
     const { t } = useTranslation(['setting', 'tool']);
+    const interfaceDensity = useInterfaceDensity();
     const [showAddConnector, setShowAddConnector] = useState(false);
     const [keyword, setKeyword] = useState('');
 
-    const handleOpenStore = useCallback(() => {
-      createSkillStoreModal();
-    }, []);
-
     const isConnectorView = viewMode === 'connector';
+    const handleOpenStore = isConnectorView ? createSkillStoreModal : createMarketSkillStoreModal;
     const { allowed: canCreate } = usePermission('create_content');
-    // Adding a workspace connector follows the same member policy as editing one.
-    const { canManage: canAddConnector, isPending: isPolicyPending } = useConnectorManageable();
+    const isPrivateTab = isConnectorView && visibility === 'private';
+    // Adding a shared workspace connector follows the same member policy as
+    // editing one; a private connector is the caller's own and skips it.
+    const { canManage: canManageShared, isPending: isSharedPolicyPending } =
+      useConnectorManageable();
+    const canAddConnector = isPrivateTab || canManageShared;
+    const isPolicyPending = !isPrivateTab && isSharedPolicyPending;
+    const visibilityTabs = isConnectorView && visibility && (
+      <Tabs
+        activeKey={visibility}
+        items={[
+          {
+            icon: <Icon icon={UsersIcon} />,
+            key: 'public',
+            label: t('skillView.connectorTabs.workspace'),
+          },
+          {
+            icon: <Icon icon={LockIcon} />,
+            key: 'private',
+            label: t('skillView.connectorTabs.private'),
+          },
+        ]}
+        onChange={(key) => onVisibilityChange?.(key as ConnectorVisibility)}
+      />
+    );
+    const connectorsDesc = isPrivateTab
+      ? t('skillView.privateConnectorsDesc')
+      : visibility
+        ? t('skillView.workspaceConnectorsDesc')
+        : t('skillView.connectorsDesc');
     const addConnectorTitle = t('connector.add.title', {
       defaultValue: 'Add Custom Connector',
       ns: 'tool',
@@ -131,38 +176,31 @@ const LeftPanel = memo<LeftPanelProps>(
               },
             ]
           : []),
-        {
-          desc: t('connectorMarket.add.browseStoreDesc'),
-          icon: <Icon icon={Store} />,
-          key: 'store',
-          label: t('connectorMarket.add.browseStore'),
-          onClick: handleOpenStore,
-        },
+        // A store install joins the shared pool, so the private tab omits it
+        ...(isPrivateTab
+          ? []
+          : [
+              {
+                desc: t(
+                  isConnectorView
+                    ? 'connectorMarket.add.browseStoreDesc'
+                    : 'skillView.browseStoreDesc',
+                ),
+                icon: <Icon icon={Store} />,
+                key: 'store',
+                label: t('connectorMarket.add.browseStore'),
+                onClick: handleOpenStore,
+              },
+            ]),
         ...(!isConnectorView
           ? [
               {
-                desc: t('tab.importFromGithub.desc'),
+                desc: t('agentSkillModal.sources'),
                 disabled: !canCreate,
-                icon: <Icon icon={GithubIcon} />,
-                key: 'importGithub',
-                label: t('tab.importFromGithub'),
-                onClick: () => openImportFromGithubModal(),
-              },
-              {
-                desc: t('tab.importFromUrl.desc'),
-                disabled: !canCreate,
-                icon: <Icon icon={Link} />,
-                key: 'importUrl',
-                label: t('tab.importFromUrl'),
-                onClick: () => openImportFromUrlModal(),
-              },
-              {
-                desc: t('tab.uploadZip.desc'),
-                disabled: !canCreate,
-                icon: <Icon icon={FileArchive} />,
-                key: 'uploadZip',
-                label: t('tab.uploadZip'),
-                onClick: () => openUploadSkillModal(),
+                icon: <Icon icon={Import} />,
+                key: 'import',
+                label: t('agentSkillModal.title'),
+                onClick: openSkillImportModal,
               },
             ]
           : []),
@@ -179,7 +217,7 @@ const LeftPanel = memo<LeftPanelProps>(
                 {t(isConnectorView ? 'skillView.connectors' : 'skillView.skills')}
               </h1>
               <Text type={'secondary'}>
-                {t(isConnectorView ? 'skillView.connectorsDesc' : 'skillView.skillsDesc')}
+                {isConnectorView ? connectorsDesc : t('skillView.skillsDesc')}
               </Text>
             </Flexbox>
             <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
@@ -204,7 +242,9 @@ const LeftPanel = memo<LeftPanelProps>(
               </DropdownMenu>
             </Flexbox>
           </div>
-          {isConnectorView && <ConnectorManagePolicy variant={'page'} />}
+          {visibilityTabs && <div {...stylex.props(styles.pageTabs)}>{visibilityTabs}</div>}
+          {/* The member policy governs the shared pool only */}
+          {isConnectorView && !isPrivateTab && <ConnectorManagePolicy variant={'page'} />}
         </>
       );
 
@@ -215,6 +255,7 @@ const LeftPanel = memo<LeftPanelProps>(
               keyword={keyword}
               renderHeader={renderHeader}
               viewMode={viewMode}
+              visibility={visibility}
               onClearKeyword={() => setKeyword('')}
               onDeleteSelected={onDeleteSelected}
               onSelect={onSelect}
@@ -222,6 +263,7 @@ const LeftPanel = memo<LeftPanelProps>(
           </div>
           <CustomConnectorModal
             open={showAddConnector}
+            visibility={visibility}
             onClose={() => setShowAddConnector(false)}
           />
         </SkillListVariantProvider>
@@ -229,13 +271,13 @@ const LeftPanel = memo<LeftPanelProps>(
     }
 
     return (
-      <>
+      <NavPanelDensityContext value={fullWidth ? null : interfaceDensity}>
         <div
           className={stylex.props(styles.root).className}
           style={fullWidth ? { borderInlineEnd: 'none', width: '100%' } : undefined}
         >
           <div {...stylex.props(styles.header)}>
-            <Text strong style={{ fontSize: 14 }}>
+            <Text strong style={{ fontSize: densityVars.fontSize }}>
               {isConnectorView
                 ? t('skillView.connectors', 'Connectors')
                 : t('skillView.skills', 'Skills')}
@@ -264,77 +306,45 @@ const LeftPanel = memo<LeftPanelProps>(
                   </span>
                 </Tooltip>
               ) : (
-                // Skill view: import a skill from a URL, GitHub, or a zip upload.
-                <DropdownMenu
-                  nativeButton={false}
-                  placement="bottomRight"
-                  items={[
-                    {
-                      icon: <Icon icon={Link} />,
-                      key: 'importUrl',
-                      label: (
-                        <Flexbox gap={2}>
-                          <span>{t('tab.importFromUrl')}</span>
-                          <Text style={{ fontSize: 12 }} type="secondary">
-                            {t('tab.importFromUrl.desc')}
-                          </Text>
-                        </Flexbox>
-                      ),
-                      onClick: () => openImportFromUrlModal(),
-                    },
-                    {
-                      icon: <Icon icon={GithubIcon} />,
-                      key: 'importGithub',
-                      label: (
-                        <Flexbox gap={2}>
-                          <span>{t('tab.importFromGithub')}</span>
-                          <Text style={{ fontSize: 12 }} type="secondary">
-                            {t('tab.importFromGithub.desc')}
-                          </Text>
-                        </Flexbox>
-                      ),
-                      onClick: () => openImportFromGithubModal(),
-                    },
-                    {
-                      icon: <Icon icon={FileArchive} />,
-                      key: 'uploadZip',
-                      label: (
-                        <Flexbox gap={2}>
-                          <span>{t('tab.uploadZip')}</span>
-                          <Text style={{ fontSize: 12 }} type="secondary">
-                            {t('tab.uploadZip.desc')}
-                          </Text>
-                        </Flexbox>
-                      ),
-                      onClick: () => openUploadSkillModal(),
-                    },
-                  ]}
-                >
-                  <Button aria-label={t('connectorMarket.add')} icon={Grid2x2Plus} size="small" />
-                </DropdownMenu>
+                <Button
+                  aria-label={t('agentSkillModal.title')}
+                  disabled={!canCreate}
+                  icon={Import}
+                  size="small"
+                  title={t('agentSkillModal.title')}
+                  onClick={openSkillImportModal}
+                />
               )}
-              <Button
-                aria-label={t('skillStore.title')}
-                icon={<Icon icon={Store} />}
-                size="small"
-                onClick={handleOpenStore}
-              />
+              {!isPrivateTab && (
+                <Button
+                  aria-label={t('skillStore.title')}
+                  icon={<Icon icon={Store} />}
+                  size="small"
+                  onClick={handleOpenStore}
+                />
+              )}
             </div>
           </div>
 
-          {isConnectorView && <ConnectorManagePolicy />}
+          {visibilityTabs && <div {...stylex.props(styles.columnTabs)}>{visibilityTabs}</div>}
+          {isConnectorView && !isPrivateTab && <ConnectorManagePolicy />}
 
           <div {...stylex.props(styles.body)}>
             <SkillList
               selectedIdentifier={selectedIdentifier}
               viewMode={viewMode}
+              visibility={visibility}
               onDeleteSelected={onDeleteSelected}
               onSelect={onSelect}
             />
           </div>
         </div>
-        <CustomConnectorModal open={showAddConnector} onClose={() => setShowAddConnector(false)} />
-      </>
+        <CustomConnectorModal
+          open={showAddConnector}
+          visibility={visibility}
+          onClose={() => setShowAddConnector(false)}
+        />
+      </NavPanelDensityContext>
     );
   },
 );

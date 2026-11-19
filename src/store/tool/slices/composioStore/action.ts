@@ -150,7 +150,7 @@ export class ComposioStoreActionImpl {
   }
 
   callComposioTool = async (params: CallComposioToolParams): Promise<CallComposioToolResult> => {
-    const { identifier, toolSlug, toolArgs } = params;
+    const { agentId, identifier, toolSlug, toolArgs, topicId } = params;
 
     const toolId = `${identifier}:${toolSlug}`;
 
@@ -164,9 +164,11 @@ export class ComposioStoreActionImpl {
 
     try {
       const response = await toolsClient.composio.executeAction.mutate({
+        agentId,
         identifier,
         toolArgs,
         toolSlug,
+        topicId,
       });
 
       this.#set(
@@ -203,7 +205,7 @@ export class ComposioStoreActionImpl {
   createComposioConnection = async (
     params: CreateComposioServerParams,
   ): Promise<ComposioServer | undefined> => {
-    const { appSlug, identifier, label, agentId } = params;
+    const { appSlug, identifier, label, agentId, replacesConnectedAccountId } = params;
     // The completion is bound to the identity that started it: the server may
     // answer after the user switched scope (see the guard below).
     const scope = cacheScope.get();
@@ -223,6 +225,7 @@ export class ComposioStoreActionImpl {
         appSlug,
         identifier,
         label,
+        replacesConnectedAccountId,
       });
 
       // The user may have switched identity while the server answered. Writing
@@ -423,36 +426,20 @@ export class ComposioStoreActionImpl {
     const { composioServers } = this.#get();
     const existing = composioServers.find((s) => s.identifier === identifier);
     if (!existing) return undefined;
-    // Bound to the identity that started it, like `createComposioConnection`,
-    // whose own guard only captures the scope once it starts — after the cleanup
-    // below has already awaited.
-    const scope = cacheScope.get();
 
-    // Clean up the stale connection on Composio's side (the prior link likely
-    // expired). Best-effort — if it's already gone we still mint a fresh one.
-    try {
-      await lambdaClient.composio.deleteConnection.mutate({
-        connectedAccountId: existing.connectedAccountId,
-        identifier,
-      });
-    } catch (error) {
-      console.error('[Composio] Failed to clean up stale connection:', error);
-      // A permission rejection here means minting a new link is rejected too:
-      // stop, and let the refetched policy disable the row.
-      if (this.#settlePermissionRejection(toConnectorActionError('connect', error)))
-        return undefined;
-    }
-
-    // Identity switched during the cleanup: minting now would create (and
-    // persist) this scope's connection under the other identity.
-    if (cacheScope.get() !== scope) return undefined;
-
-    // Mint a fresh link; createComposioConnection replaces the record in place
-    // (by identifier), so the UI keeps showing the same row with a new redirectUrl.
+    // One server write re-authorizes the connection in place: it drops the stale
+    // account (the prior link likely expired) and links a fresh one on the same
+    // connector row. Removing the row first and creating a new one would lose
+    // its scope: a private connection would come back shared — or land on a
+    // shared sibling — and the new account would run for workspace agents.
+    // createComposioConnection replaces the record in place (by identifier), so
+    // the UI keeps showing the same row with a new redirectUrl.
     return this.#get().createComposioConnection({
+      agentId: existing.agentId,
       appSlug: existing.appSlug,
       identifier,
       label: existing.label,
+      replacesConnectedAccountId: existing.connectedAccountId,
     });
   };
 

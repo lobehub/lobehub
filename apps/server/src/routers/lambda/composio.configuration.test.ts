@@ -52,6 +52,34 @@ describe('composioRouter without a configured API key', () => {
     expect(PluginModel).toHaveBeenCalledWith(expect.anything(), userId, workspaceId);
   });
 
+  it("withholds a pending connection's hosted link from everyone but its linker", async () => {
+    // Regression: any member could read a teammate's (private) pending link from
+    // the workspace-wide projection and bind their own account to it.
+    const pending = (linkedByUserId: string) => ({
+      customParams: {
+        composio: {
+          connectedAccountId: `acc-${linkedByUserId}`,
+          linkedByUserId,
+          redirectUrl: `https://composio.dev/link/${linkedByUserId}`,
+          status: 'PENDING',
+        },
+      },
+      identifier: 'gmail',
+    });
+    mocks.pluginQuery.mockResolvedValue([pending('me'), pending('mate')]);
+
+    const plugins = await callerFor('me', 'workspace-1').getComposioPlugins();
+    // A teammate's private connection is never listed to the client
+    expect(mocks.pluginQuery).toHaveBeenCalledWith({ forClient: true });
+
+    expect(plugins[0].customParams?.composio?.redirectUrl).toBe('https://composio.dev/link/me');
+    expect(plugins[1].customParams?.composio).toEqual({
+      connectedAccountId: 'acc-mate',
+      linkedByUserId: 'mate',
+      status: 'PENDING',
+    });
+  });
+
   it('still rejects unauthenticated plugin listing before reading the database', async () => {
     await expect(callerFor().getComposioPlugins()).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
     expect(mocks.pluginQuery).not.toHaveBeenCalled();

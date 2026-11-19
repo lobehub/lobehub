@@ -1,6 +1,7 @@
 import { toolSelectors } from '@/store/tool/selectors';
-import { connectorSelectors } from '@/store/tool/slices/connector';
 import type { ToolStore } from '@/store/tool/store';
+
+import { connectorForTool } from './connectorForTool';
 
 /**
  * The name an MCP App goes by in the conversation: its plugin's title, else the
@@ -11,5 +12,5 @@ export const mcpAppNameSelector =
   (identifier: string, agentId?: string) =>
   (s: ToolStore): string =>
     toolSelectors.getMetaById(identifier)(s)?.title ||
-    connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s)?.name ||
+    connectorForTool(identifier, agentId)(s)?.name ||
     identifier;

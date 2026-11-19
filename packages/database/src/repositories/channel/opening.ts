@@ -1,8 +1,10 @@
 import type { ChannelContextMessage } from '@lobechat/types';
-import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, lt, ne } from 'drizzle-orm';
+import pMap from 'p-map';
 
 import type { ChannelJobItem } from '../../schemas';
 import {
+  agentOperations,
   agents,
   channelAudit,
   channelJobs,
@@ -12,11 +14,13 @@ import {
   channelThreads,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
 import { appendMessage } from './delivery';
 import { readManifestMessages } from './manifest';
 import type { OpeningFacts, OpeningLayout } from './openingLayout';
 import { chooseOpeningLayout } from './openingLayout';
+import { messageStands } from './tombstone';
 import { audit, withChannelLock } from './transaction';
 import { createChannelThread } from './view';
 
@@ -29,6 +33,18 @@ const THREAD_TITLE_LENGTH = 60;
 /** Messages before the request the opener sees, oldest first. */
 const OPENING_CONTEXT_LIMIT = 6;
 
+/**
+ * Open Threads started before the request that its reply may continue in, nearest first. Counted
+ * by where each sits on the timeline, so the choice stays about what was just being discussed.
+ */
+const OPENING_THREAD_LIMIT = 5;
+
+/** Threads described at once; each reads two messages. */
+const OPENING_THREAD_READ_CONCURRENCY = 3;
+
+/** Thread reference a message carries, shown by clients as the Thread's chip. */
+export const channelThreadReference = (threadId: string) => `<#${threadId}>`;
+
 /** Request key of the acknowledgement a job posted before its run. */
 export const openingRequestKey = (jobId: string) => `opening:${jobId}`;
 
@@ -36,6 +52,16 @@ export const openingRequestKey = (jobId: string) => `opening:${jobId}`;
 export interface ChannelCoAddressedAgent {
   name: string | null;
   title: string | null;
+}
+
+/** An open Thread the reply may continue in, as the opener sees it. */
+export interface ChannelOpeningThread {
+  id: string;
+  /** The latest standing message in the Thread. */
+  lastMessage?: string;
+  /** The message the Thread opened under, unless it was deleted. */
+  root?: string;
+  title?: string;
 }
 
 /** A queued job that may still open its reply, with what the opener needs to decide. */
@@ -53,16 +79,33 @@ export interface ChannelOpeningCandidate {
   canOpenThread: boolean;
   /** The other Agents the request asked to answer; they share one Thread with this reply. */
   coAddressed: ChannelCoAddressedAgent[];
+  /**
+   * The device picked for the Agent in this Channel. Every reply of the member runs there, so
+   * it names the run's target before the claim; without one only the claim resolves it.
+   */
+  deviceId?: string;
+  /** The Agent's membership in this Channel, which its replies run as. */
+  memberId: string;
   /** Public messages just before the request, oldest first. */
   recent: ChannelContextMessage[];
   request: ChannelContextMessage;
   requesterUserId: string;
+  /**
+   * Open Threads started before the request, nearest first, that the reply may continue in.
+   * Empty when it cannot move: already in a Thread, or asked together with other Agents.
+   */
+  threads: ChannelOpeningThread[];
   workspaceId: string | null;
 }
 
 /** How the opener decided to open the reply. Both empty means the run simply starts. */
 export interface ChannelOpeningDecision {
   ack?: string;
+  /**
+   * Present when the reply continues in this open Thread; it must still be one of the request's
+   * {@link ChannelOpeningCandidate.threads}, or the reply starts in place.
+   */
+  threadId?: string;
   /** Present when the reply moves into a new Thread named this. */
   threadTitle?: string;
 }
@@ -100,7 +143,7 @@ const coAddressedJobs = async (
 ) => {
   if (!opensReply(job)) return [];
   const rows = await db
-    .select({ name: agents.name, title: agents.title, wake: channelJobs.wake })
+    .select({ name: agents.name, title: agentTitleSql(), wake: channelJobs.wake })
     .from(channelJobs)
     .innerJoin(channelMembers, eq(channelMembers.id, channelJobs.memberId))
     .innerJoin(agents, eq(agents.id, channelMembers.agentId))
@@ -144,7 +187,8 @@ export const findOpeningCandidate = async (
       job: channelJobs,
       agentId: channelMembers.agentId,
       agentName: agents.name,
-      agentTitle: agents.title,
+      agentTitle: agentTitleSql(),
+      memberConfig: channelMembers.config,
     })
     .from(channelJobs)
     .innerJoin(channelMembers, eq(channelMembers.id, channelJobs.memberId))
@@ -199,15 +243,27 @@ export const findOpeningCandidate = async (
   );
   const requestMessage = messages.find((message) => message.id === job.messageId);
   if (!requestMessage) return;
+  const coAddressed = await coAddressedJobs(db, job);
 
   return {
     addressed: owesAnswer(job),
     agent: { id: row.agentId, name: row.agentName, title: row.agentTitle },
     canOpenThread: !job.threadId,
-    coAddressed: await coAddressedJobs(db, job),
+    coAddressed,
+    ...(row.memberConfig?.deviceId && { deviceId: row.memberConfig.deviceId }),
+    memberId: job.memberId,
     recent: messages.filter((message) => message.id !== job.messageId),
     request: requestMessage,
     requesterUserId: requester.userId,
+    // Agents asked together share one new Thread under the request instead.
+    threads:
+      job.threadId || coAddressed.length
+        ? []
+        : await describeThreads(
+            db,
+            channelId,
+            await recentOpenThreads(db, channelId, request.sequence),
+          ),
     workspaceId: channel.workspaceId,
   };
 };
@@ -251,6 +307,32 @@ export const applyOpening = async (
         .update(channelJobs)
         .set({ wake: { ...job.wake!, kind: 'mention' } })
         .where(eq(channelJobs.id, job.id));
+    // Continuing in an open Thread: the acknowledgement answers the request where it was asked
+    // and links the Thread, and the reply moves there.
+    const existing =
+      decision.threadId && !(optional && !ack)
+        ? await continuableThread(tx, job, decision.threadId)
+        : undefined;
+    if (existing) {
+      const posted = await appendMessage(tx, {
+        agentId: member.agentId,
+        channelId,
+        content: [ack, channelThreadReference(existing.id)].filter(Boolean).join(' '),
+        replyToId: job.messageId,
+        requestKey: openingRequestKey(job.id),
+        routingStatus: 'reply',
+        threadId: null,
+      });
+      await joinThread(tx, job, existing);
+      await audit(tx, channelId, REPLY_OPENED_EVENT, job.id, {
+        continued: true,
+        messageId: posted.id,
+        ...(optional && { committed: true }),
+        threadId: existing.id,
+      });
+      return true;
+    }
+
     const title = decision.threadTitle?.trim().slice(0, THREAD_TITLE_LENGTH) ?? '';
     // An optional reply never opens or joins a Thread on its own: it may yet stay silent in it.
     const layout: OpeningLayout =
@@ -330,21 +412,13 @@ const hasSeveralPeople = async (tx: Transaction, channelId: string) => {
 };
 
 /**
- * Opens (or joins) the Thread under `rootMessageId` and moves the job into it, with every answer
- * still waiting on the same request: the follow-ups deferred behind it, and the peers that chose
- * to answer in place before the Thread existed. Returns the Thread's id.
+ * Every answer still waiting on the job's request, and the active members who follow it: the
+ * follow-ups deferred behind it (they must read it to stay silent), and the peers that already
+ * chose to answer in place — a run that started before the move must not publish outside the
+ * Thread, or the same request's answers split between the timeline and the Thread.
  */
-const openReplyThread = async (
-  tx: Transaction,
-  job: ChannelJobItem,
-  rootMessageId: string,
-  title: string,
-) => {
+const waitingOnRequest = async (tx: Transaction, job: ChannelJobItem) => {
   const { channelId } = job;
-  // Every answer still waiting on this request moves with it: the follow-ups deferred behind this
-  // one (they must read it to stay silent), and the peers that already chose to answer in place —
-  // a run that started before the Thread opened must not publish outside it, or the same request's
-  // answers split between the timeline and the Thread.
   const siblings = await tx
     .select({ id: channelJobs.id, memberId: channelJobs.memberId })
     .from(channelJobs)
@@ -374,6 +448,22 @@ const openReplyThread = async (
         ),
       )
   ).map(({ id }) => id);
+  return { followers, siblings };
+};
+
+/**
+ * Opens (or joins) the Thread under `rootMessageId` and moves the job into it, with every answer
+ * still waiting on the same request: the follow-ups deferred behind it, and the peers that chose
+ * to answer in place before the Thread existed. Returns the Thread's id.
+ */
+const openReplyThread = async (
+  tx: Transaction,
+  job: ChannelJobItem,
+  rootMessageId: string,
+  title: string,
+) => {
+  const { channelId } = job;
+  const { followers, siblings } = await waitingOnRequest(tx, job);
   const thread = await createChannelThread(tx, channelId, {
     followerMemberIds: followers,
     rootMessageId,
@@ -432,6 +522,107 @@ const followThread = async (
     .where(eq(channelThreads.id, thread.id));
 };
 
+/** The open Threads started on the main timeline before `beforeSequence`, nearest first. */
+const recentOpenThreads = (
+  db: LobeChatDatabase | Transaction,
+  channelId: string,
+  beforeSequence: number,
+) =>
+  db
+    .select({
+      followerMemberIds: channelThreads.followerMemberIds,
+      id: channelThreads.id,
+      metadata: channelThreads.metadata,
+      rootMessageId: channelThreads.rootMessageId,
+    })
+    .from(channelThreads)
+    .where(
+      and(
+        eq(channelThreads.channelId, channelId),
+        lt(channelThreads.rootSequence, beforeSequence),
+        ne(channelThreads.status, 'archived'),
+        notTrashed(channelThreads.isDeleted),
+      ),
+    )
+    .orderBy(desc(channelThreads.rootSequence))
+    .limit(OPENING_THREAD_LIMIT);
+
+/** What the opener reads of each Thread: its name, where it started and where it is now. */
+const describeThreads = async (
+  db: LobeChatDatabase,
+  channelId: string,
+  threads: Awaited<ReturnType<typeof recentOpenThreads>>,
+): Promise<ChannelOpeningThread[]> =>
+  pMap(
+    threads,
+    async (thread) => {
+      const [[root], [last]] = await Promise.all([
+        db
+          .select({ content: channelMessages.content })
+          .from(channelMessages)
+          .where(
+            and(
+              eq(channelMessages.channelId, channelId),
+              eq(channelMessages.id, thread.rootMessageId),
+              messageStands(),
+            ),
+          ),
+        db
+          .select({ content: channelMessages.content })
+          .from(channelMessages)
+          .where(
+            and(
+              eq(channelMessages.channelId, channelId),
+              eq(channelMessages.threadId, thread.id),
+              messageStands(),
+            ),
+          )
+          .orderBy(desc(channelMessages.sequence))
+          .limit(1),
+      ]);
+      const title = thread.metadata?.title;
+      return {
+        id: thread.id,
+        ...(last?.content && { lastMessage: last.content }),
+        ...(root?.content && { root: root.content }),
+        ...(typeof title === 'string' && title && { title }),
+      };
+    },
+    { concurrency: OPENING_THREAD_READ_CONCURRENCY },
+  );
+
+/**
+ * The open Thread a job may continue in: still one of the Threads its opener was shown, checked
+ * again under the lock, for a job on the main timeline that no other Agent was asked with.
+ */
+const continuableThread = async (tx: Transaction, job: ChannelJobItem, threadId: string) => {
+  if (job.threadId || (await coAddressedJobs(tx, job)).length) return;
+  const [request] = await tx
+    .select({ sequence: channelMessages.sequence })
+    .from(channelMessages)
+    .where(eq(channelMessages.id, job.messageId));
+  if (!request) return;
+  const threads = await recentOpenThreads(tx, job.channelId, request.sequence);
+  return threads.find((thread) => thread.id === threadId);
+};
+
+/**
+ * Moves the job into an open Thread with every answer still waiting on its request, as
+ * {@link openReplyThread} does; the requester and the answering Agents then follow it.
+ */
+const joinThread = async (
+  tx: Transaction,
+  job: ChannelJobItem,
+  thread: { followerMemberIds: string[]; id: string },
+) => {
+  const { followers, siblings } = await waitingOnRequest(tx, job);
+  await followThread(tx, thread, followers);
+  await tx
+    .update(channelJobs)
+    .set({ threadId: thread.id })
+    .where(inArray(channelJobs.id, [job.id, ...siblings.map(({ id }) => id)]));
+};
+
 const nameThread = async (tx: Transaction, threadId: string, title: string) => {
   const [thread] = await tx
     .select({ metadata: channelThreads.metadata })
@@ -460,4 +651,31 @@ export const findOpeningReply = async (
     )
     .limit(1);
   return message;
+};
+
+/**
+ * The newest reply of `memberId` on `deviceId` since `since` that finished: answered, chose
+ * silence, or failed, with its run's error. A stopped reply says nothing about the device.
+ */
+export const findLastSettledReplyOnDevice = async (
+  db: LobeChatDatabase,
+  channelId: string,
+  { deviceId, memberId, since }: { deviceId: string; memberId: string; since: Date },
+) => {
+  const [row] = await db
+    .select({ error: agentOperations.error, status: channelJobs.status })
+    .from(channelJobs)
+    .leftJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
+    .where(
+      and(
+        eq(channelJobs.channelId, channelId),
+        eq(channelJobs.memberId, memberId),
+        eq(channelJobs.deviceId, deviceId),
+        inArray(channelJobs.status, ['completed', 'failed', 'silent']),
+        gte(channelJobs.createdAt, since),
+      ),
+    )
+    .orderBy(desc(channelJobs.createdAt))
+    .limit(1);
+  return row;
 };

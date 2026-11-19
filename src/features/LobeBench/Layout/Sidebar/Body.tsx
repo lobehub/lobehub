@@ -126,8 +126,8 @@ const Body = memo(() => {
         style={{ gap: 8 }}
       >
         <AccordionItem value={'experiments'}>
-          <AccordionHeader style={sectionTriggerStyle}>
-            <AccordionTrigger>
+          <AccordionHeader>
+            <AccordionTrigger style={sectionTriggerStyle}>
               <Flexbox horizontal align="center" gap={4}>
                 <SectionTitle>{t('lobeBench.sidebar.experiments')}</SectionTitle>
                 {experiments.length > 0 && (
@@ -224,8 +224,8 @@ const Body = memo(() => {
         </AccordionItem>
         {/* Same three groups as the Evaluation Lab: experiments, benchmarks, datasets. */}
         <AccordionItem value={'benchmarks'}>
-          <AccordionHeader style={sectionTriggerStyle}>
-            <AccordionTrigger>
+          <AccordionHeader>
+            <AccordionTrigger style={sectionTriggerStyle}>
               <Flexbox horizontal align="center" gap={4}>
                 <SectionTitle>{t('lobeBench.sidebar.benchmarks')}</SectionTitle>
                 {benchmarks.length > 0 && (
@@ -281,8 +281,8 @@ const Body = memo(() => {
         {/* The datasets the benchmarks are made of, then the account's own (cases
             picked from the library, or its own), flat like the Evaluation Lab's list. */}
         <AccordionItem value={'datasets'}>
-          <AccordionHeader style={sectionTriggerStyle}>
-            <AccordionTrigger>
+          <AccordionHeader>
+            <AccordionTrigger style={sectionTriggerStyle}>
               <Flexbox horizontal align="center" gap={4}>
                 <SectionTitle>{t('lobeBench.sidebar.datasets')}</SectionTitle>
                 {sidebarDatasets.length > 0 && (

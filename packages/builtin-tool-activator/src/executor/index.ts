@@ -59,7 +59,11 @@ class ActivatorExecutor extends BaseExecutor<typeof ActivatorApiName> {
         return { stop: true, success: false };
       }
 
-      const result = await this.getRuntime(ctx).activateTools(params);
+      // Discoverability follows the conversation the call runs in
+      const result = await this.getRuntime(ctx).activateTools(params, {
+        agentId: ctx.agentId,
+        topicId: ctx.topicId ?? undefined,
+      });
 
       if (result.success) {
         return { content: result.content, state: result.state, success: true };

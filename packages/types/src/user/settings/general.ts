@@ -4,8 +4,6 @@ import type { ResponseAnimationStyle } from '../../aiProvider';
 
 export type AnimationMode = 'disabled' | 'agile' | 'elegant';
 
-export type ContextMenuMode = 'disabled' | 'default';
-
 export type InterfaceDensity = 'compact' | 'loose';
 
 /**
@@ -26,7 +24,6 @@ export const resolveFollowUpMode = (
 
 export interface UserGeneralConfig {
   animationMode?: AnimationMode;
-  contextMenuMode?: ContextMenuMode;
   costEstimateWarningThreshold?: number;
   /**
    * Whether to auto-scroll during AI streaming output

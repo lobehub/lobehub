@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 
 import { agentEvalService } from '@/services/agentEval';
 import { testCaseSelectors, useEvalStore } from '@/store/eval';
+import { densityVars } from '@/styles/densityVars';
 
 import { createDatasetCreateModal } from '../../../../features/DatasetCreateModal';
 import { createDatasetEditModal } from '../../../../features/DatasetEditModal';
@@ -32,9 +33,9 @@ const loadingStyles = createStaticStyles(({ css }) => ({
   `,
   header: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
   `,
   icon: css`
     flex-shrink: 0;

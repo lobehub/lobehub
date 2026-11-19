@@ -7,6 +7,7 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ImperativeModal from '@/components/ImperativeModal';
+import { densityTokens } from '@/styles/density.stylex';
 
 import AvailableAgentList from './AvailableAgentList';
 import SelectedAgentList from './SelectedAgentList';
@@ -18,7 +19,7 @@ const styles = stylex.create({
     display: 'flex',
     flexDirection: 'row',
     height: '500px',
-    padding: '12px',
+    padding: densityTokens['--lobe-density-content-gap'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,

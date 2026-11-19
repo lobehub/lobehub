@@ -42,8 +42,8 @@ const DatasetList = memo<DatasetListProps>(({ activeKey, itemKey }) => {
 
   return (
     <AccordionItem value={itemKey}>
-      <AccordionHeader style={sectionTriggerStyle}>
-        <AccordionTrigger>
+      <AccordionHeader>
+        <AccordionTrigger style={sectionTriggerStyle}>
           <Flexbox horizontal align="center" gap={4}>
             <SectionTitle>{t('sidebar.datasets')}</SectionTitle>
             {datasets.length > 0 && (

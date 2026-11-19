@@ -4,6 +4,7 @@ import * as stylex from '@stylexjs/stylex';
 import { type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
 import { type FileListItem } from '@/types/files';
 
 import {
@@ -31,7 +32,7 @@ const styles = stylex.create({
     borderBlockEndStyle: 'solid',
     borderBlockEndWidth: 1,
     insetBlockStart: 0,
-    paddingBlock: 12,
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     paddingInline: 4,
     position: 'sticky',
     zIndex: 1,

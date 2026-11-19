@@ -20,14 +20,16 @@ import { ArchivedNotice } from './ArchivedNotice';
 import { visibleChannelDetail } from './channelAccess';
 import { ChannelMessage, ThreadRootMessage } from './ChannelMessage';
 import { Composer } from './Composer';
-import { hasReplyActivity } from './jobStatus';
+import { hasReplyActivity, replyFailurePlacement } from './jobStatus';
 import { JoinEventLine } from './JoinEventLine';
 import { channelJoinEvents, channelTimeline } from './joinEvents';
 import { isCurrentUserMember } from './memberName';
 import { channelTimeFormatters, presentChannelTimeline } from './messagePresentation';
 import { presentOutgoingMessage, timelineTail } from './outgoing';
 import { OutgoingStatus } from './OutgoingStatus';
+import { ReadOnlyNotice } from './ReadOnlyNotice';
 import { ReplyActivity } from './ReplyActivity';
+import { ReplyFailureRow } from './ReplyFailure';
 import type { ReplyTopic } from './ReplyTopicPanel';
 import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
@@ -43,12 +45,15 @@ interface ChannelConversationProps {
   onOpenThread?: (threadId: string, toggle?: boolean) => void;
   onOpenTopic?: (topic: ReplyTopic) => void;
   onStartThread?: (draft: ChannelThreadDraft) => void;
+  /** Markdown filling the main composer when nothing is saved for it; never sent by itself. */
+  starter?: string;
   threadId?: string | null;
 }
 
 const Timeline = ({
   channelId,
   inert,
+  starter,
   threadId = null,
   onOpenThread,
   onOpenTopic,
@@ -121,6 +126,8 @@ const Timeline = ({
   const thread = threadId ? detail?.threads.find((entry) => entry.id === threadId) : undefined;
   const selectReply = (message: ChannelPublicMessage) => reply.select(message);
   const channelArchived = detail?.channel.status === 'archived';
+  // A shared Agent's owner reading a visitor's conversation: nothing to send, reply to or branch.
+  const readOnly = !!detail?.readOnly;
   const direct = !!detail?.channel.agentId;
   // Join lines belong to the main conversation; a thread starts from its root message. A direct
   // conversation reads like a chat with its Agent, so it has no "invited" lines at all.
@@ -133,6 +140,19 @@ const Timeline = ({
         !detail.hasMore && before === undefined,
       )
     : [];
+  const failures = replyFailurePlacement(
+    detail?.jobs ?? [],
+    new Set([
+      ...timeline.flatMap((item) => (item.kind === 'message' ? [item.message.id] : [])),
+      ...(detail?.rootMessage ? [detail.rootMessage.id] : []),
+    ]),
+    threadId,
+  );
+  const failureRows = (messageId: string) =>
+    detail &&
+    failures.afterMessage
+      .get(messageId)
+      ?.map((job) => <ReplyFailureRow detail={detail} job={job} key={job.id} />);
 
   return (
     <Flexbox
@@ -194,14 +214,18 @@ const Timeline = ({
                   </Flexbox>
                 )}
                 {detail.rootMessage && (
-                  <ThreadRootMessage
-                    detail={detail}
-                    highlighted={highlighted === detail.rootMessage.id}
-                    root={detail.rootMessage}
-                    onReply={
-                      channelArchived || thread?.status === 'archived' ? undefined : selectReply
-                    }
-                  />
+                  <>
+                    <ThreadRootMessage
+                      detail={detail}
+                      failures={failures.underMessage.get(detail.rootMessage.id)}
+                      highlighted={highlighted === detail.rootMessage.id}
+                      root={detail.rootMessage}
+                      onReply={
+                        channelArchived || readOnly || thread?.status === 'archived' ? undefined : selectReply
+                      }
+                    />
+                    {failureRows(detail.rootMessage.id)}
+                  </>
                 )}
                 {/* A new direct conversation starts blank, like an IM chat. */}
                 {!timeline.length &&
@@ -210,60 +234,68 @@ const Timeline = ({
                   ) : direct ? null : (
                     <Empty icon={MessageSquare} title={t('conversationEmpty')} />
                   ))}
-                {presentChannelTimeline(timeline).map(({ item, date, startsDay, continuation }) => (
-                  <Fragment key={item.kind === 'event' ? item.event.id : item.message.id}>
-                    {startsDay && (
-                      <div
-                        aria-label={timeFormats.date.format(date)}
-                        role="separator"
-                        {...stylex.props(styles.dateDivider)}
-                      >
-                        <time dateTime={date.toISOString()} title={timeFormats.date.format(date)}>
-                          {timeFormats.date.format(date)}
-                        </time>
-                      </div>
-                    )}
-                    {item.kind === 'event' ? (
-                      <JoinEventLine event={item.event} />
-                    ) : outgoingById.has(item.message.id) ? (
-                      <ChannelMessage
-                        continuation={continuation}
-                        message={item.message}
-                        pending={outgoingById.get(item.message.id)!.status === 'sending'}
-                        threadId={threadId}
-                        delivery={
-                          <OutgoingStatus
-                            message={outgoingById.get(item.message.id)!}
-                            onRetry={(failed) => followSent(channelActions.retrySend(failed))}
-                          />
-                        }
-                        detail={{
-                          ...detail,
-                          attachments: outgoingById.get(item.message.id)!.attachments,
-                        }}
-                        onJumpToMessage={jumpToMessage}
-                      />
-                    ) : (
-                      <ChannelMessage
-                        continuation={continuation}
-                        detail={detail}
-                        highlighted={highlighted === item.message.id}
-                        message={item.message}
-                        threadId={threadId}
-                        onJumpToMessage={jumpToMessage}
-                        onOpenThread={onOpenThread}
-                        onOpenTopic={onOpenTopic}
-                        onStartThread={channelArchived ? undefined : onStartThread}
-                        onReply={
-                          channelArchived || thread?.status === 'archived' ? undefined : selectReply
-                        }
-                      />
-                    )}
-                  </Fragment>
-                ))}
+                {presentChannelTimeline(timeline, new Set(failures.afterMessage.keys())).map(
+                  ({ item, date, startsDay, continuation }) => (
+                    <Fragment key={item.kind === 'event' ? item.event.id : item.message.id}>
+                      {startsDay && (
+                        <div
+                          aria-label={timeFormats.date.format(date)}
+                          role="separator"
+                          {...stylex.props(styles.dateDivider)}
+                        >
+                          <time dateTime={date.toISOString()} title={timeFormats.date.format(date)}>
+                            {timeFormats.date.format(date)}
+                          </time>
+                        </div>
+                      )}
+                      {item.kind === 'event' ? (
+                        <JoinEventLine event={item.event} />
+                      ) : outgoingById.has(item.message.id) ? (
+                        <ChannelMessage
+                          continuation={continuation}
+                          message={item.message}
+                          pending={outgoingById.get(item.message.id)!.status === 'sending'}
+                          threadId={threadId}
+                          delivery={
+                            <OutgoingStatus
+                              message={outgoingById.get(item.message.id)!}
+                              onRetry={(failed) => followSent(channelActions.retrySend(failed))}
+                            />
+                          }
+                          detail={{
+                            ...detail,
+                            attachments: outgoingById.get(item.message.id)!.attachments,
+                          }}
+                          onJumpToMessage={jumpToMessage}
+                        />
+                      ) : (
+                        <ChannelMessage
+                          continuation={continuation}
+                          detail={detail}
+                          failures={failures.underMessage.get(item.message.id)}
+                          highlighted={highlighted === item.message.id}
+                          message={item.message}
+                          threadId={threadId}
+                          onJumpToMessage={jumpToMessage}
+                          onOpenThread={onOpenThread}
+                          onOpenTopic={onOpenTopic}
+                          onStartThread={channelArchived || readOnly ? undefined : onStartThread}
+                          onReply={
+                            channelArchived || readOnly || thread?.status === 'archived'
+                              ? undefined
+                              : selectReply
+                          }
+                        />
+                      )}
+                      {item.kind === 'message' && failureRows(item.message.id)}
+                    </Fragment>
+                  ),
+                )}
               </WideScreenContainer>
             </Flexbox>
-            {channelArchived || thread?.status === 'archived' ? (
+            {readOnly ? (
+              <ReadOnlyNotice />
+            ) : channelArchived || thread?.status === 'archived' ? (
               <ArchivedNotice channel={detail.channel} threadId={threadId} />
             ) : (
               <Composer
@@ -272,6 +304,7 @@ const Timeline = ({
                 key={channelDraftKey(channelId, threadId)}
                 members={activeMembers}
                 replyTarget={reply.target}
+                starter={threadId ? undefined : starter}
                 activity={
                   hasReplyActivity(detail, threadId) ? (
                     <ReplyActivity detail={detail} threadId={threadId} />

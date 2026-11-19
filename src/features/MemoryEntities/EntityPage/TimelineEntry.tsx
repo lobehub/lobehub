@@ -2,6 +2,8 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { useEntityFormat } from '../format';
 import { type MemoryActivity } from '../types';
 
@@ -13,12 +15,21 @@ const styles = stylex.create({
     fontVariantNumeric: 'tabular-nums',
     paddingBlockStart: '1px',
   },
-  day: { fontSize: '16px', fontWeight: 600, lineHeight: '22px' },
-  dayUpcoming: { fontSize: '14px' },
+  day: {
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
+    fontWeight: 600,
+    lineHeight: '22px',
+  },
+  dayUpcoming: { fontSize: densityTokens['--lobe-density-font-size'] },
   inexact: { color: cssVar.colorTextSecondary, fontWeight: 400 },
   sub: { color: cssVar.colorTextTertiary, fontSize: '12px', lineHeight: '18px' },
   body: { display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 },
-  narrative: { color: cssVar.colorText, fontSize: '14px', lineHeight: '22px', margin: 0 },
+  narrative: {
+    color: cssVar.colorText,
+    fontSize: densityTokens['--lobe-density-font-size'],
+    lineHeight: '22px',
+    margin: 0,
+  },
   meta: { color: cssVar.colorTextTertiary, fontSize: '12px', lineHeight: '20px' },
   name: { color: cssVar.colorTextSecondary },
 });
@@ -34,7 +45,9 @@ const TimelineEntry = memo<TimelineEntryProps>(({ activity, matched, upcoming })
   const format = useEntityFormat();
   const { t } = format;
   const status =
-    upcoming || activity.statusValue === 'completed' ? undefined : format.status(activity.statusValue);
+    upcoming || activity.statusValue === 'completed'
+      ? undefined
+      : format.status(activity.statusValue);
 
   return (
     <div {...stylex.props(styles.row)}>

@@ -1,17 +1,19 @@
 'use client';
 
+import type { ConnectorVisibility } from '@lobechat/types';
 import { Button, Center, Empty } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { media } from '@lobehub/ui/stylex/media.stylex';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
-import { ChevronDownIcon, ChevronRightIcon, SearchX } from 'lucide-react';
+import { ChevronDownIcon, ChevronRightIcon, LockIcon, SearchX } from 'lucide-react';
 import type React from 'react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
@@ -23,8 +25,14 @@ import {
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
-import { connectorSelectors } from '@/store/tool/slices/connector';
+import {
+  connectorSelectors,
+  isInConnectorTab,
+  isIntegrationInConnectorTab,
+} from '@/store/tool/slices/connector';
+import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
+import { densityTokens } from '@/styles/density.stylex';
 import { type LobeToolType } from '@/types/tool/tool';
 
 import AgentConnectorItem from './AgentConnectorItem';
@@ -43,6 +51,7 @@ import {
 } from './connectorSections';
 import LobehubSkillItem from './LobehubSkillItem';
 import McpSkillItem from './McpSkillItem';
+import { privateTabState } from './privateTabState';
 import type { ToolDetailType } from './SkillDetail';
 import { useSkillListVariant } from './SkillListRow';
 
@@ -54,7 +63,7 @@ const styles = stylex.create({
     display: 'flex',
     gap: '4px',
     alignItems: 'center',
-    paddingBlockStart: '12px',
+    paddingBlockStart: densityTokens['--lobe-density-content-gap'],
     paddingBlockEnd: '4px',
     paddingInline: '4px',
     fontSize: '12px',
@@ -80,7 +89,7 @@ const styles = stylex.create({
     cursor: 'default',
     gap: '8px',
     paddingBlock: '0',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     fontSize: cssVar.fontSizeHeading5,
     fontWeight: 600,
     color: { 'default': cssVar.colorText, ':hover': cssVar.colorText },
@@ -101,6 +110,12 @@ interface SkillListProps {
   renderHeader?: () => React.ReactNode;
   selectedIdentifier?: string;
   viewMode?: SkillViewMode;
+  /**
+   * Workspace connector tab: `public` lists the shared pool (every catalog
+   * section); `private` lists only the caller's private connectors. Unset
+   * outside a workspace.
+   */
+  visibility?: ConnectorVisibility;
 }
 
 const SkillList = memo<SkillListProps>(
@@ -112,6 +127,7 @@ const SkillList = memo<SkillListProps>(
     renderHeader,
     selectedIdentifier,
     viewMode = 'connector',
+    visibility,
   }) => {
     const { t } = useTranslation('setting');
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -126,14 +142,27 @@ const SkillList = memo<SkillListProps>(
     const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
     const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
     const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
-    const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
-    const marketplaceConnectors = useToolStore(
+    const allCustomConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+    const allMarketplaceConnectors = useToolStore(
       connectorSelectors.marketplaceMcpConnectors,
       isEqual,
     );
     const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
-    const agentBoundConnectors = useToolStore(connectorSelectors.agentBoundConnectors, isEqual);
+    // The Private tab reads only this list: keep its load's failure for Retry
+    const connectorsSWR = useToolStore((s) => s.useFetchConnectors)(true);
+    const allAgentBoundConnectors = useToolStore(connectorSelectors.agentBoundConnectors, isEqual);
+    // What an OAuth integration's tab is decided by: its rows' visibility, and
+    // which of them holds the account its actions act on
+    const connectorTabRows = useToolStore(
+      (s) =>
+        connectorSelectors.connectorList(s).map(({ identifier, metadata, visibility }) => ({
+          identifier,
+          metadata: metadata?.composio ? { composio: metadata.composio } : null,
+          visibility,
+        })),
+      isEqual,
+    );
     const isAgentBoundInit = useToolStore((s) => s.isAgentBoundInit);
     const fetchAgentBoundConnectors = useToolStore((s) => s.fetchAgentBoundConnectors);
     const allBuiltinTools = useToolStore((s) => s.builtinTools, isEqual);
@@ -211,14 +240,41 @@ const SkillList = memo<SkillListProps>(
     // Integrations (built-in skills / tools and the OAuth catalog, connected
     // first), then installed plugins split into community and custom MCPs.
     // A few dozen entries: cheap enough to derive on each render.
-    const integrations = buildIntegrationItems({
+    const allIntegrations = buildIntegrationItems({
       ...connectionState,
       allBuiltinTools,
       builtinSkills,
       connectorAvailability: { composio: isComposioEnabled, lobehub: isLobehubSkillEnabled },
     });
-    const communityMCPs = installedPluginList.filter((plugin) => plugin.type === 'plugin');
-    const customMCPs = installedPluginList.filter((plugin) => plugin.type === 'customPlugin');
+
+    // Each workspace tab lists its own pool. Built-in tools, plugins and agent
+    // connectors carry no visibility and stay with the shared pool; a connector
+    // row lists under the tab of its visibility, and an OAuth integration
+    // (Composio, LobeHub) under the tabs of its connector rows.
+    const isPrivateTab = isConnectorView && visibility === 'private';
+    const inTab = (c: ConnectorWithTools) => isInConnectorTab(c, visibility);
+    const customConnectors = allCustomConnectors.filter(inTab);
+    const marketplaceConnectors = allMarketplaceConnectors.filter(inTab);
+    const tabVisibility = isConnectorView ? visibility : undefined;
+    const integrations = allIntegrations.filter((item) => {
+      if (item.type === 'composio')
+        return isIntegrationInConnectorTab(
+          item.serverType.identifier,
+          connectorTabRows,
+          tabVisibility,
+          getComposioServerByIdentifier(item.serverType.identifier)?.connectedAccountId,
+        );
+      if (item.type === 'lobehub')
+        return isIntegrationInConnectorTab(item.provider.id, connectorTabRows, tabVisibility);
+      return !isPrivateTab;
+    });
+    const communityMCPs = isPrivateTab
+      ? []
+      : installedPluginList.filter((plugin) => plugin.type === 'plugin');
+    const customMCPs = isPrivateTab
+      ? []
+      : installedPluginList.filter((plugin) => plugin.type === 'customPlugin');
+    const agentBoundConnectors = isPrivateTab ? [] : allAgentBoundConnectors;
 
     const hasAnySkills =
       viewMode === 'skill'
@@ -233,6 +289,49 @@ const SkillList = memo<SkillListProps>(
           agentBoundConnectors.length > 0;
 
     const header = isPage ? renderHeader?.() : undefined;
+
+    const privateState = isPrivateTab
+      ? privateTabState({
+          count: customConnectors.length + marketplaceConnectors.length + integrations.length,
+          error: connectorsSWR.error,
+          isConnectorsInit,
+        })
+      : undefined;
+    if (privateState === 'loading')
+      return (
+        <>
+          {header}
+          <SkeletonList aria-busy paddingBlock={12} rows={4} />
+        </>
+      );
+    if (privateState === 'error') {
+      return (
+        <>
+          {header}
+          <Center className={stylex.props(styles.container).className} paddingBlock={48}>
+            <AsyncError
+              error={connectorsSWR.error}
+              variant={'block'}
+              onRetry={() => void connectorsSWR.mutate()}
+            />
+          </Center>
+        </>
+      );
+    }
+    if (privateState === 'empty') {
+      return (
+        <>
+          {header}
+          <Center className={stylex.props(styles.container).className} paddingBlock={48}>
+            <Empty
+              description={t('skillView.privateConnectorsEmpty.desc')}
+              icon={LockIcon}
+              title={t('skillView.privateConnectorsEmpty.title')}
+            />
+          </Center>
+        </>
+      );
+    }
 
     // A failed fetch must read as a failure with Retry, never as the "no skills"
     // empty (error gated ahead of empty).

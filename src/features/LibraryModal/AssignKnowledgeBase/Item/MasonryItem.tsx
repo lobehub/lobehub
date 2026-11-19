@@ -3,6 +3,7 @@ import { LockIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 
 import KnowledgeIcon from '@/components/KnowledgeIcon';
+import { densityVars } from '@/styles/densityVars';
 import { type KnowledgeItem } from '@/types/knowledgeBase';
 
 import Actions from './Action';
@@ -15,7 +16,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     overflow: hidden;
 
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
@@ -36,7 +37,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   title: css`
     margin: 0 !important;
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     line-height: 1.4;
   `,

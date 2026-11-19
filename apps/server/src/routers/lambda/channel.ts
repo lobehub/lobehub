@@ -69,7 +69,7 @@ const channelProcedure = channelBaseProcedure.use(denyExternalContact);
 
 export const channelRouter = router({
   ...channelHistoryProcedures,
-  /** Without a Channel, the people a new Channel in this workspace can start with. */
+  /** Without a Channel, the people a new Channel in this scope can start with. */
   userCandidates: channelProcedure
     .input(z.object({ channelId: channelId.optional(), search: z.string().max(100).optional() }))
     .query(async ({ ctx, input }) => ({
@@ -242,6 +242,16 @@ export const channelRouter = router({
     )
     .query(async ({ ctx, input }) => ({
       data: await ctx.channelService.detail(input.channelId, input),
+      success: true,
+    })),
+  /**
+   * Visitors' conversations with the caller's shared Agent, for its owner to read; empty unless
+   * the share lets the owner read visitor conversations.
+   */
+  shareVisitors: channelProcedure
+    .input(z.object({ agentId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.channelService.shareVisitors(input.agentId),
       success: true,
     })),
   /** Messages in a Channel and its Threads containing every word of `query`, newest first. */
@@ -436,6 +446,13 @@ export const channelRouter = router({
   send: externalChannelProcedure
     .input(
       z.object({
+        /** Share a contact as a card; the server writes the content and the card snapshot. */
+        card: z
+          .discriminatedUnion('type', [
+            z.object({ type: z.literal('user'), userId: z.string().min(1) }),
+            z.object({ agentId: z.string().min(1), type: z.literal('agent') }),
+          ])
+          .optional(),
         channelId,
         content: z.string().max(CHANNEL_LIMITS.contentLength),
         fileIds: z.array(z.string().min(1)).max(CHANNEL_LIMITS.attachments).optional(),

@@ -22,6 +22,7 @@ import {
   collectBorrowedConnectors,
 } from '@/server/utils/connectorAttribution';
 
+import { toolSetsFrom } from '../../__tests__/helpers/connectorToolSets';
 import { discoverTools } from '.';
 
 vi.mock('@/business/client/model-bank/loadModels', () => ({
@@ -160,6 +161,9 @@ const run = (options: RunOptions = {}) => {
       connectorModel: {
         resolveAll: vi.fn().mockResolvedValue([]),
         resolveByIdentifiers: vi.fn(async (ids: string[]) => options.connectorResolve?.(ids) ?? []),
+        resolveToolSets: toolSetsFrom(
+          async (ids: string[]) => options.connectorResolve?.(ids) ?? [],
+        ),
       },
       connectorToolModel: {
         queryAllByConnectorIds: vi.fn().mockResolvedValue([]),
@@ -324,7 +328,7 @@ describe('discoverTools — connector permissions and ownership', () => {
   });
 });
 
-describe('discoverTools — connectors are opt-in per agent', () => {
+describe('discoverTools — connector discovery', () => {
   const plugin = (identifier: string) => ({
     customParams: {},
     identifier,
@@ -342,14 +346,12 @@ describe('discoverTools — connectors are opt-in per agent', () => {
       (p: any) => p.identifier,
     );
 
-  it('keeps a connector the agent never turned on out of the run', async () => {
+  it('offers connected services and installed plugins to an ordinary agent by default', async () => {
     const result = await run(sources).promise;
-
-    expect(engineManifestIds()).toEqual([]);
-    expect(engineInstalledIds()).toEqual([]);
-    expect(result.lobehubSkillManifests).toEqual([]);
-    expect(result.composioManifests).toEqual([]);
-    expect(Object.keys(result.toolManifestMap)).not.toContain('community-mcp');
+    for (const id of ['lobehub-notion', 'composio-gmail', 'community-mcp']) {
+      expect(result.toolManifestMap).toHaveProperty(id);
+      expect(result.toolsResult.enabledToolIds).not.toContain(id);
+    }
   });
 
   it('lets a connector that is on be discovered without invoking it up front', async () => {
@@ -371,23 +373,23 @@ describe('discoverTools — connectors are opt-in per agent', () => {
       agentConfig: { plugins: ['lobehub-notion', 'community-mcp', 'lobe-image-generation'] },
     }).promise;
 
-    expect(engineManifestIds()).toEqual(['lobehub-notion']);
+    expect(engineManifestIds()).toEqual(['lobehub-notion', 'composio-gmail']);
     expect(engineInstalledIds()).toEqual(['community-mcp']);
     // A pinned builtin tool keeps its pin; only connectors lost that state.
     expect(result.agentPlugins).toEqual(['lobe-image-generation']);
   });
 
-  it('resolves only the connectors that are on as discoverable', async () => {
+  it('limits connector discovery to the custom toolset', async () => {
     const resolveByIdentifiers = vi.fn((_ids: string[]) => []);
 
     await run({
       ...sources,
+      agentConfig: { chatConfig: { toolMode: 'custom' }, plugins: ['lobe-activator'] },
       autoSkillIds: ['custom-mcp'],
       connectorResolve: resolveByIdentifiers,
     }).promise;
 
-    expect(resolveByIdentifiers).toHaveBeenCalledTimes(1);
-    expect(resolveByIdentifiers.mock.calls[0][0]).toEqual(['custom-mcp']);
+    expect(resolveByIdentifiers).toHaveBeenCalledWith(['lobe-activator', 'custom-mcp']);
   });
 
   it('keeps opted-in connectors discoverable despite a legacy manual preference', async () => {
@@ -399,7 +401,7 @@ describe('discoverTools — connectors are opt-in per agent', () => {
 
     expect(result.agentPlugins).toEqual([]);
     expect(engineInstalledIds()).toEqual(['community-mcp']);
-    expect(engineManifestIds()).toEqual(['lobehub-notion']);
+    expect(engineManifestIds()).toEqual(['lobehub-notion', 'composio-gmail']);
   });
 
   it('invokes a connector that is on directly in custom mode, which has no activator either', async () => {

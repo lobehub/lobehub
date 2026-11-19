@@ -104,7 +104,7 @@ export enum RequestTrigger {
  * Everything one shared-agent visitor run carries: WHO the run belongs to
  * (`agentId` / `shareId` / `visitorUserId`), WHAT the visitor is allowed to
  * reach (`allowReadMemory` / `toolGrants` / `knowledgeBaseIds`), and HOW
- * much of the run is shown back to them (`showErrorDetails` / `showModelInfo`).
+ * much of the run is shown back to them (`showErrorDetails`).
  *
  * Single source of truth for the runtime-side share marker: it is stamped once
  * at operation creation onto `state.metadata.agentShareVisitor` and read back
@@ -150,8 +150,6 @@ export interface AgentShareVisitorContext {
   shareId: string;
   /** `AgentShareConfig.showErrorDetails` — gates visitor-facing error redaction. */
   showErrorDetails?: boolean;
-  /** `AgentShareConfig.showModelInfo` — gates visitor-facing model/provider/usage redaction. */
-  showModelInfo?: boolean;
   /**
    * Mirrors `shareConfig.skillGrants` so the skill runtime can enforce the same
    * per-skill allowlist the operation's skill pool was built from. Absent or

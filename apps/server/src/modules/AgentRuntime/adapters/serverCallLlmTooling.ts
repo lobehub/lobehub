@@ -53,11 +53,15 @@ export const resolveServerCallLlmTooling = (
   // Resolve device policy first, then activate only tools already allowed by
   // the operation snapshot. Routing a device must not widen that tool pool.
   const activeDeviceId = resolveRunActiveDeviceId(state);
-  const executionTarget = (state.plan?.execution as ExecutionPlan | undefined)?.target;
+  const executionPlan = state.plan?.execution as ExecutionPlan | undefined;
+  const executionTarget = executionPlan?.target;
   const operationToolSet: OperationToolSet = selectOperationToolSet(state);
 
   const stepDelta = buildStepToolDelta({
-    activeDeviceId,
+    // A pre-bound device makes local-system discoverable. Only a device selected
+    // mid-run (or a legacy operation without a plan) activates its functions.
+    activeDeviceId:
+      !executionPlan || executionPlan.kind === 'device-unrouted' ? activeDeviceId : undefined,
     enabledToolIds: operationToolSet.enabledToolIds,
     forceFinish: state.forceFinish,
     // Device activation cannot widen the operation's allowed tool pool.

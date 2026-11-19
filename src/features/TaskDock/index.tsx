@@ -11,6 +11,8 @@ import * as m from 'motion/react-m';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import Item from './Item';
 import {
   groupDockTasks,
@@ -55,7 +57,7 @@ const styles = createStaticStyles(({ css }) => ({
   head: css`
     cursor: pointer;
     padding-block: 9px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
   `,
   headDivider: css`
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};

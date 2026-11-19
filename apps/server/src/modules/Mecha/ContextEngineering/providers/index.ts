@@ -1,6 +1,9 @@
 import { type AgentState, selectToolSourceMap } from '@lobechat/agent-runtime';
 import { formatWebOnboardingStateMessage } from '@lobechat/builtin-tool-web-onboarding/utils';
-import { defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
+import {
+  resolveUninstalledBuiltinTools,
+  type UninstalledBuiltinToolsScope,
+} from '@lobechat/builtin-tools';
 import { AGENT_PLAN_FILE_TYPE } from '@lobechat/const';
 import type { AvailablePluginInfo } from '@lobechat/context-engine';
 import {
@@ -336,7 +339,10 @@ export const createServerContextFactProviders = ({
     // discovered for this run (their manifests are only fetched for connected
     // providers, so presence in the tool set is the connection).
     listConnectedConnectorIds: async (agentId) => {
-      const connected = await loadConnectedComposioIds(db, userId, ctx.workspaceId, agentId);
+      const connected = await loadConnectedComposioIds(db, userId, ctx.workspaceId, {
+        agentId,
+        topicId: ctx.topicId,
+      });
       const sourceMap = selectToolSourceMap(state);
       for (const [identifier, source] of Object.entries(sourceMap)) {
         if (source === 'lobehubSkill') connected.add(identifier);
@@ -462,20 +468,10 @@ export const createServerContextFactProviders = ({
     // workspace plus the personal one — the same slot the tool store reads.
     listUninstalledBuiltinIds: async () => {
       const settings = await new UserModel(db, userId).getUserSettings();
-      const tool = settings?.tool as
-        | {
-            uninstalledBuiltinTools?: string[];
-            uninstalledBuiltinToolsByWorkspace?: Record<string, string[] | undefined>;
-          }
-        | null
-        | undefined;
-      const stored = workspaceId
-        ? tool?.uninstalledBuiltinToolsByWorkspace?.[workspaceId]
-        : tool?.uninstalledBuiltinTools;
-      // Never configured (new account, or a workspace without its own slot)
-      // means the default seed — non-recommended builtins start uninstalled —
-      // exactly as the browser's tool store resolves it.
-      return stored === undefined ? defaultUninstalledBuiltinTools : stored;
+      return resolveUninstalledBuiltinTools(
+        settings?.tool as UninstalledBuiltinToolsScope | undefined,
+        workspaceId,
+      );
     },
 
     listSandboxFiles: async (topicId) =>

@@ -23,6 +23,7 @@ import {
   workspaceMembers,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed, trashStamp } from '../../utils/softDelete';
 import { normalizeWorkspaceId } from '../../utils/workspace';
 import type { ChannelAddAgentInput } from './agent';
@@ -32,6 +33,7 @@ import {
   memberEnvironment,
   requireAgentMember,
   requireChannelAgent,
+  sharedAgentOwner,
 } from './agent';
 import { openAgentPair } from './agentPair';
 import { channelAvatarMembers } from './avatars';
@@ -64,7 +66,7 @@ import { stopScope } from './stop';
 import { channelThreadMentions } from './threadMentions';
 import { audit, lockChannel } from './transaction';
 import type { ChannelAccess, ChannelAgentPairAccess, ChannelWriteOptions } from './types';
-import { createChannelThread, readChannelView } from './view';
+import { createChannelThread, readChannelView, viewerJobs } from './view';
 import {
   readWakeConfig,
   replaceChannelWake,
@@ -146,7 +148,7 @@ export class ChannelRepository {
     /** Callers check that the project is readable in this scope. */
     projectId?: string;
     title: string;
-    /** Workspace people a group starts with, checked the same way as adding them later. */
+    /** People a group starts with, checked the same way as adding them later. */
     userIds?: string[];
     /** The direct conversation binds another person's Agent through its live link share. */
     sharedAgent?: boolean;
@@ -205,7 +207,7 @@ export class ChannelRepository {
   /**
    * Inviting into a direct conversation starts a group instead, and the direct conversation stays
    * as it is. The group holds its person and Agent, the Agent keeping its channel-local
-   * environment, joined by the invited Agents and workspace people.
+   * environment, joined by the invited Agents and people.
    */
   createGroupFromDirect = async (
     channelId: string,
@@ -418,15 +420,11 @@ export class ChannelRepository {
       { allowArchived: true },
     );
 
-  /** People a new Channel in this workspace can start with. */
-  newChannelUserCandidates = async (search?: string) => {
-    const { workspaceId } = this;
-    if (!workspaceId)
-      throw new ChannelError('BAD_REQUEST', 'People can only be added to workspace group channels');
-    return this.db.transaction((tx) =>
-      newChannelUserCandidates(tx, workspaceId, this.userId, search),
+  /** People a new Channel in this scope can start with. */
+  newChannelUserCandidates = async (search?: string) =>
+    this.db.transaction((tx) =>
+      newChannelUserCandidates(tx, this.workspaceId, this.userId, search),
     );
-  };
 
   userCandidates = async (channelId: string, search?: string) =>
     this.write(channelId, (tx, access) => channelUserCandidates(tx, access, search), {
@@ -454,18 +452,14 @@ export class ChannelRepository {
         if (access.channel.isDeleted) throw new ChannelError('NOT_FOUND', 'Channel not found');
         const admin = hasRole(access.member.role, 'admin');
         const view = await readChannelView(tx, channelId, options, this.userId);
+        // Same test as `list`; the composer reads it from here to hide upload.
+        const sharedAgent = !!(await sharedAgentOwner(tx, access.channel, this.userId));
         return {
-          channel: { ...access.channel, canDelete: admin },
+          channel: { ...access.channel, canDelete: admin, sharedAgent },
           joined: true,
           ...view,
-          jobs: view.jobs.map(({ requesterMemberId, topicId, topicOwnerId, ...job }) => ({
-            ...job,
-            // Mirrors `stop`: the requester or an admin.
-            canStop: admin || requesterMemberId === access.member.id,
-            // Only the viewer who runs the reply can follow it into its topic; for anyone else
-            // the job carries no topic at all.
-            ...(topicId && topicOwnerId === this.userId ? { topicId } : {}),
-          })),
+          // Mirrors `stop`: the requester or an admin.
+          jobs: viewerJobs(view.jobs, this.userId, (id) => admin || id === access.member.id),
         };
       },
       { allowArchived: true, allowTrashed: true },
@@ -815,7 +809,7 @@ export class ChannelRepository {
       .select({
         agentId: channelMembers.agentId,
         agentName: agents.name,
-        agentTitle: agents.title,
+        agentTitle: agentTitleSql(),
         channelId: channelMembers.channelId,
         description: sql<
           string | null

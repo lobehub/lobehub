@@ -7,13 +7,13 @@ import type { TFunction } from 'i18next';
 
 import { mcpService } from '@/services/mcp';
 import { getToolStoreState } from '@/store/tool';
-import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 
 import { anySignal } from './abortSignal';
 import { mcpAppNameSelector } from './appName';
 import type { AppDisplayContext, McpAppBridgeHost } from './bridge';
 import { buildHostContext, connectMcpAppBridge } from './bridge';
 import { confirmAppMessage, confirmAppOpenLink, confirmAppToolCall } from './confirm';
+import { connectorForTool } from './connectorForTool';
 import { isAppFrameNavigatedNotice } from './frameDocument';
 import { sendAppMessage } from './sendAppMessage';
 import { getAppToolCallPolicy } from './toolCallPolicy';
@@ -48,6 +48,12 @@ export interface AppViewContext {
   /** The MCP server the view came from; its tool calls reach no other. */
   server?: string;
   t: TFunction<'plugin'> | ((key: string, options?: Record<string, unknown>) => string);
+  /**
+   * The conversation the result belongs to: its calls resolve connectors with
+   * the same run scope the producing tool call had, so a private agent's own
+   * topic can reach its owner's private connectors.
+   */
+  topicId?: string;
 }
 
 export interface ConnectAppViewOptions {
@@ -162,11 +168,12 @@ export const connectAppView = ({
         onThisDevice,
         server,
         t,
+        topicId,
         args: initiatingArgs,
         linkId: viewLinkId,
       } = getContext();
       const linkId = viewLinkId ?? getMcpAppLinkId(identifier, agentId, initiatingArgs);
-      const policy = await getAppToolCallPolicy(identifier, name, { agentId, toolArgs });
+      const policy = await getAppToolCallPolicy(identifier, name, { agentId, toolArgs, topicId });
       let allowed = policy === 'allow';
       if (policy === 'confirm') {
         if (pendingToolApprovals >= MAX_PENDING_TOOL_APPROVALS) {
@@ -214,7 +221,7 @@ export const connectAppView = ({
               type: 'mcp',
             },
             // The view's HTML came from this machine for a local server, so its calls do too
-            { agentId, fromMcpApp: true, onThisDevice, server, signal, linkId },
+            { agentId, fromMcpApp: true, onThisDevice, server, signal, linkId, topicId },
           ),
         );
       } finally {
@@ -335,10 +342,7 @@ export const getMcpAppLinkId = (
   agentId?: string,
   args?: string,
 ): string | undefined => {
-  const connector = connectorSelectors.connectorByIdentifierForAgent(
-    identifier,
-    agentId,
-  )(getToolStoreState());
+  const connector = connectorForTool(identifier, agentId)(getToolStoreState());
   const param = resolveConnectorLinkParam(connector?.tools.map((tool) => tool.inputSchema) ?? []);
   const input: unknown = safeParseJSON(args ?? '{}');
   return isRecord(input) && typeof input[param] === 'string' ? (input[param] as string) : undefined;

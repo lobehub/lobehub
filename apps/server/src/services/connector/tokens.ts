@@ -257,14 +257,21 @@ const runClaimedRefresh = async (
   });
 };
 
+/**
+ * Every refresh reads and writes the row through its own scope
+ * (`ConnectorModel.forRow`): a private agent's workspace run can resolve its
+ * owner's personal connector, whose token the run's workspace-scoped model can
+ * neither find nor update — a rotated refresh token would be dropped.
+ */
 const refreshSlot = async (
   connector: DecryptedConnector,
   credentials: DecryptedConnector['credentials'],
-  model: ConnectorModel,
+  runModel: ConnectorModel,
   linkId?: string,
   waitUntil = Date.now() + REFRESH_ATTEMPT_TTL_MS,
 ): Promise<RefreshSlot | undefined> => {
   if (!isRefreshDue(credentials)) return;
+  const model = runModel.forRow(connector);
   try {
     while (true) {
       const decision = await claimRefresh(connector, credentials, model, linkId);

@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import LiteTable, { type LiteTableColumn } from '@/components/LiteTable';
+import { densityTokens } from '@/styles/density.stylex';
 
 import AutomationStatus from './AutomationStatus';
 import { LastDeliveryCell, SubscriptionCell, TargetCell, TopicCell } from './cells';
@@ -22,13 +23,13 @@ const styles = stylex.create({
   // Same surface as the API key list: one frame, the table flush inside it.
   container: {
     overflow: 'hidden',
-    paddingBlock: '16px',
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
     borderRadius: cssVar.borderRadius,
     backgroundColor: cssVar.colorBgContainer,
     backgroundImage: 'none',
   },
   header: {
-    paddingBlockEnd: '16px',
+    paddingBlockEnd: densityTokens['--lobe-density-card-padding'],
     paddingInline: '24px',
   },
 });

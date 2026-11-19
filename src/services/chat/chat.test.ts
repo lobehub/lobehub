@@ -54,7 +54,7 @@ const mockCreateHeaderWithAuth = vi.hoisted(() =>
 
 // Helper to compute expected date content from SystemDateProvider
 const getCurrentDateContent = () => {
-  const tz = 'UTC';
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const today = new Date();
   const year = today.toLocaleString('en-US', { timeZone: tz, year: 'numeric' });
   const month = today.toLocaleString('en-US', { month: '2-digit', timeZone: tz });

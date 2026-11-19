@@ -3,8 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { fileChatSelectors, useFileStore } from '@/store/file';
+import type { UploadFileItem } from '@/types/files/upload';
 
 import {
+  clearSentAttachments,
   createQueueSendNowGate,
   getContextWindow,
   getConversationChatInputUiState,
@@ -287,6 +290,30 @@ describe('partitionSendableUploads', () => {
       failed: [files[1], files[3]],
       sendable: [files[0], files[2]],
     });
+  });
+});
+
+describe('clearSentAttachments', () => {
+  it('keeps a failed upload in the composer and clears only what was sent', () => {
+    const contextKey = 'main_agent-1';
+    const chip = (id: string, status: UploadFileItem['status']) =>
+      ({ file: new File([], `${id}.zip`), id, status }) as UploadFileItem;
+    const uploads = [chip('sent', 'success'), chip('failed', 'error')];
+    useFileStore.setState({
+      chatContextSelectionsByContext: { [contextKey]: [{ id: 'sel' } as any] },
+      chatUploadFileListByContext: { [contextKey]: uploads },
+    });
+
+    const { sendable } = partitionSendableUploads(uploads);
+    clearSentAttachments(useFileStore.getState(), contextKey, sendable);
+
+    const state = useFileStore.getState();
+    expect(
+      fileChatSelectors
+        .chatUploadFileList(contextKey)(state)
+        .map((f) => f.id),
+    ).toEqual(['failed']);
+    expect(fileChatSelectors.chatContextSelections(contextKey)(state)).toEqual([]);
   });
 });
 

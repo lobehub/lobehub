@@ -1472,7 +1472,6 @@ describe('StreamingExecutor actions', () => {
         }),
       );
     });
-
     it.each([
       { isBuiltinAgent: true, skillActivateMode: 'manual' },
       { isBuiltinAgent: false, skillActivateMode: 'manual' },
@@ -1495,6 +1494,7 @@ describe('StreamingExecutor actions', () => {
           agentId: TEST_IDS.SESSION_ID,
           messages: [userMessage],
           parentMessageId: userMessage.id,
+          uninstalledBuiltinTools: [],
         });
         expect(agentConfig.enabledToolIds).toContain('lobe-skill-store');
         expect(agentConfig.enabledToolIds).toContain('lobe-skills');

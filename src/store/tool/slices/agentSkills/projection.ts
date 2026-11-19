@@ -1,4 +1,4 @@
-import type { SkillResourceTreeNode } from '@lobechat/types';
+import type { GitHubSkillCheck, SkillResourceTreeNode } from '@lobechat/types';
 
 import { arrayEntity, defineReplica, type ReplicaEntityAdapter } from '@/libs/replica';
 import type { agentSkillService } from '@/services/skill';
@@ -27,6 +27,15 @@ export interface AgentSkillDetail {
  * skill sits in the single `all` entry (`agentSkillListMap[AGENT_SKILL_LIST_KEY]`).
  */
 export const AGENT_SKILL_LIST_KEY = 'all';
+
+export type GitHubUpdateChecks = Record<string, GitHubSkillCheck>;
+
+export const gitHubUpdateResource = defineReplica<Record<string, never>, GitHubUpdateChecks>({
+  key: () => AGENT_SKILL_LIST_KEY,
+  name: 'agentSkillGitHubUpdates',
+  storage: 'memory',
+  version: 1,
+});
 
 /** Every installed skill of the active scope (`agentSkillListMap.all`). */
 export const agentSkillListResource = defineReplica<

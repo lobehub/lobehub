@@ -41,7 +41,7 @@ const Header = memo<{
   return (
     <NavHeader
       showTogglePanelButton={false}
-      style={{ paddingBlock: 8, paddingInline, width: '100%', ...style }}
+      style={{ paddingInline, width: '100%', ...style }}
       left={
         <Flexbox horizontal align="center" flex={1} gap={4} style={{ minWidth: 0 }}>
           {canGoBack && (

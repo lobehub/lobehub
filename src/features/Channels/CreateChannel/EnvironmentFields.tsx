@@ -22,7 +22,7 @@ type DraftControls = ReturnType<typeof useChannelAgentDraft>;
 
 /** Device and working directory for one Agent in one Channel. */
 export const EnvironmentFields = ({
-  controls: { change, changeDevice, draft },
+  controls: { change, changeDevice, draft, remote },
   devices,
   name,
 }: {
@@ -38,6 +38,13 @@ export const EnvironmentFields = ({
     devices.isConfirmed &&
     devices.data?.some(
       (item) => item.deviceId === draft.deviceId && item.online && !item.onlineUnknown,
+    );
+
+  if (remote)
+    return (
+      <Text fontSize={12} type="secondary">
+        {t('environment.remoteHost')}
+      </Text>
     );
 
   return (

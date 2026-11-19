@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
 import RepoIcon from '@/components/LibIcon';
-import { openAttachKnowledgeModal } from '@/features/LibraryModal';
+import { openAttachKnowledgeModal, type PickerKind } from '@/features/LibraryModal';
 import ItemRow from '@/features/ProfileEditor/ItemRow';
 import ToolListGroup from '@/features/ProfileEditor/ToolListGroup';
 import { usePermission } from '@/hooks/usePermission';
@@ -67,13 +67,13 @@ const KnowledgeEditor = memo(() => {
     s.removeFileFromAgent,
   ]);
 
-  const addControl = (label: string) => (
+  const addControl = (label: string, kind: PickerKind) => (
     <Button
       disabled={!canEdit}
       icon={<Icon icon={PlusIcon} />}
       size={'small'}
       type={'text'}
-      onClick={() => openAttachKnowledgeModal()}
+      onClick={() => openAttachKnowledgeModal({ kind })}
     >
       {label}
     </Button>
@@ -107,7 +107,7 @@ const KnowledgeEditor = memo(() => {
 
       <Flexbox gap={16}>
         <ToolListGroup
-          addControl={addControl(t('settingAgent.knowledgePage.addLibrary'))}
+          addControl={addControl(t('settingAgent.knowledgePage.addLibrary'), 'library')}
           desc={t('settingAgent.knowledgePage.libraries.desc')}
           emptyText={t('settingAgent.knowledgePage.libraries.empty')}
           title={t('settingAgent.knowledgePage.libraries.title')}
@@ -127,7 +127,7 @@ const KnowledgeEditor = memo(() => {
           ))}
         />
         <ToolListGroup
-          addControl={addControl(t('settingAgent.knowledgePage.addFile'))}
+          addControl={addControl(t('settingAgent.knowledgePage.addFile'), 'file')}
           desc={t('settingAgent.knowledgePage.files.desc')}
           emptyText={t('settingAgent.knowledgePage.files.empty')}
           title={t('settingAgent.knowledgePage.files.title')}

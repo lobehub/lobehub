@@ -20,6 +20,7 @@ import useNotionImport from '@/features/ResourceManager/components/Header/hooks/
 import { usePermission } from '@/hooks/usePermission';
 import { useFileStore } from '@/store/file';
 import { pageActions } from '@/store/page';
+import { densityVars } from '@/styles/densityVars';
 import { DocumentSourceType } from '@/types/document';
 
 const ICON_SIZE = 80;
@@ -27,7 +28,7 @@ const ICON_SIZE = 80;
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actionTitle: css`
     margin-block-start: 12px;
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     color: ${cssVar.colorTextSecondary};
   `,
   card: css`

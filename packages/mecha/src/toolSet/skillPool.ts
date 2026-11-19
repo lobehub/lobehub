@@ -35,6 +35,8 @@ export interface AssembleSkillPoolOptions {
    * skill matching one is auto-activated and its content injected directly.
    */
   enabledPluginIds?: readonly string[];
+  /** Builtins implicitly offered by a legacy Auto profile. */
+  implicitBuiltinSkillIds?: readonly string[];
   /**
    * Identifiers a share configuration allows. `undefined` means the run is not
    * shared; an empty list collapses the pool to nothing.
@@ -91,7 +93,10 @@ export const assembleSkillPool = (
     ...(sources.project ?? []),
     ...offered(sources.db),
     ...selectable(sources.agentSkills),
-    ...offered(sources.builtin),
+    ...(sources.builtin ?? []).filter(
+      (skill) =>
+        on.has(skill.identifier) || options.implicitBuiltinSkillIds?.includes(skill.identifier),
+    ),
   ];
   const disabled = new Set(options.disabledIds ?? []);
   const shareAllowed = options.shareAllowedIds ? new Set(options.shareAllowedIds) : undefined;

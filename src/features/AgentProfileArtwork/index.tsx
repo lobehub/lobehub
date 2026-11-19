@@ -37,6 +37,7 @@ import { agentArtworkSelectors } from '@/store/agent/selectors';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/selectors';
 import { useFileStore } from '@/store/file';
+import { densityVars } from '@/styles/densityVars';
 
 import { avatarRemountKey, openFilePicker, resolveAgentBackground } from './utils';
 
@@ -120,7 +121,7 @@ const styles = createStaticStyles(({ css }) => ({
     z-index: 3;
     inset: 0;
 
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
 
     color: ${cssVar.colorText};
 

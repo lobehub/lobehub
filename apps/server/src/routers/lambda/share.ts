@@ -1,7 +1,6 @@
 import {
   AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
-  AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
-  AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
+  AGENT_SHARE_DEFAULT_MAX_MESSAGES_PER_VISITOR,
 } from '@lobechat/const';
 import {
   type SharedAgentData,
@@ -247,10 +246,8 @@ export const shareRouter = router({
         terms: {
           allowCreatorViewSessions: share.shareConfig.allowCreatorViewSessions ?? false,
           maxFileStorage: share.shareConfig.maxFileStorage ?? AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
-          maxTopicsPerVisitor:
-            share.shareConfig.maxTopicsPerVisitor ?? AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
-          maxTurnsPerTopic:
-            share.shareConfig.maxTurnsPerTopic ?? AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
+          maxMessagesPerVisitor:
+            share.shareConfig.maxMessagesPerVisitor ?? AGENT_SHARE_DEFAULT_MAX_MESSAGES_PER_VISITOR,
         },
         // Identifiers only. The granted API list is owner-facing configuration
         // and must not reach a visitor.

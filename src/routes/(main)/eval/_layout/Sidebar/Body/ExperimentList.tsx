@@ -84,8 +84,8 @@ const ExperimentList = memo<ExperimentListProps>(({ activeKey, itemKey }) => {
 
   return (
     <AccordionItem value={itemKey}>
-      <AccordionHeader style={sectionTriggerStyle}>
-        <AccordionTrigger>
+      <AccordionHeader>
+        <AccordionTrigger style={sectionTriggerStyle}>
           <Flexbox horizontal align="center" gap={4}>
             <SectionTitle>{t('sidebar.experiments')}</SectionTitle>
             {experimentList.length > 0 && (

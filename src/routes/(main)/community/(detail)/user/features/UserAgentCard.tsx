@@ -39,6 +39,7 @@ import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
+import { densityTokens } from '@/styles/density.stylex';
 import { type AgentStatus, type DiscoverAssistantItem } from '@/types/discover';
 import { formatIntergerNumber } from '@/utils/format';
 
@@ -93,7 +94,7 @@ const styles = stylex.create({
   },
   title: {
     margin: '0',
-    fontSize: '16px',
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
     fontWeight: 500,
     color: { 'default': null, ':hover': cssVar.colorLink },
   },

@@ -109,7 +109,7 @@ export const CredsManifest: BuiltinToolManifest = {
   meta: {
     avatar: '🔐',
     description:
-      'Manage user credentials for authentication, environment variable injection, and API verification. Use this tool when tasks require API keys, OAuth tokens, or secrets - such as calling third-party APIs, authenticating with external services, or injecting credentials into sandbox environments.',
+      'Activate first to connect a third-party account, manage API keys or tokens, or run code that needs secrets. Collect secrets securely through this tool. Never ask users to paste them into chat.',
     title: 'Credentials',
   },
   systemRole: systemPrompt,

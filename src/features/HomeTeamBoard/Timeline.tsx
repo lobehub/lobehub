@@ -11,6 +11,8 @@ import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspace
 import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import AuthorChip from '@/features/HomeInbox/AuthorChip';
+import { useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import {
@@ -51,6 +53,8 @@ const styles = stylex.create({
     paddingInline: 0,
     textAlign: 'start',
   },
+  // 4px + 20px avatar + 4px = the 28px compact section header.
+  agentCompact: { paddingBlock: 4 },
   moreButton: {
     backgroundColor: 'transparent',
     borderStyle: 'none',
@@ -85,9 +89,10 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderWidth: 1,
     minWidth: 0,
-    paddingBlock: 16,
-    paddingInline: 16,
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
+  cardCompact: { paddingBlock: 12, paddingInline: 12 },
   gridLine: {
     backgroundColor: cssVar.colorFillQuaternary,
     bottom: 0,
@@ -357,6 +362,7 @@ const Lane = ({
 }) => {
   const { t } = useTranslation('home');
   const meta = useAgentDisplayMeta(lane.agentId);
+  const compact = useInterfaceDensity() === 'compact';
   const [collapsed, setCollapsed] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const { overflow, rows } = layoutLaneTopics(lane.runs, windowStart, now, { expanded });
@@ -368,7 +374,7 @@ const Lane = ({
         aria-expanded={!collapsed}
         data-testid={'team-board-lane-toggle'}
         type={'button'}
-        {...stylex.props(styles.agent)}
+        {...stylex.props(styles.agent, compact && styles.agentCompact)}
         onClick={() => setCollapsed((value) => !value)}
       >
         <Icon
@@ -381,9 +387,9 @@ const Lane = ({
           avatar={lane.avatar ?? undefined}
           background={lane.backgroundColor ?? undefined}
           name={agentTitle}
-          size={24}
+          size={compact ? 20 : 24}
         />
-        <Text ellipsis weight={500}>
+        <Text ellipsis fontSize={compact ? 13 : undefined} weight={500}>
           {agentTitle}
         </Text>
         <AuthorChip avatarOnly userId={lane.ownerUserId} />
@@ -432,12 +438,13 @@ const Lane = ({
 
 const Timeline = ({ board }: { board: AgentRunBoardData }) => {
   const { t } = useTranslation('home');
+  const compact = useInterfaceDensity() === 'compact';
   const { generatedAt, hiddenLaneCount, lanes, windowStart } = board;
   const ticks = buildAxisTicks(windowStart, generatedAt);
   const tickPercent = (index: number) => `${axisPercent(ticks[index], windowStart, generatedAt)}%`;
 
   return (
-    <div {...stylex.props(styles.card)}>
+    <div {...stylex.props(styles.card, compact && styles.cardCompact)}>
       <div {...stylex.props(styles.axis)}>
         {ticks.map((tick, index) => (
           <span

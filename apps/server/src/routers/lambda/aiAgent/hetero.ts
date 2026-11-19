@@ -1,5 +1,8 @@
 import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
-import { LocalExecutionHeterogeneousAgentTypeSchema } from '@lobechat/types';
+import {
+  HETERO_PERMISSION_MODES,
+  LocalExecutionHeterogeneousAgentTypeSchema,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { eq } from 'drizzle-orm';
@@ -27,6 +30,7 @@ import {
   reportHeteroControlResult,
   takeHeteroControl,
 } from '@/server/services/aiAgent/steerQueue/heteroControl';
+import { setHeteroPermissionMode } from '@/server/services/aiAgent/steerQueue/heteroPermissionMode';
 import { stopHeteroBackgroundTask } from '@/server/services/aiAgent/steerQueue/heteroStopTask';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import {
@@ -180,6 +184,12 @@ const StopHeteroBackgroundTaskSchema = z.object({
   taskId: z.string().min(1).max(256),
 });
 
+/** Schema for `aiAgent.setHeteroPermissionMode` — switch a running Claude Code's mode. */
+const SetHeteroPermissionModeSchema = z.object({
+  mode: z.enum(HETERO_PERMISSION_MODES),
+  operationId: z.string().min(1),
+});
+
 /** Schema for `aiAgent.returnHeteroSteer` — the session could not take the message. */
 const ReturnHeteroSteerSchema = z.object({
   messageId: z.string().min(1),
@@ -281,6 +291,30 @@ const authorizeOperationCallback = async (
       message: error.message,
     });
   }
+};
+
+/** Only the user who started the run, still allowed to use its agent, controls its live process. */
+const assertControlsHeteroRun = async (
+  ctx: { serverDB: LobeChatDatabase; userId: string; workspaceId?: string | null },
+  operationId: string,
+) => {
+  const [operation] = await ctx.serverDB
+    .select({ userId: agentOperations.userId })
+    .from(agentOperations)
+    .where(eq(agentOperations.id, operationId))
+    .limit(1);
+  if (operation?.userId !== ctx.userId) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Operation not found or not owned by the caller',
+    });
+  }
+  await assertCanUseOperationAgent({
+    db: ctx.serverDB,
+    operationId,
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
 };
 
 export const heteroRouter = router({
@@ -700,25 +734,19 @@ export const heteroRouter = router({
   stopHeteroBackgroundTask: aiAgentWriteProcedure
     .input(StopHeteroBackgroundTaskSchema)
     .mutation(async ({ input, ctx }) => {
-      // Only the user who started the run controls its live process.
-      const [operation] = await ctx.serverDB
-        .select({ userId: agentOperations.userId })
-        .from(agentOperations)
-        .where(eq(agentOperations.id, input.operationId))
-        .limit(1);
-      if (operation?.userId !== ctx.userId) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'Operation not found or not owned by the caller',
-        });
-      }
-      await assertCanUseOperationAgent({
-        db: ctx.serverDB,
-        operationId: input.operationId,
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId,
-      });
+      await assertControlsHeteroRun(ctx, input.operationId);
       return stopHeteroBackgroundTask(input.operationId, input.taskId);
+    }),
+  /**
+   * Switch the permission mode of a running Claude Code hosted by
+   * `lh hetero exec` (the composer's mode chip). Rides the run's control
+   * channel; Claude Code's mode report then updates the topic.
+   */
+  setHeteroPermissionMode: aiAgentWriteProcedure
+    .input(SetHeteroPermissionModeSchema)
+    .mutation(async ({ input, ctx }) => {
+      await assertControlsHeteroRun(ctx, input.operationId);
+      return setHeteroPermissionMode(input.operationId, input.mode);
     }),
   /** Token-only atomic resolution path used by Mobile review/deep links. */
   resolveHeteroIntervention: aiAgentWriteProcedure

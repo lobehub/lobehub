@@ -18,23 +18,23 @@ import { findWakeableManagedDevices } from '@/server/services/deviceGateway/mana
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 
 export interface RoutedDevicePresence {
-  /** Whether `userId` can reach `deviceId` online in this Channel's scope. */
-  isOnline: (userId: string, deviceId: string) => Promise<boolean>;
+  /** Whether `userId` can reach `deviceId` online in the run's `workspaceId` scope. */
+  isOnline: (userId: string, deviceId: string, workspaceId: string | null) => Promise<boolean>;
   /** Reads the user's presence ahead of the claim, outside the channel lock. */
-  prefetch: (userId: string) => Promise<void>;
+  prefetch: (userId: string, workspaceId: string | null) => Promise<void>;
 }
 
 /**
- * Presence of requesters' routed devices for one advance pass, read once per requester. A
- * workspace run reaches the Channel workspace's devices and, as `readDevicePool` allows, the
- * requester's own personal device when the run routes exactly there: the gateway routes it by
+ * Presence of routed devices for one advance pass, read once per execution identity and scope. A
+ * workspace run reaches that workspace's devices and, as `readDevicePool` allows, the executing
+ * user's own personal device when the run routes exactly there: the gateway routes it by
  * `(userId, deviceId)`. Only that device is asked about, so no other personal device can stand
  * in for a Channel-picked one.
+ *
+ * The scope is the run's, not the Channel's: a shared Agent runs as its owner in the owner's
+ * scope, so its device is looked up there even when the visitor's Channel sits in a workspace.
  */
-export const createRoutedDevicePresence = (
-  db: LobeChatDatabase,
-  workspaceId: string | null,
-): RoutedDevicePresence => {
+export const createRoutedDevicePresence = (db: LobeChatDatabase): RoutedDevicePresence => {
   const pools = new Map<string, Promise<Set<string>>>();
   const pool = (userId: string, scope?: string) => {
     const key = `${userId}\0${scope ?? ''}`;
@@ -47,15 +47,17 @@ export const createRoutedDevicePresence = (
     }
     return ids;
   };
-  const scopes = workspaceId ? [workspaceId, undefined] : [undefined];
+  const scopes = (workspaceId: string | null) =>
+    workspaceId ? [workspaceId, undefined] : [undefined];
   return {
-    isOnline: async (userId, deviceId) => {
-      for (const scope of scopes) if ((await pool(userId, scope)).has(deviceId)) return true;
+    isOnline: async (userId, deviceId, workspaceId) => {
+      for (const scope of scopes(workspaceId))
+        if ((await pool(userId, scope)).has(deviceId)) return true;
       return false;
     },
-    // At most two reads: the Channel workspace's pool and, for a workspace Channel, the personal one.
-    prefetch: async (userId) => {
-      await Promise.all([pool(userId, workspaceId ?? undefined), workspaceId && pool(userId)]);
+    // At most two reads: the workspace's pool and, for a workspace run, the personal one.
+    prefetch: async (userId, workspaceId) => {
+      await Promise.all(scopes(workspaceId).map((scope) => pool(userId, scope)));
     },
   };
 };
@@ -130,7 +132,10 @@ export const resolveChannelRoutedDevice = async (
   ]);
   if (pinnedDeviceId) {
     if (wakeable.length) return;
-    return { deviceId: pinnedDeviceId, online: await presence.isOnline(userId, pinnedDeviceId) };
+    return {
+      deviceId: pinnedDeviceId,
+      online: await presence.isOnline(userId, pinnedDeviceId, workspaceId),
+    };
   }
   const plan = resolveExecutionPlan({
     agencyConfig,
@@ -141,5 +146,8 @@ export const resolveChannelRoutedDevice = async (
   });
   // No presence here: the plan trusts the binding (personal or not), as hetero dispatch does.
   if (plan.kind !== 'device') return;
-  return { deviceId: plan.deviceId, online: await presence.isOnline(userId, plan.deviceId) };
+  return {
+    deviceId: plan.deviceId,
+    online: await presence.isOnline(userId, plan.deviceId, workspaceId),
+  };
 };

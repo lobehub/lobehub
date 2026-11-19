@@ -27,6 +27,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
+import { densityVars } from '@/styles/densityVars';
 
 import SplitView from './SplitView';
 import type { TerminalTab } from './store';
@@ -84,7 +85,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     min-height: 0;
     padding-block: 4px 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
   `,
 }));
 

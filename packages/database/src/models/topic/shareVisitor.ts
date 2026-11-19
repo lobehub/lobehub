@@ -2,20 +2,11 @@ import { AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT } from '@lobechat/const';
 import type { ChatTopicMetadata } from '@lobechat/types';
 import { and, count, countDistinct, desc, eq, isNotNull } from 'drizzle-orm';
 
-import { topics } from '../../schemas';
+import { messages, topics } from '../../schemas';
 import type { TopicModelContext } from './context';
 import type { VisitorRunningOperation, VisitorTopicItem } from './types';
 
-/**
- * Fallback page size for {@link TopicModel.queryBySender} when a caller
- * doesn't pass one. Pinned to the package default per-visitor topic cap.
- *
- * Callers with a live share config (e.g. `shareChat.getTopics`) MUST pass the
- * share's actual resolved `maxTopicsPerVisitor` as `pageSize` instead of
- * relying on this default — a creator who raises the cap above the default
- * would otherwise have a visitor's list silently truncated below what that
- * visitor is actually allowed to create.
- */
+/** Fallback page size for {@link TopicModel.queryBySender} when a caller doesn't pass one. */
 export const VISITOR_TOPIC_PAGE_SIZE = AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT;
 
 /**
@@ -82,33 +73,37 @@ export const queryBySender = async (
 };
 
 /**
- * Per-visitor topic count on a shared agent — drives `maxTopicsPerVisitor`.
- * Same `(agentId, senderId)` scoping as {@link queryBySender}; see that
- * method's JSDoc for why there is no share-id dimension.
+ * Messages one visitor sent to a shared agent, across all of their topics —
+ * drives `maxMessagesPerVisitor`. Only the visitor's own (`user`) messages
+ * count, never the Agent's replies. Same `(agentId, senderId)` scoping as
+ * {@link queryBySender}; see that method's JSDoc for why there is no share-id
+ * dimension.
  */
-export const countBySender = async (
+export const countMessagesBySender = async (
   ctx: TopicModelContext,
-  {
-    agentId,
-    senderId,
-  }: {
-    agentId: string;
-    senderId: string;
-  },
+  { agentId, senderId }: { agentId: string; senderId: string },
 ): Promise<number> => {
-  const result = await ctx.db
-    .select({ count: count(topics.id) })
-    .from(topics)
-    .where(and(ctx.mine(), eq(topics.agentId, agentId), eq(topics.senderId, senderId)));
+  const [result] = await ctx.db
+    .select({ count: count(messages.id) })
+    .from(messages)
+    .innerJoin(topics, eq(messages.topicId, topics.id))
+    .where(
+      and(
+        ctx.mine(),
+        eq(topics.agentId, agentId),
+        eq(topics.senderId, senderId),
+        eq(messages.role, 'user'),
+      ),
+    );
 
-  return result[0].count;
+  return Number(result?.count ?? 0);
 };
 
 /**
  * Creator-facing roll-up for one shared agent: how many conversations
  * visitors started, and how many distinct visitors started them.
  *
- * Counterpart to {@link countBySender}, which counts ONE visitor. Both rely
+ * Counterpart to {@link countMessagesBySender}, which counts ONE visitor. Both rely
  * on `senderId` being non-null only for share-originated topics, so the
  * creator's own conversations with the same agent are excluded. Scoped by
  * `ctx.mine()` like every other read here, so the numbers can only ever

@@ -5,6 +5,7 @@ export * from './botReplyOpener';
 export * from './botRetro';
 export * from './botWakeClassifier';
 export * from './builderSuggestion';
+export * from './channelReplyOpener';
 export * from './channelRouting';
 export * from './compressContext';
 export * from './expertise';

@@ -91,7 +91,7 @@ vi.mock('../codexDeviceRuntime', () => ({
 const shareGate = {
   agentId: 'agent-1',
   canUseDevice: true,
-  shareConfig: { showErrorDetails: false, showModelInfo: true },
+  shareConfig: { showErrorDetails: true },
   shareId: 'share-1',
   visitorUserId: 'visitor-1',
 } as any;
@@ -167,7 +167,7 @@ describe('dispatchHeteroAgent — share visitor run', () => {
     expect(mocks.signUserJWT).toHaveBeenCalledWith('visitor-1');
     expect(mocks.signUserJWT).not.toHaveBeenCalledWith('creator-1');
 
-    const redaction = { showErrorDetails: false, showModelInfo: true };
+    const redaction = { showErrorDetails: true };
     expect(mocks.createOperationMetadata).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({

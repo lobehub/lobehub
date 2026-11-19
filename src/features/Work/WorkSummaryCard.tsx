@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/store/chat';
 import { useDensityTokens } from '@/styles/density';
 import { sidebarRow } from '@/styles/density.stylex';
+import { densityVars } from '@/styles/densityVars';
 import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
@@ -23,8 +24,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     overflow: hidden;
 
     width: 100%;
-    padding-block: 12px;
-    padding-inline: 12px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
