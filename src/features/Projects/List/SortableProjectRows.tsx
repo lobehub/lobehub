@@ -35,6 +35,7 @@ import {
 import { projectIcon } from '@/features/Projects/ProjectAvatar';
 import type { ProjectListItem } from '@/store/project';
 import { useProjectStore } from '@/store/project';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   overlay: {
@@ -43,7 +44,7 @@ const styles = stylex.create({
     boxShadow: cssVar.boxShadowSecondary,
     cursor: 'grabbing',
     paddingBlock: 8,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
 });
 

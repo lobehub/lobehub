@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { shinyTextStyles } from '@/styles';
+import { densityVars } from '@/styles/densityVars';
 
 import type { GoalGraphNodeKind } from '../../Experiments/model';
 import AssigneeProfileAvatar from '../AssigneeProfileAvatar';
@@ -90,7 +91,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     padding-block: 10px 0;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     font-family: ${cssVar.fontFamilyCode};
     font-variant-numeric: tabular-nums;
@@ -158,7 +159,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: flex-start;
 
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
   `,
   human: css`
     display: flex;
@@ -183,11 +184,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   metrics: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-start: 1px dashed ${cssVar.colorBorderSecondary};
 
     font-family: ${cssVar.fontFamilyCode};

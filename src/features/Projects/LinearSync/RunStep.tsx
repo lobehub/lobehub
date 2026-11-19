@@ -7,6 +7,8 @@ import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import {
   formatLinearSyncResult,
   isActiveLinearSyncJob,
@@ -34,7 +36,7 @@ const styles = stylex.create({
   skippedRow: {
     minHeight: 36,
     paddingBlock: 8,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   skippedRowDivider: {
     borderBlockStartColor: cssVar.colorBorderSecondary,

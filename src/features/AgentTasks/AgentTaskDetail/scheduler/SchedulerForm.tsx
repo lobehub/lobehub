@@ -17,6 +17,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBusinessPreciseSchedule } from '@/business/client/hooks/useBusinessPreciseSchedule';
+import { densityVars } from '@/styles/densityVars';
 
 import {
   buildCronPattern,
@@ -42,7 +43,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   timezoneOption: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
     justify-content: space-between;
 
