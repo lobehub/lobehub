@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   collectFromMessages,
+  countTrailingTodoCalls,
   extractActivatedSkillsFromMessages,
   extractActivatedToolIdsFromMessages,
   extractTodosFromMessages,
@@ -571,5 +572,104 @@ describe('flat tool rows inside compressedGroup compressedMessages', () => {
       { description: undefined, id: 'skl_old', name: 'xlsx' },
     ]);
     expect(extractTodosFromMessages(messages)).toEqual(todos);
+  });
+});
+
+describe('countTrailingTodoCalls', () => {
+  const todoRow = (apiName: string) =>
+    createMessage({
+      plugin: { apiName, arguments: '{}', identifier: 'lobe-agent', type: 'builtin' },
+      role: 'tool',
+    } as Partial<UIChatMessage>);
+  const otherRow = () =>
+    createMessage({
+      plugin: { apiName: 'readFile', arguments: '{}', identifier: 'local-system', type: 'builtin' },
+      role: 'tool',
+    } as Partial<UIChatMessage>);
+
+  it('counts todo calls since the last other tool call, ignoring assistant text', () => {
+    const messages = [
+      createMessage({ role: 'user' }),
+      todoRow('createTodos'),
+      otherRow(),
+      todoRow('updateTodos'),
+      createMessage({ content: 'Sorry, I will stop managing the list now.' }),
+      todoRow('clearTodos'),
+      todoRow('createTodos'),
+    ];
+
+    expect(countTrailingTodoCalls(messages, new Set())).toBe(3);
+  });
+
+  it('resets at the latest user message', () => {
+    expect(
+      countTrailingTodoCalls([todoRow('createTodos'), createMessage({ role: 'user' })], new Set()),
+    ).toBe(0);
+  });
+
+  it('counts todo calls folded into an assistant group', () => {
+    const group = createMessage({
+      children: [
+        { tools: [{ apiName: 'readFile', identifier: 'local-system', result: { content: '' } }] },
+        {
+          tools: [
+            { apiName: 'updateTodos', identifier: 'lobe-agent', result: { content: 'ok' } },
+            { apiName: 'updateTodos', identifier: 'lobe-agent', result: { content: 'ok' } },
+          ],
+        },
+      ],
+      role: 'assistantGroup',
+    } as unknown as Partial<UIChatMessage>);
+
+    expect(countTrailingTodoCalls([createMessage({ role: 'user' }), group], new Set())).toBe(2);
+  });
+
+  it('skips the calls of the batch being executed, including approval placeholders', () => {
+    // At batch execution the step's assistant is already persisted and folded
+    // into its group; on an approval resume its calls even have placeholder
+    // result rows, so only their ids tell them apart from history.
+    const group = createMessage({
+      children: [
+        {
+          tools: [
+            {
+              apiName: 'createTodos',
+              id: 'call-old',
+              identifier: 'lobe-agent',
+              result: { content: 'ok' },
+            },
+          ],
+        },
+        {
+          tools: [
+            {
+              apiName: 'createTodos',
+              id: 'call-a',
+              identifier: 'lobe-agent',
+              result: { content: '' },
+            },
+            { apiName: 'clearTodos', id: 'call-b', identifier: 'lobe-agent' },
+          ],
+        },
+      ],
+      role: 'assistantGroup',
+    } as unknown as Partial<UIChatMessage>);
+    const placeholder = createMessage({
+      plugin: {
+        apiName: 'createTodos',
+        arguments: '{}',
+        identifier: 'lobe-agent',
+        type: 'builtin',
+      },
+      role: 'tool',
+      tool_call_id: 'call-a',
+    } as Partial<UIChatMessage>);
+
+    expect(
+      countTrailingTodoCalls(
+        [createMessage({ role: 'user' }), group, placeholder],
+        new Set(['call-a', 'call-b']),
+      ),
+    ).toBe(1);
   });
 });
