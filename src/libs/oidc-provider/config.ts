@@ -5,6 +5,8 @@ import {
   ACCEPTANCE_EXTENSION_IDS,
   ACCEPTANCE_EXTENSION_SCOPE,
   ACCEPTANCE_REVIEW_SCOPE,
+  API_KEY_FULL_ACCESS_SCOPE,
+  API_KEY_SCOPES,
 } from '@lobechat/const';
 import { type ClientMetadata } from 'oidc-provider';
 import urlJoin from 'url-join';
@@ -160,16 +162,31 @@ export const defaultClients: ClientMetadata[] = mergeBusinessClients(
 );
 
 /**
- * OIDC Scopes definition
+ * API key scopes (`agent:read`, …) are OAuth scopes only when the server turns
+ * on `OIDC_ENABLE_API_SCOPES`. `/api/v1/oauth-apps` accepts them under the same
+ * flag, so both sides have to read it: an app whose advertised scopes are not in
+ * this catalog would fail at the provider instead of at registration.
+ *
+ * Full access (`*`) is never an OAuth scope: an app names each capability.
  */
-export const defaultScopes = [
+const apiScopesWhenEnabled: string[] = API_KEY_SCOPES.filter(
+  (scope) => scope !== API_KEY_FULL_ACCESS_SCOPE,
+);
+
+export const buildDefaultScopes = (apiScopesEnabled: boolean): string[] => [
   'openid',
   'profile',
   'email',
   'offline_access', // Allows obtaining refresh_token
   ACCEPTANCE_REVIEW_SCOPE,
   ACCEPTANCE_EXTENSION_SCOPE,
+  ...(apiScopesEnabled ? apiScopesWhenEnabled : []),
 ];
+
+/**
+ * OIDC Scopes definition
+ */
+export const defaultScopes = buildDefaultScopes(process.env.OIDC_ENABLE_API_SCOPES === '1');
 
 /**
  * OIDC Claims definition
