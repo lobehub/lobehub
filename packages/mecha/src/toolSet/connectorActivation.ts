@@ -16,6 +16,9 @@ export const hasConnectorActivator = (
 };
 
 export interface ConnectorActivationRequest {
+  disabledIds?: Iterable<string>;
+  /** Ordinary agent runs can discover connections without a saved switch. */
+  discoverByDefault?: boolean;
   /**
    * The run has the activator, so a connector can be found on demand (see
    * {@link hasConnectorActivator}). Without it a connector that is on has no
@@ -24,7 +27,7 @@ export interface ConnectorActivationRequest {
   hasActivator: boolean;
   /**
    * Identifiers the agent turned on — every `plugins` entry that is not
-   * disabled. A connector absent from it is off for this agent.
+   * disabled. Exact toolsets only allow these and turn-scoped additions.
    */
   optedInIds: Iterable<string>;
   /**
@@ -44,7 +47,7 @@ export interface ConnectorActivation {
 
 /**
  * Connectors — MCP connectors, Composio and LobeHub connections, installed
- * plugins — are opt-in per agent and have two states. On means the model finds
+ * plugins — have two states. On means the model finds
  * the connector on demand through the activator; off means the run never sees
  * it. Both runtimes apply this one rule to the connector identifiers they hold;
  * builtin tools and skills keep their own three-state policy.
@@ -53,12 +56,16 @@ export const resolveConnectorActivation = (
   request: ConnectorActivationRequest,
 ): ConnectorActivation => {
   const optedIn = new Set(request.optedInIds);
+  const disabled = new Set(request.disabledIds);
   const turn = new Set(request.turnIds ?? []);
 
   return {
-    isAllowed: (identifier) => optedIn.has(identifier) || turn.has(identifier),
+    isAllowed: (identifier) =>
+      turn.has(identifier) ||
+      (!disabled.has(identifier) && (optedIn.has(identifier) || !!request.discoverByDefault)),
     isInjected: (identifier) =>
-      turn.has(identifier) || (!request.hasActivator && optedIn.has(identifier)),
+      turn.has(identifier) ||
+      (!request.hasActivator && !disabled.has(identifier) && optedIn.has(identifier)),
   };
 };
 

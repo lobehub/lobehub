@@ -120,7 +120,22 @@ describe('buildAgentToolRows', () => {
     expect(rows.map((row) => [row.id, row.enabled, row.inLibrary])).toEqual([
       ['search', true, true],
       ['sentry', true, false],
-      ['jira', false, false],
+      ['jira', true, false],
+    ]);
+  });
+
+  it('keeps unconfigured own connectors off in a custom toolset, including those also in the library', () => {
+    const rows = buildAgentToolRows({
+      agentConnectors: [connector('sentry'), connector('jira')],
+      agentId: AGENT,
+      chatConfig: { toolMode: 'custom' },
+      libraryOptions: [option('jira', false)],
+      plugins: [],
+    });
+
+    expect(rows.map(({ id, enabled }) => [id, enabled])).toEqual([
+      ['jira', false],
+      ['sentry', false],
     ]);
   });
 

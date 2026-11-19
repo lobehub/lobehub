@@ -23,6 +23,7 @@ export interface AgentToolRow {
 interface BuildAgentToolRowsParams {
   agentConnectors: ConnectorWithTools[];
   agentId: string;
+  chatConfig?: Parameters<typeof getConnectorMode>[2];
   libraryOptions: LibraryToolOption[];
   plugins: AgentPluginEntry[] | undefined;
 }
@@ -39,6 +40,7 @@ interface BuildAgentToolRowsParams {
 export const buildAgentToolRows = ({
   agentConnectors,
   agentId,
+  chatConfig,
   libraryOptions,
   plugins,
 }: BuildAgentToolRowsParams): AgentToolRow[] => {
@@ -60,7 +62,9 @@ export const buildAgentToolRows = ({
       // The library's own state (a connection awaiting authorization, say) does not hold a
       // tool the agent runs on its own connection.
       canDisable: ownConnection ? true : option.canDisable,
-      enabled: ownConnection ? getConnectorMode(plugins, option.id) === 'auto' : option.enabled,
+      enabled: ownConnection
+        ? getConnectorMode(plugins, option.id, chatConfig) === 'auto'
+        : option.enabled,
       id: option.id,
       inLibrary: true,
       ownConnection,
@@ -71,7 +75,7 @@ export const buildAgentToolRows = ({
     if (listed.has(identifier)) continue;
     rows.push({
       canDisable: true,
-      enabled: getConnectorMode(plugins, identifier) === 'auto',
+      enabled: getConnectorMode(plugins, identifier, chatConfig) === 'auto',
       id: identifier,
       inLibrary: false,
       ownConnection,

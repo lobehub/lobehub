@@ -31,7 +31,10 @@ import ToolItem from '@/features/ChatInput/ActionBar/Tools/ToolItem';
 import ToolItemDetailPopover from '@/features/ChatInput/ActionBar/Tools/ToolItemDetailPopover';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { createSkillStoreModal } from '@/features/SkillStore';
-import { getConnectorIdentifiers } from '@/helpers/toolEngineering/connectorActivation';
+import {
+  getConnectedConnectorIds,
+  getConnectorIdentifiers,
+} from '@/helpers/toolEngineering/connectorActivation';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -159,12 +162,19 @@ const AgentTool = memo<AgentToolProps>(
         : builtinToolSelectors.metaList,
       isEqual,
     );
+    const connectedIds = useToolStore(
+      (s) => getConnectedConnectorIds(s, effectiveAgentId),
+      isEqual,
+    );
     const implicitToolIds = useMemo(
       () =>
         resolveToolMode(config?.chatConfig) === 'agent'
-          ? profileBuiltinList.map((tool) => tool.identifier).filter(isOnDemandBuiltinTool)
+          ? [
+              ...profileBuiltinList.map((tool) => tool.identifier).filter(isOnDemandBuiltinTool),
+              ...connectedIds,
+            ]
           : [],
-      [config?.chatConfig, profileBuiltinList],
+      [config?.chatConfig, profileBuiltinList, connectedIds],
     );
     const enabledIds = useMemo(() => {
       const ids = new Set([...implicitToolIds, ...getOptedInPluginIds(config?.plugins)]);
@@ -279,11 +289,12 @@ const AgentTool = memo<AgentToolProps>(
         // so an existing disabled entry is flipped in place instead of being
         // dropped from the array.
         await updateAgentConfigById(effectiveAgentId, {
-          plugins: isOnDemandBuiltinTool(pluginId)
-            ? upsertConnectorEnabled(config?.plugins, pluginId, shouldEnable)
-            : shouldEnable && (allSkillIdentifiers.has(pluginId) || connectorIds.has(pluginId))
-              ? upsertConnectorEnabled(config?.plugins, pluginId, true)
-              : upsertPluginMode(config?.plugins, pluginId, shouldEnable ? 'pinned' : 'auto'),
+          plugins:
+            isOnDemandBuiltinTool(pluginId) || connectorIds.has(pluginId)
+              ? upsertConnectorEnabled(config?.plugins, pluginId, shouldEnable)
+              : shouldEnable && allSkillIdentifiers.has(pluginId)
+                ? upsertConnectorEnabled(config?.plugins, pluginId, true)
+                : upsertPluginMode(config?.plugins, pluginId, shouldEnable ? 'pinned' : 'auto'),
         });
       },
       [
@@ -453,7 +464,13 @@ const AgentTool = memo<AgentToolProps>(
         if (!canEdit) return;
 
         const identifier = typeof pluginId === 'string' ? pluginId : pluginId?.identifier;
-        await togglePlugin(identifier, false);
+        if (connectorIds.has(identifier) && !implicitToolIds.includes(identifier)) {
+          await updateAgentConfigById(effectiveAgentId, {
+            plugins: upsertPluginMode(config?.plugins, identifier, 'auto'),
+          });
+        } else {
+          await togglePlugin(identifier, false);
+        }
       };
 
     // Builtin Agent Skills list items (grouped under LobeHub)
@@ -1032,6 +1049,7 @@ const AgentTool = memo<AgentToolProps>(
               isSkill={kind === 'skills'}
               key={pluginId}
               pluginId={pluginId}
+              removable={!implicitToolIds.includes(pluginId)}
               showAuthor={showAuthor}
               showDesktopOnlyLabel={filterAvailableInWeb}
               tagLabel={kind === 'skills' ? skillSource.get(pluginId) : undefined}

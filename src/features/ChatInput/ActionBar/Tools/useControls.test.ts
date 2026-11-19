@@ -22,7 +22,9 @@ const mocks = vi.hoisted(() => ({
   checked: [] as string[],
   connectors: [] as Array<{
     identifier: string;
+    isEnabled?: boolean;
     metadata: { mountedByAgentId?: string };
+    status?: string;
     sourceType: 'custom';
   }>,
   composioEnabled: false,
@@ -235,8 +237,7 @@ describe('chat input tool picker', () => {
       },
     ];
     mocks.plugins = [
-      { identifier: 'gmail', mode: 'auto' },
-      { identifier: 'vercel', mode: 'auto' },
+      { identifier: 'slack', mode: 'auto' },
       { identifier: 'google-drive', mode: 'disabled' },
     ];
     const { result } = renderHook(() => useControls());
@@ -287,6 +288,30 @@ describe('chat input tool picker', () => {
     const ids = result.current.toolOptions.map((option) => option.id);
     expect(ids).toEqual(expect.arrayContaining(['free', 'lent-here']));
     expect(ids).not.toContain('lent-elsewhere');
+  });
+
+  it('counts a newly connected library tool without a plugin entry and leaves the pending tool off', () => {
+    mocks.connectors = [
+      {
+        identifier: 'ready',
+        isEnabled: true,
+        metadata: {},
+        sourceType: 'custom',
+        status: 'connected',
+      },
+      {
+        identifier: 'pending',
+        isEnabled: true,
+        metadata: {},
+        sourceType: 'custom',
+        status: 'disconnected',
+      },
+    ];
+
+    const { result } = renderHook(() => useControls());
+    const activeIds = result.current.toolOptions.filter((row) => row.enabled).map((row) => row.id);
+    expect(activeIds).toContain('ready');
+    expect(activeIds).not.toContain('pending');
   });
 
   it('derives the profile summary from the same unfiltered options as chat', () => {

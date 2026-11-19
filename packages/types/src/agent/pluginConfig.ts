@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { resolveToolMode } from './executionTargetRules';
+
 /**
  * Three-state per-agent plugin config.
  *
@@ -75,11 +77,10 @@ export const getLibrarySkillMode = (
 
 /**
  * Connectors — the user's MCP connectors, Composio and LobeHub connections and
- * installed plugins — are opt-in per agent and have two states. The agent's
- * profile is where one is turned on, so a connector the agent has no entry for
- * is off there, exactly like a library skill.
+ * installed plugins — are discoverable by default in agent mode. Custom
+ * toolsets only include their explicitly configured connectors.
  */
-export const CONNECTOR_IMPLICIT_MODE: AgentPluginMode = 'disabled';
+export const CONNECTOR_IMPLICIT_MODE = 'auto' as const;
 
 /** The mode the two-state connector switch writes for "on". */
 export const CONNECTOR_ON_MODE: AgentPluginMode = 'auto';
@@ -92,11 +93,21 @@ export const CONNECTOR_ON_MODE: AgentPluginMode = 'auto';
 export const getConnectorMode = (
   plugins: AgentPluginEntry[] | undefined,
   identifier: string,
+  chatConfig?: Parameters<typeof resolveToolMode>[0],
 ): 'auto' | 'disabled' => {
   const entry = plugins?.find((item) => parsePluginEntry(item).identifier === identifier);
-  if (!entry) return 'disabled';
+  if (!entry) return resolveToolMode(chatConfig) === 'agent' ? CONNECTOR_IMPLICIT_MODE : 'disabled';
   return parsePluginEntry(entry).mode === 'disabled' ? 'disabled' : 'auto';
 };
+
+/** A connection initiated from an exact toolset needs an entry unless the agent already chose a mode. */
+export const shouldEnableConnectorOnConnect = (
+  plugins: AgentPluginEntry[] | undefined,
+  identifier: string,
+  chatConfig?: Parameters<typeof resolveToolMode>[0],
+): boolean =>
+  resolveToolMode(chatConfig) !== 'agent' &&
+  !plugins?.some((entry) => parsePluginEntry(entry).identifier === identifier);
 
 const getPluginIdsByMode = (
   plugins: AgentPluginEntry[] | undefined,
@@ -110,11 +121,7 @@ const getPluginIdsByMode = (
 export const getPinnedPluginIds = (plugins: AgentPluginEntry[] | undefined): string[] =>
   getPluginIdsByMode(plugins, 'pinned');
 
-/**
- * Identifiers carrying an explicit `{ mode: 'auto' }` entry. Only library
- * skills persist one (see {@link LIBRARY_SKILL_IMPLICIT_MODE}); for everything
- * else `'auto'` is the absence of an entry.
- */
+/** Identifiers explicitly configured for on-demand activation. */
 export const getAutoPluginIds = (plugins: AgentPluginEntry[] | undefined): string[] =>
   getPluginIdsByMode(plugins, 'auto');
 
@@ -123,8 +130,7 @@ export const getDisabledPluginIds = (plugins: AgentPluginEntry[] | undefined): s
 
 /**
  * Every identifier the agent turned on, pinned or `auto`. This is the opt-in
- * list for the kinds that are off without an entry — library skills and
- * connectors ({@link CONNECTOR_IMPLICIT_MODE}).
+ * list for library skills and explicitly configured toolsets.
  */
 export const getOptedInPluginIds = (plugins: AgentPluginEntry[] | undefined): string[] =>
   (plugins ?? [])
@@ -181,7 +187,7 @@ export const upsertPluginMode = (
 
 /**
  * Writes the two-state connector switch. On is an explicit `auto` entry —
- * without one the connector is off. Off keeps a `disabled` entry rather than
+ * including for custom toolsets. Off keeps a `disabled` entry rather than
  * dropping it, so the connector stays listed on the agent and can be turned
  * back on; removing it from the agent is `upsertPluginMode(…, 'auto')`.
  */
@@ -191,5 +197,5 @@ export const upsertConnectorEnabled = (
   enabled: boolean,
 ): AgentPluginEntry[] =>
   enabled
-    ? upsertPluginMode(plugins, identifier, CONNECTOR_ON_MODE, CONNECTOR_IMPLICIT_MODE)
+    ? upsertPluginMode(plugins, identifier, CONNECTOR_ON_MODE, 'disabled')
     : upsertPluginMode(plugins, identifier, 'disabled');

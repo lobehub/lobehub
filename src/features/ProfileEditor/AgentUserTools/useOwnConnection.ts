@@ -43,8 +43,7 @@ export const useOwnConnection = (agentId: string) => {
   const detachConnectorFromAgent = useToolStore((s) => s.detachConnectorFromAgent);
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
-  const readPlugins = () =>
-    agentSelectors.getAgentConfigById(agentId)(useAgentStore.getState())?.plugins;
+  const readConfig = () => agentSelectors.getAgentConfigById(agentId)(useAgentStore.getState());
 
   // The side panel describes the connection as it was when the row was opened.
   const closeStaleDetail = (identifier: string) => {
@@ -109,12 +108,14 @@ export const useOwnConnection = (agentId: string) => {
           return;
         }
 
-        const enabled = getConnectorMode(readPlugins(), own.identifier) === 'auto';
+        const config = readConfig();
+        const enabled =
+          getConnectorMode(config?.plugins, own.identifier, config?.chatConfig) === 'auto';
         await detachConnectorFromAgent(own.id, agentId, 'delete');
         // Deleting an agent's connection also takes its tool off the agent. The tool is still
         // in the library, so put the switch back where it was.
         await updateAgentConfigById(agentId, {
-          plugins: upsertConnectorEnabled(readPlugins(), own.identifier, enabled),
+          plugins: upsertConnectorEnabled(readConfig()?.plugins, own.identifier, enabled),
         });
         closeStaleDetail(own.identifier);
       },
@@ -130,7 +131,7 @@ export const useOwnConnection = (agentId: string) => {
       okText: t('settingAgent.tools.remove'),
       onOk: async () => {
         await updateAgentConfigById(agentId, {
-          plugins: upsertPluginMode(readPlugins(), own.identifier, 'auto'),
+          plugins: upsertPluginMode(readConfig()?.plugins, own.identifier, 'auto'),
         });
         await detachConnectorFromAgent(own.id, agentId, 'delete');
         closeStaleDetail(own.identifier);

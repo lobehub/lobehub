@@ -29,7 +29,7 @@ import {
   resolveInvocationToolIds,
 } from '@lobechat/mecha';
 import type { BuiltinToolResolveContext, FrozenCredentialFacts } from '@lobechat/types';
-import { getActivePluginIds } from '@lobechat/types';
+import { getActivePluginIds, resolveToolMode } from '@lobechat/types';
 import debug from 'debug';
 
 import { loadModels } from '@/business/client/model-bank/loadModels';
@@ -217,15 +217,18 @@ export const discoverTools = async (
     agentPlugins = filterPluginsByShareGate(agentPlugins, shareGate);
   }
 
-  // Connectors are opt-in per agent and two-state (see
-  // `resolveConnectorActivation`): on is every entry that is not disabled, off
-  // is everything else. An exact toolset (verify agent, goal supervisor) names
+  // Connected tools are discoverable by default in ordinary agent runs.
+  // An exact toolset (verify agent, goal supervisor) names
   // its tools itself, so the agent's switches do not apply to it.
   const optedInIds = [...getActivePluginIds(agentConfig?.plugins), ...(ctx.autoSkillIds ?? [])];
+  const discoverByDefault =
+    resolveToolMode(agentConfig.chatConfig) === 'agent' && !evalConnectorSnapshots;
   const connectorActivation =
     exclusivePluginIds || isGoalTurn
       ? undefined
       : resolveConnectorActivation({
+          disabledIds: disabledPluginIds,
+          discoverByDefault,
           hasActivator: hasConnectorActivator(
             agentConfig.chatConfig,
             agentPlugins,
@@ -282,8 +285,9 @@ export const discoverTools = async (
           exclusivePluginIds ?? (evalConnectorSnapshots ? agentPlugins : undefined),
         isGoalTurn,
         // A share run reads what the share grants instead.
+        disabledPluginIds,
         optedInExtensionIds:
-          connectorActivation && !shareGate
+          connectorActivation && !shareGate && !discoverByDefault
             ? new Set(optedInIds.filter((identifier) => !disabledPluginIds.includes(identifier)))
             : undefined,
         projectId: appContext?.projectId,
@@ -314,8 +318,7 @@ export const discoverTools = async (
     // A share run keeps only granted plugins, so an ungranted one never reaches
     // the connector permission lookup or the activator pool below.
     const disabledPluginIdSet = new Set(disabledPluginIds);
-    // A connector the agent has not turned on is off for it: it leaves every
-    // connector source here, so neither the engine nor the activator sees it.
+    // Apply per-agent overrides to every connector source.
     // A share run is cut to its grants above instead.
     const isConnectorOn = (identifier: string) =>
       !connectorActivation || !!shareGate || connectorActivation.isAllowed(identifier);

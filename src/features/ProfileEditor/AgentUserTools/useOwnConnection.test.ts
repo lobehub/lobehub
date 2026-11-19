@@ -13,6 +13,7 @@ const AGENT = 'agt_1';
 
 const mocks = vi.hoisted(() => ({
   calls: [] as string[],
+  chatConfig: {} as { toolMode?: 'custom' },
   connectors: [] as ConnectorWithTools[],
   fetchConnectors: vi.fn(),
   confirm: vi.fn(),
@@ -53,7 +54,9 @@ vi.mock('@/store/agent', () => {
   };
 });
 vi.mock('@/store/agent/selectors', () => ({
-  agentSelectors: { getAgentConfigById: () => () => ({ plugins: mocks.plugins }) },
+  agentSelectors: {
+    getAgentConfigById: () => () => ({ chatConfig: mocks.chatConfig, plugins: mocks.plugins }),
+  },
 }));
 vi.mock('@/store/tool', () => {
   const state = () => ({
@@ -90,6 +93,7 @@ const setup = () => renderHook(() => useOwnConnection(AGENT)).result.current;
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.calls.length = 0;
+  mocks.chatConfig = {};
   mocks.connectors = [connector({ agentId: null, id: 'row-lib' })];
   mocks.fetchConnectors.mockResolvedValue(undefined);
   mocks.plugins = [{ identifier: 'notion', mode: 'auto' }];
@@ -158,6 +162,17 @@ describe('useOwnConnection', () => {
     expect(mocks.detachConnectorFromAgent).not.toHaveBeenCalled();
     expect(mocks.updateAgentConfigById).not.toHaveBeenCalled();
     expect(mocks.toastError).toHaveBeenCalled();
+  });
+
+  it('preserves an implicit off switch when reverting to the library in a custom toolset', async () => {
+    mocks.plugins = [];
+    mocks.chatConfig = { toolMode: 'custom' };
+
+    await setup().revertToLibrary(connector(), 'row-lib');
+
+    expect(mocks.updateAgentConfigById).toHaveBeenCalledWith(AGENT, {
+      plugins: [{ identifier: 'notion', mode: 'disabled' }],
+    });
   });
 
   it('keeps the tool on when the agent goes back to the library connection', async () => {

@@ -153,6 +153,22 @@ export const isLibraryConnectorForAgent = (connector: ConnectorWithTools, agentI
 const userMcpConnectorsForAgent = (agentId: string) => (s: ToolStoreState) =>
   userMcpConnectors(s).filter((connector) => isLibraryConnectorForAgent(connector, agentId));
 
+/** Connected MCP rows a particular agent can use, with its own rows taking precedence. */
+const connectedMcpConnectorsForAgent = (
+  s: ToolStoreState,
+  agentId: string,
+): ConnectorWithTools[] => {
+  const agentRows = s.agentConnectors?.[agentId] ?? [];
+  const overridden = new Set(agentRows.map((row) => row.identifier));
+  const baseRows = (s.connectors ?? []).filter(
+    (row) => !overridden.has(row.identifier) && isLibraryConnectorForAgent(row, agentId),
+  );
+  return executableMcpConnectors({
+    connectors: [...agentRows, ...baseRows],
+    installedPlugins: s.installedPlugins,
+  }).filter((row) => row.isEnabled && row.status === 'connected');
+};
+
 /**
  * The connector a conversation of `agentId` resolves `identifier` to, mirroring
  * the server's agent-aware resolution: the agent's own row first (agent-owned
@@ -221,6 +237,7 @@ export const connectorSelectors = {
   executableMcpConnectors,
   installedMarketplaceConnectors,
   isMarketplaceConnectorInstalled,
+  connectedMcpConnectorsForAgent,
   marketplaceMcpConnectorByIdentifier,
   marketplaceMcpConnectors,
   connectorToolsGroupedByIdentifier:

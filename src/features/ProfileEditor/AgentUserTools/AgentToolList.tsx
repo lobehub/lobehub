@@ -56,12 +56,14 @@ const Tools = ({ agentId, group, onOpenDetail }: Props) => {
   const agentConnectors = useToolStore(connectorSelectors.agentConnectors(agentId), isEqual);
   const libraryLoaded = useToolStore((s) => s.isConnectorsInit);
   const libraryConnectors = useToolStore(connectorSelectors.connectorList, isEqual);
-  const plugins = useAgentStore((s) => agentSelectors.getAgentConfigById(agentId)(s)?.plugins);
+  const config = useAgentStore(agentSelectors.getAgentConfigById(agentId));
+  const plugins = config?.plugins;
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
   const rows = buildAgentToolRows({
     agentConnectors,
     agentId,
+    chatConfig: config?.chatConfig,
     libraryOptions: tools.toolOptions,
     plugins,
   });
