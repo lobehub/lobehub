@@ -154,7 +154,7 @@ const ThreadCard = ({ number, onClose, thread }: ThreadCardProps) => {
       </div>
       <div {...stylex.props(styles.messages)}>
         <Message comment={thread} />
-        {thread.replies.map((reply) => (
+        {(thread.replies ?? []).map((reply) => (
           <Message comment={reply} key={reply.id} />
         ))}
       </div>
