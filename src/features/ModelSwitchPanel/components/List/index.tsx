@@ -9,6 +9,7 @@ import { useBusinessModelRating } from '@/business/client/hooks/useBusinessModel
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useSingleton } from '@/hooks/useSingleton';
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
+import { filterHiddenModels } from '@/utils/filterHiddenModels';
 
 import { FOOTER_HEIGHT, ITEM_HEIGHT, MAX_PANEL_HEIGHT, TOOLBAR_HEIGHT } from '../../const';
 import { useBuildListItems } from '../../hooks/useBuildListItems';
@@ -16,7 +17,7 @@ import { useModelAndProvider } from '../../hooks/useModelAndProvider';
 import { usePanelHandlers } from '../../hooks/usePanelHandlers';
 import { styles } from '../../styles';
 import { type GroupMode } from '../../types';
-import { filterHiddenModels, menuKey } from '../../utils';
+import { menuKey } from '../../utils';
 import type { PricingMode } from '../ModelDetailPanel';
 import GenerationListItemRenderer from './GenerationListItemRenderer';
 import { ListItemRenderer } from './ListItemRenderer';
