@@ -352,7 +352,13 @@ export class ToolExecutionService {
       }
       const marker = (manifest as { connectorLinks?: { connectorId: string; param: string } })
         .connectorLinks;
-      if (marker) {
+      // A connector row's manifest (`manifest.connector`) was built at
+      // discovery with that row's endpoint and credentials. The row may since
+      // have left this conversation's scope (made private, disabled, deleted):
+      // every call resolves it again, in the run's conversation, and runs only
+      // while the tool prefix still names that same row.
+      const rowRef = (manifest as { connector?: { id: string } }).connector;
+      if (rowRef || marker) {
         if (!context.serverDB || !context.userId)
           throw new Error(
             'Connector account resolution requires an authenticated execution context',
@@ -378,45 +384,48 @@ export class ToolExecutionService {
             connectorIdentifierCandidates(identifier),
           )
         ).find((row) => row.toolIdentifier === identifier);
-        if (!connector || connector.id !== marker.connectorId || !connector.isEnabled)
+        const expectedId = marker?.connectorId ?? rowRef?.id;
+        if (!connector || connector.id !== expectedId || !connector.isEnabled)
           throw new Error(
             'Connector is no longer available. Ask the user to connect an account in Settings > Connectors.',
           );
-        const tool = // A run model reads the tools of the owner's personal row too
-          (
-            await new ConnectorToolModel(context.serverDB, context.userId, workspaceId, {
-              agentRun: true,
-            }).queryByConnector(connector.id)
-          ).find((item) => item.toolName === apiName);
-        if (!tool) throw new Error(`Connector '${identifier}' has no tool named '${apiName}'.`);
-        if (tool.permission === ConnectorToolPermission.disabled)
-          return buildBlockedToolResponse(apiName);
-        const currentEndpoint = buildConnectorMcpParams({ ...connector, credentials: null });
-        if (
-          context.agentShareVisitor &&
-          !context.agentShareVisitor.canUseDevice &&
-          isDeviceOnlyMcpEndpoint(currentEndpoint)
-        ) {
-          const message = `MCP server '${identifier}' runs on the agent owner's own machine and is not available in shared conversations.`;
-          return {
-            content: message,
-            error: { code: 'SHARE_GATE_BLOCKED', message },
-            success: false,
-          };
+        if (marker) {
+          const tool = // A run model reads the tools of the owner's personal row too
+            (
+              await new ConnectorToolModel(context.serverDB, context.userId, workspaceId, {
+                agentRun: true,
+              }).queryByConnector(connector.id)
+            ).find((item) => item.toolName === apiName);
+          if (!tool) throw new Error(`Connector '${identifier}' has no tool named '${apiName}'.`);
+          if (tool.permission === ConnectorToolPermission.disabled)
+            return buildBlockedToolResponse(apiName);
+          const currentEndpoint = buildConnectorMcpParams({ ...connector, credentials: null });
+          if (
+            context.agentShareVisitor &&
+            !context.agentShareVisitor.canUseDevice &&
+            isDeviceOnlyMcpEndpoint(currentEndpoint)
+          ) {
+            const message = `MCP server '${identifier}' runs on the agent owner's own machine and is not available in shared conversations.`;
+            return {
+              content: message,
+              error: { code: 'SHARE_GATE_BLOCKED', message },
+              success: false,
+            };
+          }
+          const resolved = await resolveLinkedCall(
+            {
+              connector,
+              argsStr: args,
+              param: marker.param,
+              isShareVisitor: !!context.agentShareVisitor,
+            },
+            { connectorModel },
+          );
+          args = resolved.argsStr;
+          payload = { ...payload, arguments: args };
+          linkName = resolved.linkName;
+          mcpParams = buildConnectorMcpParams(resolved.connector);
         }
-        const resolved = await resolveLinkedCall(
-          {
-            connector,
-            argsStr: args,
-            param: marker.param,
-            isShareVisitor: !!context.agentShareVisitor,
-          },
-          { connectorModel },
-        );
-        args = resolved.argsStr;
-        payload = { ...payload, arguments: args };
-        linkName = resolved.linkName;
-        mcpParams = buildConnectorMcpParams(resolved.connector);
       }
       // Check if this is a cloud MCP endpoint
       if (mcpParams.type === 'cloud') {

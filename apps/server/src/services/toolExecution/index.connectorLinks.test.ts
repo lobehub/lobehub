@@ -277,3 +277,56 @@ describe('live connector account resolution at dispatch', () => {
     });
   });
 });
+
+// A single-account connector's manifest carries its endpoint and credentials
+// from discovery: a row that has left the conversation's scope since must not
+// keep running from that copy.
+describe('connector row revalidation at dispatch', () => {
+  const single = (url: string) =>
+    ({
+      userId: 'me',
+      serverDB: {},
+      toolManifestMap: {
+        multi: {
+          connector: { id: 'c', identifier: 'multi' },
+          mcpParams: { auth: { accessToken: 'discovery-token' }, type: 'http', url },
+        },
+      },
+    }) as any;
+
+  it('refuses a call whose row the run no longer resolves', async () => {
+    // Regression: made private mid-conversation, the shared row stopped
+    // resolving, yet the discovery-time params kept running its account.
+    mocks.find.mockResolvedValue(undefined);
+
+    const result = await service.executeTool(
+      { ...payload, arguments: '{"x":1}' },
+      single('https://mcp.example'),
+    );
+
+    expect(result.success).toBe(false);
+    expect(mocks.call).not.toHaveBeenCalled();
+  });
+
+  it('refuses a call whose prefix now names another row', async () => {
+    mocks.find.mockResolvedValue({ id: 'other', identifier: 'multi', isEnabled: true });
+
+    const result = await service.executeTool(
+      { ...payload, arguments: '{"x":1}' },
+      single('https://mcp.example'),
+    );
+
+    expect(result.success).toBe(false);
+    expect(mocks.call).not.toHaveBeenCalled();
+  });
+
+  it('runs a call whose row still resolves', async () => {
+    const result = await service.executeTool(
+      { ...payload, arguments: '{"x":1}' },
+      single('https://mcp.example'),
+    );
+
+    expect(result.success).toBe(true);
+    expect(mocks.call).toHaveBeenCalledTimes(1);
+  });
+});
