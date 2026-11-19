@@ -59,39 +59,3 @@ export const buildClaudeCodePermissionArgs = ({
     ...(isRoot ? [] : ['--allow-dangerously-skip-permissions']),
   ];
 };
-
-/** Flags that change what Claude Code may do without asking, and take values. */
-const PERMISSION_VALUE_FLAGS = new Set([
-  '--allowed-tools',
-  '--allowedTools',
-  '--permission-mode',
-  '--permission-prompt-tool',
-]);
-/** Boolean flags that skip or permit skipping permission checks. */
-const PERMISSION_SWITCH_FLAGS = new Set([
-  '--allow-dangerously-skip-permissions',
-  '--dangerously-skip-permissions',
-]);
-
-/**
- * Agent-configured CLI arguments without the ones that change permissions.
- * Under a permission mode the host owns the policy: a shared agent's args
- * (editable by any workspace editor) must not pre-approve tools or skip
- * checks for whoever runs it in "Ask every time". `--allowedTools` takes
- * several values, so every value after a stripped flag goes with it.
- */
-export const stripClaudeCodePermissionArgs = (args: readonly string[]): string[] => {
-  const kept: string[] = [];
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    const flag = arg.split('=', 1)[0];
-    if (PERMISSION_SWITCH_FLAGS.has(flag)) continue;
-    if (!PERMISSION_VALUE_FLAGS.has(flag)) {
-      kept.push(arg);
-      continue;
-    }
-    if (arg.includes('=')) continue;
-    while (index + 1 < args.length && !args[index + 1].startsWith('-')) index += 1;
-  }
-  return kept;
-};

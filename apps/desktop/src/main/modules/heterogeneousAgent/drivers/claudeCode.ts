@@ -1,7 +1,4 @@
-import {
-  buildClaudeCodePermissionArgs,
-  stripClaudeCodePermissionArgs,
-} from '@lobechat/heterogeneous-agents/claudeCodePermission';
+import { buildClaudeCodePermissionArgs } from '@lobechat/heterogeneous-agents/claudeCodePermission';
 import {
   buildClaudeCodeDirectEnv,
   CLAUDE_CODE_BASE_ARGS,
@@ -54,8 +51,7 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
         // each message it reads: how a delivered message is known to be picked up.
         '--replay-user-messages',
         ...lobeHubCli.args,
-        // Under a mode the host owns permissions: the agent's args cannot pre-approve.
-        ...(permissionMode ? stripClaudeCodePermissionArgs(args) : args),
+        ...args,
       ],
       // Like `lh hetero exec`, Claude Code always keeps its input open: it is
       // the control channel (stop one background task, deliver a steer) and

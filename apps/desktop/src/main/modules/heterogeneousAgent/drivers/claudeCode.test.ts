@@ -41,17 +41,6 @@ describe('claudeCodeDriver', () => {
     expect(args).toContain('--allow-dangerously-skip-permissions');
   });
 
-  it("drops the agent's own permission flags under a mode", async () => {
-    const { args } = await claudeCodeDriver.buildSpawnPlan(
-      buildParams({
-        args: ['--allowed-tools', 'Bash', '--model', 'haiku'],
-        permissionMode: 'default',
-      }),
-    );
-    expect(args).not.toContain('--allowed-tools');
-    expect(args).toContain('haiku');
-  });
-
   it('keeps a picked mode and fails closed when the card bridge is not up', async () => {
     const { args } = await claudeCodeDriver.buildSpawnPlan(
       buildParams({ permissionMode: 'default', permissionPrompts: false }),

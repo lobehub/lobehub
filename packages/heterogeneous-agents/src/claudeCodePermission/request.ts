@@ -197,18 +197,9 @@ const optionsFor = (
   return request.suggestions?.length ? [o.allow, o.allowSession, o.deny] : [o.allow, o.deny];
 };
 
-const PERMISSION_TOOL_CALL_ID_PREFIX = 'cc-permission-';
-
 /** Stable card id per request, distinct from the tool the request is about. */
 export const claudeCodePermissionToolCallId = (requestId: string): string =>
-  `${PERMISSION_TOOL_CALL_ID_PREFIX}${requestId}`;
-
-/**
- * Whether an intervention is a Claude Code permission card: answering one
- * approves an action on the run owner's machine, so only that owner may.
- */
-export const isClaudeCodePermissionToolCallId = (toolCallId: string): boolean =>
-  toolCallId.startsWith(PERMISSION_TOOL_CALL_ID_PREFIX);
+  `cc-permission-${requestId}`;
 
 /**
  * The intervention a request raises: the AskUserQuestion-shaped question every

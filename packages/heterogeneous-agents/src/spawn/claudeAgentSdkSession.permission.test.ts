@@ -53,16 +53,6 @@ describe('ClaudeAgentSdkSession permission modes', () => {
     expect(options.canUseTool).toBeUndefined();
   });
 
-  it("drops the agent's own permission flags under a mode", async () => {
-    const options = await optionsFor({
-      args: ['--allowed-tools', 'Bash', '--model', 'haiku'],
-      askUserBridge: new AskUserBridge('op'),
-      permissionMode: 'default',
-    });
-    expect(options.extraArgs?.['allowed-tools']).toBeUndefined();
-    expect(options.model).toBe('haiku');
-  });
-
   it('starts in the picked mode and asks through canUseTool', async () => {
     const options = await optionsFor({
       askUserBridge: new AskUserBridge('op'),

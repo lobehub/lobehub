@@ -22,7 +22,6 @@ import {
   isRunningAsRoot,
   PermissionModeReporter,
   resolveClaudeCodePermissionMode,
-  stripClaudeCodePermissionArgs,
 } from '../claudeCodePermission';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
 import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
@@ -415,12 +414,7 @@ export class ClaudeAgentSdkSession {
   }
 
   private async buildQueryOptions(): Promise<ClaudeAgentSdkOptions> {
-    // Under a mode the host owns permissions: the agent's args cannot pre-approve.
-    const argOptions = parseClaudeSdkExtraArgs(
-      this.options.permissionMode
-        ? stripClaudeCodePermissionArgs(this.options.args)
-        : this.options.args,
-    );
+    const argOptions = parseClaudeSdkExtraArgs(this.options.args);
     const executablePath = await resolveClaudeSdkExecutablePath(
       this.options.commandPath,
       this.options.env,

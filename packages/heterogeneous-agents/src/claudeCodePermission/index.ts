@@ -2,7 +2,6 @@ export {
   buildClaudeCodePermissionArgs,
   isRunningAsRoot,
   resolveClaudeCodePermissionMode,
-  stripClaudeCodePermissionArgs,
 } from './args';
 export {
   isPermissionModeReport,
@@ -25,7 +24,6 @@ export {
   type ClaudeCodePermissionResult,
   claudeCodePermissionToolCallId,
   fromCanUseTool,
-  isClaudeCodePermissionToolCallId,
   parseClaudeCodePermissionRequest,
   resolveClaudeCodePermissionDecision,
 } from './request';

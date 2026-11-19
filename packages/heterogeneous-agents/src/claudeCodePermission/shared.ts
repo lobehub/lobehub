@@ -16,5 +16,4 @@ export {
   type ClaudeCodePermissionInterventionArgs,
   type ClaudeCodePermissionKind,
   type ClaudeCodePermissionOptionId,
-  isClaudeCodePermissionToolCallId,
 } from './request';
