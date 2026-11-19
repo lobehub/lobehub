@@ -4,6 +4,7 @@ import { toast } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openGenerationShareModal, useCanShareGeneration } from '@/features/GenerationShareModal';
 import { useMusicStore } from '@/store/music';
 import { createMusicSelectors } from '@/store/music/selectors';
 import { AsyncTaskStatus } from '@/types/asyncTask';
@@ -66,6 +67,8 @@ const SongItem = memo<SongItemProps>(({ batch, generation, index, topicId }) => 
   }, [generation.task.error, t]);
 
   const asset = getMusicAsset(generation);
+  const { fileId } = generation;
+  const canShare = useCanShareGeneration(fileId, batch.creator?.id);
 
   if (status === AsyncTaskStatus.Success && asset?.url) {
     const config = batch.config as { title?: string | null } | undefined;
@@ -84,6 +87,17 @@ const SongItem = memo<SongItemProps>(({ batch, generation, index, topicId }) => 
           index,
         })}
         onDelete={handleDelete}
+        onShare={
+          canShare && fileId
+            ? () =>
+                openGenerationShareModal({
+                  fileId,
+                  prompt: batch.prompt,
+                  title: asset.title || config?.title || undefined,
+                  type: 'music',
+                })
+            : undefined
+        }
       />
     );
   }

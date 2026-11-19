@@ -141,6 +141,25 @@ export interface OnboardingSessionSnapshot {
   version: number;
 }
 
+/**
+ * Provenance of a topic opened from another one (its parent topic): the topic
+ * and agent it was opened from.
+ *
+ * A link only — the topic keeps its own agent, working directory and
+ * lifecycle. While `detachedAt` is unset it lists under its parent
+ * (`topic.getTopics({ openedByTopicId })`, `lh topic list --parent-topic-id`);
+ * a detached one keeps the link as its origin.
+ */
+export interface TopicOpenedBy {
+  /** The opener topic's agent, so a reader never has to load the opener. */
+  agentId?: string;
+  /** ISO time the link was written. */
+  at: string;
+  /** ISO time the topic was unlinked from its parent; it no longer lists under it. */
+  detachedAt?: string;
+  topicId: string;
+}
+
 export interface ChatTopicMetadata {
   /** Watermark written by the background topic-summary workflow. */
   autoSummary?: {
@@ -319,6 +338,13 @@ export interface ChatTopicMetadata {
    */
   onboardingFeedback?: OnboardingFeedbackEntry;
   onboardingSession?: OnboardingSessionSnapshot;
+  /**
+   * The topic this one was opened from (its parent topic). Server-owned
+   * (absent from the client-writable metadata schema), written once when the
+   * topic is created with `execAgent({ openedByTopicId })` — e.g.
+   * `lh topic send --new` run inside a conversation. See {@link TopicOpenedBy}.
+   */
+  openedBy?: TopicOpenedBy;
   /**
    * Worktrees the app created for this topic, and where their automatic
    * cleanup stands. Server-owned: claimed whenever metadata is written with
