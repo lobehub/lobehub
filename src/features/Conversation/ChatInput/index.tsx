@@ -473,7 +473,12 @@ const ChatInput = memo<ChatInputProps>(
             // message owned the content must hand every part of it back —
             // uploads and context selections, not just the editor text the
             // lifecycle restores on its own.
-            store.restoreChatUploadFileList(contextKey, currentFileList);
+            // Back in their original places, around any failed upload that stayed.
+            store.restoreChatUploadFileList(
+              contextKey,
+              currentFileList,
+              uploadList.map((file) => file.id),
+            );
             store.restoreChatContextSelections(contextKey, currentContextList);
           },
           pageSelections,
