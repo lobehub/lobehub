@@ -88,6 +88,11 @@ export interface UploadFileItem {
    */
   repastedAt?: number;
   /**
+   * `false` when the failure would repeat on retry (e.g. the file is over the
+   * upload size limit), so the chip offers only removal.
+   */
+  retryable?: boolean;
+  /**
    * Set when the draft was uploaded as an agent-share VISITOR: the file lives
    * under the creator's account, so remove/retry must go through the
    * share-scoped endpoints instead of the visitor's own file API.

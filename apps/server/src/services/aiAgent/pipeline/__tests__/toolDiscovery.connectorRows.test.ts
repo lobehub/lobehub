@@ -45,6 +45,7 @@ const shared = {
   mcpServerUrl: 'https://mcp.example/shared',
   metadata: {},
   name: 'GitHub',
+  status: 'connected',
   toolIdentifier: 'github',
   visibility: 'public',
 };

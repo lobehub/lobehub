@@ -348,7 +348,7 @@ describe('Agent sidebar header nav', () => {
     });
   });
 
-  it('places topics above goals and tasks, with profile settings in the header', () => {
+  it('places goals above tasks, with profile settings in the header', () => {
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
     render(<Nav />);
@@ -358,10 +358,17 @@ describe('Agent sidebar header nav', () => {
     expect(screen.getByRole('banner')).toContainElement(
       screen.getByRole('button', { name: 'tab.profile' }),
     );
-    expect(labels.indexOf('management.sidebarEntry')).toBeLessThan(
-      labels.indexOf('goalList.title'),
-    );
     expect(labels.indexOf('goalList.title')).toBeLessThan(labels.indexOf('tab.tasks'));
+  });
+
+  // The full topic page is reached from the Topics section header arrow, not a
+  // nav entry that duplicated the section right below it.
+  it('has no Topics nav entry', () => {
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u/topics');
+
+    render(<Nav />);
+
+    expect(screen.queryByRole('button', { name: 'management.sidebarEntry' })).toBeNull();
   });
 
   // r1018 issue 7: in a workspace, `useResourceAccess` reports the edit check as

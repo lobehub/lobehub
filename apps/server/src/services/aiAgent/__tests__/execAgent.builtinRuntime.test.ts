@@ -177,6 +177,7 @@ vi.mock('@/database/models/user', () => ({
   UserModel: class {
     static getInfoForAIGeneration = mockGetInfoForAIGeneration;
     getUserPreference = mockGetUserPreference;
+    getUserSettings = vi.fn().mockResolvedValue(undefined);
   },
 }));
 

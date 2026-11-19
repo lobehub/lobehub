@@ -3,7 +3,7 @@ import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { VideoGenerationIdentifier } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { getConnectorCatalog } from '@lobechat/const';
-import { parsePluginEntry, upsertPluginMode } from '@lobechat/types';
+import { parsePluginEntry, resolveToolMode, upsertPluginMode } from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
 import { Avatar, confirmModal, Icon, Popover, Tag, Tooltip } from '@lobehub/ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
@@ -21,7 +21,7 @@ import {
   Zap,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { buildAgentProfileTabPath } from '@/features/AgentProfileTabs/tabOptions';
@@ -156,7 +156,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   );
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
-  const activationSets = useActivationSets(checked, rawPlugins);
+  const discoverBuiltins = useAgentStore(
+    (s) =>
+      resolveToolMode(agentByIdSelectors.getAgentConfigById(agentId)(s)?.chatConfig) === 'agent',
+  );
+  const activationSets = useActivationSets(agentId, checked, rawPlugins, discoverBuiltins);
   const { disabledIdSet, optInIds } = activationSets;
   const builtinList = useToolStore(builtinToolSelectors.metaListIncludingHidden, isEqual);
 
@@ -210,12 +214,12 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             plugins,
             id,
             pinMediaTool ? 'pinned' : mode,
-            resolveImplicitMode(id, optInIds),
+            mode === 'auto' && !discoverBuiltins ? 'disabled' : resolveImplicitMode(id, optInIds),
           ),
         });
       }
     },
-    [agentId, canEdit, optInIds, updateAgentConfig],
+    [agentId, canEdit, discoverBuiltins, optInIds, updateAgentConfig],
   );
 
   const openSkillPolicyMenu = useCallback((id: string) => {
@@ -515,12 +519,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     updateSkillPolicy(identifier, 'disabled'),
   );
   const getConfigure = useConnectorConfigure();
-  const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
-  const fetchConnectors = useToolStore((s) => s.fetchConnectors);
-  useEffect(() => {
-    if (!isConnectorsInit) fetchConnectors();
-  }, [isConnectorsInit, fetchConnectors]);
-
   const [
     useFetchUserComposioConnections,
     useFetchLobehubSkillConnections,

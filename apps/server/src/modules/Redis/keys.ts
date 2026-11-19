@@ -61,7 +61,8 @@ export const RedisKeyNamespace = {
    */
   AI_GENERATION: 'aiGeneration',
   /**
-   * Third-party integrations (Linear, …): OAuth hand-off state.
+   * Third-party integrations (Linear, GitHub, …): OAuth hand-off state and
+   * short-lived answers from their APIs.
    */
   INTEGRATIONS: 'integrations',
   /**
@@ -310,6 +311,12 @@ export const RedisKeys = {
      * Full key: integrations:connector_oauth_completion:v1:{flowId}
      */
     connectorOAuthCompletion: (flowId: string): string => `connector_oauth_completion:v1:${flowId}`,
+    /**
+     * The commit a public GitHub ref pointed at when it was last resolved.
+     * Full key: integrations:github_ref_commit:v1:{owner}/{repo}:{ref}
+     */
+    gitHubRefCommit: (owner: string, repo: string, ref: string): string =>
+      `github_ref_commit:v1:${owner}/${repo}:${ref}`,
     /**
      * Single-use state of one "Connect Linear" OAuth hand-off.
      * Full key: integrations:linear_oauth_state:v1:{state}

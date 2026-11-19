@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { strToU8, zipSync } from 'fflate';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -7,6 +8,7 @@ import {
   GitHubDownloadError,
   GitHubNotFoundError,
   GitHubParseError,
+  GitHubRateLimitError,
 } from './index';
 
 describe('GitHub', () => {
@@ -387,6 +389,81 @@ describe('GitHub', () => {
       });
 
       expect(result).toBeInstanceOf(Buffer);
+    });
+  });
+
+  describe('resolveCommit', () => {
+    const gh = new GitHub();
+    const info = { branch: 'main', owner: 'lobehub', repo: 'lobe-chat' };
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it.each([404, 422])(
+      'reports a missing repository or ref (HTTP %d) as not found',
+      async (status) => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status })));
+
+        await expect(gh.resolveCommit(info)).rejects.toBeInstanceOf(GitHubNotFoundError);
+      },
+    );
+
+    it('reports an exhausted quota as a rate limit', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValue(
+            new Response('', { headers: { 'x-ratelimit-remaining': '0' }, status: 403 }),
+          ),
+      );
+
+      await expect(gh.resolveCommit(info)).rejects.toBeInstanceOf(GitHubRateLimitError);
+    });
+  });
+
+  describe('downloadRefZip', () => {
+    const gh = new GitHub();
+    const info = { branch: 'main', owner: 'lobehub', repo: 'lobe-chat' };
+    const commit = 'a'.repeat(40);
+    const files = { 'lobe-chat-main/SKILL.md': strToU8('# Skill') };
+    // GitHub writes the commit into the archive comment, which closes the file.
+    const withComment = (zip: Uint8Array, comment: string) => {
+      const archive = Buffer.concat([zip, Buffer.from(comment, 'latin1')]);
+      archive.writeUInt16LE(comment.length, zip.length - 2);
+      return archive;
+    };
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('reads the commit from the archive comment without the REST API', async () => {
+      const zip = withComment(zipSync(files), commit);
+      const mockFetch = vi.fn().mockResolvedValue(new Response(zip));
+      vi.stubGlobal('fetch', mockFetch);
+
+      const result = await gh.downloadRefZip(info);
+
+      expect(result.commit).toBe(commit);
+      expect(result.buffer.equals(zip)).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch.mock.calls[0][0]).toBe(
+        'https://github.com/lobehub/lobe-chat/archive/refs/heads/main.zip',
+      );
+    });
+
+    it('rejects an archive that does not name its commit', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(zipSync(files))));
+
+      await expect(gh.downloadRefZip(info)).rejects.toBeInstanceOf(GitHubDownloadError);
+    });
+
+    it('reports a missing ref as not found', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 404 })));
+
+      await expect(gh.downloadRefZip(info)).rejects.toBeInstanceOf(GitHubNotFoundError);
     });
   });
 

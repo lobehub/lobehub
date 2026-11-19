@@ -42,7 +42,11 @@ export const useAgentMenuConnectors = (agentId?: string): ConnectorWithTools[] =
   const privateAgent = useAgentStore(
     (s) => !!agentId && s.agentMap?.[agentId]?.visibility === 'private',
   );
-  const connectors = useToolStore(connectorSelectors.userMcpConnectors, isEqual);
+  // Library connections only: an agent's own connections are managed on its profile
+  const connectors = useToolStore(
+    connectorSelectors.userMcpConnectorsForAgent(agentId ?? ''),
+    isEqual,
+  );
 
   // A stable list: the menu rebuilds its connector rows when this changes
   return useMemo(

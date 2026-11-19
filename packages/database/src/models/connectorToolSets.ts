@@ -5,7 +5,7 @@ import {
   isOwnConnectorRow,
 } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
-import { and, asc, inArray } from 'drizzle-orm';
+import { and, asc, inArray, notInArray } from 'drizzle-orm';
 
 import { userConnectors } from '../schemas';
 import type { LobeChatDatabase } from '../type';
@@ -136,11 +136,14 @@ export const selectConnectorToolSets = async (
   db: LobeChatDatabase,
   {
     agentId,
+    excludedIdentifiers = [],
     identifiers,
     scope,
     workspaceId,
   }: {
     agentId?: string;
+    /** Identifiers the caller already has or will drop, so their rows are not read. */
+    excludedIdentifiers?: string[];
     identifiers?: string[];
     scope: SQL | undefined;
     workspaceId?: string | null;
@@ -150,8 +153,18 @@ export const selectConnectorToolSets = async (
   const rows = await db
     .select()
     .from(userConnectors)
-    .where(and(scope, identifiers ? inArray(userConnectors.identifier, identifiers) : undefined))
+    .where(
+      and(
+        scope,
+        identifiers ? inArray(userConnectors.identifier, identifiers) : undefined,
+        excludedIdentifiers.length
+          ? notInArray(userConnectors.identifier, excludedIdentifiers)
+          : undefined,
+      ),
+    )
     .orderBy(asc(userConnectors.identifier), asc(userConnectors.id));
+  // Collisions are read over the whole scope, so excluding rows keeps every
+  // remaining row's prefix.
   const reservedIdentifiers = await queryReservedToolIdentifiers(db, scope, rows, workspaceId);
   return pickConnectorToolSets(rows, { agentId, reservedIdentifiers, workspaceId });
 };

@@ -3,7 +3,7 @@
  */
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import {
-  getUnselectedBuiltinToolIds,
+  getUnavailableBuiltinToolIds,
   getUserDisabledToolIds,
   isOnDemandBuiltinTool,
 } from '@lobechat/builtin-tools';
@@ -45,6 +45,7 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
+import { runtimeUninstalledBuiltinTools } from '@/store/tool/slices/builtin/projection';
 import {
   connectorSelectors,
   pickRunConnectors,
@@ -140,14 +141,27 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
   // are — only it can tell whether this conversation may run the caller's own
   // connections, and only it holds their personal ones; without a listing the
   // local list stands in, split per row the way the server splits it.
-  const executable = connectorSelectors.executableMcpConnectors(toolStoreState);
+  // An agent-owned connection stands alone for its identifier, as the server's
+  // `pickConnectorToolSets` keeps a row bound to the agent.
+  const agentOwned = agentId
+    ? (toolStoreState.agentConnectors?.[agentId] ?? []).filter((c) => c.agentId === agentId)
+    : [];
+  const ownedIds = new Set(agentOwned.map((c) => c.identifier));
   const listed = agentId ? getRunConnectors({ agentId, topicId }) : undefined;
-  const connectorToolSets = listed
-    ? connectorSelectors.executableMcpConnectors({
-        connectors: listed,
-        installedPlugins: toolStoreState.installedPlugins,
-      })
-    : pickRunToolSets(executable, { agentId, includePrivate: includePrivateConnectors });
+  const connectorToolSets = connectorSelectors
+    .executableMcpConnectors({
+      connectors:
+        listed ??
+        pickRunToolSets(
+          [
+            ...agentOwned,
+            ...(toolStoreState.connectors ?? []).filter((c) => !ownedIds.has(c.identifier)),
+          ],
+          { agentId, includePrivate: includePrivateConnectors },
+        ),
+      installedPlugins: toolStoreState.installedPlugins,
+    })
+    .filter((c) => c.isEnabled && c.status === 'connected');
 
   // Per-connector tool permissions, keyed by connector identifier: community-
   // MCP plugins execute outside the connector path, so the user's
@@ -216,6 +230,7 @@ export const createAgentToolsEngine = (
     hasOversizedFiles?: boolean;
     /** The conversation's topic: its server-listed connector rows are the run's tool sets. */
     topicId?: string;
+    uninstalledBuiltinTools?: string[];
     /** Resolved for the executing agent, which can differ from the agent open in the UI. */
     runAgent?: {
       id?: string;
@@ -234,6 +249,7 @@ export const createAgentToolsEngine = (
   const agentState = getAgentStoreState();
   const targetAgentId = options.runAgent?.id ?? agentState.activeAgentId ?? '';
   const agent = options.runAgent ?? {
+    id: targetAgentId,
     chatConfig: agentChatConfigSelectors.currentChatConfig(agentState),
     plugins: agentSelectors.currentAgentConfig(agentState)?.plugins,
   };
@@ -261,11 +277,15 @@ export const createAgentToolsEngine = (
     disabledPluginIds: [
       ...getUserDisabledToolIds(agent.plugins, chatConfig),
       ...connectors.offIds,
-      ...getUnselectedBuiltinToolIds([
-        ...getOptedInPluginIds(agent.plugins),
-        ...(options.runAgent?.enabledPluginIds ?? []),
-        ...(pluginIds ?? []),
-      ]),
+      ...getUnavailableBuiltinToolIds(
+        [
+          ...getOptedInPluginIds(agent.plugins),
+          ...(options.runAgent?.enabledPluginIds ?? []),
+          ...(pluginIds ?? []),
+        ],
+        chatConfig,
+        options.uninstalledBuiltinTools ?? runtimeUninstalledBuiltinTools(getToolStoreState()),
+      ),
       ...getFeatureDisabledToolIds(getServerConfigStoreState()?.featureFlags),
       // This engine serves runs the browser executes; server-only tools have nothing to run here.
       ...serverOnlyToolIds,

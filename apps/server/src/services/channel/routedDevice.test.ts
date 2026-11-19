@@ -42,7 +42,7 @@ const pools = (workspace: unknown[], personal: unknown[] = []) =>
   getScopedOnlineDevices.mockImplementation(async (_db, _userId, scope?: string) =>
     scope ? workspace : personal,
   );
-const presence = () => createRoutedDevicePresence({} as never, 'workspace');
+const presence = () => createRoutedDevicePresence({} as never);
 const claudeOnDevice = {
   boundDeviceId: 'agent-device',
   executionTarget: 'device',
@@ -146,6 +146,21 @@ describe('resolveChannelRoutedDevice', () => {
     expect(await resolveChannelRoutedDevice(db(), continued, presence())).toBeUndefined();
   });
 
+  // A shared Agent runs as its owner in the owner's scope; the visitor's Channel may sit in a
+  // workspace the owner's device was never in.
+  it("checks a shared Agent's device in the owner's scope, not the visitor Channel's", async () => {
+    getScopedOnlineDevices.mockImplementation(async (_db, userId: string, scope?: string) =>
+      userId === 'owner' && !scope ? [online('agent-device')] : [],
+    );
+    expect(
+      await resolveChannelRoutedDevice(
+        db(),
+        { ...run(claudeOnDevice), userId: 'owner', workspaceId: null },
+        presence(),
+      ),
+    ).toEqual({ deviceId: 'agent-device', online: true });
+  });
+
   it('reports the routed device offline when neither pool has it', async () => {
     pools([online('device-1')], [online('other-laptop')]);
     expect(await resolveChannelRoutedDevice(db(), run(claudeOnDevice), presence())).toEqual({
@@ -161,17 +176,17 @@ describe('createRoutedDevicePresence', () => {
   it('reads each pool once per requester and only asks about the routed device', async () => {
     pools([online('device-1')], [online('personal-laptop')]);
     const cache = presence();
-    await cache.prefetch('requester');
-    expect(await cache.isOnline('requester', 'personal-laptop')).toBe(true);
-    expect(await cache.isOnline('requester', 'device-1')).toBe(true);
-    expect(await cache.isOnline('requester', 'missing')).toBe(false);
+    await cache.prefetch('requester', 'workspace');
+    expect(await cache.isOnline('requester', 'personal-laptop', 'workspace')).toBe(true);
+    expect(await cache.isOnline('requester', 'device-1', 'workspace')).toBe(true);
+    expect(await cache.isOnline('requester', 'missing', 'workspace')).toBe(false);
     expect(getScopedOnlineDevices).toHaveBeenCalledTimes(2);
   });
 
-  it('uses only the personal pool for a personal Channel', async () => {
+  it('uses only the personal pool for a personal run', async () => {
     pools([online('device-1')], [online('personal-laptop')]);
-    const cache = createRoutedDevicePresence({} as never, null);
-    expect(await cache.isOnline('requester', 'device-1')).toBe(false);
-    expect(await cache.isOnline('requester', 'personal-laptop')).toBe(true);
+    const cache = presence();
+    expect(await cache.isOnline('requester', 'device-1', null)).toBe(false);
+    expect(await cache.isOnline('requester', 'personal-laptop', null)).toBe(true);
   });
 });

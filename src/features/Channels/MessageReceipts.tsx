@@ -1,4 +1,5 @@
 import type { ChannelDetail, ChannelPublicJob, ChannelPublicMessage } from '@lobechat/types';
+import { ChatErrorType } from '@lobechat/types';
 import { Button, Flexbox, Popover, Text, usePopoverContext } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { ExternalLink, Square } from 'lucide-react';
@@ -14,6 +15,35 @@ import { channelJobStatus, channelJobTone, isChannelJobActive } from './jobStatu
 import { memberAvatar, memberName } from './memberName';
 import { statusStyles, styles } from './styles';
 import { useOpenReplyAgent } from './useOpenReplyAgent';
+
+/** Failure categories with their own text; a shared Agent's visitor learns why only from these. */
+const RECEIPT_ERROR_KEYS = {
+  [ChatErrorType.ShareHeteroDeviceUnavailable]: 'receipt.errorShareHeteroDevice',
+  [ChatErrorType.ShareHeterogeneousAgentUnsupported]: 'receipt.errorShareHeteroUnsupported',
+  [ChatErrorType.ShareMessageLimitExceeded]: 'receipt.errorShareMessageLimit',
+  [ChatErrorType.ShareSpendLimitExceeded]: 'receipt.errorShareSpendLimit',
+} as const;
+
+type ReceiptErrorKey =
+  (typeof RECEIPT_ERROR_KEYS)[keyof typeof RECEIPT_ERROR_KEYS] | 'receipt.errorUnavailable';
+
+/** The viewer-language text for a known failure category, if it is one. */
+export const receiptErrorKey = (errorType?: string | null) =>
+  errorType && Object.hasOwn(RECEIPT_ERROR_KEYS, errorType)
+    ? RECEIPT_ERROR_KEYS[errorType as keyof typeof RECEIPT_ERROR_KEYS]
+    : undefined;
+
+/**
+ * The failure reason under a reply. A known category reads in the viewer's language: a shared
+ * Agent's visitor gets no raw text, so the category is all that explains a share's refusal.
+ */
+export const receiptErrorText = (
+  job: Pick<ChannelPublicJob, 'errorMessage' | 'errorType'>,
+  t: (key: ReceiptErrorKey) => string,
+) => {
+  const key = receiptErrorKey(job.errorType);
+  return key ? t(key) : job.errorMessage?.trim() || t('receipt.errorUnavailable');
+};
 
 export interface ReplyEntry {
   agentId?: string | null;
@@ -108,7 +138,7 @@ export function ReplyDetail({
         <Flexbox gap={4}>
           <Text weight={500}>{t('receipt.errorReason')}</Text>
           <Text style={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
-            {job.errorMessage?.trim() || t('receipt.errorUnavailable')}
+            {receiptErrorText(job, t)}
           </Text>
         </Flexbox>
       )}

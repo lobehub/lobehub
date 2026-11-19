@@ -19,6 +19,11 @@ afterEach(() => {
   desktopEnv.enabled = false;
 });
 
+vi.mock(import('@/store/tool/slices/builtin/projection'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  runtimeUninstalledBuiltinTools: () => [],
+}));
+
 // Mock the store and helper dependencies
 let mockConnectors: any[] = [];
 // No conversation listing here: the local lists stand in (see index.runConnectors.test.ts)
@@ -635,10 +640,6 @@ describe('toolEngineering', () => {
         skipDefaultTools: true,
         toolIds: ['lobe-agent'],
       };
-      expect(
-        createAgentToolsEngine(model).generateToolsDetailed(activation).enabledToolIds,
-      ).toEqual([]);
-      mockCurrentAgentAutoPlugins = ['lobe-agent'];
       const engine = createAgentToolsEngine(model);
 
       expect(engine.generateToolsDetailed({ ...model, toolIds: [] }).enabledToolIds).not.toContain(
@@ -672,7 +673,7 @@ describe('toolEngineering', () => {
       expect(result.enabledToolIds).toEqual([]);
       expect(result.filteredTools).toContainEqual({
         id: 'lobe-agent',
-        reason: 'not_found',
+        reason: 'incompatible',
       });
       expect(result.filteredTools).toContainEqual({
         id: 'lobe-web-browsing',
@@ -1006,7 +1007,7 @@ describe('toolEngineering', () => {
     });
   });
 
-  describe('connectors are opt-in per agent', () => {
+  describe('connector discovery', () => {
     const connectorManifest = {
       api: [
         {
@@ -1038,9 +1039,9 @@ describe('toolEngineering', () => {
       mockInstalledPluginManifestList = () => [connectorManifest];
     });
 
-    it('keeps a connector the agent never turned on out of reach, even for the activator', () => {
+    it('offers an unconfigured connector only after activation', () => {
       expect(generate().enabledToolIds).toEqual([]);
-      expect(generate({ explicit: true }).enabledToolIds).toEqual([]);
+      expect(generate({ explicit: true }).enabledToolIds).toEqual(['gmail-mcp']);
     });
 
     it('leaves a connector that is on to the activator instead of invoking it up front', () => {
@@ -1097,7 +1098,7 @@ describe('toolEngineering', () => {
         { model: 'gpt-4', provider: 'openai' },
         undefined,
         undefined,
-        { runAgent: { plugins: [] } },
+        { runAgent: { plugins: [{ identifier: 'gmail-mcp', mode: 'disabled' }] } },
       ).generateToolsDetailed({
         context: { isExplicitActivation: true },
         model: 'gpt-4',

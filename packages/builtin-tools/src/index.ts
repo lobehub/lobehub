@@ -650,8 +650,14 @@ export const onDemandBuiltinToolIds = builtinTools
   .map((tool) => tool.identifier);
 const onDemandBuiltinIds = new Set(onDemandBuiltinToolIds);
 
-/** An installed tool is not permission to offer it to every agent. */
-export const getUnselectedBuiltinToolIds = (available: Iterable<string>) => {
+/** Agent mode discovers installed builtins by default. Other modes keep their configured toolset. */
+export const getUnavailableBuiltinToolIds = (
+  available: Iterable<string>,
+  chatConfig?: Pick<LobeAgentChatConfig, 'toolMode' | 'enableAgentMode'> | null,
+  uninstalled: readonly string[] = [],
+) => {
+  if (resolveToolMode(chatConfig) === 'agent') return uninstalled.filter(isOnDemandBuiltinTool);
+
   const allowed = new Set(available);
   return onDemandBuiltinToolIds.filter((id) => !allowed.has(id));
 };
@@ -662,12 +668,46 @@ const recommendedBuiltinIds = new Set(
 );
 
 /**
- * Non-hidden builtin tools that are NOT in RECOMMENDED_SKILLS.
+ * Non-selectable, non-recommended tools that require installation from the Skill Store.
  * These tools default to uninstalled and must be explicitly installed by the user from the Skill Store.
  */
 export const defaultUninstalledBuiltinTools = builtinTools
-  .filter((t) => !t.hidden && !recommendedBuiltinIds.has(t.identifier))
+  .filter(
+    (t) =>
+      !t.hidden && !isOnDemandBuiltinTool(t.identifier) && !recommendedBuiltinIds.has(t.identifier),
+  )
   .map((t) => t.identifier);
+
+/**
+ * Minimal view of `settings.tool` covering just the builtin-tool install slots.
+ * Typed locally so the helpers accept the loosened shape returned by
+ * `getUserState()` while still spreading the rest of `tool` through at runtime.
+ */
+export interface UninstalledBuiltinToolsScope {
+  uninstalledBuiltinTools?: string[];
+  uninstalledBuiltinToolsByWorkspace?: Record<string, string[] | undefined>;
+}
+
+/**
+ * Resolve the uninstalled-builtin-tools list for the active scope.
+ *
+ * - Personal context (`workspaceId == null`) → the user's personal list.
+ * - Workspace context → the per-workspace list; a workspace with no stored
+ *   entry falls back to the default seed (a clean default state), never the
+ *   user's personal customization.
+ *
+ * `undefined` (never configured) maps to the default seed in both scopes.
+ */
+export const resolveUninstalledBuiltinTools = (
+  tool: UninstalledBuiltinToolsScope | null | undefined,
+  workspaceId?: string | null,
+): string[] => {
+  const stored = workspaceId
+    ? tool?.uninstalledBuiltinToolsByWorkspace?.[workspaceId]
+    : tool?.uninstalledBuiltinTools;
+
+  return stored === undefined ? defaultUninstalledBuiltinTools : stored;
+};
 
 const builtinIdentifierSet = new Set(builtinTools.map((tool) => tool.identifier));
 

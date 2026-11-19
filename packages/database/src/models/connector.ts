@@ -634,10 +634,12 @@ export class ConnectorModel {
     runTarget: ConnectorRunTargetInput = {},
     identifiers?: string[],
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
+    excludedIdentifiers: string[] = [],
   ): Promise<(DecryptedConnector & { toolIdentifier: string })[]> => {
     const target = toRunTarget(runTarget);
     const picked = await selectConnectorToolSets(this.db, {
       agentId: target.agentId,
+      excludedIdentifiers,
       identifiers,
       scope: this.scopePredicate(target),
       workspaceId: normalizeWorkspaceId(this.workspaceId),

@@ -12,6 +12,7 @@ import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
 import { ConnectorDetail, CustomConnectorModal } from '@/features/Connectors';
 import { useSkillConnect } from '@/features/SkillStore/SkillList/LobeHub/useSkillConnect';
 import { usePermission } from '@/hooks/usePermission';
@@ -194,6 +195,11 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete, visibi
       ? (s.agentBoundConnectors ?? []).find((c) => c.id === identifier)
       : undefined,
   );
+  // The list loads the agents' connectors, but a detail opened by link (or after a reload)
+  // mounts while the list is hidden, where the list's effects never run.
+  const isAgentBoundInit = useToolStore((s) => s.isAgentBoundInit);
+  const useFetchAgentBoundConnectors = useToolStore((s) => s.useFetchAgentBoundConnectors);
+  const agentBoundSync = useFetchAgentBoundConnectors(type === 'agent-connector');
 
   // Creator attribution for the row-level manage gate: agent skills carry it
   // on the skill row; connector-backed types on the connector row.
@@ -414,28 +420,35 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete, visibi
   if (type === 'agent-connector') {
     const usageAgentId = agentBoundConnector?.agentId;
     return (
-      <ConnectorDetail
-        connectorId={identifier}
-        agentTitle={agentDisplayName({
-          name: agentBoundConnector?.agentName,
-          title: agentBoundConnector?.agentTitle,
-        })}
-        middleSlot={
-          usageAgentId ? (
-            <Suspense fallback={null}>
-              <AgentConnectorUsage
-                agentAvatar={agentBoundConnector?.agentAvatar}
-                agentId={usageAgentId}
-                agentTitle={agentDisplayName({
-                  name: agentBoundConnector?.agentName,
-                  title: agentBoundConnector?.agentTitle,
-                })}
-              />
-            </Suspense>
-          ) : undefined
-        }
-        onDelete={onDelete}
-      />
+      <AsyncBoundary
+        data={isAgentBoundInit || undefined}
+        error={agentBoundSync.error}
+        isLoading={agentBoundSync.isValidating}
+        onRetry={agentBoundSync.revalidate}
+      >
+        <ConnectorDetail
+          connectorId={identifier}
+          agentTitle={agentDisplayName({
+            name: agentBoundConnector?.agentName,
+            title: agentBoundConnector?.agentTitle,
+          })}
+          middleSlot={
+            usageAgentId ? (
+              <Suspense fallback={null}>
+                <AgentConnectorUsage
+                  agentAvatar={agentBoundConnector?.agentAvatar}
+                  agentId={usageAgentId}
+                  agentTitle={agentDisplayName({
+                    name: agentBoundConnector?.agentName,
+                    title: agentBoundConnector?.agentTitle,
+                  })}
+                />
+              </Suspense>
+            ) : undefined
+          }
+          onDelete={onDelete}
+        />
+      </AsyncBoundary>
     );
   }
 

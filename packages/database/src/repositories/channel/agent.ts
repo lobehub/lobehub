@@ -1,5 +1,5 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
-import { isHeterogeneousAgentModelId } from '@lobechat/const';
+import { isAgentShareVisitorHeteroType, isHeterogeneousAgentModelId } from '@lobechat/const';
 import type {
   ChannelExecutionConfig,
   ChannelMemberConfig,
@@ -40,6 +40,29 @@ export const isSharedAgentChannel = (
     agent.agentWorkspaceId === channel.workspaceId &&
     agent.agentVisibility !== 'private'
   );
+
+/**
+ * The owner of the Agent a direct conversation is with, when it is another person's shared Agent
+ * (`isSharedAgentChannel`); `null` otherwise.
+ */
+export const sharedAgentOwner = async (
+  tx: Transaction,
+  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
+  viewerId: string,
+): Promise<string | null> => {
+  if (!channel.agentId) return null;
+  const [agent] = await tx
+    .select({
+      agentOwnerId: agents.userId,
+      agentVisibility: agents.visibility,
+      agentWorkspaceId: agents.workspaceId,
+    })
+    .from(agents)
+    .where(eq(agents.id, channel.agentId));
+  return agent?.agentOwnerId && isSharedAgentChannel(channel, agent, viewerId)
+    ? agent.agentOwnerId
+    : null;
+};
 
 /** Explicitly select environment fields so legacy or untyped copies cannot override an Agent. */
 export const memberEnvironment = (config?: ChannelMemberConfig | null): ChannelMemberConfig =>
@@ -267,11 +290,18 @@ export const resolveExecutionConfig = async (
     .for('share');
   if (!owned) return null;
   const config = await mergeDefaults(tx, owned, share.ownerId, share.workspaceId, serverDefault);
-  if (agentRuntime(config) !== 'native') return null;
+  // The runtimes its share page runs: Native, or Claude Code / Codex. The visitor picks no device;
+  // the run's share gate decides whether the share grants the owner's device and routes there.
+  const runtime = agentRuntime(config);
+  if (
+    !isChannelRuntime(runtime) ||
+    (runtime !== 'native' && !isAgentShareVisitorHeteroType(runtime))
+  )
+    return null;
   return {
     ...config,
     provider: config.provider || DEFAULT_PROVIDER,
-    runtime: 'native',
+    runtime,
     share: { ownerId: share.ownerId, shareId: share.shareId, workspaceId: share.workspaceId },
   };
 };

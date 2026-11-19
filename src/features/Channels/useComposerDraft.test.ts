@@ -53,6 +53,30 @@ describe('useComposerDraft', () => {
     expect(next.setDocument).toHaveBeenCalledWith('json', { text: 'half a thought' }, undefined);
   });
 
+  // An opening question picked on a share page lands in the composer as a draft, not a send.
+  it('fills an empty composer with the starter when nothing is saved', () => {
+    const editor = createFakeEditor();
+    const { result } = renderHook(() => useComposerDraft(editor, main, 'What can you do?'));
+    act(() => result.current.restore());
+    expect(editor.setDocument).toHaveBeenCalledExactlyOnceWith(
+      'markdown',
+      'What can you do?',
+      undefined,
+    );
+  });
+
+  it('prefers a saved draft over the starter', () => {
+    saveDraft(main, { text: 'my own words' });
+    const editor = createFakeEditor();
+    const { result } = renderHook(() => useComposerDraft(editor, main, 'What can you do?'));
+    act(() => result.current.restore());
+    expect(editor.setDocument).toHaveBeenCalledExactlyOnceWith(
+      'json',
+      { text: 'my own words' },
+      undefined,
+    );
+  });
+
   it('keeps each Thread separate from the main timeline', () => {
     saveDraft(main, { text: 'main draft' });
     const editor = createFakeEditor();

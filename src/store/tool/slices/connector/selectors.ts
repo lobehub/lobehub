@@ -305,11 +305,29 @@ const agentConnectors =
   (s: ToolStore): ConnectorWithTools[] =>
     s.agentConnectors?.[agentId] ?? [];
 
-/** Mounted (locked) to an agent other than `agentId`; without one, to any agent. */
-const isMountedByAnotherAgent = (connector: ConnectorWithTools, agentId?: string) => {
+/** A base connection is available to every agent until one agent mounts it. */
+export const isLibraryConnectorForAgent = (connector: ConnectorWithTools, agentId?: string) => {
   const mountedBy = connector.metadata?.mountedByAgentId;
+  return !connector.agentId && (!mountedBy || mountedBy === agentId);
+};
 
-  return typeof mountedBy === 'string' && mountedBy !== '' && mountedBy !== agentId;
+const userMcpConnectorsForAgent = (agentId: string) => (s: ToolStoreState) =>
+  userMcpConnectors(s).filter((connector) => isLibraryConnectorForAgent(connector, agentId));
+
+/** Connected MCP rows a particular agent can use, with its own rows taking precedence. */
+const connectedMcpConnectorsForAgent = (
+  s: ToolStoreState,
+  agentId: string,
+): ConnectorWithTools[] => {
+  const agentRows = s.agentConnectors?.[agentId] ?? [];
+  const overridden = new Set(agentRows.map((row) => row.identifier));
+  const baseRows = (s.connectors ?? []).filter(
+    (row) => !overridden.has(row.identifier) && isLibraryConnectorForAgent(row, agentId),
+  );
+  return executableMcpConnectors({
+    connectors: [...agentRows, ...baseRows],
+    installedPlugins: s.installedPlugins,
+  }).filter((row) => row.isEnabled && row.status === 'connected');
 };
 
 /**
@@ -351,7 +369,7 @@ const connectorByIdentifierForAgent =
     const baseRows = (s.connectors ?? []).filter(
       (c) =>
         connectorToolIdentifier(c, undefined, reserved) === identifier &&
-        !isMountedByAnotherAgent(c, agentId) &&
+        isLibraryConnectorForAgent(c, agentId) &&
         (includePrivate || c.visibility !== 'private'),
     );
 
@@ -367,32 +385,6 @@ const isAgentConnectorsInit =
   (agentId: string) =>
   (s: ToolStore): boolean =>
     s.agentConnectorsInit?.[agentId] ?? false;
-
-/**
- * The badge kind of an agent tool, derived from its scope + whether a same-named
- * user connector exists:
- * - `agentOnly` — agent-owned, no user connector of the same identifier;
- * - `copy` — agent-owned, and the user also has one of the same identifier;
- * - `linked` — a user-owned row this agent has mounted (referenced + locked).
- */
-type AgentToolBadge = 'agentOnly' | 'copy' | 'linked';
-const agentToolBadge =
-  (agentId: string, connector: ConnectorWithTools) =>
-  (s: ToolStore): AgentToolBadge => {
-    if (connector.agentId !== agentId) return 'linked'; // mounted user row
-    const hasUserSame = (s.connectors ?? []).some(
-      (c) => c.identifier === connector.identifier && !c.agentId,
-    );
-    return hasUserSame ? 'copy' : 'agentOnly';
-  };
-
-/** Identifiers of user connectors that an agent has overridden (owns a same-named tool). */
-const agentOverriddenIdentifiers =
-  (agentId: string) =>
-  (s: ToolStore): Set<string> => {
-    const owned = (s.agentConnectors?.[agentId] ?? []).filter((c) => c.agentId === agentId);
-    return new Set(owned.map((c) => c.identifier));
-  };
 
 export const connectorSelectors = {
   /**
@@ -422,8 +414,6 @@ export const connectorSelectors = {
       )(s)?.links?.find((link) => link.id === linkId)?.name,
   agentBoundConnectors,
   agentConnectors,
-  agentOverriddenIdentifiers,
-  agentToolBadge,
   connectedConnectors,
   connectorById,
   connectorByIdentifier,
@@ -435,6 +425,7 @@ export const connectorSelectors = {
   executableMcpConnectors,
   installedMarketplaceConnectors,
   isMarketplaceConnectorInstalled,
+  connectedMcpConnectorsForAgent,
   marketplaceMcpConnectorByIdentifier,
   marketplaceMcpConnectors,
   sharedConnectorByIdentifier,
@@ -455,4 +446,5 @@ export const connectorSelectors = {
     },
   notConnectedConnectors,
   userMcpConnectors,
+  userMcpConnectorsForAgent,
 };
