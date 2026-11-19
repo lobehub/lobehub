@@ -13,6 +13,7 @@ import {
   channelThreads,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
 import { appendMessage } from './delivery';
 import { readManifestMessages } from './manifest';
@@ -134,7 +135,7 @@ const coAddressedJobs = async (
 ) => {
   if (!opensReply(job)) return [];
   const rows = await db
-    .select({ name: agents.name, title: agents.title, wake: channelJobs.wake })
+    .select({ name: agents.name, title: agentTitleSql(), wake: channelJobs.wake })
     .from(channelJobs)
     .innerJoin(channelMembers, eq(channelMembers.id, channelJobs.memberId))
     .innerJoin(agents, eq(agents.id, channelMembers.agentId))
@@ -178,7 +179,7 @@ export const findOpeningCandidate = async (
       job: channelJobs,
       agentId: channelMembers.agentId,
       agentName: agents.name,
-      agentTitle: agents.title,
+      agentTitle: agentTitleSql(),
     })
     .from(channelJobs)
     .innerJoin(channelMembers, eq(channelMembers.id, channelJobs.memberId))

@@ -11,6 +11,7 @@ import {
   users,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
 import { isAgentAuthored } from './author';
 import { messageStands } from './tombstone';
@@ -57,7 +58,7 @@ export const channelLastMessages = async (
     .selectDistinctOn([channelMessages.channelId], {
       agentId: channelMessages.agentId,
       agentName: agents.name,
-      agentTitle: agents.title,
+      agentTitle: agentTitleSql(),
       channelId: channelMessages.channelId,
       content: sql<string>`left(${channelMessages.content}, ${LIST_PREVIEW_LENGTH})`,
       createdAt: channelMessages.createdAt,

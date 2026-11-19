@@ -16,6 +16,7 @@ import type {
 } from '../../schemas';
 import { agents, channelJobs, channelMessages, users } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { agentTitleSql } from '../../utils/inboxAgent';
 import { fileIdsByMessage } from './attachments';
 import { isAgentAuthored } from './author';
 import { messageStands } from './tombstone';
@@ -125,7 +126,7 @@ export const readManifestMessages = async (
     .select({
       agentId: channelMessages.agentId,
       agentName: agents.name,
-      agentTitle: agents.title,
+      agentTitle: agentTitleSql(),
       fullName: users.fullName,
       routingStatus: channelMessages.routingStatus,
       userId: channelMessages.userId,
