@@ -60,6 +60,19 @@ describe('useProjectDraftStaging', () => {
     expect(pending()).toBeUndefined();
   });
 
+  /** @example Review: closing one of two split panes on the same draft cleared the other's staging. */
+  it('keeps a draft staged while another live pane holds the same one', () => {
+    const projectDraft = { agentId: 'agt_a', projectId: 'prj_1' };
+    const first = renderHook(() => useProjectDraftStaging({ ...projectDraft }, ids));
+    const second = renderHook(() => useProjectDraftStaging({ ...projectDraft }, ids));
+
+    first.unmount();
+    expect(pending()).toEqual(projectDraft);
+
+    second.unmount();
+    expect(pending()).toBeUndefined();
+  });
+
   it("leaves another pane's staged draft alone", () => {
     const a = renderHook(() => useProjectDraftStaging(paneA, ids));
     renderHook(() => useProjectDraftStaging(paneB, ids));
