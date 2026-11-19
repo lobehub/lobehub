@@ -220,6 +220,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
     id,
     name,
     openCreateGroupModal: handleOpenCreateGroupModal,
+    organizeOnlyInWorkspace: true,
     pinned: pinned ?? false,
     slug,
     title: displayTitle,

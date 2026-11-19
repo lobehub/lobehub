@@ -180,7 +180,10 @@ const getMenuItem = (
 };
 
 type PublicAgentMenuOptions = Partial<
-  Pick<Parameters<typeof useAgentDropdownMenu>[0], 'id' | 'labelsEnabled' | 'pinned' | 'visibility'>
+  Pick<
+    Parameters<typeof useAgentDropdownMenu>[0],
+    'id' | 'labelsEnabled' | 'organizeOnlyInWorkspace' | 'pinned' | 'visibility'
+  >
 >;
 
 const renderPublicAgentMenu = (
@@ -188,6 +191,7 @@ const renderPublicAgentMenu = (
   {
     id = 'agent-1',
     labelsEnabled,
+    organizeOnlyInWorkspace,
     pinned = false,
     visibility = 'public',
   }: PublicAgentMenuOptions = {},
@@ -198,6 +202,7 @@ const renderPublicAgentMenu = (
       id,
       ...(labelsEnabled === undefined ? {} : { labelsEnabled }),
       openCreateGroupModal: vi.fn(),
+      organizeOnlyInWorkspace,
       pinned,
       title: 'Public Agent',
       userId,
@@ -300,6 +305,64 @@ describe('useAgentDropdownMenu', () => {
       'duplicate',
       'moveGroup',
     ]);
+  });
+
+  describe('sidebar row menu (organizeOnlyInWorkspace)', () => {
+    const grantFullAccess = () => {
+      mocks.canEditResource = true;
+      mocks.canManageResource = true;
+      mocks.canManage = true;
+      mocks.transferMenuItems = [{ key: 'transfer', label: 'Transfer' }];
+    };
+
+    it('keeps only pin, hide and move-to-category in a workspace, even for the creator', () => {
+      grantFullAccess();
+
+      const { result } = renderPublicAgentMenu('member-1', { organizeOnlyInWorkspace: true });
+
+      expect(getMenuLayout(result.current())).toEqual(['pin', 'hideFromSidebar', 'moveGroup']);
+    });
+
+    it('drops publish on a private agent too', () => {
+      grantFullAccess();
+
+      const { result } = renderPublicAgentMenu('member-1', {
+        organizeOnlyInWorkspace: true,
+        visibility: 'private',
+      });
+
+      expect(getMenuLayout(result.current())).toEqual(['pin', 'hideFromSidebar', 'moveGroup']);
+    });
+
+    it('keeps the full menu in personal mode', () => {
+      grantFullAccess();
+      mocks.activeWorkspaceId = null;
+
+      const { result } = renderPublicAgentMenu('member-1', { organizeOnlyInWorkspace: true });
+      const keys = getMenuKeys(result.current());
+
+      expect(keys).toEqual(
+        expect.arrayContaining(['openInNewWindow', 'copyAgentId', 'rename', 'delete']),
+      );
+    });
+
+    it('keeps the full management menu where the option is off (the agents list page)', () => {
+      grantFullAccess();
+
+      const { result } = renderPublicAgentMenu('member-1');
+      const keys = getMenuKeys(result.current());
+
+      expect(keys).toEqual(
+        expect.arrayContaining([
+          'openInNewWindow',
+          'copyAgentId',
+          'rename',
+          'permission',
+          'makePrivate',
+          'delete',
+        ]),
+      );
+    });
   });
 
   it('shows the Labels submenu only where it is enabled (the agents list page)', () => {

@@ -54,6 +54,22 @@ import { getAgentPublishErrorKey } from './agentMenuVisibility';
 
 const BUILTIN_SLUGS = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
 
+/**
+ * Items that only organize the viewer's own list. In a workspace the sidebar
+ * row menu is limited to these; opening, copying, renaming, permissions,
+ * visibility and deletion live on the Agent itself and the agents list page.
+ */
+const ORGANIZE_ONLY_KEYS = new Set(['pin', 'pinForTeam', 'hideFromSidebar', 'moveGroup', 'labels']);
+
+const keepOrganizeOnlyItems = (items: DropdownItem[]): DropdownItem[] =>
+  items.filter(
+    (item) =>
+      !!item &&
+      typeof item === 'object' &&
+      'key' in item &&
+      ORGANIZE_ONLY_KEYS.has(String(item.key)),
+  );
+
 interface UseAgentDropdownMenuParams {
   avatar?: string;
   backgroundColor?: string;
@@ -70,6 +86,12 @@ interface UseAgentDropdownMenuParams {
   /** The agent's personal name — the row label is this when set, the role otherwise. */
   name?: string | null;
   openCreateGroupModal: () => void;
+  /**
+   * Inside a workspace, keep only list-organizing items (pin, hide, move to
+   * category, labels). The sidebar sets this; the agents list page keeps the
+   * full management menu.
+   */
+  organizeOnlyInWorkspace?: boolean;
   pinned: boolean;
   slug?: string | null;
   title: string;
@@ -86,6 +108,7 @@ export const useAgentDropdownMenu = ({
   labelsEnabled,
   name,
   openCreateGroupModal,
+  organizeOnlyInWorkspace,
   pinned,
   slug,
   title,
@@ -215,7 +238,9 @@ export const useAgentDropdownMenu = ({
     visibility,
   });
 
-  return useMemo(
+  const organizeOnly = Boolean(organizeOnlyInWorkspace && activeWorkspaceId);
+
+  const buildMenu = useMemo(
     () => () =>
       [
         ...(activeWorkspaceId
@@ -652,5 +677,10 @@ export const useAgentDropdownMenu = ({
       revealSidebarSection,
       t,
     ],
+  );
+
+  return useMemo(
+    () => (organizeOnly ? () => keepOrganizeOnlyItems(buildMenu()) : buildMenu),
+    [buildMenu, organizeOnly],
   );
 };
