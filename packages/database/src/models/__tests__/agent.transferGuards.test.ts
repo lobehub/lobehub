@@ -304,6 +304,41 @@ describe('AgentModel.getDeleteImpact', () => {
     });
   });
 
+  it("flags a teammate's message in the caller's live topic even without the agent or session on the message", async () => {
+    await serverDB
+      .insert(topics)
+      .values({ agentId, id: 'agtg-own-topic', userId: ownerId, workspaceId: wsId });
+    await serverDB.insert(messages).values({
+      id: 'agtg-teammate-message',
+      role: 'user',
+      topicId: 'agtg-own-topic',
+      userId: teammateId,
+    });
+
+    expect(await ownerModel.getDeleteImpact(agentId)).toEqual({
+      foreignTopicCount: 0,
+      hasForeignContent: true,
+    });
+  });
+
+  it("ignores a teammate's message tagged with the agent but kept in a topic outside the cascade", async () => {
+    await serverDB
+      .insert(topics)
+      .values({ id: 'agtg-unrelated-topic', userId: ownerId, workspaceId: wsId });
+    await serverDB.insert(messages).values({
+      agentId,
+      id: 'agtg-teammate-message',
+      role: 'user',
+      topicId: 'agtg-unrelated-topic',
+      userId: teammateId,
+    });
+
+    expect(await ownerModel.getDeleteImpact(agentId)).toEqual({
+      foreignTopicCount: 0,
+      hasForeignContent: false,
+    });
+  });
+
   it("ignores a teammate's message that is already in the trash", async () => {
     await serverDB.insert(messages).values({
       agentId,
