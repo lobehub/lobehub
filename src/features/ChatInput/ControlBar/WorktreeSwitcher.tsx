@@ -37,6 +37,7 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { gitService } from '@/services/git';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import { openCreateWorktreeModal } from './CreateWorktreeModal';
 import { gitMenuTriggerStyles } from './gitMenuTrigger';
@@ -100,10 +101,11 @@ const styles = stylex.create({
     display: 'flex',
     gap: '8px',
     alignItems: 'center',
-    paddingBlock: '6px',
+    minHeight: sidebarRow.controlHeight,
+    paddingBlock: '4px',
     paddingInline: '8px',
-    borderRadius: '8px',
-    fontSize: '13px',
+    borderRadius: sidebarRow.radius,
+    fontSize: sidebarRow.textFontSize,
     color: cssVar.colorText,
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
@@ -145,11 +147,11 @@ const styles = stylex.create({
     gridTemplateColumns: 'minmax(0, 1fr) minmax(44px, auto) 20px',
     gap: '10px',
     alignItems: 'center',
-    minHeight: '48px',
-    paddingBlock: '6px',
+    minHeight: sidebarRow.listRowHeight,
+    paddingBlock: '4px',
     paddingInline: '8px',
-    borderRadius: '8px',
-    fontSize: '13px',
+    borderRadius: sidebarRow.radius,
+    fontSize: sidebarRow.textFontSize,
     color: cssVar.colorText,
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },

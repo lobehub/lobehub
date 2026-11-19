@@ -6,6 +6,7 @@ import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 
 import NavHeader from '@/features/NavHeader';
+import { useDensityTokens, useInterfaceDensity } from '@/styles/density';
 
 import SkeletonBar from '../../Bar';
 
@@ -25,6 +26,9 @@ interface SkillCatalogProps {
 /** The shared catalog header and two-column rows used by skills and connectors. */
 export const SkillCatalogListSkeleton = ({ viewMode }: SkillCatalogProps) => {
   const { t } = useTranslation('setting');
+  // Compact `SkillListRow` page rows: 6px padding, 32px tile, 20 + 2 + 18px text → 52px.
+  const compact = useInterfaceDensity() === 'compact';
+  const { controlHeight } = useDensityTokens();
   const skills = viewMode === 'skill';
   const sections = skills
     ? (['skillGroup.builtinSkills', 'skillGroup.communitySkills'] as const)
@@ -49,8 +53,8 @@ export const SkillCatalogListSkeleton = ({ viewMode }: SkillCatalogProps) => {
           </Text>
         </Flexbox>
         <Flexbox horizontal align={'center'} gap={8}>
-          <SkeletonBar height={32} width={240} />
-          <SkeletonBar height={32} width={80} />
+          <SkeletonBar height={controlHeight} width={240} />
+          <SkeletonBar height={controlHeight} width={80} />
         </Flexbox>
       </Flexbox>
       <Flexbox gap={40} paddingBlock={24}>
@@ -69,16 +73,20 @@ export const SkillCatalogListSkeleton = ({ viewMode }: SkillCatalogProps) => {
                   align={'center'}
                   gap={12}
                   key={index}
-                  paddingBlock={12}
+                  paddingBlock={compact ? 6 : 12}
                   paddingInline={12}
-                  style={{ minHeight: 64, minWidth: 0 }}
+                  style={{ minHeight: compact ? 48 : 64, minWidth: 0 }}
                 >
-                  <SkeletonBar height={40} radius={cssVar.borderRadiusLG} width={40} />
+                  <SkeletonBar
+                    height={compact ? 32 : 40}
+                    radius={cssVar.borderRadiusLG}
+                    width={compact ? 32 : 40}
+                  />
                   <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-                    <Flexbox height={22} justify={'center'}>
+                    <Flexbox height={compact ? 20 : 22} justify={'center'}>
                       <SkeletonBar height={14} width={96 + (index % 3) * 32} />
                     </Flexbox>
-                    <Flexbox height={20} justify={'center'}>
+                    <Flexbox height={compact ? 18 : 20} justify={'center'}>
                       <SkeletonBar height={12} width={`${64 + (index % 2) * 16}%`} />
                     </Flexbox>
                   </Flexbox>
