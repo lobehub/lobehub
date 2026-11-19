@@ -43,6 +43,7 @@ import { nextWorkingDirs } from '@/store/device';
 import AgentRuntimes from './AgentRuntimes';
 import { refreshDeviceList } from './const';
 import DeviceOverview from './DeviceOverview';
+import DeviceVisibility from './DeviceVisibility';
 import FieldLabel from './FieldLabel';
 import { getDeviceIcon } from './getDeviceIcon';
 import ManagedDeviceBadge from './ManagedDeviceBadge';
@@ -357,6 +358,8 @@ const DeviceDetail = memo<DeviceDetailProps>(({ device, isConfirmed, isCurrent, 
           </Flexbox>
         </Flexbox>
       </Flexbox>
+
+      <DeviceVisibility device={device} disabled={!isConfirmed} />
 
       <Tabs
         activeKey={tab}

@@ -617,6 +617,8 @@
   "devices.detail.tabs.files": "Directories",
   "devices.detail.tabs.overview": "Overview",
   "devices.detail.usage": "Usage",
+  "devices.detail.visibility.private": "Private: only you can see this device and run Agents on it. Other workspace members can’t use Agents bound to it.",
+  "devices.detail.visibility.public": "Workspace: every member of this workspace can see this device and run Agents on it.",
   "devices.edit.browse": "Browse…",
   "devices.edit.cancel": "Cancel",
   "devices.edit.defaultCwd": "Default working directory",

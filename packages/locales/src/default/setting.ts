@@ -868,6 +868,10 @@ export default {
   'devices.detail.tabs.agents': 'Agent runtimes',
   'devices.detail.tabs.files': 'Directories',
   'devices.detail.tabs.overview': 'Overview',
+  'devices.detail.visibility.private':
+    'Private: only you can see this device and run Agents on it. Other workspace members can’t use Agents bound to it.',
+  'devices.detail.visibility.public':
+    'Workspace: every member of this workspace can see this device and run Agents on it.',
   'devices.detail.usage': 'Usage',
   'devices.edit.browse': 'Browse…',
   'devices.edit.cancel': 'Cancel',
