@@ -83,15 +83,25 @@ export interface AccessSettings extends StanceSettings {
   devicePolicy?: string;
   groupAllowFrom?: unknown;
   groupPolicy?: string;
+  guestPolicy?: string;
   userId?: unknown;
 }
+
+/**
+ * Whether these settings have strangers wait for an approval with no owner to give it. Mirrors the
+ * server's `validateAccessSettings`, which refuses them, so the page can say so before it asks.
+ */
+export const ownerIdMissing = (settings: AccessSettings): boolean => {
+  const userId = typeof settings.userId === 'string' ? settings.userId.trim() : '';
+
+  return (settings.dmPolicy === 'pairing' || settings.guestPolicy === 'pairing') && !userId;
+};
 
 /** Things that leave the current choice not working the way it reads. */
 export const accessIssues = (settings: AccessSettings): AccessIssue[] => {
   const issues: AccessIssue[] = [];
-  const userId = typeof settings.userId === 'string' ? settings.userId.trim() : '';
 
-  if (settings.dmPolicy === 'pairing' && !userId) issues.push('approverMissing');
+  if (ownerIdMissing(settings)) issues.push('approverMissing');
   if (settings.dmPolicy === 'allowlist' && countListed(settings.allowFrom) === 0)
     issues.push('listEmpty');
   if (settings.groupPolicy === 'allowlist' && countListed(settings.groupAllowFrom) === 0)

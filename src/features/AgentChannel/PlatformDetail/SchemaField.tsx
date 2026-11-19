@@ -94,6 +94,8 @@ const CONTROL_WIDTH = 'min(240px, 100%)';
 // --------------- Single field component (memo'd) ---------------
 
 interface SchemaFieldProps {
+  /** DOM id of the field's wrapper, for a save that has to bring this field into view. */
+  anchorId?: string;
   /** Replaces the schema's description line, e.g. with a warning that depends on other values. */
   descOverride?: React.ReactNode;
   disabled?: boolean;
@@ -115,6 +117,7 @@ interface SchemaFieldProps {
 
 export const SchemaField = memo<SchemaFieldProps>(
   ({
+    anchorId,
     field,
     parentKey,
     divider,
@@ -308,7 +311,7 @@ export const SchemaField = memo<SchemaFieldProps>(
     }
 
     return (
-      <div hidden={hidden}>
+      <div hidden={hidden} id={anchorId}>
         <Form.Field
           desc={desc}
           divider={divider}
