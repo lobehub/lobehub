@@ -72,11 +72,12 @@ tool does not ship):
   device(s). A visitor executing arbitrary commands or driving a live
   browser session on the CREATOR's own machine is a far larger blast radius
   than any single data store, so they are never offered through the tool
-  picker. They are granted only by `shareConfig.deviceAccess: 'allowlist'`
-  naming the visitor in `deviceAllowUserIds`, and only while the visitor is
-  still in the address book of the Agent's scope (personal contacts, or the
-  workspace's members and external contacts). There is no "every visitor"
-  value. The explicit creator choice is resolved once per gate by `resolveShareVisitorDeviceAccess` into
+  picker. They are granted only by `shareConfig.deviceAccess`: `contacts`
+  admits everyone currently in the address book of the Agent's scope
+  (personal contacts, or the workspace's members and external contacts),
+  including people added later; `allowlist` admits only visitors named in
+  `deviceAllowUserIds`, and only while they are still in that address book.
+  There is no "every visitor" value. The explicit creator choice is resolved once per gate by `resolveShareVisitorDeviceAccess` into
   `canUseDevice` and re-applied at dispatch. The same grant admits
   device-only MCP servers (which still need their own tool grant). The device
   is always the Agent's configured execution environment; a visitor never

@@ -4,7 +4,6 @@ import { appEnv } from '@/envs/app';
 
 import { AgentStateManager } from './AgentStateManager';
 import { GatewayStreamNotifier, type GatewayStreamNotifierOptions } from './GatewayStreamNotifier';
-import { FULL_STRIP_REDACTION } from './gatewayVisitorRedaction';
 import { inMemoryAgentStateManager } from './InMemoryAgentStateManager';
 import { inMemoryStreamEventManager } from './InMemoryStreamEventManager';
 import { getAgentRuntimeRedisClient } from './redis';
@@ -113,11 +112,10 @@ export const createStreamEventManager = (
       // Same reasoning as the mirror resolver above, but for share-visitor
       // detection: a queue worker that never ran `publishAgentRuntimeInit` for
       // this op still needs to know whether its events must be scrubbed of the
-      // creator's identity, and under which owner-configured policy.
+      // creator's identity.
       async (operationId) => {
         const meta = await stateManager.getOperationMetadata(operationId);
-        if (!meta?.streamOwnerUserId) return null;
-        return meta.visitorRedaction ?? FULL_STRIP_REDACTION;
+        return !!meta?.streamOwnerUserId;
       },
       {
         ...notifierOptions,

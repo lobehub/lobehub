@@ -250,8 +250,12 @@ export const shareRouter = router({
             share.shareConfig.maxMessagesPerVisitor ?? AGENT_SHARE_DEFAULT_MAX_MESSAGES_PER_VISITOR,
         },
         // Identifiers only. The granted API list is owner-facing configuration
-        // and must not reach a visitor.
-        toolGrants: (share.shareConfig.toolGrants ?? []).map((grant) => grant.identifier),
+        // and must not reach a visitor. A Claude Code / Codex Agent runs none of
+        // LobeHub's tools, so grants stored before it switched harness are not
+        // advertised (the settings page hides them too).
+        toolGrants: share.agentAgencyConfig?.heterogeneousProvider
+          ? []
+          : (share.shareConfig.toolGrants ?? []).map((grant) => grant.identifier),
         uploadAbility,
         // TODO(cloud budget gate): the spend gate itself is already enforced —
         // `shareChat.execAgent` checks `checkAgentShareSpendAllowance` before
