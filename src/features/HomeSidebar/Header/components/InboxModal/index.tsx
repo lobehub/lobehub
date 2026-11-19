@@ -71,6 +71,8 @@ const styles = stylex.create({
     borderBlockEndColor: cssVar.colorFillSecondary,
   },
   headerMain: { minWidth: '0', paddingBlock: '12px', paddingInline: '16px' },
+  // Small tabs/actions are 28px tall, so 6px block padding lands on the 40px compact header.
+  headerMainCompact: { paddingBlock: '6px' },
   headerTitle: {
     flex: 'none',
     boxSizing: 'border-box',
@@ -128,6 +130,7 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
 const InboxModalContent = memo(() => {
   const headerActionSize = useHeaderActionSize(true);
   const interfaceDensity = useInterfaceDensity();
+  const compact = interfaceDensity === 'compact';
   const { i18n, t } = useTranslation('notification');
   const workspaceId = useActiveWorkspaceId();
   const [navigationFilter, setNavigationFilter] = useState(ALL_FILTER);
@@ -284,7 +287,7 @@ const InboxModalContent = memo(() => {
         <Flexbox
           horizontal
           align="center"
-          className={stylex.props(styles.headerMain).className}
+          className={stylex.props(styles.headerMain, compact && styles.headerMainCompact).className}
           flex={1}
           justify="space-between"
         >
@@ -403,13 +406,17 @@ const InboxModalContent = memo(() => {
         </NavPanelDensityContext>
         <Flexbox className={stylex.props(styles.main).className} flex={1}>
           <Flexbox flex={1} style={{ minHeight: 0 }}>
-            <Content
-              category={category}
-              isRead={isRead}
-              onArchive={handleArchive}
-              onMarkAsRead={handleMarkAsRead}
-              onRefreshInbox={refreshInbox}
-            />
+            {/* Compact only: loose skeletons keep their context-free metrics. The dynamic
+                loading fallback renders inside this provider, so it follows density too. */}
+            <NavPanelDensityContext value={compact ? interfaceDensity : undefined}>
+              <Content
+                category={category}
+                isRead={isRead}
+                onArchive={handleArchive}
+                onMarkAsRead={handleMarkAsRead}
+                onRefreshInbox={refreshInbox}
+              />
+            </NavPanelDensityContext>
           </Flexbox>
         </Flexbox>
       </Flexbox>

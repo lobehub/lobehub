@@ -18,7 +18,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: none;
 
     padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
+    border-radius: var(--lobe-density-radius);
 
     &:hover {
       background: ${cssVar.colorFillTertiary};

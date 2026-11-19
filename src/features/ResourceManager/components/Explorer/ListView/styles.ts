@@ -12,8 +12,8 @@ export const styles = createStaticStyles(({ css }) => ({
   `,
   header: css`
     min-width: 1040px;
-    height: 40px;
-    min-height: 40px;
+    height: var(--lobe-density-toolbar-height);
+    min-height: var(--lobe-density-toolbar-height);
     color: ${cssVar.colorTextDescription};
   `,
   headerItem: css`
@@ -42,7 +42,7 @@ export const styles = createStaticStyles(({ css }) => ({
   selectAllHint: css`
     position: sticky;
     z-index: 1;
-    inset-block-start: 40px;
+    inset-block-start: var(--lobe-density-toolbar-height);
 
     min-width: 1040px;
     padding-block: 8px;

@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import MemoryAnalysis from '@/routes/(main)/memory/features/MemoryAnalysis';
+import { useInterfaceDensity } from '@/styles/density';
 
 import KindIcon from './components/KindIcon';
 import { useEntityFormat } from './format';
@@ -68,6 +69,8 @@ const styles = stylex.create({
     paddingInline: '16px',
     width: '320px',
   },
+  // Compact entity rows are 4px shorter (6px block padding), so the skeleton pitch follows.
+  loadingListCompact: { gap: '12px' },
   loadingRow: { alignItems: 'flex-start', display: 'flex', gap: '12px' },
   loadingPage: {
     display: 'flex',
@@ -131,27 +134,31 @@ export const ErrorState = memo<{ onRetry: () => void }>(({ onRetry }) => {
 ErrorState.displayName = 'ErrorState';
 
 /** Same frame as the loaded page, so nothing jumps when data arrives. */
-export const LoadingState = memo(() => (
-  <div aria-busy {...stylex.props(styles.loading)}>
-    <div {...stylex.props(styles.loadingList)}>
-      <Skeleton height={22} width={64} />
-      <Skeleton height={32} radius={8} width={'100%'} />
-      {Array.from({ length: 7 }, (_, i) => (
-        <div key={i} {...stylex.props(styles.loadingRow)}>
-          <SkeletonAvatar shape={'square'} size={24} />
-          <SkeletonText fontSize={12} rows={2} width={['60%', '90%']} />
-        </div>
-      ))}
-    </div>
-    <div {...stylex.props(styles.loadingPage)}>
-      <div {...stylex.props(styles.loadingRow)}>
-        <SkeletonAvatar shape={'square'} size={40} />
-        <SkeletonText fontSize={20} rows={2} width={['40%', '25%']} />
+export const LoadingState = memo(() => {
+  const compact = useInterfaceDensity() === 'compact';
+
+  return (
+    <div aria-busy {...stylex.props(styles.loading)}>
+      <div {...stylex.props(styles.loadingList, compact && styles.loadingListCompact)}>
+        <Skeleton height={22} width={64} />
+        <Skeleton height={32} radius={8} width={'100%'} />
+        {Array.from({ length: 7 }, (_, i) => (
+          <div key={i} {...stylex.props(styles.loadingRow)}>
+            <SkeletonAvatar shape={'square'} size={24} />
+            <SkeletonText fontSize={12} rows={2} width={['60%', '90%']} />
+          </div>
+        ))}
       </div>
-      <SkeletonText fontSize={17} rows={3} width={['15%', '100%', '70%']} />
-      <SkeletonText rows={6} width={['15%', '90%', '60%', '95%', '80%', '50%']} />
+      <div {...stylex.props(styles.loadingPage)}>
+        <div {...stylex.props(styles.loadingRow)}>
+          <SkeletonAvatar shape={'square'} size={40} />
+          <SkeletonText fontSize={20} rows={2} width={['40%', '25%']} />
+        </div>
+        <SkeletonText fontSize={17} rows={3} width={['15%', '100%', '70%']} />
+        <SkeletonText rows={6} width={['15%', '90%', '60%', '95%', '80%', '50%']} />
+      </div>
     </div>
-  </div>
-));
+  );
+});
 
 LoadingState.displayName = 'LoadingState';

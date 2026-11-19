@@ -2,7 +2,7 @@ import { type InterfaceDensity } from '@lobechat/types';
 import { cssVar } from '@lobehub/ui';
 import { useContext } from 'react';
 
-import { DENSITY_TOKENS, PanelDensityContext } from '@/styles/density';
+import { DENSITY_TOKENS, PanelDensityContext, useInterfaceDensity } from '@/styles/density';
 
 export interface NavItemMetrics {
   fontSize: number;
@@ -15,6 +15,7 @@ export interface NavItemMetrics {
   headerTitleWeight: number;
   iconBox: number;
   iconSize: number;
+  lineHeight: number;
   paddingInline: number;
   panelPaddingInline: number;
   radius?: number;
@@ -23,6 +24,8 @@ export interface NavItemMetrics {
   sectionLabelColor: string;
   sectionTriggerPaddingBlock: number;
   sectionTriggerPaddingInline: string;
+  twoLineGap: number;
+  twoLinePaddingBlock: number;
 }
 
 const SECTION_ACTION_SIZE = 24;
@@ -42,6 +45,7 @@ export const resolveNavItemMetrics = (density: InterfaceDensity | null): NavItem
     headerTitleWeight: compact ? 600 : 500,
     iconBox: tokens.iconBox,
     iconSize: tokens.iconSize,
+    lineHeight: tokens.lineHeight,
     paddingInline: tokens.paddingInline,
     panelPaddingInline: tokens.panelPaddingInline,
     radius: density ? tokens.radius : undefined,
@@ -50,10 +54,15 @@ export const resolveNavItemMetrics = (density: InterfaceDensity | null): NavItem
     sectionLabelColor: compact ? cssVar.colorTextTertiary : cssVar.colorTextSecondary,
     sectionTriggerPaddingBlock: (tokens.sectionHeaderHeight - SECTION_ACTION_SIZE) / 2,
     sectionTriggerPaddingInline: compact ? '6px 4px' : '8px 4px',
+    twoLineGap: compact ? 2 : 3,
+    twoLinePaddingBlock: compact ? 6 : 8,
   };
 };
 
 export const NavPanelDensityContext = PanelDensityContext;
 
-export const useNavItemMetrics = (): NavItemMetrics =>
-  resolveNavItemMetrics(useContext(NavPanelDensityContext));
+export const useNavItemMetrics = (): NavItemMetrics => {
+  const contextDensity = useContext(NavPanelDensityContext);
+  const interfaceDensity = useInterfaceDensity();
+  return resolveNavItemMetrics(contextDensity === undefined ? interfaceDensity : contextDensity);
+};

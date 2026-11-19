@@ -3,6 +3,7 @@ import { createContext, useContext } from 'react';
 
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 export interface ActionSize {
   blockSize: number;
@@ -103,12 +104,14 @@ export const DENSITY_TOKENS: Record<InterfaceDensity, DensityTokens> = {
   }),
 };
 
-export const useInterfaceDensity = () =>
-  useUserStore(userGeneralSettingsSelectors.interfaceDensity);
+export const useInterfaceDensity = (): InterfaceDensity => {
+  const density = useUserStore(userGeneralSettingsSelectors.interfaceDensity);
+  return isMobileSurface() ? 'loose' : density;
+};
 
 export const useDensityTokens = () => DENSITY_TOKENS[useInterfaceDensity()];
 
-export const PanelDensityContext = createContext<InterfaceDensity | null>(null);
+export const PanelDensityContext = createContext<InterfaceDensity | null | undefined>(undefined);
 
 export const usePanelDensityTokens = (): DensityTokens | null => {
   const density = useContext(PanelDensityContext);

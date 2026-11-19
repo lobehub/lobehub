@@ -34,8 +34,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     transition: opacity 0.2s ${cssVar.motionEaseOut};
   `,
   name: css`
-    font-size: 14px;
-    line-height: 20px;
+    font-size: var(--lobe-density-font-size);
+    line-height: var(--lobe-density-line-height);
   `,
   popup: css`
     overflow: hidden;

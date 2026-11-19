@@ -13,6 +13,7 @@ import useSWRInfinite from 'swr/infinite';
 import LinearIcon from '@/features/Integrations/Linear/LinearIcon';
 import { linearKeys } from '@/features/Integrations/Linear/swrKeys';
 import { type LinearIssueFilterParams, linearService } from '@/services/linear';
+import { useInterfaceDensity } from '@/styles/density';
 
 import StateIcon from './StateIcon';
 import { linearIssueListCounts, linearSyncErrorMessage } from './utils';
@@ -25,6 +26,13 @@ const styles = stylex.create({
   // Without the 40px header the frame keeps the same height, so picking a team does not move the footer.
   bodyWithoutHead: {
     height: 360,
+  },
+  // Compact: 32px header and rows; the headless body still adds the header back.
+  bodyWithoutHeadCompact: {
+    height: 352,
+  },
+  compactLine: {
+    height: 32,
   },
   frame: {
     borderColor: cssVar.colorBorder,
@@ -80,6 +88,7 @@ interface IssueListProps {
 /** The issues matching the filter, pick-able one by one, newest activity first. */
 const IssueList = memo<IssueListProps>(({ disabled, filter, onSelectionChange, selected }) => {
   const { t } = useTranslation('integration');
+  const compact = useInterfaceDensity() === 'compact';
 
   const { data, error, isLoading, isValidating, setSize, size } = useSWRInfinite(
     (index: number, previous: LinearIssuePage | null) => {
@@ -125,7 +134,8 @@ const IssueList = memo<IssueListProps>(({ disabled, filter, onSelectionChange, s
     body = placeholder(<Text type={'danger'}>{linearSyncErrorMessage(error, t)}</Text>);
   } else if (isLoading || !data) {
     body = (
-      <Flexbox gap={12} padding={12}>
+      // Compact: 16px bars on a 32px pitch, centred on the rows they stand in for.
+      <Flexbox gap={compact ? 16 : 12} padding={compact ? 8 : 12}>
         {[0, 1, 2, 3].map((index) => (
           <Skeleton height={16} key={index} />
         ))}
@@ -144,7 +154,11 @@ const IssueList = memo<IssueListProps>(({ disabled, filter, onSelectionChange, s
               align={'center'}
               gap={12}
               key={issue.id}
-              {...stylex.props(styles.row, disabled && styles.rowDisabled)}
+              {...stylex.props(
+                styles.row,
+                compact && styles.compactLine,
+                disabled && styles.rowDisabled,
+              )}
               onClick={(event) => {
                 // The checkbox and the Linear link handle their own clicks.
                 const target = event.target as HTMLElement;
@@ -207,7 +221,12 @@ const IssueList = memo<IssueListProps>(({ disabled, filter, onSelectionChange, s
   return (
     <div {...stylex.props(styles.frame)}>
       {filter ? (
-        <Flexbox horizontal align={'center'} gap={12} {...stylex.props(styles.head)}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={12}
+          {...stylex.props(styles.head, compact && styles.compactLine)}
+        >
           <Checkbox
             aria-label={t('linear.sync.list.selectAll', { count: issues.length })}
             checked={allSelected}
@@ -227,7 +246,14 @@ const IssueList = memo<IssueListProps>(({ disabled, filter, onSelectionChange, s
           ) : null}
         </Flexbox>
       ) : null}
-      <div {...stylex.props(styles.body, !filter && styles.bodyWithoutHead)}>{body}</div>
+      <div
+        {...stylex.props(
+          styles.body,
+          !filter && (compact ? styles.bodyWithoutHeadCompact : styles.bodyWithoutHead),
+        )}
+      >
+        {body}
+      </div>
     </div>
   );
 });

@@ -16,11 +16,15 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     user-select: none;
 
     [role='menuitem'] {
+      min-height: var(--lobe-density-control-height);
       margin-block: 1px;
       margin-inline: 4px;
-      padding-block: 8px;
+      padding-block: calc((var(--lobe-density-control-height) - 20px) / 2);
       padding-inline: 8px;
-      border-radius: ${cssVar.borderRadiusSM};
+      border-radius: var(--lobe-density-radius);
+
+      font-size: var(--lobe-density-font-size);
+      line-height: 20px;
     }
   `,
   groupHeader: css`
@@ -41,11 +45,24 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 8px;
     align-items: center;
 
+    min-height: var(--lobe-density-control-height);
     margin-block: 1px;
     margin-inline: 4px;
-    padding-block: 8px;
+    padding-block: calc((var(--lobe-density-control-height) - 20px) / 2);
     padding-inline: 8px;
-    border-radius: ${cssVar.borderRadiusSM};
+    border-radius: var(--lobe-density-radius);
+
+    font-size: var(--lobe-density-font-size);
+    line-height: 20px;
+  `,
+  rowTrigger: css`
+    min-height: var(--lobe-density-control-height);
+    padding-block: calc((var(--lobe-density-control-height) - 20px) / 2);
+    padding-inline: 8px;
+    border-radius: var(--lobe-density-radius);
+
+    font-size: var(--lobe-density-font-size);
+    line-height: 20px;
   `,
   menuItemActive: css`
     background: ${cssVar.colorFillTertiary};
