@@ -61,6 +61,21 @@ for (const definition of providerDefinitions) {
   definition.aliases?.forEach((alias) => providerRegistry.set(alias, definition));
 }
 
+type RegistryDefinition = (typeof providerDefinitions)[number];
+type RegistryEnv = Exclude<ReturnType<RegistryDefinition['checkEnvs']>, false>;
+
+/**
+ * Invoke a provider definition's `build` with its validated env.
+ *
+ * The registry stores a union of provider definitions, so TypeScript cannot
+ * correlate a specific definition's `checkEnvs` return type with its `build`
+ * parameter type. At runtime they always match (both come from the same
+ * definition), and every env type only gets read by `build`, so the call is safe.
+ */
+function buildProviderConfig(definition: RegistryDefinition, env: RegistryEnv): unknown {
+  return (definition.build as (env: RegistryEnv) => unknown)(env);
+}
+
 export const initBetterAuthSSOProviders = () => {
   const enabledProviders = parseSSOProviders(authEnv.AUTH_SSO_PROVIDERS);
 
@@ -91,18 +106,17 @@ export const initBetterAuthSSOProviders = () => {
         throw new Error(`[Better-Auth] Duplicate SSO provider: ${providerId}`);
       }
 
-      // @ts-expect-error - build expects specific env type, but we use union definition type
-      const config = definition.build(env);
+      const config = buildProviderConfig(definition, env);
       if (config) {
-        // @ts-expect-error hard to type
-        socialProviders[providerId] = config;
+        // `config` was built by this exact definition, so it matches `providerId`;
+        // the union types just can't express that correlation.
+        socialProviders[providerId] = config as SocialProviders[typeof providerId];
       }
 
       continue;
     }
 
-    // @ts-expect-error - build expects specific env type, but we use union definition type
-    const config = definition.build(env);
+    const config = buildProviderConfig(definition, env) as GenericOAuthConfig | undefined;
 
     if (config) {
       // the generic oidc callback url is /api/auth/oauth2/callback/{providerId}
