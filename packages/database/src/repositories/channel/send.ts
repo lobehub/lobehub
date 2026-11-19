@@ -45,6 +45,11 @@ export interface ChannelSendInput {
   rootMessageId?: string;
   /** How to route a message without @mentioned Agents. */
   routing: ChannelRoutingMode;
+  /**
+   * Server only: post for the record without waking any Agent, e.g. the root of a Thread an Agent
+   * opens, or a correction it steered into a running reply.
+   */
+  silent?: boolean;
   threadId?: string | null;
 }
 
@@ -56,6 +61,8 @@ export const validateSendInput = (input: ChannelSendInput) => {
     throw new ChannelError('BAD_REQUEST', 'Choose a reply or a thread root, not both');
   if (input.rootMessageId && input.threadId)
     throw new ChannelError('BAD_REQUEST', 'Choose a thread or a root message, not both');
+  if (input.silent && (input.replyToId || input.mentions?.length))
+    throw new ChannelError('BAD_REQUEST', 'A message for the record neither replies nor mentions');
   const fileIds = [...new Set(input.fileIds ?? [])];
   if (
     (!input.content.trim() && !fileIds.length) ||
@@ -113,7 +120,7 @@ export const sendMessage = async (
     throw new ChannelError('BAD_REQUEST', 'Reply message belongs to another conversation');
   const humanQuote = !!replyTo && replyTo.routingStatus !== 'reply';
   // An explicit @mention still dispatches; the quote only adds context.
-  const quoteOnly = humanQuote && !mentions.length;
+  const quoteOnly = !!input.silent || (humanQuote && !mentions.length);
   // Quoting an Agent asks it only when nobody is @mentioned: a mention names who should answer.
   const [replyAgent] =
     replyTo && !humanQuote && !mentions.length
@@ -256,37 +263,43 @@ export const sendMessage = async (
             ),
           )
       : [];
-  const routed = quoteOnly
-    ? ({ reason: 'Quoted human message', source: 'explicit', status: 'skipped' } as const)
-    : replyAgent
-      ? replyTarget
-        ? ({ reason: 'Reply to Agent', source: 'explicit', status: 'directed' } as const)
-        : ({ reason: 'The Agent is muted', source: 'explicit', status: 'skipped' } as const)
-      : paired
-        ? ({ reason: 'Only Agent in the Channel', source: 'explicit', status: 'directed' } as const)
-        : mentions.length
-          ? ({ reason: 'Mentioned', source: 'explicit', status: 'directed' } as const)
-          : pendingRoot
-            ? {
-                reason: 'Waiting for the root message routing decision',
-                source: input.routing === 'fallback' ? ('fallback' as const) : null,
-                status: 'pending' as const,
-              }
-            : !candidates.length
-              ? ({ reason: 'No Agent can answer here', source: null, status: 'skipped' } as const)
-              : direct
-                ? ({
-                    reason: 'Direct conversation',
-                    source: 'explicit',
-                    status: 'directed',
-                  } as const)
-                : input.routing === 'decision'
-                  ? ({ reason: null, source: null, status: 'pending' } as const)
-                  : ({
-                      reason: 'No decision model configured',
-                      source: 'fallback',
-                      status: 'assigned',
-                    } as const);
+  const routed = input.silent
+    ? ({ reason: 'Posted for the record', source: 'explicit', status: 'skipped' } as const)
+    : quoteOnly
+      ? ({ reason: 'Quoted human message', source: 'explicit', status: 'skipped' } as const)
+      : replyAgent
+        ? replyTarget
+          ? ({ reason: 'Reply to Agent', source: 'explicit', status: 'directed' } as const)
+          : ({ reason: 'The Agent is muted', source: 'explicit', status: 'skipped' } as const)
+        : paired
+          ? ({
+              reason: 'Only Agent in the Channel',
+              source: 'explicit',
+              status: 'directed',
+            } as const)
+          : mentions.length
+            ? ({ reason: 'Mentioned', source: 'explicit', status: 'directed' } as const)
+            : pendingRoot
+              ? {
+                  reason: 'Waiting for the root message routing decision',
+                  source: input.routing === 'fallback' ? ('fallback' as const) : null,
+                  status: 'pending' as const,
+                }
+              : !candidates.length
+                ? ({ reason: 'No Agent can answer here', source: null, status: 'skipped' } as const)
+                : direct
+                  ? ({
+                      reason: 'Direct conversation',
+                      source: 'explicit',
+                      status: 'directed',
+                    } as const)
+                  : input.routing === 'decision'
+                    ? ({ reason: null, source: null, status: 'pending' } as const)
+                    : ({
+                        reason: 'No decision model configured',
+                        source: 'fallback',
+                        status: 'assigned',
+                      } as const);
   const recipients = quoteOnly
     ? []
     : replyAgent

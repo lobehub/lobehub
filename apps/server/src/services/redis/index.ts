@@ -6,6 +6,7 @@ import { agentSignal } from './agentSignal';
 import { botDeferred } from './botDeferred';
 import { botReply } from './botReply';
 import { botWake } from './botWake';
+import { channelWatch } from './channelWatch';
 import { connectorOAuth } from './connectorOAuth';
 import { deviceSystemInfo } from './deviceSystemInfo';
 import { gitHubRefs } from './gitHubRefs';
@@ -31,6 +32,7 @@ export const redisService = {
   botDeferred,
   botReply,
   botWake,
+  channelWatch,
   connectorOAuth,
   deviceSystemInfo,
   gitHubRefs,
