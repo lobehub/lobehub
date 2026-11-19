@@ -56,6 +56,7 @@ import { sanitizeFileName } from '@/utils/sanitizeFileName';
 import { openAgentSettingsModal } from '../AgentSettings';
 import { selectors as profileSelectors, useProfileStore } from '../store';
 import AgentForkTag from './AgentForkTag';
+import AgentSocialShare from './AgentSocialShare';
 import AgentVersionReviewTag from './AgentVersionReviewTag';
 
 type HeaderTranslation = TFunction<
@@ -436,6 +437,8 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
       }
       right={
         <Flexbox horizontal align={'center'} gap={4}>
+          {/* Posts the agent's public Community page; disabled until it is published. */}
+          {showMarketSubmission && <AgentSocialShare />}
           {canShareAgent && (
             <ActionIcon
               icon={Share2Icon}
