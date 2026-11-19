@@ -14,6 +14,7 @@ export const ChatErrorType = {
   ShareSpendLimitExceeded: 'ShareSpendLimitExceeded', // Shared agent reached shareConfig.monthlySpendLimit for the current month — recovers on the next reset
   ShareHeterogeneousAgentUnsupported: 'ShareHeterogeneousAgentUnsupported', // This agent configuration is not supported for shared visitors
   ShareHeteroDeviceUnavailable: 'ShareHeteroDeviceUnavailable', // The shared Claude Code / Codex agent's device is offline or not set — visitor can retry later
+  ChannelAttachmentUnavailable: 'ChannelAttachmentUnavailable', // A Channel send names a file the sender cannot attach there (e.g. uploaded in another workspace) — resending the same files never succeeds
   AgentShareProviderNotSupported: 'AgentShareProviderNotSupported', // This shared agent uses a provider that is not supported for shared visitors
   SupervisorDecisionFailed: 'SupervisorDecisionFailed', // Supervisor decision failed
   AgentConcurrencyLimitExceeded: 'AgentConcurrencyLimitExceeded', // The user already has as many agent runs in flight as allowed — recovers when one finishes

@@ -242,7 +242,7 @@ describe('FileUploadAction', () => {
           });
         });
 
-        expect(fileService.checkFileHash).toHaveBeenCalledWith('mock-hash-value');
+        expect(fileService.checkFileHash).toHaveBeenCalledWith('mock-hash-value', undefined);
         expect(uploadToS3Spy).not.toHaveBeenCalled();
         expect(onStatusUpdate).toHaveBeenCalledWith({
           id: mockFile.name,
@@ -258,6 +258,7 @@ describe('FileUploadAction', () => {
             size: mockFile.size,
             url: mockExistingMetadata.path, // Uses metadata.path when available
           },
+          undefined,
           undefined,
         );
         expect(uploadResult).toEqual({
@@ -306,6 +307,7 @@ describe('FileUploadAction', () => {
             url: mockCheckResult.url,
           },
           undefined,
+          undefined,
         );
         expect(uploadResult).toEqual({
           ...mockFileResponse,
@@ -352,7 +354,7 @@ describe('FileUploadAction', () => {
           });
         });
 
-        expect(fileService.checkFileHash).toHaveBeenCalledWith('mock-hash-value');
+        expect(fileService.checkFileHash).toHaveBeenCalledWith('mock-hash-value', undefined);
         expect(uploadService.uploadFileToS3).toHaveBeenCalledWith(mockFile, {
           onNotSupported: expect.any(Function),
           onProgress: expect.any(Function),
@@ -367,6 +369,7 @@ describe('FileUploadAction', () => {
             size: mockFile.size,
             url: mockMetadata.path,
           },
+          undefined,
           undefined,
         );
         expect(onStatusUpdate).toHaveBeenCalledWith({
@@ -432,6 +435,7 @@ describe('FileUploadAction', () => {
               mimeType: mockFile.type,
             },
           }),
+          undefined,
           undefined,
         );
       });
@@ -571,6 +575,7 @@ describe('FileUploadAction', () => {
             fileType: 'image/png',
           }),
           undefined,
+          undefined,
         );
       });
 
@@ -621,6 +626,7 @@ describe('FileUploadAction', () => {
             name: 'mislabelled.jpg',
           }),
           undefined,
+          undefined,
         );
       });
 
@@ -657,6 +663,7 @@ describe('FileUploadAction', () => {
             fileType: 'image/png',
           }),
           undefined,
+          undefined,
         );
       });
 
@@ -691,6 +698,7 @@ describe('FileUploadAction', () => {
           expect.objectContaining({
             fileType: 'text/plain',
           }),
+          undefined,
           undefined,
         );
       });
@@ -728,6 +736,7 @@ describe('FileUploadAction', () => {
         expect(fileService.createFile).toHaveBeenCalledWith(
           expect.objectContaining({ fileType: 'audio/mp4' }),
           undefined,
+          undefined,
         );
       });
 
@@ -759,6 +768,7 @@ describe('FileUploadAction', () => {
 
         expect(fileService.createFile).toHaveBeenCalledWith(
           expect.objectContaining({ fileType: 'audio/x-m4a' }),
+          undefined,
           undefined,
         );
       });
@@ -798,6 +808,7 @@ describe('FileUploadAction', () => {
             metadata: { ...mockMetadata, durationMs: 2501 },
           }),
           undefined,
+          undefined,
         );
       });
 
@@ -830,6 +841,7 @@ describe('FileUploadAction', () => {
         expect(getAudioDuration).not.toHaveBeenCalled();
         expect(fileService.createFile).toHaveBeenCalledWith(
           expect.objectContaining({ metadata: mockMetadata }),
+          undefined,
           undefined,
         );
       });
@@ -868,6 +880,47 @@ describe('FileUploadAction', () => {
             name: mockFile.name,
           }),
           knowledgeBaseId,
+          undefined,
+        );
+      });
+    });
+
+    describe('workspace scope', () => {
+      it('runs every step in the pinned scope instead of the active one', async () => {
+        const { result } = renderHook(() => useStore());
+
+        const mockFile = new File(['test content'], 'channel.txt', { type: 'text/plain' });
+        const mockMetadata = {
+          date: '12345',
+          dirname: '/files',
+          filename: 'channel.txt',
+          path: '/files/channel.txt',
+        };
+
+        vi.mocked(getImageDimensions).mockResolvedValue(undefined);
+        vi.spyOn(fileService, 'checkFileHash').mockResolvedValue({ isExist: false });
+        vi.spyOn(uploadService, 'uploadFileToS3').mockResolvedValue({
+          data: mockMetadata,
+          success: true,
+        });
+        vi.spyOn(fileService, 'createFile').mockResolvedValue({
+          id: 'file-id',
+          url: 'https://example.com/channel.txt',
+        });
+
+        await act(async () => {
+          await result.current.uploadWithProgress({ file: mockFile, workspaceId: 'ws-channel' });
+        });
+
+        expect(fileService.checkFileHash).toHaveBeenCalledWith('mock-hash-value', 'ws-channel');
+        expect(uploadService.uploadFileToS3).toHaveBeenCalledWith(
+          mockFile,
+          expect.objectContaining({ workspaceId: 'ws-channel' }),
+        );
+        expect(fileService.createFile).toHaveBeenCalledWith(
+          expect.anything(),
+          undefined,
+          'ws-channel',
         );
       });
     });

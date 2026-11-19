@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { ChatErrorType } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -218,7 +219,7 @@ describe('a conversation with an external contact of a workspace', () => {
         routing: 'fallback',
       });
 
-    await expect(send(bob, teamFile)).rejects.toThrow('One or more attachments are unavailable');
+    await expect(send(bob, teamFile)).rejects.toThrow(ChatErrorType.ChannelAttachmentUnavailable);
     // His own upload, which the file router stores in his personal space, goes through.
     expect(await send(bob, await upload(bob, null))).toBeDefined();
     // A member still attaches the workspace's file.

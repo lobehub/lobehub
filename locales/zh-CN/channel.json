@@ -188,6 +188,7 @@
   "profile.title": "Agent 资料",
   "profile.view": "查看资料",
   "projectAgents": "项目 Agent",
+  "receipt.errorAttachmentUnavailable": "有附件无法在这里发送，可能是在其他工作区上传的。请删除这条消息后重新添加附件。",
   "receipt.errorReason": "失败原因",
   "receipt.errorShareHeteroDevice": "创建者的设备当前离线，请稍后再试。",
   "receipt.errorShareHeteroUnsupported": "这个 Agent 需要创建者授权后才能为你运行，请联系创建者开通。",

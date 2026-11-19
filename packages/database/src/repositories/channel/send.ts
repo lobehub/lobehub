@@ -1,5 +1,5 @@
 import type { ChannelMessageMetadata, ChannelRoutingMode } from '@lobechat/types';
-import { CHANNEL_LIMITS } from '@lobechat/types';
+import { CHANNEL_LIMITS, ChatErrorType } from '@lobechat/types';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 
 import type { ChannelMessageItem } from '../../schemas';
@@ -215,7 +215,7 @@ export const sendMessage = async (
       .orderBy(asc(files.id))
       .for('update');
     if (accessible.length !== fileIds.length)
-      throw new ChannelError('BAD_REQUEST', 'One or more attachments are unavailable');
+      throw new ChannelError('BAD_REQUEST', ChatErrorType.ChannelAttachmentUnavailable);
   }
 
   const mentioned = quoteOnly ? [] : await activeMembers(tx, channel.id, mentions);

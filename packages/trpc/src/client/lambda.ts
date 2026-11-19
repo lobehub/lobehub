@@ -387,6 +387,14 @@ export const createWorkspaceLambdaClient = (workspaceId: string | null) => {
   });
 };
 
+/**
+ * The lambda client for an optional scope: `undefined` follows the active workspace like
+ * `lambdaClient`; a workspace id or `null` (personal) pins it like
+ * {@link createWorkspaceLambdaClient}.
+ */
+export const scopedLambdaClient = (workspaceId?: string | null) =>
+  workspaceId === undefined ? lambdaClient : createWorkspaceLambdaClient(workspaceId);
+
 export const lambdaQuery = createTRPCReact<LambdaRouter>();
 
 export const lambdaQueryClient = lambdaQuery.createClient({ links });
