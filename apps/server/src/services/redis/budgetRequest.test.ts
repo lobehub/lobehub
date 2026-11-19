@@ -45,9 +45,9 @@ const memoryClient = {
       state.strings.delete(cooldownKey);
     return 1;
   }),
-  hdel: vi.fn(async (key: string, field: string) => {
+  hdel: vi.fn(async (key: string, ...fields: string[]) => {
     guard('hdel');
-    return state.hashes.get(key)?.delete(field) ? 1 : 0;
+    return fields.filter((field) => state.hashes.get(key)?.delete(field)).length;
   }),
   hget: vi.fn(async (key: string, field: string) => {
     guard('hget');
@@ -143,6 +143,28 @@ describe('redisService.budgetRequest', () => {
       'u-2',
       'u-1',
     ]);
+    // The expired entry is pruned, not just hidden.
+    expect(state.hashes.get('budget_request:v1:ws-1')?.has('old')).toBe(false);
+  });
+
+  it('keeps an older open request when a replacement cannot be stored', async () => {
+    await budgetRequest.create('ws-1', { note: 'first', userId: 'u-1' }, NOW);
+    // The cooldown ran out; the member asks again but the write fails.
+    state.strings.delete(COOLDOWN_KEY);
+    state.failOn = 'eval';
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await budgetRequest.create(
+      'ws-1',
+      { note: 'second', userId: 'u-1' },
+      NOW + 25 * HOUR,
+    );
+    state.failOn = undefined;
+
+    expect(result.persisted).toBe(false);
+    expect((await budgetRequest.get('ws-1', 'u-1', NOW + 25 * HOUR))?.note).toBe('first');
+    expect(state.strings.has(COOLDOWN_KEY)).toBe(false);
+    warn.mockRestore();
   });
 
   it('releases the cooldown when the request cannot be stored', async () => {

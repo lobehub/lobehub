@@ -95,17 +95,30 @@ export const budgetRequest = {
     }
   },
 
-  /** Open requests of the workspace, newest first. */
+  /**
+   * Open requests of the workspace, newest first. Expired or unreadable
+   * entries are pruned on the way, since the shared hash TTL is refreshed by
+   * every new request and would otherwise keep them forever.
+   */
   async list(workspaceId: string, now = Date.now()): Promise<BudgetRequest[]> {
     try {
       const redis = await getClient();
       if (!redis) return [];
 
-      const entries = await redis.hgetall(RedisKeys.lobechat.budgetRequests(workspaceId));
-      return Object.values(entries ?? {})
-        .map(parseRequest)
-        .filter((request): request is BudgetRequest => !!request && isRetained(request, now))
-        .sort((a, b) => b.createdAt - a.createdAt);
+      const key = RedisKeys.lobechat.budgetRequests(workspaceId);
+      const entries = Object.entries((await redis.hgetall(key)) ?? {});
+      const open: BudgetRequest[] = [];
+      const stale: string[] = [];
+
+      for (const [field, raw] of entries) {
+        const request = parseRequest(raw);
+        if (request && isRetained(request, now)) open.push(request);
+        else stale.push(field);
+      }
+
+      if (stale.length > 0) await redis.hdel(key, ...stale).catch(() => undefined);
+
+      return open.sort((a, b) => b.createdAt - a.createdAt);
     } catch (error) {
       warn('list requests', workspaceId, error);
       return [];
@@ -158,11 +171,21 @@ export const budgetRequest = {
     } catch (error) {
       warn('store request', workspaceId, error);
       if (claimed) {
-        // Undo whatever may have been written before giving the claim back, so
-        // the caller's `persisted: false` holds and a retry cannot double-notify.
-        // The claim still blocks every other writer for this member here.
+        // Undo this attempt's write, if it landed, before giving the claim back,
+        // so the caller's `persisted: false` holds and a retry cannot
+        // double-notify. Only the exact value written here is removed: an
+        // older request that is still open stays.
         await redis
-          .hdel(RedisKeys.lobechat.budgetRequests(workspaceId), input.userId)
+          .eval(
+            REMOVE_SCRIPT,
+            2,
+            RedisKeys.lobechat.budgetRequests(workspaceId),
+            cooldownKey,
+            input.userId,
+            JSON.stringify(request),
+            '0',
+            '',
+          )
           .catch(() => undefined);
         await redis.del(cooldownKey).catch(() => undefined);
       }
