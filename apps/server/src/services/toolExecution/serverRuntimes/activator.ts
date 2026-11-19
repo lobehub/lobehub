@@ -27,10 +27,21 @@ import { type ServerRuntimeRegistration } from './types';
  */
 export const activatorRuntime: ServerRuntimeRegistration = {
   factory: async (context) => {
-    const activatedIds: string[] = [];
+    // This factory runs for every tool call, so a list kept here only ever
+    // sees the current call. What the run already offers the model — the
+    // operation tool set plus earlier activations — arrives as
+    // `enabledToolIds`; seeding from it is what lets a repeated request
+    // answer "Already active".
+    const activatedIds: string[] = [...(context.enabledToolIds ?? [])];
     const emitActivationOutcome = async (input: {
       errorReason?: string;
       identifiers: string[];
+      /**
+       * What was activated. Only a skill belongs to the skill procedure
+       * domain; a tool is reported as a tool, with no domain, so it leaves no
+       * skill record, marker or receipt behind.
+       */
+      kind: 'skill' | 'tool';
       status: 'failed' | 'succeeded';
       summary: string;
     }) => {
@@ -43,10 +54,12 @@ export const activatorRuntime: ServerRuntimeRegistration = {
         userId: context.userId,
       });
 
+      const isSkill = input.kind === 'skill';
+
       await emitToolOutcomeSafely({
-        apiName: 'activateSkill',
+        apiName: isSkill ? 'activateSkill' : 'activateTools',
         context: { agentId: context.agentId, userId: context.userId },
-        domainKey: 'skill:builtin-skill',
+        domainKey: isSkill ? 'skill:builtin-skill' : undefined,
         errorReason: input.errorReason,
         identifier: LobeActivatorIdentifier,
         intentClass: 'tool_command',
@@ -55,7 +68,7 @@ export const activatorRuntime: ServerRuntimeRegistration = {
         policyStateStore: redisPolicyStateStore,
         relatedObjects: input.identifiers.map((id) => ({
           objectId: id,
-          objectType: 'skill',
+          objectType: input.kind,
           relation: 'selected',
         })),
         scope,
@@ -101,7 +114,7 @@ export const activatorRuntime: ServerRuntimeRegistration = {
         // with `activeDeviceId` as the fallback for callers without a plan.
         builtinSkills: filterBuiltinSkills(builtinSkills, {
           canExecuteOnDevice: context.deviceCapable ?? !!context.activeDeviceId,
-        }).filter((skill) => isSkillReachable(skill.identifier)),
+        }).filter((skill) => isLibrarySkillReachable(skill.identifier)),
         service: {
           findAll: async () => {
             const result = await skillModel.findAll();
@@ -132,6 +145,7 @@ export const activatorRuntime: ServerRuntimeRegistration = {
               const result = await skillsRuntime!.activateSkill(args);
               await emitActivationOutcome({
                 identifiers: [args.name],
+                kind: 'skill',
                 status: 'succeeded',
                 summary: 'Activator selected a skill.',
               });
@@ -140,6 +154,7 @@ export const activatorRuntime: ServerRuntimeRegistration = {
               await emitActivationOutcome({
                 errorReason: (error as Error).message,
                 identifiers: [args.name],
+                kind: 'skill',
                 status: 'failed',
                 summary: 'Activator failed to select a skill.',
               });
@@ -201,8 +216,9 @@ export const activatorRuntime: ServerRuntimeRegistration = {
         }
         void emitActivationOutcome({
           identifiers,
+          kind: 'tool',
           status: 'succeeded',
-          summary: 'Activator marked skills as active.',
+          summary: 'Activator activated tools.',
         }).catch((error) => {
           console.error('[AgentSignal] Failed to emit activator outcome:', error);
         });

@@ -18,13 +18,14 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BrowserIcon } from '@/components/BrowserIcon';
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { electronBrowserSidebarService } from '@/services/electron/browserSidebar';
 import { browserWebviewRegistry } from '@/services/electron/browserWebviewRegistry';
 import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
+import { useHeaderActionSize } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import type { ComposerTarget } from '../../types';
 import { BROWSER_IMPORT_BANNER_DISMISSED_STORAGE_KEY } from './const';
@@ -86,6 +87,12 @@ const styles = stylex.create({
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorBorderSecondary,
   },
+  toolbarCompact: {
+    height: sidebarRow.toolbarHeight,
+    minHeight: sidebarRow.toolbarHeight,
+    paddingInlineStart: sidebarRow.toolbarPaddingInlineStart,
+    paddingInlineEnd: sidebarRow.toolbarPaddingInlineEnd,
+  },
   address: {
     flex: '1',
     minWidth: 0,
@@ -122,6 +129,8 @@ const styles = stylex.create({
 interface BrowserPaneProps {
   /** The conversation the chat input belongs to — screenshots are attached there. */
   agentId?: string;
+  /** The WorkingSidebar pane toolbar: density-driven height, small icon buttons and address field. */
+  compactToolbar?: boolean;
   composerTarget: ComposerTarget;
   onMetadataChange?: (metadata: { faviconUrl?: string; title: string; url: string }) => void;
   /**
@@ -140,7 +149,16 @@ export interface BrowserOpenRequest {
 }
 
 const BrowserPane = memo<BrowserPaneProps>((props) => {
-  const { agentId, composerTarget, onMetadataChange, onRequestConsumed, sessionId } = props;
+  const {
+    agentId,
+    compactToolbar,
+    composerTarget,
+    onMetadataChange,
+    onRequestConsumed,
+    sessionId,
+  } = props;
+  const headerActionSize = useHeaderActionSize(true);
+  const toolbarIconSize = compactToolbar ? 'small' : headerActionSize;
   const { t } = useTranslation('chat');
   const state = useBrowserSidebarState(sessionId);
   const [address, setAddress] = useState('');
@@ -332,26 +350,31 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
 
   return (
     <Flexbox height={'100%'} width={'100%'}>
-      <Flexbox horizontal align={'center'} {...stylex.props(styles.toolbar)} gap={4}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        {...stylex.props(styles.toolbar, compactToolbar && styles.toolbarCompact)}
+        gap={4}
+      >
         <Flexbox horizontal align={'center'} gap={4}>
           <ActionIcon
             disabled={!state.canGoBack}
             icon={ChevronLeft}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={toolbarIconSize}
             title={t('workingPanel.browser.actions.back')}
             onClick={() => runAction(() => electronBrowserSidebarService.goBack({ sessionId }))}
           />
           <ActionIcon
             disabled={!state.canGoForward}
             icon={ChevronRight}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={toolbarIconSize}
             title={t('workingPanel.browser.actions.forward')}
             onClick={() => runAction(() => electronBrowserSidebarService.goForward({ sessionId }))}
           />
           <ActionIcon
             disabled={!state.attached}
             icon={state.isLoading ? XCircle : RefreshCw}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={toolbarIconSize}
             title={
               state.isLoading
                 ? t('workingPanel.browser.actions.stop')
@@ -369,6 +392,7 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
         <Input
           {...stylex.props(styles.address)}
           placeholder={t('workingPanel.browser.addressPlaceholder')}
+          size={compactToolbar ? 'small' : undefined}
           value={address}
           variant={'filled'}
           onBlur={() => setIsEditing(false)}
@@ -387,7 +411,7 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
             <ActionIcon
               active
               icon={SquareDashedMousePointer}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              size={toolbarIconSize}
               title={t('workingPanel.browser.context.pickCancel')}
               onClick={() =>
                 void electronBrowserSidebarService.cancelElementPick({ sessionId }).catch(() => {})
@@ -397,7 +421,7 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
             <ActionIcon
               disabled={!state.attached || state.isLoading || !composerTarget.writable}
               icon={SquareDashedMousePointer}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              size={toolbarIconSize}
               title={t('workingPanel.browser.context.pickElement')}
               onClick={() => void pickElementContext()}
             />
@@ -405,7 +429,7 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
           <ActionIcon
             disabled={!state.attached}
             icon={ExternalLink}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={toolbarIconSize}
             title={t('workingPanel.browser.actions.openExternal')}
             onClick={() =>
               runAction(() => electronBrowserSidebarService.openExternal({ sessionId }))
@@ -415,7 +439,7 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
             disabled={!state.attached || !agentId || !composerTarget.writable}
             icon={Camera}
             loading={isCapturing}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={toolbarIconSize}
             title={t('workingPanel.browser.actions.capture')}
             onClick={() => void addScreenshotToInput()}
           />
@@ -449,7 +473,7 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
             </Button>
             <ActionIcon
               icon={XCircle}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              size={headerActionSize}
               title={t('workingPanel.browser.import.dismiss')}
               onClick={() => setIsImportBannerDismissed(true)}
             />

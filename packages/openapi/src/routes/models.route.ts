@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { ModelController } from '../controllers';
 import { requireAuth } from '../middleware';
@@ -9,6 +10,8 @@ import { requireAnyPermission } from '../middleware/permission-check';
 import {
   CreateModelRequestSchema,
   ModelIdParamSchema,
+  ModelListSchema,
+  ModelSchema,
   ModelsListQuerySchema,
   UpdateModelRequestSchema,
 } from '../types/model.type';
@@ -19,6 +22,7 @@ const ModelRoutes = new Hono();
 // GET /api/v1/models - Get model list (supports pagination, filtering, and grouping)
 ModelRoutes.get(
   '/',
+  routeDoc({ data: ModelListSchema, summary: 'List models', tags: ['models'] }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AI_MODEL_READ'),
@@ -34,6 +38,7 @@ ModelRoutes.get(
 // POST /api/v1/models - Create a model
 ModelRoutes.post(
   '/',
+  routeDoc({ data: ModelSchema, summary: 'Create a model', tags: ['models'] }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AI_MODEL_CREATE'),
@@ -49,6 +54,7 @@ ModelRoutes.post(
 // GET /api/v1/models/:providerId/:modelId - Get model details
 ModelRoutes.get(
   '/:providerId/:modelId',
+  routeDoc({ data: ModelSchema, errors: [404], summary: 'Get a model', tags: ['models'] }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AI_MODEL_READ'),
@@ -64,6 +70,7 @@ ModelRoutes.get(
 // PATCH /api/v1/models/:providerId/:modelId - Update a model
 ModelRoutes.patch(
   '/:providerId/:modelId',
+  routeDoc({ data: ModelSchema, errors: [404], summary: 'Update a model', tags: ['models'] }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AI_MODEL_UPDATE'),

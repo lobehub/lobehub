@@ -163,6 +163,12 @@ export const messages = pgTable(
     index('messages_quota_id_idx').on(table.quotaId),
 
     index('messages_user_id_idx').on(table.userId),
+    /**
+     * Author counts joined to their topic's scope (workspace usage stats):
+     * lets them read `topic_id` from the index instead of fetching every
+     * message the user ever wrote from the heap.
+     */
+    index('messages_user_id_topic_id_idx').on(table.userId, table.topicId),
     index('messages_session_id_idx').on(table.sessionId),
     index('messages_thread_id_idx').on(table.threadId),
     index('messages_agent_id_idx').on(table.agentId),

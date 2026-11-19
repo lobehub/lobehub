@@ -137,6 +137,30 @@ export const channels = pgTable(
 );
 
 /**
+ * A person's own sidebar section for organizing channels (Slack-style). Sections belong to one
+ * person in one scope: channels are shared, so how each member files them is not a channel
+ * property. Built-in sections (pinned, channels, direct messages) are derived, not stored.
+ */
+export const channelSections = pgTable(
+  'channel_sections',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    /** NULL for the personal scope. */
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    name: text('name').notNull(),
+    sort: integer('sort'),
+    collapsed: boolean('collapsed').notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('channel_sections_user_id_workspace_id_idx').on(t.userId, t.workspaceId)],
+);
+
+/**
  * People and Agents in a channel. Mentions, job participants, Thread followers and read
  * positions all reference this one member identity.
  */
@@ -157,6 +181,15 @@ export const channelMembers = pgTable(
     role: text('role').$type<ChannelMemberRole>(),
     /** Highest sequence this person has read in the main channel. */
     lastReadSequence: integer('last_read_sequence'),
+    /** This person's sidebar section; NULL falls back to the built-in section. */
+    sectionId: uuid('section_id').references(() => channelSections.id, { onDelete: 'set null' }),
+    /**
+     * @deprecated Unused duplicate of `pinnedAt`, which carries both the pin and its order. Kept
+     * only so dropping it needs no migration; read and write `pinnedAt` instead.
+     */
+    pinned: boolean('pinned').notNull().default(false),
+    /** Hidden from this person's sidebar until new activity reaches them. */
+    hidden: boolean('hidden').notNull().default(false),
     /** When this person pinned the conversation atop their own list; NULL when not pinned. */
     pinnedAt: timestamptz('pinned_at'),
 
@@ -181,6 +214,9 @@ export const channelMembers = pgTable(
       .on(t.channelId, t.userId)
       .where(sql`${t.userId} IS NOT NULL`),
     index('channel_members_user_id_idx').on(t.userId),
+    index('channel_members_section_id_idx')
+      .on(t.sectionId)
+      .where(sql`${t.sectionId} IS NOT NULL`),
     index('channel_members_agent_id_idx').on(t.agentId),
     // One constraint per rule, so a new actor type adds constraints instead of rewriting these.
     check('channel_members_actor_type_check', sql`${t.actorType} IN ('user', 'agent')`),
@@ -201,6 +237,11 @@ export const channelMembers = pgTable(
     check(
       'channel_members_agent_id_owner_check',
       sql`${t.agentId} IS NULL OR ${t.actorType} = 'agent'`,
+    ),
+    // Sidebar placement is a person's view; Agent members have no sidebar.
+    check(
+      'channel_members_section_id_owner_check',
+      sql`${t.sectionId} IS NULL OR ${t.actorType} = 'user'`,
     ),
     check(
       'channel_members_config_owner_check',
@@ -526,6 +567,7 @@ export const channelJobs = pgTable(
 export type ChannelItem = typeof channels.$inferSelect;
 export type NewChannel = typeof channels.$inferInsert;
 export type ChannelMemberItem = typeof channelMembers.$inferSelect;
+export type ChannelSectionItem = typeof channelSections.$inferSelect;
 export type NewChannelMember = typeof channelMembers.$inferInsert;
 export type ChannelMemberGrantItem = typeof channelMemberGrants.$inferSelect;
 export type ChannelThreadItem = typeof channelThreads.$inferSelect;

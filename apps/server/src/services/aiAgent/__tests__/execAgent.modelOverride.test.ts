@@ -691,6 +691,24 @@ describe('AiAgentService.execAgent - toolModeOverride (/mode command)', () => {
     service = new AiAgentService(mockDb, userId);
   });
 
+  it.each([
+    { from: 'agent', to: 'chat', expected: ['lobe-image-generation', 'lobe-video-generation'] },
+    { from: 'chat', to: 'agent', expected: [] },
+  ] as const)(
+    'resolves saved media pins for /mode $to instead of the stored $from mode',
+    async ({ from, to, expected }) => {
+      mockGetAgentConfig.mockResolvedValue({
+        ...defaultAgentConfig,
+        chatConfig: { toolMode: from },
+        plugins: ['lobe-image-generation', { identifier: 'lobe-video-generation', mode: 'pinned' }],
+      });
+
+      await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', toolModeOverride: to });
+
+      expect(mockCreateOperation.mock.calls[0][0].agentConfig.plugins).toEqual(expected);
+    },
+  );
+
   it('/mode chat on an agent-mode agent also disables enableAgentMode for context injection', async () => {
     mockGetAgentConfig.mockResolvedValue({
       ...defaultAgentConfig,

@@ -5,7 +5,7 @@ import { fileEnv } from '@/envs/file';
 import { lambdaClient } from '@/libs/trpc/client';
 
 import { hashFile } from '../hashFile';
-import { UPLOAD_NETWORK_ERROR, uploadService } from '../upload';
+import { UPLOAD_NETWORK_ERROR, UploadRequestError, uploadService } from '../upload';
 
 const { mockHashHex, mockHashUpdate } = vi.hoisted(() => ({
   mockHashHex: vi.fn(() => 'streamed-hash'),
@@ -388,7 +388,32 @@ describe('UploadService', () => {
         }
       });
 
-      await expect(uploadService.uploadToServerS3(mockFile, {})).rejects.toBe('Bad Request');
+      await expect(uploadService.uploadToServerS3(mockFile, {})).rejects.toMatchObject({
+        name: 'UploadRequestError',
+        status: 400,
+      });
+    });
+
+    it('should keep the status and storage code when HTTP/2 leaves statusText empty', async () => {
+      const xhr = new XMLHttpRequest();
+      vi.spyOn(xhr, 'addEventListener').mockImplementation((event, handler) => {
+        if (event === 'load') {
+          Object.assign(xhr, {
+            responseText:
+              '<?xml version="1.0"?><Error><Code>SignatureDoesNotMatch</Code><Message>The request signature we calculated does not match</Message></Error>',
+            status: 403,
+            statusText: '',
+          });
+          // @ts-expect-error - mock implementation
+          handler({});
+        }
+      });
+
+      const error = await uploadService.uploadToServerS3(mockFile, {}).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(UploadRequestError);
+      expect(error).toMatchObject({ code: 'SignatureDoesNotMatch', retryable: false, status: 403 });
+      expect((error as Error).message).toContain('HTTP 403 SignatureDoesNotMatch');
     });
 
     it('should use custom directory when provided', async () => {
@@ -461,16 +486,105 @@ describe('UploadService', () => {
       expect(slice).toHaveBeenCalledTimes(2);
       expect(xhr.send).toHaveBeenCalledTimes(2);
       expect(arrayBuffer).not.toHaveBeenCalled();
-      expect(lambdaClient.upload.completeS3MultipartUpload.mutate).toHaveBeenCalledWith({
-        partCount: 2,
-        parts: [
-          { etag: 'etag-value', partNumber: 1 },
-          { etag: 'etag-value', partNumber: 2 },
-        ],
-        pathname: expect.stringContaining('mock-uuid.bin'),
+      expect(lambdaClient.upload.completeS3MultipartUpload.mutate).toHaveBeenCalledWith(
+        {
+          partCount: 2,
+          parts: [
+            { etag: 'etag-value', partNumber: 1 },
+            { etag: 'etag-value', partNumber: 2 },
+          ],
+          pathname: expect.stringContaining('mock-uuid.bin'),
+          uploadId: 'upload-1',
+        },
+        { signal: undefined },
+      );
+      expect(lambdaClient.upload.abortS3MultipartUpload.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should resend a multipart part that storage failed transiently', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const largeFile = new File(['small fixture'], 'large.bin');
+        Object.defineProperty(largeFile, 'size', { value: 64 * 1024 * 1024 });
+        Object.defineProperty(largeFile, 'slice', {
+          value: vi.fn(() => new Blob(['part'])),
+        });
+        vi.mocked(lambdaClient.upload.createS3MultipartUpload.mutate).mockResolvedValue({
+          uploadId: 'upload-1',
+        });
+        vi.mocked(lambdaClient.upload.createS3MultipartUploadPartUrl.mutate).mockResolvedValue(
+          'https://example.com/part',
+        );
+        vi.mocked(lambdaClient.upload.completeS3MultipartUpload.mutate).mockResolvedValue({
+          success: true,
+        });
+
+        let attempts = 0;
+        const xhr = new XMLHttpRequest();
+        vi.spyOn(xhr, 'addEventListener').mockImplementation((event, handler) => {
+          if (event !== 'load') return;
+          attempts += 1;
+          // The last part fails once with S3's idle-socket timeout, then succeeds.
+          Object.assign(
+            xhr,
+            attempts === 2
+              ? {
+                  responseText: '<Error><Code>RequestTimeout</Code></Error>',
+                  status: 400,
+                  statusText: '',
+                }
+              : { responseText: '', status: 200, statusText: '' },
+          );
+          // @ts-expect-error - mock implementation
+          handler({});
+        });
+
+        const upload = uploadService.uploadToServerS3(largeFile, {});
+        await vi.runAllTimersAsync();
+        await upload;
+
+        expect(xhr.send).toHaveBeenCalledTimes(3);
+        expect(lambdaClient.upload.createS3MultipartUploadPartUrl.mutate).toHaveBeenCalledTimes(3);
+        expect(lambdaClient.upload.completeS3MultipartUpload.mutate).toHaveBeenCalledOnce();
+        expect(lambdaClient.upload.abortS3MultipartUpload.mutate).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should not resend a multipart part that storage refused outright', async () => {
+      const largeFile = new File(['small fixture'], 'large.bin');
+      Object.defineProperty(largeFile, 'size', { value: 64 * 1024 * 1024 });
+      Object.defineProperty(largeFile, 'slice', { value: vi.fn(() => new Blob(['part'])) });
+      vi.mocked(lambdaClient.upload.createS3MultipartUpload.mutate).mockResolvedValue({
         uploadId: 'upload-1',
       });
-      expect(lambdaClient.upload.abortS3MultipartUpload.mutate).not.toHaveBeenCalled();
+      vi.mocked(lambdaClient.upload.createS3MultipartUploadPartUrl.mutate).mockResolvedValue(
+        'https://example.com/part',
+      );
+      vi.mocked(lambdaClient.upload.abortS3MultipartUpload.mutate).mockResolvedValue({
+        success: true,
+      });
+
+      const xhr = new XMLHttpRequest();
+      vi.spyOn(xhr, 'addEventListener').mockImplementation((event, handler) => {
+        if (event !== 'load') return;
+        Object.assign(xhr, {
+          responseText: '<Error><Code>AccessDenied</Code></Error>',
+          status: 403,
+          statusText: '',
+        });
+        // @ts-expect-error - mock implementation
+        handler({});
+      });
+
+      await expect(uploadService.uploadToServerS3(largeFile, {})).rejects.toMatchObject({
+        code: 'AccessDenied',
+        status: 403,
+      });
+      expect(xhr.send).toHaveBeenCalledOnce();
+      expect(lambdaClient.upload.abortS3MultipartUpload.mutate).toHaveBeenCalledOnce();
+      expect(lambdaClient.upload.completeS3MultipartUpload.mutate).not.toHaveBeenCalled();
     });
 
     it('should abort the S3 multipart upload when a part cannot be signed', async () => {

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 import type { PublicAgentGroup } from '../helpers/public-fields';
+import { dateTimeSchema } from './common.type';
+
 // ==================== Agent Group CRUD Types ====================
 // Agent group (stored in sessionGroups table) related type definitions
 
@@ -50,3 +52,23 @@ export type AgentGroupListResponse = PublicAgentGroup[];
 export const AgentGroupIdParamSchema = z.object({
   id: z.string().min(1, 'Agent category ID cannot be empty'),
 });
+
+// ==================== Response Schemas ====================
+
+/** `projectPublicAgentGroup` output — a sidebar folder (`session_groups` row). */
+export const AgentGroupSchema = z
+  .object({
+    createdAt: dateTimeSchema,
+    id: z.string(),
+    name: z.string(),
+    sort: z.number().int().nullable(),
+    updatedAt: dateTimeSchema,
+  } satisfies Record<keyof PublicAgentGroup, z.ZodType>)
+  .strict()
+  .meta({ id: 'AgentGroup' });
+
+/** `POST /agent-groups` answers with the new folder's id only. */
+export const CreatedAgentGroupSchema = z
+  .object({ id: z.string() })
+  .strict()
+  .meta({ id: 'CreatedAgentGroup' });

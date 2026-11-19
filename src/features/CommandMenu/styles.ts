@@ -95,7 +95,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    padding-block: 12px;
+    padding-block: calc(var(--lobe-density-section-gap) - 4px);
     padding-inline: 16px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
@@ -125,7 +125,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       border: none;
 
       font-family: inherit;
-      font-size: 16px;
+      font-size: var(--lobe-density-page-title-font-size);
       color: ${cssVar.colorText};
 
       background: transparent;
@@ -139,14 +139,14 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     [cmdk-list] {
       overflow-y: auto;
       max-height: 400px;
-      padding: 8px;
+      padding: 6px;
     }
 
     [cmdk-empty] {
       padding-block: 32px;
       padding-inline: 16px;
 
-      font-size: 14px;
+      font-size: var(--lobe-density-font-size);
       color: ${cssVar.colorTextTertiary};
       text-align: center;
     }
@@ -156,12 +156,13 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       user-select: none;
 
       display: flex;
-      gap: 12px;
+      gap: 10px;
       align-items: center;
 
-      padding-block: 12px;
-      padding-inline: 16px;
-      border-radius: ${cssVar.borderRadius};
+      min-height: var(--lobe-density-row-height);
+      padding-block: calc((var(--lobe-density-row-height) - 20px) / 2);
+      padding-inline: var(--lobe-density-section-gap);
+      border-radius: var(--lobe-density-radius);
 
       color: ${cssVar.colorText};
 
@@ -179,8 +180,8 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     [cmdk-group-heading] {
       user-select: none;
 
-      padding-block: 8px;
-      padding-inline: 16px;
+      padding-block: 6px;
+      padding-inline: var(--lobe-density-section-gap);
 
       font-size: 12px;
       font-weight: 500;
@@ -201,13 +202,13 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 8px;
     align-items: center;
 
-    padding-block: 8px;
-    padding-inline: 16px;
+    padding-block: 6px;
+    padding-inline: var(--lobe-density-section-gap);
   `,
   icon: css`
     flex-shrink: 0;
-    width: 20px;
-    height: 20px;
+    width: var(--lobe-density-icon-size);
+    height: var(--lobe-density-icon-size);
     color: ${cssVar.colorTextSecondary};
   `,
   inputWrapper: css`
@@ -215,14 +216,14 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 8px;
     align-items: center;
 
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: calc(var(--lobe-density-section-gap) - 4px);
+    padding-inline: var(--lobe-density-section-gap);
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   itemContent: css`
     display: flex;
     flex: 1;
-    gap: 12px;
+    gap: 10px;
     align-items: center;
 
     min-width: 0;
@@ -248,20 +249,20 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 20px;
-    height: 20px;
+    width: var(--lobe-density-icon-size);
+    height: var(--lobe-density-icon-size);
 
     color: ${cssVar.colorTextSecondary};
   `,
   itemLabel: css`
-    font-size: 14px;
+    font-size: var(--lobe-density-font-size);
     font-weight: 500;
     line-height: 1.4;
   `,
   itemTitle: css`
     overflow: hidden;
 
-    font-size: 14px;
+    font-size: var(--lobe-density-font-size);
     font-weight: 500;
     line-height: 1.4;
     text-overflow: ellipsis;

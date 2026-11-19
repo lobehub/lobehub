@@ -132,6 +132,26 @@ describe('changing an Agent member’s channel environment', () => {
     expect(notify).toHaveBeenCalledWith(expect.anything(), 'channel');
   });
 
+  it.each(['hermes', 'openclaw'])('refuses a device for a remote %s Agent', async (type) => {
+    getAgent.mockResolvedValue({ agencyConfig: { heterogeneousProvider: { type } } });
+    await expect(
+      service().updateAgentEnvironment('channel', 'member-1', { deviceId: 'mac' }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'A remote Agent runs on its own host, not a device',
+    });
+
+    expect(findDevice).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('seats a remote Agent with no device', async () => {
+    getAgent.mockResolvedValue({ agencyConfig: { heterogeneousProvider: { type: 'hermes' } } });
+    await service().updateAgentEnvironment('channel', 'member-1', {});
+
+    expect(update).toHaveBeenCalledWith('channel', 'member-1', {});
+  });
+
   it('still refuses a directory without a device', async () => {
     await expect(
       service().updateAgentEnvironment('channel', 'member-1', { workingDirectory: '/repo' }),

@@ -105,37 +105,43 @@ export const BackgroundTaskRow = ({
     !running && task.summary && task.summary !== task.description ? task.summary : undefined;
   const visual = running ? undefined : STATUS_VISUAL[status as keyof typeof STATUS_VISUAL];
   const outputFile = task.outputFile;
+  const hasActions = (!!outputFile && !!onViewOutput) || canStop;
 
   return (
     <OverviewRow
       icon={TOOL_ICONS[task.toolName] ?? SquareTerminalIcon}
-      iconSize={15}
       title={[task.description, summary].filter(Boolean).join('\n')}
+      actions={
+        hasActions ? (
+          <>
+            {outputFile && onViewOutput && (
+              <ActionIcon
+                icon={FileTextIcon}
+                size={'small'}
+                title={t('workingPanel.overview.backgroundTasks.viewOutput')}
+                onClick={stopClick(() => onViewOutput(outputFile))}
+              />
+            )}
+            {canStop && (
+              <ActionIcon
+                disabled={stopping}
+                icon={SquareIcon}
+                loading={stopping}
+                size={'small'}
+                title={
+                  stopping
+                    ? t('workingPanel.overview.backgroundTasks.stopping')
+                    : t('workingPanel.overview.backgroundTasks.stop')
+                }
+                onClick={stopClick(() => void stop())}
+              />
+            )}
+          </>
+        ) : undefined
+      }
       trailing={
         <>
           <span>{elapsed}</span>
-          {outputFile && onViewOutput && (
-            <ActionIcon
-              icon={FileTextIcon}
-              size={'small'}
-              title={t('workingPanel.overview.backgroundTasks.viewOutput')}
-              onClick={stopClick(() => onViewOutput(outputFile))}
-            />
-          )}
-          {canStop && (
-            <ActionIcon
-              disabled={stopping}
-              icon={SquareIcon}
-              loading={stopping}
-              size={'small'}
-              title={
-                stopping
-                  ? t('workingPanel.overview.backgroundTasks.stopping')
-                  : t('workingPanel.overview.backgroundTasks.stop')
-              }
-              onClick={stopClick(() => void stop())}
-            />
-          )}
           <Tooltip title={statusLabel}>
             <span aria-label={statusLabel} role={'img'}>
               {running ? (

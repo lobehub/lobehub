@@ -68,11 +68,14 @@ export interface ContactRequestItem {
   workspace?: ContactRequestWorkspace | null;
 }
 
-export interface ContactRequestWorkspace {
+/** A workspace as the address book names it: an invitation's origin, or one I am external to. */
+export interface ContactWorkspace {
   avatar: string | null;
   id: string;
   name: string;
 }
+
+export type ContactRequestWorkspace = ContactWorkspace;
 
 /**
  * Relation of a search result or profile to the current user, in the active scope. `member`:

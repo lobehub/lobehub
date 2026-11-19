@@ -4,6 +4,7 @@ import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 
+import { useInterfaceDensity } from '@/styles/density';
 import { sx } from '@/styles/sx';
 
 const styles = stylex.create({
@@ -25,7 +26,8 @@ const styles = stylex.create({
   },
   cell: {
     'paddingBlockStart': {
-      'default': '8px',
+      // 8px loose, 6px compact: a single 20px text line fills the 32 / 36px row height.
+      'default': 'calc((var(--lobe-density-row-height) - 20px) / 2)',
       '@container (max-width: 600px)': {
         'default': '6px',
         ":is([data-list-slot='title'])": '8px',
@@ -33,7 +35,7 @@ const styles = stylex.create({
       },
     },
     'paddingBlockEnd': {
-      'default': '8px',
+      'default': 'calc((var(--lobe-density-row-height) - 20px) / 2)',
       '@container (max-width: 600px)': {
         'default': '6px',
         ":is([data-list-slot='title'])": '8px',
@@ -135,8 +137,8 @@ const styles = stylex.create({
     },
   },
   heading: {
-    paddingBlockStart: '8px',
-    paddingBlockEnd: '8px',
+    paddingBlockStart: 'calc((var(--lobe-density-row-height) - 20px) / 2)',
+    paddingBlockEnd: 'calc((var(--lobe-density-row-height) - 20px) / 2)',
     paddingInlineStart: { 'default': '8px', ':first-child': '24px' },
     paddingInlineEnd: { 'default': '8px', ':last-child': '24px' },
     textAlign: 'start',
@@ -179,7 +181,7 @@ const styles = stylex.create({
   },
   wideCell: {
     'paddingBlockStart': {
-      'default': '8px',
+      'default': 'calc((var(--lobe-density-row-height) - 20px) / 2)',
       '@container (max-width: 800px)': {
         'default': '6px',
         ":is([data-list-slot='title'])": '8px',
@@ -187,7 +189,7 @@ const styles = stylex.create({
       },
     },
     'paddingBlockEnd': {
-      'default': '8px',
+      'default': 'calc((var(--lobe-density-row-height) - 20px) / 2)',
       '@container (max-width: 800px)': {
         'default': '6px',
         ":is([data-list-slot='title'])": '8px',
@@ -289,8 +291,8 @@ const styles = stylex.create({
     },
   },
   wideHeading: {
-    paddingBlockStart: '8px',
-    paddingBlockEnd: '8px',
+    paddingBlockStart: 'calc((var(--lobe-density-row-height) - 20px) / 2)',
+    paddingBlockEnd: 'calc((var(--lobe-density-row-height) - 20px) / 2)',
     paddingInlineStart: { 'default': '8px', ':first-child': '24px' },
     paddingInlineEnd: { 'default': '8px', ':last-child': '24px' },
     textAlign: 'start',
@@ -387,6 +389,7 @@ const LiteTableInner = <RecordType,>({
   const items = dataSource ?? [];
   const initialLoading = !!loading && items.length === 0;
   const wide = listBreakpoint === 800;
+  const compact = useInterfaceDensity() === 'compact';
 
   const listLabelOf = (column: LiteTableColumn<RecordType>) =>
     column.listSlot || column.listLabel === false
@@ -432,7 +435,15 @@ const LiteTableInner = <RecordType,>({
                           data-list-slot={column.listSlot}
                           key={column.key}
                         >
-                          <Skeleton style={{ height: 14, minWidth: 0, width: '100%' }} />
+                          <Skeleton
+                            style={{
+                              height: 14,
+                              // compact: 3 + 14 + 3 stands in for the 20px text line of a 32px row
+                              marginBlock: compact ? 3 : undefined,
+                              minWidth: 0,
+                              width: '100%',
+                            }}
+                          />
                         </td>
                       ))}
                     </tr>

@@ -1,6 +1,10 @@
 import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { DeviceListItem, LobeAgentAgencyConfig } from '@lobechat/types';
-import { defaultChannelAgentDirectory, isChannelRuntime } from '@lobechat/types';
+import {
+  defaultChannelAgentDirectory,
+  isChannelRuntime,
+  isRemoteChannelRuntime,
+} from '@lobechat/types';
 
 import type { ChannelAgentSelection } from '@/services/channel';
 
@@ -43,6 +47,10 @@ export const channelAgentIssueKey = (issue: ChannelAgentIssue, inherited?: boole
 const getRuntime = ({ agencyConfig, model }: ChannelAgentEnvironment) =>
   agencyConfig?.heterogeneousProvider?.type ??
   (isHeterogeneousAgentModelId(model) ? model! : 'native');
+
+/** A remote-task Agent runs on its own host; a Channel picks no device for it. */
+export const isRemoteChannelAgent = (environment: ChannelAgentEnvironment) =>
+  isRemoteChannelRuntime(getRuntime(environment));
 
 const getDeviceDirectory = (deviceId: string | undefined, environment: ChannelAgentEnvironment) => {
   if (!deviceId) return;

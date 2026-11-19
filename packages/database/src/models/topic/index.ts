@@ -152,7 +152,7 @@ export class TopicModel {
   // **************** Agent Share (visitor-scoped) *************** //
 
   queryBySender = this.withContext(shareVisitor.queryBySender);
-  countBySender = this.withContext(shareVisitor.countBySender);
+  countMessagesBySender = this.withContext(shareVisitor.countMessagesBySender);
   countShareVisitors = this.withContext(shareVisitor.countShareVisitors);
 
   // **************** Create *************** //

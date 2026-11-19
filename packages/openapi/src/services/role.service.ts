@@ -1,5 +1,5 @@
 import type { SQL } from 'drizzle-orm';
-import { and, count, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, count, eq, ilike, inArray, isNull, or } from 'drizzle-orm';
 
 import { permissions, rolePermissions, roles, userRoles } from '@/database/schemas/rbac';
 import type { LobeChatDatabase } from '@/database/type';
@@ -8,6 +8,7 @@ import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
 import { projectPublicRole, type PublicRole } from '../helpers/public-fields';
 import type { ServiceResult } from '../types';
+import type { DeletedResource, DeletedResources } from '../types/common.type';
 import type {
   CreateRoleRequest,
   RolePermissionsListRequest,
@@ -463,7 +464,7 @@ export class RoleService extends BaseService {
   /**
    * Clear a role's permission mappings
    */
-  async clearRolePermissions(roleId: string): ServiceResult<{ removed: number; roleId: string }> {
+  async clearRolePermissions(roleId: string): ServiceResult<DeletedResources> {
     this.log('info', 'clear role permissions', { roleId });
 
     // Permission check
@@ -483,15 +484,13 @@ export class RoleService extends BaseService {
         throw this.createNotFoundError(`Role ID "${roleId}" not found`);
       }
 
-      // Count and delete
-      const before = await this.db
-        .select({ count: sql<number>`count(*)` })
-        .from(rolePermissions)
-        .where(eq(rolePermissions.roleId, roleId));
+      // `count` is the number of mappings this call actually removed.
+      const removed = await this.db
+        .delete(rolePermissions)
+        .where(eq(rolePermissions.roleId, roleId))
+        .returning({ permissionId: rolePermissions.permissionId });
 
-      await this.db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
-
-      return { removed: Number(before[0]?.count || 0), roleId };
+      return { count: removed.length, deleted: true };
     } catch (error) {
       this.handleServiceError(error, 'clear role permissions');
     }
@@ -500,7 +499,7 @@ export class RoleService extends BaseService {
   /**
    * Delete role by ID
    */
-  async deleteRole(id: string): ServiceResult<{ deleted: boolean; id: string }> {
+  async deleteRole(id: string): ServiceResult<DeletedResource> {
     this.log('info', 'delete role', { roleId: id });
 
     const permissionResult = await this.resolveOperationPermission('RBAC_ROLE_DELETE');

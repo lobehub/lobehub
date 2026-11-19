@@ -38,7 +38,6 @@ const FavoriteItem = memo<FavoriteItemProps>(({ active, item }) => {
   return (
     <WorkspaceLink to={item.path}>
       <NavItem
-        compact
         active={active}
         contextMenuItems={menuItems}
         icon={<FavoriteItemIcon item={item} />}

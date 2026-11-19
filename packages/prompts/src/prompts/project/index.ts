@@ -1,8 +1,12 @@
+import { agentIdentityLabel } from '@lobechat/types';
+
 import type { TaskSummary } from '../task';
 import { priorityLabel, statusIcon } from '../task';
 
 export interface ProjectContextMember {
   agentId: string;
+  /** The agent's personal name; the label leads with it, `title` follows as its role. */
+  name?: string | null;
   responsibility?: string | null;
   role?: string | null;
   title?: string | null;
@@ -48,8 +52,9 @@ export interface ProjectContextPromptInput {
   totalOpenTasks: number;
 }
 
+/** A member as it is addressed, so a named agent recognises itself when called by name. */
 const memberLabel = (member?: ProjectContextMember) =>
-  member ? `${member.title || '(untitled agent)'} (${member.agentId})` : undefined;
+  member ? `${agentIdentityLabel(member, '(untitled agent)')} (${member.agentId})` : undefined;
 
 const COORDINATOR_RULES = [
   '<coordination_rules>',

@@ -1,73 +1,79 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { UserModel } from '@/database/models/user';
+import { ContactModel } from '@/database/models/contact';
 import type { LobeChatDatabase } from '@/database/type';
 
-import { resolveShareVisitorDeviceAccess } from './deviceAccess';
+import { resolveShareVisitorDeviceAccess, type ShareDeviceAccessSubject } from './deviceAccess';
 
-vi.mock('@/database/models/user', () => ({ UserModel: { findById: vi.fn() } }));
+const { filterAddressBookPeople, isChannelEnabled } = vi.hoisted(() => ({
+  filterAddressBookPeople: vi.fn(),
+  isChannelEnabled: vi.fn(),
+}));
+vi.mock('@/server/services/channel/featureGate', () => ({ isChannelEnabled }));
+vi.mock('@/database/models/contact', () => ({
+  ContactModel: vi.fn(function () {
+    return { filterAddressBookPeople };
+  }),
+}));
 
 const db = {} as LobeChatDatabase;
-const findById = vi.mocked(UserModel.findById);
 
-const visitor = (email: string | null, emailVerified: boolean) =>
-  findById.mockResolvedValue({ email, emailVerified, id: 'visitor-1' } as any);
+const share = (
+  shareConfig: ShareDeviceAccessSubject['shareConfig'],
+  workspaceId: string | null = null,
+): ShareDeviceAccessSubject => ({ ownerId: 'owner', shareConfig, workspaceId });
 
 describe('resolveShareVisitorDeviceAccess', () => {
-  beforeEach(() => findById.mockReset());
-
-  it('denies by default and under `none`', async () => {
-    expect(await resolveShareVisitorDeviceAccess(db, {}, 'visitor-1')).toBe(false);
-    expect(await resolveShareVisitorDeviceAccess(db, { deviceAccess: 'none' }, 'visitor-1')).toBe(
-      false,
-    );
-    expect(findById).not.toHaveBeenCalled();
+  beforeEach(() => {
+    filterAddressBookPeople.mockReset();
+    isChannelEnabled.mockReset().mockResolvedValue(true);
+    vi.mocked(ContactModel).mockClear();
   });
 
-  it('grants every visitor under `all` without a user lookup', async () => {
-    expect(await resolveShareVisitorDeviceAccess(db, { deviceAccess: 'all' }, 'visitor-1')).toBe(
+  it('denies by default, under `none`, and for a stored legacy `all`', async () => {
+    expect(await resolveShareVisitorDeviceAccess(db, share({}), 'visitor-1')).toBe(false);
+    expect(
+      await resolveShareVisitorDeviceAccess(db, share({ deviceAccess: 'none' }), 'visitor-1'),
+    ).toBe(false);
+    expect(
+      await resolveShareVisitorDeviceAccess(db, share({ deviceAccess: 'all' as any }), 'visitor-1'),
+    ).toBe(false);
+    expect(filterAddressBookPeople).not.toHaveBeenCalled();
+  });
+
+  it('denies an unlisted visitor without reading the address book', async () => {
+    const config = { deviceAccess: 'allowlist', deviceAllowUserIds: ['bob'] } as const;
+    expect(await resolveShareVisitorDeviceAccess(db, share(config), 'visitor-1')).toBe(false);
+    expect(
+      await resolveShareVisitorDeviceAccess(db, share({ deviceAccess: 'allowlist' }), 'visitor-1'),
+    ).toBe(false);
+    expect(filterAddressBookPeople).not.toHaveBeenCalled();
+  });
+
+  it('grants a listed visitor only while they are in the scope address book', async () => {
+    const config = { deviceAccess: 'allowlist', deviceAllowUserIds: ['visitor-1'] } as const;
+
+    filterAddressBookPeople.mockResolvedValue(['visitor-1']);
+    expect(await resolveShareVisitorDeviceAccess(db, share(config, 'ws-1'), 'visitor-1')).toBe(
       true,
     );
-    expect(findById).not.toHaveBeenCalled();
+    // The book is the share owner's scope, not the visitor's.
+    expect(ContactModel).toHaveBeenCalledWith(db, 'owner', 'ws-1');
+    expect(filterAddressBookPeople).toHaveBeenCalledWith(['visitor-1']);
+
+    // Removed from contacts (or left the workspace) after being listed.
+    filterAddressBookPeople.mockResolvedValue([]);
+    expect(await resolveShareVisitorDeviceAccess(db, share(config), 'visitor-1')).toBe(false);
   });
 
-  it('grants a listed visitor whose email is verified, case-insensitively', async () => {
-    visitor('Alice@Example.com', true);
-    expect(
-      await resolveShareVisitorDeviceAccess(
-        db,
-        { deviceAccess: 'allowlist', deviceAllowEmails: ['alice@example.com'] },
-        'visitor-1',
-      ),
-    ).toBe(true);
-  });
+  it('denies a listed contact while contacts are off for the owner', async () => {
+    const config = { deviceAccess: 'allowlist', deviceAllowUserIds: ['visitor-1'] } as const;
+    filterAddressBookPeople.mockResolvedValue(['visitor-1']);
+    isChannelEnabled.mockResolvedValue(false);
 
-  it('denies a listed email that is not verified', async () => {
-    visitor('alice@example.com', false);
-    expect(
-      await resolveShareVisitorDeviceAccess(
-        db,
-        { deviceAccess: 'allowlist', deviceAllowEmails: ['alice@example.com'] },
-        'visitor-1',
-      ),
-    ).toBe(false);
-  });
-
-  it('denies an unlisted visitor and an empty allowlist', async () => {
-    visitor('bob@example.com', true);
-    expect(
-      await resolveShareVisitorDeviceAccess(
-        db,
-        { deviceAccess: 'allowlist', deviceAllowEmails: ['alice@example.com'] },
-        'visitor-1',
-      ),
-    ).toBe(false);
-    expect(
-      await resolveShareVisitorDeviceAccess(
-        db,
-        { deviceAccess: 'allowlist', deviceAllowEmails: [] },
-        'visitor-1',
-      ),
-    ).toBe(false);
+    expect(await resolveShareVisitorDeviceAccess(db, share(config, 'ws-1'), 'visitor-1')).toBe(
+      false,
+    );
+    expect(isChannelEnabled).toHaveBeenCalledWith('owner');
   });
 });

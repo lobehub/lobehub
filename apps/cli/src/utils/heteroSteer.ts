@@ -31,6 +31,7 @@ export interface HeteroSteerClient {
       mutate: (
         input: {
           acceptsControl?: boolean;
+          acceptsImageAttachments?: boolean;
           acceptsImages?: boolean;
           blockMs?: number;
           holdSteer?: boolean;
@@ -54,11 +55,12 @@ export interface HeteroSteerClient {
   };
 }
 
-/** A follow-up to type into the session; `imageList` holds images pasted into its body. */
+/** A follow-up to type into the session, including uploaded and inline images. */
 export interface HeteroSteerMessage {
   content: string;
   imageList?: { id: string; url: string }[];
   messageId: string;
+  requiresImages?: true;
 }
 
 /** The prompt a follow-up is typed in as: its text, then its images as image blocks. */
@@ -87,6 +89,7 @@ interface SteerableHandle {
     request: ClaudeCodeControlRequest,
   ) => ClaudeCodeControlRequestHandle | undefined;
   sendUserMessage?: (prompt: AgentPromptInput, options?: { uuid?: string }) => Promise<boolean>;
+  supportsSteerImageAttachments?: true;
 }
 
 const RETRY_MS = 2000;
@@ -202,6 +205,7 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
         const res = await client.aiAgent.waitHeteroSteer.mutate(
           {
             ...(acceptsControl && { acceptsControl: true }),
+            ...(handle.supportsSteerImageAttachments && { acceptsImageAttachments: true }),
             // The session takes image blocks, so pasted images come along.
             acceptsImages: true,
             // The first poll answers at once, so the run is marked steerable early.
@@ -239,7 +243,7 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
       const steer = message;
       const options = { uuid: steer.messageId };
       const accepted = await send(buildSteerPrompt(steer), options).catch(async (error) => {
-        if (!steer.imageList?.length) return false;
+        if (steer.requiresImages || !steer.imageList?.length) return false;
         // An image that cannot be fetched must not cost the message: its
         // markdown still names the image.
         log.debug('Steer images failed, sending the text: %s', String(error));

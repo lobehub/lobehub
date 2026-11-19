@@ -4,6 +4,7 @@ import { describeRoute } from 'hono-openapi';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { errorResponse } from '../common/openapi';
 import { AudioController } from '../controllers/audio.controller';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission } from '../middleware/permission-check';
@@ -36,6 +37,8 @@ const openAIError = (description: string): RouteResponse => ({
 });
 
 const app = new Hono();
+// The success body is the audio bytes, not JSON, which `routeDoc` (JSON-only)
+// cannot express — so this route declares its responses with `describeRoute`.
 // Synthesis spends model credits: API keys need `model:invoke`, members the invoke permission.
 const requireModelInvoke = requireAnyPermission(getAllScopePermissions('AI_MODEL_INVOKE'));
 
@@ -59,8 +62,12 @@ app.post(
         description: 'Synthesized audio',
       },
       400: openAIError('Invalid request, unsupported format or invalid params'),
+      // Raised by `requireAuth` / the permission gate before the handler runs.
+      401: errorResponse(401),
       402: openAIError('Insufficient balance'),
+      403: errorResponse(403),
       429: openAIError('Upstream provider rate limit'),
+      500: openAIError('Text-to-speech failed'),
       502: openAIError('Upstream provider error'),
     },
     summary: 'Create speech',

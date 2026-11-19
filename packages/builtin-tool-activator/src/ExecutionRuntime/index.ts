@@ -1,7 +1,13 @@
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 import { Md5 } from 'ts-md5';
 
-import type { ActivatedToolInfo, ActivateSkillParams, ActivateToolsParams } from '../types';
+import type {
+  ActivatedToolInfo,
+  ActivateSkillParams,
+  ActivateToolsParams,
+  ActivateToolsState,
+  UnavailableToolInfo,
+} from '../types';
 
 export interface ToolManifestInfo {
   apiDescriptions: Array<{ description: string; name: string }>;
@@ -343,27 +349,31 @@ export class ActivatorExecutionRuntime {
         parts.push(`\nAlready active: ${alreadyActiveList.join(', ')}`);
       }
 
+      const notAvailable: UnavailableToolInfo[] = [];
       const unexplained: string[] = [];
       for (const id of notFound) {
-        const explanation = this.service.explainNotFound?.(id);
-        if (explanation) parts.push(`\nNot available: ${id}. ${explanation}`);
-        else unexplained.push(id);
+        const reason = this.service.explainNotFound?.(id);
+        if (reason) {
+          parts.push(`\nNot available: ${id}. ${reason}`);
+          notAvailable.push({ identifier: id, reason });
+        } else {
+          unexplained.push(id);
+        }
       }
 
       if (unexplained.length > 0) {
         parts.push(`\nNot found: ${unexplained.join(', ')}`);
       }
 
-      return {
-        content: parts.join('\n'),
-        state: {
-          activatedSkills: activatedSkillResults.map((r) => r.state),
-          activatedTools,
-          alreadyActive: alreadyActiveList,
-          notFound,
-        },
-        success: true,
+      const state: ActivateToolsState = {
+        activatedSkills: activatedSkillResults.map((r) => r.state),
+        activatedTools,
+        alreadyActive: alreadyActiveList,
+        notAvailable,
+        notFound,
       };
+
+      return { content: parts.join('\n'), state, success: true };
     } catch (e) {
       return {
         content: `Failed to activate tools: ${(e as Error).message}`,

@@ -23,9 +23,9 @@ const styles = createStaticStyles(({ css, cssVar: cv }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
+    width: var(--lobe-density-icon-box);
+    height: var(--lobe-density-icon-box);
+    border-radius: var(--lobe-density-radius);
 
     color: ${cv.colorTextTertiary};
 
@@ -72,10 +72,12 @@ const styles = createStaticStyles(({ css, cssVar: cv }) => ({
     gap: 6px;
     align-items: center;
 
-    height: 32px;
-    padding-block: 6px;
+    height: var(--lobe-density-control-height);
+    padding-block: 4px;
     padding-inline: 12px;
-    border-radius: 8px;
+    border-radius: var(--lobe-density-radius);
+
+    font-size: var(--lobe-density-font-size);
 
     color: ${cv.colorTextTertiary};
 

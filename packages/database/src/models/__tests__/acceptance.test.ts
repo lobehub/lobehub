@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { deleteTestUsers } from '../../core/testCleanup';
 import { ProjectRepository } from '../../repositories/project';
 import {
   acceptanceComments,
@@ -29,7 +30,7 @@ const otherUserId = 'acceptance-test-other';
 const topicId = 'acceptance-test-topic';
 
 beforeEach(async () => {
-  await serverDB.delete(users);
+  await deleteTestUsers(serverDB);
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
   await serverDB.insert(topics).values([{ id: topicId, userId }]);
 });
@@ -38,7 +39,7 @@ afterEach(async () => {
   await serverDB.delete(verifyRuns);
   await serverDB.delete(acceptances);
   await serverDB.delete(topics);
-  await serverDB.delete(users);
+  await deleteTestUsers(serverDB);
 });
 
 describe('AcceptanceModel', () => {

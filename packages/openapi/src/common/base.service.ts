@@ -1,6 +1,7 @@
 import { buildWorkspacePayload, buildWorkspaceWhere } from '@lobechat/database';
 import { and, eq, inArray, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+import { HTTPException } from 'hono/http-exception';
 
 import type { PERMISSION_ACTIONS } from '@/const/rbac';
 import { ALL_SCOPE } from '@/const/rbac';
@@ -133,6 +134,11 @@ export abstract class BaseService implements IBaseService {
    */
   protected handleServiceError(error: unknown, operation: string): never {
     this.log('error', `${operation} failed`, { error });
+
+    // An HTTP error already names its status (and `ApiException` its code,
+    // e.g. an invalid pagination cursor): wrapping it would turn it into a
+    // generic 400 `bad_request`.
+    if (error instanceof HTTPException) throw error;
 
     // If it is a known business error, throw it directly
     if (
@@ -361,11 +367,16 @@ export abstract class BaseService implements IBaseService {
             return workspaceModel?.userId;
           }
 
-          const targetModel = await this.db.query.aiModels.findFirst({
+          // A model id names a model, not a row: `ai_models` is unique on
+          // (id, providerId, userId), so other accounts hold their own rows under
+          // the same id. Only the caller's row says anything about ownership; with
+          // none, the model is unowned for this caller (e.g. a built-in one) and
+          // must not be attributed to whichever account's row the lookup hits.
+          const ownModel = await this.db.query.aiModels.findFirst({
             columns: { userId: true },
-            where: eq(aiModels.id, target.targetModelId),
+            where: and(eq(aiModels.id, target.targetModelId), eq(aiModels.userId, this.userId)),
           });
-          return targetModel?.userId;
+          return ownModel?.userId;
         }
 
         default: {

@@ -287,11 +287,7 @@ export class AgentGroupRepository {
           description: supervisorConfig?.description,
           model: supervisorConfig?.model,
           params: supervisorConfig?.params,
-          // The `plugins` column is still typed `string[]` at the schema layer
-          // (widening deferred to the tri-state rollout's final phase) but
-          // legitimately holds mixed AgentPluginEntry[] at runtime — JSONB has
-          // no schema enforcement.
-          plugins: supervisorConfig?.plugins as unknown as string[] | undefined,
+          plugins: supervisorConfig?.plugins,
           provider: supervisorConfig?.provider,
           systemRole: supervisorConfig?.systemRole,
           tags: supervisorConfig?.tags,

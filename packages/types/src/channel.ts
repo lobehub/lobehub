@@ -1,5 +1,8 @@
-import type { LobeAgentAgencyConfig, LobeAgentConfig, RemoteHeterogeneousAgentType } from './agent';
-import { LocalExecutionHeterogeneousAgentTypeSchema } from './agent/heterogeneousAgent';
+import type { LobeAgentAgencyConfig, LobeAgentConfig } from './agent';
+import {
+  LocalExecutionHeterogeneousAgentTypeSchema,
+  REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
+} from './agent/heterogeneousAgent';
 import { getWorkingDirEffectivePath } from './device';
 import type { BotWakeKind } from './signal';
 import type { ExternalWorkSummaryItem } from './work';
@@ -12,32 +15,29 @@ import type { ExternalWorkSummaryItem } from './work';
  */
 
 /**
- * Runtimes a Channel can seat, derived rather than listed: LobeHub's own `native` loop plus every
- * heterogeneous runtime that executes on its user's machine (descriptor-backed CLIs and
- * protocol-driven local runtimes). A new local runtime joins Channels when it joins the provider
- * registry; only runtimes known not to work are excluded below, each with its reason.
+ * Remote-task runtimes (`openclaw`, `hermes`) run on their own host, so a Channel seats them
+ * without a device or working directory; the run routes to that host as an ordinary one does.
  */
-const LOCAL_EXECUTION_RUNTIMES = LocalExecutionHeterogeneousAgentTypeSchema.options;
+const REMOTE_RUNTIMES = REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type);
 
 /**
- * Remote-task runtimes (`openclaw`, `hermes`) run a task on a remote host instead of on a seated
- * device, so a Channel's "pick a device + working directory" premise does not hold for them.
- * They are not part of LOCAL_EXECUTION_RUNTIMES; this list documents the exclusion and is
- * asserted by tests so a remote runtime cannot slip in by being reclassified.
+ * Runtimes a Channel can seat: every runtime an Agent can have, derived rather than listed.
+ * LobeHub's own `native` loop, every heterogeneous runtime that executes on its user's machine
+ * and every remote-task runtime. A new runtime joins Channels when it joins the registry.
  */
-export const CHANNEL_EXCLUDED_RUNTIMES: Readonly<Record<RemoteHeterogeneousAgentType, string>> = {
-  hermes:
-    'remote-task runtime: runs off-device, so there is no Channel device or working directory',
-  openclaw:
-    'remote-task runtime: runs off-device, so there is no Channel device or working directory',
-};
-
-export const CHANNEL_RUNTIMES = ['native', ...LOCAL_EXECUTION_RUNTIMES] as const;
-export type ChannelRuntime = 'native' | (typeof LOCAL_EXECUTION_RUNTIMES)[number];
+export const CHANNEL_RUNTIMES = [
+  'native',
+  ...LocalExecutionHeterogeneousAgentTypeSchema.options,
+  ...REMOTE_RUNTIMES,
+] as const;
+export type ChannelRuntime = (typeof CHANNEL_RUNTIMES)[number];
 
 export const isChannelRuntime = (runtime: string): runtime is ChannelRuntime =>
-  !Object.hasOwn(CHANNEL_EXCLUDED_RUNTIMES, runtime) &&
   (CHANNEL_RUNTIMES as readonly string[]).includes(runtime);
+
+/** A runtime that runs on its own host: a Channel picks no device or directory for it. */
+export const isRemoteChannelRuntime = (runtime: string) =>
+  (REMOTE_RUNTIMES as readonly string[]).includes(runtime);
 
 /** The directory on that device: the Agent's own choice there, else the device's default. */
 export const defaultChannelAgentDirectory = (
@@ -144,6 +144,8 @@ export interface ChannelMemberWorktree {
 
 /** Free-form member state that does not need its own column. */
 export type ChannelMemberMetadata = Record<string, unknown> & {
+  /** The member who added this one; absent when they joined on their own or before it was kept. */
+  invitedBy?: string;
   /** Worktree per conversation branch: a Thread id, or `main` for the main timeline. */
   worktrees?: Record<string, ChannelMemberWorktree>;
   /** The configured directory could not host a worktree (e.g. not a git repo); retried later. */
@@ -246,6 +248,14 @@ export const channelMessageReceipt = (
         messageId: receipt.messageId,
       }
     : undefined;
+};
+
+/** When the message was deleted (`metadata.deletedAt`); null while it stands. */
+export const channelMessageDeletedAt = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): Date | null => {
+  const deletedAt = metadata?.deletedAt;
+  return typeof deletedAt === 'string' ? new Date(deletedAt) : null;
 };
 
 /** When a person last edited their message (`metadata.editedAt`); null if never. */
@@ -547,6 +557,13 @@ export interface ChannelAvatarMember {
 
 /** A Channel's newest message as its list row previews it. */
 export interface ChannelLastMessage {
+  /**
+   * The first attachment's MIME type and how many there are, so a message of only an image
+   * still has a preview line; null without attachments.
+   */
+  attachments: { count: number; fileType: string } | null;
+  /** Who sent it, so a list can read "Me: …" or "Alice: …"; `id` is null after deletion. */
+  author: { id: string | null; name: string | null; type: ChannelMemberActorType };
   content: string;
   createdAt: Date;
   /**
@@ -554,6 +571,12 @@ export interface ChannelLastMessage {
    * null for the main conversation.
    */
   thread: { id: string; title: string | null } | null;
+}
+
+/** The newest message in a Thread that @mentions the caller. */
+export interface ChannelThreadMention {
+  createdAt: Date;
+  threadId: string;
 }
 
 /** Public client projection. No execution configuration, private topic or draft fields. */
@@ -568,6 +591,11 @@ export interface ChannelListItem {
   /** Server-computed for the current member. */
   canDelete: boolean;
   createdAt: Date;
+  /**
+   * The caller hid the conversation from their list; new activity brings it back. Set by the
+   * Channel list. Personal: other members never see it.
+   */
+  hidden?: boolean;
   id: string;
   /**
    * False for a project Channel the caller can read through the project but has not joined; it
@@ -605,6 +633,11 @@ export interface ChannelListItem {
    * show them without loading the conversation; set by the Channel list.
    */
   replyJobs?: ChannelReplyJob[];
+  /**
+   * The caller's own sidebar section holding the conversation; null keeps it in the built-in one.
+   * Set by the Channel list. Personal: other members never see it.
+   */
+  sectionId?: string | null;
   sequence: number;
   /**
    * A direct conversation with another person's Agent, reached through the caller's contact entry
@@ -617,6 +650,12 @@ export interface ChannelListItem {
    */
   sharedAgentHandle?: string | null;
   status: ChannelStatus;
+  /**
+   * The newest @mention of the caller in each Thread from the last 30 days, read or not; set by
+   * the Channel list. The read position cannot tell whether one was seen, so the client's
+   * per-Thread reads decide.
+   */
+  threadMentions?: ChannelThreadMention[];
   title: string;
   /** Main-channel messages the caller has not read; set by the Channel list. */
   unreadCount?: number;
@@ -643,6 +682,8 @@ export interface ChannelPublicMember {
   /** Agent members only; null when the Channel sets no device or directory for it. */
   environment?: ChannelMemberEnvironmentPreview | null;
   id: string;
+  /** The member who added this one; null when they joined on their own or the adder is unknown. */
+  invitedBy: string | null;
   joinedAt: Date;
   /** An Agent that answers only when @mentioned; see `ChannelMemberConfig.muted`. */
   muted?: boolean;
@@ -665,6 +706,11 @@ export interface ChannelPublicMessage {
   };
   content: string;
   createdAt: Date;
+  /**
+   * Set once the message was deleted. Its row stays as a tombstone, without text, mentions or
+   * attachments, so Threads, replies and jobs that point at it still resolve.
+   */
+  deletedAt?: Date | null;
   /** Set once the author has edited the text; shown as "(edited)". */
   editedAt?: Date | null;
   fileIds: string[];
@@ -676,7 +722,7 @@ export interface ChannelPublicMessage {
   /** Bounded public quote, including when its original is outside the loaded page. */
   replyTo?: Pick<
     ChannelPublicMessage,
-    'id' | 'author' | 'content' | 'sequence' | 'threadId'
+    'id' | 'author' | 'content' | 'deletedAt' | 'sequence' | 'threadId'
   > | null;
   replyToId: string | null;
   routingStatus: ChannelMessageRoutingStatus;
@@ -734,6 +780,12 @@ export interface ChannelPublicThread {
   followerMemberIds: string[];
   id: string;
   /**
+   * When the newest reply worth reporting as unread was posted: an Agent's acknowledgement before
+   * its run is not, so it does not mark the thread unread while its preview still shows. Null when
+   * the thread holds only acknowledgements; present under the same conditions as `lastReply`.
+   */
+  lastNewsAt?: Date | null;
+  /**
    * The newest reply, for threads whose root is on the loaded main-timeline page. Absent in
    * thread views and in views cached before summaries existed.
    */
@@ -760,6 +812,27 @@ export interface ChannelDetail {
   joined?: boolean;
   members: ChannelPublicMember[];
   messages: ChannelPublicMessage[];
+  /**
+   * True while a shared Agent's owner reads a visitor's conversation with it: the same view, with
+   * no composer and no message actions.
+   */
+  readOnly?: boolean;
   rootMessage: ChannelPublicMessage | null;
   threads: ChannelPublicThread[];
+}
+
+/**
+ * A visitor's direct conversation with a shared Agent, as its owner lists them when the share
+ * lets the owner read visitor conversations.
+ */
+export interface ShareVisitorConversation {
+  createdAt: Date;
+  /** The visitor's Channel. */
+  id: string;
+  lastMessage: ChannelLastMessage | null;
+  /** USD cost of every run in the conversation, from its run topics. */
+  totalCost: number;
+  totalTokens: number;
+  updatedAt: Date;
+  visitor: { avatar: string | null; id: string; name: string | null };
 }

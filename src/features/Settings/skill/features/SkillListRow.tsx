@@ -7,6 +7,7 @@ import { CircleCheck } from 'lucide-react';
 import { createContext, memo, type ReactNode, use } from 'react';
 
 import NavItem, { type NavItemProps } from '@/features/NavPanel/components/NavItem';
+import { useInterfaceDensity } from '@/styles/density';
 
 /**
  * `nav` is the compact sidebar row beside a detail pane; `page` is the
@@ -34,9 +35,17 @@ const styles = stylex.create({
     overflow: 'hidden',
     width: 40,
   },
+  // Compact page row: 6px padding around a 32px tile and a 20 + 2 + 18px text stack → 52px.
+  iconTileCompact: {
+    height: 32,
+    width: 32,
+  },
   row: {
     minHeight: 64,
     minWidth: 0,
+  },
+  rowCompact: {
+    minHeight: 48,
   },
   trailing: {
     alignItems: 'center',
@@ -62,6 +71,7 @@ interface SkillListRowProps {
 const SkillListRow = memo<SkillListRowProps>(
   ({ active, description, extra, icon, onClick, summary, title, titleColor }) => {
     const variant = useSkillListVariant();
+    const compact = useInterfaceDensity() === 'compact';
 
     if (variant === 'nav')
       return (
@@ -82,23 +92,33 @@ const SkillListRow = memo<SkillListRowProps>(
       <Block
         horizontal
         align={'center'}
-        {...stylex.props(styles.row)}
+        {...stylex.props(styles.row, compact && styles.rowCompact)}
         clickable={!!onClick}
         gap={12}
-        paddingBlock={12}
+        paddingBlock={compact ? 6 : 12}
         paddingInline={12}
         variant={'borderless'}
         onClick={onClick}
       >
-        <Center {...stylex.props(styles.iconTile)}>
+        <Center {...stylex.props(styles.iconTile, compact && styles.iconTileCompact)}>
           <IconNode />
         </Center>
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-          <Text ellipsis weight={500}>
+          <Text
+            ellipsis
+            fontSize={compact ? 13 : undefined}
+            lineHeight={compact ? '20px' : undefined}
+            weight={500}
+          >
             {title}
           </Text>
           {summary && (
-            <Text ellipsis color={cssVar.colorTextSecondary} fontSize={13}>
+            <Text
+              ellipsis
+              color={cssVar.colorTextSecondary}
+              fontSize={compact ? 12 : 13}
+              lineHeight={compact ? '18px' : undefined}
+            >
               {summary}
             </Text>
           )}

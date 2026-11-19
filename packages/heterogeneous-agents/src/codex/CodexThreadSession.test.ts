@@ -327,6 +327,97 @@ describe('CodexThreadSession', () => {
       ctx.session.close();
     };
 
+    const announceAsyncQuestion = (ctx: Awaited<ReturnType<typeof start>>) =>
+      ctx.harness.notify('item/completed', {
+        item: {
+          delivery: 'async',
+          id: 'async-1',
+          questions: [{ options: ['Staging', 'Production'], title: 'Which environment?' }],
+          text: 'Which environment?\n- Staging\n- Production',
+          type: 'agentMessage',
+        },
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+      });
+
+    it('keeps an async question actionable after completion and continues the original thread', async () => {
+      const ctx = await start();
+      await announceAsyncQuestion(ctx);
+      expect(ctx.bridge.pendingCount).toBe(1);
+      expect((await ctx.bridge.events()[Symbol.asyncIterator]().next()).value).toMatchObject({
+        data: { apiName: 'askUserQuestion', identifier: 'codex', toolCallId: 'async-1' },
+        type: 'agent_intervention_request',
+      });
+      await ctx.harness.notify('turn/completed', {
+        threadId: 'thread-1',
+        turn: turn('turn-1', 'completed'),
+      });
+      expect(ctx.bridge.pendingCount).toBe(1);
+      expect(ctx.events.some(({ type }) => type === 'agent_runtime_end')).toBe(false);
+
+      ctx.bridge.resolve('async-1', { result: { 'Which environment?': 'Staging' } });
+      await vi.waitFor(() => {
+        expect(ctx.harness.requests.filter(({ method }) => method === 'turn/start')).toHaveLength(
+          2,
+        );
+      });
+      expect(ctx.harness.requests.at(-1)).toMatchObject({
+        method: 'turn/start',
+        params: {
+          input: [{ text: expect.stringContaining('"answer":"Staging"'), type: 'text' }],
+          threadId: 'thread-1',
+        },
+      });
+      expect(JSON.stringify(ctx.harness.requests.at(-1))).toContain('request_user_input_async');
+      await ctx.harness.notify('turn/started', {
+        threadId: 'thread-1',
+        turn: turn('turn-2', 'inProgress'),
+      });
+      await ctx.harness.notify('turn/completed', {
+        threadId: 'thread-1',
+        turn: turn('turn-2', 'completed'),
+      });
+      await ctx.running;
+      expect(ctx.events.filter(({ type }) => type === 'agent_runtime_end')).toHaveLength(1);
+      expect(ctx.events).toContainEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({ newStep: true }),
+          type: 'stream_start',
+        }),
+      );
+    });
+
+    it('stops waiting on an async question without starting another native turn when skipped', async () => {
+      const ctx = await start();
+      await announceAsyncQuestion(ctx);
+      expect(ctx.bridge.pendingCount).toBe(1);
+      await ctx.harness.notify('turn/completed', {
+        threadId: 'thread-1',
+        turn: turn('turn-1', 'completed'),
+      });
+      ctx.bridge.resolve('async-1', { cancelled: true, cancelReason: 'user_cancelled' });
+      await ctx.running;
+      expect(ctx.harness.requests.filter(({ method }) => method === 'turn/start')).toHaveLength(1);
+      expect(ctx.events.filter(({ type }) => type === 'agent_runtime_end')).toHaveLength(1);
+      ctx.session.close();
+    });
+
+    it('stops waiting without interrupting a native turn that has already completed', async () => {
+      const ctx = await start();
+      await announceAsyncQuestion(ctx);
+      await ctx.harness.notify('turn/completed', {
+        threadId: 'thread-1',
+        turn: turn('turn-1', 'completed'),
+      });
+      await ctx.session.interrupt();
+      await ctx.running;
+      expect(ctx.bridge.pendingCount).toBe(0);
+      expect(ctx.harness.requests.filter(({ method }) => method === 'turn/start')).toHaveLength(1);
+      expect(ctx.harness.requests.some(({ method }) => method === 'turn/interrupt')).toBe(false);
+      expect(ctx.events.filter(({ type }) => type === 'agent_runtime_end')).toHaveLength(1);
+      ctx.session.close();
+    });
+
     it('presents native questions and returns selected/custom answers by their original ids', async () => {
       const ctx = await start();
       const reply = ctx.harness.serverRequest(

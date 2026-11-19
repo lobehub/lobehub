@@ -42,6 +42,7 @@ import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAcce
 import { useEffectiveAgentMode } from '../../hooks/useEffectiveAgentMode';
 import { useToggleAgentMode } from '../../hooks/useToggleAgentMode';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
+import { useGatewayMode } from './useGatewayMode';
 import { useParamsModelConfig } from './useParamsModelConfig';
 
 interface ControlsProps {
@@ -413,6 +414,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
   const { t } = useTranslation(['setting', 'components', 'chat']);
   const agentId = useAgentId();
   const toggleAgentMode = useToggleAgentMode();
+  const gatewayMode = useGatewayMode();
   const { canUseResource } = useChatInputResourceAccess();
   const { canSelectAgentMode, currentMode, isAgentModeUnavailable } =
     useEffectiveAgentMode(agentId);
@@ -755,6 +757,21 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                     })
               }
             />
+            {gatewayMode.available && (
+              <ControlRow
+                title={t('gatewayMode.cardTitle', { ns: 'chat' })}
+                tooltip={t('gatewayMode.desc', { ns: 'chat' })}
+                action={
+                  <Switch
+                    aria-label={t('gatewayMode.cardTitle', { ns: 'chat' })}
+                    checked={gatewayMode.enabled}
+                    loading={gatewayMode.loading}
+                    size={'small'}
+                    onChange={gatewayMode.onChange}
+                  />
+                }
+              />
+            )}
             <ControlRow
               tag="compression"
               title={t('settingModel.params.panel.contextCompression')}

@@ -14,7 +14,7 @@ import ContextMotionItem, { CONTEXT_ITEM_GAP } from './ContextMotionItem';
 import ElementItem from './ElementItem';
 import SelectionItem from './SelectionItem';
 
-const styles = stylex.create({ container: { overflowX: 'scroll', width: '100%' } });
+const styles = stylex.create({ container: { width: '100%' } });
 
 const ContextList = memo(() => {
   const contextSelectionKey = useChatInputStore((s) => s.contextSelectionKey);

@@ -1,7 +1,8 @@
+import { channelMessageDeletedAt } from '@lobechat/types';
 import { and, eq, sql } from 'drizzle-orm';
 
 import type { ChannelJobItem } from '../../schemas';
-import { agentOperations, channelJobs } from '../../schemas';
+import { agentOperations, channelJobs, channelMessages } from '../../schemas';
 import type { Transaction } from '../../type';
 import { assertThreadOpen, findThread } from './delivery';
 import { ChannelError } from './error';
@@ -12,11 +13,12 @@ const DEVICE_UNREACHABLE = 'DeviceGatewayNotConfigured';
 
 /**
  * Queues a reply that failed before it started again. Only a reply whose device could not be
- * reached qualifies, and only once its writer is released: nothing ran, nothing was accepted
- * or published, so running it again cannot repeat work. Deliveries are unique per message and
- * member, so the job itself goes back to the queue, keeping its place in message order. The
- * next claim reads the Agent's current settings and environment and opens a fresh operation;
- * the failed one stays on its topic as history.
+ * reached qualifies, only while its request still stands (a deleted request leaves a tombstone
+ * without text or mentions, so re-running it would answer nothing), and only once its writer is
+ * released: nothing ran, nothing was accepted or published, so running it again cannot repeat
+ * work. Deliveries are unique per message and member, so the job itself goes back to the queue,
+ * keeping its place in message order. The next claim reads the Agent's current settings and
+ * environment and opens a fresh operation; the failed one stays on its topic as history.
  */
 export const retryJob = async (
   tx: Transaction,
@@ -24,12 +26,21 @@ export const retryJob = async (
   jobId: string,
 ): Promise<ChannelJobItem> => {
   const [row] = await tx
-    .select({ errorType: sql<string | null>`${agentOperations.error}->>'type'`, job: channelJobs })
+    .select({
+      errorType: sql<string | null>`${agentOperations.error}->>'type'`,
+      job: channelJobs,
+      request: channelMessages,
+    })
     .from(channelJobs)
+    .innerJoin(channelMessages, eq(channelMessages.id, channelJobs.messageId))
     .leftJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
     .where(and(eq(channelJobs.channelId, channelId), eq(channelJobs.id, jobId)));
   if (!row) throw new ChannelError('NOT_FOUND', 'Job not found');
-  const { errorType, job } = row;
+  const { errorType, job, request } = row;
+  // A withdrawn request must not restart work: the tombstone is left with no text or mentions,
+  // and the coordinator would still launch a run for it.
+  if (channelMessageDeletedAt(request.metadata))
+    throw new ChannelError('CONFLICT', 'The request was deleted');
   assertThreadOpen(await findThread(tx, channelId, job.threadId));
   if (
     job.status !== 'failed' ||

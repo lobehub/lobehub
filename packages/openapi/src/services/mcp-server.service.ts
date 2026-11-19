@@ -10,6 +10,7 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 
 import { BaseService } from '../common/base.service';
+import type { DeletedResource } from '../types/common.type';
 import type {
   CreateMcpServerRequest,
   McpServerResponse,
@@ -154,10 +155,10 @@ export class McpServerService extends BaseService {
     return this.getServer(id);
   }
 
-  async deleteServer(id: string): Promise<{ id: string }> {
+  async deleteServer(id: string): Promise<DeletedResource> {
     await this.requireManageableServer(id);
     await this.connectorModel.delete(id);
-    return { id };
+    return { deleted: true, id };
   }
 
   async syncServer(id: string): Promise<{ id: string; status: string; toolCount: number }> {

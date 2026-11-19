@@ -84,6 +84,8 @@ const label = (text: string) => cell(text.replaceAll(/[\\[\]()*_`~<>]/g, String.
 
 export interface TrackingCommentInput {
   acceptance?: { id: string; status: AcceptanceStatus; url: string } | null;
+  /** The pull request's Auto-fix switch; `false` means nobody is woken. Defaults to on. */
+  autoFix?: boolean;
   conversation?: { title?: string | null; url: string } | null;
   marker: TrackingCommentMarker;
   /** How often the agent has been notified about this pull request, and why last. */
@@ -92,26 +94,32 @@ export interface TrackingCommentInput {
 }
 
 export const buildTrackingComment = (input: TrackingCommentInput): string => {
-  const { acceptance, conversation, marker, notification, updatedAt } = input;
+  const { acceptance, autoFix = true, conversation, marker, notification, updatedAt } = input;
 
   const acceptanceCell = acceptance ? `[${acceptance.id.slice(0, 8)}](${acceptance.url})` : '—';
   const statusCell = acceptance ? (ACCEPTANCE_STATUS[acceptance.status] ?? acceptance.status) : '—';
   const conversationCell = conversation
     ? `[${label(conversation.title?.trim() || 'Open conversation')} ↗︎](${conversation.url})`
     : '—';
-  const notificationCell =
+  const countCell =
     notification && notification.count > 0
       ? `${notification.count}/${notification.max}${
           notification.reason
             ? ` · ${NOTIFICATION_REASON[notification.reason] ?? notification.reason}`
             : ''
         }`
-      : '—';
+      : null;
+  const notificationCell = autoFix
+    ? (countCell ?? '—')
+    : `⏸ Auto-fix off${countCell ? ` · ${countCell}` : ''}`;
+  const loop = autoFix
+    ? 'failing checks and review feedback reach the agent that opened it'
+    : 'Auto-fix is off, so failing checks and review feedback do not wake the agent';
 
   return [
     encodeTrackingMarker(marker),
     '',
-    `**${BRANDING_NAME} is tracking this pull request.** Merging accepts the delivery; failing checks and review feedback reach the agent that opened it. [Learn more ↗︎](${GITHUB_INTEGRATION_DOCS_URL})`,
+    `**${BRANDING_NAME} is tracking this pull request.** Merging accepts the delivery; ${loop}. [Learn more ↗︎](${GITHUB_INTEGRATION_DOCS_URL})`,
     '',
     '| Acceptance | Status | Conversation | Notifications | Updated (UTC) |',
     '| :--- | :--- | :--- | :--- | :--- |',

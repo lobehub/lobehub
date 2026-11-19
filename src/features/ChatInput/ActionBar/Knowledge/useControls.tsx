@@ -11,6 +11,7 @@ import FileIcon from '@/components/FileIcon';
 import RepoIcon from '@/components/LibIcon';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import CheckboxItem from '../components/CheckboxWithLoading';
@@ -30,15 +31,15 @@ const styles = stylex.create({
     // submenu) and lets the row span full width; padding-inline 12 lines its icon/text
     // up with the menu items above.
     width: '320px',
-    minHeight: '32px',
+    minHeight: sidebarRow.controlHeight,
     // The footer wrapper adds padding-block: 8px top & bottom; the top keeps it separated
     // from the list, but the bottom leaves a dead gap against the popup edge — cancel it.
     marginBlockEnd: '-8px',
     marginInline: '-12px',
     paddingInline: '12px',
     borderStyle: 'none',
-    borderRadius: '6px',
-    fontSize: '14px',
+    borderRadius: sidebarRow.radius,
+    fontSize: sidebarRow.textFontSize,
     color: cssVar.colorText,
     backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': 'none', ':hover': 'none' },

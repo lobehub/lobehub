@@ -1,7 +1,7 @@
 'use client';
 
 import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
-import { Button, Empty, Flexbox, Icon, Skeleton, toast } from '@lobehub/ui';
+import { Button, Center, Empty, Flexbox, toast } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -15,12 +15,11 @@ import {
   GitBranchIcon,
   GitForkIcon,
   LaptopIcon,
-  RefreshCwIcon,
-  TriangleAlertIcon,
 } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import RingLoadingIcon from '@/components/RingLoading';
 import ThreadListSection from '@/features/AgentSidebar/Topic/TopicListContent/ThreadList/ThreadListSection';
 import { TopicBackgroundActivity } from '@/features/BackgroundActivity/TopicSection';
@@ -42,7 +41,9 @@ import {
 } from '@/store/device';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
+import { sidebarRow } from '@/styles/density.stylex';
 
+import { SidebarRowSkeleton } from '../DeferredSkeleton';
 import GoalSection from '../GoalSection';
 import ProgressSection from '../ProgressSection';
 import { toLinkedPullRequest } from '../PullRequest/useSidebarPullRequests';
@@ -59,16 +60,17 @@ import OverviewHeader from './OverviewHeader';
 import { ChevronRight, OverviewRow, PickerGlyph, rowStyles } from './OverviewRow';
 import PortSwitcher from './PortSwitcher';
 import PullRequestRow from './PullRequestRow';
-import { sectionProps, sectionStyles } from './sectionStyles';
+import PullRequestRowMenu from './PullRequestRowMenu';
+import { SectionHeader } from './SectionHeader';
+import { sectionProps } from './sectionStyles';
 import { TerminalRow } from './TerminalRow';
 
 const styles = stylex.create({
-  body: { overflowY: 'auto' },
-  emptyWorkspace: {
-    flexShrink: 0,
-    paddingBlockStart: '28px',
-    paddingBlockEnd: '30px',
-    paddingInline: '20px',
+  body: {
+    overflowY: 'auto',
+    paddingBlockStart: sidebarRow.paneBlockStart,
+    paddingBlockEnd: sidebarRow.paneBlockEnd,
+    paddingInline: sidebarRow.paneInline,
   },
 });
 
@@ -122,7 +124,6 @@ const Overview = memo<OverviewProps>(
   }) => {
     const { t } = useTranslation('chat');
     const { t: tDevice } = useTranslation('device');
-    const { t: tCommon } = useTranslation('common');
     const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
     const tunnelsEnabled = useUserStore(labPreferSelectors.enableDeviceTunnel);
     const topicId = useChatStore((s) => s.activeTopicId);
@@ -302,21 +303,27 @@ const Overview = memo<OverviewProps>(
             pullRequest={toLinkedPullRequest(view)}
             tooltip={`${view.repoFullName}#${view.number} ${view.title}`}
             unvouched={!view.vouched}
-            onClick={() => onOpenPullRequest?.(view)}
-            onDismiss={
-              onDismissPullRequest &&
-              (() =>
-                void onDismissPullRequest(view).then(
-                  () =>
-                    toast.info(
-                      t('workingPanel.overview.pr.dismissed', { name: `#${view.number}` }),
-                    ),
-                  () =>
-                    toast.error(
-                      t('workingPanel.overview.pr.dismissFailed', { name: `#${view.number}` }),
-                    ),
-                ))
+            actions={
+              <PullRequestRowMenu
+                topicId={topicId}
+                view={view}
+                onDismiss={
+                  onDismissPullRequest &&
+                  (() =>
+                    void onDismissPullRequest(view).then(
+                      () =>
+                        toast.info(
+                          t('workingPanel.overview.pr.dismissed', { name: `#${view.number}` }),
+                        ),
+                      () =>
+                        toast.error(
+                          t('workingPanel.overview.pr.dismissFailed', { name: `#${view.number}` }),
+                        ),
+                    ))
+                }
+              />
             }
+            onClick={() => onOpenPullRequest?.(view)}
           />
         ))}
         {onLinkPullRequest && <LinkPullRequestRow onLink={onLinkPullRequest} />}
@@ -352,7 +359,6 @@ const Overview = memo<OverviewProps>(
           <OverviewRow
             icon={ArrowDownIcon}
             iconColor={cssVar.colorError}
-            iconSize={14}
             value={t('workingPanel.overview.sync.behind', { count: aheadBehind!.behind })}
             trailing={
               pulling ? (
@@ -370,7 +376,6 @@ const Overview = memo<OverviewProps>(
           <OverviewRow
             icon={ArrowUpIcon}
             iconColor={cssVar.colorInfo}
-            iconSize={14}
             value={t('workingPanel.overview.sync.ahead', { count: aheadBehind!.ahead })}
             trailing={
               pushing ? (
@@ -441,24 +446,14 @@ const Overview = memo<OverviewProps>(
 
     const workspaceSection = repoType ? (
       isGitLoading ? (
-        <div {...stylex.props(sectionStyles.skeleton)}>
-          <Skeleton.Text rows={3} />
-        </div>
+        <SidebarRowSkeleton rows={3} />
       ) : gitError ? (
-        <OverviewRow
-          danger
-          icon={TriangleAlertIcon}
-          iconColor={cssVar.colorError}
-          value={t('workingPanel.overview.environmentError')}
-          trailing={
-            <Button
-              icon={<Icon icon={RefreshCwIcon} size={12} />}
-              size={'small'}
-              onClick={() => void refreshGit()}
-            >
-              {tCommon('retry')}
-            </Button>
-          }
+        <AsyncError
+          align={'start'}
+          error={gitError}
+          title={t('workingPanel.overview.environmentError')}
+          variant={'inline'}
+          onRetry={() => void refreshGit()}
         />
       ) : (
         gitRows
@@ -510,12 +505,13 @@ const Overview = memo<OverviewProps>(
 
         <TopicBackgroundActivity topicId={topicId} />
         {showEmptyWorkspace && (
-          <Empty
-            className={stylex.props(styles.emptyWorkspace).className}
-            description={t('workingPanel.overview.workspace.emptyDesc')}
-            icon={LaptopIcon}
-            title={t('workingPanel.overview.workspace.empty')}
-          />
+          <Center paddingBlock={24}>
+            <Empty
+              description={t('workingPanel.overview.workspace.emptyDesc')}
+              icon={LaptopIcon}
+              title={t('workingPanel.overview.workspace.empty')}
+            />
+          </Center>
         )}
 
         <GoalSection className={sectionProps(showEmptyWorkspace).className} />
@@ -523,24 +519,14 @@ const Overview = memo<OverviewProps>(
 
         {visibleWorks.length > 0 && (
           <Flexbox {...sectionProps(showEmptyWorkspace)}>
-            <Flexbox
-              horizontal
-              align={'center'}
-              {...stylex.props(sectionStyles.sectionHeader)}
-              justify={'space-between'}
-            >
-              <span {...stylex.props(sectionStyles.sectionTitle)}>
-                {t('workingPanel.overview.outputs')}
-              </span>
-              <Button
-                outdent={'end'}
-                size={'small'}
-                type={'text'}
-                onClick={() => onOpenTab('works')}
-              >
-                {t('workingPanel.overview.viewAll')}
-              </Button>
-            </Flexbox>
+            <SectionHeader
+              title={t('workingPanel.overview.outputs')}
+              actions={
+                <Button size={'small'} type={'text'} onClick={() => onOpenTab('works')}>
+                  {t('workingPanel.overview.viewAll')}
+                </Button>
+              }
+            />
             {visibleWorks.map((work) => (
               <WorkSummaryCard item={work} key={work.id} variant={'inline'} />
             ))}
@@ -548,12 +534,13 @@ const Overview = memo<OverviewProps>(
         )}
 
         {!environmentAvailable && !topicId && visibleWorks.length === 0 && (
-          <Empty
-            className={sectionProps().className}
-            description={t('workingPanel.overview.empty')}
-            icon={BoxesIcon}
-            title={t('workingPanel.overview.emptyTitle')}
-          />
+          <Center {...sectionProps()} paddingBlock={24}>
+            <Empty
+              description={t('workingPanel.overview.empty')}
+              icon={BoxesIcon}
+              title={t('workingPanel.overview.emptyTitle')}
+            />
+          </Center>
         )}
 
         {/* Claude Code background tasks; async subagents stay in the thread list below. */}
@@ -570,27 +557,21 @@ const Overview = memo<OverviewProps>(
         <Flexbox {...sectionProps(showEmptyWorkspace)}>
           {hasWorkspace && (
             <OverviewRow
-              weak
               icon={FilesIcon}
-              iconSize={15}
               trailing={<ChevronRight />}
               value={t('workingPanel.overview.files')}
               onClick={() => onOpenTab('files')}
             />
           )}
           <OverviewRow
-            weak
             icon={SkillsIcon}
-            iconSize={15}
             trailing={<ChevronRight />}
             value={t('workingPanel.resources.filter.skills')}
             onClick={() => onOpenTab('skills')}
           />
           {!isHetero && (
             <OverviewRow
-              weak
               icon={FileTextIcon}
-              iconSize={15}
               trailing={<ChevronRight />}
               value={t('workingPanel.resources.filter.documents')}
               onClick={() => onOpenTab('documents')}

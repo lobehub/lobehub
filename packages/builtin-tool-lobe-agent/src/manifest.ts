@@ -369,7 +369,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
   meta: {
     avatar: '🤖',
     description:
-      'Run built-in Lobe Agent capabilities: plan + todo management, sub-agent dispatch, and multimodal media analysis.',
+      'Create and update conversation plans and todos, ask the user a structured question, analyze media, report a platform blocker, or delegate work to a sub-agent when available.',
     readme: 'Lobe Agent provides built-in assistant capabilities that can be expanded over time.',
     title: 'Lobe Agent',
   },
