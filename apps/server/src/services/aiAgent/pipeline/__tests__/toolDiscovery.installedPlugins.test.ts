@@ -1,3 +1,6 @@
+import { AuvManifest } from '@lobechat/builtin-tool-auv';
+import { onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
+import { isToolEnabledByFeatureFlags } from '@lobechat/builtin-tools/featureGates';
 import { type LobeToolManifest, ToolResolver } from '@lobechat/context-engine';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -183,13 +186,17 @@ describe('Agent first-turn tool payload', () => {
 });
 
 describe('discoverTools — installed plugins are opt-in per agent', () => {
-  it('discovers Credentials with no saved preference and loads its functions only on activation', async () => {
-    const id = 'lobe-creds';
+  // This server fixture has no device and no optional feature flags.
+  const availableBuiltins = onDemandBuiltinToolIds.filter(
+    (id) => id !== AuvManifest.identifier && isToolEnabledByFeatureFlags(id, {}),
+  );
+  it.each(availableBuiltins)('defers %s until activation and respects opt-out', async (id) => {
     const result = await run();
     expect(availableToolIds(result.toolManifestMap, result.toolsResult.enabledToolIds)).toContain(
       id,
     );
     expect(result.toolsResult.enabledToolIds).not.toContain(id);
+    expect(offeredToolNames(result).filter((name) => name.startsWith(`${id}____`))).toEqual([]);
     const activate = (engine: typeof result.toolsEngine) =>
       engine!.generateToolsDetailed({
         context: { isExplicitActivation: true },
@@ -197,11 +204,13 @@ describe('discoverTools — installed plugins are opt-in per agent', () => {
         provider: 'test-provider',
         skipDefaultTools: true,
         toolIds: [id],
-      }).enabledToolIds;
-    expect(activate(result.toolsEngine)).toContain(id);
+      });
+    const activated = activate(result.toolsEngine);
+    expect(activated.enabledToolIds).toEqual([id]);
+    expect(offeredToolNames(activated)).toContainEqual(expect.stringMatching(`^${id}____`));
     const off = await run({ disabledPluginIds: [id] });
     expect(off.toolManifestMap[id]).toBeUndefined();
-    expect(activate(off.toolsEngine)).not.toContain(id);
+    expect(activate(off.toolsEngine).enabledToolIds).not.toContain(id);
   });
 
   it('keeps an installed plugin the agent never turned on out of the run', async () => {
