@@ -656,13 +656,18 @@ export class ChannelHistoryRepository {
 /** Largest `channel_messages.sequence` (int4): no cutoff. */
 const LATEST_SEQUENCE = 2_147_483_647;
 
-/** A Thread's whole branch up to its latest message, for reading it from another conversation. */
+/**
+ * A Thread's whole branch up to its latest message, for reading it from another conversation.
+ * The run's own request belongs to the run's conversation, not this Thread, so the Thread's root
+ * stands in for it: the scope then adds only the requests continued in this Thread.
+ */
 const liveThreadManifest = (
   manifest: ChannelInputManifest,
-  thread: { id: string; rootSequence: number },
+  thread: { id: string; rootMessageId: string; rootSequence: number },
 ): ChannelInputManifest => ({
   ...manifest,
   cutoffSequence: LATEST_SEQUENCE,
+  requestMessageId: thread.rootMessageId,
   threadId: thread.id,
   threadRootSequence: thread.rootSequence,
 });
