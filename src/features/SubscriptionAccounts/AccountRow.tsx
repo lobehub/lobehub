@@ -257,7 +257,7 @@ const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
       okButtonProps: visibility === 'private' ? { danger: true } : undefined,
       okText: t(`subscriptionAccounts.visibility.${visibility}Action`),
       onOk: async () => {
-        // The account leaves this tab, so say where it went.
+        // Say who can use the account now.
         if (await run(() => setQuotaAccountVisibility(account.id, visibility)))
           toast.success(t(`subscriptionAccounts.visibility.${visibility}Done`));
       },

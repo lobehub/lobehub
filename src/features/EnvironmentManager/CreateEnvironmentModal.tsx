@@ -103,9 +103,9 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
                 }
               : { kind: 'code' },
           name: trimmed,
-          // Created into the pool the person is looking at. Opening the dialog
-          // from the Private tab and having the result land in the workspace's
-          // shared list would be a publication nobody asked for.
+          // Created into the pool the host chose (private on the workspace
+          // page). Landing in the workspace's shared pool by default would be
+          // a publication nobody asked for.
           visibility,
         });
         close();
@@ -130,7 +130,7 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
     // first instance on — and an instance keeps whatever a session leaves in its
     // home directory, credentials included. So creating one there asks the same
     // question publishing one does, with the same explanation, rather than
-    // publishing it silently because of which tab happened to be open.
+    // publishing it silently.
     const submit = () => {
       if (!trimmed || creating) return;
       if (visibility !== 'public') return void create();
