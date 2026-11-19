@@ -35,6 +35,20 @@ describe('generateMessages', () => {
     },
   ] as UIChatMessage[];
 
+  it('should preserve a user message containing exactly three periods', () => {
+    const result = generateMessages({
+      includeTool: false,
+      messages: [{ ...mockMessages[0], content: '...' }, mockMessages[1]],
+      systemRole: '',
+      withSystemRole: false,
+    });
+
+    expect(result).toEqual([
+      { content: '...', role: 'user' },
+      { content: 'Hi there', role: 'assistant' },
+    ]);
+  });
+
   it('should filter out loading messages', () => {
     const result = generateMessages({
       messages: mockMessages,

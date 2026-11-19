@@ -54,6 +54,20 @@ describe('generateFullExport', () => {
     vi.useRealTimers();
   });
 
+  it('should preserve a user message containing exactly three periods', () => {
+    const result = generateFullExport({
+      includeTool: false,
+      messages: [{ ...mockMessages[0], content: '...' }, mockMessages[1]],
+      systemRole: '',
+      withSystemRole: false,
+    });
+
+    expect(result.messages).toMatchObject([
+      { content: '...', id: 'msg-1', role: 'user' },
+      { id: 'msg-2', parentId: 'msg-1', role: 'assistant' },
+    ]);
+  });
+
   it('should export messages with correct structure', () => {
     const result = generateFullExport({
       messages: mockMessages,
