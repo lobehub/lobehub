@@ -277,49 +277,47 @@ describe('MCPService', () => {
         vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue(detail as never);
       });
 
-      it('executes through local IPC with fresh configuration when no gateway is configured', async () => {
-        const { lambdaClient } = await import('@/libs/trpc/client');
-        const result = {
-          content: 'local result',
-          state: { content: [{ type: 'text', text: 'local result' }] },
-          success: true,
-        };
-        mockElectronIpc.mcp.callTool.mockResolvedValue(superjson.serialize(result));
-
-        await expect(mcpService.invokeMcpToolCall(payload, {})).resolves.toEqual(result);
-        expect(superjson.deserialize(mockElectronIpc.mcp.callTool.mock.calls[0][0])).toEqual({
-          args: { path: 'test.txt' },
-          env: detail.mcpStdioConfig.env,
-          // MCP Apps off for this user: the desktop session doesn't announce them
-          mcpApps: false,
-          params: { command: 'node', args: ['mcp.js'], name: payload.identifier, type: 'stdio' },
-          toolName: 'read_file',
-        });
-        expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();
-      });
-
-      it.each([
-        { desktop: true, gateway: true },
-        { desktop: true, gateway: undefined },
-        { desktop: false, gateway: false },
-      ])(
-        'preserves the server route for desktop=$desktop gateway=$gateway',
-        async ({ desktop, gateway }) => {
-          environment.isDesktop = desktop;
+      // T-14428: the connector route refuses an unbound stdio server whether or
+      // not a gateway is configured, so a desktop runs it here in every case
+      it.each([false, true, undefined])(
+        'executes through local IPC with fresh configuration when gateway=%s',
+        async (gateway) => {
           environment.deviceGatewayConfigured = gateway;
           const { lambdaClient } = await import('@/libs/trpc/client');
           const result = {
-            content: 'server result',
-            state: { content: [{ type: 'text', text: 'server result' }] },
+            content: 'local result',
+            state: { content: [{ type: 'text', text: 'local result' }] },
             success: true,
           };
-          vi.mocked(lambdaClient.connector.callTool.mutate).mockResolvedValue(result as never);
+          mockElectronIpc.mcp.callTool.mockResolvedValue(superjson.serialize(result));
 
           await expect(mcpService.invokeMcpToolCall(payload, {})).resolves.toEqual(result);
-          expect(lambdaClient.connector.getForEdit.query).not.toHaveBeenCalled();
-          expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
+          expect(superjson.deserialize(mockElectronIpc.mcp.callTool.mock.calls[0][0])).toEqual({
+            args: { path: 'test.txt' },
+            env: detail.mcpStdioConfig.env,
+            // MCP Apps off for this user: the desktop session doesn't announce them
+            mcpApps: false,
+            params: { command: 'node', args: ['mcp.js'], name: payload.identifier, type: 'stdio' },
+            toolName: 'read_file',
+          });
+          expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();
         },
       );
+
+      it('preserves the server route on the web', async () => {
+        environment.isDesktop = false;
+        const { lambdaClient } = await import('@/libs/trpc/client');
+        const result = {
+          content: 'server result',
+          state: { content: [{ type: 'text', text: 'server result' }] },
+          success: true,
+        };
+        vi.mocked(lambdaClient.connector.callTool.mutate).mockResolvedValue(result as never);
+
+        await expect(mcpService.invokeMcpToolCall(payload, {})).resolves.toEqual(result);
+        expect(lambdaClient.connector.getForEdit.query).not.toHaveBeenCalled();
+        expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
+      });
 
       // Marketplace and protocol-link stdio servers ran over IPC as plugins;
       // installed as connectors they still do, while the connector route refuses stdio

@@ -3,6 +3,7 @@ import {
   type RuntimeStepContext,
   type SubAgentCallbacks,
 } from '@lobechat/types';
+import { toRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
 import { resolveEffectiveWorkingDirectory } from '@/helpers/effectiveWorkingDirectory';
@@ -24,6 +25,27 @@ import { type RemoteToolExecutor } from './exector';
 import { composioExecutor, lobehubSkillExecutor } from './exector';
 
 const log = debug('lobe-store:plugin-types');
+
+/**
+ * An MCP call that didn't run, as its tool result: the reason, plus what traces
+ * it — the tool call id, and the server's error code when the server refused it.
+ */
+const toMcpCallFailure = (error: unknown, payload: ChatToolPayload): MCPToolCallResult => {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = toRecord(toRecord(error)?.data)?.code;
+  const content = `MCP tool ${payload.identifier}/${payload.apiName} failed: ${message}`;
+
+  return {
+    content,
+    error: {
+      body: { ...(typeof code === 'string' && { code }), toolCallId: payload.id },
+      message,
+      type: 'ToolExecutionError',
+    },
+    state: { content: [{ text: content, type: 'text' }], isError: true },
+    success: false,
+  };
+};
 
 /**
  * Plugin type-specific implementations
@@ -344,7 +366,13 @@ export class PluginTypesActionImpl {
         topicId: message?.topicId,
       });
 
-      if (!!result) data = result;
+      data =
+        result ||
+        // No enabled connector or plugin here goes by this identifier
+        toMcpCallFailure(
+          new Error(`No enabled MCP server named '${payload.identifier}' can run this call`),
+          payload,
+        );
     } catch (error) {
       console.error(error);
       const err = error as Error;
@@ -362,11 +390,13 @@ export class PluginTypesActionImpl {
             context: { agentId: message?.agentId || '', topicId: message?.topicId },
           });
         }
+        // The failure is the call's result: returning nothing left the run to
+        // record "no result returned" over it, hiding where the call stopped
+        data = toMcpCallFailure(error, payload);
       }
     }
 
-    // If error occurred, exit
-
+    // Aborted, or the service had nothing to run the call with
     if (!data) return;
 
     // Archive oversized content (or truncate if archive context unavailable)

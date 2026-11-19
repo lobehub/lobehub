@@ -282,9 +282,8 @@ class MCPService {
     if (fromEntrypoint && !mcpApps) throw new Error('Interactive views are turned off');
 
     // Connector-first: HTTP connectors use their server-held credentials.
-    // Standalone desktop stdio connectors use local IPC; configured device
-    // gateways keep the existing server route for conversation calls, except
-    // for marketplace and protocol-link stdio installs, which ran here as plugins.
+    // Desktop stdio connectors use local IPC unless bound to a device: the
+    // server's connector route never runs or tunnels an unbound stdio server.
     // Only connectors with a real MCP endpoint are routed here — Lobehub/Composio
     // skills synced into the connector store have no mcpServerUrl and keep their
     // original executor path.
@@ -324,6 +323,9 @@ class MCPService {
         ((connector.mcpConnectionType === 'stdio' &&
           (fromMcpApp ||
             fromEntrypoint ||
+            // The connector route refuses an unbound stdio server, gateway or
+            // not: it runs on the desktop that calls it, where its tools were listed
+            !connectorDeviceBinding(connector) ||
             // These stdio servers ran on this desktop as plugins, gateway or not
             keepsDesktopStdioExecution(connector) ||
             getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured === false)) ||
