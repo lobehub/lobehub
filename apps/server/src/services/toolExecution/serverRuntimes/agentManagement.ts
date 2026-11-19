@@ -52,10 +52,6 @@ const MAX_SEARCH_AGENT_LIMIT = 20;
 
 const log = debug('lobe-server:agent-management-runtime');
 
-/** Appended to a background callAgent's receipt; see the delegation guide in lobe-topic. */
-export const CALL_AGENT_BACKGROUND_HINT =
-  'Tip: for independent work the user may want to follow and continue on its own, open a sub-topic with lobe-topic openTopic (if you have it) instead of a background callAgent.';
-
 export const agentManagementRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
     if (!context.userId || !context.serverDB) {
@@ -176,13 +172,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
         // as a message from the target. It goes into the runner's placeholder,
         // which anchors the thread.
         if (background) {
-          // Background callAgent stays supported; for work that should run as
-          // its own conversation, sub-topics (lobe-topic) are the path.
-          return {
-            content: `${buildBackgroundSubAgentReceipt()}\n\n${CALL_AGENT_BACKGROUND_HINT}`,
-            success: true,
-            toolMessageId,
-          };
+          return { content: buildBackgroundSubAgentReceipt(), success: true, toolMessageId };
         }
 
         return {

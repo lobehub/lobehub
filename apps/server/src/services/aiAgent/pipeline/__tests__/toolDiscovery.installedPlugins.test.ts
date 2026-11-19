@@ -1,9 +1,6 @@
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
-import {
-  isToolEnabledByFeatureFlags,
-  isToolEnabledByLab,
-} from '@lobechat/builtin-tools/featureGates';
+import { isToolEnabledByFeatureFlags } from '@lobechat/builtin-tools/featureGates';
 import { type LobeToolManifest, ToolResolver } from '@lobechat/context-engine';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -193,13 +190,9 @@ describe('Agent first-turn tool payload', () => {
 });
 
 describe('discoverTools — installed plugin discovery', () => {
-  // This server fixture has no device, no optional feature flags and no Labs
-  // preference (so Labs-gated builtins such as `lobe-topic` stay out).
+  // This server fixture has no device and no optional feature flags.
   const availableBuiltins = onDemandBuiltinToolIds.filter(
-    (id) =>
-      id !== AuvManifest.identifier &&
-      isToolEnabledByFeatureFlags(id, {}) &&
-      isToolEnabledByLab(id, undefined),
+    (id) => id !== AuvManifest.identifier && isToolEnabledByFeatureFlags(id, {}),
   );
   it.each(availableBuiltins)('defers %s until activation and respects opt-out', async (id) => {
     const result = await run();

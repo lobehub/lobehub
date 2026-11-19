@@ -2,12 +2,7 @@ import { DashboardIdentifier, LegacyDashboardIdentifier } from '@lobechat/builti
 import { WebhookIdentifier } from '@lobechat/builtin-tool-webhook';
 import { describe, expect, it } from 'vitest';
 
-import {
-  getFeatureDisabledToolIds,
-  getLabDisabledToolIds,
-  isToolEnabledByFeatureFlags,
-  isToolEnabledByLab,
-} from './featureGates';
+import { getFeatureDisabledToolIds, isToolEnabledByFeatureFlags } from './featureGates';
 
 describe('feature-gated builtin tools', () => {
   it('drops the dashboard tool unless the dashboard flag is on', () => {
@@ -32,21 +27,5 @@ describe('feature-gated builtin tools', () => {
     expect(getFeatureDisabledToolIds({ enableWebhook: true })).not.toContain(WebhookIdentifier);
     expect(isToolEnabledByFeatureFlags(WebhookIdentifier, { enableDashboard: true })).toBe(false);
     expect(isToolEnabledByFeatureFlags(WebhookIdentifier, { enableWebhook: true })).toBe(true);
-  });
-});
-
-describe('Labs-gated builtin tools', () => {
-  it('drops lobe-topic unless Better Coding Experience is on', () => {
-    expect(getLabDisabledToolIds(undefined)).toContain('lobe-topic');
-    expect(getLabDisabledToolIds({ enableBetterCodingExperience: false })).toContain('lobe-topic');
-    expect(getLabDisabledToolIds({ enableBetterCodingExperience: true })).not.toContain(
-      'lobe-topic',
-    );
-  });
-
-  it('lists lobe-topic only with the lab on, and leaves ungated tools alone', () => {
-    expect(isToolEnabledByLab('lobe-topic', {})).toBe(false);
-    expect(isToolEnabledByLab('lobe-topic', { enableBetterCodingExperience: true })).toBe(true);
-    expect(isToolEnabledByLab('lobe-task', undefined)).toBe(true);
   });
 });

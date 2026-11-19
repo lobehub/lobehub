@@ -1,5 +1,4 @@
 import { McpEventsIdentifier } from '@lobechat/builtin-tool-mcp-events';
-import { TopicToolIdentifier } from '@lobechat/builtin-tool-topic';
 import { WebhookIdentifier } from '@lobechat/builtin-tool-webhook';
 
 /**
@@ -7,8 +6,4 @@ import { WebhookIdentifier } from '@lobechat/builtin-tool-webhook';
  * needs the database and stored credentials). A run the browser drives itself (no agent gateway,
  * or gateway mode turned off) leaves them out, or a call would come back empty.
  */
-export const serverOnlyToolIds: readonly string[] = [
-  McpEventsIdentifier,
-  TopicToolIdentifier,
-  WebhookIdentifier,
-];
+export const serverOnlyToolIds: readonly string[] = [McpEventsIdentifier, WebhookIdentifier];

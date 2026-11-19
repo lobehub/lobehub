@@ -10,10 +10,7 @@ import {
   shouldExposeSelfFeedbackIntentTool,
 } from '@lobechat/builtin-tool-self-iteration';
 import { getUnavailableBuiltinToolIds, runtimeManagedToolIds } from '@lobechat/builtin-tools';
-import {
-  getFeatureDisabledToolIds,
-  getLabDisabledToolIds,
-} from '@lobechat/builtin-tools/featureGates';
+import { getFeatureDisabledToolIds } from '@lobechat/builtin-tools/featureGates';
 import type {
   AgentGroupConfig,
   LobeToolManifest,
@@ -134,13 +131,9 @@ export const discoverTools = async (
   const featureFlags = await getServerFeatureFlagsStateFromRuntimeConfig(deps.userId).catch(
     () => undefined,
   );
-  // Lab-gated tools (e.g. lobe-topic) leave the pool while the user's Labs
-  // switch is off; a preference read failure keeps them out.
-  const lab = (await ctx.runFacts.userPreference().catch(() => undefined))?.lab;
   const disabledPluginIds = [
     ...requestedDisabledPluginIds,
     ...getFeatureDisabledToolIds(featureFlags),
-    ...getLabDisabledToolIds(lab),
   ];
 
   let tools: any[] | undefined;

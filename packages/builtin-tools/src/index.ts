@@ -51,7 +51,6 @@ import {
   SkillsManifest,
 } from '@lobechat/builtin-tool-skills';
 import { TaskManifest } from '@lobechat/builtin-tool-task';
-import { TopicToolManifest } from '@lobechat/builtin-tool-topic';
 import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
 import { VerifyToolManifest } from '@lobechat/builtin-tool-verify';
 import { VideoGenerationManifest } from '@lobechat/builtin-tool-video-generation';
@@ -85,8 +84,6 @@ export const defaultToolIds = [
   CloudSandboxManifest.identifier,
   AgentDocumentsManifest.identifier,
   TaskManifest.identifier,
-  // Only while Labs → Better Coding Experience is on (see `LAB_GATED_TOOLS`).
-  TopicToolManifest.identifier,
   // A runtime media fallback can enable this candidate even without a user pin.
   LobeAgentManifest.identifier,
   CanvasManifest.identifier,
@@ -592,11 +589,6 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     identifier: TaskManifest.identifier,
     manifest: TaskManifest,
-    type: 'builtin',
-  },
-  {
-    identifier: TopicToolManifest.identifier,
-    manifest: TopicToolManifest,
     type: 'builtin',
   },
   {

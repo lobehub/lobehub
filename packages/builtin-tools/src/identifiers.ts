@@ -36,7 +36,6 @@ import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
 import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteration';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import { SkillsManifest } from '@lobechat/builtin-tool-skills';
-import { TopicToolManifest } from '@lobechat/builtin-tool-topic';
 import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
 import { VerifyToolManifest } from '@lobechat/builtin-tool-verify';
 import { VideoGenerationManifest } from '@lobechat/builtin-tool-video-generation';
@@ -45,7 +44,6 @@ import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
 import { WebhookManifest } from '@lobechat/builtin-tool-webhook';
 
 export const builtinToolIdentifiers: string[] = [
-  TopicToolManifest.identifier,
   McpEventsManifest.identifier,
   WebhookManifest.identifier,
   ChannelManifest.identifier,

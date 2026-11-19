@@ -50,7 +50,6 @@ import { selfFeedbackIntentRuntime } from './selfFeedbackIntent';
 import { skillManagementRuntime } from './skillManagement';
 import { skillsRuntime } from './skills';
 import { skillStoreRuntime } from './skillStore';
-import { subTopicRuntime } from './subTopic';
 import { taskRuntime } from './task';
 import type { ServerRuntimeFactory, ServerRuntimeRegistration } from './types';
 import { userInteractionRuntime } from './userInteraction';
@@ -99,7 +98,6 @@ registerRuntimes([
   browserRuntime,
   remoteDeviceRuntime,
   briefRuntime,
-  subTopicRuntime,
   taskRuntime,
   userInteractionRuntime,
   credsRuntime,
