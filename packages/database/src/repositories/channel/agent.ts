@@ -89,6 +89,19 @@ export const sharedAgentOwner = async (
   return agent && isSharedAgentChannel(channel, agent, viewerId) ? agent.owner : null;
 };
 
+/**
+ * What a conversation view says about another person's shared Agent it is with: the same marks as
+ * `list` (the composer reads them there to hide upload) and the owner's contact card.
+ */
+export const sharedAgentView = async (
+  tx: Transaction,
+  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
+  viewerId: string,
+) => {
+  const owner = await sharedAgentOwner(tx, channel, viewerId);
+  return { channel: { sharedAgent: !!owner, sharedAgentOwnerId: owner?.id ?? null }, owner };
+};
+
 /** Explicitly select environment fields so legacy or untyped copies cannot override an Agent. */
 export const memberEnvironment = (config?: ChannelMemberConfig | null): ChannelMemberConfig =>
   cleanObject({

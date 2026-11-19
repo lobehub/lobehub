@@ -33,7 +33,7 @@ import {
   requireAgentMember,
   requireChannelAgent,
   sharedAgentFields,
-  sharedAgentOwner,
+  sharedAgentView,
 } from './agent';
 import { openAgentPair } from './agentPair';
 import { channelAvatarMembers } from './avatars';
@@ -452,17 +452,11 @@ export class ChannelRepository {
         if (access.channel.isDeleted) throw new ChannelError('NOT_FOUND', 'Channel not found');
         const admin = hasRole(access.member.role, 'admin');
         const view = await readChannelView(tx, channelId, options, this.userId);
-        // Same test as `list`; the composer reads it from here to hide upload.
-        const owner = await sharedAgentOwner(tx, access.channel, this.userId);
-        const channel = {
-          ...access.channel,
-          canDelete: admin,
-          sharedAgentOwnerId: owner?.id ?? null,
-        };
+        const shared = await sharedAgentView(tx, access.channel, this.userId);
         return {
-          channel: { ...channel, sharedAgent: !!owner },
+          channel: { ...access.channel, canDelete: admin, ...shared.channel },
           joined: true,
-          sharedAgentOwner: owner,
+          sharedAgentOwner: shared.owner,
           ...view,
           // Mirrors `stop`: the requester or an admin.
           jobs: viewerJobs(view.jobs, this.userId, (id) => admin || id === access.member.id),
