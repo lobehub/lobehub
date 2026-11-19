@@ -39,6 +39,24 @@ const createFailedResult = (
   success: false,
 });
 
+/**
+ * Envelope returned by CLI-based LobeHub Skill providers (e.g. GitHub's `gh`
+ * CLI, and any future provider built on the shared cli-base infra) after
+ * running a command.
+ */
+interface CLISkillCommandResult {
+  command: string;
+  exitCode: number;
+  output: string;
+}
+
+const isCLISkillCommandResult = (data: unknown): data is CLISkillCommandResult =>
+  typeof data === 'object' &&
+  data !== null &&
+  typeof (data as CLISkillCommandResult).command === 'string' &&
+  typeof (data as CLISkillCommandResult).exitCode === 'number' &&
+  typeof (data as CLISkillCommandResult).output === 'string';
+
 export const composioExecutor: RemoteToolExecutor = async (p, _context) => {
   const identifier = p.identifier;
   const composioServers = useToolStore.getState().composioServers || [];
@@ -109,8 +127,19 @@ export const lobehubSkillExecutor: RemoteToolExecutor = async (p, context) => {
     });
   }
 
-  // Convert to MCPToolCallResult format
-  const content = typeof result.data === 'string' ? result.data : JSON.stringify(result.data);
+  // Convert to MCPToolCallResult format.
+  // CLI-based skill providers (e.g. `gh`) wrap a successful command's stdout in a
+  // { command, exitCode, output } envelope. On success, surface `output` directly
+  // instead of JSON-stringifying the whole envelope — the escaped result is unreadable
+  // in the chat transcript, and command/exitCode add no value once it already succeeded.
+  // A non-zero exitCode still falls through to the full envelope so the model can see
+  // command/exitCode/stderr and self-correct.
+  const content =
+    typeof result.data === 'string'
+      ? result.data
+      : isCLISkillCommandResult(result.data) && result.data.exitCode === 0
+        ? result.data.output
+        : JSON.stringify(result.data);
 
   return {
     content,
