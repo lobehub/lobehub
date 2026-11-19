@@ -60,6 +60,17 @@ describe('Marketplace page copy', () => {
     }
   });
 
+  it('names the Marketplace as the place an agent is published before social sharing', () => {
+    const hint = (locale: string) => readNs(locale, 'chat')['shareModal.social.agent.disabledHint'];
+
+    expect(hint('en-US')).toContain(readNs('en-US', 'common')['tab.marketplace']);
+    expect(hint('zh-CN')).toContain(readNs('zh-CN', 'common')['tab.marketplace']);
+    for (const locale of locales) {
+      const value = hint(locale);
+      if (value) expect(value, locale).not.toMatch(/Community|社区|社群/);
+    }
+  });
+
   it('uses the same page name in every locale as the sidebar entry', () => {
     for (const locale of locales) {
       const name = readNs(locale, 'common')['tab.marketplace'];
