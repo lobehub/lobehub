@@ -834,22 +834,28 @@ describe('AgentShareModel', () => {
   });
 
   describe('lockUploadAdmission', () => {
-    const heldAdvisoryLocks = async (db: LobeChatDatabase) => {
-      const { rows } = await db.execute(
-        sql`SELECT count(*)::int AS held FROM pg_locks WHERE locktype = 'advisory'`,
-      );
+    // Other test files share the database and take advisory locks of their
+    // own, so count only this share's lock: a bigint advisory key is stored as
+    // its high (`classid`) and low (`objid`) 32 bits.
+    const heldUploadLocks = async (db: LobeChatDatabase, shareId: string) => {
+      const { rows } = await db.execute(sql`
+        WITH k AS (SELECT hashtext(${`agent_share_upload:${shareId}`})::bigint AS key)
+        SELECT count(*)::int AS held FROM pg_locks, k
+        WHERE locktype = 'advisory' AND objsubid = 1
+          AND classid::text::bigint = ((k.key >> 32) & 4294967295)
+          AND objid::text::bigint = (k.key & 4294967295)`);
       return (rows[0] as { held: number }).held;
     };
 
     it('holds a transaction-scoped advisory lock that is released at commit', async () => {
       await serverDB.transaction(async (tx) => {
         await AgentShareModel.lockUploadAdmission(tx, 'share-lock-test');
-        await expect(heldAdvisoryLocks(tx)).resolves.toBe(1);
+        await expect(heldUploadLocks(tx, 'share-lock-test')).resolves.toBe(1);
         // Re-entrant within the same transaction: a retry does not deadlock.
         await AgentShareModel.lockUploadAdmission(tx, 'share-lock-test');
       });
 
-      await expect(heldAdvisoryLocks(serverDB)).resolves.toBe(0);
+      await expect(heldUploadLocks(serverDB, 'share-lock-test')).resolves.toBe(0);
     });
   });
 
