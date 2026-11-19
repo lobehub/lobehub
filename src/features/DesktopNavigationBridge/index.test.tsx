@@ -5,19 +5,28 @@ import DesktopNavigationBridge from './index';
 
 type NavigatePayload = { escape?: boolean; path: string; replace?: boolean };
 type NavigateHandler = (payload: NavigatePayload) => void;
+type OpenDirectoryPayload = { newWindow: boolean; path: string };
+type OpenDirectoryHandler = (payload: OpenDirectoryPayload) => void;
 
 let registeredHandler: NavigateHandler | null = null;
+let openDirectoryHandler: OpenDirectoryHandler | null = null;
 
 const navigateMock = vi.hoisted(() => vi.fn());
+const openDirectoryInAppMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@lobechat/electron-client-ipc', () => ({
-  useWatchBroadcast: (event: string, handler: NavigateHandler) => {
+  useWatchBroadcast: (event: string, handler: any) => {
     if (event === 'navigate') registeredHandler = handler;
+    if (event === 'openDirectory') openDirectoryHandler = handler;
   },
 }));
 
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => navigateMock,
+}));
+
+vi.mock('@/features/AppLaunch/openDirectory', () => ({
+  openDirectoryInApp: openDirectoryInAppMock,
 }));
 
 const emitNavigate = (payload: NavigatePayload) => {
@@ -26,10 +35,19 @@ const emitNavigate = (payload: NavigatePayload) => {
   });
 };
 
+const emitOpenDirectory = (payload: OpenDirectoryPayload) => {
+  act(() => {
+    openDirectoryHandler?.(payload);
+  });
+};
+
 describe('DesktopNavigationBridge', () => {
   beforeEach(() => {
     registeredHandler = null;
+    openDirectoryHandler = null;
     navigateMock.mockReset();
+    openDirectoryInAppMock.mockReset();
+    openDirectoryInAppMock.mockResolvedValue({ status: 'opened-topic' });
   });
 
   it('uses escaped navigation for literal desktop notification paths', () => {
@@ -68,5 +86,30 @@ describe('DesktopNavigationBridge', () => {
     emitNavigate({ path: '' });
 
     expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('reveals the conversation bound to a launched directory', () => {
+    render(<DesktopNavigationBridge />);
+
+    emitOpenDirectory({ newWindow: false, path: '/repo' });
+
+    expect(openDirectoryInAppMock).toHaveBeenCalledWith({
+      navigate: navigateMock,
+      reuseExisting: true,
+      targetPath: '/repo',
+    });
+  });
+
+  it('starts a fresh conversation when the launch asks for a new window', () => {
+    render(<DesktopNavigationBridge />);
+
+    emitOpenDirectory({ newWindow: true, path: '/repo' });
+
+    // `--new-window` means "do not take over the conversation I already have".
+    expect(openDirectoryInAppMock).toHaveBeenCalledWith({
+      navigate: navigateMock,
+      reuseExisting: false,
+      targetPath: '/repo',
+    });
   });
 });
