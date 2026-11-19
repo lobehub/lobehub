@@ -5,6 +5,9 @@ import { useSidebarSectionMenuItems } from './useSidebarSectionMenuItems';
 
 const mocks = vi.hoisted(() => ({
   channelsEnabled: true,
+  favorites: [{ id: 'f1' }] as unknown[] | undefined,
+  links: ['tasks', 'image'],
+  recents: [{ id: 'r1' }] as unknown[] | undefined,
   openCustomizeSidebarModal: vi.fn(),
   status: {} as { hiddenSidebarSections?: string[]; sidebarItems?: string[] },
   updateSystemStatus: vi.fn(),
@@ -21,6 +24,25 @@ vi.mock('@/store/global', () => ({
 vi.mock('@/features/Channels/useChannelsEnabled', () => ({
   useChannelsEnabled: () => mocks.channelsEnabled,
 }));
+vi.mock('@/hooks/useNavLayout', () => ({
+  useNavLayout: () => ({
+    bottomMenuItems: [],
+    topNavItems: mocks.links.map((key) => ({ key })),
+  }),
+}));
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (s: unknown) => unknown) => selector({}),
+}));
+vi.mock('@/store/user/slices/auth/selectors', () => ({
+  authSelectors: { isLogin: () => true },
+}));
+vi.mock('@/store/home', () => ({
+  useHomeStore: (selector: (s: unknown) => unknown) => selector({}),
+}));
+vi.mock('@/store/home/selectors', () => ({
+  favoriteSelectors: { favoriteList: () => mocks.favorites },
+  homeRecentSelectors: { query: () => () => mocks.recents },
+}));
 vi.mock('./CustomizeSidebarModal', () => ({
   openCustomizeSidebarModal: mocks.openCustomizeSidebarModal,
 }));
@@ -34,6 +56,9 @@ const find = (items: MenuItem[], key: string) => items.find((item) => item.key =
 describe('useSidebarSectionMenuItems', () => {
   beforeEach(() => {
     mocks.channelsEnabled = true;
+    mocks.favorites = [{ id: 'f1' }];
+    mocks.links = ['tasks', 'image'];
+    mocks.recents = [{ id: 'r1' }];
     mocks.openCustomizeSidebarModal.mockReset();
     mocks.updateSystemStatus.mockReset();
     mocks.status = {
@@ -112,5 +137,39 @@ describe('useSidebarSectionMenuItems', () => {
       sidebarItems: string[];
     };
     expect(sidebarItems.indexOf('favorites')).toBeLessThan(sidebarItems.indexOf('agent'));
+  });
+
+  it('steps over sections that render nothing', () => {
+    // Recents are known empty and Favorites have nothing starred.
+    mocks.recents = [];
+    mocks.favorites = [];
+    mocks.status.sidebarItems = [
+      'tasks',
+      'recents',
+      'channels',
+      'favorites',
+      'agent',
+      '__spacer__',
+    ];
+
+    const moveUp = find(itemsFor('channels'), 'moveUp');
+    act(() => moveUp.onClick!());
+
+    const { sidebarItems } = mocks.updateSystemStatus.mock.calls[0][0] as {
+      sidebarItems: string[];
+    };
+    // Channels pass Tasks, the nearest section that renders, and the sections
+    // stay one block led by Channels.
+    const block = ['channels', 'recents', 'favorites', 'agent'];
+    const start = sidebarItems.indexOf('channels');
+    expect(start).toBeLessThan(sidebarItems.indexOf('tasks'));
+    expect(sidebarItems.slice(start, start + 4)).toEqual(block);
+  });
+
+  it('keeps Recents a move target while they are still loading', () => {
+    mocks.recents = undefined;
+    mocks.status.sidebarItems = ['recents', 'channels', 'agent', '__spacer__'];
+
+    expect(find(itemsFor('channels'), 'moveUp').disabled).toBe(false);
   });
 });
