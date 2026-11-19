@@ -96,6 +96,20 @@ describe('HTTP protocol negotiation against SDK v2 servers', () => {
     expect(servers.requests.map((r) => r.method)).toEqual(['server/discover']);
   });
 
+  it('lists the tools of a modern server that omits the caching hints', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const client = clientAt('/modern-no-cache-hints');
+    await client.initialize();
+    expect(client.getProtocolEra()).toBe('modern');
+
+    expect((await client.listTools()).map((tool) => tool.name)).toEqual(['echo', 'needs_input']);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('ttlMs, cacheScope'));
+    await expect(client.callTool('echo', {})).resolves.toMatchObject({
+      content: [{ type: 'text', text: 'MCP negotiation tool succeeded' }],
+    });
+    warn.mockRestore();
+  });
+
   it('completes an input_required call as a readable failed result without continuation', async () => {
     const client = clientAt('/modern');
     await client.initialize();

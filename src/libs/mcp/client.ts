@@ -7,6 +7,7 @@ import {
   isMcpToolVisibleTo,
   resolveMcpUiToolMeta,
 } from '@lobechat/const/mcpApp';
+import { installMcpResultCompat } from '@lobechat/utils/mcpResultCompat';
 import { toRecord } from '@lobechat/utils/object';
 import {
   Client,
@@ -311,6 +312,12 @@ export class MCPClient {
               })
             : mcpSsrfSafeFetch,
           requestInit: { headers },
+        });
+        // A server on a draft of protocol 2026-07-28 may omit the caching hints
+        // its listings must carry; fill them in rather than list no tools.
+        installMcpResultCompat(this.transport, {
+          onWarning: (message) =>
+            console.warn(`${message} (MCP server: ${getMCPLogOrigin(params.url)})`),
         });
 
         log('HTTP transport created with %d header(s)', Object.keys(headers).length);

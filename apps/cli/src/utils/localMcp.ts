@@ -1,4 +1,10 @@
 import { getMcpToolVisibility } from '@lobechat/const/mcpApp';
+import {
+  installMcpResultCompat,
+  type McpResultCompat,
+  withMcpRawResult,
+} from '@lobechat/utils/mcpResultCompat';
+import pc from 'picocolors';
 
 export interface LocalMcpTool {
   description?: string;
@@ -34,9 +40,13 @@ export async function listLocalMcpTools(params: LocalMcpParams): Promise<LocalMc
 
   const stderr: string[] = [];
   let transport;
+  let compat: McpResultCompat | undefined;
   if (params.type === 'http') {
     transport = new StreamableHTTPClientTransport(new URL(params.url), {
       requestInit: { headers: params.headers },
+    });
+    compat = installMcpResultCompat(transport, {
+      onWarning: (message) => console.error(pc.yellow(`Warning: ${message}`)),
     });
   } else {
     const { getDefaultEnvironment, StdioClientTransport } =
@@ -65,10 +75,11 @@ export async function listLocalMcpTools(params: LocalMcpParams): Promise<LocalMc
       // would make a view-only (`['app']`) tool model-visible.
       visibility: getMcpToolVisibility(tool._meta),
     }));
-  } catch (error) {
+  } catch (rawError) {
+    const error = withMcpRawResult(rawError, compat, 'tools/list');
     const message = (error as Error)?.message ?? String(error);
     throw new Error(stderr.length > 0 ? `${message}\n${stderr.join('\n')}` : message, {
-      cause: error,
+      cause: rawError,
     });
   } finally {
     await client.close().catch(() => {});
