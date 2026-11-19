@@ -56,5 +56,6 @@
   "UpstreamGatewayError": "上游网关或代理返回错误。请稍后重试；如果问题仍然存在，请检查您的代理/端点配置。",
   "UpstreamHttpError": "提供商返回了HTTP错误，但未提供进一步详细信息。请重试，或检查您的请求和模型配置。",
   "UpstreamMalformedResponse": "提供商返回了无法解析的格式错误响应。请重试；如果问题仍然存在，请尝试使用其他模型或提供商。",
-  "UserConfigError": "提供商配置无效（基础URL错误、缺少环境变量、虚拟密钥限制等）。请检查提供商设置。"
+  "UserConfigError": "提供商配置无效（基础URL错误、缺少环境变量、虚拟密钥限制等）。请检查提供商设置。",
+  "WorkspaceModelRestricted": "工作区管理员限制了这个模型。请换一个模型，或联系工作区管理员开放。"
 }

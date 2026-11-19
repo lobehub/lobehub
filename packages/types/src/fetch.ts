@@ -9,6 +9,7 @@ export const ChatErrorType = {
   InsufficientBudgetForModel: 'InsufficientBudgetForModel', // Has credits but not enough for estimated model cost
   WorkspaceFrozenByAdmin: 'WorkspaceFrozenByAdmin', // Workspace manually frozen by admin (reason is operator-written, safe to surface)
   WorkspaceFrozenByRiskControl: 'WorkspaceFrozenByRiskControl', // Workspace auto-frozen by risk control (reason is engineer debug text, hide from user)
+  WorkspaceModelRestricted: 'WorkspaceModelRestricted', // A workspace admin restricted the LobeHub model this member asked for
   WorkspaceSubscriptionInactive: 'WorkspaceSubscriptionInactive', // Workspace's paid subscription has lapsed — view-only for non-primary members; spend blocked until renewed
   ShareMessageLimitExceeded: 'ShareMessageLimitExceeded', // Visitor hit shareConfig.maxMessagesPerVisitor on this shared agent
   ShareSpendLimitExceeded: 'ShareSpendLimitExceeded', // Shared agent reached shareConfig.monthlySpendLimit for the current month — recovers on the next reset

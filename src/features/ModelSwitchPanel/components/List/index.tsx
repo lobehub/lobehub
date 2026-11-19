@@ -16,7 +16,7 @@ import { useModelAndProvider } from '../../hooks/useModelAndProvider';
 import { usePanelHandlers } from '../../hooks/usePanelHandlers';
 import { styles } from '../../styles';
 import { type GroupMode } from '../../types';
-import { menuKey } from '../../utils';
+import { filterHiddenModels, menuKey } from '../../utils';
 import type { PricingMode } from '../ModelDetailPanel';
 import GenerationListItemRenderer from './GenerationListItemRenderer';
 import { ListItemRenderer } from './ListItemRenderer';
@@ -51,6 +51,7 @@ export const List: FC<ListProps> = ({
   const { t: tCommon } = useTranslation('common');
   const newLabel = tCommon('new');
   const {
+    isModelHidden,
     isModelRestricted,
     onBeforeModelSelect,
     onRestrictedModelClick,
@@ -65,7 +66,10 @@ export const List: FC<ListProps> = ({
   );
 
   const chatEnabledList = useEnabledChatModels();
-  const enabledList = enabledListProp ?? chatEnabledList;
+  const enabledList = useMemo(
+    () => filterHiddenModels(enabledListProp ?? chatEnabledList, isModelHidden),
+    [chatEnabledList, enabledListProp, isModelHidden],
+  );
   const { model, provider } = useModelAndProvider(modelProp, providerProp);
   const { handleModelChange, handleClose } = usePanelHandlers({
     onModelChange: onModelChangeProp,
