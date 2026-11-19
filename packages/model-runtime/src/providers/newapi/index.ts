@@ -27,6 +27,16 @@ export interface NewAPIPricing {
   supported_endpoint_types?: string[];
 }
 
+/**
+ * NewAPI does not describe image parameters in its model list. Without this
+ * fallback, `processModelCard` drops image models that LobeHub has no local
+ * definition for, so models the upstream advertises never reach the picker.
+ */
+const DEFAULT_IMAGE_GENERATION_PARAMETERS = { prompt: { default: '' } };
+
+const isImageGenerationModel = (supportedEndpointTypes?: string[]) =>
+  supportedEndpointTypes?.includes('image-generation') ?? false;
+
 const isBrowser = () => typeof window !== 'undefined' && typeof document !== 'undefined';
 
 const fetchPricing = async (
@@ -154,8 +164,22 @@ export const params = {
     const enrichedModelList = modelList.map((model) => {
       const enhancedModel: any = { ...model };
 
-      // add pricing info
       const pricing = pricingMap.get(model.id);
+
+      // The endpoint types are the upstream capability declaration. Keep the
+      // model visible even when it carries no parameter schema. This is a
+      // fallback only: the model-bank definition must keep its richer schema
+      // (size, reference images) for models NewAPI and LobeHub both know.
+      // Do not force `type: 'image'`: conversational image models (for example
+      // Nano Banana) are typed `chat` with `imageOutput`, and the keyword
+      // detection already classifies dedicated image models.
+      if (
+        isImageGenerationModel(model.supported_endpoint_types ?? pricing?.supported_endpoint_types)
+      ) {
+        enhancedModel.fallbackParameters = DEFAULT_IMAGE_GENERATION_PARAMETERS;
+      }
+
+      // add pricing info
       if (pricing) {
         // NewAPI pricing calculation logic:
         // - quota_type: 0 means pay-per-token, 1 means pay-per-call
@@ -182,6 +206,9 @@ export const params = {
         additionalModels.push({
           ...(pricing.description && { description: pricing.description }),
           id: modelName,
+          ...(isImageGenerationModel(pricing.supported_endpoint_types) && {
+            fallbackParameters: DEFAULT_IMAGE_GENERATION_PARAMETERS,
+          }),
           ...(pricingData && { pricing: pricingData }),
         });
       }
