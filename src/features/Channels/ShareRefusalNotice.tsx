@@ -16,8 +16,10 @@ import { contactRequestOutcome } from './shareRefusal';
 import { statusStyles, toneStyles } from './styles';
 
 const styles = stylex.create({
+  // Grows with a long name instead of cutting it short; the conversation width still caps it.
   card: {
-    width: 320,
+    width: 'fit-content',
+    minWidth: 280,
     maxWidth: '100%',
     paddingBlock: 10,
     paddingInline: 12,
