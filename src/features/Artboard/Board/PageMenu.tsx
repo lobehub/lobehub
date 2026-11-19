@@ -3,6 +3,8 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { CheckIcon, ChevronsUpDownIcon, LayersIcon } from 'lucide-react';
 
+import { sidebarRow } from '@/styles/density.stylex';
+
 import { useBoard } from '../BoardContext';
 import { artboardActions } from '../store';
 
@@ -10,11 +12,11 @@ const styles = stylex.create({
   switcher: {
     alignItems: 'center',
     backgroundColor: 'transparent',
-    borderRadius: 8,
+    borderRadius: sidebarRow.radius,
     display: 'flex',
     flexShrink: 1,
     gap: 8,
-    height: 34,
+    height: sidebarRow.controlHeight,
     minWidth: 0,
     paddingInlineEnd: 8,
     paddingInlineStart: 10,
@@ -28,7 +30,7 @@ const styles = stylex.create({
   },
   title: {
     color: cssVar.colorText,
-    fontSize: 14,
+    fontSize: sidebarRow.textFontSize,
     fontWeight: 600,
     maxWidth: 220,
     overflow: 'hidden',

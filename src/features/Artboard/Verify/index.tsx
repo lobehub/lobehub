@@ -4,6 +4,8 @@ import * as stylex from '@stylexjs/stylex';
 import { ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon, XIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { sidebarRow } from '@/styles/density.stylex';
+
 import { useBoard } from '../BoardContext';
 import StatusTag from '../StatusTag';
 import { artboardActions, artboardSelectors, useArtboardStore } from '../store';
@@ -47,7 +49,7 @@ const styles = stylex.create({
     borderBlockEndStyle: 'solid',
     borderBlockEndWidth: 1,
     flex: 'none',
-    height: 48,
+    height: sidebarRow.headerHeight,
     paddingInlineEnd: 10,
     paddingInlineStart: 16,
   },

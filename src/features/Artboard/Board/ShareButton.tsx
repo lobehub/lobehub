@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { artboardService } from '@/services/artboard';
+import { useHeaderActionSize } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import { useBoard } from '../BoardContext';
 import { floatStyles } from '../Viewport/floatStyles';
@@ -14,11 +16,11 @@ import { useArtboardShareTrigger } from './useArtboardShare';
 const styles = stylex.create({
   button: {
     borderColor: cssVar.colorBorderSecondary,
-    borderRadius: 8,
+    borderRadius: sidebarRow.radius,
     flex: 'none',
     fontSize: 12,
     gap: 6,
-    height: 30,
+    height: sidebarRow.controlHeight,
     paddingInline: 10,
   },
   dot: {
@@ -32,6 +34,7 @@ const styles = stylex.create({
 
 const ShareButton = ({ compact }: { compact?: boolean }) => {
   const { t } = useTranslation('project');
+  const headerActionSmallSize = useHeaderActionSize(true);
   const board = useBoard();
   const { id, revision } = board.artboard;
   const choices = board.artboard.content.rounds
@@ -53,7 +56,7 @@ const ShareButton = ({ compact }: { compact?: boolean }) => {
     <ActionIcon
       disabled={disabled}
       icon={icon}
-      size={'small'}
+      size={headerActionSmallSize}
       title={label}
       onClick={trigger.kind === 'action' ? trigger.action.onClick : undefined}
     />

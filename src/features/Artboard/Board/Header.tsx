@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { useDensityTokens, useHeaderActionSize } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 import { electronStylish } from '@/styles/electron';
 import { sx } from '@/styles/sx';
 
@@ -29,22 +31,20 @@ import ShareButton from './ShareButton';
 
 const BAR_PADDING = 10;
 
-const TOOL_SIZE = { blockSize: 34, borderRadius: 8, size: 18, strokeWidth: 1.75 };
-
 const styles = stylex.create({
   bar: {
     borderBlockEndColor: cssVar.colorBorderSecondary,
     borderBlockEndStyle: 'solid',
     borderBlockEndWidth: 1,
     flex: 'none',
-    fontSize: 13,
-    minHeight: 44,
+    fontSize: sidebarRow.textFontSize,
+    minHeight: sidebarRow.headerHeight,
     paddingBlock: 4,
     paddingInline: BAR_PADDING,
   },
   chip: {
     alignItems: 'center',
-    borderRadius: 6,
+    borderRadius: sidebarRow.radius,
     display: 'flex',
     flex: 'none',
     fontWeight: 500,
@@ -60,16 +60,16 @@ const styles = stylex.create({
     },
     borderWidth: 0,
     color: cssVar.colorWarningText,
-    fontSize: 13,
+    fontSize: sidebarRow.textFontSize,
   },
   finalized: {
     backgroundColor: cssVar.colorSuccessBg,
     color: cssVar.colorSuccessText,
   },
   finalize: {
-    borderRadius: 8,
+    borderRadius: sidebarRow.radius,
     fontWeight: 500,
-    height: 30,
+    height: sidebarRow.controlHeight,
     paddingInline: 12,
   },
 });
@@ -81,6 +81,9 @@ interface HeaderProps {
 
 const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
   const { t } = useTranslation('project');
+  const { radius } = useDensityTokens();
+  const headerActionSize = useHeaderActionSize();
+  const toolSize = { ...headerActionSize, borderRadius: radius, strokeWidth: 1.75 };
   const board = useBoard();
   const { finalized } = board;
   const bar = sx(styles.bar, onExitFullscreen ? electronStylish.draggable : undefined);
@@ -113,7 +116,7 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
             className={nodrag}
             disabled={mode === 'verify'}
             icon={ListTreeIcon}
-            size={TOOL_SIZE}
+            size={toolSize}
             title={t('artboard.header.outline')}
             onClick={() => artboardActions.setOutlineOpen(!outlineOpen)}
           />
@@ -141,14 +144,14 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
           <ActionIcon
             active={tool === 'select'}
             icon={MousePointer2Icon}
-            size={TOOL_SIZE}
+            size={toolSize}
             title={t('artboard.tool.select')}
             onClick={() => artboardActions.setTool('select')}
           />
           <ActionIcon
             active={tool === 'comment'}
             icon={MessageCirclePlusIcon}
-            size={TOOL_SIZE}
+            size={toolSize}
             title={t('artboard.tool.comment')}
             onClick={() => artboardActions.setTool('comment')}
           />
@@ -210,7 +213,7 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
         <ActionIcon
           active={verifyOpen}
           icon={ClipboardCheckIcon}
-          size={TOOL_SIZE}
+          size={toolSize}
           title={t('artboard.header.verifyPanel')}
           onClick={() => artboardActions.setVerifyOpen(!verifyOpen)}
         />
@@ -218,7 +221,7 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
       {gallery && <OpenConversation onLeave={onExitFullscreen} />}
       <ActionIcon
         icon={onExitFullscreen ? Minimize2Icon : Maximize2Icon}
-        size={TOOL_SIZE}
+        size={toolSize}
         title={t(
           onExitFullscreen ? 'artboard.header.exitFullscreen' : 'artboard.header.fullscreen',
         )}
