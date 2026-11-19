@@ -66,6 +66,7 @@ export enum ModelProvider {
   Search1API = 'search1api',
   SenseNova = 'sensenova',
   SiliconCloud = 'siliconcloud',
+  Sokkan = 'sokkan',
   Spark = 'spark',
   Stepfun = 'stepfun',
   Straico = 'straico',
