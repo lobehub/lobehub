@@ -2,7 +2,8 @@ import { AgentRuntimeErrorType } from '@lobechat/types';
 import { renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import useBusinessErrorContent, { MEMBER_BUDGET_TYPE } from './useBusinessErrorContent';
+import { MEMBER_BUDGET_TYPE } from './memberBudgetError';
+import useBusinessErrorContent from './useBusinessErrorContent';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),

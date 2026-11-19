@@ -15,6 +15,7 @@ import { type AlertProps, Block, Highlighter, Skeleton, toast } from '@lobehub/u
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getBusinessErrorDetailsBody } from '@/business/client/hooks/memberBudgetError';
 import useBusinessErrorAlertConfig from '@/business/client/hooks/useBusinessErrorAlertConfig';
 import useBusinessErrorContent from '@/business/client/hooks/useBusinessErrorContent';
 import useRenderBusinessChatErrorMessageExtra from '@/business/client/hooks/useRenderBusinessChatErrorMessageExtra';
@@ -95,18 +96,19 @@ const parseJsonDetail = (detail: unknown) => {
 const getErrorDetails = (error?: ChatMessageError | null) => {
   if (!error) return;
 
+  const body = getBusinessErrorDetailsBody(error);
   const rawErrorMessage = getRawErrorMessage(error);
-  if (!rawErrorMessage) return error.body;
-  if (isRecord(error.body)) {
-    if (!('detail' in error.body)) return { ...error.body, message: rawErrorMessage };
+  if (!rawErrorMessage) return body;
+  if (isRecord(body)) {
+    if (!('detail' in body)) return { ...body, message: rawErrorMessage };
 
-    const { detail, ...rest } = error.body;
+    const { detail, ...rest } = body;
     // A message that only repeats the raw detail adds nothing to the block.
     return detail === rawErrorMessage
       ? { ...rest, detail: parseJsonDetail(detail) }
       : { ...rest, detail: parseJsonDetail(detail), message: rawErrorMessage };
   }
-  if (error.body !== undefined) return { body: error.body, message: rawErrorMessage };
+  if (body !== undefined) return { body, message: rawErrorMessage };
 
   return { message: rawErrorMessage };
 };
