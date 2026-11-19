@@ -265,9 +265,10 @@ const availableToolsForDiscovery = (
       };
     });
 
-  // 5. MCP connectors no plugin row serves (every MCP install now), as the
-  //    tools engine offers them. Stdio servers run only on a desktop.
-  const listed = new Set([...builtinItems, ...pluginItems].map((item) => item.identifier));
+  // 5. MCP connectors, as the tools engine offers them: a connector's tool sets
+  //    replace a same-identifier plugin row (`assembleManifestPool`), so the
+  //    plugin's bare entry gives way to them. Stdio servers run only on a desktop.
+  const builtinIds = new Set(builtinItems.map((item) => item.identifier));
   //    Each row is its own tool set (a private or personal row under its own
   //    prefix), so a manifest is runnable by the row it was built from, and
   //    deduplicated against the other sources by the connector it serves.
@@ -285,9 +286,11 @@ const availableToolsForDiscovery = (
       .filter((connector) => isDesktop || connector.mcpConnectionType !== 'stdio')
       .map((connector) => connector.id),
   );
-  const connectorItems = executableConnectorManifests(s)
+  const connectorManifests = executableConnectorManifests(s)
     .filter((manifest) => !!manifest.connector && runnableHere.has(manifest.connector.id))
-    .filter((manifest) => !listed.has(manifestBaseIdentifier(manifest)))
+    .filter((manifest) => !builtinIds.has(manifestBaseIdentifier(manifest)));
+  const connectorBaseIds = new Set(connectorManifests.map(manifestBaseIdentifier));
+  const connectorItems = connectorManifests
     .filter((manifest) => !composioIds.has(manifestBaseIdentifier(manifest)))
     .filter((manifest) => !lobehubSkillIds.has(manifestBaseIdentifier(manifest)))
     .map((manifest) => ({
@@ -301,7 +304,7 @@ const availableToolsForDiscovery = (
 
   return [
     ...builtinItems,
-    ...pluginItems,
+    ...pluginItems.filter((item) => !connectorBaseIds.has(item.identifier)),
     ...composioItems,
     ...lobehubSkillItems,
     ...connectorItems,

@@ -277,6 +277,28 @@ describe('MCP connectors in tool discovery', () => {
     expect(ids.filter((id) => id === 'plugin-1')).toHaveLength(1);
   });
 
+  it("offers a private row's tool set in place of a same-identifier legacy plugin", () => {
+    // Regression: the plugin's bare entry hid the private row's suffixed tool
+    // set, but the run's pool replaces the plugin with that tool set, so the
+    // advertised bare name had nothing to activate.
+    const s = state([
+      marketplace('plugin-1', {
+        id: '3f9a1c2e-mine',
+        metadata: {},
+        sourceType: 'custom',
+        visibility: 'private',
+      }),
+    ]);
+    runListing.rows = [s.connectors[0]];
+    const ids = toolSelectors
+      .availableToolsForDiscovery(s, { agentId: 'agt-private', topicId: 'tpc-own' })
+      .map((tool) => tool.identifier);
+    runListing.rows = undefined;
+
+    expect(ids).toContain('plugin-1-3f9a1c2e');
+    expect(ids).not.toContain('plugin-1');
+  });
+
   it('lists a private row beside the shared one of its connector, each under its prefix', () => {
     // Regression: discovery matched manifests against base identifiers, so a
     // private row's `identifier-<suffix>` tool set never matched and could not
