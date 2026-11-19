@@ -142,3 +142,71 @@ describe('AgentSkillModel import helpers', () => {
     });
   });
 });
+
+/**
+ * Rows the Skills page offers for "update from GitHub": anything installed with
+ * an `upstream` (a GitHub install), plus market rows that recorded a `sourceUrl`
+ * in their manifest (legacy imports). A market row without one, and a
+ * user-authored skill, are not GitHub installs.
+ */
+describe('AgentSkillModel findGitHubInstalls', () => {
+  const installUserId = 'askcov-github-installs';
+  const model = new AgentSkillModel(serverDB, installUserId);
+
+  const seed = (identifier: string, extra: Record<string, unknown> = {}) =>
+    model.create({
+      content: '# content',
+      description: identifier,
+      identifier,
+      manifest: {},
+      name: identifier,
+      source: 'user',
+      ...extra,
+    });
+
+  beforeEach(async () => {
+    await serverDB.delete(users).where(eq(users.id, installUserId));
+    await serverDB.insert(users).values({ id: installUserId });
+  });
+
+  it('returns GitHub installs only', async () => {
+    await seed('gh.upstream', {
+      upstream: { owner: 'lobehub', path: 'skills/a/SKILL.md', ref: 'HEAD', repo: 'skills' },
+      source: 'market',
+    });
+    await seed('gh.legacy', {
+      manifest: { sourceUrl: 'https://github.com/lobehub/skills/tree/main/skills/b' },
+      source: 'market',
+    });
+    // Neither of these is a GitHub install.
+    await seed('market.no-url', { manifest: { description: 'no source url' }, source: 'market' });
+    await seed('user.skill');
+
+    const installs = await model.findGitHubInstalls();
+
+    expect(installs.map((skill) => skill.identifier).sort()).toEqual(['gh.legacy', 'gh.upstream']);
+    // The full item is returned, so the caller can compare the installed revision.
+    expect(installs.find((skill) => skill.identifier === 'gh.upstream')?.upstream).toMatchObject({
+      owner: 'lobehub',
+      repo: 'skills',
+    });
+  });
+
+  it('keeps another user’s installs out of the list', async () => {
+    await seed('mine.upstream', {
+      upstream: { owner: 'lobehub', path: 'skills/a/SKILL.md', ref: 'HEAD', repo: 'skills' },
+      source: 'market',
+    });
+
+    const other = new AgentSkillModel(serverDB, 'askcov-github-installs-other');
+    await serverDB
+      .insert(users)
+      .values({ id: 'askcov-github-installs-other' })
+      .onConflictDoNothing();
+
+    await expect(other.findGitHubInstalls()).resolves.toEqual([]);
+    await expect(model.findGitHubInstalls()).resolves.toHaveLength(1);
+
+    await serverDB.delete(users).where(eq(users.id, 'askcov-github-installs-other'));
+  });
+});

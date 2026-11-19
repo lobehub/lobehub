@@ -402,3 +402,25 @@ describe('ConnectorModel remaining edges', () => {
     expect(after.credentials).toBeNull();
   });
 });
+
+describe('ConnectorModel.resolveToolSets', () => {
+  beforeEach(async () => {
+    await cleanup();
+    await serverDB.insert(users).values({ id: userId });
+  });
+
+  afterEach(async () => {
+    await cleanup();
+  });
+
+  it('resolves no tool sets when the run names no identifiers', async () => {
+    await insertBaseRow({ identifier: 'not-named' });
+    const model = new ConnectorModel(serverDB, userId);
+
+    // An empty set is "none named", not "every row": the run must not fall back
+    // to resolving connectors the caller did not ask for.
+    await expect(model.resolveToolSets({}, [])).resolves.toEqual([]);
+    // The same call with no identifiers at all does read the scope.
+    await expect(model.resolveToolSets({}, undefined)).resolves.toHaveLength(1);
+  });
+});
