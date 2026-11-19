@@ -42,6 +42,8 @@ export const webBrowsingRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.webBrowsingService.upsertCrawledDocument(input);
+      // The stored body is for server-side windowing only; do not send the page back.
+      const { id, status } = await ctx.webBrowsingService.upsertCrawledDocument(input);
+      return { id, status };
     }),
 });

@@ -432,6 +432,43 @@ export class AgentDocumentsExecutionRuntime {
     });
   }
 
+  /**
+   * The error for a paged read whose `offset` starts after the last line of every field it reads,
+   * or `undefined` when the offset is in range. An empty success here read as "the document ends
+   * here", and agents filled the gap from other tool results in context, quoting another page as
+   * this document. Report the real size so the next call can be corrected.
+   */
+  private formatOffsetPastEnd(doc: AgentDocumentRecord, args: ReadDocumentArgs) {
+    if (args.offset === undefined) return undefined;
+
+    // Same field choice as `formatDocumentReadContent`.
+    const markdown = { format: 'markdown', text: doc.content || '' };
+    const xml = { format: 'xml', text: doc.litexml || '' };
+    const format = args.format ?? 'xml';
+    const fields =
+      format === 'markdown'
+        ? [markdown]
+        : format === 'both'
+          ? [markdown, xml]
+          : [doc.litexml ? xml : markdown];
+    const windows = fields.map((field) => ({
+      format: field.format,
+      window: sliceTextWindow(field.text, { maxLines: 1, offset: args.offset }),
+    }));
+    if (windows.some(({ window }) => window.endLine > 0)) return undefined;
+
+    const sizes = windows
+      .map(
+        ({ format, window }) =>
+          `its ${format} text has ${window.totalLines} line${window.totalLines === 1 ? '' : 's'}, ${window.totalChars} characters`,
+      )
+      .join(' and ');
+    const lastLine = Math.max(...windows.map(({ window }) => window.totalLines));
+    const name = doc.title ? `document "${doc.title}"` : 'document';
+
+    return `offset=${windows[0].window.startLine} is past the end of ${name} (id="${args.id}"): ${sizes}. Nothing was read. Use an offset from 1 to ${lastLine}; line numbers count this document's own ${windows.map(({ format }) => format).join(' and ')} text, so an offset taken from another document or tool result does not apply.`;
+  }
+
   private formatDocumentReadContent(doc: AgentDocumentRecord, args: ReadDocumentArgs) {
     const format = args.format ?? 'xml';
     const markdown = () => this.windowReadContent(doc.content || '', args, format);
@@ -683,6 +720,9 @@ export class AgentDocumentsExecutionRuntime {
     const { limit: _limit, offset: _offset, ...readArgs } = args;
     const doc = await this.service.readDocument({ ...readArgs, agentId });
     if (!doc) return { content: `Document not found: ${args.id}`, success: false };
+
+    const offsetPastEnd = this.formatOffsetPastEnd(doc, args);
+    if (offsetPastEnd) return { content: offsetPastEnd, success: false };
 
     return {
       content: this.formatDocumentReadContent(doc, args),

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createAgentMarkdownSnapshot } from '@/server/services/agentDocuments/headlessEditor';
+
 import { WebBrowsingDocumentService } from '../index';
 
 const mocks = vi.hoisted(() => ({
@@ -81,7 +83,7 @@ describe('WebBrowsingDocumentService.upsertCrawledDocument ()', () => {
       totalCharCount: 10,
       totalLineCount: 2,
     });
-    expect(result).toEqual({ id: 'doc-1', status: 'created' });
+    expect(result).toEqual({ content: 'body\nline2', id: 'doc-1', status: 'created' });
   });
 
   // Byte-identical re-crawl must NOT write — neither `documents` nor
@@ -101,7 +103,7 @@ describe('WebBrowsingDocumentService.upsertCrawledDocument ()', () => {
 
     expect(mocks.documentModel.create).not.toHaveBeenCalled();
     expect(mocks.documentService.updateDocument).not.toHaveBeenCalled();
-    expect(result).toEqual({ id: 'doc-existing', status: 'unchanged' });
+    expect(result).toEqual({ content: 'same content', id: 'doc-existing', status: 'unchanged' });
   });
 
   // Content changed → must route through DocumentService.updateDocument so
@@ -131,7 +133,26 @@ describe('WebBrowsingDocumentService.upsertCrawledDocument ()', () => {
       title: 'Updated title',
       writeSource: 'system',
     });
-    expect(result).toEqual({ id: 'doc-existing', status: 'updated' });
+    expect(result).toEqual({ content: 'new body', id: 'doc-existing', status: 'updated' });
+  });
+
+  // T-14186: crawl windows count lines of this text so their readDocument offsets land in the
+  // stored document; the snapshot can be shorter than the crawl.
+  it('returns the stored snapshot text, not the crawled text', async () => {
+    vi.mocked(createAgentMarkdownSnapshot).mockResolvedValueOnce({
+      content: 'para 1\n\npara 2',
+      editorData: { root: {} },
+    } as any);
+    mocks.documentModel.findBySource.mockResolvedValueOnce(undefined);
+    mocks.documentModel.create.mockResolvedValueOnce({ id: 'doc-1' });
+
+    const result = await service.upsertCrawledDocument({
+      content: 'para 1\n\n\n\npara 2',
+      title: 'Paper',
+      url: 'https://example.com/paper',
+    });
+
+    expect(result.content).toBe('para 1\n\npara 2');
   });
 
   it('treats different URLs as distinct documents', async () => {
@@ -150,8 +171,8 @@ describe('WebBrowsingDocumentService.upsertCrawledDocument ()', () => {
       url: 'https://example.com/b',
     });
 
-    expect(a).toEqual({ id: 'doc-a', status: 'created' });
-    expect(b).toEqual({ id: 'doc-b', status: 'created' });
+    expect(a).toEqual({ content: 'a', id: 'doc-a', status: 'created' });
+    expect(b).toEqual({ content: 'b', id: 'doc-b', status: 'created' });
     expect(mocks.documentModel.create).toHaveBeenCalledTimes(2);
     expect(mocks.documentService.updateDocument).not.toHaveBeenCalled();
   });
@@ -220,7 +241,7 @@ describe('WebBrowsingDocumentService.upsertCrawledDocument ()', () => {
       url: 'https://example.com/a',
     });
 
-    expect(result).toEqual({ id: 'doc-existing', status: 'unchanged' });
+    expect(result).toEqual({ content: 'same body', id: 'doc-existing', status: 'unchanged' });
     expect(mocks.topicDocumentModel.associate).toHaveBeenCalledWith({
       documentId: 'doc-existing',
       topicId: 'topic-other',
@@ -243,7 +264,7 @@ describe('WebBrowsingDocumentService.upsertCrawledDocument ()', () => {
     });
 
     expect(mocks.documentService.updateDocument).toHaveBeenCalled();
-    expect(result).toEqual({ id: 'doc-legacy', status: 'updated' });
+    expect(result).toEqual({ content: 'fresh body', id: 'doc-legacy', status: 'updated' });
   });
 
   // T-775: upsertCrawledDocument routes through the guarded agent snapshot, so
@@ -302,7 +323,7 @@ describe('WebBrowsingDocumentService.upsertCrawledDocument ()', () => {
         editorData: { root: { fakeNodeFor: expected } },
       }),
     );
-    expect(result).toEqual({ id: 'doc-json', status: 'created' });
+    expect(result).toEqual({ content: expected, id: 'doc-json', status: 'created' });
   });
 
   it('hashes the fenced json body so an unchanged json re-crawl short-circuits', async () => {
@@ -320,7 +341,7 @@ describe('WebBrowsingDocumentService.upsertCrawledDocument ()', () => {
       url: 'https://example.com/data.json',
     });
 
-    expect(result).toEqual({ id: 'doc-json', status: 'unchanged' });
+    expect(result).toEqual({ content: fenced, id: 'doc-json', status: 'unchanged' });
     expect(mocks.documentModel.create).not.toHaveBeenCalled();
     expect(mocks.documentService.updateDocument).not.toHaveBeenCalled();
   });
@@ -355,7 +376,7 @@ describe('WebBrowsingDocumentService.upsertCrawledDocument ()', () => {
       url: 'https://example.com/nul',
     });
 
-    expect(result).toEqual({ id: 'doc-nul', status: 'unchanged' });
+    expect(result).toEqual({ content: 'beforeafter', id: 'doc-nul', status: 'unchanged' });
     expect(mocks.documentService.updateDocument).not.toHaveBeenCalled();
   });
 });
