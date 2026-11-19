@@ -44,6 +44,8 @@ import { ReplyFailureCard } from './ReplyFailure';
 import { showsReplyQuote } from './replyQuote';
 import type { ReplyTopic } from './ReplyTopicPanel';
 import { ReplyWorks } from './ReplyWorks';
+import { shareRefusalOf } from './shareRefusal';
+import { ShareRefusalNotice } from './ShareRefusalNotice';
 import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
 import { ThreadPreviewCard } from './ThreadPreviewCard';
@@ -141,6 +143,7 @@ export const ChannelMessage = ({
       attachments: detail.attachments.filter((file) => message.fileIds.includes(file.id)),
     });
   const isRequest = message.author.type === 'user' && !isRoot;
+  const shareRefusal = isRequest && !delivery ? shareRefusalOf(detail, message.id) : undefined;
   const agentAuthorId = message.author.type === 'agent' ? message.author.id : null;
   const agentMember = agentAuthorId
     ? detail.members.find((member) => member.agentId === agentAuthorId)
@@ -232,7 +235,12 @@ export const ChannelMessage = ({
           title: message.author.name || t('deletedMember'),
         }}
         belowMessage={
-          delivery ?? (isRequest ? <MessageRoutingStatus message={message} /> : undefined)
+          delivery ??
+          (shareRefusal ? (
+            <ShareRefusalNotice {...shareRefusal} />
+          ) : isRequest ? (
+            <MessageRoutingStatus message={message} />
+          ) : undefined)
         }
         customAvatarRender={(_, avatar) => (
           <Flexbox {...stylex.props(styles.messageAvatar)}>

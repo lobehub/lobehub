@@ -17,6 +17,10 @@ export default {
     'This shared Agent reached the monthly usage limit its creator set. It will be available again next month.',
   'receipt.errorUnavailable':
     'No detailed reason was recorded. Check the Agent’s model and device settings before sending again.',
+  'shareRefusal.addOwner': 'Add the creator as a contact',
+  'shareRefusal.added': 'The creator is now your contact',
+  'shareRefusal.alreadyContact': 'The creator is already your contact',
+  'shareRefusal.requestSent': 'Contact request sent to the creator',
   'sort.by': 'Sort by',
   'sort.by.createdAt': 'Date created',
   'sort.by.title': 'Name',
