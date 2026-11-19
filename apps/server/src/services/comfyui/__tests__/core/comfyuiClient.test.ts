@@ -1,3 +1,5 @@
+import type * as SSRFSafeFetchModule from '@lobechat/ssrf-safe-fetch';
+import { assertSsrfSafeUrl } from '@lobechat/ssrf-safe-fetch';
 import { ComfyApi } from '@saintno/comfyui-sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,6 +18,17 @@ vi.mock('@saintno/comfyui-sdk', () => ({
 // Mock the modular services
 vi.mock('@/server/services/comfyui/core/comfyUIAuthService');
 vi.mock('@/server/services/comfyui/core/comfyUIConnectionService');
+
+// The baseURL gate is stubbed to resolve by default; the SSRF describe
+// overrides it with the real implementation.
+vi.mock('@lobechat/ssrf-safe-fetch', async (importOriginal) => {
+  const mod = await importOriginal<typeof SSRFSafeFetchModule>();
+  return {
+    ...mod,
+    assertSsrfSafeUrl: vi.fn().mockResolvedValue(undefined),
+    ssrfSafeAgent: vi.fn(),
+  };
+});
 
 const workflowCallWrapper = () => ({
   onFailed: vi.fn().mockReturnThis(),
@@ -76,21 +89,31 @@ describe('ComfyUIClientService', () => {
 
   afterEach(() => {
     Date.now = originalDateNow;
+    vi.unstubAllEnvs();
   });
 
   describe('constructor', () => {
-    it('should initialize with default settings', () => {
+    it('should initialize with default settings', async () => {
       service = new ComfyUIClientService();
+
+      // The SDK client is created asynchronously once the baseURL passes the
+      // SSRF policy.
+      await vi.waitFor(() => expect(ComfyApi).toHaveBeenCalled());
 
       expect(ComfyUIAuthService).toHaveBeenCalledWith({});
       expect(ComfyUIConnectionService).toHaveBeenCalled();
-      expect(ComfyApi).toHaveBeenCalledWith(expect.stringContaining('http'), undefined, {
-        credentials: undefined,
-      });
+      expect(ComfyApi).toHaveBeenCalledWith(
+        expect.stringContaining('http'),
+        undefined,
+        expect.objectContaining({
+          credentials: undefined,
+          customWebSocketImpl: expect.any(Function),
+        }),
+      );
       expect(mockClient.init).toHaveBeenCalled();
     });
 
-    it('should initialize with custom options', () => {
+    it('should initialize with custom options', async () => {
       const options: ComfyUIKeyVault = {
         authType: 'basic',
         baseURL: 'http://custom:8188',
@@ -100,11 +123,18 @@ describe('ComfyUIClientService', () => {
 
       service = new ComfyUIClientService(options);
 
+      await vi.waitFor(() => expect(ComfyApi).toHaveBeenCalled());
+
       expect(ComfyUIAuthService).toHaveBeenCalledWith(options);
       expect(ComfyUIConnectionService).toHaveBeenCalled();
-      expect(ComfyApi).toHaveBeenCalledWith('http://custom:8188', undefined, {
-        credentials: undefined,
-      });
+      expect(ComfyApi).toHaveBeenCalledWith(
+        'http://custom:8188',
+        undefined,
+        expect.objectContaining({
+          credentials: undefined,
+          customWebSocketImpl: expect.any(Function),
+        }),
+      );
       expect(mockClient.init).toHaveBeenCalled();
     });
 
@@ -668,4 +698,66 @@ describe('ComfyUIClientService', () => {
       await expect(service.uploadImage(mockFile, 'test.png')).rejects.toThrow();
     });
   });
+});
+
+describe('ComfyUIClientService SSRF boundary', () => {
+  let service: ComfyUIClientService;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.stubEnv('SSRF_ALLOW_IP_ADDRESS_LIST', undefined);
+    vi.stubEnv('SSRF_ALLOW_PRIVATE_IP_ADDRESS', undefined);
+
+    const { assertSsrfSafeUrl: realAssert } = await vi.importActual<typeof SSRFSafeFetchModule>(
+      '@lobechat/ssrf-safe-fetch',
+    );
+    vi.mocked(assertSsrfSafeUrl).mockImplementation(realAssert);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.mocked(assertSsrfSafeUrl).mockResolvedValue(undefined);
+  });
+
+  it.each([
+    'http://169.254.169.254:8188',
+    'http://127.0.0.1:8188',
+    'http://10.0.0.1:8188',
+    'http://192.168.1.1:8188',
+    'http://172.16.0.1:8188',
+    'http://[::1]:8188',
+  ])('refuses to create an SDK client for %s', async (baseURL) => {
+    service = new ComfyUIClientService({ baseURL });
+
+    await expect(service.getCheckpoints()).rejects.toThrow(/SSRF blocked/);
+
+    // No SDK client or connection is created for a refused baseURL.
+    expect(ComfyApi).not.toHaveBeenCalled();
+    expect(assertSsrfSafeUrl).toHaveBeenCalledWith(baseURL);
+  });
+
+  it('refuses a baseURL hostname that resolves to loopback', async () => {
+    service = new ComfyUIClientService({ baseURL: 'http://localhost:8188' });
+
+    await expect(service.getCheckpoints()).rejects.toThrow(/SSRF blocked/);
+    expect(ComfyApi).not.toHaveBeenCalled();
+  });
+
+  it.each(['uploadImage', 'executeWorkflow', 'getLoras', 'getNodeDefs', 'getSamplerInfo'] as const)(
+    'gates %s on the baseURL check',
+    async (method) => {
+      service = new ComfyUIClientService({ baseURL: 'http://169.254.169.254:8188' });
+
+      const calls = {
+        executeWorkflow: () => service.executeWorkflow({} as any),
+        getLoras: () => service.getLoras(),
+        getNodeDefs: () => service.getNodeDefs(),
+        getSamplerInfo: () => service.getSamplerInfo(),
+        uploadImage: () => service.uploadImage(Buffer.from('x'), 'x.png'),
+      };
+
+      await expect(calls[method]()).rejects.toThrow(/SSRF blocked/);
+      expect(ComfyApi).not.toHaveBeenCalled();
+    },
+  );
 });
