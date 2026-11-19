@@ -111,15 +111,26 @@ describe('share visitor conversations', () => {
     expect(view.jobs.every((job) => !('topicId' in job))).toBe(true);
   });
 
-  it('leave out a Workspace member’s own conversation with a Workspace-visible Agent', async () => {
+  it('keep a Workspace member’s own conversation private, even after the Agent turns private', async () => {
     await setCreatorView(true);
     await db
       .update(agents)
       .set({ visibility: 'public', workspaceId: fixture.workspaceId })
       .where(eq(agents.id, agentId));
     const member = new ChannelRepository(db, visitorId, fixture.workspaceId);
-    await member.create({ agentId, title: 'Helper' });
+    const { channel } = await member.create({ agentId, title: 'Helper' });
+    const message = await member.send(channel.id, {
+      content: 'Workspace question',
+      requestKey: 'member',
+      routing: 'fallback',
+    });
+    const [job] = await jobsOf(db, message.id);
+    const claim = (await execution.claim(channel.id, job.id, lease))!;
+    expect(claim.job.executionConfig?.share).toBeUndefined();
 
+    // Making the Agent private does not turn the member's earlier conversation into a share visit.
+    await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, agentId));
     expect(await listShareVisitorConversations(db, ownerId, agentId)).toEqual([]);
+    expect(await readShareVisitorChannel(db, ownerId, channel.id)).toBeUndefined();
   });
 });

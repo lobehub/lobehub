@@ -1,5 +1,5 @@
 import type { ShareVisitorConversation } from '@lobechat/types';
-import { and, desc, eq, inArray, isNotNull, ne, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 
 import { agents, agentShares, channelJobs, channels, topics, users } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
@@ -14,8 +14,11 @@ const SHARE_VISITOR_LIST_LIMIT = 200;
  * Direct Channels visitors opened with `ownerId`'s shared Agent, while its share lets the creator
  * read them (`allowCreatorViewSessions`). Each visitor has one such Channel per scope.
  *
- * A Workspace member's own direct conversation with a Workspace-visible Agent runs as that member,
- * not through the share (`isSharedAgentChannel`), so it is never a visitor conversation here.
+ * Admission follows each run's frozen share provenance (`executionConfig.share`, set at claim), not
+ * the Agent's current visibility: a Workspace member's own conversation with a Workspace-visible
+ * Agent runs as that member and must stay private even after the Agent is made private. A Channel
+ * qualifies once a run went through the share and no claimed run ran outside it; unclaimed jobs
+ * carry no config yet and do not count.
  */
 const shareVisitorChannelWhere = (ownerId: string) =>
   and(
@@ -24,11 +27,8 @@ const shareVisitorChannelWhere = (ownerId: string) =>
     ne(channels.userId, ownerId),
     notTrashed(channels.isDeleted),
     sql`${agentShares.shareConfig}->>'allowCreatorViewSessions' = 'true'`,
-    or(
-      sql`${channels.workspaceId} IS NULL`,
-      sql`${agents.workspaceId} IS DISTINCT FROM ${channels.workspaceId}`,
-      eq(agents.visibility, 'private'),
-    ),
+    sql`EXISTS (SELECT 1 FROM ${channelJobs} WHERE ${channelJobs.channelId} = ${channels.id} AND jsonb_typeof(${channelJobs.executionConfig}->'share') = 'object')`,
+    sql`NOT EXISTS (SELECT 1 FROM ${channelJobs} WHERE ${channelJobs.channelId} = ${channels.id} AND ${channelJobs.executionConfig} IS NOT NULL AND coalesce(jsonb_typeof(${channelJobs.executionConfig}->'share'), 'null') <> 'object')`,
   );
 
 const shareVisitorChannels = (db: LobeChatDatabase | Transaction) =>
