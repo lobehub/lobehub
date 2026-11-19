@@ -168,6 +168,18 @@ export interface QueryTopicParams {
    * workspace, where the list otherwise shows every member's topics.
    */
   onlyMine?: boolean;
+  /**
+   * With `openedByTopicId`: only children of these agents (plus agent-less
+   * ones) — the agents the caller may view, applied before paging and counting.
+   */
+  openedByAgentIds?: string[];
+  /**
+   * Only the topics opened from this one (its child topics:
+   * `metadata.openedBy.topicId`, not unlinked), whatever their agent. Takes
+   * precedence over the agent / group / container scopes; `agentId` still
+   * narrows it when given.
+   */
+  openedByTopicId?: string | null;
   pageSize?: number;
   /**
    * Server-side ordering. Defaults to `updatedAt`. `status` orders by status

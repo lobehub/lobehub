@@ -77,6 +77,7 @@ const PUBLIC_METHODS = [
   'findWaitingCleanupTopicsUnder',
   'getCronTopicsGroupedByCronJob',
   'isRunningOperationAlive',
+  'listChildTopicAgentIds',
   'listTopicsForMemoryExtractor',
   'markRead',
   'patchRunningOperation',
