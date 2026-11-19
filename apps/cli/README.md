@@ -381,3 +381,28 @@ The internal `lh hetero exec --codex-app-server` transport uses a per-operation 
 that owns cancellation and shell identity. This transport rejects unsupported approval
 or sandbox arguments instead of weakening permissions. The richer permission bridge is
 maintained separately.
+
+### Claude Code silence watchdog
+
+`lh hetero exec --type claude-code` stops a Claude Code process that has gone silent
+for longer than anything it can legitimately be doing allows. It kills the whole
+process tree (`taskkill /T /F` on Windows; on macOS and Linux the process and every
+descendant), then reports the run as failed with error type `HeteroAgentSilenceTimeout`.
+The message states how long the process was silent and what it was doing. The server
+fails the operation at once instead of waiting for its one-hour hetero watchdog.
+
+Every limit counts from the last output of the process, so a run that keeps streaming
+is never stopped:
+
+| State                                 | Stopped after                                               | Override (minutes)                                |
+| ------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------- |
+| No output since spawn                 | 3 min                                                       | `LOBE_HETERO_WATCHDOG_STARTUP_MINUTES`            |
+| Waiting for the model or next step    | 15 min                                                      | `LOBE_HETERO_WATCHDOG_SILENCE_MINUTES`            |
+| `Bash` running                        | the later of 15 min silence and start + its timeout + 2 min | `LOBE_HETERO_WATCHDOG_TOOL_GRACE_MINUTES` (grace) |
+| Another tool running (no own timeout) | 30 min                                                      | `LOBE_HETERO_WATCHDOG_TOOL_SILENCE_MINUTES`       |
+| Background task running               | 45 min                                                      | `LOBE_HETERO_WATCHDOG_BACKGROUND_SILENCE_MINUTES` |
+| Question or permission prompt open    | never                                                       |                                                   |
+
+A `Bash` call without a timeout uses Claude Code's default (2 min, or
+`BASH_DEFAULT_TIMEOUT_MS`); a declared one is capped at 10 min (or `BASH_MAX_TIMEOUT_MS`).
+Set `LOBE_HETERO_WATCHDOG_DISABLED=1` to turn the watchdog off.

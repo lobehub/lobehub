@@ -1,4 +1,4 @@
-import type { ChildProcess } from 'node:child_process';
+import { type ChildProcess, spawn } from 'node:child_process';
 import { platform } from 'node:os';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
@@ -449,15 +449,29 @@ const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
 const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals, detached: boolean): void => {
   if (!proc.pid || proc.killed) return;
 
-  // On Windows the spawn `detached` flag has different semantics; fall back
-  // to a direct signal. Tree-kill via `taskkill` is what the desktop
-  // controller does for end-user CC, but the CLI's primary use case is
-  // sandbox + Unix dev terminals, so keep this minimal.
+  // Windows has no process groups, and `proc.kill` only terminates the direct
+  // child: a `.cmd` shim's node, or Claude Code's shell tool children (Git
+  // Bash), would live on and can keep a hung run alive. `taskkill /T /F` walks
+  // the tree; every signal is a hard kill on Windows anyway.
   if (platform() === 'win32') {
     try {
-      proc.kill(signal);
+      const killer = spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], {
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+      killer.once('error', () => {
+        try {
+          proc.kill(signal);
+        } catch {
+          // already gone
+        }
+      });
     } catch {
-      // already gone
+      try {
+        proc.kill(signal);
+      } catch {
+        // already gone
+      }
     }
     return;
   }

@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { createWriteStream } from 'node:fs';
-import { mkdir, unlink, writeFile } from 'node:fs/promises';
+import { unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -44,11 +43,20 @@ import { HeteroTraceRecorder } from '../../utils/HeteroTraceRecorder';
 import { log } from '../../utils/logger';
 import { createOperationHeartbeat } from '../../utils/OperationHeartbeat';
 import { createOperationTokenRenewal } from '../../utils/OperationTokenRenewal';
+import { forceKillProcessTree } from '../../utils/processTree';
 import { createLocalTraceStore } from '../../utils/traceStore';
 import { TrpcIngestSink } from '../../utils/TrpcIngestSink';
 import type { HeteroCliArgumentOptions } from './buildExtraArgs';
 import { buildExtraArgs } from './buildExtraArgs';
 import { type ResolvedPrompt, resolvePrompt } from './prompt';
+import { RawStreamDump } from './rawStreamDump';
+import {
+  iterateUntil,
+  resolveSilenceWatchdogConfig,
+  type SilenceTimeout,
+  type SilenceWatchdogRunner,
+  startSilenceWatchdog,
+} from './silenceWatchdog';
 
 const DSH_AGENT_TYPE = 'deepseek-harness';
 export const SUPPORTED_AGENT_TYPES = new Set<string>([
@@ -232,77 +240,6 @@ interface ExecOptions extends HeteroCliArgumentOptions {
 
 const collectImage = (value: string, previous: string[] = []): string[] => [...previous, value];
 const collectAgentArg = (value: string, previous: string[] = []): string[] => [...previous, value];
-
-interface RawStreamDumpAttempt {
-  /** Flush + close both file streams. Resolves once the bytes are on disk. */
-  close: () => Promise<void>;
-  writeStderr: (chunk: Buffer) => void;
-  writeStdout: (chunk: Buffer) => void;
-}
-
-/**
- * Persists the agent process's RAW stdout/stderr — the untouched stream-json,
- * BEFORE the adapter — to disk for post-hoc debugging. The adapted/ingested
- * view can't tell a CC-side empty `tool_result` apart from an adapter
- * extraction bug; the raw dump can.
- *
- * Enabled via `lh hetero exec --raw-dump <dir>`. Each exec gets its own
- * `<dir>/<timestamp>-<operationId>/` session folder; each spawn attempt (the
- * resume retry is a second attempt) writes `<label>.stdout.jsonl` /
- * `<label>.stderr.log`. Fully best-effort: any dump failure is logged and
- * swallowed so it never affects the run or its exit code.
- *
- * Future: the server-side sandbox runner (`spawnHeteroSandbox`) and the
- * desktop device path (`spawnLhHeteroExec`) can pass `--raw-dump` pointing at
- * a collectable location to capture remote runs the same way.
- */
-class RawStreamDump {
-  private constructor(private readonly dir: string) {}
-
-  static async create(
-    root: string,
-    operationId: string,
-    meta: Record<string, unknown>,
-  ): Promise<RawStreamDump | undefined> {
-    try {
-      const safeTs = new Date().toISOString().replaceAll(/[.:]/g, '-');
-      const dir = path.join(path.resolve(root), `${safeTs}-${operationId}`);
-      await mkdir(dir, { recursive: true });
-      await writeFile(
-        path.join(dir, 'meta.json'),
-        `${JSON.stringify({ ...meta, operationId, startedAt: new Date().toISOString() }, null, 2)}\n`,
-      );
-      log.info(`Raw stream dump enabled → ${dir}`);
-      return new RawStreamDump(dir);
-    } catch (err) {
-      log.warn(
-        `Failed to initialize raw stream dump: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      return undefined;
-    }
-  }
-
-  openAttempt(label: string): RawStreamDumpAttempt {
-    const stdout = createWriteStream(path.join(this.dir, `${label}.stdout.jsonl`));
-    const stderr = createWriteStream(path.join(this.dir, `${label}.stderr.log`));
-    // A failed dump write must never crash the run — drop write errors.
-    stdout.on('error', () => {});
-    stderr.on('error', () => {});
-    return {
-      close: () =>
-        Promise.all([
-          new Promise<void>((resolve) => stdout.end(() => resolve())),
-          new Promise<void>((resolve) => stderr.end(() => resolve())),
-        ]).then(() => undefined),
-      writeStderr: (chunk: Buffer) => {
-        stderr.write(chunk);
-      },
-      writeStdout: (chunk: Buffer) => {
-        stdout.write(chunk);
-      },
-    };
-  }
-}
 
 const exec = async (options: ExecOptions): Promise<void> => {
   if (!SUPPORTED_AGENT_TYPES.has(options.type)) {
@@ -698,6 +635,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
     return { body: { ...classified }, message: classified.message, type: 'AgentRuntimeError' };
   };
 
+  const silenceWatchdogConfig =
+    agentType === 'claude-code' ? resolveSilenceWatchdogConfig() : undefined;
+
   /**
    * Spawn one agent process and stream all its events into the server ingester.
    *
@@ -739,6 +679,8 @@ const exec = async (options: ExecOptions): Promise<void> => {
     sawTerminalError: boolean;
     sessionId: string | undefined;
     signal: NodeJS.Signals | null;
+    /** Set when the silence watchdog stopped a hung process. */
+    silenceTimeout?: SilenceTimeout;
     stderrContent: string;
     terminalErrorData: Record<string, unknown> | undefined;
     terminalErrorMessage: string | undefined;
@@ -809,7 +751,14 @@ const exec = async (options: ExecOptions): Promise<void> => {
       interrupted = true;
       applyCancellation('SIGTERM');
     };
+    // Silence watchdog (Claude Code only, see silenceWatchdog.ts). After it kills
+    // a hung process, `streamReleased` bounds how long the stream may stay open.
+    let watchdog: SilenceWatchdogRunner | undefined;
+    let silenceTimeout: SilenceTimeout | undefined;
+    let releaseStream = () => {};
+    const streamReleased = new Promise<void>((resolve) => (releaseStream = resolve));
     const removeSignalListeners = () => {
+      watchdog?.stop();
       process.off('SIGINT', onSigint);
       process.off('SIGTERM', onSigterm);
       abortForIngestLoss = undefined;
@@ -835,7 +784,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
     try {
       handle = await spawnAgentOrRuntime(
         spawnOpts,
-        dumpAttempt?.writeStdout,
+        dumpAttempt || silenceWatchdogConfig
+          ? (chunk) => {
+              watchdog?.touch();
+              dumpAttempt?.writeStdout(chunk);
+            }
+          : undefined,
         (control) => {
           startupControl = control;
           // `control.cancel` is protocol-level (session abort), not an OS signal
@@ -897,6 +851,24 @@ const exec = async (options: ExecOptions): Promise<void> => {
       process.exit(1);
     }
 
+    const spawnedHandle = handle;
+    if (silenceWatchdogConfig && !cancellationSignal) {
+      watchdog = startSilenceWatchdog({
+        agentLabel: 'Claude Code',
+        config: silenceWatchdogConfig,
+        // A question or permission prompt is waiting on the user, not hung.
+        isPaused: () => (askBridge?.pendingCount ?? 0) > 0,
+        onTimeout: (timeout) => {
+          silenceTimeout = timeout;
+          log.error(timeout.message);
+          // The whole tree: a hung tool child is the usual cause.
+          if (spawnedHandle.pid) forceKillProcessTree(spawnedHandle.pid);
+          spawnedHandle.kill('SIGKILL');
+          setTimeout(releaseStream, 10_000).unref?.();
+        },
+      });
+    }
+
     // Always collect stderr — used for resume-error detection AND for
     // surfacing a meaningful error message to the server when CC fails
     // without emitting a structured error event.  Cap at 8 KB so the
@@ -932,7 +904,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
         isWaitingForUser: () => (askBridge?.pendingCount ?? 0) > 0,
         operationId,
       };
-      for await (const event of withHeteroSteer(handle, steerContext)) {
+      for await (const event of iterateUntil(
+        withHeteroSteer(handle, steerContext),
+        streamReleased,
+      )) {
+        watchdog?.observe(event);
         if (interceptResumeErrors && event.type === 'error') {
           const data = event.data as Record<string, unknown> | undefined;
           const msg = String(data?.message ?? data?.error ?? '');
@@ -1003,8 +979,10 @@ const exec = async (options: ExecOptions): Promise<void> => {
       process.exit(1);
     }
 
-    const { code, signal } = await exit;
-    await stderrEnded;
+    watchdog?.stop();
+    const released = streamReleased.then(() => ({ code: null, signal: 'SIGKILL' as const }));
+    const { code, signal } = await Promise.race([exit, released]);
+    await Promise.race([stderrEnded, streamReleased]);
     await dumpAttempt?.close();
     try {
       await drainCancellation();
@@ -1035,6 +1013,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       sawTerminalError,
       sessionId: handle.sessionId,
       signal,
+      silenceTimeout,
       stderrContent,
       terminalErrorData,
       terminalErrorMessage,
@@ -1104,7 +1083,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // fresh session.  The server's `heteroSessionId` is updated with the new id,
   // breaking the stale-session loop.
   let result = first;
-  if (!first.cancelled && !first.ingestError && first.resumeNotFound) {
+  if (!first.cancelled && !first.ingestError && !first.silenceTimeout && first.resumeNotFound) {
     log.info('Resume failed (session not found or context overflow) — retrying without --resume');
     result = await runOneAgent(
       // No resumeSessionId — start fresh
@@ -1142,6 +1121,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     !result.cancelled &&
     !result.ingestError &&
     !result.sawTerminalError &&
+    !result.silenceTimeout &&
     (code === 0 || signal === 'SIGTERM');
 
   // When the run failed, pass an error detail so the server surfaces a useful
@@ -1161,15 +1141,17 @@ const exec = async (options: ExecOptions): Promise<void> => {
   const finishError =
     result.cancelled || exitedClean
       ? undefined
-      : result.terminalErrorData
-        ? {
-            body: { ...result.terminalErrorData },
-            message: String(result.terminalErrorData.message ?? errorDetail ?? ''),
-            type: 'AgentRuntimeError',
-          }
-        : errorDetail
-          ? buildFinishError(errorDetail.slice(-1024), 'AgentRuntimeError')
-          : undefined;
+      : result.silenceTimeout
+        ? { message: result.silenceTimeout.message, type: 'HeteroAgentSilenceTimeout' }
+        : result.terminalErrorData
+          ? {
+              body: { ...result.terminalErrorData },
+              message: String(result.terminalErrorData.message ?? errorDetail ?? ''),
+              type: 'AgentRuntimeError',
+            }
+          : errorDetail
+            ? buildFinishError(errorDetail.slice(-1024), 'AgentRuntimeError')
+            : undefined;
 
   const runResult = result.cancelled ? 'cancelled' : exitedClean ? 'success' : 'error';
 
@@ -1209,7 +1191,10 @@ const exec = async (options: ExecOptions): Promise<void> => {
 
   if (code !== null) {
     const hasRunError =
-      finishDeliveryFailed || result.ingestError || (!result.cancelled && result.sawTerminalError);
+      finishDeliveryFailed ||
+      result.ingestError ||
+      !!result.silenceTimeout ||
+      (!result.cancelled && result.sawTerminalError);
     process.exit(hasRunError ? 1 : code);
   }
   if (signal === 'SIGINT') process.exit(130);
