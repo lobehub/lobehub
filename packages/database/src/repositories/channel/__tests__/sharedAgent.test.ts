@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { SHARE_VISITOR_PROMPT_MAX_LENGTH } from '@lobechat/const';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import {
@@ -160,6 +160,42 @@ describe('a contact’s shared Agent in a direct conversation', () => {
       expect(claim.job.executionConfig?.deviceId).toBeUndefined();
       await execution.retireReservation(channel.id, job.id);
     }
+  });
+
+  // The run uses the owner's device, so its presence is the owner's: asking about the visitor
+  // left every visitor waiting for a device that was online.
+  it("checks the owner's routed device as the owner, in the owner's scope", async () => {
+    await db
+      .update(agents)
+      .set({
+        agencyConfig: {
+          boundDeviceId: 'owner-device',
+          executionTarget: 'device',
+          heterogeneousProvider: { command: 'claude-code', type: 'claude-code' },
+        },
+      })
+      .where(eq(agents.id, agentId));
+    const { channel } = await new ChannelRepository(db, visitorId, fixture.workspaceId).create({
+      agentId,
+      sharedAgent: true,
+      title: 'Shared Helper',
+    });
+    const message = await new ChannelRepository(db, visitorId, fixture.workspaceId).send(
+      channel.id,
+      { content: 'Hello', requestKey: 'routed', routing: 'fallback' },
+    );
+    const [job] = await jobsOf(db, message.id);
+    const routedDevice = vi.fn(async () => ({ deviceId: 'owner-device', online: true }));
+
+    const claim = await execution.claim(channel.id, job.id, {
+      ...lease,
+      onlineDeviceIds: [],
+      routedDevice,
+    });
+    expect(routedDevice).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId, userId: ownerId, workspaceId: null }),
+    );
+    expect(claim?.job).toMatchObject({ blockedCode: null });
   });
 
   it('is blocked for a runtime its share page cannot run', async () => {

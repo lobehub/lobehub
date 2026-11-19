@@ -276,7 +276,7 @@ describe('Channel concurrent startup', () => {
     await new ChannelCoordinator({ select } as never).advance('channel');
 
     // Outside the channel lock, before the claim resolves the routed device.
-    expect(routedPresence.prefetch).toHaveBeenCalledWith('requester');
+    expect(routedPresence.prefetch).toHaveBeenCalledWith('requester', 'workspace');
     expect(routedPresence.prefetch.mock.invocationCallOrder[0]).toBeLessThan(
       executions.claim.mock.invocationCallOrder[0],
     );
