@@ -149,6 +149,9 @@ export const agentChatDesktopRouteMeta = routeMeta({
 
 /** A share visitor's run topic, read-only beside the Agent sidebar. */
 export const agentShareVisitorTopicRouteMeta = routeMeta({
+  // Titled like the Topics page (`Topics · <agent>`): the visitor transcript is fetched by the
+  // page, and a background tab should not poll it just to name itself.
+  DynamicMeta: TopicsDynamicMeta,
   icon: MessagesSquareIcon,
   Skeleton: ReadOnlyConversationSkeleton,
   titleKey: 'navigation.topics',
