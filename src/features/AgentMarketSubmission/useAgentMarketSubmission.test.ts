@@ -15,7 +15,11 @@ const mocks = vi.hoisted(() => ({
     provider: 'test-provider',
     systemRole: 'Older saved prompt',
   },
-  meta: { marketIdentifier: undefined as string | undefined, title: 'Review agent' },
+  meta: {
+    avatar: undefined as string | undefined,
+    marketIdentifier: undefined as string | undefined,
+    title: 'Review agent',
+  },
   signIn: vi.fn(),
   state: { activeAgentId: 'agent-a', updateAgentMetaById: vi.fn() },
   submit: vi.fn(),
@@ -59,6 +63,7 @@ describe('Market review submission', () => {
     mocks.authenticated = true;
     mocks.workspace = false;
     mocks.state.activeAgentId = 'agent-a';
+    mocks.meta.avatar = undefined;
     mocks.meta.marketIdentifier = undefined;
     mocks.submit.mockResolvedValue({ identifier: 'market-a', isNewAgent: true, success: true });
     mocks.state.updateAgentMetaById.mockResolvedValue(undefined);
@@ -96,6 +101,26 @@ describe('Market review submission', () => {
     expect(toast.success).toHaveBeenCalledWith('marketSubmission.success');
     expect(result.current.revision).toBe(1);
     expect(result.current.isUnderReview).toBe(true);
+  });
+
+  it('publishes an emoji or image avatar as is', async () => {
+    mocks.meta.avatar = '🤖';
+    const { result } = renderSubmission();
+    await act(() => result.current.open());
+    await act(async () => confirmation().onOk?.());
+
+    expect(mocks.submit).toHaveBeenCalledWith(expect.objectContaining({ avatar: '🤖' }));
+  });
+
+  // A picked character only draws inside LobeHub; the Market would show its
+  // stored `generated:<seed>` value instead.
+  it('publishes an agent with a picked character without an avatar', async () => {
+    mocks.meta.avatar = 'generated:character-1';
+    const { result } = renderSubmission();
+    await act(() => result.current.open());
+    await act(async () => confirmation().onOk?.());
+
+    expect(mocks.submit).toHaveBeenCalledWith(expect.objectContaining({ avatar: undefined }));
   });
 
   it('does not show another agent as under review after navigating during submission', async () => {

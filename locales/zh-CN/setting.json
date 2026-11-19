@@ -1619,6 +1619,8 @@
   "settingAgent.artwork.studio.title": "Agent 形象",
   "settingAgent.artwork.styleMenu": "生成风格",
   "settingAgent.artwork.uploadFailed": "暂时无法上传图片，请重试",
+  "settingAgent.avatar.character": "角色 {{index}}",
+  "settingAgent.avatar.characters": "角色",
   "settingAgent.avatar.sizeExceeded": "图片大小超过 1MB 限制，请选择更小的图片",
   "settingAgent.avatar.title": "助理头像",
   "settingAgent.backgroundColor.title": "头像背景色",

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
+import { customAgentAvatar } from '@/components/AgentAvatar/resolve';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
@@ -69,7 +70,9 @@ export const useAgentMarketSubmission = ({ agentId, canSubmit, getPrompt }: Opti
               : undefined;
             const result = await lambdaClient.market.agent.publishOrCreate.mutate({
               actAs,
-              avatar: meta.avatar,
+              // The Market shows an emoji or image; a picked character only
+              // draws inside LobeHub, so it is published without one.
+              avatar: customAgentAvatar(meta.avatar),
               config: {
                 chatConfig: {
                   enableHistoryCount: snapshot.chatConfig?.enableHistoryCount,

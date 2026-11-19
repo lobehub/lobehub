@@ -1,12 +1,13 @@
 'use client';
 
-import { Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { ChevronDown, ChevronUp, CircleAlert, Loader2, MessagesSquare } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 

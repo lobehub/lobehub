@@ -91,4 +91,17 @@ describe('overlaySnapshot', () => {
       },
     ]);
   });
+
+  // The overlay shows an avatar as an emoji or image; a picked character would
+  // reach it as its stored `generated:<seed>` value.
+  it('leaves a picked character out of the overlay avatars', () => {
+    const [inbox, agent] = resolveOverlayAgentOptions({
+      agents: [{ avatar: 'generated:character-1', id: 'agent-1', title: 'Agent 1' }],
+      inboxAgentId: 'inbox-agent',
+      inboxMeta: { avatar: 'generated:character-2', title: 'Lobe AI' },
+    });
+
+    expect(inbox.avatar).toBe(DEFAULT_INBOX_AVATAR);
+    expect(agent.avatar).toBeUndefined();
+  });
 });

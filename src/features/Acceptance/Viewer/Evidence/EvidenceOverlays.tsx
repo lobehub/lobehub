@@ -7,6 +7,7 @@ import { Check, MessageSquare, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { remoteAvatarSrc } from '@/components/Avatar/fallback';
 import { sx } from '@/styles/sx';
 
 import { type EvidenceOverlay, overlayColor } from './overlay';
@@ -93,9 +94,16 @@ const styles = stylex.create({
  */
 export const AnnotationFace = memo<{ name?: string; size?: number; src?: string | null }>(
   ({ name, size = 18, src }) => {
-    if (src)
+    // Only an image goes into the <img>: an emoji or an agent's picked
+    // character would load as a broken image.
+    const imageSrc = remoteAvatarSrc(src);
+    if (imageSrc)
       return (
-        <img alt={name ?? ''} src={src} {...sx(styles.pinFace, { height: size, width: size })} />
+        <img
+          alt={name ?? ''}
+          src={imageSrc}
+          {...sx(styles.pinFace, { height: size, width: size })}
+        />
       );
     const initial = name?.trim().slice(0, 1);
     if (initial) return <span {...stylex.props(styles.pinInitial)}>{initial.toUpperCase()}</span>;

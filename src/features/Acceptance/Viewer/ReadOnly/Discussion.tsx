@@ -1,9 +1,10 @@
 import type { AcceptanceCommentItem } from '@lobechat/types';
-import { Avatar, Button, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { BadgeCheck, GitCommitHorizontal, Info, MessagesSquare, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { sx } from '@/styles/sx';
 

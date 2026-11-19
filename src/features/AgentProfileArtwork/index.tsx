@@ -25,6 +25,7 @@ import { memo, useCallback, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import { useAgentCharacterTab } from '@/components/AgentAvatar/CharacterTab';
 import EmojiPicker from '@/components/EmojiPicker';
 import {
   openAgentArtworkStudio,
@@ -236,6 +237,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
     const generationError = generation?.status === 'error' ? generation.kind : null;
     const backgroundGenerationActive = generation?.kind === 'background';
     const backgroundUrl = resolveAgentBackground(background);
+    const characterTab = useAgentCharacterTab(avatar);
 
     const openBackgroundFilePicker = useCallback(() => {
       const input = backgroundInputRef.current;
@@ -477,10 +479,10 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
           ) : null}
         </div>
         <div className={`${styles.avatar} agent-avatar-entry`}>
-          {/* Uploading an image lives in the studio, so the picker keeps only
-              emoji plus the studio launcher tab; the launcher tab is ordered
-              first and auto-selected on open, preserving the old generate-tab
-              position. */}
+          {/* Uploading an image lives in the studio, so the picker keeps emoji,
+              the generated characters and the studio launcher tab; the launcher
+              tab is ordered last and auto-selected on open, preserving the old
+              generate-tab position. */}
           {/* Keyed by the url for the same reason as the studio preview: the
               underlying Avatar latches its image-error state, so without a
               remount a newly generated avatar stays invisible whenever the
@@ -508,6 +510,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
               />
             )}
             customTabs={[
+              characterTab,
               {
                 label: (
                   <Tooltip title={t('settingAgent.artwork.avatar.image')}>

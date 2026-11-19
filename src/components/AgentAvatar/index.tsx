@@ -1,13 +1,14 @@
 'use client';
 
-import { AgentAvatar as GeneratedAgentAvatar, type AgentAvatarState } from '@lobehub/ui';
+import { type AgentAvatarState } from '@lobehub/ui';
 import { memo, type MouseEventHandler, type Ref } from 'react';
 
 import Avatar, { type AvatarProps } from '@/components/Avatar';
 
-import { pickDomProps, resolveAgentAvatar } from './resolve';
+import GeneratedCharacter from './GeneratedCharacter';
+import { resolveAgentAvatar } from './resolve';
 
-export { isDefaultAgentAvatar } from './resolve';
+export { isDefaultAgentAvatar, isGeneratedAgentAvatar } from './resolve';
 
 export interface AgentAvatarProps extends Omit<AvatarProps, 'avatar' | 'brokenFallback' | 'name'> {
   /**
@@ -17,7 +18,10 @@ export interface AgentAvatarProps extends Omit<AvatarProps, 'avatar' | 'brokenFa
   agentId?: string | null;
   /** Play the `state` animation of the generated character. */
   animated?: boolean;
-  /** Emoji or image URL. Empty (or the legacy default image) draws the generated character. */
+  /**
+   * Emoji or image URL. Empty (or the legacy default image) draws the generated
+   * character; `generated:<seed>` draws the character the agent picked.
+   */
   avatar?: string | null;
   /** Display name: labels the avatar and seeds the character when `agentId` is absent. */
   name?: string | null;
@@ -49,24 +53,19 @@ const AgentAvatar = memo<AgentAvatarProps>(
   }) => {
     const resolved = resolveAgentAvatar({ agentId, avatar, name, title });
 
-    // Wrapped in a span so a trigger around the avatar (Popover, Tooltip) still
-    // gets its injected handlers and anchor ref, as it does on the Avatar branch.
     const generated = (
-      <span
-        {...pickDomProps(rest)}
+      <GeneratedCharacter
+        animated={animated}
         className={className}
-        ref={ref as Ref<HTMLSpanElement>}
-        style={{ display: 'inline-flex', flex: 'none', ...style }}
-        onClick={onClick as MouseEventHandler<HTMLSpanElement>}
-      >
-        <GeneratedAgentAvatar
-          animated={animated}
-          name={resolved.label}
-          seed={resolved.seed}
-          size={size}
-          state={state}
-        />
-      </span>
+        domProps={rest}
+        name={resolved.label}
+        ref={ref as Ref<HTMLElement>}
+        seed={resolved.seed}
+        size={size}
+        state={state}
+        style={style}
+        onClick={onClick as MouseEventHandler<HTMLElement>}
+      />
     );
 
     if (resolved.kind === 'generated') return generated;

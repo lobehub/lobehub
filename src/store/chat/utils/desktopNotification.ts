@@ -14,6 +14,7 @@ import type { ChatMessageError, ConversationContext } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import { t } from 'i18next';
 
+import { customAgentAvatar } from '@/components/AgentAvatar/resolve';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import type { ChatStore } from '@/store/chat/store';
@@ -115,7 +116,12 @@ export const buildNotificationSender = async (
 
   let avatarDataUrl: string | undefined;
   try {
-    avatarDataUrl = await renderAvatarToDataUrl(context.agentId, agentMeta);
+    // A picked character is drawn, not an emoji or image, so the canvas would
+    // print its stored value; the banner goes without, as for no avatar.
+    avatarDataUrl = await renderAvatarToDataUrl(context.agentId, {
+      ...agentMeta,
+      avatar: customAgentAvatar(agentMeta.avatar),
+    });
   } catch (error) {
     console.error('Notification avatar render failed:', error);
   }

@@ -20,6 +20,17 @@ describe('toStackAvatar', () => {
     expect(item.background).toBeUndefined();
   });
 
+  it('draws the character a member picked instead of its own', () => {
+    const item = toStackAvatar(
+      { avatar: 'generated:character-1', background: '#fff', seed: 'agent-1' },
+      0,
+    );
+
+    expect(isValidElement(item.avatar)).toBe(true);
+    expect((item.avatar as ReactElement<{ seed: string }>).props.seed).toBe('character-1');
+    expect(item.background).toBeUndefined();
+  });
+
   it('keeps members without a seed apart by their position', () => {
     const seedAt = (index: number) =>
       (toStackAvatar({}, index).avatar as ReactElement<{ seed: string }>).props.seed;

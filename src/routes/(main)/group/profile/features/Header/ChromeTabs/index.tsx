@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Avatar,
   createStaticStyles,
   cx,
   type DropdownItem,
@@ -13,6 +12,8 @@ import { Plus } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import Avatar from '@/components/Avatar';
 
 const styles = createStaticStyles(({ css, cssVar: cv }) => ({
   addButton: css`
