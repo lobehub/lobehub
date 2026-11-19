@@ -474,14 +474,17 @@ const resolveInitialization = async ({
       userId,
       workspaceId,
     };
+    const cloneCredentials = await resolveScmCloneCredentials(params);
     if (hasTfsGitSource(params.configuration)) {
       if (sharedDrive) return { ...initialization, authorizationError: 'sharedDrive' };
       const tfs = await resolveTfsCloneCredential(params).catch(() => undefined);
       if (!tfs) return { ...initialization, authorizationError: 'unavailable' };
-      return { ...initialization, cloneCredential: tfs };
+      return {
+        ...initialization,
+        cloneCredential: tfs,
+        ...(cloneCredentials.length > 0 && { cloneCredentials }),
+      };
     }
-
-    const cloneCredentials = await resolveScmCloneCredentials(params);
 
     if (cloneCredentials.length === 0) return initialization;
     // One repository keeps the single host-wide credential it always had.

@@ -749,6 +749,38 @@ describe('resolveSandboxSessionConfig', () => {
       });
     });
 
+    it('keeps GitHub and TFS credentials for a mixed multi-repository environment', async () => {
+      const tfsCredential = {
+        tfs: { authType: 'pat' as const, secret: 'tfs-only', username: '' },
+        urlPrefix: 'https://tfs.example.com/Collection/',
+      };
+      const githubCredential = {
+        header: 'Authorization: Basic github-only',
+        urlPrefix: 'https://github.com/acme/service',
+      };
+      resolveSandboxStorageClaim.mockResolvedValue(null);
+      mocks.findEnvironmentById.mockResolvedValue({
+        configuration: {
+          sources: [
+            { kind: 'git', url: 'https://github.com/acme/service' },
+            { kind: 'git', url: 'https://tfs.example.com/Collection/RSMP/_git/service' },
+          ],
+        },
+        id: 'env-1',
+        name: 'Mixed',
+      });
+      mocks.resolveScmCloneCredential.mockResolvedValue(githubCredential);
+      mocks.resolveTfsCloneCredential.mockResolvedValue(tfsCredential);
+      findById.mockResolvedValue({ metadata: { sandboxEnvironmentId: 'env-1' } });
+
+      await expect(resolve()).resolves.toMatchObject({
+        initialization: {
+          cloneCredential: tfsCredential,
+          cloneCredentials: [githubCredential],
+        },
+      });
+    });
+
     it("keeps a member's private environment out of a workspace-public agent", async () => {
       resolveSandboxStorageClaim.mockResolvedValue(null);
       mocks.findEnvironmentById.mockResolvedValue({ ...environment, visibility: 'private' });
