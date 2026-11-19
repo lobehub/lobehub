@@ -47,6 +47,7 @@ describe('OIDC default clients', () => {
 
     expect(lobot).toMatchObject({
       client_name: 'Lobot',
+      logo_uri: 'https://hub-apac-1.lobeobjects.space/lobot-desktop-icon.png',
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
       token_endpoint_auth_method: 'none',

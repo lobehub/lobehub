@@ -63,7 +63,11 @@ const builtinClients: ClientMetadata[] = [
     client_name: `${BRANDING_NAME} Desktop`,
     logo_uri: 'https://hub-apac-1.lobeobjects.space/lobehub-desktop-icon.png',
   }),
-  desktopClient({ client_id: LOBOT_DESKTOP_CLIENT_ID, client_name: 'Lobot' }),
+  desktopClient({
+    client_id: LOBOT_DESKTOP_CLIENT_ID,
+    client_name: 'Lobot',
+    logo_uri: 'https://hub-apac-1.lobeobjects.space/lobot-desktop-icon.png',
+  }),
 
   {
     application_type: 'native', // Mobile uses native type
