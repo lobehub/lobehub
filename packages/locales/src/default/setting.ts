@@ -1596,10 +1596,6 @@ export default {
   'settingAppearance.animationMode.disabled': 'Off',
   'settingAppearance.animationMode.elegant': 'Elegant',
   'settingAppearance.animationMode.title': 'Response Animation',
-  'settingAppearance.contextMenuMode.default': 'Default',
-  'settingAppearance.contextMenuMode.desc': 'Enable the right-click menu for some list items.',
-  'settingAppearance.contextMenuMode.disabled': 'Disabled',
-  'settingAppearance.contextMenuMode.title': 'Right-Click Menu Mode',
   'settingAppearance.density.compact': 'Compact',
   'settingAppearance.density.desc':
     'Row height and spacing in the sidebars. Compact fits more on screen; Loose gives each row more room.',
