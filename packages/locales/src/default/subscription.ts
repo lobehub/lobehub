@@ -259,6 +259,7 @@ export default {
     'Members without a rule of their own will no longer be capped. Members with their own rule keep it.',
   'credits.dedicatedBudget.rules.removeConfirm.memberDesc':
     'This member will follow the rule for all members again.',
+  'credits.dedicatedBudget.rules.removeConfirm.title': 'Remove the limit for {{name}}?',
   'credits.dedicatedBudget.rules.title': 'Member limits · {{name}}',
   'credits.dedicatedBudget.saveError': 'Failed to save the dedicated budget',
   'credits.dedicatedBudget.saveSuccess': 'Dedicated budget saved',

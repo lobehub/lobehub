@@ -199,6 +199,7 @@
   "credits.dedicatedBudget.rules.overrideCount_other": "{{count}} 人单独设置",
   "credits.dedicatedBudget.rules.removeConfirm.defaultDesc": "未单独设置的成员将不再受限制；单独设置的成员保留各自的上限。",
   "credits.dedicatedBudget.rules.removeConfirm.memberDesc": "该成员将改为适用所有成员的规则。",
+  "credits.dedicatedBudget.rules.removeConfirm.title": "删除「{{name}}」的上限？",
   "credits.dedicatedBudget.rules.title": "成员上限 · {{name}}",
   "credits.dedicatedBudget.saveError": "专项额度保存失败",
   "credits.dedicatedBudget.saveSuccess": "专项额度已保存",
