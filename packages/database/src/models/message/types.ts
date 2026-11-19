@@ -257,12 +257,6 @@ export interface VisitorRedactionOptions {
    * builds.
    */
   showErrorDetails?: boolean;
-  /**
-   * `AgentShareConfig.showModelInfo`. When false, the creator's model /
-   * provider choice and the token/cost snapshot are stripped everywhere they
-   * appear, at any nesting depth.
-   */
-  showModelInfo?: boolean;
 }
 
 export interface SoftDeletedMessage {

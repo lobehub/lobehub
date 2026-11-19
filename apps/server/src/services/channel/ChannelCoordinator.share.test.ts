@@ -236,4 +236,17 @@ describe('dispatching a contact’s shared Agent', () => {
       });
     },
   );
+  // A visitor past the owner's message cap is refused by the atomic turn guard inside execAgent
+  // (the admission pre-check can race it); the receipt must still say why.
+  it('records the message-limit refusal raised by the turn guard', async () => {
+    execAgent.mockRejectedValue(
+      new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'ShareMessageLimitExceeded' }),
+    );
+    await coordinator().advance('channel');
+
+    expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
+      message: 'ShareMessageLimitExceeded',
+      type: 'ShareMessageLimitExceeded',
+    });
+  });
 });

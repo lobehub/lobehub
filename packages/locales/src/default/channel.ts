@@ -9,6 +9,8 @@ export default {
   'receipt.errorShareHeteroDevice': "The creator's device is offline. Try again later.",
   'receipt.errorShareHeteroUnsupported':
     "This Agent can run for you only with its creator's permission. Ask its creator for access.",
+  'receipt.errorShareMessageLimit':
+    'You have sent all the messages its creator allows to this shared Agent.',
   'receipt.errorShareSpendLimit':
     'This shared Agent reached the monthly usage limit its creator set. It will be available again next month.',
   'receipt.errorUnavailable':

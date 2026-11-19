@@ -21,6 +21,15 @@ describe('receiptErrorText', () => {
     ).toBe('receipt.errorShareHeteroDevice');
   });
 
+  it('explains a shared Agent’s per-visitor message-limit refusal', () => {
+    expect(
+      receiptErrorText(
+        { errorMessage: 'ShareMessageLimitExceeded', errorType: 'ShareMessageLimitExceeded' },
+        t,
+      ),
+    ).toBe('receipt.errorShareMessageLimit');
+  });
+
   it('shows the recorded reason, or the fallback when none was recorded', () => {
     expect(receiptErrorText({ errorMessage: ' boom ', errorType: null }, t)).toBe('boom');
     expect(receiptErrorText({ errorMessage: null, errorType: 'AgentRuntimeError' }, t)).toBe(

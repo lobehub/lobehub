@@ -57,13 +57,15 @@ class ChannelDispatchError extends Error {
 }
 
 /**
- * Refusals of a shared Agent's run its visitor can act on, raised by the run's share gate before
- * anything is written: the share grants them no device for a Claude Code / Codex Agent, or the
- * owner's device is offline. Kept as the job's failure type, as the share page shows them.
+ * Refusals of a shared Agent's run its visitor can act on, raised by the run's share guards before
+ * the visitor's message is written: the share grants them no device for a Claude Code / Codex
+ * Agent, the owner's device is offline, or the visitor has sent all the messages the share allows.
+ * Kept as the job's failure type, as the share page shows them.
  */
 const SHARE_REFUSAL_TYPES = new Set<string>([
   ChatErrorType.ShareHeterogeneousAgentUnsupported,
   ChatErrorType.ShareHeteroDeviceUnavailable,
+  ChatErrorType.ShareMessageLimitExceeded,
 ]);
 
 const dispatchFailureType = (error: unknown) =>

@@ -93,7 +93,7 @@ never take one. The claim freezes `executionConfig.share` (owner, share and the 
   `readMessage`, and `ChannelHistoryRepository` authorizes those reads against the frozen share
   (owner operation, the person's Channel) while every other use of the run (`currentRun`, so
   `listChannels` / `sendMessage`) is refused: they would act in the owner's Channels.
-- A topic ends at the share's `maxTurnsPerTopic`; the next request starts a new one.
+- Each requester can send at most the share's `maxMessagesPerVisitor` messages in total, counted across all their topics with this Agent; sending refuses the next one. Topics still roll over only after the staleness window.
 
 ## Conversations between contacts
 

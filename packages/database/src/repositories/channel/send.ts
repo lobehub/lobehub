@@ -185,11 +185,8 @@ export const sendMessage = async (
         throw new ChannelError('BAD_REQUEST', 'Attachments cannot be sent to a shared Agent');
       await assertSharedAgentAdmission(tx, {
         agentId: channel.agentId,
-        channelId: channel.id,
         content: input.content,
         ownerId: agentOwnerId,
-        requesterMemberId: member.id,
-        threadId,
         visitorId: member.userId!,
       });
     }

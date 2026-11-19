@@ -9,7 +9,6 @@ import {
   agents,
   agentShares,
   channelJobs,
-  channelThreads,
   files,
   messages,
   topics,
@@ -45,7 +44,7 @@ beforeEach(async () => {
     .insert(agentShares)
     .values({
       agentId,
-      shareConfig: { maxTurnsPerTopic: 2, monthlySpendLimit: 1, slug: 'shared-helper' },
+      shareConfig: { monthlySpendLimit: 1, slug: 'shared-helper' },
       visibility: 'link',
     })
     .returning();
@@ -94,7 +93,7 @@ describe('a contact’s shared Agent in a direct conversation', () => {
   it('lists the share id as its handle when the owner set no custom slug', async () => {
     await db
       .update(agentShares)
-      .set({ shareConfig: { maxTurnsPerTopic: 2, monthlySpendLimit: 1 } })
+      .set({ shareConfig: { monthlySpendLimit: 1 } })
       .where(eq(agentShares.id, shareId));
     const { channel } = await visitor.create({
       agentId,
@@ -220,7 +219,7 @@ describe('a contact’s shared Agent in a direct conversation', () => {
     ).rejects.toThrow('Attachments cannot be sent to a shared Agent');
   });
 
-  it('continues its topic until the share’s per-topic turn limit', async () => {
+  it('keeps continuing its topic however many messages it holds', async () => {
     const { channel } = await visitor.create({
       agentId,
       sharedAgent: true,
@@ -240,9 +239,9 @@ describe('a contact’s shared Agent in a direct conversation', () => {
     const second = await claim('b');
     expect(second.topic.id).toBe(first.topic.id);
 
-    // Two visitor turns reach `maxTurnsPerTopic: 2`.
+    // Message count never rolls the topic over; only the staleness window does.
     await db.insert(messages).values(
-      ['one', 'two'].map((content) => ({
+      ['one', 'two', 'three', 'four', 'five'].map((content) => ({
         content,
         role: 'user' as const,
         topicId: first.topic.id,
@@ -251,7 +250,7 @@ describe('a contact’s shared Agent in a direct conversation', () => {
     );
     await finish(second.job.id);
     const third = await claim('c');
-    expect(third.topic.id).not.toBe(first.topic.id);
+    expect(third.topic.id).toBe(first.topic.id);
     expect(third.topic).toMatchObject({ senderId: visitorId, userId: ownerId });
   });
 
@@ -281,7 +280,7 @@ describe('a contact’s shared Agent in a direct conversation', () => {
     it('shows the raw failure when the owner’s share opts into error details', async () => {
       await db
         .update(agentShares)
-        .set({ shareConfig: { maxTurnsPerTopic: 2, showErrorDetails: true } })
+        .set({ shareConfig: { showErrorDetails: true } })
         .where(eq(agentShares.id, shareId));
       const { channel } = await visitor.create({
         agentId,
@@ -342,10 +341,10 @@ describe('a contact’s shared Agent in a direct conversation', () => {
       await expect(sendText(channel.id, 'ok', 'short')).resolves.toBeDefined();
     });
 
-    it('refuses a message that would need a topic beyond maxTopicsPerVisitor', async () => {
+    it('refuses a message once the visitor sent maxMessagesPerVisitor, not counting replies', async () => {
       await db
         .update(agentShares)
-        .set({ shareConfig: { maxTopicsPerVisitor: 1, maxTurnsPerTopic: 2 } })
+        .set({ shareConfig: { maxMessagesPerVisitor: 2 } })
         .where(eq(agentShares.id, shareId));
       const channel = await open();
       const first = (await execution.claim(channel.id, (await send(channel.id, 'a')).id, lease))!;
@@ -354,80 +353,29 @@ describe('a contact’s shared Agent in a direct conversation', () => {
       await execution.publish(channel.id, first.job.id);
       await execution.releaseWriter(channel.id, first.job.id);
 
-      // One topic is at the cap, but it still takes a turn: the conversation continues in it.
-      await expect(sendText(channel.id, 'b', 'b')).resolves.toBeDefined();
-
-      // Once that topic is out of turns, a new one would exceed the cap.
-      await db.insert(messages).values(
-        ['one', 'two'].map((content) => ({
+      // One message and several Agent replies: the replies leave room for another message.
+      await db.insert(messages).values([
+        { content: 'one', role: 'user', topicId: first.topic.id, userId: ownerId },
+        ...['r1', 'r2', 'r3'].map((content) => ({
           content,
-          role: 'user' as const,
+          role: 'assistant' as const,
           topicId: first.topic.id,
           userId: ownerId,
         })),
-      );
+      ]);
+      await expect(sendText(channel.id, 'b', 'b')).resolves.toBeDefined();
+
+      // A second message, in another topic of the same visitor, reaches the cap.
+      const [otherTopic] = await db
+        .insert(topics)
+        .values({ agentId, senderId: visitorId, userId: ownerId })
+        .returning();
+      await db
+        .insert(messages)
+        .values({ content: 'two', role: 'user', topicId: otherTopic.id, userId: ownerId });
       await expect(sendText(channel.id, 'c', 'c')).rejects.toMatchObject({
         code: 'TOO_MANY_REQUESTS',
-        message: 'You have reached the limit of 1 conversations with this Agent',
-      });
-    });
-
-    it('judges a send by the topic its own Thread would continue', async () => {
-      await db
-        .update(agentShares)
-        .set({ shareConfig: { maxTopicsPerVisitor: 2, maxTurnsPerTopic: 2 } })
-        .where(eq(agentShares.id, shareId));
-      const channel = await open();
-      const settle = async (job: { id: string }) => {
-        const claimed = (await execution.claim(channel.id, job.id, lease))!;
-        await execution.accepted(channel.id, job.id);
-        await execution.saveDraft(channel.id, job.id, 'Answer');
-        await execution.publish(channel.id, job.id);
-        await execution.releaseWriter(channel.id, job.id);
-        return claimed.topic;
-      };
-
-      // A Thread with turns left, and a main-timeline topic, touched last, that has run out of them.
-      const root = await sendText(channel.id, 'root', 'root');
-      const [rootJob] = await jobsOf(db, root.id);
-      const mainTopic = await settle(rootJob);
-      const [thread] = await db
-        .insert(channelThreads)
-        .values({
-          channelId: channel.id,
-          followerMemberIds: [rootJob.memberId],
-          rootMessageId: root.id,
-          rootSequence: root.sequence,
-        })
-        .returning();
-      const inThread = await visitor.send(channel.id, {
-        content: 'In thread',
-        requestKey: 'thread',
-        routing: 'fallback',
-        threadId: thread.id,
-      });
-      const threadTopic = await settle((await jobsOf(db, inThread.id))[0]);
-      expect(mainTopic.id).not.toBe(threadTopic.id);
-      await db.insert(messages).values(
-        ['one', 'two'].map((content) => ({
-          content,
-          role: 'user' as const,
-          topicId: mainTopic.id,
-          userId: ownerId,
-        })),
-      );
-      await db.update(topics).set({ updatedAt: new Date() }).where(eq(topics.id, mainTopic.id));
-
-      await expect(
-        visitor.send(channel.id, {
-          content: 'More',
-          requestKey: 'thread-more',
-          routing: 'fallback',
-          threadId: thread.id,
-        }),
-      ).resolves.toBeDefined();
-      await expect(sendText(channel.id, 'main', 'main')).rejects.toMatchObject({
-        code: 'TOO_MANY_REQUESTS',
+        message: 'You have reached the limit of 2 messages to this Agent',
       });
     });
   });

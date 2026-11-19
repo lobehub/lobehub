@@ -685,7 +685,7 @@ export const setupTurn = async (
         // `TopicModel`'s creator-facing reads (`query`, `count`, `queryTopics`,
         // `queryRecent`, `rank`) filter out via `notShareVisitorTopic()`, and
         // what lets shareChat scope reads per visitor (`queryBySender` /
-        // `countBySender`).
+        // `countMessagesBySender`).
         senderId: shareGate?.visitorUserId,
         title:
           title !== undefined
@@ -693,10 +693,9 @@ export const setupTurn = async (
             : fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : ''),
         trigger,
       };
-      // Share-visitor runs must reserve the `maxTopicsPerVisitor` slot and
-      // insert the topic in ONE locked transaction — see
-      // `reserveShareVisitorTopic`'s JSDoc for the race this closes. Non-share
-      // runs (no per-visitor cap to enforce) keep the plain unlocked insert.
+      // Share-visitor runs insert the topic only under the share's row lock, so
+      // a share paused mid-request writes nothing — see
+      // `reserveShareVisitorTopic`'s JSDoc. Non-share runs keep the plain insert.
       const newTopic = shareGate
         ? await reserveShareVisitorTopic(
             {
@@ -704,7 +703,6 @@ export const setupTurn = async (
               db: deps.db,
               expectedShareId: shareGate.shareId,
               ownerId: deps.userId,
-              visitorUserId: shareGate.visitorUserId,
               workspaceId: deps.workspaceId,
             },
             newTopicParams,
@@ -988,12 +986,10 @@ export const setupTurn = async (
         threadId: appContext?.threadId ?? undefined,
         topicId,
       };
-      // Share-visitor runs must reserve the `maxTurnsPerTopic` slot and insert
-      // the user message in ONE locked transaction — see
-      // `reserveShareVisitorTurn`'s JSDoc for the race this closes (same class of
-      // count-then-act bug as the topic cap above). Harmless no-op on a topic
-      // this same call just created (count is 0). Non-share runs (no per-turn
-      // cap) keep the plain unlocked insert.
+      // Share-visitor runs must reserve the `maxMessagesPerVisitor` slot and
+      // insert the user message in ONE locked transaction — see
+      // `reserveShareVisitorTurn`'s JSDoc for the race this closes. Non-share
+      // runs (no per-visitor cap) keep the plain unlocked insert.
       const userMessageRecord = runFromHistory
         ? undefined
         : shareGate
@@ -1003,7 +999,7 @@ export const setupTurn = async (
                 db: deps.db,
                 expectedShareId: shareGate.shareId,
                 ownerId: deps.userId,
-                topicId,
+                visitorUserId: shareGate.visitorUserId,
                 workspaceId: deps.workspaceId,
               },
               userMessageParams,
