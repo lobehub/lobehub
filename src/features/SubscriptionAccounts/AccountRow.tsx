@@ -29,6 +29,7 @@ import {
 import { type CSSProperties, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import PrivateLockIcon from '@/components/PrivateLockIcon';
 import { formatPercent, usageLevel } from '@/features/DeviceManager/DeviceHealth/format';
 import { usageTextColor } from '@/features/DeviceManager/DeviceHealth/shared';
 import { UsageBar } from '@/features/DeviceManager/DeviceHealth/UsageMeter';
@@ -220,7 +221,6 @@ const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
   // Only workspace accounts carry a visibility; personal ones have no team to hide from.
   const isPrivate = !!account.workspaceId && account.visibility === 'private';
   // With a label set, the email moves to the subtitle so the account stays identifiable.
-  // Private or shared is the page's tab, so the row does not repeat it.
   const subtitle = [meta.name, account.label ? account.email : undefined]
     .filter(Boolean)
     .join(' · ');
@@ -364,9 +364,12 @@ const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
               />
             </Flexbox>
           ) : (
-            <Text ellipsis title={name} weight={500}>
-              {name}
-            </Text>
+            <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
+              <Text ellipsis title={name} weight={500}>
+                {name}
+              </Text>
+              {isPrivate && <PrivateLockIcon />}
+            </Flexbox>
           )}
           <Text ellipsis fontSize={12} type={'secondary'}>
             {subtitle}

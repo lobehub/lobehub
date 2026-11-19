@@ -14,7 +14,7 @@ import {
   TerminalIcon,
   ZapIcon,
 } from 'lucide-react';
-import { memo, type ReactNode } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ManagedDeviceCreateEntry from '@/business/client/features/ManagedDeviceCreateEntry';
@@ -220,28 +220,18 @@ interface DeviceManagerProps {
   onOpenDevice: (deviceId: string) => void;
   /** Which device pool this surface manages. */
   scope: DeviceScope;
-  /**
-   * Left side of the toolbar — the workspace page puts its visibility tabs
-   * here; the personal page has a single pool and leaves it empty.
-   */
-  toolbarLeading?: ReactNode;
-  /**
-   * Workspace scope only: narrow the list to one visibility tab — 'public'
-   * (shared pool) or 'private' (the caller's own private enrollments). Omitted
-   * → no visibility filtering (personal page).
-   */
-  visibility?: DeviceVisibility;
 }
 
 /**
  * Device list shared by the personal (`/settings/devices`) and workspace
  * (`/:slug/settings/devices`) pages — toolbar (refresh + connect) above the
- * card grid / onboarding empty state, filtered to the given `scope` (and, for
- * workspace, the active visibility tab). A card opens the device's detail
+ * card grid / onboarding empty state, filtered to the given `scope`. The workspace
+ * list holds the shared pool and the caller's private devices together, the
+ * private ones marked with a lock on their card. A card opens the device's detail
  * page; the host owns that route.
  */
 const DeviceManager = memo<DeviceManagerProps>((props) => {
-  const { onConnect, onOpenDevice, scope, toolbarLeading, visibility } = props;
+  const { onConnect, onOpenDevice, scope } = props;
   const { t } = useTranslation('setting');
   const isWorkspace = scope === 'workspace';
   // The `managed_cloud_device` flag gates only the entry that creates a managed
@@ -254,15 +244,13 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
   // a reload paints the persisted cards first, presence pending.
   const deviceList = useDeviceList();
   const { data, isValidating, error, mutate } = deviceList;
-  // `listDevices` is workspace-aware and returns both pools — keep each surface
-  // to its own scope (and visibility tab). Ghost rows (`visibility: null`,
-  // online but unregistered) belong to the shared pool: the server already
-  // strips other members' private devices, so an unclaimed live connection can
-  // only be a public-pool machine.
-  const devices = (data ?? []).filter(
-    (d) => d.scope === scope && (!visibility || (d.visibility ?? 'public') === visibility),
-  );
-  // A persisted copy with no row for this pool / tab is not proof the pool is
+  // `listDevices` is workspace-aware and returns both scopes — keep each
+  // surface to its own. In a workspace the server already strips other
+  // members' private devices, so both visibility pools list here together.
+  const devices = (data ?? []).filter((d) => d.scope === scope);
+  // A device connected from here starts private; its card menu publishes it.
+  const createVisibility: DeviceVisibility | undefined = isWorkspace ? 'private' : undefined;
+  // A persisted copy with no row for this scope is not proof the pool is
   // empty: wait for the server (or its error) before showing onboarding.
   const boundary = getDeviceListBoundary(deviceList, devices.length === 0);
 
@@ -280,14 +268,13 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
   // Workspace machines are headless (CLI-only enrollment), so that scope gets
   // a single primary button instead of the personal page's connect-method
   // cards + capabilities. The copy is pool-agnostic; only the hero icon forks
-  // between the shared (server) and private (own machine) pools.
-  const isPrivatePool = isWorkspace && visibility === 'private';
+  // between the workspace (server) and personal (own machine) pages.
   const emptyState = (
     <Flexbox gap={32}>
       <Flexbox className={styles.emptyCard}>
         <Flexbox align={'center'} className={styles.emptyHero} gap={12}>
           <span className={styles.heroIcon}>
-            <Icon icon={isWorkspace && !isPrivatePool ? ServerIcon : MonitorDownIcon} size={28} />
+            <Icon icon={isWorkspace ? ServerIcon : MonitorDownIcon} size={28} />
           </span>
           <Text fontSize={18} weight={600}>
             {t(isWorkspace ? 'workspaceSetting.devices.heroTitle' : 'devices.empty.title')}
@@ -306,7 +293,11 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
             </Button>
           )}
           {showManagedDeviceCreate && (
-            <ManagedDeviceCreateEntry placement={'empty'} scope={scope} visibility={visibility} />
+            <ManagedDeviceCreateEntry
+              placement={'empty'}
+              scope={scope}
+              visibility={createVisibility}
+            />
           )}
         </Flexbox>
 
@@ -347,7 +338,11 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
         onClick={() => mutate()}
       />
       {showManagedDeviceCreate && (
-        <ManagedDeviceCreateEntry placement={'toolbar'} scope={scope} visibility={visibility} />
+        <ManagedDeviceCreateEntry
+          placement={'toolbar'}
+          scope={scope}
+          visibility={createVisibility}
+        />
       )}
       {isWorkspace ? (
         <Button
@@ -372,18 +367,15 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
   );
 
   const toolbar = (
-    <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
-      <div style={{ minWidth: 0 }}>{toolbarLeading}</div>
+    <Flexbox horizontal align={'center'} justify={'flex-end'}>
       {renderActions()}
     </Flexbox>
   );
 
-  // With nothing on the left (the personal pool), the actions join the shared
-  // settings header instead of leaving a half-empty toolbar row; hosts without
-  // that header (workspace settings, mobile) keep the toolbar.
-  const toolbarSlot = toolbarLeading ? (
-    toolbar
-  ) : (
+  // The actions join the shared settings header instead of leaving a
+  // half-empty toolbar row; hosts without that header (workspace settings,
+  // mobile) keep the toolbar.
+  const toolbarSlot = (
     <SettingsPageActions fallback={toolbar}>{renderActions()}</SettingsPageActions>
   );
 

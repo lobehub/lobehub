@@ -59,29 +59,28 @@ const LIST_MIN_HEIGHT = 4 * 72;
  * its page, laid out the same way a project's environment page is.
  */
 interface EnvironmentManagerProps {
-  /** Open one environment's page. */
-  onOpenEnvironment: (id: string) => void;
+  /**
+   * Workspace pages only: where a new environment lands. The list itself is
+   * every environment the caller can see — published and their own private
+   * ones together. Omitted on the personal page, where an environment has no
+   * pool to belong to.
+   */
+  createVisibility?: EnvironmentVisibility;
   /**
    * Put beside the actions rather than above them, so the page has one header
-   * row instead of two. Passed in rather than built here because only a page
-   * with more than one pool has anything to put in it, and that page is the one
-   * that owns which pool is selected.
+   * row instead of two. Omitted, the section's own name sits there.
    */
-  tabs?: ReactNode;
-  /**
-   * Workspace pages only: which pool to manage — `public` (published to the
-   * workspace) or `private` (the caller's own). Omitted on the personal page,
-   * where an environment has no pool to belong to.
-   */
-  visibility?: EnvironmentVisibility;
+  headerLeading?: ReactNode;
+  /** Open one environment's page. */
+  onOpenEnvironment: (id: string) => void;
 }
 
 const EnvironmentManager = memo<EnvironmentManagerProps>(
-  ({ onOpenEnvironment, tabs, visibility }) => {
+  ({ createVisibility, headerLeading, onOpenEnvironment }) => {
     const { t } = useTranslation('setting');
     // `settled`: a list to paint — the stored one on a reload, confirmed behind
-    // it, a tab switch included. A stored empty list waits for the server.
-    const { environments, error, revalidate, settled } = useEnvironments(visibility);
+    // it. A stored empty list waits for the server.
+    const { environments, error, revalidate, settled } = useEnvironments();
 
     // Whether a refresh the user asked for is still running.
     const [refreshing, setRefreshing] = useState(false);
@@ -95,7 +94,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(
     /**
      * The spinner is driven by this call rather than by `isValidating`, which is
      * true of every fetch the page makes — read off that flag the button would
-     * spin on a tab switch and on any background revalidation.
+     * spin on any background revalidation.
      */
     const refresh = async () => {
       setRefreshing(true);
@@ -126,7 +125,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(
         <Button
           icon={<Icon icon={PlusIcon} />}
           type={'primary'}
-          onClick={() => openCreateEnvironmentModal(visibility, onEnvironmentCreated)}
+          onClick={() => openCreateEnvironmentModal(createVisibility, onEnvironmentCreated)}
         >
           {t('environments.create')}
         </Button>
@@ -154,17 +153,17 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(
                 descriptionProps={{ fontSize: 13 }}
                 icon={ContainerIcon}
                 style={{ maxWidth: 360 }}
+                title={t('environments.empty')}
                 action={
                   <Button
                     icon={<Icon icon={PlusIcon} />}
-                    onClick={() => openCreateEnvironmentModal(visibility, onEnvironmentCreated)}
+                    onClick={() =>
+                      openCreateEnvironmentModal(createVisibility, onEnvironmentCreated)
+                    }
                   >
                     {t('environments.create')}
                   </Button>
                 }
-                title={t(
-                  visibility === 'public' ? 'environments.emptyPublished' : 'environments.empty',
-                )}
               />
             </Center>
           </Flexbox>
@@ -185,13 +184,13 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(
 
     /**
      * One layout for both pages. What sits on the left of the header is the only
-     * difference: tabs where there is a pool to choose, and the section's own
-     * name where there is not.
+     * difference: the host's own lead-in where it passes one, and the section's
+     * own name where it does not.
      */
     return (
       <Flexbox gap={16}>
         <Flexbox horizontal align={'center'} gap={16} justify={'space-between'} wrap={'wrap'}>
-          {tabs ?? (
+          {headerLeading ?? (
             <Text fontSize={16} weight={600}>
               {t('environments.mine')}
             </Text>
