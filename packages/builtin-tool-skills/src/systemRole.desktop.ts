@@ -1,1 +1,1 @@
-export { deviceSystemPrompt as systemPrompt } from './systemRole';
+export { deviceSystemPrompt, deviceSystemPrompt as systemPrompt } from './systemRole';
