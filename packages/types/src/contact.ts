@@ -56,12 +56,31 @@ export interface ContactAgentItem {
 
 export type ContactItem = ContactUserItem | ContactAgentItem;
 
+/**
+ * How a request came about, stored with it (`user_contact_requests.source`). `card`: the
+ * requester opened the addressee's contact card that `sharedById` sent in a Channel message.
+ */
+export interface ContactRequestSource {
+  channelId: string;
+  messageId: string;
+  sharedById: string;
+  type: 'card';
+}
+
+/** A request's source as its reader sees it: who recommended the requester's card. */
+export interface ContactRequestOrigin {
+  sharedBy: ContactUserProfile;
+  type: 'card';
+}
+
 export interface ContactRequestItem {
   createdAt: Date;
   /** `incoming`: sent to me; `outgoing`: sent by me. */
   direction: 'incoming' | 'outgoing';
   id: string;
   message: string | null;
+  /** Set when the request came from a shared contact card whose sharer still exists. */
+  source?: ContactRequestOrigin | null;
   /** The other person. */
   user: ContactUserProfile;
   /** Set when a member invited the addressee to be an external contact of this workspace. */
@@ -90,3 +109,27 @@ export type ContactSearchResult =
 
 /** Owner-side extras of an address book entry; open for later management features. */
 export type ContactMetadata = Record<string, unknown>;
+
+// ── Contact cards ───────────────────────────────────────────────────────
+
+/** What a sender picks to share in a Channel message as a contact card. */
+export type ContactCardTarget =
+  { type: 'user'; userId: string } | { agentId: string; type: 'agent' };
+
+/**
+ * A contact card in a Channel message (`metadata.contactCard`), as the server resolved it when it
+ * was sent. The profile is a snapshot for rendering; clients recheck the live relation and share
+ * when the card is opened.
+ */
+export type ContactCard =
+  { type: 'user'; user: ContactUserProfile } | { agent: ContactAgentProfile; type: 'agent' };
+
+/** Where the sender of a card message names the shared card. */
+export const contactCardOf = (
+  metadata: Record<string, unknown> | null | undefined,
+): ContactCard | undefined => {
+  const card = metadata?.contactCard as ContactCard | undefined;
+  if (card?.type === 'user' && card.user?.id) return card;
+  if (card?.type === 'agent' && card.agent?.agentId) return card;
+  return undefined;
+};

@@ -34,6 +34,10 @@ const agentSelection = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   workingDirectory: z.string().trim().min(1).max(4096).optional(),
 });
+const contactCardTarget = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('user'), userId: z.string().min(1).max(64) }),
+  z.object({ agentId: z.string().min(1).max(64), type: z.literal('agent') }),
+]);
 const channelBaseProcedure = wsExternalCompatProcedure
   .use(serverDatabase)
   .use(async ({ ctx, next }) => {
@@ -438,6 +442,8 @@ export const channelRouter = router({
       z.object({
         channelId,
         content: z.string().max(CHANNEL_LIMITS.contentLength),
+        /** Share a contact card; the message is then the card alone. */
+        contactCard: contactCardTarget.optional(),
         fileIds: z.array(z.string().min(1)).max(CHANNEL_LIMITS.attachments).optional(),
         mentions: z.array(z.uuid()).max(100).optional(),
         requestKey: z.string().min(1).max(200),

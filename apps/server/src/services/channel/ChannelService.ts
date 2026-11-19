@@ -1,7 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { ChannelVisibility } from '@lobechat/types';
+import type { ChannelVisibility, ContactCardTarget } from '@lobechat/types';
 import {
   agentDisplayName,
   CHANNEL_LIMITS,
@@ -30,6 +30,7 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
+import { contactCardText } from './contactCard';
 import { notifyChannelDirectMessages } from './directMessage';
 import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
@@ -504,7 +505,31 @@ export class ChannelService {
     await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
   };
 
-  send = async (channelId: string, input: Omit<ChannelSendInput, 'routing'>) => {
+  /**
+   * Posts the caller's message. With `contactCard` the message is the card alone: the server
+   * resolves and checks what the caller may share, stores it as `metadata.contactCard`, and
+   * writes its description as the content, so any text or files sent along are dropped.
+   */
+  send = async (
+    channelId: string,
+    {
+      contactCard,
+      ...message
+    }: Omit<ChannelSendInput, 'routing'> & { contactCard?: ContactCardTarget },
+  ) => {
+    if (!contactCard) return this.sendMessage(channelId, message);
+    const card = await new ContactModel(this.db, this.userId, this.workspaceId).resolveCard(
+      contactCard,
+    );
+    return this.sendMessage(channelId, {
+      ...message,
+      content: contactCardText(card),
+      fileIds: undefined,
+      metadata: { ...message.metadata, contactCard: card },
+    });
+  };
+
+  private sendMessage = async (channelId: string, input: Omit<ChannelSendInput, 'routing'>) => {
     // Explicit reply and mention routing is decided by the repository.
     const config =
       input.replyToId || input.mentions?.length
