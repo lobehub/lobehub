@@ -498,6 +498,63 @@ describe('messagesReducer', () => {
       const newState = messagesReducer(initialState, payload);
       expect(newState).toEqual(initialState);
     });
+
+    it.each([
+      ['chat', messagesReducer],
+      ['conversation', conversationMessagesReducer],
+    ] as const)(
+      'should not duplicate a tool that already exists at the first position in %s',
+      (_, reduce) => {
+        const messageId = 'message2';
+        const existingTool = { ...initialState[1].tools![0] };
+
+        const payload: MessageDispatch = {
+          type: 'addMessageTool',
+          id: messageId,
+          value: existingTool,
+        };
+
+        const newState = reduce(initialState, payload);
+        const updatedMessage = newState.find((m) => m.id === messageId);
+
+        expect(updatedMessage?.tools).toHaveLength(1);
+        expect(updatedMessage?.tools?.[0].id).toBe(existingTool.id);
+      },
+    );
+
+    it.each([
+      ['chat', messagesReducer],
+      ['conversation', conversationMessagesReducer],
+    ] as const)(
+      'should not duplicate a tool that already exists at a later position in %s',
+      (_, reduce) => {
+        const messageId = 'message2';
+        const existingTool = { ...initialState[1].tools![0] };
+        // Seed a second tool so the existing one sits at index 1.
+        const seeded = reduce(initialState, {
+          type: 'addMessageTool',
+          id: messageId,
+          value: {
+            id: 'tc_new',
+            type: 'default',
+            identifier: 'tool1',
+            apiName: 'testFunction',
+            arguments: '',
+          },
+        });
+
+        const payload: MessageDispatch = {
+          type: 'addMessageTool',
+          id: messageId,
+          value: existingTool,
+        };
+
+        const newState = reduce(seeded, payload);
+        const updatedMessage = newState.find((m) => m.id === messageId);
+
+        expect(updatedMessage?.tools?.map((tool) => tool.id)).toEqual(['abc', 'tc_new']);
+      },
+    );
   });
 
   describe('deleteMessageTool', () => {
