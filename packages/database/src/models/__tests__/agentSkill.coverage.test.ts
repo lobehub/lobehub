@@ -41,7 +41,7 @@ describe('AgentSkillModel coverage edges', () => {
 describe('AgentSkillModel import helpers', () => {
   const importModel = new AgentSkillModel(serverDB, importUserId);
 
-  const seed = async (identifier: string, name: string) =>
+  const seed = async (identifier: string, name: string, updatedAt?: Date) =>
     importModel.create({
       content: '# content',
       description: `${name} description`,
@@ -49,6 +49,7 @@ describe('AgentSkillModel import helpers', () => {
       manifest: { description: `${name} description`, name },
       name,
       source: 'user',
+      ...(updatedAt ? { updatedAt } : {}),
     });
 
   beforeEach(async () => {
@@ -118,7 +119,11 @@ describe('AgentSkillModel import helpers', () => {
   });
 
   it('replaceImportedSkill only writes when the stored row is still the one read', async () => {
-    await seed('replace.skill', 'Replace Skill');
+    // Seed an explicitly old timestamp: `replaceImportedSkill` stamps `new Date()`
+    // and compares at millisecond precision, so a fixture created "now" could
+    // share the first replacement's millisecond and stay fresh — the guard would
+    // then let the second write through depending on timing.
+    await seed('replace.skill', 'Replace Skill', new Date('2020-01-01T00:00:00.000Z'));
     const existing = await importModel.findByIdentifier('replace.skill');
 
     const updated = await importModel.replaceImportedSkill(existing!, {
