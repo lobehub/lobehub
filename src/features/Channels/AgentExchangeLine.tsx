@@ -1,4 +1,3 @@
-import { CHANNEL_URL } from '@lobechat/const';
 import type { ChannelPublicMessage } from '@lobechat/types';
 import * as stylex from '@stylexjs/stylex';
 import { ChevronRight } from 'lucide-react';
@@ -8,11 +7,8 @@ import AgentAvatar from '@/components/AgentAvatar';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
+import { exchangeAgentOf, exchangeLinkOf } from './agentExchange';
 import { styles } from './styles';
-
-/** The Agent another Agent's report answers, when the message is such a report. */
-export const exchangeAgentOf = (message: ChannelPublicMessage) =>
-  !message.via && message.author.type === 'agent' ? message.receipt?.agent : undefined;
 
 /**
  * "Messages from <Agent>", as a system line above an Agent's report of what it concluded after
@@ -23,8 +19,8 @@ export function AgentExchangeLine({ message }: { message: ChannelPublicMessage }
   const { t } = useTranslation('channel');
   const navigate = useWorkspaceAwareNavigate();
   const agent = exchangeAgentOf(message);
-  if (!agent || !message.receipt) return null;
-  const { channelId } = message.receipt;
+  const link = exchangeLinkOf(message);
+  if (!agent) return null;
   return (
     <div role="note" {...stylex.props(styles.event)}>
       <Trans
@@ -52,11 +48,11 @@ export function AgentExchangeLine({ message }: { message: ChannelPublicMessage }
         }}
       />
       {/* Only the person who asked is in the conversation between the Agents. */}
-      {message.receipt.canOpen && (
+      {link && (
         <button
           type="button"
           {...stylex.props(styles.eventAction)}
-          onClick={() => navigate(CHANNEL_URL(channelId, null, null))}
+          onClick={() => navigate(link)}
         >
           {t('events.agentExchangeOpen')}
           <ChevronRight size={12} />
