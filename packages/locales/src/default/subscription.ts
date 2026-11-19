@@ -461,11 +461,13 @@ export default {
   'limitation.workspace.insufficientBudget.topup': 'Top up',
   'limitation.workspace.insufficientBudget.upgradeToPro': 'Upgrade to Pro',
   'limitation.workspace.memberBudget.desc':
-    'You have reached the member budget this workspace set for you. Ask a workspace admin for more — top-ups and plan upgrades do not change member limits.',
+    'You have reached the personal budget set by this workspace. Contact a workspace admin to adjust your quota — top-up and plan upgrades do not change member limits.',
   'limitation.workspace.memberBudget.adminDesc':
     'You have reached your member budget in this workspace. As an admin, you can raise it in budget settings — top-ups and plan upgrades do not change member limits.',
   'limitation.workspace.memberBudget.retry': 'Retry',
   'limitation.workspace.memberBudget.request.action': 'Ask an admin for more budget',
+  'limitation.workspace.memberBudget.request.cooldown':
+    'An admin just answered your last request. You can ask again tomorrow.',
   'limitation.workspace.memberBudget.request.error': "Couldn't send the request. Please try again.",
   'limitation.workspace.memberBudget.request.manage': 'Adjust in budget settings',
   'limitation.workspace.memberBudget.request.modal.amount': 'Budget you need (optional)',
@@ -482,6 +484,8 @@ export default {
   'limitation.workspace.memberBudget.request.pendingHint':
     "Admins have been notified. You'll get a notification once they respond, then retry.",
   'limitation.workspace.memberBudget.request.success': 'Request sent to workspace admins',
+  'limitation.workspace.memberBudget.requestDesc':
+    'You have reached the member budget this workspace set for you. Ask a workspace admin for more — top-ups and plan upgrades do not change member limits.',
   'limitation.workspace.memberBudget.title': 'Member budget reached',
   'limitation.hobby.action': 'Configured, continue chatting',
   'limitation.hobby.configAPI': 'Configure API',

@@ -5,6 +5,7 @@ import { agentSignal } from './agentSignal';
 import { botDeferred } from './botDeferred';
 import { botReply } from './botReply';
 import { botWake } from './botWake';
+import { budgetRequest } from './budgetRequest';
 import { connectorOAuth } from './connectorOAuth';
 import { deviceSystemInfo } from './deviceSystemInfo';
 import { heteroControl } from './heteroControl';
@@ -28,6 +29,7 @@ export const redisService = {
   botDeferred,
   botReply,
   botWake,
+  budgetRequest,
   connectorOAuth,
   deviceSystemInfo,
   heteroControl,

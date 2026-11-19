@@ -331,6 +331,17 @@ export const RedisKeys = {
      * Full key: lobechat:page_projection:v1:{documentId}
      */
     pageProjection: (documentId: string): string => `page_projection:v1:${documentId}`,
+    /**
+     * Open member budget requests of one workspace, field = requester user id.
+     * Full key: lobechat:budget_request:v1:{workspaceId}
+     */
+    budgetRequests: (workspaceId: string): string => `budget_request:v1:${workspaceId}`,
+    /**
+     * Set while a member's budget request is cooling down, so repeats notify once.
+     * Full key: lobechat:budget_request_cooldown:v1:{workspaceId}:{userId}
+     */
+    budgetRequestCooldown: (workspaceId: string, userId: string): string =>
+      `budget_request_cooldown:v1:${workspaceId}:${userId}`,
   },
   /**
    * Send-path cache scope — see {@link RedisKeyNamespace.SEND_PATH_CACHE}.
