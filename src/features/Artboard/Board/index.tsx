@@ -108,7 +108,9 @@ const SidePanel = ({
   );
 };
 
-const BoardLayout = ({ onExitFullscreen }: { onExitFullscreen?: () => void }) => {
+type BoardLayoutProps = Pick<BoardViewProps, 'onClose' | 'onExitFullscreen'>;
+
+const BoardLayout = ({ onClose, onExitFullscreen }: BoardLayoutProps) => {
   const board = useBoard();
   useArtboardRevisionWatch(board.artboard);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -128,7 +130,7 @@ const BoardLayout = ({ onExitFullscreen }: { onExitFullscreen?: () => void }) =>
 
   return (
     <Flexbox data-artboard-root flex={1} height={'100%'} ref={rootRef} style={{ minWidth: 0 }}>
-      <Header narrow={narrow} onExitFullscreen={onExitFullscreen} />
+      <Header narrow={narrow} onClose={onClose} onExitFullscreen={onExitFullscreen} />
       <StaleBanner />
       <div {...stylex.props(styles.body)}>
         <Stage narrow={narrow} />
@@ -146,10 +148,13 @@ const BoardLayout = ({ onExitFullscreen }: { onExitFullscreen?: () => void }) =>
 
 interface BoardViewProps {
   artboardId: string;
+  /** Shown in the Works modal: the header offers to close it. */
+  onClose?: () => void;
+  /** Shown covering the whole window: the header offers to return to the side panel. */
   onExitFullscreen?: () => void;
 }
 
-const BoardView = ({ artboardId, onExitFullscreen }: BoardViewProps) => {
+const BoardView = ({ artboardId, onClose, onExitFullscreen }: BoardViewProps) => {
   const { enabled } = useArtboardFeature();
   const { data, error, isLoading, mutate } = useArtboard(artboardId);
 
@@ -167,7 +172,7 @@ const BoardView = ({ artboardId, onExitFullscreen }: BoardViewProps) => {
   return (
     <BoardProvider artboard={data.artboard} fileBaseUrl={resolveArtboardFileBase(data.fileBaseUrl)}>
       <AppBoardCapabilities>
-        <BoardLayout onExitFullscreen={onExitFullscreen} />
+        <BoardLayout onClose={onClose} onExitFullscreen={onExitFullscreen} />
       </AppBoardCapabilities>
     </BoardProvider>
   );

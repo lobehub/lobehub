@@ -17,7 +17,7 @@ const GalleryBoard = ({ artboardId }: { artboardId: string }) => {
   if (!enabled) return null;
   return (
     <Flexbox height={'100%'} style={{ minHeight: 0 }} width={'100%'}>
-      <BoardView artboardId={artboardId} onExitFullscreen={close} />
+      <BoardView artboardId={artboardId} onClose={close} />
     </Flexbox>
   );
 };

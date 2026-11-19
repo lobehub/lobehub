@@ -10,6 +10,7 @@ import {
   Minimize2Icon,
   MousePointer2Icon,
   StampIcon,
+  XIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,8 +27,10 @@ import OpenConversation from '../Gallery/OpenConversation';
 import { artboardActions, useArtboardStore } from '../store';
 import type { BoardMode, VerifyView } from '../types';
 import { floatStyles } from '../Viewport/floatStyles';
+import { headerChrome } from './headerChrome';
 import PageMenu from './PageMenu';
 import ShareButton from './ShareButton';
+import { useTitleBarInset } from './useTitleBarInset';
 
 const BAR_PADDING = 10;
 
@@ -76,18 +79,40 @@ const styles = stylex.create({
 
 interface HeaderProps {
   narrow: boolean;
+  /** The board is in the Works modal; the header closes it. */
+  onClose?: () => void;
+  /** The board covers the whole window; the header returns it to the side panel. */
   onExitFullscreen?: () => void;
 }
 
-const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
-  const { t } = useTranslation('project');
+const Header = ({ narrow, onClose, onExitFullscreen }: HeaderProps) => {
+  const { t } = useTranslation(['project', 'common']);
   const { radius } = useDensityTokens();
   const headerActionSize = useHeaderActionSize();
   const toolSize = { ...headerActionSize, borderRadius: radius, strokeWidth: 1.75 };
   const board = useBoard();
   const { finalized } = board;
-  const bar = sx(styles.bar, onExitFullscreen ? electronStylish.draggable : undefined);
-  const nodrag = onExitFullscreen ? electronStylish.nodrag : undefined;
+  const { coversWindow, exit } = headerChrome({ onClose, onExitFullscreen });
+  const trafficLightPadding = useTitleBarInset();
+  const bar = sx(
+    styles.bar,
+    coversWindow ? electronStylish.draggable : undefined,
+    coversWindow ? { paddingInlineStart: BAR_PADDING + trafficLightPadding } : {},
+  );
+  const nodrag = coversWindow ? electronStylish.nodrag : undefined;
+  const exitButton = {
+    close: { icon: XIcon, onClick: onClose, title: t('close', { ns: 'common' }) },
+    enterFullscreen: {
+      icon: Maximize2Icon,
+      onClick: () => artboardActions.setFullscreen(true),
+      title: t('artboard.header.fullscreen'),
+    },
+    exitFullscreen: {
+      icon: Minimize2Icon,
+      onClick: onExitFullscreen,
+      title: t('artboard.header.exitFullscreen'),
+    },
+  }[exit];
   const pendingLeft = board.blockers.length;
   const hasTask = !!board.artboard.taskId;
   const { data: threads = [] } = useArtboardComments(board.artboard.id);
@@ -218,14 +243,12 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
           onClick={() => artboardActions.setVerifyOpen(!verifyOpen)}
         />
       )}
-      {gallery && <OpenConversation onLeave={onExitFullscreen} />}
+      {gallery && <OpenConversation onLeave={onClose} />}
       <ActionIcon
-        icon={onExitFullscreen ? Minimize2Icon : Maximize2Icon}
+        icon={exitButton.icon}
         size={toolSize}
-        title={t(
-          onExitFullscreen ? 'artboard.header.exitFullscreen' : 'artboard.header.fullscreen',
-        )}
-        onClick={onExitFullscreen ?? (() => artboardActions.setFullscreen(true))}
+        title={exitButton.title}
+        onClick={exitButton.onClick}
       />
       <ShareButton compact={narrow} />
     </Flexbox>
