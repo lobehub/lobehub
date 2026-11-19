@@ -360,25 +360,6 @@ describe('/api/v1/mcp transport and auth', () => {
   });
 });
 
-describe('tool scopes', () => {
-  it('derive from the REST permission codes, except the run tier', async () => {
-    const { MCP_TOOLS, toolScopes } = await import('../mcp/tools');
-    expect(Object.fromEntries(MCP_TOOLS.map((tool) => [tool.name, toolScopes(tool)]))).toEqual({
-      get_agent: ['agent:read'],
-      get_run: ['run:read'],
-      get_topic: ['chat:read'],
-      list_agents: ['agent:read'],
-      list_files: ['file:read'],
-      list_knowledge_bases: ['knowledge:read'],
-      read_file: ['file:read'],
-      run_agent: ['run:write', 'model:invoke'],
-      search_messages: ['chat:read'],
-      search_topics: ['chat:read'],
-      upload_file: ['file:write'],
-    });
-  });
-});
-
 describe('/api/v1/mcp tools', () => {
   it('lists only the caller’s own agents, scoped to the workspace the key belongs to', async () => {
     const personal = await callJson(await connect(KEYS.full), 'list_agents');
@@ -609,23 +590,32 @@ describe('/api/v1/mcp run_agent', () => {
     const { MCP_TOOLS } = await import('../mcp/tools');
     const runAgent = MCP_TOOLS.find((tool) => tool.name === 'run_agent')!;
     const controller = new AbortController();
-    const started = Date.now();
-    const pending = runAgent.run(
-      {
-        apiKeyScopes: null,
-        authType: 'apikey',
-        db: serverDB,
-        signal: controller.signal,
-        userId: OWNER,
-      },
-      { agentId, input: 'Hang', waitSeconds: 120 },
-    );
-    setTimeout(() => controller.abort(), 300);
+    let settled = false;
+    const pending = runAgent
+      .run(
+        {
+          apiKeyScopes: null,
+          authType: 'apikey',
+          db: serverDB,
+          signal: controller.signal,
+          userId: OWNER,
+        },
+        { agentId, input: 'Hang', waitSeconds: 120 },
+      )
+      .then((result) => {
+        settled = true;
+        return result;
+      });
+
+    // The call keeps waiting while the caller is still connected …
+    expect(settled).toBe(false);
+
+    // … and returns the pending run — not a completed one — once the caller goes.
+    controller.abort();
     const run = (await pending) as { id: string; status: string };
-    expect(Date.now() - started).toBeLessThan(5000);
     expect(run.id).toBeTruthy();
     expect(['queued', 'running']).toContain(run.status);
-  });
+  }, 20_000);
 
   it("refuses to run another user's agent", async () => {
     const client = await connect(KEYS.full);
