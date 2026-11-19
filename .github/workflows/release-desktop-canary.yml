@@ -550,6 +550,39 @@ jobs:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
   # ============================================
+  # 通知 Homebrew tap 更新 canary cask
+  # canary Release 发布成功后 ping lobehub/homebrew-tap。
+  # tap 侧还有 6 小时定时 bump 兜底，所以这里失败不阻塞发版。
+  # ============================================
+  notify-homebrew-tap:
+    needs: [publish-release, calculate-version]
+    name: Notify Homebrew Tap
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Create tap token
+        id: tap-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+          owner: lobehub
+          repositories: homebrew-tap
+          permission-contents: write
+
+      - name: Dispatch desktop-release to lobehub/homebrew-tap
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.tap-token.outputs.token }}
+          RELEASE_VERSION: ${{ needs.calculate-version.outputs.version }}
+        run: |
+          payload=$(jq -nc --arg v "${RELEASE_VERSION}" \
+            '{event_type: "desktop-release", client_payload: {channel: "canary", version: $v}}')
+          echo "${payload}"
+          echo "${payload}" | gh api -X POST /repos/lobehub/homebrew-tap/dispatches --input -
+
+  # ============================================
   # 发布到 S3 更新服务器
   # ============================================
   publish-s3:
