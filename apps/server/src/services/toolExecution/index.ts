@@ -20,6 +20,7 @@ import { buildConnectorMcpParams } from '@/server/services/connector/sync';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { resolveMcpClientKinds } from '@/server/services/deviceGateway/deviceChannels';
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
+import { mcpDeviceCallError } from '@/server/services/deviceGateway/mcpCallReply';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { type MCPService } from '../mcp';
@@ -672,10 +673,7 @@ export class ToolExecutionService {
       // classifier replay it (see withoutDeviceReplay).
       return withoutDeviceReplay({
         content: result.content,
-        error: result.errorData ?? {
-          code: 'MCP_DEVICE_EXECUTION_ERROR',
-          message: result.error || result.content,
-        },
+        error: result.errorData ?? mcpDeviceCallError(result),
         errorData: result.errorData,
         success: false,
       });

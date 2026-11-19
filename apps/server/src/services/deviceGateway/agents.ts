@@ -29,6 +29,7 @@ import debug from 'debug';
 import type { McpTool } from '@/libs/mcp/types';
 
 import { invokeDeviceRead } from './deviceRead';
+import { classifyMcpCallReply } from './mcpCallReply';
 import type { DeviceClientGetter } from './types';
 
 const log = debug('lobe-server:device-gateway');
@@ -292,7 +293,7 @@ export async function executeMcpCall(
   );
 
   try {
-    return await client.executeMcpCall({ ...mcpCall, timeout });
+    return classifyMcpCallReply(mcpCall, await client.executeMcpCall({ ...mcpCall, timeout }));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     log('executeMcpCall: error — %s', message);

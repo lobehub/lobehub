@@ -150,6 +150,36 @@ describe('DeviceGateway', () => {
       expect(mockClient.executeMcpCall).toHaveBeenCalledWith({ ...mcpCall, timeout: 60_000 });
     });
 
+    it('names an lh connect too old for MCP calls instead of an unknown tool', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      // CLI 0.0.78 dispatches every call by apiName among its built-in tools
+      mockClient.executeMcpCall.mockResolvedValue({
+        content: '',
+        error: 'Unknown tool API: getStock',
+        success: false,
+      });
+
+      const result = await new DeviceGateway().executeMcpCall(mcpCall);
+
+      expect(result).toEqual({
+        content: expect.stringContaining('`lh connect` too old for MCP servers'),
+        error: 'MCP_DEVICE_CLIENT_OUTDATED',
+        success: false,
+      });
+      expect(result.content).toContain("MCP tool 'getStock' of 'kimi-datasource' did not run");
+      expect(result.content).toContain('lh update');
+    });
+
+    it("passes the MCP server's own failure through", async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      const failure = { content: 'Unknown tool API: other', error: 'boom', success: false };
+      mockClient.executeMcpCall.mockResolvedValue(failure);
+
+      expect(await new DeviceGateway().executeMcpCall(mcpCall)).toEqual(failure);
+    });
+
     it('should return error result on exception', async () => {
       mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
