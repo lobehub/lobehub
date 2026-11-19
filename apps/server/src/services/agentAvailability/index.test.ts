@@ -3,11 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentAvailabilityService } from './index';
 
 const mocks = vi.hoisted(() => ({
-  accountBindings: {} as Record<string, { accountId: string; enabled: boolean; role: string }[]>,
-  deviceBindings: {} as Record<string, string>,
   deviceByAgent: {} as Record<string, string>,
-  loads: {} as Record<string, { enabled: boolean; rateLimitedUntil?: number | null }>,
   online: [] as { deviceId: string; online: boolean }[],
+  quota: {} as Record<string, { resetsAt?: number; status: string }>,
+  quotaCalls: [] as { agentId: string; deviceId?: string }[],
   visible: [] as string[],
 }));
 
@@ -15,15 +14,6 @@ vi.mock('@/database/models/agent', () => ({
   AgentModel: class {
     queryAgencyRoutingByIds = async (ids: string[]) =>
       ids.filter((id) => mocks.visible.includes(id)).map((id) => ({ id }));
-  },
-}));
-vi.mock('@/database/models/agentQuota', () => ({
-  AgentAccountBindingModel: class {
-    listByAgent = async (agentId: string) => mocks.accountBindings[agentId] ?? [];
-  },
-  AgentDeviceAccountBindingModel: class {
-    find = async (agentId: string) =>
-      mocks.deviceBindings[agentId] ? { accountId: mocks.deviceBindings[agentId] } : undefined;
   },
 }));
 vi.mock('@/database/models/device', () => ({ DeviceModel: class {} }));
@@ -38,10 +28,10 @@ vi.mock('@/server/routers/lambda/deviceBoundAgents', () => ({
 }));
 vi.mock('@/server/services/agentQuota', () => ({
   AgentQuotaService: class {
-    resolveAccountLoads = async (ids: string[]) =>
-      ids.flatMap((accountId) =>
-        mocks.loads[accountId] ? [{ accountId, ...mocks.loads[accountId] }] : [],
-      );
+    resolveAgentAvailability = async (agentId: string, options: { deviceId?: string }) => {
+      mocks.quotaCalls.push({ agentId, deviceId: options.deviceId });
+      return mocks.quota[agentId] ?? { accountIds: [], status: 'untracked' };
+    };
   },
 }));
 vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
@@ -53,10 +43,11 @@ vi.mock('@/business/server/managedDevice', () => ({
 vi.mock('@/server/services/redis', () => ({
   redisService: {
     agentAvailability: {
-      readAccounts: async (ids: string[]) => ids.map(() => undefined),
       readDevices: async (_pool: string, ids: string[]) => ids.map(() => undefined),
-      rememberAccounts: async () => {},
+      readQuotas: async (_user: string, _pool: string, keys: unknown[]) =>
+        keys.map(() => undefined),
       rememberDevices: async () => {},
+      rememberQuotas: async () => {},
     },
   },
 }));
@@ -74,11 +65,10 @@ const now = 1_000_000;
 const service = () => new AgentAvailabilityService(db, 'user-1');
 
 beforeEach(() => {
-  mocks.accountBindings = {};
-  mocks.deviceBindings = {};
   mocks.deviceByAgent = {};
-  mocks.loads = {};
   mocks.online = [];
+  mocks.quota = {};
+  mocks.quotaCalls = [];
   mocks.visible = [];
   jobCounts.length = 0;
 });
@@ -92,47 +82,31 @@ describe('AgentAvailabilityService', () => {
 
     expect(Object.keys(result)).toEqual(['mine']);
     expect(result.mine).toMatchObject({ activeJobs: 1, dispatchable: true, status: 'working' });
+    expect(mocks.quotaCalls.map((call) => call.agentId)).toEqual(['mine']);
   });
 
-  it('ignores a device pin whose account left the agent rotation', async () => {
+  it('judges quota on the device row the agent runs on', async () => {
     mocks.visible = ['a1'];
     mocks.deviceByAgent = { a1: 'd1' };
     mocks.online = [{ deviceId: 'd1', online: true }];
-    mocks.deviceBindings = { a1: 'benched' };
-    mocks.accountBindings = { a1: [{ accountId: 'fresh', enabled: true, role: 'pool' }] };
-    mocks.loads = {
-      benched: { enabled: true, rateLimitedUntil: now + 60_000 },
-      fresh: { enabled: true },
-    };
+    mocks.quota = { a1: { resetsAt: now + 60_000, status: 'exhausted' } };
 
     const result = await service().getAvailability(['a1'], now);
 
-    expect(result.a1).toMatchObject({ dispatchable: true, status: 'idle' });
-  });
-
-  it('judges a device-pinned agent by its pinned account alone', async () => {
-    mocks.visible = ['a1'];
-    mocks.deviceByAgent = { a1: 'd1' };
-    mocks.online = [{ deviceId: 'd1', online: true }];
-    mocks.deviceBindings = { a1: 'benched' };
-    mocks.accountBindings = {
-      a1: [
-        { accountId: 'benched', enabled: true, role: 'pinned' },
-        { accountId: 'fresh', enabled: true, role: 'pool' },
-      ],
-    };
-    mocks.loads = {
-      benched: { enabled: true, rateLimitedUntil: now + 60_000 },
-      fresh: { enabled: true },
-    };
-
-    const result = await service().getAvailability(['a1'], now);
-
+    expect(mocks.quotaCalls).toEqual([{ agentId: 'a1', deviceId: 'row-d1' }]);
     expect(result.a1).toMatchObject({
       dispatchable: false,
       resetsAt: now + 60_000,
       status: 'offDuty',
     });
+  });
+
+  it('keeps an agent with untracked quota on duty', async () => {
+    mocks.visible = ['a1'];
+
+    const result = await service().getAvailability(['a1'], now);
+
+    expect(result.a1).toMatchObject({ dispatchable: true, status: 'online' });
   });
 
   it('reads an agent whose device is not connected as offline and not dispatchable', async () => {

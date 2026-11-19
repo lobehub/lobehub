@@ -4,8 +4,8 @@ Import `redisService` from `@/server/services/redis`. Domains expose business op
 callers do not choose a provider, prefix, key, SET options or claim lifetime.
 
 - `agentAvailability`: what the dispatch layer reads to tell whether an Agent can take work —
-  device presence per principal pool (30 seconds) and quota load per provider account (a minute,
-  or until a benched account's reset, at most six hours). Batched reads; a miss or no Redis reads
+  device presence per principal pool (30 seconds) and each agent's quota verdict per caller, agent
+  and device (a minute, or until a spent agent's reset, at most ten minutes). Batched reads; a miss or no Redis reads
   as unknown and the caller does the live read.
 - `deviceSystemInfo.remember`: principal/device scoped answers, three minute default freshness;
   callers may request a freshness bound through the existing gateway API.

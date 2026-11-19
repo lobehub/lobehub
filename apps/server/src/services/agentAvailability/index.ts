@@ -7,10 +7,6 @@ import pMap from 'p-map';
 import { agentDispatchPolicy } from '@/business/server/agentDispatchPolicy';
 import { managedDeviceProvider } from '@/business/server/managedDevice';
 import { AgentModel } from '@/database/models/agent';
-import {
-  AgentAccountBindingModel,
-  AgentDeviceAccountBindingModel,
-} from '@/database/models/agentQuota';
 import { DeviceModel } from '@/database/models/device';
 import { channelJobs, channelMembers } from '@/database/schemas';
 import { loadAgentDeviceBindings } from '@/server/routers/lambda/deviceBoundAgents';
@@ -19,11 +15,11 @@ import { resolveDeviceRowId } from '@/server/services/agentQuota/resolveDeviceRo
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { redisService } from '@/server/services/redis';
 import type {
-  CachedAccountLoad,
+  CachedAgentQuota,
   CachedDevicePresence,
 } from '@/server/services/redis/agentAvailability';
 
-import { type AvailabilityAccountLoad, resolveAgentAvailability } from './resolve';
+import { resolveAgentAvailability } from './resolve';
 
 const log = debug('lobe-server:agent-availability');
 
@@ -89,15 +85,11 @@ export class AgentAvailabilityService {
       userId: this.userId,
       workspaceId: this.workspaceId,
     });
-    const [devices, accountsByAgent, activeJobs] = await Promise.all([
+    const [devices, quotas, activeJobs] = await Promise.all([
       this.readDevices([...new Set(Object.values(deviceByAgent))]),
-      this.readAgentAccounts(ids, deviceByAgent),
+      this.readQuotas(ids, deviceByAgent, now),
       this.countActiveJobs(ids),
     ]);
-    const loads = await this.readAccountLoads(
-      [...new Set([...accountsByAgent.values()].flat())],
-      now,
-    );
 
     const result: Record<string, AgentAvailability> = {};
     for (const agentId of ids) {
@@ -106,8 +98,7 @@ export class AgentAvailabilityService {
         activeJobs: activeJobs.get(agentId) ?? 0,
         device: deviceId ? devices.get(deviceId) : undefined,
         deviceId,
-        loads: (accountsByAgent.get(agentId) ?? []).flatMap((id) => loads.get(id) ?? []),
-        now,
+        quota: quotas.get(agentId),
       });
       result[agentId] = {
         ...availability,
@@ -165,20 +156,31 @@ export class AgentAvailabilityService {
   };
 
   /**
-   * The accounts each agent can run on: the one pinned on its device when there is one (the
-   * rest of its pool, logged in on other machines, cannot keep it on duty there), otherwise
-   * every enabled account bound to it.
+   * Whether each agent would find quota where it runs, as `AgentQuotaService.resolveAgentAvailability`
+   * judges it: on the accounts a run there is routed to (the device's choice, a strict legacy
+   * pin, or the pool), and only those the caller can see. The answer is remembered per caller,
+   * agent and device, so one member's view never answers for another's.
    */
-  private readAgentAccounts = async (
+  private readQuotas = async (
     agentIds: string[],
     deviceByAgent: Record<string, string>,
-  ): Promise<Map<string, string[]>> => {
-    const bindings = new AgentAccountBindingModel(this.db, this.userId, this.workspaceId);
-    const deviceBindings = new AgentDeviceAccountBindingModel(
-      this.db,
+    now: number,
+  ): Promise<Map<string, CachedAgentQuota>> => {
+    const keyOf = (agentId: string) => ({ agentId, deviceId: deviceByAgent[agentId] });
+    const cached = await redisService.agentAvailability.readQuotas(
       this.userId,
-      this.workspaceId,
+      this.pool,
+      agentIds.map(keyOf),
     );
+    const quotas = new Map<string, CachedAgentQuota>();
+    const missing: string[] = [];
+    agentIds.forEach((agentId, i) => {
+      if (cached[i]) quotas.set(agentId, cached[i]);
+      else missing.push(agentId);
+    });
+    if (missing.length === 0) return quotas;
+
+    const quotaService = new AgentQuotaService(this.db, this.userId, this.workspaceId);
     const deviceModel = new DeviceModel(this.db, this.userId, this.workspaceId);
     const rowIds = new Map<string, Promise<string | undefined>>();
     const rowIdOf = (deviceId: string) => {
@@ -190,58 +192,39 @@ export class AgentAvailabilityService {
       return id;
     };
 
-    const entries = await pMap(
-      agentIds,
-      async (agentId): Promise<[string, string[]]> => {
-        const usable = (await bindings.listByAgent(agentId))
-          .filter((row) => row.enabled && row.role !== 'disabled')
-          .map((row) => row.accountId);
+    const live = await pMap(
+      missing,
+      async (agentId): Promise<[string, CachedAgentQuota] | undefined> => {
         const deviceId = deviceByAgent[agentId];
-        if (deviceId) {
-          const rowId = await rowIdOf(deviceId);
-          const pinned = rowId && (await deviceBindings.find(agentId, rowId))?.accountId;
-          // A pin counts only while its account is still in the agent's rotation, as the run's
-          // own account choice (`AgentQuotaService.deviceChoiceOf`) decides it.
-          if (pinned && usable.includes(pinned)) return [agentId, [pinned]];
+        try {
+          const quota = await quotaService.resolveAgentAvailability(agentId, {
+            deviceId: deviceId ? await rowIdOf(deviceId) : undefined,
+            now,
+          });
+          return [
+            agentId,
+            {
+              exhausted: quota.status === 'exhausted',
+              ...(quota.resetsAt !== undefined && { resetsAt: quota.resetsAt }),
+            },
+          ];
+        } catch (error) {
+          // Quota is a nice-to-have: a failed read only means "off duty" was not ruled in.
+          log('quota read failed for %s: %O', agentId, error);
         }
-        return [agentId, usable];
       },
       { concurrency: 5 },
     );
-    return new Map(entries);
-  };
 
-  private readAccountLoads = async (accountIds: string[], now: number) => {
-    const loads = new Map<string, AvailabilityAccountLoad>();
-    if (accountIds.length === 0) return loads;
-
-    const cached = await redisService.agentAvailability.readAccounts(accountIds);
-    const missing: string[] = [];
-    accountIds.forEach((accountId, i) => {
-      if (cached[i]) loads.set(accountId, cached[i]);
-      else missing.push(accountId);
-    });
-    if (missing.length === 0) return loads;
-
-    const live = new Map<string, CachedAccountLoad>();
-    const views = await new AgentQuotaService(this.db, this.userId, this.workspaceId)
-      .resolveAccountLoads(missing, now)
-      .catch((error) => {
-        // Quota is a nice-to-have: a failed read only means "off duty" was not ruled in.
-        log('quota load read failed: %O', error);
-        return [];
-      });
-    for (const view of views)
-      live.set(view.accountId, {
-        enabled: view.enabled,
-        rateLimitedUntil: view.rateLimitedUntil,
-        sessionUtil: view.sessionUtil,
-        weeklyUtil: view.weeklyUtil,
-      });
-
-    void redisService.agentAvailability.rememberAccounts(live, now);
-    for (const [accountId, load] of live) loads.set(accountId, load);
-    return loads;
+    const fresh = live.filter((entry): entry is [string, CachedAgentQuota] => !!entry);
+    void redisService.agentAvailability.rememberQuotas(
+      this.userId,
+      this.pool,
+      fresh.map(([agentId, quota]) => ({ ...keyOf(agentId), quota })),
+      now,
+    );
+    for (const [agentId, quota] of fresh) quotas.set(agentId, quota);
+    return quotas;
   };
 
   /** Channel replies each agent has queued or running, across every Channel. */

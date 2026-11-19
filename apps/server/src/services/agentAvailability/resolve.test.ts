@@ -1,44 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { quotaExhaustion, resolveAgentAvailability } from './resolve';
+import { resolveAgentAvailability } from './resolve';
 
-const now = 1_000_000;
-const benched = { enabled: true, rateLimitedUntil: now + 60_000 };
-const fresh = { enabled: true, sessionUtil: 20, weeklyUtil: 30 };
-
-describe('quotaExhaustion', () => {
-  it('does not judge an agent without enabled accounts', () => {
-    expect(quotaExhaustion([], now)).toEqual({ exhausted: false });
-    expect(quotaExhaustion([{ ...benched, enabled: false }], now)).toEqual({ exhausted: false });
-  });
-
-  it('keeps an agent on duty while one account has headroom', () => {
-    expect(quotaExhaustion([benched, fresh], now)).toEqual({ exhausted: false });
-  });
-
-  it('returns the earliest reset when every account is benched by a session limit', () => {
-    const later = { enabled: true, rateLimitedUntil: now + 120_000 };
-    expect(quotaExhaustion([later, benched], now)).toEqual({
-      exhausted: true,
-      resetsAt: now + 60_000,
-    });
-  });
-
-  it('promises no reset when a weekly limit benches an account', () => {
-    expect(quotaExhaustion([benched, { enabled: true, weeklyUtil: 100 }], now)).toEqual({
-      exhausted: true,
-    });
-  });
-
-  it('ignores a rate limit that already lifted', () => {
-    expect(quotaExhaustion([{ enabled: true, rateLimitedUntil: now - 1 }], now)).toEqual({
-      exhausted: false,
-    });
-  });
-});
+const spent = { exhausted: true, resetsAt: 1_060_000 };
+const fresh = { exhausted: false };
 
 describe('resolveAgentAvailability', () => {
-  const base = { activeJobs: 0, loads: [], now };
+  const base = { activeJobs: 0 };
 
   it('reads a cloud agent with nothing running as online', () => {
     expect(resolveAgentAvailability(base)).toEqual({ activeJobs: 0, status: 'online' });
@@ -72,22 +40,26 @@ describe('resolveAgentAvailability', () => {
   });
 
   it('reads an agent with queued or running replies as working', () => {
-    expect(resolveAgentAvailability({ ...base, activeJobs: 2, loads: [fresh] })).toEqual({
+    expect(resolveAgentAvailability({ ...base, activeJobs: 2, quota: fresh })).toEqual({
       activeJobs: 2,
       status: 'working',
     });
   });
 
   it('reads an agent out of quota as off duty, even while a run finishes', () => {
-    expect(resolveAgentAvailability({ ...base, activeJobs: 1, loads: [benched] })).toEqual({
+    expect(resolveAgentAvailability({ ...base, activeJobs: 1, quota: spent })).toEqual({
       activeJobs: 1,
-      resetsAt: now + 60_000,
+      resetsAt: 1_060_000,
       status: 'offDuty',
     });
   });
 
+  it('does not rule off duty in when the quota could not be read', () => {
+    expect(resolveAgentAvailability(base).status).toBe('online');
+  });
+
   it('lets an offline device hide the quota', () => {
-    expect(resolveAgentAvailability({ ...base, deviceId: 'd1', loads: [benched] }).status).toBe(
+    expect(resolveAgentAvailability({ ...base, deviceId: 'd1', quota: spent }).status).toBe(
       'offline',
     );
   });

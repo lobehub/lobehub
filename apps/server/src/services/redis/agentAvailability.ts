@@ -10,20 +10,27 @@ export interface CachedDevicePresence {
   online: boolean;
 }
 
-/** One provider account's load, the part availability reads. */
-export interface CachedAccountLoad {
-  enabled: boolean;
-  rateLimitedUntil?: number | null;
-  sessionUtil?: number;
-  weeklyUtil?: number;
+/** Whether one agent's quota is spent where it runs. */
+export interface CachedAgentQuota {
+  exhausted: boolean;
+  resetsAt?: number;
+}
+
+/** Which agent, on which device, a quota verdict is about. */
+export interface AgentQuotaKey {
+  agentId: string;
+  deviceId?: string;
 }
 
 /** Presence moves with a socket, so a remembered answer stays short. */
 const DEVICE_TTL_MS = 30 * 1000;
 /** Quota readings arrive with runs; a minute keeps a refill from going unnoticed for long. */
-const ACCOUNT_TTL_MS = 60 * 1000;
-/** A benched account stays benched until its reset, but never trust that for longer than this. */
-const ACCOUNT_BENCHED_MAX_TTL_MS = 6 * 60 * 60 * 1000;
+const QUOTA_TTL_MS = 60 * 1000;
+/**
+ * A spent agent stays spent until its reset, but an account added or re-enabled meanwhile
+ * would put it back on duty, so never trust that for longer than this.
+ */
+const QUOTA_EXHAUSTED_MAX_TTL_MS = 10 * 60 * 1000;
 
 const parse = <T>(raw: string | null): T | undefined => {
   if (raw === null) return;
@@ -55,10 +62,10 @@ const writeMany = async (entries: { key: string; ttlMs: number; value: unknown }
   await pipeline.exec().catch(() => undefined);
 };
 
-const accountTtlMs = (load: CachedAccountLoad, now: number) =>
-  load.rateLimitedUntil != null && load.rateLimitedUntil > now
-    ? Math.min(load.rateLimitedUntil - now, ACCOUNT_BENCHED_MAX_TTL_MS)
-    : ACCOUNT_TTL_MS;
+const quotaTtlMs = (quota: CachedAgentQuota, now: number) =>
+  quota.exhausted && quota.resetsAt !== undefined && quota.resetsAt > now
+    ? Math.min(quota.resetsAt - now, QUOTA_EXHAUSTED_MAX_TTL_MS)
+    : QUOTA_TTL_MS;
 
 export const agentAvailability = {
   /** Remembered presence of `deviceIds` in one principal pool, `undefined` where unknown. */
@@ -76,22 +83,29 @@ export const agentAvailability = {
       })),
     ),
 
-  /** Remembered loads of `accountIds`, `undefined` where unknown. */
-  readAccounts: (accountIds: string[]) =>
-    readMany<CachedAccountLoad>(
-      accountIds.map((accountId) => RedisKeys.agentAvailability.account(accountId)),
+  /** Remembered quota verdicts, as `userId` sees them in `pool`; `undefined` where unknown. */
+  readQuotas: (userId: string, pool: string, keys: AgentQuotaKey[]) =>
+    readMany<CachedAgentQuota>(
+      keys.map(({ agentId, deviceId }) =>
+        RedisKeys.agentAvailability.quota(userId, pool, agentId, deviceId),
+      ),
     ),
 
   /**
-   * Remember account loads. A benched account is kept until its reset, so the key expiring is
-   * the quota coming back.
+   * Remember quota verdicts. A spent agent is kept until its reset (bounded), so the key
+   * expiring is the quota coming back.
    */
-  rememberAccounts: (loads: Map<string, CachedAccountLoad>, now = Date.now()) =>
+  rememberQuotas: (
+    userId: string,
+    pool: string,
+    entries: (AgentQuotaKey & { quota: CachedAgentQuota })[],
+    now = Date.now(),
+  ) =>
     writeMany(
-      [...loads].map(([accountId, value]) => ({
-        key: RedisKeys.agentAvailability.account(accountId),
-        ttlMs: accountTtlMs(value, now),
-        value,
+      entries.map(({ agentId, deviceId, quota }) => ({
+        key: RedisKeys.agentAvailability.quota(userId, pool, agentId, deviceId),
+        ttlMs: quotaTtlMs(quota, now),
+        value: quota,
       })),
     ),
 };

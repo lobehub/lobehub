@@ -16,8 +16,8 @@
  */
 export const RedisKeyNamespace = {
   /**
-   * Whether Agents can take work: device presence per principal pool and quota load per
-   * provider account, read by the dispatch layer and the contact card's status.
+   * Whether Agents can take work: device presence per principal pool and each agent's quota
+   * verdict per caller, read by the dispatch layer and the contact card's status.
    */
   AGENT_AVAILABILITY: 'agent-availability',
   /**
@@ -109,10 +109,11 @@ export const RedisKeys = {
      */
     device: (pool: string, deviceId: string): string => `device:v1:${pool}:${deviceId}`,
     /**
-     * One provider account's quota load.
-     * Full key: agent-availability:account:v1:{accountId}
+     * Whether one agent's quota is spent where it runs, as one caller sees its accounts.
+     * Full key: agent-availability:quota:v1:{userId}:{pool}:{agentId}:{deviceId|none}
      */
-    account: (accountId: string): string => `account:v1:${accountId}`,
+    quota: (userId: string, pool: string, agentId: string, deviceId?: string): string =>
+      `quota:v1:${userId}:${pool}:${agentId}:${deviceId ?? 'none'}`,
   },
   inboundWebhook: {
     wake: (id: string) => `wake:v1:${id}`,
