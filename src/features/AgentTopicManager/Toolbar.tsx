@@ -30,6 +30,7 @@ import {
   MessageCircle,
   MoreHorizontal,
   Plus,
+  Share2,
   TestTubeIcon,
   Webhook,
   X,
@@ -171,6 +172,7 @@ const STATUS_OPTIONS: { key: StatusFilter; labelKey: string }[] = [
 const TRIGGER_OPTIONS: TriggerFilter[] = [
   'chat',
   'channel',
+  'share',
   'bot',
   'webhook',
   'api',
@@ -184,6 +186,7 @@ const TRIGGER_ICON: Record<TriggerFilter, LucideIcon> = {
   channel: Hash,
   chat: MessageCircle,
   eval: TestTubeIcon,
+  share: Share2,
   task: ListTodoIcon,
   webhook: Webhook,
 };
@@ -268,13 +271,16 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelOptions 
   const channelsEnabled = useChannelsEnabled();
   const triggerItems: DropdownItem[] = useMemo(
     () =>
-      TRIGGER_OPTIONS.filter((tr) => tr !== 'channel' || channelsEnabled).map((tr) => ({
-        extra: <CheckMark visible={triggers.includes(tr)} />,
-        icon: <Icon icon={TRIGGER_ICON[tr]} size={14} />,
-        key: tr,
-        label: t(`management.filters.trigger.${tr}` as any) as string,
-        onClick: () => toggleTrigger(tr),
-      })),
+      // Visitor conversations are Channels too, opened on the Channel page.
+      TRIGGER_OPTIONS.filter((tr) => (tr !== 'channel' && tr !== 'share') || channelsEnabled).map(
+        (tr) => ({
+          extra: <CheckMark visible={triggers.includes(tr)} />,
+          icon: <Icon icon={TRIGGER_ICON[tr]} size={14} />,
+          key: tr,
+          label: t(`management.filters.trigger.${tr}` as any) as string,
+          onClick: () => toggleTrigger(tr),
+        }),
+      ),
     [channelsEnabled, triggers, t, toggleTrigger],
   );
 

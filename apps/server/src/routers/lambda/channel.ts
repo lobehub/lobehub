@@ -244,6 +244,16 @@ export const channelRouter = router({
       data: await ctx.channelService.detail(input.channelId, input),
       success: true,
     })),
+  /**
+   * Visitors' conversations with the caller's shared Agent, for its owner to read; empty unless
+   * the share lets the owner read visitor conversations.
+   */
+  shareVisitors: channelProcedure
+    .input(z.object({ agentId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.channelService.shareVisitors(input.agentId),
+      success: true,
+    })),
   /** Messages in a Channel and its Threads containing every word of `query`, newest first. */
   searchMessages: channelProcedure
     .input(

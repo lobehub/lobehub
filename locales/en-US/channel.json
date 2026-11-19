@@ -260,6 +260,7 @@
   "settings.visibility.privateHint": "Only invited members can see this channel. Turn it on to let everyone in the workspace find and join it.",
   "settings.visibility.publicHint": "Everyone in the workspace can find and join this channel.",
   "settings.visibility.title": "Public channel",
+  "shareVisitorReadOnlyNotice": "A visitor's conversation through your share link. You can read it but can't reply.",
   "sort.by": "Sort by",
   "sort.by.createdAt": "Date created",
   "sort.by.title": "Name",

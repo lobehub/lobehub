@@ -260,6 +260,7 @@
   "settings.visibility.privateHint": "只有被邀请的成员能看到这个频道。开启后，工作区里的所有人都可以找到并加入。",
   "settings.visibility.publicHint": "工作区里的所有人都可以找到并加入这个频道。",
   "settings.visibility.title": "公开频道",
+  "shareVisitorReadOnlyNotice": "这是访客通过你的分享链接发起的对话，你只能查看，不能回复。",
   "sort.by": "排序方式",
   "sort.by.createdAt": "创建时间",
   "sort.by.title": "名称",

@@ -812,7 +812,7 @@ export type ChatTopicStatus = z.infer<typeof chatTopicStatusSchema>;
 
 export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   completedAt?: Date | null;
-  /** Server-side mock until real cost aggregation lands. */
+  /** USD cost of the topic, rolled up from its messages and runs; set by detail queries. */
   cost?: number | null;
   description?: string | null;
   favorite?: boolean;
@@ -860,7 +860,7 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   sortUpdatedAt?: number;
   status?: ChatTopicStatus | null;
   title: string;
-  /** Server-side mock until real token aggregation lands. */
+  /** Tokens the topic used, rolled up with `cost`; set by detail queries. */
   tokenUsage?: number | null;
   trigger?: string | null;
   userId?: string;
