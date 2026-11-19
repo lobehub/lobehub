@@ -16,7 +16,7 @@ const Header = memo<PropsWithChildren>(() => {
         breadcrumb={[
           {
             href: '/marketplace',
-            title: t('tab.community'),
+            title: t('tab.marketplace'),
           },
         ]}
       />

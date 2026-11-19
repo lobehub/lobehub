@@ -127,7 +127,7 @@ export const useNavLayout = (): NavLayout => {
           activeTab: MARKETPLACE_SEGMENT,
           icon: getRouteById('community')!.icon,
           key: SidebarTabKey.Community,
-          title: t('tab.community'),
+          title: t('tab.marketplace'),
           url: showMarket ? MARKETPLACE_PATH : MARKETPLACE_INSTALLED_SKILLS_PATH,
         },
         {

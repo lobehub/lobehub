@@ -566,7 +566,7 @@ const SkillList = memo<SkillListProps>(
               {
                 items: renderCommunityMCPs(),
                 key: 'communityTools',
-                label: t('skillGroup.communityTools', 'Community Tools'),
+                label: t('skillGroup.communityTools', 'Marketplace Tools'),
               },
               {
                 items: renderCustomConnectors(),
@@ -762,14 +762,14 @@ const SkillList = memo<SkillListProps>(
         {hasCommunitySkills &&
           renderSection(
             'communitySkills',
-            t('skillGroup.communitySkills', 'Community Skills'),
+            t('skillGroup.communitySkills', 'Marketplace Skills'),
             renderAgentSkills(marketAgentSkills),
           )}
 
         {hasCommunityTools &&
           renderSection(
             'communityTools',
-            t('skillGroup.communityTools', 'Community Tools'),
+            t('skillGroup.communityTools', 'Marketplace Tools'),
             renderCommunityMCPs(),
           )}
 

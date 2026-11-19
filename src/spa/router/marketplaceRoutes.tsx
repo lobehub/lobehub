@@ -78,7 +78,7 @@ export const marketplaceRoute: RouteObject = {
               handle: {
                 meta: routeMeta({
                   icon: ShapesIcon,
-                  titleKey: 'navigation.discoverAssistants',
+                  titleKey: 'navigation.marketplaceAgents',
                 }),
               },
               index: true,
@@ -98,7 +98,7 @@ export const marketplaceRoute: RouteObject = {
                 'Desktop > Discover > List > Model',
               ),
               handle: {
-                meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverModels' }),
+                meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceModels' }),
               },
               index: true,
             },
@@ -115,7 +115,7 @@ export const marketplaceRoute: RouteObject = {
             'Desktop > Discover > List > Provider',
           ),
           handle: {
-            meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverProviders' }),
+            meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceProviders' }),
           },
           path: 'provider',
         },
@@ -127,7 +127,7 @@ export const marketplaceRoute: RouteObject = {
                 'Desktop > Discover > List > Skill',
               ),
               handle: {
-                meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discover' }),
+                meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceSkills' }),
               },
               index: true,
             },
@@ -146,7 +146,7 @@ export const marketplaceRoute: RouteObject = {
                 'Desktop > Discover > List > MCP',
               ),
               handle: {
-                meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverMcp' }),
+                meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceMcp' }),
               },
               index: true,
             },
@@ -175,7 +175,7 @@ export const marketplaceRoute: RouteObject = {
             meta: routeMeta({
               icon: ShapesIcon,
               Skeleton: CommunityHomeSkeleton,
-              titleKey: 'navigation.discover',
+              titleKey: 'navigation.marketplace',
             }),
           },
           index: true,

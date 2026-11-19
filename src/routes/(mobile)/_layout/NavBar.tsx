@@ -66,7 +66,7 @@ const NavBar = memo(() => {
           onClick: () => {
             navigate(showMarket ? MARKETPLACE_PATH : MARKETPLACE_INSTALLED_SKILLS_PATH);
           },
-          title: t('tab.community'),
+          title: t('tab.marketplace'),
         },
         {
           icon: (active: boolean) => (

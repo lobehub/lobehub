@@ -131,7 +131,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Mobile > Discover > List > Home',
               { preloadId: 'mobile-community' },
             ),
-            handle: { meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discover' }) },
+            handle: { meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplace' }) },
             index: true,
           },
           {
@@ -142,7 +142,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
                   'Mobile > Discover > List > Agent',
                 ),
                 handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverAssistants' }),
+                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceAgents' }),
                 },
                 path: 'agent',
               },
@@ -156,7 +156,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
                   'Mobile > Discover > List > Model',
                 ),
                 handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverModels' }),
+                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceModels' }),
                 },
                 path: 'model',
               },
@@ -168,7 +168,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Mobile > Discover > List > Provider',
             ),
             handle: {
-              meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverProviders' }),
+              meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceProviders' }),
             },
             path: 'provider',
           },
@@ -180,7 +180,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
                   'Mobile > Discover > List > MCP',
                 ),
                 handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverMcp' }),
+                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceMcp' }),
                 },
                 path: 'mcp',
               },
@@ -191,7 +191,9 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/community/(list)/skill'),
               'Mobile > Discover > List > Skill',
             ),
-            handle: { meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discover' }) },
+            handle: {
+              meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceSkills' }),
+            },
             path: 'skill',
           },
           {

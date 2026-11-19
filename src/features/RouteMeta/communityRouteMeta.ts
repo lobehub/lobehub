@@ -14,7 +14,7 @@ const createCommunityDetailRouteMeta = (name: CommunityDynamicMetaName): RouteMe
       import('./CommunityDynamicMeta').then((module) => ({ default: module[name] })),
     ),
     icon: ShapesIcon,
-    titleKey: 'navigation.discover',
+    titleKey: 'navigation.marketplace',
   });
 
 /** Community detail routes (`/marketplace/<type>/:slug`), titled after the item they show. */

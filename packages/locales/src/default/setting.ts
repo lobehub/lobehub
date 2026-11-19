@@ -1528,7 +1528,7 @@ export default {
     'A skill is a set of steps it picks up only when a task needs them.',
   'settingAgent.skillsPage.group.title': 'Turned on for this agent',
   'settingAgent.skills.source.builtin': 'Built-in',
-  'settingAgent.skills.source.community': 'Community',
+  'settingAgent.skills.source.community': 'Marketplace',
   'settingAgent.skills.source.custom': 'Custom',
   'settingAgent.devicePolicy.noPublicDevice': 'No public devices',
   'settingAgent.devicePolicy.privateDeviceFixed':
@@ -1554,7 +1554,7 @@ export default {
   'settingAgent.topicSharePolicy.title': 'Topic sharing',
   'settingAgent.toolsConfig.title': 'Tools',
   'settingAgent.submit': 'Update Agent',
-  'settingAgent.tag.desc': 'Agent tags will be displayed in the Agent Community',
+  'settingAgent.tag.desc': 'Agent tags will be displayed in the Marketplace',
   'settingAgent.tag.placeholder': 'Enter tag',
   'settingAgent.tag.title': 'Tag',
   'settingAgent.title': 'Agent info',
@@ -2032,8 +2032,8 @@ export default {
   'skillGroup.builtinSkills': 'Built-in Skills',
   'skillGroup.builtinTools': 'Built-in Tools',
   'skillGroup.communityConnectors': 'OAuth Connectors',
-  'skillGroup.communitySkills': 'Community Skills',
-  'skillGroup.communityTools': 'Community Tools',
+  'skillGroup.communitySkills': 'Marketplace Skills',
+  'skillGroup.communityTools': 'Marketplace Tools',
   'skillGroup.customConnectors': 'Custom Connectors',
   'skillGroup.customSkills': 'Custom Skills',
   'skillStore.button': 'Skill Store',
@@ -2043,7 +2043,7 @@ export default {
   'skillStore.networkError': 'Network error, please try again',
   'skillStore.rateLimited': 'Too many requests just now. Please wait a moment and try again.',
   'skillStore.search': 'Search skills by name or keyword, press Enter to search…',
-  'skillStore.tabs.community': 'Community',
+  'skillStore.tabs.community': 'Marketplace',
   'skillStore.tabs.custom': 'Custom',
   'skillStore.tabs.lobehub': 'LobeHub',
   'skillStore.tabs.mcp': 'MCP',
@@ -4262,11 +4262,11 @@ When I am ___, I need ___
   'workspace.onboarding.step4.subtitleWithAgents':
     '{{count}} agent(s) ready to help. Jump in and start collaborating with your team.',
   'workspace.onboarding.step4.marketProfileNudge':
-    "We've set up a Community profile for <strong>{{name}}</strong> so workspace agents can be installed. <cta>Customize it in Community</cta>.",
+    "We've set up a Community profile for <strong>{{name}}</strong> so workspace agents can be installed. <cta>Customize it in the Marketplace</cta>.",
   'workspace.onboarding.step4.marketProfileAdjust':
-    "We've automatically created a Community profile for your workspace. <cta>Adjust it in Community</cta>.",
+    "We've automatically created a Community profile for your workspace. <cta>Adjust it in the Marketplace</cta>.",
   'workspace.onboarding.step4.marketProfileCreate':
-    "We couldn't set up your Community profile automatically. <cta>Create one in Community</cta> so workspace agents can be shared.",
+    "We couldn't set up your Community profile automatically. <cta>Create one in the Marketplace</cta> so workspace agents can be shared.",
   'workspace.onboarding.step4.cta': 'Enter workspace',
   'workspaceSetting.breadcrumb.settings': 'Settings',
   'workspaceSetting.devices.connectTitlePrivate': 'Add private device',
