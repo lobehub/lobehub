@@ -38,7 +38,7 @@ import {
   repositorySlug,
 } from './sandboxEnvironmentOptions';
 import SandboxRepositoryMenu, { type SandboxRepositoryOption } from './SandboxRepositoryMenu';
-import { useIsSharedAgent, useSandboxEnvironmentList } from './useSandboxEnvironmentList';
+import { useSandboxEnvironmentList } from './useSandboxEnvironmentList';
 import { isPersistentSelection, type SandboxSelection } from './useSandboxPlacement';
 import { workingDirectoryChipStyles } from './workingDirectoryChipStyles';
 
@@ -100,6 +100,8 @@ interface SandboxDrivePickerProps {
    * project's settings rather than in the workspace's list.
    */
   projectId?: string;
+  /** Whether the conversation's agent is workspace-public; it applies published environments only. */
+  sharedAgent?: boolean;
   topicId?: string;
   /** Where this conversation works today. */
   value: SandboxSelection;
@@ -131,7 +133,15 @@ const folderName = (path: string) => path.split('/').pop() || path;
  * replaces it.
  */
 const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
-  ({ entitled, modeInEnvironmentMenu = true, onChange, projectId, topicId, value }) => {
+  ({
+    entitled,
+    modeInEnvironmentMenu = true,
+    onChange,
+    projectId,
+    sharedAgent = false,
+    topicId,
+    value,
+  }) => {
     const { t } = useTranslation(['chat', 'device']);
     const [open, setOpen] = useState(false);
     const workspaceId = useActiveWorkspaceId();
@@ -145,7 +155,6 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
     // a repository is cloned into it.
     const repositoryOnly = modeInEnvironmentMenu && !onDrive;
 
-    const sharedAgent = useIsSharedAgent();
     const {
       environments,
       failed: environmentsFailed,

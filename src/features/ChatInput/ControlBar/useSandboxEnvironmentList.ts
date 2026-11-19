@@ -11,12 +11,14 @@ import type { SandboxRepositoryOption } from './SandboxRepositoryMenu';
 
 /**
  * Whether the conversation's agent is workspace-public. Such an agent runs on
- * its caller's session and applies published environments only.
+ * its caller's session and applies published environments only. Read by the
+ * conversation's own agent: in split or embedded views it need not be the
+ * active one, and the server checks the topic's agent.
  */
-export const useIsSharedAgent = () => {
+export const useIsSharedAgent = (agentId: string) => {
   const workspaceId = useActiveWorkspaceId();
   return useAgentStore(
-    (s) => !!workspaceId && agentSelectors.currentAgentVisibility(s) === 'public',
+    (s) => !!workspaceId && agentSelectors.getAgentVisibilityById(agentId)(s) === 'public',
   );
 };
 

@@ -62,7 +62,7 @@ export const useSandboxModeSelect = (
     topicId: scopeTopicId,
   } = useSandboxPlacement(agentId, topicId);
   const onDrive = isPersistentSelection(selection);
-  const sharedAgent = useIsSharedAgent();
+  const sharedAgent = useIsSharedAgent(agentId);
   const {
     environments: projectEnvironments,
     loaded: projectEnvironmentsLoaded,

@@ -55,7 +55,7 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
     scopeTopicId,
   );
   const workspaceId = useActiveWorkspaceId();
-  const sharedAgent = useIsSharedAgent();
+  const sharedAgent = useIsSharedAgent(agentId);
   // Only a run in the sandbox needs the project's environment.
   const { environments: projectEnvironments } = useProjectSandboxEnvironments(
     projectId,
@@ -120,6 +120,7 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
       entitled={status === 'ready'}
       modeInEnvironmentMenu={modeInEnvironmentMenu}
       projectId={projectId}
+      sharedAgent={sharedAgent}
       topicId={topicId}
       value={selection}
       onChange={pick}

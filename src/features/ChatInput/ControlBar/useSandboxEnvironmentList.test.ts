@@ -2,6 +2,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  useIsSharedAgent,
   useProjectSandboxEnvironments,
   useSandboxEnvironmentList,
 } from './useSandboxEnvironmentList';
@@ -12,10 +13,18 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
-  useActiveWorkspaceId: () => undefined,
+  useActiveWorkspaceId: () => 'workspace-1',
 }));
+// The active agent is private; the conversation's own agent is workspace-public.
 vi.mock('@/store/agent', () => ({
-  useAgentStore: (selector: (s: object) => unknown) => selector({}),
+  useAgentStore: (selector: (s: object) => unknown) =>
+    selector({
+      activeAgentId: 'agent-private',
+      agentMap: {
+        'agent-private': { visibility: 'private' },
+        'agent-public': { visibility: 'public' },
+      },
+    }),
 }));
 vi.mock('@/services/environment', () => ({
   environmentService: { listEnvironments: state.listEnvironments },
@@ -96,5 +105,14 @@ describe('useProjectSandboxEnvironments', () => {
     renderHook(() => useProjectSandboxEnvironments('project-1', false, false));
 
     expect(state.fetchEnvironments).toHaveBeenCalledWith('project-1', false);
+  });
+});
+
+describe('useIsSharedAgent', () => {
+  // A split or embedded conversation's agent need not be the active one, and
+  // the server checks the topic's own agent.
+  it("reads the conversation's own agent, not the active one", () => {
+    expect(renderHook(() => useIsSharedAgent('agent-public')).result.current).toBe(true);
+    expect(renderHook(() => useIsSharedAgent('agent-private')).result.current).toBe(false);
   });
 });
