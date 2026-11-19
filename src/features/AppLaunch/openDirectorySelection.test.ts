@@ -1,0 +1,92 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  type BoundDirectoryLike,
+  normalizeComparablePath,
+  pickDirectoryForPath,
+  pickLatestTopic,
+} from './openDirectorySelection';
+
+const directory = (
+  id: string,
+  path: string,
+  extra: Partial<BoundDirectoryLike> = {},
+): BoundDirectoryLike => ({ id, path, projectId: `prj_${id}`, ...extra });
+
+describe('normalizeComparablePath', () => {
+  it('should ignore trailing separators', () => {
+    expect(normalizeComparablePath('/repo/')).toBe('/repo');
+    expect(normalizeComparablePath('/repo')).toBe('/repo');
+  });
+
+  it('should keep the filesystem root as a single separator', () => {
+    expect(normalizeComparablePath('/')).toBe('/');
+  });
+});
+
+describe('pickDirectoryForPath', () => {
+  it('should prefer an exact match over an ancestor binding', () => {
+    expect(
+      pickDirectoryForPath(
+        [directory('root', '/repo'), directory('nested', '/repo/apps')],
+        '/repo/apps',
+      ),
+    ).toEqual({ directory: directory('nested', '/repo/apps'), matchedParent: false });
+  });
+
+  it('should match when only the trailing separator differs', () => {
+    expect(pickDirectoryForPath([directory('a', '/repo/')], '/repo')).toEqual({
+      directory: directory('a', '/repo/'),
+      matchedParent: false,
+    });
+  });
+
+  it('should fall back to the nearest ancestor when launched from a subfolder', () => {
+    expect(
+      pickDirectoryForPath(
+        [
+          directory('root', '/repo'),
+          directory('nested', '/repo/apps/desktop'),
+          directory('other', '/elsewhere'),
+        ],
+        '/repo/apps/desktop/src',
+      ),
+    ).toEqual({ directory: directory('nested', '/repo/apps/desktop'), matchedParent: true });
+  });
+
+  it('should not match a shared name prefix', () => {
+    // `/repo` is not an ancestor of `/repository`.
+    expect(pickDirectoryForPath([directory('a', '/repo')], '/repository')).toBeUndefined();
+  });
+
+  it('should prefer a runnable binding of the same path', () => {
+    // A binding whose device went offline must not shadow a live one.
+    expect(
+      pickDirectoryForPath(
+        [directory('stale', '/repo'), directory('live', '/repo', { runnable: true })],
+        '/repo',
+      ),
+    ).toEqual({ directory: directory('live', '/repo', { runnable: true }), matchedParent: false });
+  });
+
+  it('should return undefined for an empty binding list', () => {
+    expect(pickDirectoryForPath([], '/repo')).toBeUndefined();
+  });
+});
+
+describe('pickLatestTopic', () => {
+  it('should pick the newest topic regardless of list order', () => {
+    // `listTopics` returns ascending `updatedAt`; the rule must not depend on it.
+    expect(
+      pickLatestTopic([
+        { id: 'old', updatedAt: '2026-01-01T00:00:00Z' },
+        { id: 'new', updatedAt: '2026-11-01T00:00:00Z' },
+        { id: 'mid', updatedAt: new Date('2026-06-01T00:00:00Z') },
+      ])?.id,
+    ).toBe('new');
+  });
+
+  it('should return undefined without topics', () => {
+    expect(pickLatestTopic([])).toBeUndefined();
+  });
+});

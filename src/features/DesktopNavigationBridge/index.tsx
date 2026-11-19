@@ -3,6 +3,7 @@
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { memo, useCallback } from 'react';
 
+import { openDirectoryInApp } from '@/features/AppLaunch/openDirectory';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 const DesktopNavigationBridge = memo(() => {
@@ -20,7 +21,29 @@ const DesktopNavigationBridge = memo(() => {
     [navigate],
   );
 
+  /**
+   * A shell launch (`lh app .`, `LobeHub ~/Code/app`, Finder's "Open With")
+   * arrives as a canonical directory. It lands here rather than in
+   * `ProtocolUrlHandler` because that component only mounts inside the agent
+   * and group layouts — a second `lh app` while the app sits on a project page
+   * would reach no listener at all.
+   */
+  const handleOpenDirectory = useCallback(
+    ({ newWindow, path }: { newWindow: boolean; path: string }) => {
+      void openDirectoryInApp({
+        navigate,
+        // `--new-window` means "don't take over the conversation I already have".
+        reuseExisting: !newWindow,
+        targetPath: path,
+      }).catch((error) => {
+        console.error('[DesktopNavigationBridge] Failed to open directory:', error);
+      });
+    },
+    [navigate],
+  );
+
   useWatchBroadcast('navigate', handleNavigate);
+  useWatchBroadcast('openDirectory', handleOpenDirectory);
 
   return null;
 });
