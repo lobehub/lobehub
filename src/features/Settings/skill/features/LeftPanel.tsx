@@ -1,18 +1,15 @@
 'use client';
 
 import { Button, DropdownMenu, Flexbox, Icon, SearchBar, Text, Tooltip } from '@lobehub/ui';
-import { GithubIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronDown, FileArchive, Grid2x2Plus, Link, Plus, Store } from 'lucide-react';
+import { ChevronDown, Grid2x2Plus, Import, Plus, Store } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { CustomConnectorModal } from '@/features/Connectors';
 import { createSkillStoreModal } from '@/features/SkillStore';
-import { openImportFromGithubModal } from '@/features/SkillStore/SkillList/ImportFromGithubModal';
-import { openImportFromUrlModal } from '@/features/SkillStore/SkillList/ImportFromUrlModal';
-import { openUploadSkillModal } from '@/features/SkillStore/SkillList/UploadSkillModal';
+import { openSkillImportModal } from '@/features/SkillStore/SkillImportModal';
 import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 import { usePermission } from '@/hooks/usePermission';
 
@@ -141,28 +138,12 @@ const LeftPanel = memo<LeftPanelProps>(
         ...(!isConnectorView
           ? [
               {
-                desc: t('tab.importFromGithub.desc'),
+                desc: t('agentSkillModal.sources'),
                 disabled: !canCreate,
-                icon: <Icon icon={GithubIcon} />,
-                key: 'importGithub',
-                label: t('tab.importFromGithub'),
-                onClick: () => openImportFromGithubModal(),
-              },
-              {
-                desc: t('tab.importFromUrl.desc'),
-                disabled: !canCreate,
-                icon: <Icon icon={Link} />,
-                key: 'importUrl',
-                label: t('tab.importFromUrl'),
-                onClick: () => openImportFromUrlModal(),
-              },
-              {
-                desc: t('tab.uploadZip.desc'),
-                disabled: !canCreate,
-                icon: <Icon icon={FileArchive} />,
-                key: 'uploadZip',
-                label: t('tab.uploadZip'),
-                onClick: () => openUploadSkillModal(),
+                icon: <Icon icon={Import} />,
+                key: 'import',
+                label: t('agentSkillModal.title'),
+                onClick: openSkillImportModal,
               },
             ]
           : []),
@@ -264,54 +245,14 @@ const LeftPanel = memo<LeftPanelProps>(
                   </span>
                 </Tooltip>
               ) : (
-                // Skill view: import a skill from a URL, GitHub, or a zip upload.
-                <DropdownMenu
-                  nativeButton={false}
-                  placement="bottomRight"
-                  items={[
-                    {
-                      icon: <Icon icon={Link} />,
-                      key: 'importUrl',
-                      label: (
-                        <Flexbox gap={2}>
-                          <span>{t('tab.importFromUrl')}</span>
-                          <Text style={{ fontSize: 12 }} type="secondary">
-                            {t('tab.importFromUrl.desc')}
-                          </Text>
-                        </Flexbox>
-                      ),
-                      onClick: () => openImportFromUrlModal(),
-                    },
-                    {
-                      icon: <Icon icon={GithubIcon} />,
-                      key: 'importGithub',
-                      label: (
-                        <Flexbox gap={2}>
-                          <span>{t('tab.importFromGithub')}</span>
-                          <Text style={{ fontSize: 12 }} type="secondary">
-                            {t('tab.importFromGithub.desc')}
-                          </Text>
-                        </Flexbox>
-                      ),
-                      onClick: () => openImportFromGithubModal(),
-                    },
-                    {
-                      icon: <Icon icon={FileArchive} />,
-                      key: 'uploadZip',
-                      label: (
-                        <Flexbox gap={2}>
-                          <span>{t('tab.uploadZip')}</span>
-                          <Text style={{ fontSize: 12 }} type="secondary">
-                            {t('tab.uploadZip.desc')}
-                          </Text>
-                        </Flexbox>
-                      ),
-                      onClick: () => openUploadSkillModal(),
-                    },
-                  ]}
-                >
-                  <Button aria-label={t('connectorMarket.add')} icon={Grid2x2Plus} size="small" />
-                </DropdownMenu>
+                <Button
+                  aria-label={t('agentSkillModal.title')}
+                  disabled={!canCreate}
+                  icon={Import}
+                  size="small"
+                  title={t('agentSkillModal.title')}
+                  onClick={openSkillImportModal}
+                />
               )}
               <Button
                 aria-label={t('skillStore.title')}

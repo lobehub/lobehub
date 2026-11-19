@@ -120,6 +120,22 @@ describe('useGithubSkillImport', () => {
     expect(mocks.refresh).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps completed imports when refreshing the library fails and retries only the refresh', async () => {
+    mocks.discoverGitHubSkills.mockResolvedValue({ candidates: [demo], commit, scope: 'scope' });
+    mocks.importGitHubSkills.mockResolvedValue([{ path: demo.path, status: 'created' }]);
+    mocks.refresh.mockRejectedValueOnce(new Error('Offline'));
+
+    const { result } = await scanned();
+    await act(() => result.current.install([demo.path]));
+    expect(result.current.failure).toEqual({ details: 'Offline', stage: 'refresh' });
+    expect(result.current.results).toEqual([{ path: demo.path, status: 'created' }]);
+
+    await act(() => result.current.refreshLibrary());
+    expect(result.current.failure).toBeUndefined();
+    expect(mocks.importGitHubSkills).toHaveBeenCalledTimes(1);
+    expect(mocks.refresh).toHaveBeenCalledTimes(2);
+  });
+
   it('drops the scan and the failure when the URL is edited', async () => {
     mocks.discoverGitHubSkills.mockResolvedValue({ candidates: [demo], commit, scope: 'scope' });
 
