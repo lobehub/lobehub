@@ -91,6 +91,7 @@
   "environment.inherited.deviceOffline": "此 Agent 的设备已离线，请重新连接设备，或移除此 Agent。",
   "environment.inherited.deviceUnavailable": "当前空间无法使用此 Agent 的设备，请在它的设置里更换设备，或移除此 Agent。",
   "environment.permissionRequired": "你无权保存这些成员，请检查频道和 Agent 的访问权限。",
+  "environment.remoteHost": "这个助手在它自己的主机上运行，无需选择设备。",
   "environment.resolveRequired": "请先处理成员下方提示的问题。",
   "environment.saveFailed": "未能保存频道成员，已保留你的选择，请重试。",
   "environment.saved": "运行环境已更新",

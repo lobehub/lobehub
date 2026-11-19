@@ -7,6 +7,7 @@ import {
   CHANNEL_LIMITS,
   defaultChannelAgentDirectory,
   isChannelRuntime,
+  isRemoteChannelRuntime,
 } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -81,6 +82,8 @@ export class ChannelService {
     if (!isChannelRuntime(runtime))
       throw new ChannelError('BAD_REQUEST', 'Unsupported Channel runtime');
     const config: NonNullable<ChannelAddAgentInput['config']> = {};
+    if (input.deviceId && isRemoteChannelRuntime(runtime))
+      throw new ChannelError('BAD_REQUEST', 'A remote Agent runs on its own host, not a device');
     if (input.deviceId) {
       const device = this.workspaceId
         ? await this.deviceModel.findWorkspaceDeviceById(input.deviceId)

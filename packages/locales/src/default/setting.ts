@@ -2160,6 +2160,14 @@ When I am ___, I need ___
   'systemAgent.expertise.modelDesc':
     'Model used to draft expertise domains and extract reusable experience from conversations.',
   'systemAgent.expertise.title': 'Agent Self-Evolution',
+  'systemAgent.fileEmbedding.modelDesc': 'Embeds file chunks and knowledge base search queries',
+  'systemAgent.fileEmbedding.precedence':
+    'In your personal space, this choice overrides the deployment default. System recommended uses DEFAULT_FILES_CONFIG or the built-in default.',
+  'systemAgent.fileEmbedding.reindexHint':
+    'Only files embedded after a change use the new model. Files already embedded keep their old vectors and may match poorly in semantic search; delete and re-upload them to embed them with the new model.',
+  'systemAgent.fileEmbedding.title': 'File & Knowledge Base Embedding',
+  'systemAgent.fileEmbedding.workspaceDefault':
+    'Team workspaces use the deployment default for file embedding and knowledge base search.',
   'systemAgent.goal.modelDesc':
     'Model used to turn a persistent goal into its standing acceptance criteria.',
   'systemAgent.goal.title': 'Goal Creation',

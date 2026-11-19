@@ -36,6 +36,7 @@ export default {
     'This Agent is no longer available. Remove it and choose another.',
   'environment.checkingDevice': 'Checking status',
   'environment.followAgent': "Use the Agent's own settings",
+  'environment.remoteHost': 'This Agent runs on its own host, so there is no device to choose.',
   'environment.configurationFailed': 'Could not load this Agent’s settings. Try again.',
   'environment.configurationLoading': 'Loading this Agent’s settings…',
   'environment.connectorUpgradeRequired':
