@@ -5381,6 +5381,7 @@ When I am ___, I need ___
   'automations.empty.desc':
     'Ask an agent to keep an eye on a connector for you, like "Tell me when CI fails on this PR". Subscriptions you approve show up here.',
   'environments.form.addRepository': 'Add repository',
+  'environments.form.addTfsRepository': 'Add TFS repository',
   'environments.form.noRepositories': 'No repositories. Conversations start in an empty folder.',
   'environments.form.noVariables': 'No variables',
   'environments.github.openIntegrations': 'Open GitHub settings',

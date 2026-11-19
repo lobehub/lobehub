@@ -881,6 +881,7 @@
   "environments.form.addEnv": "新建变量",
   "environments.form.addPastedRepository": "添加",
   "environments.form.addRepository": "添加仓库",
+  "environments.form.addTfsRepository": "添加 TFS 仓库",
   "environments.form.addSource": "添加仓库",
   "environments.form.appliesOnBuild": "在新建副本时生效。已有副本会一直用它创建时的那份定义——重建也是照它再跑一遍，要用上改动就新建一个副本。",
   "environments.form.appliesOnInit": "下次将环境应用到工作目录时生效；已初始化过的文件夹保持原样。",

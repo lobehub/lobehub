@@ -9,6 +9,14 @@ interface SourcedConfiguration {
   sources?: { kind?: string; url?: string }[];
 }
 
+export type RepositorySourceKind = 'github' | 'git' | 'tfs';
+
+export const repositorySourceKind = (url?: string): RepositorySourceKind => {
+  if (parseTfsRepository(url ?? '')) return 'tfs';
+  if (/^https:\/\/github\.com\//.test(url ?? '')) return 'github';
+  return 'git';
+};
+
 /**
  * The one repository an environment builds from, as `owner/name`.
  *

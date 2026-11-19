@@ -881,6 +881,7 @@
   "environments.form.addEnv": "New variable",
   "environments.form.addPastedRepository": "Add",
   "environments.form.addRepository": "Add repository",
+  "environments.form.addTfsRepository": "Add TFS repository",
   "environments.form.addSource": "Add repository",
   "environments.form.appliesOnBuild": "Applied when a copy is created. Existing copies keep the definition they were made with — a rebuild replays that one, so use a new copy to pick this up.",
   "environments.form.appliesOnInit": "Takes effect the next time the environment is applied to a working directory. Folders it was already applied to keep what they have.",

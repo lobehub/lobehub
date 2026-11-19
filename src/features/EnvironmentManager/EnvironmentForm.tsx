@@ -36,6 +36,7 @@ import { describeError } from './errorMessage';
 import GithubRepositoryPicker, { type GithubRepositorySelection } from './GithubRepositoryPicker';
 import InlineField from './InlineField';
 import PanelSection from './PanelSection';
+import { repositorySourceKind } from './repository';
 import type { SandboxEnvironment } from './useEnvironmentData';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -98,6 +99,7 @@ const RepositoryRow = memo<{
   const { t } = useTranslation('setting');
   const [editing, setEditing] = useState(false);
   const github = repositoryPathOf(source.url);
+  const sourceKind = repositorySourceKind(source.url);
   const label = github ? `${github.owner}/${github.repository}` : source.url;
   // One line: the name, then each setting as an icon and its value. The
   // default branch says nothing worth a word, so it shows only when one is set.
@@ -122,7 +124,7 @@ const RepositoryRow = memo<{
   return (
     <div className={styles.item}>
       <Flexbox horizontal align={'center'} gap={12}>
-        <Github size={16} />
+        {sourceKind === 'github' ? <Github size={16} /> : <GitBranchIcon size={16} />}
         <Flexbox horizontal align={'center'} flex={1} gap={16} style={{ minWidth: 0 }}>
           <Text ellipsis style={{ flex: 'none', maxWidth: '50%' }} weight={500}>
             {label}
@@ -565,8 +567,12 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
             >
               {t('environments.form.addRepository')}
             </Button>
-            <Button size={'small'} onClick={() => setPickingTfsRepository(true)}>
-              TFS / Azure DevOps
+            <Button
+              icon={<Icon icon={GitBranchIcon} />}
+              size={'small'}
+              onClick={() => setPickingTfsRepository(true)}
+            >
+              {t('environments.form.addTfsRepository')}
             </Button>
           </Flexbox>
         )}
