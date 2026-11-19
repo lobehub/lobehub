@@ -62,6 +62,23 @@ describe('buildAgentToolRows', () => {
     expect(rows[1].ownConnection).toBeUndefined();
   });
 
+  it.each(['auto', 'disabled'] as const)(
+    'keeps the own account switch editable and reflects its %s mode when the library account needs authorization',
+    (mode) => {
+      const own = connector('gmail', { metadata: { composio: { status: 'ACTIVE' } } });
+      const rows = buildAgentToolRows({
+        agentConnectors: [own],
+        agentId: AGENT,
+        libraryOptions: [option('gmail', false, false)],
+        plugins: [{ identifier: 'gmail', mode }],
+      });
+
+      expect(rows).toMatchObject([
+        { canDisable: true, enabled: mode === 'auto', ownConnection: own },
+      ]);
+    },
+  );
+
   it('keeps a tool with its own connection in place when it is turned off', () => {
     const rows = buildAgentToolRows({
       agentConnectors: [connector('notion')],

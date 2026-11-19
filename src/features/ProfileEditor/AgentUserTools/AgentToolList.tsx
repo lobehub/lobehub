@@ -1,6 +1,5 @@
 'use client';
 
-import { hasCallableMcpEndpoint } from '@lobechat/const';
 import { upsertConnectorEnabled } from '@lobechat/types';
 import { Button, type ItemType } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
@@ -21,7 +20,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
-import { connectorSelectors, isLibraryConnectorForAgent } from '@/store/tool/slices/connector';
+import { connectorSelectors } from '@/store/tool/slices/connector';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 import { useUserStore } from '@/store/user';
 
@@ -32,7 +31,7 @@ import ProfilePopoverContent from '../PopoverContent';
 import ToolListGroup, { type ToolGroupMeta } from '../ToolListGroup';
 import { buildAgentToolRows, countAvailableTools } from './agentToolRows';
 import ConnectionMenu from './ConnectionMenu';
-import { isComposioConnection } from './useOwnConnection';
+import { isAvailableLibraryConnection, isComposioConnection } from './useOwnConnection';
 
 interface Props extends Pick<AgentToolProps, 'onOpenDetail'> {
   agentId: string;
@@ -74,14 +73,13 @@ const Tools = ({ agentId, group, onOpenDetail }: Props) => {
     (!inWorkspace || !connector.userId || connector.userId === currentUserId || isWorkspaceOwner);
 
   /** The library's connection for a tool that signs in somewhere; nothing for other tools. */
-  const libraryConnectionOf = (identifier: string) => {
-    const connector = libraryConnectors.find(
-      (c) => c.identifier === identifier && isLibraryConnectorForAgent(c, agentId),
+  const libraryConnectionOf = (identifier: string) =>
+    libraryConnectors.find(
+      (c) =>
+        c.identifier === identifier &&
+        isAvailableLibraryConnection(c, agentId) &&
+        (!isComposioConnection(c) || isComposioEnabled),
     );
-    if (!connector) return;
-    if (isComposioConnection(connector)) return isComposioEnabled ? connector : undefined;
-    return hasCallableMcpEndpoint(connector) ? connector : undefined;
-  };
 
   const ownConnectionNote: ItemConnection = {
     desc: t(
@@ -105,9 +103,13 @@ const Tools = ({ agentId, group, onOpenDetail }: Props) => {
     ),
   };
 
-  const setEnabled = (id: string, inLibrary: boolean, enabled: boolean) => {
-    if (inLibrary) return void tools.setPolicy(id, enabled ? 'auto' : 'disabled');
-    // A tool only this agent has is not in the library's list, so its switch is written here.
+  const setEnabled = (
+    id: string,
+    ownConnection: ConnectorWithTools | undefined,
+    enabled: boolean,
+  ) => {
+    if (!ownConnection) return void tools.setPolicy(id, enabled ? 'auto' : 'disabled');
+    // An agent's own connector stays independently switchable when the library needs authorization.
     void updateAgentConfigById(agentId, {
       plugins: upsertConnectorEnabled(plugins, id, enabled),
     });
@@ -220,7 +222,7 @@ const Tools = ({ agentId, group, onOpenDetail }: Props) => {
               />
             }
             onOpen={onOpenDetail}
-            onToggle={(on) => setEnabled(id, inLibrary, on)}
+            onToggle={(on) => setEnabled(id, ownConnection, on)}
           />
         );
       })}

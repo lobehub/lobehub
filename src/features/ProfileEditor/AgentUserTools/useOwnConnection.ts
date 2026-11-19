@@ -25,6 +25,12 @@ export const ownConnectionSettingsPath = (connectorId: string) =>
 export const isComposioConnection = (connector: ConnectorWithTools) =>
   !!connector.metadata && 'composio' in connector.metadata && !!connector.metadata.composio;
 
+export const isAvailableLibraryConnection = (row: ConnectorWithTools, agentId: string) =>
+  isLibraryConnectorForAgent(row, agentId) &&
+  row.isEnabled &&
+  row.status === 'connected' &&
+  (isComposioConnection(row) || hasCallableMcpEndpoint(row));
+
 /**
  * What an agent can do about the connection one of its tools runs on: get its own instead of
  * the library's, manage it, or give it up.
@@ -97,8 +103,7 @@ export const useOwnConnection = (agentId: string) => {
         if (
           !fallback ||
           fallback.identifier !== own.identifier ||
-          !isLibraryConnectorForAgent(fallback, agentId) ||
-          !(isComposioConnection(fallback) || hasCallableMcpEndpoint(fallback))
+          !isAvailableLibraryConnection(fallback, agentId)
         ) {
           toast.error(t('settingAgent.tools.connection.switchFailed', { name: own.name }));
           return;

@@ -60,7 +60,7 @@ export const buildAgentToolRows = ({
       // The library's own state (a connection awaiting authorization, say) does not hold a
       // tool the agent runs on its own connection.
       canDisable: ownConnection ? true : option.canDisable,
-      enabled: option.enabled,
+      enabled: ownConnection ? getConnectorMode(plugins, option.id) === 'auto' : option.enabled,
       id: option.id,
       inLibrary: true,
       ownConnection,
