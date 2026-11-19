@@ -827,8 +827,6 @@
   "share.visitor.profile.terms.title": "Antes de comenzar",
   "share.visitor.profile.terms.tools_one": "{{count}} herramienta está abierta a los visitantes.",
   "share.visitor.profile.terms.tools_other": "{{count}} herramientas están abiertas a los visitantes.",
-  "share.visitor.profile.terms.uploads": "Puedes adjuntar archivos; este Ajan tiene {{size}} de almacenamiento de archivos para visitantes.",
-  "share.visitor.profile.terms.uploadsOff": "Los adjuntos están desactivados.",
   "share.visitor.profile.terms.visibilityCreator": "El creador ha activado la revisión de sesiones, por lo que puede leer esta conversación.",
   "share.visitor.profile.terms.visibilityPrivate": "Solo tú puedes ver tus conversaciones.",
   "share.visitor.profile.works.desc": "Seleccionado por el creador. Mira lo que este Ajan puede entregar.",

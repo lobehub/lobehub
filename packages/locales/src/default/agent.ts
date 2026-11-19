@@ -1125,9 +1125,6 @@ export default {
   'share.visitor.profile.terms.title': 'Before you start',
   'share.visitor.profile.terms.tools_one': '{{count}} tool is open to visitors.',
   'share.visitor.profile.terms.tools_other': '{{count}} tools are open to visitors.',
-  'share.visitor.profile.terms.uploads':
-    'You can attach files; this Agent has {{size}} of file storage for visitors.',
-  'share.visitor.profile.terms.uploadsOff': 'Attachments are turned off.',
   'share.visitor.profile.terms.visibilityCreator':
     'The creator has turned on topic access and may read the messages in your topics.',
   'share.visitor.profile.terms.visibilityPrivate': 'Only you can see your topics.',

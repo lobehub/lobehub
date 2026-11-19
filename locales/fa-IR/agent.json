@@ -827,8 +827,6 @@
   "share.visitor.profile.terms.title": "قبل از شروع",
   "share.visitor.profile.terms.tools_one": "{{count}} ابزار برای بازدیدکنندگان باز است.",
   "share.visitor.profile.terms.tools_other": "{{count}} ابزار برای بازدیدکنندگان باز است.",
-  "share.visitor.profile.terms.uploads": "می‌توانید فایل‌ها را پیوست کنید؛ این Ajan دارای {{size}} فضای ذخیره‌سازی فایل برای بازدیدکنندگان است.",
-  "share.visitor.profile.terms.uploadsOff": "پیوست‌ها غیرفعال هستند.",
   "share.visitor.profile.terms.visibilityCreator": "سازنده بازبینی جلسه را فعال کرده است، بنابراین می‌تواند این گفتگو را بخواند.",
   "share.visitor.profile.terms.visibilityPrivate": "فقط شما می‌توانید گفتگوهای خود را ببینید.",
   "share.visitor.profile.works.desc": "توسط سازنده انتخاب شده است. ببینید این آژان چه چیزی می‌تواند ارائه دهد.",

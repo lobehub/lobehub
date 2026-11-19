@@ -827,8 +827,6 @@
   "share.visitor.profile.terms.title": "Trước khi bạn bắt đầu",
   "share.visitor.profile.terms.tools_one": "{{count}} công cụ được mở cho khách truy cập.",
   "share.visitor.profile.terms.tools_other": "{{count}} công cụ được mở cho khách truy cập.",
-  "share.visitor.profile.terms.uploads": "Bạn có thể đính kèm tệp; Ajan này có {{size}} dung lượng lưu trữ tệp cho khách truy cập.",
-  "share.visitor.profile.terms.uploadsOff": "Đính kèm đã bị tắt.",
   "share.visitor.profile.terms.visibilityCreator": "Người tạo đã bật chế độ xem lại phiên, vì vậy họ có thể đọc cuộc trò chuyện này.",
   "share.visitor.profile.terms.visibilityPrivate": "Chỉ bạn có thể xem các cuộc trò chuyện của mình.",
   "share.visitor.profile.works.desc": "Được chọn bởi người tạo. Xem ajan này có thể cung cấp gì.",

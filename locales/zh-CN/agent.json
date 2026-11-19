@@ -899,8 +899,6 @@
   "share.visitor.profile.terms.title": "开始之前",
   "share.visitor.profile.terms.tools_one": "{{count}} 个工具对访客开放。",
   "share.visitor.profile.terms.tools_other": "有 {{count}} 个工具对访客开放。",
-  "share.visitor.profile.terms.uploads": "你可以上传附件，这个智能体为访客预留了 {{size}} 的文件存储空间。",
-  "share.visitor.profile.terms.uploadsOff": "附件功能已关闭。",
   "share.visitor.profile.terms.visibilityCreator": "创建者开启了话题查看权限，可能会读取你话题中的消息。",
   "share.visitor.profile.terms.visibilityPrivate": "你的话题只有你自己能看到。",
   "share.visitor.profile.works.desc": "由创建者精选，看看这个助手能交付什么。",

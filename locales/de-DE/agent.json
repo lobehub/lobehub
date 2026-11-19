@@ -827,8 +827,6 @@
   "share.visitor.profile.terms.title": "Bevor Sie beginnen",
   "share.visitor.profile.terms.tools_one": "{{count}} Werkzeug ist für Besucher geöffnet.",
   "share.visitor.profile.terms.tools_other": "{{count}} Werkzeuge sind für Besucher geöffnet.",
-  "share.visitor.profile.terms.uploads": "Sie können Dateien anhängen; dieser Ajan hat {{size}} Dateispeicher für Besucher.",
-  "share.visitor.profile.terms.uploadsOff": "Anhänge sind deaktiviert.",
   "share.visitor.profile.terms.visibilityCreator": "Der Ersteller hat die Sitzungsüberprüfung aktiviert, sodass er dieses Gespräch lesen kann.",
   "share.visitor.profile.terms.visibilityPrivate": "Nur Sie können Ihre Gespräche sehen.",
   "share.visitor.profile.works.desc": "Ausgewählt vom Ersteller. Sehen Sie, was dieser Ajan liefern kann.",

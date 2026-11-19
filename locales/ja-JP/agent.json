@@ -827,8 +827,6 @@
   "share.visitor.profile.terms.title": "始める前に",
   "share.visitor.profile.terms.tools_one": "{{count}} つのツールが訪問者に公開されています。",
   "share.visitor.profile.terms.tools_other": "{{count}} つのツールが訪問者に公開されています。",
-  "share.visitor.profile.terms.uploads": "ファイルを添付できます。このエージェントには訪問者用に{{size}}のファイルストレージがあります。",
-  "share.visitor.profile.terms.uploadsOff": "添付ファイルは無効になっています。",
   "share.visitor.profile.terms.visibilityCreator": "作成者がセッションレビューを有効にしているため、この会話を読むことができます。",
   "share.visitor.profile.terms.visibilityPrivate": "自分だけが自分の会話を見ることができます。",
   "share.visitor.profile.works.desc": "作成者によって選ばれました。このエージェントが提供できるものを確認してください。",

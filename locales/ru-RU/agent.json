@@ -827,8 +827,6 @@
   "share.visitor.profile.terms.title": "Прежде чем начать",
   "share.visitor.profile.terms.tools_one": "{{count}} инструмент доступен для посетителей.",
   "share.visitor.profile.terms.tools_other": "{{count}} инструментов доступны для посетителей.",
-  "share.visitor.profile.terms.uploads": "Вы можете прикреплять файлы; у этого Агента есть {{size}} для хранения файлов посетителей.",
-  "share.visitor.profile.terms.uploadsOff": "Вложения отключены.",
   "share.visitor.profile.terms.visibilityCreator": "Создатель включил обзор сессии, поэтому он может читать этот разговор.",
   "share.visitor.profile.terms.visibilityPrivate": "Только вы можете видеть свои разговоры.",
   "share.visitor.profile.works.desc": "Выбрано создателем. Посмотрите, что может предоставить этот агент.",

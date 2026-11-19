@@ -827,8 +827,6 @@
   "share.visitor.profile.terms.title": "قبل أن تبدأ",
   "share.visitor.profile.terms.tools_one": "{{count}} أداة مفتوحة للزوار.",
   "share.visitor.profile.terms.tools_other": "{{count}} أدوات مفتوحة للزوار.",
-  "share.visitor.profile.terms.uploads": "يمكنك إرفاق ملفات؛ يحتوي هذا الوكيل على {{size}} لتخزين الملفات للزوار.",
-  "share.visitor.profile.terms.uploadsOff": "تم تعطيل المرفقات.",
   "share.visitor.profile.terms.visibilityCreator": "قام المنشئ بتفعيل مراجعة الجلسة، لذا يمكنه قراءة هذه المحادثة.",
   "share.visitor.profile.terms.visibilityPrivate": "يمكنك فقط رؤية محادثاتك.",
   "share.visitor.profile.works.desc": "تم اختيارها بواسطة المنشئ. انظر ما يمكن لهذا الوكيل تقديمه.",

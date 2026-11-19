@@ -827,8 +827,6 @@
   "share.visitor.profile.terms.title": "Zanim zaczniesz",
   "share.visitor.profile.terms.tools_one": "{{count}} narzędzie jest dostępne dla odwiedzających.",
   "share.visitor.profile.terms.tools_other": "{{count}} narzędzia są dostępne dla odwiedzających.",
-  "share.visitor.profile.terms.uploads": "Możesz dołączać pliki; ten Ajan ma {{size}} miejsca na pliki dla odwiedzających.",
-  "share.visitor.profile.terms.uploadsOff": "Załączniki są wyłączone.",
   "share.visitor.profile.terms.visibilityCreator": "Twórca włączył przegląd sesji, więc może przeczytać tę rozmowę.",
   "share.visitor.profile.terms.visibilityPrivate": "Tylko Ty możesz zobaczyć swoje rozmowy.",
   "share.visitor.profile.works.desc": "Wybrane przez twórcę. Zobacz, co ten agent może dostarczyć.",

@@ -827,8 +827,6 @@
   "share.visitor.profile.terms.title": "Преди да започнете",
   "share.visitor.profile.terms.tools_one": "{{count}} инструмент е отворен за посетители.",
   "share.visitor.profile.terms.tools_other": "{{count}} инструменти са отворени за посетители.",
-  "share.visitor.profile.terms.uploads": "Можете да прикачвате файлове; този Аджент има {{size}} за съхранение на файлове за посетители.",
-  "share.visitor.profile.terms.uploadsOff": "Прикачените файлове са изключени.",
   "share.visitor.profile.terms.visibilityCreator": "Създателят е включил преглед на сесията, така че може да прочете този разговор.",
   "share.visitor.profile.terms.visibilityPrivate": "Само вие можете да видите вашите разговори.",
   "share.visitor.profile.works.desc": "Избрано от създателя. Вижте какво може да достави този агент.",

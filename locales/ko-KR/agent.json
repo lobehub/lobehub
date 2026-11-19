@@ -827,8 +827,6 @@
   "share.visitor.profile.terms.title": "시작하기 전에",
   "share.visitor.profile.terms.tools_one": "방문자에게 {{count}}개의 도구가 열려 있습니다.",
   "share.visitor.profile.terms.tools_other": "방문자에게 {{count}}개의 도구가 열려 있습니다.",
-  "share.visitor.profile.terms.uploads": "파일을 첨부할 수 있습니다. 이 Ajan은 방문자를 위해 {{size}}의 파일 저장 공간을 제공합니다.",
-  "share.visitor.profile.terms.uploadsOff": "첨부 파일이 비활성화되었습니다.",
   "share.visitor.profile.terms.visibilityCreator": "제작자가 세션 검토를 활성화했으므로 이 대화를 읽을 수 있습니다.",
   "share.visitor.profile.terms.visibilityPrivate": "오직 본인만 대화를 볼 수 있습니다.",
   "share.visitor.profile.works.desc": "생성자가 선택한 작업입니다. 이 에이전트가 제공할 수 있는 것을 확인하세요.",

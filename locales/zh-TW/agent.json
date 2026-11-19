@@ -827,8 +827,6 @@
   "share.visitor.profile.terms.title": "開始之前",
   "share.visitor.profile.terms.tools_one": "{{count}} 個工具對訪客開放。",
   "share.visitor.profile.terms.tools_other": "{{count}} 個工具對訪客開放。",
-  "share.visitor.profile.terms.uploads": "您可以附加檔案；此 Agent 為訪客提供 {{size}} 的檔案儲存空間。",
-  "share.visitor.profile.terms.uploadsOff": "附件功能已關閉。",
   "share.visitor.profile.terms.visibilityCreator": "創建者已開啟會話審查，因此他們可以閱讀此對話。",
   "share.visitor.profile.terms.visibilityPrivate": "只有您可以看到您的對話。",
   "share.visitor.profile.works.desc": "由創建者選擇。查看此代理可以交付的內容。",
