@@ -40,6 +40,7 @@ export interface OperationSkillSetInput {
   /** Tri-state disabled plugin identifiers — excluded from the skill pool. */
   disabledPluginIds: string[];
   executionPlan: ToolDiscoveryResult['executionPlan'];
+  implicitBuiltinSkillIds?: readonly string[];
   prompt: ExecRunContext['prompt'];
   resolvedAgentId: ExecRunContext['resolvedAgentId'];
   /**
@@ -277,6 +278,7 @@ export const buildOperationSkillSet = async (
         // skill grant is the creator opting the visitor in by name, so a
         // granted skill stays reachable without also being turned on.
         autoSkillIds: [...autoSkillIds, ...(shareAllowedSkillIds ?? [])],
+        implicitBuiltinSkillIds: input.implicitBuiltinSkillIds,
         canExecuteOnDevice: executionPlan ? isDeviceCapablePlan(executionPlan) : false,
         disabledIds: disabledPluginIds,
         // Selected skills join the enabled set so the resolver auto-activates

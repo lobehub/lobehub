@@ -2,6 +2,7 @@
 
 import { isOnDemandBuiltinTool, onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
 import { getConnectorCatalog } from '@lobechat/const';
+import { getImplicitBuiltinSkillIds } from '@lobechat/mecha/builtinSkillGate';
 import {
   getDisabledPluginIds,
   getOptedInPluginIds,
@@ -166,15 +167,30 @@ const AgentTool = memo<AgentToolProps>(
       (s) => getConnectedConnectorIds(s, effectiveAgentId),
       isEqual,
     );
+    const installedBuiltinSkills = useToolStore(
+      builtinToolSelectors.installedBuiltinSkills,
+      isEqual,
+    );
+    const createdAt = useAgentStore((s) => s.agentMap[effectiveAgentId]?.createdAt);
+    const implicitSkills = getImplicitBuiltinSkillIds(createdAt, config?.chatConfig);
     const implicitToolIds = useMemo(
       () =>
         resolveToolMode(config?.chatConfig) === 'agent'
           ? [
               ...profileBuiltinList.map((tool) => tool.identifier).filter(isOnDemandBuiltinTool),
               ...connectedIds,
+              ...installedBuiltinSkills
+                .map((skill) => skill.identifier)
+                .filter((id) => implicitSkills.includes(id)),
             ]
           : [],
-      [config?.chatConfig, profileBuiltinList, connectedIds],
+      [
+        config?.chatConfig,
+        profileBuiltinList,
+        connectedIds,
+        installedBuiltinSkills,
+        implicitSkills,
+      ],
     );
     const enabledIds = useMemo(() => {
       const ids = new Set([...implicitToolIds, ...getOptedInPluginIds(config?.plugins)]);
@@ -201,10 +217,6 @@ const AgentTool = memo<AgentToolProps>(
     const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
 
     // Agent Skills-related state
-    const installedBuiltinSkills = useToolStore(
-      builtinToolSelectors.installedBuiltinSkills,
-      isEqual,
-    );
     const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
     const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
 
@@ -290,7 +302,9 @@ const AgentTool = memo<AgentToolProps>(
         // dropped from the array.
         await updateAgentConfigById(effectiveAgentId, {
           plugins:
-            isOnDemandBuiltinTool(pluginId) || connectorIds.has(pluginId)
+            isOnDemandBuiltinTool(pluginId) ||
+            connectorIds.has(pluginId) ||
+            implicitSkills.includes(pluginId)
               ? upsertConnectorEnabled(config?.plugins, pluginId, shouldEnable)
               : shouldEnable && allSkillIdentifiers.has(pluginId)
                 ? upsertConnectorEnabled(config?.plugins, pluginId, true)
@@ -302,6 +316,7 @@ const AgentTool = memo<AgentToolProps>(
         effectiveAgentId,
         enabledIds,
         connectorIds,
+        implicitSkills,
         allSkillIdentifiers,
         config?.plugins,
         updateAgentConfigById,

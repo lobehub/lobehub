@@ -21,6 +21,7 @@ export const resolveClientSkills = async (
    * agent: one that is neither here nor pinned is not listed at all.
    */
   autoSkillIds?: string[],
+  implicitBuiltinSkillIds?: readonly string[],
 ): Promise<OperationSkillSet> => {
   // The list is only fetched by mounted views (tool popover, side panel), so a
   // send right after a page load would otherwise see no DB skills. A failed
@@ -51,6 +52,7 @@ export const resolveClientSkills = async (
     {
       autoSkillIds,
       disabledIds,
+      implicitBuiltinSkillIds,
       // The desktop app is itself the execution device.
       canExecuteOnDevice: isDesktop,
       enabledPluginIds: pluginIds,

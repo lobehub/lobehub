@@ -12,18 +12,24 @@ import {
 import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import { agentSkillService } from '@/services/skill';
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
 import { getChatStoreState } from '@/store/chat';
 import { parseSelectedSkillsFromEditorData } from '@/store/chat/slices/agentRun/actions/entries/commandBus/parseCommands';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { getToolStoreState } from '@/store/tool';
+
+import { installedImplicitBuiltinSkillIds } from '../projection';
 
 /** Bind both name lookup and the fallback catalog to the calling agent, not the active tab. */
 export const clientSkillCatalog = (ctx: BuiltinToolContext) => {
   const { agentId, subAgentId } = ctx;
   const profileAgentId = subAgentId ?? agentId;
-  const plugins = profileAgentId
-    ? agentSelectors.getAgentConfigById(profileAgentId)(getAgentStoreState())?.plugins
-    : undefined;
+  const profile = profileAgentId ? getAgentStoreState().agentMap[profileAgentId] : undefined;
+  const plugins = profile?.plugins;
+  const implicitBuiltins = installedImplicitBuiltinSkillIds(
+    getToolStoreState(),
+    profile?.createdAt,
+    profile?.chatConfig,
+  );
   const messages = agentId
     ? (getChatStoreState().dbMessagesMap[
         messageMapKey({
@@ -68,7 +74,11 @@ export const clientSkillCatalog = (ctx: BuiltinToolContext) => {
   };
 
   return {
-    builtinSkills: filterBuiltinSkills(builtinSkills).filter((skill) => offered(skill.identifier)),
+    builtinSkills: filterBuiltinSkills(builtinSkills).filter(
+      (skill) =>
+        offered(skill.identifier) ||
+        (!disabled.has(skill.identifier) && implicitBuiltins.includes(skill.identifier)),
+    ),
     lookup,
   };
 };
