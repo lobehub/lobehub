@@ -455,7 +455,11 @@ const ChatInput = memo<ChatInputProps>(
           stillHere: messageMapKey(storeApi.getState().context) === messageMapKey(sendContext),
         });
         if (handoff.clearEditor) clearContent();
-        fileStore.clearChatUploadFileList(contextKey);
+        // Only the attachments being sent leave the composer; a failed upload stays to retry.
+        fileStore.clearChatUploadFileList(
+          contextKey,
+          currentFileList.map((file) => file.id),
+        );
         fileStore.clearChatContextSelections(contextKey);
 
         const { contextSelections, pageSelections } =
