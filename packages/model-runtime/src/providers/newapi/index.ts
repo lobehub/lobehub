@@ -206,7 +206,7 @@ export const params = {
       {
         apiType: 'google',
         models: LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
-          (id) => detectModelProvider(id) === 'google',
+          (id) => detectModelProvider(id) === 'google' && !id.startsWith('imagen'),
         ),
         options: {
           ...options,
