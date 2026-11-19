@@ -21,6 +21,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
+import { densityVars } from '@/styles/densityVars';
 import { type DiscoverSkillItem } from '@/types/discover';
 import { downloadFile } from '@/utils/client/downloadFile';
 
@@ -39,7 +40,7 @@ const styles = createStaticStyles(({ css }) => ({
     border: 0;
 
     font-family: inherit;
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     line-height: inherit;
     color: ${cssVar.colorText};

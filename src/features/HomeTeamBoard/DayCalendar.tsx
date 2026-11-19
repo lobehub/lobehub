@@ -5,6 +5,7 @@ import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import { buildHourCells, type HourCellItem } from './layout';
@@ -21,8 +22,8 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderWidth: 1,
     minWidth: 0,
-    paddingBlock: 16,
-    paddingInline: 16,
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   cell: {
     backgroundColor: cssVar.colorFillQuaternary,

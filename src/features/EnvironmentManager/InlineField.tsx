@@ -17,6 +17,7 @@ import { type KeyboardEvent, memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
+import { densityVars } from '@/styles/densityVars';
 
 import { describeError } from './errorMessage';
 
@@ -33,7 +34,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-height: 36px;
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
 

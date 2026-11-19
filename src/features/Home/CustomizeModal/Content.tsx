@@ -14,6 +14,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDensityTokens } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import CountStepper from './components/CountStepper';
 import PresetBar from './components/PresetBar';
@@ -25,16 +26,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
     overflow-y: auto;
     max-block-size: min(70vh, 560px);
-    padding-block: 12px 20px;
+    padding-block: ${densityVars.contentGap} 20px;
     padding-inline: 20px;
   `,
   footer: css`
-    padding-block: 12px;
-    padding-inline: 12px 20px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.contentGap} 20px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   header: css`
-    padding-block: 16px 4px;
+    padding-block: ${densityVars.cardPadding} 4px;
     padding-inline: 20px;
   `,
 }));

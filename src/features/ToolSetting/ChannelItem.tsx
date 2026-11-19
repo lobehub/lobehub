@@ -4,6 +4,8 @@ import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { getChannelDisplayName, getChannelIcon } from './const';
 
 const ICON_SIZE = 24;
@@ -13,7 +15,7 @@ const styles = stylex.create({
   inactive: { opacity: 0.45 },
   item: {
     paddingBlock: '8px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadius,
     transition: 'background 0.2s ease-in-out',
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },

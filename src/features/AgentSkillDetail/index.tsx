@@ -13,6 +13,7 @@ import { ArticleSkeleton } from '@/components/Skeleton';
 import SkillAvatar from '@/components/SkillAvatar';
 import FileTree, { FileTreeSkeleton } from '@/features/FileTree';
 import { useToolStore } from '@/store/tool';
+import { densityVars } from '@/styles/densityVars';
 
 import ContentViewer from './ContentViewer';
 import { GitHubSkillUpdate, hasGitHubSource } from './GitHubSkillUpdate';
@@ -51,11 +52,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   meta: css`
     flex-shrink: 0;
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   name: css`
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     font-weight: 500;
     line-height: 20px;
     color: ${cssVar.colorText};

@@ -12,6 +12,7 @@ import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import AuthorChip from '@/features/HomeInbox/AuthorChip';
 import { useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import {
@@ -88,8 +89,8 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderWidth: 1,
     minWidth: 0,
-    paddingBlock: 16,
-    paddingInline: 16,
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   cardCompact: { paddingBlock: 12, paddingInline: 12 },
   gridLine: {

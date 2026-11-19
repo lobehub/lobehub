@@ -70,7 +70,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgElevated};
   `,
   optionTitle: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     line-height: 1.4;
     color: ${cssVar.colorText};

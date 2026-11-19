@@ -7,6 +7,7 @@ import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { GithubSkillPicker } from './GithubSkillPicker';
 import { canImportCandidate } from './githubSkillSelection';
@@ -24,7 +25,7 @@ const styles = stylex.create({
   },
   row: {
     paddingBlock: 10,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockEndWidth: { 'default': 1, ':last-child': 0 },
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorBorderSecondary,

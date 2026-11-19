@@ -39,6 +39,7 @@ import {
   openRenameFolderModal,
 } from '@/features/WorkingDirectory';
 import { sandboxStorageService } from '@/services/sandboxStorage';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { openDriveFilePreview } from './DriveFilePreview';
 import {
@@ -98,7 +99,7 @@ const styles = stylex.create({
     borderBlockEndStyle: 'solid',
     borderBlockEndWidth: 1,
     paddingBlock: 6,
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   muted: {
     color: cssVar.colorTextTertiary,
@@ -111,7 +112,7 @@ const styles = stylex.create({
     borderRadius: cssVar.borderRadius,
     minHeight: 40,
     paddingBlock: 4,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   toolbar: {
     borderBlockEndColor: cssVar.colorBorderSecondary,
@@ -119,7 +120,7 @@ const styles = stylex.create({
     borderBlockEndWidth: 1,
     minHeight: 48,
     paddingBlock: 8,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
 });
 

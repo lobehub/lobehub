@@ -10,6 +10,7 @@ import { useFetchAgentChatTopics } from '@/hooks/useFetchChatTopics';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 import { useHeaderActionSize } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   time: css`
@@ -20,7 +21,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   title: css`
     overflow: hidden;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     text-overflow: ellipsis;
     white-space: nowrap;

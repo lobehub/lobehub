@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 import UserAvatar from '@/components/UserAvatar';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import { describeError } from './errorMessage';
 import { repositoryPath } from './repository';
@@ -86,8 +87,8 @@ const styles = createStaticStyles(({ css }) => ({
   row: css`
     cursor: pointer;
 
-    padding-block: 12px;
-    padding-inline: 12px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadius};
 
     transition: background 0.15s ease;
