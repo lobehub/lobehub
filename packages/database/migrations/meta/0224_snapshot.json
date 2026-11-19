@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "97adbc65-9233-404f-998c-8d77bca8fd7e",
+  "id": "b5b0e975-6a35-467a-b05a-d4504b1af168",
   "policies": {},
   "prevId": "e4b7cfb6-736f-455b-a78e-7a6383945adc",
   "roles": {},
@@ -17111,6 +17111,12 @@
         "message": {
           "name": "message",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },

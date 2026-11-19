@@ -90,3 +90,14 @@ export type ContactSearchResult =
 
 /** Owner-side extras of an address book entry; open for later management features. */
 export type ContactMetadata = Record<string, unknown>;
+
+/**
+ * Stored on a contact request sent from a person's card in a Channel: the card message and who
+ * shared it. Server-verified at send time, so it never names a referrer who did not share.
+ */
+export interface ContactRequestSource {
+  channelId: string;
+  messageId: string;
+  referrerId: string | null;
+  type: 'card';
+}

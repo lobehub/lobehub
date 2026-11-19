@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS "agent_delivery_works" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "user_contact_requests" ADD COLUMN IF NOT EXISTS "source" jsonb;--> statement-breakpoint
 ALTER TABLE "agent_deliveries" DROP CONSTRAINT IF EXISTS "agent_deliveries_agent_id_agents_id_fk";--> statement-breakpoint
 ALTER TABLE "agent_deliveries" ADD CONSTRAINT "agent_deliveries_agent_id_agents_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agents"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_deliveries" DROP CONSTRAINT IF EXISTS "agent_deliveries_user_id_users_id_fk";--> statement-breakpoint
