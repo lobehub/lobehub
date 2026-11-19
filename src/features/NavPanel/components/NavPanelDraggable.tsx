@@ -84,12 +84,12 @@ const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
         width 0.2s ${cssVar.motionEaseOut};
     }
     #${BACK_BUTTON_ID} {
-      width: 24px !important;
+      width: var(--lobe-density-icon-box) !important;
     }
 
     &:hover {
       #${TOGGLE_BUTTON_ID} {
-        width: 32px !important;
+        width: var(--lobe-density-icon-box) !important;
         opacity: 1;
       }
 

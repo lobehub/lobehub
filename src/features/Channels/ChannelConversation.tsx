@@ -27,6 +27,7 @@ import { isCurrentUserMember } from './memberName';
 import { channelTimeFormatters, presentChannelTimeline } from './messagePresentation';
 import { presentOutgoingMessage, timelineTail } from './outgoing';
 import { OutgoingStatus } from './OutgoingStatus';
+import { ReadOnlyNotice } from './ReadOnlyNotice';
 import { ReplyActivity } from './ReplyActivity';
 import type { ReplyTopic } from './ReplyTopicPanel';
 import { styles } from './styles';
@@ -124,6 +125,8 @@ const Timeline = ({
   const thread = threadId ? detail?.threads.find((entry) => entry.id === threadId) : undefined;
   const selectReply = (message: ChannelPublicMessage) => reply.select(message);
   const channelArchived = detail?.channel.status === 'archived';
+  // A shared Agent's owner reading a visitor's conversation: nothing to send, reply to or branch.
+  const readOnly = !!detail?.readOnly;
   const direct = !!detail?.channel.agentId;
   // Join lines belong to the main conversation; a thread starts from its root message. A direct
   // conversation reads like a chat with its Agent, so it has no "invited" lines at all.
@@ -202,7 +205,9 @@ const Timeline = ({
                     highlighted={highlighted === detail.rootMessage.id}
                     root={detail.rootMessage}
                     onReply={
-                      channelArchived || thread?.status === 'archived' ? undefined : selectReply
+                      channelArchived || readOnly || thread?.status === 'archived'
+                        ? undefined
+                        : selectReply
                     }
                   />
                 )}
@@ -256,9 +261,11 @@ const Timeline = ({
                         onJumpToMessage={jumpToMessage}
                         onOpenThread={onOpenThread}
                         onOpenTopic={onOpenTopic}
-                        onStartThread={channelArchived ? undefined : onStartThread}
+                        onStartThread={channelArchived || readOnly ? undefined : onStartThread}
                         onReply={
-                          channelArchived || thread?.status === 'archived' ? undefined : selectReply
+                          channelArchived || readOnly || thread?.status === 'archived'
+                            ? undefined
+                            : selectReply
                         }
                       />
                     )}
@@ -266,7 +273,9 @@ const Timeline = ({
                 ))}
               </WideScreenContainer>
             </Flexbox>
-            {channelArchived || thread?.status === 'archived' ? (
+            {readOnly ? (
+              <ReadOnlyNotice />
+            ) : channelArchived || thread?.status === 'archived' ? (
               <ArchivedNotice channel={detail.channel} threadId={threadId} />
             ) : (
               <Composer

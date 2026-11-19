@@ -26,6 +26,7 @@ import { compactDensityTheme } from '@/styles/densityTheme';
 import { sx } from '@/styles/sx';
 import { setCookie } from '@/utils/client/cookie';
 import { resolveLang } from '@/utils/client/switchLang';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { resolveFontFamilyOverride } from './fontFamilyOverride';
 
@@ -131,9 +132,12 @@ const AppTheme = memo<AppThemeProps>(
     }, [fontAntialiasing]);
 
     useEffect(() => {
-      document.documentElement.dataset.density = interfaceDensity;
-      if (interfaceDensity !== 'compact') return;
-      const classes = stylex.props(compactDensityTheme).className?.split(' ') ?? [];
+      const effectiveDensity = isMobileSurface() ? 'loose' : interfaceDensity;
+      document.documentElement.dataset.density = effectiveDensity;
+      if (effectiveDensity !== 'compact') return;
+      const classes =
+        stylex.props(compactDensityTheme).className?.split(/\s+/).filter(Boolean) ?? [];
+      if (classes.length === 0) return;
       document.documentElement.classList.add(...classes);
       return () => document.documentElement.classList.remove(...classes);
     }, [interfaceDensity]);

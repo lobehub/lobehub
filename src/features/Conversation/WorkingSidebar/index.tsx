@@ -62,7 +62,13 @@ import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useHeaderActionSize } from '@/styles/density';
+import {
+  PanelDensityContext,
+  useDensityTokens,
+  useHeaderActionSize,
+  useInterfaceDensity,
+} from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { type ComposerTarget, createComposerTarget, resolveThreadComposerTarget } from '../types';
@@ -133,7 +139,7 @@ const styles = stylex.create({
     height: '100%',
     paddingBlockStart: {
       'default': null,
-      '@container agent-chat-layout (min-width: 1200px)': '44px',
+      '@container agent-chat-layout (min-width: 1200px)': sidebarRow.headerHeight,
     },
   },
   tabs: {
@@ -167,6 +173,8 @@ interface AgentWorkingSidebarProps {
 }
 
 const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) => {
+  const interfaceDensity = useInterfaceDensity();
+  const { headerHeight } = useDensityTokens();
   const headerActionSize = useHeaderActionSize(true);
   const { t } = useTranslation(['chat', 'setting']);
   // Keep the panel frame + tabs on the navigation commit; the pane contents
@@ -896,7 +904,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   );
 
   return (
-    <>
+    <PanelDensityContext value={interfaceDensity}>
       {overviewPanel}
       <TopicPullRequestProbes
         deviceId={remoteDeviceId}
@@ -925,7 +933,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
             align={'center'}
             className={stylex.props(styles.header).className}
             gap={4}
-            height={44}
+            height={headerHeight}
             justify={'space-between'}
             paddingInline={6}
           >
@@ -1120,7 +1128,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
           </Flexbox>
         </Flexbox>
       </RightPanel>
-    </>
+    </PanelDensityContext>
   );
 });
 

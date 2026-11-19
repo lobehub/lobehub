@@ -24,6 +24,10 @@ import type {
 } from '@/database/repositories/channel';
 import { ChannelError, ChannelRepository } from '@/database/repositories/channel';
 import { findProjectMainChannelId } from '@/database/repositories/channel/projectMainChannel';
+import {
+  listShareVisitorConversations,
+  readShareVisitorChannel,
+} from '@/database/repositories/channel/shareVisitors';
 import { users } from '@/database/schemas';
 import { AgentService } from '@/server/services/agent';
 import { deviceGateway } from '@/server/services/deviceGateway';
@@ -455,8 +459,29 @@ export class ChannelService {
 
   changed = (channelId: string) => notifyChannel(this.db, channelId);
 
+  /** Visitor conversations with the caller's shared Agent, when its share lets the caller read them. */
+  shareVisitors = (agentId: string) => listShareVisitorConversations(this.db, this.userId, agentId);
+
+  /**
+   * A Channel the caller is a member of or can read openly; failing that, a visitor's conversation
+   * with the caller's shared Agent, read-only.
+   */
+  private readView = async (
+    channelId: string,
+    options: Parameters<ChannelRepository['detail']>[1],
+  ) => {
+    try {
+      return await this.repository.detail(channelId, options);
+    } catch (error) {
+      if (!(error instanceof ChannelError) || error.code !== 'NOT_FOUND') throw error;
+      const visitorView = await readShareVisitorChannel(this.db, this.userId, channelId, options);
+      if (!visitorView) throw error;
+      return visitorView;
+    }
+  };
+
   detail = async (channelId: string, options: Parameters<ChannelRepository['detail']>[1]) => {
-    const view = await this.repository.detail(channelId, options);
+    const view = await this.readView(channelId, options);
     const files = new FileService(this.db, this.userId, this.workspaceId);
     // The public message's attachment relation grants this read after membership authorization.
     // Do not return private storage keys or route through an unrelated ordinary-chat ACL.

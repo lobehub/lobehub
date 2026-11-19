@@ -812,6 +812,27 @@ export interface ChannelDetail {
   joined?: boolean;
   members: ChannelPublicMember[];
   messages: ChannelPublicMessage[];
+  /**
+   * True while a shared Agent's owner reads a visitor's conversation with it: the same view, with
+   * no composer and no message actions.
+   */
+  readOnly?: boolean;
   rootMessage: ChannelPublicMessage | null;
   threads: ChannelPublicThread[];
+}
+
+/**
+ * A visitor's direct conversation with a shared Agent, as its owner lists them when the share
+ * lets the owner read visitor conversations.
+ */
+export interface ShareVisitorConversation {
+  createdAt: Date;
+  /** The visitor's Channel. */
+  id: string;
+  lastMessage: ChannelLastMessage | null;
+  /** USD cost of every run in the conversation, from its run topics. */
+  totalCost: number;
+  totalTokens: number;
+  updatedAt: Date;
+  visitor: { avatar: string | null; id: string; name: string | null };
 }

@@ -9,10 +9,13 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { CustomConnectorModal } from '@/features/Connectors';
+import { NavPanelDensityContext } from '@/features/NavPanel/density';
 import { createSkillStoreModal } from '@/features/SkillStore';
 import { openSkillImportModal } from '@/features/SkillStore/SkillImportModal';
 import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 import { usePermission } from '@/hooks/usePermission';
+import { useInterfaceDensity } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import ConnectorManagePolicy from './ConnectorManagePolicy';
 import { type ToolDetailType } from './SkillDetail';
@@ -66,7 +69,7 @@ const styles = stylex.create({
     gap: '8px',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: '42px',
+    height: sidebarRow.headerHeight,
     paddingInline: '16px',
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
@@ -114,6 +117,7 @@ const LeftPanel = memo<LeftPanelProps>(
     visibility,
   }) => {
     const { t } = useTranslation(['setting', 'tool']);
+    const interfaceDensity = useInterfaceDensity();
     const [showAddConnector, setShowAddConnector] = useState(false);
     const [keyword, setKeyword] = useState('');
 
@@ -265,13 +269,13 @@ const LeftPanel = memo<LeftPanelProps>(
     }
 
     return (
-      <>
+      <NavPanelDensityContext value={fullWidth ? null : interfaceDensity}>
         <div
           className={stylex.props(styles.root).className}
           style={fullWidth ? { borderInlineEnd: 'none', width: '100%' } : undefined}
         >
           <div {...stylex.props(styles.header)}>
-            <Text strong style={{ fontSize: 14 }}>
+            <Text strong style={{ fontSize: 'var(--lobe-density-font-size)' }}>
               {isConnectorView
                 ? t('skillView.connectors', 'Connectors')
                 : t('skillView.skills', 'Skills')}
@@ -338,7 +342,7 @@ const LeftPanel = memo<LeftPanelProps>(
           visibility={visibility}
           onClose={() => setShowAddConnector(false)}
         />
-      </>
+      </NavPanelDensityContext>
     );
   },
 );

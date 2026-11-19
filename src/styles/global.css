@@ -131,31 +131,140 @@ html.desktop[data-window-fullscreen] body {
   }
 }
 
-/* lobe-ui ships its rules inside @layer lobe-ui, so these unlayered overrides win without !important */
-html[data-density='compact'] .lobe-menu-popup,
-html[data-density='compact'] .lobe-select__popup {
-  font-size: var(--lobe-density-font-size);
-}
+@layer lobe-base, lobe-popup, lobe-ui, lobe-density;
 
-html[data-density='compact'] .lobe-dropdown-menu__item,
-html[data-density='compact'] .lobe-context-menu__item,
-html[data-density='compact'] .lobe-select__option {
-  min-height: var(--lobe-density-control-height);
-  padding-block: calc((var(--lobe-density-control-height) - 20px) / 2);
-  padding-inline: 8px;
+/* lobe-ui ships its rules inside @layer lobe-ui; placing density overrides in @layer lobe-density
+   beats @layer lobe-ui defaults without !important while letting unlayered app StyleX / static styles win. */
+@layer lobe-density {
+  html[data-density='compact'] {
+    --lobe-form-item-padding-block: 10px;
+  }
 
-  font-size: var(--lobe-density-font-size);
-  line-height: 20px;
-}
+  html[data-density='compact'] .lobe-menu-popup,
+  html[data-density='compact'] .lobe-select__popup {
+    font-size: var(--lobe-density-font-size);
+  }
 
-html[data-density='compact'] .lobe-select[data-size='middle'],
-html[data-density='compact'] .lobe-tabs__tab {
-  height: var(--lobe-density-control-height);
-  min-height: var(--lobe-density-control-height);
-  font-size: var(--lobe-density-font-size);
-}
+  html[data-density='compact'] .lobe-dropdown-menu__item,
+  html[data-density='compact'] .lobe-context-menu__item,
+  html[data-density='compact'] .lobe-select__option,
+  html[data-density='compact'] .lobe-auto-complete__item {
+    min-height: var(--lobe-density-control-height);
+    padding-block: calc((var(--lobe-density-control-height) - 20px) / 2);
+    padding-inline: 8px;
 
-html[data-density='compact'] .lobe-segmented[data-size='small'] .lobe-segmented__item {
-  height: calc(var(--lobe-density-control-height) - 8px);
-  min-height: 0;
+    font-size: var(--lobe-density-font-size);
+    line-height: 20px;
+  }
+
+  html[data-density='compact'] .lobe-dropdown-menu__group-label,
+  html[data-density='compact'] .lobe-context-menu__group-label,
+  html[data-density='compact'] .lobe-select__group-label,
+  html[data-density='compact'] .lobe-dropdown-menu__header,
+  html[data-density='compact'] .lobe-dropdown-menu__footer,
+  html[data-density='compact'] .lobe-context-menu__header,
+  html[data-density='compact'] .lobe-context-menu__footer,
+  html[data-density='compact'] .lobe-select__empty {
+    padding-inline: 8px;
+  }
+
+  html[data-density='compact'] .lobe-dropdown-menu__header,
+  html[data-density='compact'] .lobe-dropdown-menu__footer,
+  html[data-density='compact'] .lobe-context-menu__header,
+  html[data-density='compact'] .lobe-context-menu__footer {
+    padding-block: 6px;
+  }
+
+  html[data-density='compact'] .lobe-select__search {
+    min-height: var(--lobe-density-row-height);
+    padding-block: 6px;
+    padding-inline: 8px;
+  }
+
+  html[data-density='compact'] .lobe-select__search input,
+  html[data-density='compact'] .lobe-select__empty {
+    font-size: var(--lobe-density-font-size);
+  }
+
+  html[data-density='compact'] .lobe-menu-icon {
+    margin-inline-end: 8px;
+  }
+
+  /* Keep min-height (not fixed height) so multiple / tags Select wraps cleanly without clipping. */
+  html[data-density='compact'] .lobe-select[data-size='middle'] {
+    min-height: var(--lobe-density-control-height);
+    padding-block: 2px;
+    font-size: var(--lobe-density-font-size);
+  }
+
+  html[data-density='compact']
+    .lobe-tabs[data-size='middle'][data-variant='rounded']
+    .lobe-tabs__tab {
+    height: var(--lobe-density-control-height);
+    min-height: var(--lobe-density-control-height);
+    font-size: var(--lobe-density-font-size);
+  }
+
+  html[data-density='compact']
+    .lobe-tabs[data-size='middle'][data-variant='square']
+    .lobe-tabs__tab {
+    padding-block: 6px;
+    font-size: var(--lobe-density-font-size);
+  }
+
+  html[data-density='compact'] .lobe-segmented[data-size='small'] .lobe-segmented__item {
+    height: calc(var(--lobe-density-control-height) - 8px);
+    min-height: 0;
+  }
+
+  html[data-density='compact'] .lobe-segmented[data-size='middle'] .lobe-segmented__item {
+    height: calc(var(--lobe-density-control-height) - 4px);
+    min-height: 0;
+    padding-inline: 10px;
+    font-size: var(--lobe-density-font-size);
+  }
+
+  /* Unify middle controls on the 28px baseline in compact mode. ActionIcon also carries .lobe-button,
+     so exclude it here and size it with its own rule below. */
+  html[data-density='compact'] .lobe-button[data-size='middle']:not(.lobe-action-icon) {
+    height: var(--lobe-density-control-height);
+    font-size: var(--lobe-density-font-size);
+  }
+
+  html[data-density='compact'] .lobe-action-icon[data-size='middle'] {
+    width: var(--lobe-density-control-height);
+    height: var(--lobe-density-control-height);
+  }
+
+  html[data-density='compact'] .lobe-input[data-size='middle'],
+  html[data-density='compact'] .lobe-input-number[data-size='middle'],
+  html[data-density='compact'] .lobe-auto-complete[data-size='middle'] {
+    min-height: var(--lobe-density-control-height);
+    font-size: var(--lobe-density-font-size);
+  }
+
+  html[data-density='compact'] .lobe-list__item {
+    min-height: var(--lobe-density-control-height);
+    padding-block: 4px;
+    padding-inline: 8px;
+    font-size: var(--lobe-density-font-size);
+  }
+
+  html[data-density='compact'] .lobe-table-medium {
+    --lobe-table-padding-block: 8px;
+    --lobe-table-padding-inline: 12px;
+
+    font-size: var(--lobe-density-font-size);
+  }
+
+  html[data-density='compact'] .lobe-modal__header,
+  html[data-density='compact'] .lobe-drawer__header {
+    min-height: var(--lobe-density-header-height);
+    padding-block: 6px;
+  }
+
+  html[data-density='compact'] .lobe-modal__title,
+  html[data-density='compact'] .lobe-drawer__title {
+    font-size: var(--lobe-density-page-title-font-size);
+  }
 }

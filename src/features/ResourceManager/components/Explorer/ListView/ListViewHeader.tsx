@@ -128,7 +128,7 @@ const ListViewHeader = ({
           minWidth: getListViewMinWidth(showUploader),
         }}
       >
-        <Center height={40} style={{ paddingInline: 4 }}>
+        <Center height={'var(--lobe-density-toolbar-height)'} style={{ paddingInline: 4 }}>
           <Checkbox
             checked={allSelected}
             disabled={!hasSelectableItems}

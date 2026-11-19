@@ -8,6 +8,7 @@ import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import { useHeaderActionSize, useInterfaceDensity } from '@/styles/density';
 
 export interface SettingsModalTabItem {
   icon?: LucideIcon;
@@ -36,6 +37,10 @@ const styles = stylex.create({
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorBorderSecondary,
   },
+  // 6px + the 28px close button = the 40px compact header height.
+  headerCompact: {
+    paddingBlock: '6px',
+  },
   tabsBar: {
     flexShrink: 0,
     paddingInline: '12px',
@@ -49,6 +54,9 @@ const SettingsModalLayout = memo<SettingsModalLayoutProps>(
   ({ agentId, avatar, background, title, tabs, activeTab, onTabChange, children }) => {
     const { t } = useTranslation('common');
     const { close } = useModalContext();
+    const compact = useInterfaceDensity() === 'compact';
+    // Loose keeps the ActionIcon default; compact takes the 28px header action.
+    const headerActionSize = useHeaderActionSize();
 
     const tabItems = tabs?.map(({ icon, key, label }) => ({
       icon: icon ? <Icon icon={icon} size={16} /> : undefined,
@@ -61,7 +69,7 @@ const SettingsModalLayout = memo<SettingsModalLayoutProps>(
         <Flexbox
           horizontal
           align={'center'}
-          className={stylex.props(styles.header).className}
+          className={stylex.props(styles.header, compact && styles.headerCompact).className}
           justify={'space-between'}
         >
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
@@ -86,7 +94,12 @@ const SettingsModalLayout = memo<SettingsModalLayoutProps>(
               {title}
             </Text>
           </Flexbox>
-          <ActionIcon icon={XIcon} title={t('cancel')} onClick={close} />
+          <ActionIcon
+            icon={XIcon}
+            size={compact ? headerActionSize : undefined}
+            title={t('cancel')}
+            onClick={close}
+          />
         </Flexbox>
 
         {tabItems && tabItems.length >= 2 && (
