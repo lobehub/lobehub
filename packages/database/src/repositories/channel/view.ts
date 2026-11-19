@@ -1,8 +1,12 @@
 import {
+  type AgentDeviceOverride,
   channelMessageDeletedAt,
   channelMessageEditedAt,
   channelMessageReceipt,
   channelMessageVia,
+  defaultChannelAgentDirectory,
+  type LobeAgentAgencyConfig,
+  resolveAgentAgencyConfig,
 } from '@lobechat/types';
 import {
   and,
@@ -33,6 +37,7 @@ import {
   files as fileTable,
   topics,
   users,
+  workspaceUserSettings,
 } from '../../schemas';
 import type { Transaction } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
@@ -297,36 +302,42 @@ interface MemberDevice {
   deviceOwnerId: string | null;
 }
 
+interface MemberDeviceInfo {
+  defaultCwd: string | null;
+  name: string | null;
+}
+
 /**
- * Display names for the devices Agent members run on, keyed by member id. A device id is unique
- * only within its principal, so each one resolves the way execution does: the Channel's workspace
- * device first, else the personal device of the member who owns it.
+ * The devices Agent members run on, keyed by member: display name and default directory. A device
+ * id is unique only within its principal, so each one resolves the way execution does: the
+ * Channel's workspace device first, else the personal device of the member who owns it.
  */
-const memberDeviceNames = async (tx: Transaction, channelId: string, members: MemberDevice[]) => {
+const memberDevices = async (
+  tx: Transaction,
+  workspaceId: string | null,
+  members: MemberDevice[],
+) => {
   const configured = members.filter(
     (member): member is MemberDevice & { deviceId: string } =>
       !!member.agentId && !!member.deviceId,
   );
-  const names = new Map<MemberDevice, string>();
-  if (!configured.length) return names;
+  const infos = new Map<MemberDevice, MemberDeviceInfo>();
+  if (!configured.length) return infos;
 
-  const [channel] = await tx
-    .select({ workspaceId: channels.workspaceId })
-    .from(channels)
-    .where(eq(channels.id, channelId));
   const owners = [
     ...new Set(
       configured.flatMap((member) => (member.deviceOwnerId ? [member.deviceOwnerId] : [])),
     ),
   ];
   const scopes = [
-    channel?.workspaceId ? eq(devices.workspaceId, channel.workspaceId) : undefined,
+    workspaceId ? eq(devices.workspaceId, workspaceId) : undefined,
     owners.length ? and(isNull(devices.workspaceId), inArray(devices.userId, owners)) : undefined,
   ].filter((scope): scope is SQL => !!scope);
-  if (!scopes.length) return names;
+  if (!scopes.length) return infos;
 
   const rows = await tx
     .select({
+      defaultCwd: devices.defaultCwd,
       deviceId: devices.deviceId,
       friendlyName: devices.friendlyName,
       hostname: devices.hostname,
@@ -352,10 +363,95 @@ const memberDeviceNames = async (tx: Transaction, channelId: string, members: Me
           !entry.workspaceId &&
           entry.userId === member.deviceOwnerId,
       );
-    const name = row?.friendlyName || row?.hostname;
-    if (name) names.set(member, name);
+    if (row)
+      infos.set(member, {
+        defaultCwd: row.defaultCwd,
+        name: row.friendlyName || row.hostname || null,
+      });
   }
-  return names;
+  return infos;
+};
+
+interface EnvironmentViewer {
+  /** The viewer's own device picks per Agent in the Channel's workspace. */
+  deviceOverrides: Record<string, AgentDeviceOverride>;
+  userId: string | undefined;
+  workspaceId: string | null;
+}
+
+/**
+ * Where an Agent member runs: the device and directory the Channel picked for it, else the device
+ * a request from the viewer routes to, the Agent's own binding with the viewer's device override
+ * on top, as the run resolves it. Shown only when that is one fixed device the viewer may see: a
+ * workspace Agent in its own workspace's Channel, or a personal Agent to its owner, so a share
+ * link visitor never learns the owner's device. Any other target (auto, local, sandbox) picks its
+ * device per run, so there is none to show ahead of it.
+ */
+const memberEnvironmentSource = <
+  T extends {
+    agencyConfig: LobeAgentAgencyConfig | null;
+    agentId: string | null;
+    agentUserId: string | null;
+    agentVisibility: 'private' | 'public' | null;
+    agentWorkspaceId: string | null;
+    deviceId: string | null;
+    deviceOwnerId: string | null;
+    workingDirectory: string | null;
+  },
+>(
+  row: T,
+  viewer: EnvironmentViewer,
+): T & { inheritedConfig: LobeAgentAgencyConfig | null } => {
+  const none = { ...row, inheritedConfig: null };
+  if (!row.agentId || row.deviceId || row.workingDirectory) return none;
+  const visible = row.agentWorkspaceId
+    ? row.agentWorkspaceId === viewer.workspaceId
+    : !!viewer.userId && row.agentUserId === viewer.userId;
+  if (!visible) return none;
+  const override = row.agentWorkspaceId ? viewer.deviceOverrides[row.agentId] : undefined;
+  const config = resolveAgentAgencyConfig(row.agencyConfig, override, {
+    canManage: !!viewer.userId && row.agentUserId === viewer.userId,
+    visibility: row.agentVisibility ?? undefined,
+    workspaceId: row.agentWorkspaceId,
+  });
+  if (config?.executionTarget !== 'device' || !config.boundDeviceId) return none;
+  return {
+    ...row,
+    deviceId: config.boundDeviceId,
+    // A device the viewer picked may be their own personal one.
+    deviceOwnerId:
+      override?.boundDeviceId === config.boundDeviceId ? viewer.userId! : row.agentUserId,
+    inheritedConfig: config,
+  };
+};
+
+const environmentViewer = async (
+  tx: Transaction,
+  channelId: string,
+  userId: string | undefined,
+): Promise<EnvironmentViewer> => {
+  const [channel] = await tx
+    .select({ workspaceId: channels.workspaceId })
+    .from(channels)
+    .where(eq(channels.id, channelId));
+  const workspaceId = channel?.workspaceId ?? null;
+  const [settings] =
+    workspaceId && userId
+      ? await tx
+          .select({ preference: workspaceUserSettings.preference })
+          .from(workspaceUserSettings)
+          .where(
+            and(
+              eq(workspaceUserSettings.workspaceId, workspaceId),
+              eq(workspaceUserSettings.userId, userId),
+            ),
+          )
+      : [];
+  return {
+    deviceOverrides: settings?.preference.agentDeviceOverrides ?? {},
+    userId,
+    workspaceId,
+  };
 };
 
 export const readChannelView = async (
@@ -390,6 +486,10 @@ export const readChannelView = async (
         deviceId: sql<string | null>`${channelMembers.config}->>'deviceId'`,
         deviceOwnerId: sql<string | null>`${channelMembers.config}->>'deviceOwnerId'`,
         workingDirectory: sql<string | null>`${channelMembers.config}->>'workingDirectory'`,
+        agencyConfig: agents.agencyConfig,
+        agentUserId: agents.userId,
+        agentVisibility: agents.visibility,
+        agentWorkspaceId: agents.workspaceId,
       })
       .from(channelMembers)
       .leftJoin(users, eq(users.id, channelMembers.userId))
@@ -445,7 +545,9 @@ export const readChannelView = async (
           THREAD_ACTIVE_JOB_LIMIT,
         ),
   ]);
-  const deviceNames = await memberDeviceNames(tx, channelId, members);
+  const viewer = await environmentViewer(tx, channelId, viewerUserId);
+  const environments = members.map((row) => memberEnvironmentSource(row, viewer));
+  const deviceInfos = await memberDevices(tx, viewer.workspaceId, environments);
   const jobs = [...ownJobs, ...threadJobs].sort(
     (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
   );
@@ -525,13 +627,29 @@ export const readChannelView = async (
     attachments,
     hasMore: reversed.length > limit,
     jobs,
-    members: members.map((row) => {
-      const { deviceId, deviceOwnerId: _deviceOwnerId, workingDirectory, ...member } = row;
+    members: environments.map((row) => {
+      const {
+        agencyConfig: _agencyConfig,
+        agentUserId: _agentUserId,
+        agentVisibility: _agentVisibility,
+        agentWorkspaceId: _agentWorkspaceId,
+        deviceId,
+        deviceOwnerId: _deviceOwnerId,
+        inheritedConfig,
+        workingDirectory: channelDirectory,
+        ...member
+      } = row;
+      const device = deviceInfos.get(row);
+      // An inherited device works in the Agent's own folder there, else the device's default.
+      const workingDirectory =
+        inheritedConfig && deviceId
+          ? (defaultChannelAgentDirectory(inheritedConfig, deviceId, device?.defaultCwd) ?? null)
+          : channelDirectory;
       return {
         ...member,
         environment:
           member.agentId && (deviceId || workingDirectory)
-            ? { deviceId, deviceName: deviceNames.get(row) ?? null, workingDirectory }
+            ? { deviceId, deviceName: device?.name ?? null, workingDirectory }
             : null,
       };
     }),
