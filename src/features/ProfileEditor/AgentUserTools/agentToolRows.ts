@@ -57,7 +57,9 @@ export const buildAgentToolRows = ({
 
     listed.add(option.id);
     rows.push({
-      canDisable: option.canDisable,
+      // The library's own state (a connection awaiting authorization, say) does not hold a
+      // tool the agent runs on its own connection.
+      canDisable: ownConnection ? true : option.canDisable,
       enabled: option.enabled,
       id: option.id,
       inLibrary: true,

@@ -76,6 +76,22 @@ describe('buildAgentToolRows', () => {
     ]);
   });
 
+  it('lets a tool on its own connection be switched whatever state the library connection is in', () => {
+    // A library connection awaiting authorization cannot be switched; the agent's own
+    // connection works without it.
+    const rows = buildAgentToolRows({
+      agentConnectors: [connector('gmail')],
+      agentId: AGENT,
+      libraryOptions: [option('gmail', true, false), option('search', true, false)],
+      plugins: [{ identifier: 'gmail', mode: 'auto' }],
+    });
+
+    expect(rows.map((row) => [row.id, row.canDisable])).toEqual([
+      ['gmail', true],
+      ['search', false],
+    ]);
+  });
+
   it('adds the tools only this agent has after the library ones, with their own switch', () => {
     const rows = buildAgentToolRows({
       agentConnectors: [connector('sentry'), connector('jira')],
