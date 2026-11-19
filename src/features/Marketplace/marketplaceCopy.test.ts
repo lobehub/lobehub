@@ -71,6 +71,20 @@ describe('Marketplace page copy', () => {
     }
   });
 
+  it('translates every Marketplace sidebar entry in zh-CN', () => {
+    const zh = readNs('zh-CN', 'discover');
+    const navKeys = [
+      'tab.home',
+      'tab.assistant',
+      'tab.skill',
+      'tab.connector',
+      'tab.model',
+      'tab.provider',
+    ];
+    for (const key of navKeys) expect(zh[key], `zh-CN/discover:${key}`).toMatch(/\p{Script=Han}/u);
+    expect(zh['tab.skill']).toBe(readNs('zh-CN', 'setting')['tab.skill']);
+  });
+
   it('uses the same page name in every locale as the sidebar entry', () => {
     for (const locale of locales) {
       const name = readNs(locale, 'common')['tab.marketplace'];
