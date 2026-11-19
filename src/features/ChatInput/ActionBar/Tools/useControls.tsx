@@ -275,6 +275,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           {...stylex.props(styles.policyPanel, Boolean(panelExtra) && styles.policyPanelWide)}
           onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.stopPropagation()}
+          // Keep the compatibility mouse sequence inside the portalled policy panel.
+          onMouseDownCapture={(event) => event.stopPropagation()}
         >
           {!deleteOnly &&
             supportedModes.includes('auto') &&
