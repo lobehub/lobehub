@@ -76,6 +76,7 @@ import SuperGrokProvider from './superGrok';
 import TaichuProvider from './taichu';
 import TencentcloudProvider from './tencentcloud';
 import TogetherAIProvider from './togetherai';
+import TokenDosProvider from './tokendos';
 import { TypeSafeProvider } from './typesafe';
 import UnslothProvider from './unsloth';
 import UpstageProvider from './upstage';
@@ -174,6 +175,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   XiaomiMiMoProvider,
   AiHubMixProvider,
   OpenRouterProvider,
+  TokenDosProvider,
   FalProvider,
   ElevenLabsProvider,
   FishAudioProvider,
@@ -386,6 +388,7 @@ export { default as SuperGrokProviderCard } from './superGrok';
 export { default as TaichuProviderCard } from './taichu';
 export { default as TencentCloudProviderCard } from './tencentcloud';
 export { default as TogetherAIProviderCard } from './togetherai';
+export { default as TokenDosProviderCard } from './tokendos';
 export { default as UnslothProviderCard } from './unsloth';
 export { default as UpstageProviderCard } from './upstage';
 export { default as V0ProviderCard } from './v0';
