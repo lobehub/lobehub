@@ -146,7 +146,7 @@ const applyEdit = async (
       const regex = new RegExp(search.replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&'), 'g');
       const matches = content.match(regex);
       replacements = matches ? matches.length : 0;
-      newContent = content.replaceAll(search, replace);
+      newContent = content.replaceAll(search, () => replace);
     } else {
       const index = content.indexOf(search);
       if (index === -1) {
