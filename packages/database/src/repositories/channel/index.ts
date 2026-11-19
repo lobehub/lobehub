@@ -453,11 +453,16 @@ export class ChannelRepository {
         const admin = hasRole(access.member.role, 'admin');
         const view = await readChannelView(tx, channelId, options, this.userId);
         // Same test as `list`; the composer reads it from here to hide upload.
-        const sharedAgentOwnerId = await sharedAgentOwner(tx, access.channel, this.userId);
-        const channel = { ...access.channel, canDelete: admin, sharedAgentOwnerId };
+        const owner = await sharedAgentOwner(tx, access.channel, this.userId);
+        const channel = {
+          ...access.channel,
+          canDelete: admin,
+          sharedAgentOwnerId: owner?.id ?? null,
+        };
         return {
-          channel: { ...channel, sharedAgent: !!sharedAgentOwnerId },
+          channel: { ...channel, sharedAgent: !!owner },
           joined: true,
+          sharedAgentOwner: owner,
           ...view,
           // Mirrors `stop`: the requester or an admin.
           jobs: viewerJobs(view.jobs, this.userId, (id) => admin || id === access.member.id),

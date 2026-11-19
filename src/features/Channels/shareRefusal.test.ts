@@ -4,13 +4,15 @@ import { describe, expect, it } from 'vitest';
 
 import { contactRequestOutcome, shareRefusalOf } from './shareRefusal';
 
+const owner = { avatar: null, fullName: 'Ada', id: 'owner', username: 'ada' };
+
 const detail = (
   job: { errorType: string | null; status: string },
-  sharedAgentOwnerId: string | null = 'owner',
+  sharedAgentOwner: typeof owner | null = owner,
 ) =>
   ({
-    channel: { sharedAgentOwnerId },
     jobs: [{ id: 'job', messageId: 'msg', ...job }],
+    sharedAgentOwner,
   }) as never;
 
 describe('shareRefusalOf', () => {
@@ -21,13 +23,13 @@ describe('shareRefusalOf', () => {
         detail({ errorType: ChatErrorType.ShareMessageLimitExceeded, status: 'failed' }),
         'msg',
       ),
-    ).toEqual({ errorType: ChatErrorType.ShareMessageLimitExceeded, ownerId: 'owner' });
+    ).toEqual({ errorType: ChatErrorType.ShareMessageLimitExceeded, owner });
     expect(
       shareRefusalOf(
         detail({ errorType: ChatErrorType.ShareSpendLimitExceeded, status: 'failed' }),
         'msg',
       ),
-    ).toEqual({ errorType: ChatErrorType.ShareSpendLimitExceeded, ownerId: 'owner' });
+    ).toEqual({ errorType: ChatErrorType.ShareSpendLimitExceeded, owner });
   });
 
   it('only explains a message that is too long, which the visitor fixes themselves', () => {

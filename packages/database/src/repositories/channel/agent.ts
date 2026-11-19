@@ -4,6 +4,7 @@ import type {
   ChannelExecutionConfig,
   ChannelMemberConfig,
   ChannelSharedAgentAccess,
+  ContactUserProfile,
   LobeAgentConfig,
 } from '@lobechat/types';
 import { agentDisplayName, isChannelRuntime } from '@lobechat/types';
@@ -12,7 +13,7 @@ import { and, eq, ne } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import type { ChannelItem, ChannelMemberItem } from '../../schemas';
-import { agents, agentShares, channelMembers, userSettings } from '../../schemas';
+import { agents, agentShares, channelMembers, users, userSettings } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { agentUsableByWhere } from '../../utils/agent-access';
 import { mergeAgentDefaultConfig } from '../../utils/agentConfig';
@@ -62,25 +63,30 @@ export const sharedAgentFields = (
 
 /**
  * The owner of the Agent a direct conversation is with, when it is another person's shared Agent
- * (`isSharedAgentChannel`); `null` otherwise.
+ * (`isSharedAgentChannel`): the profile a refused reply's contact card shows. `null` otherwise.
  */
 export const sharedAgentOwner = async (
   tx: Transaction,
   channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
   viewerId: string,
-): Promise<string | null> => {
+): Promise<ContactUserProfile | null> => {
   if (!channel.agentId) return null;
   const [agent] = await tx
     .select({
       agentOwnerId: agents.userId,
       agentVisibility: agents.visibility,
       agentWorkspaceId: agents.workspaceId,
+      owner: {
+        avatar: users.avatar,
+        fullName: users.fullName,
+        id: users.id,
+        username: users.username,
+      },
     })
     .from(agents)
+    .innerJoin(users, eq(users.id, agents.userId))
     .where(eq(agents.id, channel.agentId));
-  return agent?.agentOwnerId && isSharedAgentChannel(channel, agent, viewerId)
-    ? agent.agentOwnerId
-    : null;
+  return agent && isSharedAgentChannel(channel, agent, viewerId) ? agent.owner : null;
 };
 
 /** Explicitly select environment fields so legacy or untyped copies cannot override an Agent. */

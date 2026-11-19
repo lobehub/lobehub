@@ -88,11 +88,10 @@ describe('a contact’s shared Agent in a direct conversation', () => {
     });
     expect(listed.memberAvatars).toMatchObject([{ actorType: 'agent', id: agentId }]);
     // The conversation view marks it too: its composer reads `detail`, not the list, and a refused
-    // reply offers to add its owner as a contact.
-    expect((await visitor.detail(channel.id)).channel).toMatchObject({
-      sharedAgent: true,
-      sharedAgentOwnerId: ownerId,
-    });
+    // reply offers its owner's contact card.
+    const detail = await visitor.detail(channel.id);
+    expect(detail.channel).toMatchObject({ sharedAgent: true, sharedAgentOwnerId: ownerId });
+    expect(detail.sharedAgentOwner).toMatchObject({ id: ownerId });
   });
 
   it('lists the share id as its handle when the owner set no custom slug', async () => {

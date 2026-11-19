@@ -1,4 +1,4 @@
-import type { ChannelDetail, ChannelPublicJob } from '@lobechat/types';
+import type { ChannelDetail, ChannelPublicJob, ContactUserProfile } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 import { TRPCClientError } from '@trpc/client';
 
@@ -19,22 +19,22 @@ export const isShareRefusal = (job: Pick<ChannelPublicJob, 'errorType' | 'status
 
 /**
  * The refusal of a message's reply in a conversation with another person's shared Agent, and
- * the owner it offers to add as a contact. Undefined in any other conversation or when the reply
+ * the owner whose contact card it offers. Undefined in any other conversation or when the reply
  * did not fail for a share limit.
  */
 export const shareRefusalOf = (
-  detail: Pick<ChannelDetail, 'channel' | 'jobs'>,
+  detail: Pick<ChannelDetail, 'jobs' | 'sharedAgentOwner'>,
   messageId: string,
-): { errorType: string; ownerId?: string } | undefined => {
-  const ownerId = detail.channel.sharedAgentOwnerId;
-  if (!ownerId) return;
+): { errorType: string; owner?: ContactUserProfile } | undefined => {
+  const owner = detail.sharedAgentOwner;
+  if (!owner) return;
   const job = (detail.jobs ?? []).find(
     (item) => item.messageId === messageId && isShareRefusal(item),
   );
   if (!job?.errorType) return;
   return {
     errorType: job.errorType,
-    ...(SHARE_REFUSALS[job.errorType].addOwner && { ownerId }),
+    ...(SHARE_REFUSALS[job.errorType].addOwner && { owner }),
   };
 };
 
