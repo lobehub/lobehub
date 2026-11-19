@@ -2,6 +2,7 @@ import type { BuiltinRestrictedManifestResolver } from '@lobechat/types';
 
 import { SkillsManifest } from './manifest';
 import { AGENT_SHARE_SKILL_API_NAMES } from './types';
+import { visualOutputPrompt } from './visualOutput';
 
 /**
  * Replacement `systemRole` for the share-visitor surface.
@@ -38,6 +39,8 @@ export const agentShareSystemPrompt = `You have access to a Skills tool that loa
   - Returns the file content for you to use as context
   - Only use paths that are referenced in the skill content
 </tool_selection_guidelines>
+
+${visualOutputPrompt}
 
 <best_practices>
 - Only activate skills when the user's task clearly matches the skill's purpose
