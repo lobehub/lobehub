@@ -3,6 +3,7 @@ import { platform } from 'node:os';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import type { HeteroPermissionMode } from '@lobechat/types';
+import { isHeteroPermissionMode } from '@lobechat/types';
 import { spawnManaged } from '@lobechat/utils/managedProcess';
 
 import { ClaudeCodeAdapter } from '../adapters/claudeCode';
@@ -686,6 +687,13 @@ const spawnCliAgent = async (
       options.operationId,
       resolveClaudeCodePermissionMode(permissionMode, isRoot).fallback,
     );
+    // A mid-run switch: report against the pick (root takes acceptEdits for bypass).
+    live.onControlRequestSent((request, meta) => {
+      const requestedMode = meta?.requestedMode;
+      if (request.subtype === 'set_permission_mode' && isHeteroPermissionMode(requestedMode)) {
+        reporter.requested(requestedMode, isRoot);
+      }
+    });
     live.subscribe((message) => {
       const event = reporter.observe(message);
       if (!event) return;

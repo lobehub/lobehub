@@ -106,15 +106,31 @@ describe('attachClaudeCodePermissionResponder', () => {
 });
 
 describe('buildSetPermissionModeRequest', () => {
-  it('switches mode, turning bypass into acceptEdits as root', () => {
+  it('switches mode, turning bypass into acceptEdits as root, and keeps the pick for the host', () => {
     expect(buildSetPermissionModeRequest('plan', false)).toEqual({
+      __host: { requestedMode: 'plan' },
       mode: 'plan',
       subtype: 'set_permission_mode',
     });
     expect(buildSetPermissionModeRequest('bypassPermissions', true)).toEqual({
+      __host: { requestedMode: 'bypassPermissions' },
       mode: 'acceptEdits',
       subtype: 'set_permission_mode',
     });
+  });
+
+  it('never sends the host metadata to Claude Code, and hands it to listeners', () => {
+    const { live, written } = setup();
+    const sent: any[] = [];
+    live.onControlRequestSent((request, meta) => sent.push({ meta, request }));
+    live.sendControlRequest(buildSetPermissionModeRequest('bypassPermissions', true));
+    expect(written[0].request).toEqual({ mode: 'acceptEdits', subtype: 'set_permission_mode' });
+    expect(sent).toEqual([
+      {
+        meta: { requestedMode: 'bypassPermissions' },
+        request: { mode: 'acceptEdits', subtype: 'set_permission_mode' },
+      },
+    ]);
   });
 });
 
@@ -154,6 +170,22 @@ describe('PermissionModeReporter', () => {
     expect(
       reporter.observe({ permissionMode: 'dontAsk', subtype: 'init', type: 'system' }),
     ).toBeUndefined();
+  });
+
+  it('keeps a bypass pick made mid-run as root instead of taking acceptEdits', () => {
+    // Started in default on a root device; the user switches to Allow everything.
+    const reporter = new PermissionModeReporter('op-1', undefined);
+    reporter.observe({ permissionMode: 'default', subtype: 'init', type: 'system' });
+    reporter.requested('bypassPermissions', true);
+    expect(
+      reporter.observe({ permissionMode: 'acceptEdits', subtype: 'status', type: 'system' })?.data,
+    ).toEqual({ fallback: 'root', permissionMode: 'acceptEdits', phase: 'permission_mode' });
+    // Re-reported even when the mode did not change, so the fallback reaches the topic.
+    reporter.requested('bypassPermissions', true);
+    expect(
+      reporter.observe({ permissionMode: 'acceptEdits', subtype: 'status', type: 'system' })?.data
+        .fallback,
+    ).toBe('root');
   });
 
   it('explains the root fallback while it applies', () => {

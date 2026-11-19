@@ -2,9 +2,10 @@ import type { AgentInterventionInteractionKind } from '@lobechat/agent-gateway-c
 import type { HeteroPermissionMode } from '@lobechat/types';
 
 import type { AskUserBridge, InterventionAnswer } from '../askUser/AskUserBridge';
-import type {
-  ClaudeCodeControlRequest,
-  ClaudeCodeControlRequestHandle,
+import {
+  type ClaudeCodeControlRequest,
+  type ClaudeCodeControlRequestHandle,
+  CONTROL_REQUEST_HOST_META,
 } from '../spawn/claudeCodeLiveInput';
 import { resolveClaudeCodePermissionMode } from './args';
 import {
@@ -100,7 +101,13 @@ export const attachClaudeCodePermissionResponder = (
 export const buildSetPermissionModeRequest = (
   mode: HeteroPermissionMode,
   isRoot?: boolean,
-): { mode: HeteroPermissionMode; subtype: 'set_permission_mode' } => ({
+): {
+  [CONTROL_REQUEST_HOST_META]: { requestedMode: HeteroPermissionMode };
+  mode: HeteroPermissionMode;
+  subtype: 'set_permission_mode';
+} => ({
+  // The pick itself, for the host's mode report; never sent to Claude Code.
+  [CONTROL_REQUEST_HOST_META]: { requestedMode: mode },
   mode: resolveClaudeCodePermissionMode(mode, isRoot).mode,
   subtype: 'set_permission_mode',
 });

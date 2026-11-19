@@ -9,10 +9,12 @@ import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Button, Flexbox, Highlighter, Icon, Markdown, Text, TextArea } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ClipboardList, ShieldQuestion } from 'lucide-react';
+import { CircleAlert, ClipboardList, ShieldQuestion } from 'lucide-react';
 import { memo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+
+import { useChatStore } from '@/store/chat';
 
 import { useSubmissionReconcile } from '../useSubmissionReconcile';
 
@@ -68,6 +70,10 @@ const PermissionRequestIntervention = memo<
   useSubmissionReconcile(messageId);
   const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
+  const [failed, setFailed] = useState(false);
+  // The store also says when a submission could not be confirmed.
+  const submissionPhase = useChatStore((s) => s.questionSubmissions[messageId]);
+  const showFailure = failed || submissionPhase === 'failed' || submissionPhase === 'uncertain';
   const detail = args.claudeCodePermission;
   const question = args.questions[0]?.question ?? '';
   const inert = disabled || sending;
@@ -76,6 +82,7 @@ const PermissionRequestIntervention = memo<
     if (inert || !onInteractionAction) return;
     const trimmed = TAKES_NOTE[optionId] ? note.trim() : '';
     setSending(true);
+    setFailed(false);
     try {
       await onInteractionAction({
         payload: {
@@ -84,6 +91,11 @@ const PermissionRequestIntervention = memo<
         },
         type: 'submit',
       });
+    } catch (error) {
+      // The card is back to pending: say the answer did not reach Claude Code,
+      // so the user answers again instead of waiting for nothing.
+      console.error('[CCPermissionRequest] submit failed', error);
+      setFailed(true);
     } finally {
       setSending(false);
     }
@@ -103,6 +115,11 @@ const PermissionRequestIntervention = memo<
 
   const actions = (
     <Flexbox gap={8}>
+      {showFailure && (
+        <Text fontSize={12} role="alert" type="danger">
+          <Icon icon={CircleAlert} size={14} /> {t('askUserQuestion.submitFailed')}
+        </Text>
+      )}
       {takesNote && (
         <TextArea
           autoSize={{ maxRows: 4, minRows: 1 }}

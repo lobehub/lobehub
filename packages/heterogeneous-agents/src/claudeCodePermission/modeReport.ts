@@ -6,6 +6,8 @@ import type {
 } from '@lobechat/types';
 import { isHeteroPermissionMode } from '@lobechat/types';
 
+import { resolveClaudeCodePermissionMode } from './args';
+
 /** `step_complete` phase carrying the mode Claude Code reports it is in. */
 export const PERMISSION_MODE_PHASE = 'permission_mode';
 
@@ -67,6 +69,17 @@ export class PermissionModeReporter {
     fallback: HeteroPermissionModeFallback | undefined,
   ) {
     this.fallback = fallback;
+  }
+
+  /**
+   * The user switched the running session to `mode`. Reports from now on
+   * explain against that pick: as root a bypass pick runs as `acceptEdits`
+   * with the root fallback, so the topic keeps the pick instead of taking
+   * `acceptEdits`. The next report is emitted even if the mode is unchanged.
+   */
+  requested(mode: HeteroPermissionMode, isRoot: boolean): void {
+    this.fallback = resolveClaudeCodePermissionMode(mode, isRoot).fallback;
+    this.last = undefined;
   }
 
   /** The event for a record that reports a new mode, else undefined. */

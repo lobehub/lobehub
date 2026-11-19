@@ -382,6 +382,8 @@ export class ClaudeAgentSdkSession {
   async setPermissionMode(mode: HeteroPermissionMode): Promise<HeteroPermissionMode> {
     if (!this.queryHandle) throw new Error('The Claude Code session is no longer running');
     const taken = buildSetPermissionModeRequest(mode, this.isRoot).mode;
+    // Report against the pick: as root a bypass pick runs as acceptEdits.
+    this.modeReporter?.requested(mode, this.isRoot);
     await this.queryHandle.setPermissionMode(taken);
     return taken;
   }
