@@ -126,6 +126,8 @@ const SkillList = memo<SkillListProps>(
     const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
     const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
     const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
+    const useFetchConnectors = useToolStore((s) => s.useFetchConnectors);
+    useFetchConnectors(viewMode === 'connector');
     const agentBoundConnectors = useToolStore(connectorSelectors.agentBoundConnectors, isEqual);
     const isAgentBoundInit = useToolStore((s) => s.isAgentBoundInit);
     const fetchAgentBoundConnectors = useToolStore((s) => s.fetchAgentBoundConnectors);

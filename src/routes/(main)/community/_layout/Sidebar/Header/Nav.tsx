@@ -50,7 +50,7 @@ const Nav = memo(() => {
         {
           icon: McpIcon,
           key: DiscoverTab.Mcp,
-          title: `MCP`,
+          title: t('tab.connector'),
           url: '/community/mcp',
         },
         // Models / Model Providers are hidden, not deleted: see

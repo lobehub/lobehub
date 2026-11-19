@@ -1,15 +1,17 @@
-import { Button, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { ArrowLeft, ChevronRight, Plus } from 'lucide-react';
+import { Button, Flexbox, Tooltip } from '@lobehub/ui';
+import { ArrowLeft, Plus } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
 import { CustomConnectorModal } from '@/features/Connectors';
+import { CatalogBody } from '@/features/MarketplaceCatalog/CatalogBody';
+import { catalogDetailQuery } from '@/features/MarketplaceCatalog/catalogDetailQuery';
 import { CatalogHeader } from '@/features/MarketplaceCatalog/CatalogHeader';
 import SkillDetail from '@/features/Settings/skill/features/SkillDetail';
 import { parseMobileSelection } from '@/features/Settings/skill/mobileSelection';
-import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
+import { useCategory } from '@/hooks/useMCPCategory';
 import { useQuery } from '@/hooks/useQuery';
 import { useToolStore } from '@/store/tool';
 import { useUserStore } from '@/store/user';
@@ -35,8 +37,8 @@ const AddMcp = () => {
         }
       >
         <span style={{ display: 'inline-flex' }}>
-          <Button disabled={!canManage} icon={Plus} type="primary" onClick={() => setOpen(true)}>
-            {t('mcp.add')}
+          <Button disabled={!canManage} icon={Plus} onClick={() => setOpen(true)}>
+            {t('catalog.addConnector')}
           </Button>
         </span>
       </Tooltip>
@@ -54,6 +56,7 @@ export const McpMarketplace = ({ sortControl, renderPagination }: McpMarketplace
   const { t } = useTranslation('discover');
   const [params, setParams] = useSearchParams();
   const query = useQuery() as McpQueryParams;
+  const categories = useCategory().filter(({ key }) => key !== 'discover');
   const signedIn = Boolean(useUserStore(authSelectors.isLogin));
   const fetchConnectors = useToolStore((s) => s.useFetchConnectors);
   const fetchPlugins = useToolStore((s) => s.useFetchInstalledPlugins);
@@ -63,17 +66,12 @@ export const McpMarketplace = ({ sortControl, renderPagination }: McpMarketplace
   const filtered = Boolean(
     query.q || query.category || query.page || query.sort || query.connectionType,
   );
-  const back = () => {
-    const next = new URLSearchParams(params);
-    next.delete('open');
-    setParams(next, { replace: true });
-  };
-
+  const back = () => setParams(catalogDetailQuery(params), { replace: true });
   if (selected && (selected.type === 'mcp-connector' || selected.type === 'plugin'))
     return (
       <Flexbox align="flex-start">
         <Button icon={ArrowLeft} type="text" onClick={back}>
-          MCP
+          {t('tab.connector')}
         </Button>
         <Flexbox width="100%">
           <SkillDetail
@@ -90,45 +88,28 @@ export const McpMarketplace = ({ sortControl, renderPagination }: McpMarketplace
     <Flexbox gap={24}>
       <CatalogHeader
         action={signedIn && <AddMcp />}
+        categories={categories}
         description={t('mcp.marketplaceDescription')}
-        searchLabel={t('mcp.searchPlaceholder')}
-        title="MCP"
+        searchLabel={t('catalog.searchConnectors')}
+        title={t('tab.connector')}
       />
       {signedIn && isMobileSurface() && (
         <details>
           <summary>{t('plugins.installed')}</summary>
-          <InstalledMcp />
+          <InstalledMcp hideTitle />
         </details>
       )}
-      {filtered ? (
-        <>
-          <Flexbox horizontal align="center" gap={8} justify="space-between">
-            <WorkspaceLink to={MCP_MARKETPLACE_PATH}>← MCP</WorkspaceLink>
-            {sortControl}
-          </Flexbox>
-          {query.category && (
-            <Text as="h2" fontSize={18} weight={600}>
-              {t(`mcp.categories.${query.category}.name`, { defaultValue: query.category })}
-            </Text>
-          )}
-          <McpResults query={query} renderPagination={renderPagination} />
-        </>
-      ) : (
-        <>
-          <McpResults featured preview query={{ sort: McpSorts.IsFeatured }} />
-          <Flexbox horizontal align="center" gap={8} justify="space-between">
-            <WorkspaceLink
-              style={{ alignItems: 'center', display: 'inline-flex', gap: 4 }}
-              to={MCP_MARKETPLACE_PATH + '?category=all'}
-            >
-              {t('mcp.categories.all.description')}
-              <Icon icon={ChevronRight} size={16} />
-            </WorkspaceLink>
-            {sortControl}
-          </Flexbox>
-          <McpCategorySections />
-        </>
-      )}
+      <CatalogBody
+        allLabel={t('catalog.allConnectors')}
+        categories={<McpCategorySections />}
+        categoryLabel={categories.find(({ key }) => key === query.category && key !== 'all')?.label}
+        featured={<McpResults featured preview query={{ sort: McpSorts.IsFeatured }} />}
+        filtered={filtered}
+        path={MCP_MARKETPLACE_PATH}
+        results={<McpResults query={query} renderPagination={renderPagination} />}
+        searching={Boolean(query.q)}
+        sortControl={sortControl}
+      />
     </Flexbox>
   );
 };

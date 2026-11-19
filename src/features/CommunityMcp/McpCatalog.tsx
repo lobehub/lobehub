@@ -50,11 +50,17 @@ export const McpResults = ({ featured, preview, query, renderPagination }: McpRe
   return (
     <AsyncBoundary
       data={data}
-      empty={<McpEmpty />}
       error={error}
       isEmpty={!items?.length}
       isLoading={isLoading}
       loading={preview ? undefined : <RouteLoading />}
+      empty={
+        preview ? (
+          <Text type="secondary">{t('catalog.emptyCategory')}</Text>
+        ) : (
+          <McpEmpty search={Boolean(query.q)} />
+        )
+      }
       onRetry={mutate}
     >
       {featured ? (

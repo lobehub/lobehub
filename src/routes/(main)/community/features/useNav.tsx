@@ -37,7 +37,7 @@ export const useNav = () => {
       {
         icon: <MCP className={'anticon'} size={ICON_SIZE} />,
         key: DiscoverTab.Mcp,
-        label: <div style={{ color: 'inherit', display: 'inline' }}>MCP</div>,
+        label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.connector')}</div>,
       },
       // Models / Model Providers are hidden, not deleted: see
       // `@/spa/router/communityHiddenRoutes` for the restore path.

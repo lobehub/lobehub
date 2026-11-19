@@ -88,6 +88,15 @@ export default {
   'assistants.withKnowledge': 'This Agent includes Libraries',
   'assistants.withPlugin': 'This Agent includes Skills',
   'back': 'Back to Discovery',
+  'catalog.addConnector': 'Add custom connector',
+  'catalog.allCategories': 'All categories',
+  'catalog.allConnectors': 'All connectors',
+  'catalog.browseCategories': 'Browse by category',
+  'catalog.emptyCategory': 'No items in this category yet.',
+  'catalog.importSkill': 'Import skill',
+  'catalog.resetFilters': 'Clear filters',
+  'catalog.searchConnectors': 'Search connectors',
+  'catalog.searchResults': 'Search results',
   'category.assistant.academic': 'Academic',
   'category.assistant.all': 'All',
   'category.assistant.career': 'Career',
@@ -664,10 +673,8 @@ export default {
 
   'mcp.validated.title': 'Validated',
 
-  'mcp.add': 'Add MCP',
   'mcp.marketplaceDescription': 'Find and install MCP servers for your agents.',
   'mcp.noneInstalled': 'No installed MCP servers',
-  'mcp.searchPlaceholder': 'Search MCP servers',
   'mcpEmpty.description': 'Try adjusting filters or searching with different keywords.',
 
   'mcpEmpty.search': 'No matching MCP Servers found',
@@ -1137,6 +1144,7 @@ export default {
 
   'tab.assistant': 'Agent',
 
+  'tab.connector': 'Connectors',
   'tab.home': 'Home',
 
   'tab.model': 'Model',

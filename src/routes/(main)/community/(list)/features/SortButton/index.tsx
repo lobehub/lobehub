@@ -178,10 +178,6 @@ const SortButton = memo(() => {
     return items[0];
   }, [items, sort]);
 
-  const handleSort = (config: string) => {
-    router.push(pathname, { query: { sort: config } });
-  };
-
   const menuItems = useMemo<DropdownMenuCheckboxItem[]>(
     () =>
       items.map((item): DropdownMenuCheckboxItem => ({
@@ -191,12 +187,12 @@ const SortButton = memo(() => {
         label: item.label,
         onCheckedChange: (checked: boolean) => {
           if (checked) {
-            handleSort(String(item.key));
+            router.push(pathname, { query: { page: null, sort: String(item.key) } });
           }
         },
         type: 'checkbox',
       })),
-    [activeItem?.key, handleSort, items],
+    [activeItem?.key, items, pathname, router],
   );
 
   if (menuItems.length === 0) return null;

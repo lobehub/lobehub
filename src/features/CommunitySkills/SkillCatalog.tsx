@@ -27,6 +27,7 @@ export const SkillResults = ({
   query: SkillQueryParams;
   preview?: boolean;
 }) => {
+  const { t } = useTranslation('discover');
   const useList = useDiscoverStore((s) => s.useFetchSkillList);
   const { queryKey, isLoading, error, mutate } = useList({
     ...query,
@@ -38,11 +39,17 @@ export const SkillResults = ({
   return (
     <AsyncBoundary
       data={data}
-      empty={<SkillEmpty />}
       error={error}
       isEmpty={!data?.items.length}
       isLoading={isLoading}
       loading={preview ? undefined : <RouteLoading />}
+      empty={
+        preview ? (
+          <Text type="secondary">{t('catalog.emptyCategory')}</Text>
+        ) : (
+          <SkillEmpty search={Boolean(query.q)} />
+        )
+      }
       onRetry={mutate}
     >
       {data && (

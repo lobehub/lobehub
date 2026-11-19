@@ -31,7 +31,7 @@ export const CatalogSections = ({
     <Flexbox gap={32}>
       {categories.slice(0, limit).map(({ key, label, icon }) => (
         <Flexbox gap={12} key={key}>
-          <Text as="h2" fontSize={18} weight={600}>
+          <Text as="h3" fontSize={16} weight={600}>
             <WorkspaceLink
               style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}
               to={path + '?' + new URLSearchParams({ category: key })}
