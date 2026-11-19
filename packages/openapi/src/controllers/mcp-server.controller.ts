@@ -142,7 +142,13 @@ export class McpServerController extends BaseController {
       );
       return this.success(
         c,
-        await service.callTool({ ...body, identifier: server.identifier }),
+        await service.callTool({
+          ...body,
+          // Stay on the server this route addressed: a base connector sharing
+          // its identifier would otherwise be resolved in its place.
+          connectorId: server.id,
+          identifier: server.identifier,
+        }),
         'Tool called',
       );
     } catch (error) {

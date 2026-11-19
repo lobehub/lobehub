@@ -37,12 +37,15 @@ export class ToolCallRestService extends BaseService {
     this.ctx = { userId: this.userId, workspaceId, workspaceRole };
   }
 
-  async callTool(request: ToolCallRequest): Promise<ToolCallResult> {
+  async callTool(request: ToolCallRequest & { connectorId?: string }): Promise<ToolCallResult> {
     let outcome: ToolCallOutcome;
     try {
       outcome = (await connectorRouter.createCaller(this.ctx).callTool({
         agentId: request.agentId,
         args: JSON.stringify(request.arguments ?? {}),
+        // The id-addressed call picked this row; pin it so a connector sharing
+        // the identifier (another endpoint, other credentials) cannot run instead.
+        connectorId: request.connectorId,
         identifier: request.identifier,
         linkId: request.linkId,
         toolName: request.toolName,

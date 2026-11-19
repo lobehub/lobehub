@@ -471,6 +471,36 @@ describe('POST /mcp-servers/{id}/tools/call', () => {
     expect((await json(res)).data).toMatchObject({ content: 'Found 2 issues', success: true });
   });
 
+  it('runs the addressed server when a sibling shares its identifier', async () => {
+    // A workspace holds a shared `docs` server and the caller's private `docs`
+    // server: the id-addressed route must run the row it addressed, not the
+    // shared sibling the identifier also resolves to.
+    const shared = await seedConnector({ identifier: 'docs', workspaceId: WORKSPACE });
+    const own = await seedConnector({
+      identifier: 'docs',
+      mcpServerUrl: 'https://private-docs.example.com/mcp',
+      visibility: 'private',
+      workspaceId: WORKSPACE,
+    });
+    await seedTool(shared, 'search');
+    await seedTool(own, 'search');
+
+    const res = await call(`/mcp-servers/${own.id}/tools/call`, {
+      body: { arguments: { q: 'auth' }, toolName: 'search' },
+      key: KEYS.workspace,
+      method: 'POST',
+      workspaceId: WORKSPACE,
+    });
+
+    expect(res.status).toBe(200);
+    expect(mcp.callTool).toHaveBeenCalledTimes(1);
+    expect(mcp.callTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientParams: expect.objectContaining({ url: 'https://private-docs.example.com/mcp' }),
+      }),
+    );
+  });
+
   it('applies the same approval gate as POST /tools/call', async () => {
     const server = await seedConnector({ identifier: 'docs' });
     await seedTool(server, 'publish', 'needs_approval');

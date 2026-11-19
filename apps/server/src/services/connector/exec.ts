@@ -128,9 +128,19 @@ export interface ConnectorExecContext extends ConnectorToolSyncContext {
  * reads as not found.
  */
 const findConnector = async (
-  params: { agentId?: string; identifier: string },
+  params: { agentId?: string; connectorId?: string; identifier: string },
   ctx: ConnectorExecContext,
 ) => {
+  // The id-addressed REST call (`/mcp-servers/{id}/tools/call`) already checked
+  // that exact row and how the caller reaches it. Resolving the identifier again
+  // would run a sibling that shares it — a different endpoint with different
+  // credentials — in its place, so the selected row is used as is.
+  if (params.connectorId) {
+    const connector = await ctx.connectorModel.findById(params.connectorId);
+    // An agent-scoped row is only reachable through its agent.
+    if (!connector || (!params.agentId && connector.agentId)) return [];
+    return [connector];
+  }
   if (!params.agentId) return ctx.connectorModel.queryByIdentifiers([params.identifier]);
   if (!(await ctx.agentModel.existsById(params.agentId))) return [];
 
@@ -197,6 +207,12 @@ export const callConnectorToolById = async (
   params: {
     agentId?: string;
     args?: string;
+    /**
+     * Pin the call to this connector row instead of resolving `identifier`
+     * (`/mcp-servers/{id}/tools/call`): the caller already picked the row, and
+     * a sibling sharing the identifier must not take its place.
+     */
+    connectorId?: string;
     /** An MCP App view's `tools/call`: only tools visible to the app run. */
     fromApp?: boolean;
     fromEntrypoint?: boolean;
