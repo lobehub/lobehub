@@ -4,10 +4,12 @@ import path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DSH_MIN_VERSION, DSH_VERSION_PATTERN } from '../spawn/dshAcpSession';
 import {
   probeRemotePlatform,
   resolveRemotePlatformCommand,
   resolveRemotePlatformRuntime,
+  scanHeterogeneousAgentsOnHost,
 } from './scanHost';
 
 vi.mock('node:child_process', () => ({ execFile: vi.fn() }));
@@ -20,15 +22,18 @@ vi.mock('node:os', async () => {
 const {
   detectHeterogeneousCliCommandMock,
   detectValidatedCommandCandidatesMock,
+  detectValidatedCommandMock,
   resolveCliSpawnPlanMock,
 } = vi.hoisted(() => ({
   detectHeterogeneousCliCommandMock: vi.fn(),
+  detectValidatedCommandMock: vi.fn(),
   detectValidatedCommandCandidatesMock: vi.fn(),
   resolveCliSpawnPlanMock: vi.fn(),
 }));
 
 vi.mock('../spawn/resolveCliCommand', () => ({
   detectHeterogeneousCliCommand: detectHeterogeneousCliCommandMock,
+  detectValidatedCommand: detectValidatedCommandMock,
   detectValidatedCommandCandidates: detectValidatedCommandCandidatesMock,
 }));
 
@@ -222,5 +227,70 @@ describe('platform command scanning', () => {
       available: false,
       reason: 'hermes was not found or failed validation',
     });
+  });
+});
+
+describe('scanHeterogeneousAgentsOnHost', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    platformMock.mockReturnValue('darwin');
+    detectHeterogeneousCliCommandMock.mockResolvedValue({ available: true, version: '1.0.0' });
+    detectValidatedCommandCandidatesMock.mockResolvedValue({ available: false });
+  });
+
+  it('probes DeepSeek Harness through its version-gated dsh detector', async () => {
+    detectValidatedCommandMock.mockResolvedValue({
+      available: true,
+      path: '/private/bin/dsh',
+      resolvedPathEnv: '/private/bin:/usr/bin',
+      version: DSH_MIN_VERSION,
+    });
+
+    const agents = await scanHeterogeneousAgentsOnHost();
+
+    expect(agents['deepseek-harness']).toEqual({ available: true, version: DSH_MIN_VERSION });
+    expect(detectValidatedCommandMock).toHaveBeenCalledWith(
+      'dsh',
+      { validatePattern: DSH_VERSION_PATTERN },
+      undefined,
+    );
+  });
+
+  it('explains a missing dsh, which the detector reports without an error', async () => {
+    detectValidatedCommandMock.mockResolvedValue({ available: false });
+
+    const agents = await scanHeterogeneousAgentsOnHost();
+
+    expect(agents['deepseek-harness']).toEqual({
+      available: false,
+      reason: 'DeepSeek Harness (dsh) was not found or failed validation',
+    });
+  });
+
+  it('keeps the upgrade hint for a dsh older than the minimum version', async () => {
+    detectValidatedCommandMock.mockResolvedValue({
+      available: true,
+      path: '/private/bin/dsh',
+      version: '0.1.9',
+    });
+
+    const agents = await scanHeterogeneousAgentsOnHost();
+    const status = agents['deepseek-harness'];
+
+    expect(status).toMatchObject({ available: false, version: '0.1.9' });
+    expect(status?.reason).toContain(DSH_MIN_VERSION);
+    expect(status?.reason).toContain('npm i -g @deepseek-ai/dsh');
+  });
+
+  it('keeps other providers when only the dsh probe throws', async () => {
+    detectValidatedCommandMock.mockRejectedValue(new Error('unexpected probe failure'));
+
+    const agents = await scanHeterogeneousAgentsOnHost();
+
+    expect(agents['deepseek-harness']).toEqual({
+      available: false,
+      reason: 'unexpected probe failure',
+    });
+    expect(agents['claude-code']).toEqual({ available: true, version: '1.0.0' });
   });
 });

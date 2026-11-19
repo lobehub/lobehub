@@ -3,8 +3,13 @@ import { homedir, platform } from 'node:os';
 import path from 'node:path';
 
 import type { RemoteHeterogeneousAgentDescriptor, RemoteHeterogeneousAgentType } from '../config';
-import { HETEROGENEOUS_AGENT_CONFIGS, REMOTE_HETEROGENEOUS_AGENT_CONFIGS } from '../config';
+import {
+  HETEROGENEOUS_AGENT_CONFIGS,
+  LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS,
+  REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
+} from '../config';
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
+import { detectDshCommand } from '../spawn/dshAcpSession';
 import type { CliCommandStatus } from '../spawn/resolveCliCommand';
 import {
   detectHeterogeneousCliCommand,
@@ -183,6 +188,29 @@ export const probeRemotePlatform = async (
     : { available: false, reason: status.error };
 };
 
+/**
+ * The detector leaves `error` unset for a missing `dsh`, so the row needs its own
+ * reason. An unexpected probe error stays on this row instead of rejecting the scan.
+ */
+const probeLocalRuntime = async (
+  config: (typeof LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS)[number],
+): Promise<HeterogeneousAgentScanStatus> => {
+  try {
+    const status = await detectDshCommand(config.defaultCommand);
+    return status.available
+      ? { available: true, version: status.version }
+      : {
+          available: false,
+          reason:
+            status.error ??
+            `${config.title} (${config.defaultCommand}) was not found or failed validation`,
+          version: status.version,
+        };
+  } catch (error) {
+    return { available: false, reason: error instanceof Error ? error.message : String(error) };
+  }
+};
+
 export const scanHeterogeneousAgentsOnHost = async (): Promise<HeterogeneousAgentScanMap> => {
   const entries = await Promise.all([
     ...HETEROGENEOUS_AGENT_CONFIGS.map(async (config) => {
@@ -199,6 +227,9 @@ export const scanHeterogeneousAgentsOnHost = async (): Promise<HeterogeneousAgen
       const status = await probeRemotePlatform(config.type);
       return [config.type, status] as const;
     }),
+    ...LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS.map(
+      async (config) => [config.type, await probeLocalRuntime(config)] as const,
+    ),
   ]);
 
   return Object.fromEntries(entries);
