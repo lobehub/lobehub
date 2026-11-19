@@ -211,6 +211,7 @@ describe('AgentRuntimeService', () => {
         'gpt-4o-mini',
         'contextWindowTokens',
         'openai',
+        undefined,
       );
       expect(capturedConfig).toEqual(
         expect.objectContaining({
@@ -249,6 +250,41 @@ describe('AgentRuntimeService', () => {
             maxWindowToken: undefined,
           }),
         }),
+      );
+    });
+
+    it('reuses the compression facts frozen on the operation instead of looking them up', async () => {
+      vi.mocked(getModelPropertyWithFallback).mockClear();
+
+      let capturedConfig: any;
+      const serviceWithFactory = new AgentRuntimeService(mockDb, mockUserId, {
+        agentFactory: (config) => {
+          capturedConfig = config;
+          return { runner: vi.fn() } as any;
+        },
+      });
+
+      await (serviceWithFactory as any).createAgentRuntime({
+        agentState: {
+          world: { agent: { chatConfig: { enableContextCompression: true } } as any },
+          modelRuntimeConfig: {
+            model: 'my-model',
+            modelFacts: {
+              cards: [],
+              compression: { maxWindowToken: 400_000 },
+              model: 'my-model',
+              provider: 'custom',
+            },
+            provider: 'custom',
+          },
+        },
+        operationId: 'test-operation-1',
+        stepIndex: 3,
+      });
+
+      expect(getModelPropertyWithFallback).not.toHaveBeenCalled();
+      expect(capturedConfig.compressionConfig).toEqual(
+        expect.objectContaining({ enabled: true, maxWindowToken: 400_000 }),
       );
     });
 
