@@ -65,7 +65,9 @@ export const resolveNotificationNavigatePath = (
 export const resolveNotificationNavigate = (context: DesktopNotificationContext) => {
   const path = resolveNotificationNavigatePath(context);
 
-  return path ? { escape: true, path } : undefined;
+  // The click lands in the conversation's own tab when one is open, rather than
+  // rewriting whichever tab happens to be focused.
+  return path ? { escape: true, path, preferExistingTab: true } : undefined;
 };
 
 /**

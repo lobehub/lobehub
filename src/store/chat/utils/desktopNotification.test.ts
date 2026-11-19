@@ -144,6 +144,7 @@ describe('resolveNotificationNavigatePath', () => {
     expect(resolveNotificationNavigate({ agentId: 'a1', topicId: 't1' })).toEqual({
       escape: true,
       path: AGENT_CHAT_TOPIC_URL('a1', 't1'),
+      preferExistingTab: true,
     });
   });
 
@@ -153,6 +154,7 @@ describe('resolveNotificationNavigatePath', () => {
     ).toEqual({
       escape: true,
       path: '/team/agent/a1/t1',
+      preferExistingTab: true,
     });
   });
 });
@@ -305,7 +307,11 @@ describe('failed run notification', () => {
     expect(showNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         body: 'Working directory unavailable: /Users/me/gone',
-        navigate: { escape: true, path: AGENT_CHAT_TOPIC_URL('agent-named', 'topic-1') },
+        navigate: {
+          escape: true,
+          path: AGENT_CHAT_TOPIC_URL('agent-named', 'topic-1'),
+          preferExistingTab: true,
+        },
         title: 'My Agent ran into a problem',
       }),
     );
