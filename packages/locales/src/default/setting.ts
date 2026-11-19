@@ -1269,6 +1269,7 @@ export default {
   'notification.item.topic_comment_activity': 'Comment activity',
   'notification.item.topic_comment_mentioned': 'Mentioned in a comment',
   'notification.item.video_generation_completed': 'Video generation completed',
+  'notification.item.workspace_budget_request_resolved': 'Budget request results',
   'notification.item.workspace_credit_balance_low': 'Workspace balance running low',
   'notification.item.workspace_member_invited': 'Workspace invitation',
   'notification.item.workspace_member_joined': 'New member joined',
