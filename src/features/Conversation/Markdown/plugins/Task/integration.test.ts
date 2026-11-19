@@ -2,6 +2,7 @@ import remarkParse from 'remark-parse';
 import { unified } from 'unified';
 import { describe, expect, it } from 'vitest';
 
+import { markdownElements } from '../index';
 import { remarkTaskBlock } from './remarkTaskBlock';
 
 const runRemark = (markdown: string) => {
@@ -59,6 +60,32 @@ Review: (not configured)
     expect(value).toContain('写一本《AI Agent 实战指南》');
     expect(value).toContain('Status:');
     expect(value).toContain('Instruction:');
+    expect(value).toContain('Review: (not configured)');
+  });
+
+  it('keeps an inline mention in the task body with the user message plugin chain', () => {
+    const markdown = `<task>
+T-6169 Topic render error
+Status: ⭕ backlog     Priority: -
+Instruction: <mention name="Lobe AI" id="agt_1" /> please take a look
+
+Review: (not configured)
+</task>`;
+
+    const processor = unified().use(remarkParse);
+    for (const element of markdownElements) {
+      if (element.scope !== 'assistant' && element.remarkPlugin)
+        processor.use(element.remarkPlugin);
+    }
+    const tree: any = processor.runSync(processor.parse(markdown));
+
+    const taskNodes = (tree.children as any[]).filter((c) => c.type === 'taskBlock');
+    expect(taskNodes).toHaveLength(1);
+
+    const value = taskNodes[0].data.hChildren[0].value as string;
+    expect(value).toContain(
+      'Instruction: <mention name="Lobe AI" id="agt_1" /> please take a look',
+    );
     expect(value).toContain('Review: (not configured)');
   });
 });
