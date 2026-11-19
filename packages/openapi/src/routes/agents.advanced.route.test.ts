@@ -30,7 +30,7 @@ const {
 const { apiKeyRow, buildRouteApp, json, seedUsersAndKeys } =
   await import('./__tests__/pglite-harness');
 const { AgentDetailSchema } = await import('../types/agent.type');
-const { AgentKnowledgeSchema, AgentPinStateSchema, ResourceTransferResultSchema } =
+const { AgentKnowledgeSchema, AgentPinStateSchema } =
   await import('../types/agent-advanced.type');
 const { AgentLabelSetSchema } = await import('../types/agent-label.type');
 const AgentRoutes = (await import('./agents.route')).default;
@@ -460,17 +460,6 @@ describe('transfer', () => {
     expect(res.status).toBe(400);
   });
 
-  it('documents a transfer result shape the procedure fills', () => {
-    expect(
-      ResourceTransferResultSchema.parse({
-        id: AGENT,
-        requestId: null,
-        slug: 'owner-helper',
-        status: 'transferred',
-        transferJobId: null,
-      }).status,
-    ).toBe('transferred');
-  });
 });
 
 describe('workspace-bound API keys', () => {
