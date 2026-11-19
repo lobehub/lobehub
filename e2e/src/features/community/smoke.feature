@@ -7,8 +7,8 @@ Feature: Community Smoke Tests
     Given I navigate to "/community"
     Then the page should load without errors
     And I should see the page body
-    And I should see the featured assistants section
-    And I should see the featured MCP tools section
+    And I should be navigated to "/community/agent"
+    And I should see assistant cards
 
   @COMMUNITY-SMOKE-002 @P0
   Scenario: Load Assistant List Page

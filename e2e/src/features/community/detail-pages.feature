@@ -84,7 +84,7 @@ Feature: Discover Detail Pages
   Scenario: Load MCP detail page and verify content
     Given I navigate to "/community/mcp"
     And I wait for the page to fully load
-    When I click on the first MCP card
+    When I open the first connector by its detail URL
     Then I should be on an MCP detail page
     And I should see the MCP title
     And I should see the MCP description
@@ -94,6 +94,6 @@ Feature: Discover Detail Pages
   Scenario: Navigate back from MCP detail page
     Given I navigate to "/community/mcp"
     And I wait for the page to fully load
-    And I click on the first MCP card
+    And I open the first connector by its detail URL
     When I click the back button
     Then I should be on the MCP list page

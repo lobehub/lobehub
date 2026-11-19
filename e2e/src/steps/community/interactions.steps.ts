@@ -64,41 +64,13 @@ When('I click on a category in the category menu', async function (this: CustomW
 });
 
 When('I click on a category in the category filter', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
-
-  // Find the category filter items - MCP page has categories like "Developer Tools", "Productivity Tools"
-  // Use the same selector pattern as the category menu
-  const categoryItems = this.page.locator('[data-testid="category-menu"] li > :is(a, button)');
-
-  const count = await categoryItems.count();
-  console.log(`   📍 Found ${count} category filter items`);
-
-  if (count === 0) {
-    // Fallback: try finding by text content that looks like MCP categories
-    const fallbackCategories = this.page.locator(
-      'text=/^(Developer Tools|Productivity Tools|Utility Tools|Media Generation|Business Services)/',
-    );
-    const fallbackCount = await fallbackCategories.count();
-    console.log(`   📍 Fallback: Found ${fallbackCount} MCP category items by text`);
-
-    if (fallbackCount > 0) {
-      await fallbackCategories.first().click();
-      this.testContext.selectedCategory = await fallbackCategories.first().textContent();
-      return;
-    }
-  }
-
-  // Wait for categories to be visible
-  await categoryItems.first().waitFor({ state: 'visible', timeout: 30_000 });
-
-  // Click the third category (skip "Discover" at index 0 and "All" at index 1)
-  // This should select the first actual category filter
-  const targetCategory = categoryItems.nth(2);
-  await targetCategory.click();
-
-  // Store the category for later verification
-  const categoryText = await targetCategory.textContent();
-  this.testContext.selectedCategory = categoryText?.trim();
+  await this.page.getByRole('combobox').click();
+  const category = this.page.getByRole('option', { name: /^(Developer Tools|开发技能)$/ });
+  await category.click();
+  await expect(this.page).toHaveURL(/[?&]category=developer(?:&|$)/);
+  await expect(
+    this.page.getByRole('heading', { level: 2, name: /^(Developer Tools|开发技能)$/ }),
+  ).toBeVisible();
 });
 
 When('I wait for the filtered results to load', async function (this: CustomWorld) {
@@ -195,23 +167,20 @@ When('I click on the first provider card', async function (this: CustomWorld) {
   );
 });
 
+When('I open the first connector by its detail URL', async function (this: CustomWorld) {
+  const link = this.page.getByTestId('mcp-item').first().getByRole('link');
+  await expect(link).toBeVisible();
+  const href = await link.getAttribute('href');
+  if (!href) throw new Error('The connector detail link has no URL');
+  await this.page.goto(href);
+});
+
 When('I click on the first MCP card', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
-
-  const firstCard = this.page.locator('[data-testid="mcp-item"]').first();
-  await firstCard.waitFor({ state: 'visible', timeout: 30_000 });
-
-  // Store the current URL before clicking
+  const link = this.page.getByTestId('mcp-item').first().getByRole('link');
+  await expect(link).toBeVisible();
   this.testContext.previousUrl = this.page.url();
-
-  await firstCard.click();
-
-  // Wait for URL to change
-  await this.page.waitForFunction(
-    (previousUrl) => window.location.href !== previousUrl,
-    this.testContext.previousUrl,
-    { timeout: 30_000 },
-  );
+  this.testContext.connectorName = (await link.innerText()).trim();
+  await link.click();
 });
 
 When('I click on the sort dropdown', async function (this: CustomWorld) {
@@ -264,91 +233,11 @@ When('I wait for the sorted results to load', async function (this: CustomWorld)
 });
 
 When(
-  'I click on the {string} link in the featured assistants section',
-  async function (this: CustomWorld, linkText: string) {
-    await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
-
-    // Find the featured assistants section and the "more" link
-    const moreLink = this.page
-      .locator(`a:has-text("${linkText}"), button:has-text("${linkText}")`)
-      .first();
-
-    await moreLink.waitFor({ state: 'visible', timeout: 30_000 });
-    await moreLink.click();
+  'I open the {string} Marketplace directory',
+  async function (this: CustomWorld, directory: string) {
+    await this.page.locator(`a[href$="/community/${directory}"]`).first().click();
   },
 );
-
-When(
-  'I click on the {string} link in the featured MCP tools section',
-  async function (this: CustomWorld, linkText: string) {
-    await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
-
-    // The home page might not have a direct MCP section with a "more" link
-    // Try to find MCP-specific link first, then fall back to direct navigation
-    const mcpLink = this.page.locator('a[href*="/community/mcp"], a[href*="mcp"]').first();
-    const mcpLinkVisible = await mcpLink.isVisible().catch(() => false);
-
-    if (mcpLinkVisible) {
-      console.log('   📍 Found direct MCP link');
-      await mcpLink.click();
-      return;
-    }
-
-    // Try to find "more" link near MCP-related content
-    const mcpSection = this.page.locator('section:has-text("MCP"), div:has-text("MCP Tools")');
-    const mcpSectionVisible = await mcpSection
-      .first()
-      .isVisible()
-      .catch(() => false);
-
-    if (mcpSectionVisible) {
-      const moreLinkInSection = mcpSection.locator(
-        `a:has-text("${linkText}"), button:has-text("${linkText}")`,
-      );
-      if ((await moreLinkInSection.count()) > 0) {
-        await moreLinkInSection.first().click();
-        return;
-      }
-    }
-
-    // Fallback: click on MCP in the sidebar navigation
-    console.log('   📍 Fallback: clicking MCP in sidebar');
-    const mcpNavItem = this.page
-      .locator('nav a:has-text("MCP"), [class*="nav"] a:has-text("MCP")')
-      .first();
-    if (await mcpNavItem.isVisible().catch(() => false)) {
-      await mcpNavItem.click();
-      return;
-    }
-
-    // Last resort: navigate directly
-    console.log('   📍 Last resort: direct navigation to /community/mcp');
-    await this.page.goto('/community/mcp');
-  },
-);
-
-When('I click on the first featured assistant card', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
-
-  const firstCard = this.page.locator('[data-testid="assistant-item"]').first();
-  await firstCard.waitFor({ state: 'visible', timeout: 30_000 });
-
-  // Store the current URL before clicking
-  this.testContext.previousUrl = this.page.url();
-
-  await firstCard.click();
-
-  // Wait for URL to change
-  await this.page.waitForFunction(
-    (previousUrl) => window.location.href !== previousUrl,
-    this.testContext.previousUrl,
-    { timeout: 30_000 },
-  );
-});
-
-// ============================================
-// Then Steps (Assertions)
-// ============================================
 
 Then('I should see filtered assistant cards', async function (this: CustomWorld) {
   await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
@@ -537,26 +426,11 @@ Then(
   },
 );
 
-Then('I should be navigated to the MCP detail page', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
-
-  const currentUrl = this.page.url();
-  // Verify that URL changed and contains /mcp/ followed by an identifier
-  const hasMcpDetail = /\/community\/mcp\/[^#?]+/.test(currentUrl);
-  const urlChanged = currentUrl !== this.testContext.previousUrl;
-
-  expect(
-    hasMcpDetail && urlChanged,
-    `Expected to navigate to MCP detail page, but URL is: ${currentUrl} (previous: ${this.testContext.previousUrl})`,
-  ).toBeTruthy();
-});
-
-Then('I should see the MCP detail content', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
-
-  // Look for MCP detail page content
-  const detailContent = this.page.locator('[data-testid="mcp-detail-content"]');
-  await expect(detailContent).toBeVisible({ timeout: 30_000 });
+Then('I should see its details in a dialog on the same page', async function (this: CustomWorld) {
+  const dialog = this.page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText(this.testContext.connectorName);
+  await expect(this.page).toHaveURL(this.testContext.previousUrl!);
 });
 
 Then('I should be navigated to {string}', async function (this: CustomWorld, expectedPath: string) {
