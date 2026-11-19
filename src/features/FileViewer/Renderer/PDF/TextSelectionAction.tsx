@@ -10,7 +10,8 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import {
-  getRangeFirstLineRect,
+  getFirstLineRect,
+  getRangeTextRects,
   getSelectionToolbarPosition,
   type SelectionToolbarPosition,
 } from '@/utils/selectionToolbar';
@@ -64,8 +65,12 @@ const TextSelectionAction = ({ onAdd, root }: TextSelectionActionProps) => {
     const update = () => {
       const nativeSelection = window.getSelection();
       const selection = readPDFTextSelection(nativeSelection, root);
+      // Anchor on the selected text: a cross-page range also covers whole
+      // overlay layers whose boxes start at the top of the page.
       const rect =
-        selection && nativeSelection && getRangeFirstLineRect(nativeSelection.getRangeAt(0));
+        selection &&
+        nativeSelection &&
+        getFirstLineRect(getRangeTextRects(nativeSelection.getRangeAt(0)));
       if (!selection || !rect) {
         setActive(null);
         return;
