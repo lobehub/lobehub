@@ -3,6 +3,7 @@
  */
 import type { Readable } from 'node:stream';
 
+import { cookies, headers } from 'next/headers';
 import type { NextRequest } from 'next/server';
 import type { SelectiveBodyContext } from 'oidc-provider/lib/shared/selective_body.js';
 import { describe, expect, it, vi } from 'vitest';
@@ -19,6 +20,7 @@ vi.mock('@/envs/app', () => ({
 
 vi.mock('next/headers', () => ({
   cookies: vi.fn(),
+  headers: vi.fn(),
 }));
 
 const readStream = async (stream: Readable) => {
@@ -32,6 +34,42 @@ const readStream = async (stream: Readable) => {
 };
 
 describe('OIDC HTTP adapter', () => {
+  describe('createContextForInteractionDetails', () => {
+    it.each([
+      ['Chinese', '用户的名字', '%E7%94%A8%E6%88%B7%E7%9A%84%E5%90%8D%E5%AD%97'],
+      ['emoji', '😀', '%F0%9F%98%80'],
+      ['encoded delimiters', 'value; injected=true', 'value%3B%20injected%3Dtrue'],
+      ['percent encoding', '%E4%BD%A0', '%25E4%25BD%25A0'],
+    ])('preserves the raw cookie header containing %s', async (_, decoded, encoded) => {
+      const rawCookie = `display_name=${encoded}; _interaction=test-id; _interaction.sig=test-signature`;
+      vi.mocked(headers).mockResolvedValue(new Headers({ cookie: rawCookie }));
+      vi.mocked(cookies).mockResolvedValue({
+        getAll: () => [
+          { name: 'display_name', value: decoded },
+          { name: '_interaction', value: 'test-id' },
+          { name: '_interaction.sig', value: 'test-signature' },
+        ],
+      } as Awaited<ReturnType<typeof cookies>>);
+
+      const { createContextForInteractionDetails } = await import('./http-adapter');
+      const { req } = await createContextForInteractionDetails('test-id');
+
+      expect(req.headers.cookie).toBe(rawCookie);
+    });
+
+    it('does not synthesize a cookie header when the request has none', async () => {
+      vi.mocked(headers).mockResolvedValue(new Headers());
+      vi.mocked(cookies).mockResolvedValue({
+        getAll: () => [],
+      } as Awaited<ReturnType<typeof cookies>>);
+
+      const { createContextForInteractionDetails } = await import('./http-adapter');
+      const { req } = await createContextForInteractionDetails('test-id');
+
+      expect(req.headers.cookie).toBeUndefined();
+    });
+  });
+
   describe('createNodeResponse', () => {
     it('captures statusCode assignments made by Koa', async () => {
       const resolvePromise = vi.fn();
