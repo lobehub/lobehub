@@ -283,6 +283,7 @@ type SystemStrings = {
   errorTimeout: string;
   errorTransientNetwork: string;
   errorUserGeneric: string;
+  errorWorkspaceModelRestricted: string;
   errorWithDetails: (details: string, operationId?: string) => string;
   errorWithId: (operationId: string) => string;
   groupRejectedAllowlist: string;
@@ -402,6 +403,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       "**Model not found.**\nThe configured model isn't available — it may have been removed or renamed. Please pick a different model in the agent's settings.",
     errorNoAvailableProvider:
       "**No model provider configured.**\nThis bot's agent has no available model provider — please add an API key and enable a provider in the agent's settings, then try again.",
+    errorWorkspaceModelRestricted:
+      "**Model restricted by your workspace admin.**\nThis agent's model isn't open to you in this workspace. Please switch the agent to another model, or ask a workspace admin to allow it.",
     errorPermissionDenied:
       "**Permission denied by the model provider.**\nThe API key doesn't have access to the requested model or operation. Please check the key's permissions, or switch to a model your account is authorized to use.",
     errorProviderUnavailable:
@@ -530,6 +533,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       '**未找到对应模型**\n所配置的模型不可用，可能已下线或更名。请在 Agent 设置中选择其他模型后重试。',
     errorNoAvailableProvider:
       '**未配置可用的模型 Provider**\n该机器人的 Agent 当前没有可用的模型 Provider，请在 Agent 设置中添加 API Key 并启用一个 Provider 后重试。',
+    errorWorkspaceModelRestricted:
+      '**工作区管理员限制了该模型**\n这个 Agent 使用的模型在当前工作区未对你开放。请在 Agent 设置中切换到其他模型，或联系工作区管理员开放。',
     errorPermissionDenied:
       '**模型 Provider 拒绝访问**\nAPI Key 没有访问该模型或操作的权限。请检查 Key 的权限范围，或在 Agent 设置中切换到当前账户已授权的模型。',
     errorProviderUnavailable:
@@ -627,6 +632,9 @@ const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
   NoAvailableProvider: 'errorNoAvailableProvider',
   PermissionDenied: 'errorPermissionDenied',
   QuotaLimitReached: 'errorQuotaLimitReached',
+  // A workspace admin closed the agent's model to this member: switching the
+  // model or asking an admin fixes it, retrying does not.
+  WorkspaceModelRestricted: 'errorWorkspaceModelRestricted',
   // ── transient provider / capacity (attribution: provider) ──
   ModelEmptyCompletion: 'errorEmptyCompletion',
   ModelRefusal: 'errorModelRefusal',
