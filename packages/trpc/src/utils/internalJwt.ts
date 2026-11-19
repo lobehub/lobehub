@@ -132,6 +132,38 @@ const verifyJwt = async (token: string, options: JWTVerifyOptions) => {
   throw signatureError ?? new Error('No RSA key available for JWT verification');
 };
 
+const DEFAULT_INTERNAL_JWT_EXPIRATION = '30s';
+let reportedInvalidInternalJwtExpiration: string | undefined;
+
+/**
+ * `INTERNAL_JWT_EXPIRATION` is an operator-set time span that jose parses at sign time, and jose
+ * only accepts `<number><unit>` (`30s`, `2m`, `1 hour`). A bare number, `ms`, quotes or a trailing
+ * newline throw `Invalid time period format`, and because every lambda → async call (image /
+ * music generation, file chunking, …) signs this token, one bad value failed all of them. The
+ * lifetime is a tuning knob, so fall back to the default and say so instead of failing the call.
+ */
+const setInternalJwtExpiration = (jwt: SignJWT): SignJWT => {
+  const configured = authEnv.INTERNAL_JWT_EXPIRATION?.trim();
+
+  if (configured) {
+    try {
+      return jwt.setExpirationTime(configured);
+    } catch (error) {
+      if (!(error instanceof TypeError)) throw error;
+
+      if (reportedInvalidInternalJwtExpiration !== configured) {
+        reportedInvalidInternalJwtExpiration = configured;
+        console.error(
+          `[internalJwt] INTERNAL_JWT_EXPIRATION=${JSON.stringify(configured)} is not a time span ` +
+            `jose can parse (e.g. "30s", "2m", "1 hour"); using "${DEFAULT_INTERNAL_JWT_EXPIRATION}".`,
+        );
+      }
+    }
+  }
+
+  return jwt.setExpirationTime(DEFAULT_INTERNAL_JWT_EXPIRATION);
+};
+
 /**
  * Sign JWT for internal lambda → async calls
  * Uses JWKS private key with configurable expiration (default: 30s)
@@ -140,11 +172,11 @@ const verifyJwt = async (token: string, options: JWTVerifyOptions) => {
 export const signInternalJWT = async (): Promise<string> => {
   const { key, kid } = await getSigningKey();
 
-  return new SignJWT({ purpose: INTERNAL_JWT_PURPOSE })
-    .setProtectedHeader({ alg: 'RS256', kid })
-    .setIssuedAt()
-    .setExpirationTime(authEnv.INTERNAL_JWT_EXPIRATION)
-    .sign(key);
+  return setInternalJwtExpiration(
+    new SignJWT({ purpose: INTERNAL_JWT_PURPOSE })
+      .setProtectedHeader({ alg: 'RS256', kid })
+      .setIssuedAt(),
+  ).sign(key);
 };
 
 /**
