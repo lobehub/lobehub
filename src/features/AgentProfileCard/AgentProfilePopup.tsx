@@ -44,10 +44,23 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     inset-block-start: 8px;
     inset-inline-end: 8px;
 
-    background: ${cssVar.colorBgElevated};
+    color: ${cssVar.colorText};
+    opacity: 0;
+    filter: drop-shadow(0 0 2px ${cssVar.colorBgElevated});
+
+    transition: opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseOut};
+
+    @media (hover: none) {
+      opacity: 1;
+    }
   `,
   content: css`
     position: relative;
+
+    &:hover [data-profile-card-close],
+    &:focus-within [data-profile-card-close] {
+      opacity: 1;
+    }
   `,
   footer: css`
     padding-block: 12px;
@@ -291,6 +304,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
             <div className={styles.content} role="presentation" onClick={stopCardClick}>
               {content}
               <ActionIcon
+                data-profile-card-close
                 aria-label={t('close', { ns: 'common' })}
                 className={styles.closeButton}
                 icon={X}
