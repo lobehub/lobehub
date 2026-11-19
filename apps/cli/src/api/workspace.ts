@@ -14,7 +14,7 @@ export const WORKSPACE_ID_HEADER = 'X-Workspace-Id';
  */
 export const PERSONAL_SCOPE_ENV_VALUE = 'personal';
 
-export type WorkspaceScopeSource = 'explicit' | 'env' | 'settings' | 'stale' | 'personal';
+export type WorkspaceScopeSource = 'explicit' | 'flag' | 'env' | 'settings' | 'stale' | 'personal';
 
 export interface WorkspaceScope {
   source: WorkspaceScopeSource;
@@ -22,6 +22,16 @@ export interface WorkspaceScope {
 }
 
 let warnedAboutStaleScope = false;
+let scopeFromFlag = false;
+
+/**
+ * The global `--workspace` flag travels through `LOBEHUB_WORKSPACE_ID`, so every
+ * reader and every spawned child sees one value. This only keeps the reported
+ * source honest for the rest of the process.
+ */
+export function markScopeFromFlag(): void {
+  scopeFromFlag = true;
+}
 
 /**
  * A persisted scope only counts when the server and account it was chosen under
@@ -58,7 +68,8 @@ function resolvePersistedScope(): WorkspaceScope | undefined {
  * from — `lh workspace current` and `lh whoami` report the source so a caller
  * can tell "wrong workspace" from "not found".
  *
- * Precedence: explicit caller arg -> `LOBEHUB_WORKSPACE_ID` env ->
+ * Precedence: explicit caller arg -> global `--workspace` flag ->
+ * `LOBEHUB_WORKSPACE_ID` env ->
  * `lh workspace use` (persisted, and still bound to this account/server) ->
  * personal mode.
  */
@@ -66,8 +77,9 @@ export function resolveWorkspaceScope(explicit?: string): WorkspaceScope {
   if (explicit) return { source: 'explicit', workspaceId: explicit };
 
   const fromEnv = process.env.LOBEHUB_WORKSPACE_ID;
-  if (fromEnv === PERSONAL_SCOPE_ENV_VALUE) return { source: 'env' };
-  if (fromEnv && fromEnv.length > 0) return { source: 'env', workspaceId: fromEnv };
+  const ambientSource = scopeFromFlag ? 'flag' : 'env';
+  if (fromEnv === PERSONAL_SCOPE_ENV_VALUE) return { source: ambientSource };
+  if (fromEnv && fromEnv.length > 0) return { source: ambientSource, workspaceId: fromEnv };
 
   // A server-dispatched execution (operation-scoped `LOBEHUB_JWT`) carries its
   // complete scope in env: `LOBEHUB_WORKSPACE_ID` when the run is
@@ -90,8 +102,10 @@ export function resolveWorkspaceScope(explicit?: string): WorkspaceScope {
 export function describeScopedNotFound(error: unknown): string | undefined {
   const data = toRecord(toRecord(error)?.data);
   if (data?.code !== 'NOT_FOUND') return;
-  const { workspaceId } = resolveWorkspaceScope();
+  const { source, workspaceId } = resolveWorkspaceScope();
   if (!workspaceId) return;
+  if (source === 'flag')
+    return `Looked in workspace ${workspaceId}. If it is in your personal space, rerun with -w ${PERSONAL_SCOPE_ENV_VALUE}; for another workspace, pass -w <id|slug>.`;
   return `Looked in workspace ${workspaceId}. If it is in your personal space, rerun with LOBEHUB_WORKSPACE_ID=${PERSONAL_SCOPE_ENV_VALUE}; for another workspace, set LOBEHUB_WORKSPACE_ID=<id>.`;
 }
 
@@ -110,4 +124,9 @@ export function withWorkspaceHeader(
 /** Test seam: the stale-scope warning is emitted at most once per process. */
 export function __resetStaleScopeWarning(): void {
   warnedAboutStaleScope = false;
+}
+
+/** Test seam: the flag marker lives for the whole process. */
+export function __resetScopeFromFlag(): void {
+  scopeFromFlag = false;
 }

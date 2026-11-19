@@ -4,6 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLI_COMPLETION_CWORD_ENV } from '../constants/identity';
 import { registerCompletionCommand } from './completion';
 
+const { mockListWorkspaces, mockPickAuthSource, mockGetValidToken } = vi.hoisted(() => ({
+  mockGetValidToken: vi.fn(),
+  mockListWorkspaces: vi.fn(),
+  mockPickAuthSource: vi.fn(),
+}));
+
+vi.mock('../api/workspaceRef', () => ({ listWorkspaces: mockListWorkspaces }));
+vi.mock('../auth/refresh', () => ({ getValidToken: mockGetValidToken }));
+vi.mock('../auth/source', () => ({ pickAuthSource: mockPickAuthSource }));
+
 describe('completion command', () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
   const originalShell = process.env.SHELL;
@@ -21,6 +31,7 @@ describe('completion command', () => {
   function createProgram() {
     const program = new Command();
     program.exitOverride();
+    program.enablePositionalOptions();
 
     program
       .command('agent')
@@ -30,6 +41,9 @@ describe('completion command', () => {
     program.command('generate').alias('gen').description('Generate content');
     program.command('usage').description('Usage').option('--month <YYYY-MM>', 'Month to query');
     program.command('internal', { hidden: true });
+    program.option('-w, --workspace <id|slug>', 'Workspace');
+    program.command('search').option('-w, --web', 'Web');
+    program.command('connect').option('--workspace <id>', 'Workspace id');
 
     registerCompletionCommand(program);
 
@@ -99,5 +113,53 @@ describe('completion command', () => {
 
     expect(consoleSpy.mock.calls.map(([value]) => value)).not.toContain('internal');
     expect(consoleSpy.mock.calls.map(([value]) => value)).not.toContain('__complete');
+  });
+
+  describe('--workspace values', () => {
+    beforeEach(() => {
+      mockPickAuthSource.mockReturnValue({ kind: 'stored' });
+      mockGetValidToken.mockResolvedValue({ status: 'ok' });
+      mockListWorkspaces.mockResolvedValue([{ slug: 'acme' }, { slug: 'beta' }]);
+    });
+
+    it('suggests workspace slugs after the global flag', async () => {
+      process.env[CLI_COMPLETION_CWORD_ENV] = '1';
+      await createProgram().parseAsync(['node', 'test', '__complete', '-w', 'a']);
+      expect(consoleSpy.mock.calls.map(([value]) => value)).toEqual(['acme']);
+    });
+
+    it('stays silent when not logged in', async () => {
+      mockGetValidToken.mockResolvedValue({ status: 'missing' });
+      process.env[CLI_COMPLETION_CWORD_ENV] = '1';
+      await createProgram().parseAsync(['node', 'test', '__complete', '--workspace', '']);
+      expect(mockListWorkspaces).not.toHaveBeenCalled();
+      expect(consoleSpy).not.toHaveBeenCalled();
+    });
+
+    it('stays silent when the lookup fails', async () => {
+      mockListWorkspaces.mockRejectedValue(new Error('offline'));
+      process.env[CLI_COMPLETION_CWORD_ENV] = '1';
+      await createProgram().parseAsync(['node', 'test', '__complete', '-w', '']);
+      expect(consoleSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not suggest slugs for a --workspace that takes an id only', async () => {
+      process.env[CLI_COMPLETION_CWORD_ENV] = '2';
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        '__complete',
+        'connect',
+        '--workspace',
+        '',
+      ]);
+      expect(mockListWorkspaces).not.toHaveBeenCalled();
+    });
+
+    it("does not treat another command's boolean -w as a workspace value", async () => {
+      process.env[CLI_COMPLETION_CWORD_ENV] = '2';
+      await createProgram().parseAsync(['node', 'test', '__complete', 'search', '-w', '']);
+      expect(mockListWorkspaces).not.toHaveBeenCalled();
+    });
   });
 });
