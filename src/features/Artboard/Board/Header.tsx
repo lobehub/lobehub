@@ -26,7 +26,6 @@ import type { BoardMode, VerifyView } from '../types';
 import { floatStyles } from '../Viewport/floatStyles';
 import PageMenu from './PageMenu';
 import ShareButton from './ShareButton';
-import { useTitleBarInset } from './useTitleBarInset';
 
 const BAR_PADDING = 10;
 
@@ -84,12 +83,7 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
   const { t } = useTranslation('project');
   const board = useBoard();
   const { finalized } = board;
-  const trafficLightPadding = useTitleBarInset();
-  const bar = sx(
-    styles.bar,
-    onExitFullscreen ? electronStylish.draggable : undefined,
-    onExitFullscreen ? { paddingInlineStart: BAR_PADDING + trafficLightPadding } : {},
-  );
+  const bar = sx(styles.bar, onExitFullscreen ? electronStylish.draggable : undefined);
   const nodrag = onExitFullscreen ? electronStylish.nodrag : undefined;
   const pendingLeft = board.blockers.length;
   const hasTask = !!board.artboard.taskId;
