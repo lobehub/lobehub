@@ -1,6 +1,5 @@
 import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
 import { getBuiltinStreaming } from '@lobechat/builtin-tools/streamings';
-import { isCodexAsyncQuestion } from '@lobechat/heterogeneous-agents/client';
 import { Accordion, Divider, Flexbox, Skeleton } from '@lobehub/ui';
 import { memo, useState } from 'react';
 
@@ -18,7 +17,6 @@ import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { dataSelectors, useConversationStore } from '../../../store';
 import { isImageReadTool } from '../toolRenderRules';
 import Actions from './Actions';
-import { CodexAsyncQuestion } from './CodexAsyncQuestion';
 import Detail from './Detail';
 import Inspectors from './Inspector';
 import { hasToolResultBody } from './toolResultBody';
@@ -128,10 +126,6 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
   const canToggleCustomToolRender = hasCustomRender && !isPending && !isReject && !isAbort;
 
   if (!tool) return null;
-  if (isCodexAsyncQuestion(tool))
-    return (
-      <CodexAsyncQuestion arguments={requestArgs} disableEditing={disableEditing} toolCallId={id} />
-    );
 
   const isToolDetailExpand = forceShowStreamingRender || showToolRender || showDebug;
   const mountActions = !disableEditing && (actionsArmed || isToolDetailExpand);

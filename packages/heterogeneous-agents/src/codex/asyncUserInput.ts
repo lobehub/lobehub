@@ -1,47 +1,51 @@
 import { z } from 'zod';
 
-export const CODEX_ASYNC_QUESTION = 'askUserQuestionAsync';
-
-export const isCodexAsyncQuestion = (tool: { apiName: string; identifier: string }) =>
-  tool.identifier === 'codex' && tool.apiName === CODEX_ASYNC_QUESTION;
+import type { InterventionAnswer } from '../askUser';
+import { codexUserInputResponse } from './requestUserInput';
 
 const nonBlank = z.string().refine((value) => value.trim().length > 0);
+const notificationSchema = z.object({
+  item: z.object({
+    delivery: z.literal('async'),
+    id: nonBlank,
+    questions: z.array(z.object({ options: z.array(nonBlank).nullish(), title: nonBlank })).min(1),
+    type: z.literal('agentMessage'),
+  }),
+});
 
-export const codexAsyncQuestionsSchema = z
-  .array(z.object({ options: z.array(nonBlank).min(1).nullish(), title: nonBlank }))
-  .min(1);
-
-const repliesSchema = z
-  .array(z.object({ answer: nonBlank, question: nonBlank, questionItemId: nonBlank }))
-  .min(1);
-
-type CodexAsyncReplies = z.infer<typeof repliesSchema>;
-
-// Codex CLI and Desktop send async answers as a follow-up user message.
-const REPLY_OPEN = '<send_user_message_question_reply>';
-const REPLY_CLOSE = '</send_user_message_question_reply>';
-const replyBlock =
-  /^<send_user_message_question_reply>\n([^\n]+)\n<\/send_user_message_question_reply>$/gm;
-
-export const codexAsyncQuestionId = (itemId: string, index: number) =>
-  JSON.stringify(['request_user_input_async', itemId, index]);
-
-export const formatCodexAsyncReplies = (replies: CodexAsyncReplies) =>
-  `${REPLY_OPEN}\n${JSON.stringify(replies)}\n${REPLY_CLOSE}`;
-
-const parseReplies = (json: string): CodexAsyncReplies | undefined => {
-  try {
-    return repliesSchema.safeParse(JSON.parse(json)).data;
-  } catch {
-    return;
-  }
+export const readCodexAsyncQuestion = (params: unknown) => {
+  const item = notificationSchema.safeParse(params).data?.item;
+  if (!item) return;
+  const questionNames = new Set(['__freeform__', '__supplement__']);
+  const questions = item.questions.map(({ options, title }, index) => {
+    let question = title;
+    for (let suffix = 2; questionNames.has(question); suffix++) {
+      question = `${title} (${suffix})`;
+    }
+    questionNames.add(question);
+    return {
+      header: '',
+      id: JSON.stringify(['request_user_input_async', item.id, index]),
+      isSecret: false as const,
+      options: [...new Set(options)].map((label) => ({ description: '', label })),
+      question,
+      title,
+    };
+  });
+  return { itemId: item.id, questions };
 };
 
-export const parseCodexAsyncReplies = (content: string): CodexAsyncReplies =>
-  Array.from(content.matchAll(replyBlock), (match) => parseReplies(match[1]) ?? []).flat();
-
-export const displayCodexAsyncReplies = (content: string) =>
-  content.replaceAll(replyBlock, (block, json: string) => {
-    const replies = parseReplies(json);
-    return replies?.map(({ answer, question }) => `${question}\n\n${answer}`).join('\n\n') ?? block;
+export const codexAsyncAnswers = (
+  request: NonNullable<ReturnType<typeof readCodexAsyncQuestion>>,
+  answer: InterventionAnswer,
+) => {
+  const { answers } = codexUserInputResponse(request, answer);
+  return request.questions.flatMap(({ id, title }) => {
+    const response = answers[id]?.answers.join('\n');
+    return response ? [{ answer: response, question: title, questionItemId: id }] : [];
   });
+};
+
+// Codex recognizes the same reply envelope its CLI and Desktop send on the original thread.
+export const formatCodexAsyncReplies = (replies: ReturnType<typeof codexAsyncAnswers>) =>
+  `<send_user_message_question_reply>\n${JSON.stringify(replies)}\n</send_user_message_question_reply>`;

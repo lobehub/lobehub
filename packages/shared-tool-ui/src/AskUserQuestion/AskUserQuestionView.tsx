@@ -63,8 +63,6 @@ export interface AskUserQuestionLabels {
 export interface AskUserQuestionViewProps extends AskUserFormApi {
   /** Portal the Skip/Submit footer here so it stays pinned below the scroll. */
   actionsPortalTarget?: HTMLElement | null;
-  /** Pending cards can receive shortcuts even when focus is outside the card. */
-  globalHotkeys?: boolean;
   labels: AskUserQuestionLabels;
   /** Render the countdown text in the footer (only when a countdown is active). */
   showCountdown: boolean;
@@ -91,7 +89,6 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
     escapeActive,
     escapeText,
     expired,
-    globalHotkeys = true,
     handleCustomChange,
     handleEscapeTextChange,
     handleSkip,
@@ -271,10 +268,9 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
       registerPendingHotkeyCard({
         contains: (node) =>
           Boolean(rootRef.current?.contains(node)) || Boolean(portalRef.current?.contains(node)),
-        focusOnly: !globalHotkeys,
         onKeyDown: (event) => onKeyDownRef.current(event),
       }),
-    [globalHotkeys],
+    [],
   );
 
   const footer = (
@@ -318,13 +314,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
   );
 
   return (
-    <Flexbox
-      aria-label={globalHotkeys ? undefined : activeQuestion?.question}
-      gap={12}
-      ref={rootRef}
-      role={globalHotkeys ? undefined : 'group'}
-      tabIndex={globalHotkeys ? undefined : 0}
-    >
+    <Flexbox gap={12} ref={rootRef}>
       {questions.length > 0 && (
         <Tabs
           activeKey={escapeActive ? 'escape' : supplementActive ? 'supplement' : activeTab}
@@ -420,13 +410,12 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
             onCustomChange={handleCustomChange}
             onPressEnter={isSubmitDisabled ? undefined : handleSubmit}
             onToggle={handleToggle}
-            onCustomNavigate={(direction) => {
+            onCustomNavigate={(direction) =>
               setHighlight(
                 activeQuestion,
                 direction === 'prev' ? activeQuestion.options.length - 1 : 0,
-              );
-              if (!globalHotkeys) rootRef.current?.focus();
-            }}
+              )
+            }
           />
         )
       )}

@@ -1,7 +1,6 @@
 import { formatPatch, structuredPatch } from 'diff';
 
 import type { InterventionAnswer } from '../askUser';
-import { CODEX_ASYNC_QUESTION, codexAsyncQuestionsSchema } from '../codex/asyncUserInput';
 import type {
   AgentMessageDeltaNotification,
   CodexErrorInfo,
@@ -393,19 +392,29 @@ export class CodexAppServerAdapter {
   private started = false;
   /** A steered message was read; the next visible output opens a new step. */
   private steerStepPending = false;
-  private stepIndex = 0;
+  private stepIndex: number;
   private terminal = false;
 
   constructor(
-    options: { initialCumulativeUsage?: UsageData; initialModel?: string; sessionId?: string } = {},
+    options: {
+      initialCumulativeUsage?: UsageData;
+      initialModel?: string;
+      initialStepIndex?: number;
+      sessionId?: string;
+    } = {},
   ) {
     this.currentModel = options.initialModel;
     this.lastCumulativeUsage = options.initialCumulativeUsage;
     this.sessionId = options.sessionId;
+    this.stepIndex = options.initialStepIndex ?? 0;
   }
 
   get cumulativeUsage(): UsageData | undefined {
     return this.latestCumulativeUsage ?? this.lastCumulativeUsage;
+  }
+
+  get nextStepIndex(): number {
+    return this.stepIndex + 1;
   }
 
   startUserInput(toolCallId: string, args: unknown): HeterogeneousAgentEvent[] {
@@ -514,7 +523,15 @@ export class CodexAppServerAdapter {
     if (this.started) return [];
     this.started = true;
     this.currentTurnId = params.turn.id;
-    return [this.makeEvent('stream_start', this.streamStartData({ messageId: params.turn.id }))];
+    return [
+      this.makeEvent(
+        'stream_start',
+        this.streamStartData({
+          messageId: params.turn.id,
+          newStep: this.stepIndex > 0 || undefined,
+        }),
+      ),
+    ];
   }
 
   private handleItemStarted({ item }: ItemStartedNotification): HeterogeneousAgentEvent[] {
@@ -556,34 +573,9 @@ export class CodexAppServerAdapter {
 
   private handleItemCompleted({ item }: ItemCompletedNotification): HeterogeneousAgentEvent[] {
     if (item.type === 'agentMessage') {
-      const message = item as AgentMessageItem & { delivery?: unknown; questions?: unknown };
+      const message = item as AgentMessageItem;
       const streamed = this.streamedAgentText.get(message.id);
       this.streamedAgentText.delete(message.id);
-      // Unlike requestUserInput RPC, Codex's async question is a completed
-      // message item. Its answer is sent in a later user message.
-      if (message.delivery === 'async') {
-        const questions = codexAsyncQuestionsSchema.safeParse(message.questions);
-        if (questions.success) {
-          const opening = this.openStepAfterSteer();
-          this.hasToolActivity = true;
-          return [
-            ...opening,
-            ...this.startLateTool({
-              apiName: CODEX_ASYNC_QUESTION,
-              arguments: JSON.stringify({ questions: questions.data }),
-              id: message.id,
-              identifier: CODEX_IDENTIFIER,
-              type: 'default',
-            }),
-            this.makeEvent('tool_result', {
-              content: message.text,
-              isError: false,
-              toolCallId: message.id,
-            } satisfies ToolResultData),
-            this.makeEvent('tool_end', { isSuccess: true, toolCallId: message.id }),
-          ];
-        }
-      }
       if (streamed !== undefined) {
         const remainder = message.text.startsWith(streamed)
           ? message.text.slice(streamed.length)

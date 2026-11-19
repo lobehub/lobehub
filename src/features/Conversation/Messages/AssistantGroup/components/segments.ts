@@ -1,6 +1,5 @@
 import type { AssistantGroupSegment } from '@lobechat/conversation-flow';
 import { splitAssistantGroupFinalAnswer } from '@lobechat/conversation-flow';
-import { isCodexAsyncQuestion } from '@lobechat/heterogeneous-agents/client';
 
 import { LOADING_FLAT } from '@/const/message';
 
@@ -50,7 +49,8 @@ export const hasRenderableFinalAnswer = (segments: GroupRenderSegment[]): boolea
  * header.
  *
  * A turn whose process carries a PRODUCED image never folds — that image is
- * the deliverable. Interactive tool cards are lifted out so the rest of the process still folds. A tool
+ * the deliverable. An MCP App view is lifted out of the fold instead (see
+ * {@link liftMcpAppSegments}), so the rest of the process still folds. A tool
  * that merely READ an image no longer blocks folding: the read is one ordinary
  * step, and it surfaces (with its preview) once the fold is expanded instead of
  * holding the whole process open.
@@ -81,28 +81,29 @@ export const shouldFoldProcess = ({
     ),
   );
 
-/**
- * Keep interactive cards visible after the run ends. The workflow partition
- * already breaks them out of mixed tool runs, leaving ordinary steps in the fold.
- */
-export const liftInteractiveToolSegments = (
-  processSegments: GroupRenderSegment[],
-  enableMcpApps: boolean,
-): { folded: GroupRenderSegment[]; lifted: GroupRenderSegment[] } => {
-  const isInteractiveBlock = (block: RenderableAssistantContentBlock) =>
-    !!block.tools?.length &&
-    block.tools.every(
-      (tool) => isCodexAsyncQuestion(tool) || (enableMcpApps && isMcpAppTool(tool)),
-    );
+const isMcpAppBlock = (block: RenderableAssistantContentBlock): boolean =>
+  !!block.tools?.length && block.tools.every(isMcpAppTool);
 
+/**
+ * Take the MCP App views out of a turn's folded process. Like an image the turn
+ * produced, the view is what the user came for, so it stays on screen between
+ * the fold and the answer while the other steps fold as usual. A block of MCP
+ * App tools alone is lifted: the workflow partition already breaks each view
+ * out of a multi-tool run (`isBreakoutTool`). A lone view may share its segment
+ * with tool-less neighbours (the answer's reasoning after it), which stay in
+ * the fold, in their order.
+ */
+export const liftMcpAppSegments = (
+  processSegments: GroupRenderSegment[],
+): { folded: GroupRenderSegment[]; lifted: GroupRenderSegment[] } => {
   const folded: GroupRenderSegment[] = [];
   const lifted: GroupRenderSegment[] = [];
   for (const segment of processSegments) {
-    if (segment.kind !== 'workflow' || !segment.blocks.some(isInteractiveBlock)) {
+    if (segment.kind !== 'workflow' || !segment.blocks.some(isMcpAppBlock)) {
       folded.push(segment);
       continue;
     }
-    if (segment.blocks.every(isInteractiveBlock)) {
+    if (segment.blocks.every(isMcpAppBlock)) {
       lifted.push(segment);
       continue;
     }
@@ -115,7 +116,7 @@ export const liftInteractiveToolSegments = (
       run = [];
     };
     for (const block of segment.blocks) {
-      const isView = isInteractiveBlock(block);
+      const isView = isMcpAppBlock(block);
       if (isView !== runIsView) flush();
       runIsView = isView;
       run.push(block);
@@ -143,15 +144,18 @@ export const resolveWorkflowExpandLevel = (
 
 /**
  * One turn's segments as the group lays them out once its process may fold:
- * the final answer, the process steps that fold, and the interactive cards
- * lifted out between the fold and the answer.
+ * the final answer, the process steps that fold, and the MCP App views lifted
+ * out between the fold and the answer. With the `mcp_apps` flag off, nothing
+ * is lifted and a view folds with the rest of the process.
  */
 export const splitProcessForFold = (
   segments: GroupRenderSegment[],
   { enableMcpApps }: { enableMcpApps: boolean },
 ) => {
   const split = splitAssistantGroupFinalAnswer(segments);
-  const { folded, lifted } = liftInteractiveToolSegments(split.processSegments, enableMcpApps);
+  const { folded, lifted } = enableMcpApps
+    ? liftMcpAppSegments(split.processSegments)
+    : { folded: split.processSegments, lifted: [] };
 
   return { ...split, liftedSegments: lifted, processSegments: folded };
 };

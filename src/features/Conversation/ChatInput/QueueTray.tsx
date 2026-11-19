@@ -1,6 +1,5 @@
 'use client';
 
-import { displayCodexAsyncReplies } from '@lobechat/heterogeneous-agents/client';
 import { ActionIcon, Flexbox, Icon, Image, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -359,7 +358,7 @@ const QueueTray = memo(() => {
               )}
               {msg.content && (
                 <Flexbox {...stylex.props(styles.text)} flex={'0 1 auto'}>
-                  {displayCodexAsyncReplies(msg.content)}
+                  {msg.content}
                 </Flexbox>
               )}
             </Flexbox>
