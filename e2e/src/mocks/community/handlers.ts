@@ -294,6 +294,15 @@ const getMockResponse = (procedure: string, input: unknown): unknown => {
       return SUCCESS_RESPONSE;
     }
 
+    case 'market.skill.getSkillList': {
+      return paginate([], input);
+    }
+
+    case 'connector.getManagePolicy': {
+      return { canEditPolicy: false, canManage: true, memberManage: 'all_members' };
+    }
+
+    case 'connector.list':
     case 'plugin.getPlugins': {
       return [];
     }

@@ -10,29 +10,38 @@ import {
   Flexbox,
   Icon,
   stopPropagation,
+  toast,
 } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { t as translate } from 'i18next';
-import { MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
+import { MoreHorizontalIcon, Plus, Settings2, Trash2 } from 'lucide-react';
 import React, { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import MCPTag from '@/components/Plugins/MCPTag';
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
+import { installedMcpSelection } from '@/features/CommunityMcp/installedMcpSelection';
 import McpDetail from '@/features/MCP/MCPDetail';
 import McpDetailLoading from '@/features/MCP/MCPDetail/Loading';
 import MCPInstallProgress from '@/features/MCP/MCPInstallProgress';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { discoverService } from '@/services/discover';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
 import { mcpStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
 import { type DiscoverMcpItem } from '@/types/discover';
+import { isModifierClick } from '@/utils/navigation';
 
 import { itemStyles } from '../style';
 
-const openSkillDetailModal = (identifier: string) =>
+const openSkillDetailModal = (
+  identifier: string,
+  title = translate('dev.title.skillDetails', { ns: 'plugin' }),
+) =>
   createModal({
     content: (
       <Suspense fallback={<McpDetailLoading />}>
@@ -40,13 +49,16 @@ const openSkillDetailModal = (identifier: string) =>
       </Suspense>
     ),
     footer: null,
-    title: translate('dev.title.skillDetails', { ns: 'plugin' }),
-    width: 800,
+    title,
+    width: 'min(92vw, 800px)',
   });
 
-const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => {
+const Item = memo<DiscoverMcpItem & { marketplace?: boolean }>((props) => {
+  const { name, description, icon, identifier, marketplace } = props;
   const styles = itemStyles;
   const { t } = useTranslation('plugin');
+  const navigate = useWorkspaceAwareNavigate();
+  const detailPath = '/community/mcp/' + identifier;
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
 
@@ -59,6 +71,12 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
       s.uninstallMCPPlugin,
       mcpStoreSelectors.getPluginById(identifier)(s),
     ]);
+
+  // Undefined for a connector-backed install, which has no plugin row.
+  const legacyType = useToolStore((s) => {
+    const row = pluginSelectors.installedPlugins(s).find((i) => i.identifier === identifier);
+    return row && (row.source || row.type);
+  });
 
   const installProgress = useToolStore(
     mcpStoreSelectors.getMCPInstallProgress(identifier),
@@ -83,10 +101,11 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
       }
     }
 
-    const isSuccess = await installMCPPlugin(identifier);
-
-    if (isSuccess) {
-      await togglePlugin(identifier);
+    try {
+      const isSuccess = await installMCPPlugin(identifier);
+      if (isSuccess && !marketplace) await togglePlugin(identifier);
+    } catch {
+      toast.error(t('error.installError', { name }));
     }
   };
 
@@ -94,7 +113,33 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
     await cancelInstallMCPPlugin(identifier);
   };
 
+  const openDetail = () => {
+    if (!marketplace) {
+      openSkillDetailModal(identifier);
+      return;
+    }
+
+    void discoverService
+      .reportMcpEvent({ event: 'click', identifier, source: location.pathname })
+      .catch(() => {});
+    openSkillDetailModal(identifier, t('store.actions.detail'));
+  };
+
   const renderAction = () => {
+    if (marketplace && installed)
+      return (
+        <ActionIcon
+          aria-label={t('store.actions.settings')}
+          icon={Settings2}
+          title={t('store.actions.settings')}
+          onClick={() => {
+            const params = new URLSearchParams(location.search);
+            params.set('open', installedMcpSelection(identifier, legacyType));
+            navigate({ search: params.toString() });
+          }}
+        />
+      );
+
     if (installed) {
       return (
         <DropdownMenu
@@ -143,6 +188,7 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
 
     return (
       <ActionIcon
+        aria-label={t('store.actions.install')}
         disabled={!canCreate || !canEdit}
         icon={Plus}
         title={t('store.actions.install')}
@@ -152,23 +198,45 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
   };
 
   return (
-    <Flexbox className={styles.container} gap={0}>
+    <Flexbox
+      className={styles.container}
+      data-testid={marketplace ? 'mcp-item' : undefined}
+      gap={0}
+    >
       <Block
         clickable
         horizontal
         align={'center'}
         gap={12}
-        paddingBlock={12}
+        paddingBlock={marketplace ? 8 : 12}
         paddingInline={12}
-        style={{ cursor: 'pointer' }}
-        variant={'outlined'}
-        onClick={() => openSkillDetailModal(identifier)}
+        variant={marketplace ? 'filled' : 'outlined'}
+        onClick={openDetail}
       >
-        <PluginAvatar avatar={icon} size={40} />
+        <PluginAvatar avatar={icon} size={marketplace ? 36 : 40} />
         <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
           <Flexbox horizontal align="center" gap={8}>
-            <span className={styles.title}>{name}</span>
-            <MCPTag showText={false} />
+            {marketplace ? (
+              <WorkspaceLink
+                aria-haspopup="dialog"
+                className={styles.title}
+                to={detailPath}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (isModifierClick(event) || event.shiftKey || event.altKey) return;
+
+                  event.preventDefault();
+                  openDetail();
+                }}
+              >
+                {name}
+              </WorkspaceLink>
+            ) : (
+              <>
+                <span className={styles.title}>{name}</span>
+                <MCPTag showText={false} />
+              </>
+            )}
           </Flexbox>
           {description && <span className={styles.description}>{description}</span>}
         </Flexbox>

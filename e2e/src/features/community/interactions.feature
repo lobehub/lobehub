@@ -39,11 +39,15 @@ Feature: Discover Interactions
     Then I should be navigated to the assistant detail page
     And I should see the assistant detail content
 
+  # Models / Model Providers are hidden from the Marketplace (routes redirect to the
+  # Marketplace home, see src/spa/router/communityHiddenRoutes.tsx). Their scenarios are
+  # kept under @skip until the pages are either restored or deleted for good.
+
   # ============================================
   # Model Page Interactions
   # ============================================
 
-  @COMMUNITY-INTERACT-005 @P1
+  @COMMUNITY-INTERACT-005 @P1 @skip
   Scenario: Sort models
     Given I navigate to "/community/model"
     When I click on the sort dropdown
@@ -51,7 +55,7 @@ Feature: Discover Interactions
     And I wait for the sorted results to load
     Then I should see model cards in the sorted order
 
-  @COMMUNITY-INTERACT-006 @P1
+  @COMMUNITY-INTERACT-006 @P1 @skip
   Scenario: Navigate to model detail page
     Given I navigate to "/community/model"
     When I click on the first model card
@@ -62,7 +66,7 @@ Feature: Discover Interactions
   # Provider Page Interactions
   # ============================================
 
-  @COMMUNITY-INTERACT-007 @P1
+  @COMMUNITY-INTERACT-007 @P1 @skip
   Scenario: Navigate to provider detail page
     Given I navigate to "/community/provider"
     When I click on the first provider card
@@ -81,33 +85,32 @@ Feature: Discover Interactions
     Then I should see MCP cards filtered by the selected category
 
   @COMMUNITY-INTERACT-009 @P1
-  Scenario: Navigate to MCP detail page
+  Scenario: Inspect a connector without leaving the catalogue
     Given I navigate to "/community/mcp"
     When I click on the first MCP card
-    Then I should be navigated to the MCP detail page
-    And I should see the MCP detail content
+    Then I should see its details in a dialog on the same page
 
   # ============================================
   # Home Page Interactions
   # ============================================
 
   @COMMUNITY-INTERACT-010 @P1
-  Scenario: Navigate from home to assistant list
+  Scenario: Navigate from the Marketplace to Skills
     Given I navigate to "/community"
-    When I click on the "more" link in the featured assistants section
-    Then I should be navigated to "/community/agent"
+    When I open the "skill" Marketplace directory
+    Then I should be navigated to "/community/skill"
     And I should see the page body
 
   @COMMUNITY-INTERACT-011 @P1
   Scenario: Navigate from home to MCP list
     Given I navigate to "/community"
-    When I click on the "more" link in the featured MCP tools section
+    When I open the "mcp" Marketplace directory
     Then I should be navigated to "/community/mcp"
     And I should see the page body
 
   @COMMUNITY-INTERACT-012 @P1
-  Scenario: Click featured assistant from home
+  Scenario: Open an assistant from the Marketplace entry
     Given I navigate to "/community"
-    When I click on the first featured assistant card
+    When I click on the first assistant card
     Then I should be navigated to the assistant detail page
     And I should see the assistant detail content

@@ -1,8 +1,8 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { McpIcon, ProviderIcon, SkillsIcon } from '@lobehub/ui/icons';
-import { Bot, Brain, ShapesIcon } from 'lucide-react';
+import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
+import { Bot } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,8 +24,7 @@ interface Item {
 
 const useActiveTabKey = () => {
   const { pathname } = useActiveLocation();
-  if (pathname.endsWith('/community')) return DiscoverTab.Home;
-  return (pathname.split('/community/').at(1) as DiscoverTab) || DiscoverTab.Home;
+  return (pathname.split('/community/').at(1) as DiscoverTab) || DiscoverTab.Assistants;
 };
 
 const Nav = memo(() => {
@@ -36,12 +35,6 @@ const Nav = memo(() => {
   const items: Item[] = useMemo(
     () =>
       [
-        {
-          icon: ShapesIcon,
-          key: DiscoverTab.Home,
-          title: t('tab.home'),
-          url: '/community',
-        },
         {
           icon: Bot,
           key: DiscoverTab.Assistants,
@@ -57,21 +50,11 @@ const Nav = memo(() => {
         {
           icon: McpIcon,
           key: DiscoverTab.Mcp,
-          title: `MCP`,
+          title: t('tab.connector'),
           url: '/community/mcp',
         },
-        {
-          icon: Brain,
-          key: DiscoverTab.Models,
-          title: t('tab.model'),
-          url: '/community/model',
-        },
-        {
-          icon: ProviderIcon,
-          key: DiscoverTab.Providers,
-          title: t('tab.provider'),
-          url: '/community/provider',
-        },
+        // Models / Model Providers are hidden, not deleted: see
+        // `@/spa/router/communityHiddenRoutes` for the restore path.
       ] as Item[],
     [t],
   );

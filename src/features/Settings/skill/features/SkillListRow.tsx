@@ -55,7 +55,7 @@ interface SkillListRowProps {
   onClick?: () => void;
   /** What the connector does; only the page row has room for it. */
   summary?: ReactNode;
-  title: string;
+  title: ReactNode;
   titleColor?: string;
 }
 

@@ -15,6 +15,7 @@ import { styles } from './Header/style';
 const Header = memo(() => {
   const location = useLocation();
   const isHome = location.pathname === '/';
+  const hasCatalogSearch = /\/community\/(?:skill|mcp)\/?$/.test(location.pathname);
 
   const cssVariables: Record<string, string> = {
     '--header-border-color': cssVar.colorBorderSecondary,
@@ -23,12 +24,12 @@ const Header = memo(() => {
   return (
     <NavHeader
       className={stylex.props(styles.headerContainer).className}
-      left={<StoreSearchBar />}
+      left={hasCatalogSearch ? null : <StoreSearchBar />}
       style={cssVariables}
       right={
         !isHome && (
           <>
-            <SortButton />
+            {!hasCatalogSearch && <SortButton />}
             <UserAvatar />
           </>
         )

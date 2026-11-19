@@ -82,11 +82,10 @@ export default {
   'cmdk.askAgentHeading': 'Ask Agent',
   'cmdk.askAgentPlaceholder': 'Ask {{agent}} something...',
   'cmdk.askLobeAI': 'Ask Lobe AI',
-  'cmdk.community': 'Community',
   'cmdk.communitySupport': 'Community Support',
   'cmdk.contactUs': 'Contact Us',
   'cmdk.context.agent': 'Agent',
-  'cmdk.context.community': 'Community',
+  'cmdk.context.community': 'Marketplace',
   'cmdk.context.general': 'General',
   'cmdk.context.group': 'Group',
   'cmdk.context.memory': 'Memory',
@@ -107,7 +106,7 @@ export default {
 
   'cmdk.keywords.billing': 'billing payment invoice transaction',
 
-  'cmdk.keywords.community': 'discover market assistant model provider mcp',
+  'cmdk.keywords.community': 'discover market marketplace community assistant agent skill mcp',
 
   // CMDK search keywords (space-separated for i18n)
   'cmdk.keywords.contactUs': 'feedback issue bug problem',
@@ -152,6 +151,8 @@ export default {
 
   'cmdk.keywords.video': 'video,generate,seedance,kling',
 
+  'cmdk.marketplace': 'Marketplace',
+
   'cmdk.memory': 'Memory',
 
   'cmdk.mentionAgent': 'Mention Agent',
@@ -191,7 +192,7 @@ export default {
 
   'cmdk.search.chatGroups': 'Groups',
 
-  'cmdk.search.communityAgent': 'Community Agent',
+  'cmdk.search.communityAgent': 'Marketplace Agent',
 
   'cmdk.search.file': 'File',
 
@@ -627,7 +628,6 @@ export default {
   'tab.chat': 'Chat',
   'tab.projects': 'Projects',
   'recents': 'Recents',
-  'tab.community': 'Community',
   'tab.dashboard': 'Dashboards',
   'tab.create': 'Create',
   'tab.discover': 'Discover',

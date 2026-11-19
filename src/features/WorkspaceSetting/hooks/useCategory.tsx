@@ -1,6 +1,5 @@
 import { isDesktop } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
-import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   AppWindowIcon,
   BellIcon,
@@ -233,11 +232,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: Sparkles,
               key: WorkspaceSettingsTabs.ServiceModel,
               label: t('tab.serviceModel'),
-            },
-            {
-              icon: SkillsIcon,
-              key: WorkspaceSettingsTabs.Skill,
-              label: t('workspaceSetting.tab.skill'),
             },
             // Label registry is readable by everyone; the page itself keeps
             // management actions behind the admin gate (disabled, not hidden).

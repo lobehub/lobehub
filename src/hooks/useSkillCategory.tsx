@@ -246,6 +246,10 @@ export const useSkillCategory = () => {
   );
 };
 
+/** Browse sections follow the menu taxonomy, excluding the aggregate All view. */
+export const useSkillCategorySections = () =>
+  useSkillCategory().filter(({ key }) => key !== SkillCategory.All);
+
 export const useSkillCategoryItem = (key?: string) => {
   const items = useSkillCategory();
   if (!key) return;

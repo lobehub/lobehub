@@ -63,7 +63,7 @@ const NavBar = memo(() => {
           onClick: () => {
             navigate('/community');
           },
-          title: t('tab.community'),
+          title: t('tab.marketplace'),
         },
         {
           icon: (active: boolean) => (

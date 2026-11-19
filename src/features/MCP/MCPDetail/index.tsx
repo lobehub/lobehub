@@ -3,6 +3,7 @@ import { Boxes } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import Agents from '@/features/MCPPluginDetail/Agents';
 import Deployment from '@/features/MCPPluginDetail/Deployment';
 import { DetailProvider } from '@/features/MCPPluginDetail/DetailProvider';
@@ -26,7 +27,7 @@ interface DetailProps {
 }
 const Detail = memo<DetailProps>(({ identifier: defaultIdentifier, defaultTab, noSettings }) => {
   const [activeTab, setActiveTab] = useState(defaultTab ?? McpNavKey.Overview);
-  const { t } = useTranslation('plugin');
+  const { t } = useTranslation(['plugin', 'discover']);
 
   const theme = useTheme(); // Keep for colorBgContainerSecondary (not in cssVar)
   const list = useToolStore((s) => s.mcpPluginList);
@@ -36,13 +37,15 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier, defaultTab, n
   const identifier = defaultIdentifier ?? list?.items?.[0]?.identifier;
 
   const useMcpDetail = useDiscoverStore((s) => s.useFetchMcpDetail);
-  const { isLoading, queryKey } = useMcpDetail({ identifier });
+  const { error, isLoading, mutate, queryKey } = useMcpDetail({ identifier });
   const data = useDiscoverStore(mcpSelectors.mcpDetail(queryKey));
 
   // An explicit identifier never waits on the list; otherwise wait for it to paint.
   if ((!defaultIdentifier && !list) || isLoading) return <Loading />;
 
-  if (!identifier)
+  if (error && !data) return <AsyncError error={error} onRetry={mutate} />;
+
+  if (!identifier || !data)
     return (
       <Center
         height={'100%'}
@@ -52,10 +55,12 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier, defaultTab, n
         }}
       >
         <Empty
-          description={t('store.emptySelectHint')}
           descriptionProps={{ fontSize: 14 }}
           icon={Boxes}
           style={{ maxWidth: 400 }}
+          description={
+            identifier ? t('mcpEmpty.title', { ns: 'discover' }) : t('store.emptySelectHint')
+          }
         />
       </Center>
     );

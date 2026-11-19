@@ -1,7 +1,6 @@
 import { ENABLE_TOOL_CHANNEL_SETTINGS } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
-import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   AppWindowIcon,
   BellIcon,
@@ -173,11 +172,6 @@ export const useCategory = () => {
         icon: Sparkles,
         key: SettingsTabs.ServiceModel,
         label: t('tab.serviceModel'),
-      },
-      {
-        icon: SkillsIcon,
-        key: SettingsTabs.Skill,
-        label: t('tab.skill'),
       },
       ENABLE_TOOL_CHANNEL_SETTINGS && {
         icon: Wrench,

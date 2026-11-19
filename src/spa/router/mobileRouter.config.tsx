@@ -18,6 +18,7 @@ import {
   providerDetailRouteMeta,
 } from '@/features/Settings/features/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
+import { hiddenCommunityRoutes } from '@/spa/router/communityHiddenRoutes';
 import { mobileAgentRoute, mobileGroupRoute } from '@/spa/router/mobileAgentRoutes';
 import { mobileUnsupportedRoutes, mobileWorkspaceRoutes } from '@/spa/router/mobileWorkspaceRoutes';
 import { mobileWorkspaceSettingsChildren } from '@/spa/router/mobileWorkspaceSettingsRoutes';
@@ -101,18 +102,12 @@ export const sharedMainAreaChildren: RouteObject[] = [
         ),
         path: 'workspace/settings',
       },
+      // Models / Model Providers are hidden, not deleted: see communityHiddenRoutes.
+      ...hiddenCommunityRoutes,
       // List routes (with ListLayout)
       {
         children: [
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/(home)'),
-              'Mobile > Discover > List > Home',
-              { preloadId: 'mobile-community' },
-            ),
-            handle: { meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discover' }) },
-            index: true,
-          },
+          { element: redirectElement('agent'), index: true },
           {
             children: [
               {
@@ -126,30 +121,6 @@ export const sharedMainAreaChildren: RouteObject[] = [
                 path: 'agent',
               },
             ],
-          },
-          {
-            children: [
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/community/(list)/model'),
-                  'Mobile > Discover > List > Model',
-                ),
-                handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverModels' }),
-                },
-                path: 'model',
-              },
-            ],
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/provider'),
-              'Mobile > Discover > List > Provider',
-            ),
-            handle: {
-              meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverProviders' }),
-            },
-            path: 'provider',
           },
           {
             children: [
@@ -205,26 +176,6 @@ export const sharedMainAreaChildren: RouteObject[] = [
             ),
             handle: { meta: communityDetailRouteMeta.agent },
             path: 'agent/:slug',
-          },
-          {
-            element: dynamicElement(
-              () =>
-                import('@/routes/(main)/community/(detail)/model').then((m) => m.MobileModelPage),
-              'Mobile > Discover > Detail > Model',
-            ),
-            handle: { meta: communityDetailRouteMeta.model },
-            path: 'model/:slug',
-          },
-          {
-            element: dynamicElement(
-              () =>
-                import('@/routes/(main)/community/(detail)/provider').then(
-                  (m) => m.MobileProviderPage,
-                ),
-              'Mobile > Discover > Detail > Provider',
-            ),
-            handle: { meta: communityDetailRouteMeta.provider },
-            path: 'provider/:slug',
           },
           {
             element: dynamicElement(

@@ -83,8 +83,6 @@ describe('route document titles', () => {
     '/team/resource/page/abc',
     '/community/agent/some-agent',
     '/community/group_agent/some-group',
-    '/community/model/gpt-5',
-    '/community/provider/openai',
     '/community/skill/some-skill',
     '/community/mcp/some-mcp',
     '/community/user/someone',

@@ -20,7 +20,7 @@ const MenuLabel = ({ desc, title }: { desc: string; title: ReactNode }) => (
   </Flexbox>
 );
 
-const AddSkillButton = () => {
+const AddSkillButton = ({ skillsOnly = false }: { skillsOnly?: boolean }) => {
   const { t } = useTranslation('setting');
   const [showMcpModal, setMcpModal] = useState(false);
   const { allowed: canCreate } = usePermission('create_content');
@@ -34,7 +34,6 @@ const AddSkillButton = () => {
     >
       <CustomConnectorModal open={showMcpModal} onClose={() => setMcpModal(false)} />
       <DropdownMenu
-        nativeButton={false}
         placement="bottomRight"
         items={[
           {
@@ -69,21 +68,27 @@ const AddSkillButton = () => {
               openUploadSkillModal();
             },
           },
-          { type: 'divider' as const },
-          {
-            disabled: !canCreate || !canEdit,
-            icon: <Icon icon={PenLine} />,
-            key: 'customMcp',
-            label: <MenuLabel desc={t('tab.addCustomMcp.desc')} title={t('tab.addCustomMcp')} />,
-            onClick: () => {
-              if (!canCreate || !canEdit) return;
-              setMcpModal(true);
-            },
-          },
+          ...(skillsOnly
+            ? []
+            : [
+                { type: 'divider' as const },
+                {
+                  disabled: !canCreate || !canEdit,
+                  icon: <Icon icon={PenLine} />,
+                  key: 'customMcp',
+                  label: (
+                    <MenuLabel desc={t('tab.addCustomMcp.desc')} title={t('tab.addCustomMcp')} />
+                  ),
+                  onClick: () => {
+                    if (!canCreate || !canEdit) return;
+                    setMcpModal(true);
+                  },
+                },
+              ]),
         ]}
       >
-        <Button disabled={!canCreate} icon={Grid2x2Plus}>
-          {t('tab.addCustomSkill')}
+        <Button disabled={!canCreate} icon={Grid2x2Plus} type="default">
+          {skillsOnly ? t('catalog.importSkill', { ns: 'discover' }) : t('tab.addCustomSkill')}
           <Icon icon={ChevronDown} size={14} />
         </Button>
       </DropdownMenu>

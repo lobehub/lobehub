@@ -9,7 +9,6 @@ import {
   BusinessDesktopRoutesWithoutMainLayout,
 } from '@/business/client/BusinessDesktopRoutes';
 import AppsSkeleton from '@/components/Skeleton/Apps';
-import CommunityHomeSkeleton from '@/components/Skeleton/CommunityHome';
 import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
 import AgentConversationLayoutSkeleton from '@/components/Skeleton/Conversation/AgentLayout';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
@@ -60,6 +59,7 @@ import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
 import { collaborationRoutes } from './collaborationRoutes';
+import { hiddenCommunityRoutes } from './communityHiddenRoutes';
 
 export { ResourceCategorySkeleton };
 
@@ -200,6 +200,8 @@ export const sharedMainAreaChildren: RouteObject[] = [
         handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('form') }) },
         path: 'workspace/settings',
       },
+      // Models / Model Providers are hidden, not deleted: see communityHiddenRoutes.
+      ...hiddenCommunityRoutes,
       // List routes (with ListLayout)
       {
         children: [
@@ -229,35 +231,6 @@ export const sharedMainAreaChildren: RouteObject[] = [
             children: [
               {
                 element: dynamicElement(
-                  () => import('@/routes/(main)/community/(list)/model'),
-                  'Desktop > Discover > List > Model',
-                ),
-                handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverModels' }),
-                },
-                index: true,
-              },
-            ],
-            element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/model/_layout'),
-              'Desktop > Discover > List > Model > Layout',
-            ),
-            path: 'model',
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/provider'),
-              'Desktop > Discover > List > Provider',
-            ),
-            handle: {
-              meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverProviders' }),
-            },
-            path: 'provider',
-          },
-          {
-            children: [
-              {
-                element: dynamicElement(
                   () => import('@/routes/(main)/community/(list)/skill'),
                   'Desktop > Discover > List > Skill',
                 ),
@@ -274,22 +247,11 @@ export const sharedMainAreaChildren: RouteObject[] = [
             path: 'skill',
           },
           {
-            children: [
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/community/(list)/mcp'),
-                  'Desktop > Discover > List > MCP',
-                ),
-                handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverMcp' }),
-                },
-                index: true,
-              },
-            ],
             element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/mcp/_layout'),
-              'Desktop > Discover > List > MCP > Layout',
+              () => import('@/routes/(main)/community/(list)/mcp'),
+              'Desktop > Discover > List > MCP',
             ),
+            handle: { meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverMcp' }) },
             path: 'mcp',
           },
           {
@@ -300,21 +262,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('detail') }) },
             path: 'workspace',
           },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/(home)'),
-              'Desktop > Discover > List > Home',
-              { preloadId: 'community' },
-            ),
-            handle: {
-              meta: routeMeta({
-                icon: ShapesIcon,
-                Skeleton: CommunityHomeSkeleton,
-                titleKey: 'navigation.discover',
-              }),
-            },
-            index: true,
-          },
+          { element: redirectElement('agent'), index: true },
         ],
         element: dynamicElement(
           () => import('@/routes/(main)/community/(list)/_layout'),
@@ -341,22 +289,6 @@ export const sharedMainAreaChildren: RouteObject[] = [
             ),
             handle: { meta: communityDetailRouteMeta.groupAgent },
             path: 'group_agent/:slug',
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/community/(detail)/model'),
-              'Desktop > Discover > Detail > Model',
-            ),
-            handle: { meta: communityDetailRouteMeta.model },
-            path: 'model/:slug',
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/community/(detail)/provider'),
-              'Desktop > Discover > Detail > Provider',
-            ),
-            handle: { meta: communityDetailRouteMeta.provider },
-            path: 'provider/:slug',
           },
           {
             element: dynamicElement(
