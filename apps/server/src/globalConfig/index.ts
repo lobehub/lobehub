@@ -139,6 +139,7 @@ export const getServerGlobalConfig = async () => {
   const loginMethods = await getLoginMethods();
   const config: GlobalServerConfig = {
     aiProvider: await genServerAiProvidersConfig(getAiProviderSpecificConfig()),
+    ...(appEnv.APP_URL ? { appUrl: appEnv.APP_URL.replace(/\/+$/, '') } : undefined),
     defaultAgent: {
       config: parseAgentConfig(DEFAULT_AGENT_CONFIG),
     },

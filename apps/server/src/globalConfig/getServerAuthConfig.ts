@@ -10,6 +10,7 @@ export const getServerAuthConfig = async (): Promise<GlobalServerConfig> => {
 
   return {
     aiProvider: {},
+    ...(appEnv.APP_URL ? { appUrl: appEnv.APP_URL.replace(/\/+$/, '') } : undefined),
     disableEmailPassword: !loginMethods.emailPassword,
     enableBusinessFeatures: ENABLE_BUSINESS_FEATURES,
     enableEmailVerification: loginMethods.requireEmailVerification,

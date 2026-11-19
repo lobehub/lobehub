@@ -146,6 +146,13 @@ export interface GlobalServerConfig {
    */
   agentGatewayUrl?: string;
   aiProvider: ServerLanguageModel;
+  /**
+   * This deployment's own public origin (`APP_URL`, no trailing slash). Inlined
+   * into every SPA page before any module runs, so the browser can learn the
+   * site it belongs to at runtime — one image serves several sites, so this
+   * can't be baked in at build time.
+   */
+  appUrl?: string;
   defaultAgent?: PartialDeep<UserDefaultAgent>;
   desktopDownloads?: DesktopDownloadUrls;
   /** Whether the server has DEVICE_GATEWAY_URL configured, independent of its public URL. */

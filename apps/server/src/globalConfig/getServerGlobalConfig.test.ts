@@ -379,4 +379,14 @@ describe('getServerGlobalConfig', () => {
   it('should omit the OIDC issuer when APP_URL is not configured', async () => {
     await expect(loadServerConfig(false)).resolves.not.toHaveProperty('oidcIssuer');
   });
+
+  it("should expose the deployment's own origin from APP_URL", async () => {
+    await expect(
+      loadServerConfig(false, { appUrl: 'https://app.example.com/' }),
+    ).resolves.toHaveProperty('appUrl', 'https://app.example.com');
+  });
+
+  it('should omit the app origin when APP_URL is not configured', async () => {
+    await expect(loadServerConfig(false)).resolves.not.toHaveProperty('appUrl');
+  });
 });
