@@ -1,12 +1,7 @@
 import { UserPreferenceSchema } from '@lobechat/types';
 import { z } from 'zod';
 
-/**
- * Settings sections the public API reads and writes. Deliberately absent:
- * `keyVaults` (provider / tool credentials — the providers API owns them) and
- * `market` (Marketplace OAuth tokens). Neither is ever returned, and a write
- * that names either is refused by the strict request schema.
- */
+/** Settings sections the public API reads and writes. */
 export const USER_SETTINGS_SECTIONS = [
   'defaultAgent',
   'general',
@@ -67,9 +62,8 @@ export const UpdateUserSettingsRequestSchema = z
     /** Deep-merged into the stored preference (arrays are replaced). */
     preference: UserPreferenceSchema.optional(),
     /**
-     * Sections to change. Each one is deep-merged into the stored section —
-     * objects merge key by key, arrays and scalars replace. `keyVaults` and
-     * `market` are not accepted here.
+     * Sections to change. Each one is deep-merged into the stored section:
+     * objects merge key by key, arrays and scalars replace.
      */
     settings: z.object(sectionShape).partial().strict().optional(),
   })
