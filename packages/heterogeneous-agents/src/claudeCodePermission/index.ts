@@ -24,6 +24,7 @@ export {
   type ClaudeCodePermissionResult,
   claudeCodePermissionToolCallId,
   fromCanUseTool,
+  isClaudeCodePermissionToolCallId,
   parseClaudeCodePermissionRequest,
   resolveClaudeCodePermissionDecision,
 } from './request';

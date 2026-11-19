@@ -1,4 +1,5 @@
 import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { isClaudeCodePermissionToolCallId } from '@lobechat/heterogeneous-agents/claudeCodePermission/shared';
 import {
   HETERO_PERMISSION_MODES,
   LocalExecutionHeterogeneousAgentTypeSchema,
@@ -793,12 +794,19 @@ export const heteroRouter = router({
         input.cancelled ?? false,
       );
 
-      await assertCanUseOperationAgent({
-        db: ctx.serverDB,
-        operationId: input.operationId,
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId,
-      });
+      // A Claude Code permission card approves an action on the run owner's
+      // machine: only that owner answers it, not every member who may use the
+      // shared agent. Checked before the Cloud claim, so it covers both paths.
+      if (isClaudeCodePermissionToolCallId(input.toolCallId)) {
+        await assertControlsHeteroRun(ctx, input.operationId);
+      } else {
+        await assertCanUseOperationAgent({
+          db: ctx.serverDB,
+          operationId: input.operationId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
 
       return submitHeteroInterventionAs(input, ctx);
     }),
