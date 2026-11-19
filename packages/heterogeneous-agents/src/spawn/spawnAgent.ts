@@ -15,6 +15,7 @@ import {
   isRunningAsRoot,
   PermissionModeReporter,
   resolveClaudeCodePermissionMode,
+  stripClaudeCodePermissionArgs,
 } from '../claudeCodePermission';
 import { resolveHeterogeneousAgentCommand } from '../config';
 import {
@@ -324,7 +325,8 @@ const buildClaudeCodeArgs = ({
   ...buildClaudeCodePermissionArgs({ hostPrompts: permissionPrompts, mode: permissionMode }),
   ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
   ...inputArgs,
-  ...extraArgs,
+  // Under a mode the host owns permissions: the agent's args cannot pre-approve.
+  ...(permissionMode ? stripClaudeCodePermissionArgs(extraArgs) : extraArgs),
 ];
 
 const buildCodeBuddyArgs = ({

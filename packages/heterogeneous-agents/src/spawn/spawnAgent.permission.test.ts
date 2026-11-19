@@ -154,6 +154,43 @@ describe('spawnAgent — Claude Code permission modes', () => {
     live.finish();
   });
 
+  it("drops the agent's own permission flags under a mode, and only then", async () => {
+    const extraArgs = [
+      '--allowed-tools',
+      'Bash',
+      '--dangerously-skip-permissions',
+      '--model',
+      'haiku',
+    ];
+    const { spawnAgent } = await import('./spawnAgent');
+
+    nextProc = createLiveProc().proc;
+    await spawnAgent({
+      agentType: 'claude-code',
+      askUserBridge: new AskUserBridge('op-s'),
+      extraArgs,
+      liveInput: true,
+      operationId: 'op-s',
+      permissionMode: 'default',
+      prompt: 'hi',
+    });
+    const guarded = spawnCalls.at(-1)!.args;
+    expect(guarded).not.toContain('--allowed-tools');
+    expect(guarded).not.toContain('--dangerously-skip-permissions');
+    expect(guarded).toContain('haiku');
+
+    // Lab off: everything is allowed anyway, the args stay as configured.
+    nextProc = createLiveProc().proc;
+    await spawnAgent({
+      agentType: 'claude-code',
+      extraArgs,
+      liveInput: true,
+      operationId: 'op-s2',
+      prompt: 'hi',
+    });
+    expect(spawnCalls.at(-1)!.args).toContain('--allowed-tools');
+  });
+
   it('allows everything, as before, without a mode', async () => {
     for (const options of [{ askUserBridge: new AskUserBridge('op-a') }]) {
       const live = createLiveProc();

@@ -2,6 +2,7 @@ export {
   buildClaudeCodePermissionArgs,
   isRunningAsRoot,
   resolveClaudeCodePermissionMode,
+  stripClaudeCodePermissionArgs,
 } from './args';
 export {
   isPermissionModeReport,

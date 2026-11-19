@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildClaudeCodePermissionArgs, resolveClaudeCodePermissionMode } from './args';
+import {
+  buildClaudeCodePermissionArgs,
+  resolveClaudeCodePermissionMode,
+  stripClaudeCodePermissionArgs,
+} from './args';
 
 describe('buildClaudeCodePermissionArgs', () => {
   it('keeps every action allowed when the lab picked no mode', () => {
@@ -77,5 +81,34 @@ describe('resolveClaudeCodePermissionMode', () => {
     expect(resolveClaudeCodePermissionMode('bypassPermissions', false)).toEqual({
       mode: 'bypassPermissions',
     });
+  });
+});
+
+describe('stripClaudeCodePermissionArgs', () => {
+  it('drops every flag that pre-approves or skips checks, values included', () => {
+    expect(
+      stripClaudeCodePermissionArgs([
+        '--model',
+        'haiku',
+        '--allowed-tools',
+        'Bash',
+        '--allowedTools',
+        'Bash(git:*)',
+        'Edit',
+        '--permission-mode=bypassPermissions',
+        '--dangerously-skip-permissions',
+        '--allow-dangerously-skip-permissions',
+        '--permission-prompt-tool',
+        'mcp__evil__approve',
+        '--append-system-prompt',
+        'be brief',
+      ]),
+    ).toEqual(['--model', 'haiku', '--append-system-prompt', 'be brief']);
+  });
+
+  it('keeps restrictive and unrelated flags', () => {
+    expect(
+      stripClaudeCodePermissionArgs(['--disallowedTools', 'Bash', '--effort', 'high']),
+    ).toEqual(['--disallowedTools', 'Bash', '--effort', 'high']);
   });
 });

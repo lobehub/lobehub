@@ -6,7 +6,7 @@ import type {
 } from '@lobechat/types';
 import { isHeteroPermissionMode } from '@lobechat/types';
 
-import { resolveClaudeCodePermissionMode } from './args';
+import { resolveClaudeCodePermissionMode } from './mode';
 
 /** `step_complete` phase carrying the mode Claude Code reports it is in. */
 export const PERMISSION_MODE_PHASE = 'permission_mode';
