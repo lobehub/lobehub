@@ -10,6 +10,7 @@ import {
   applyWatchKeywordInstructions,
   burstMatchesWatchKeyword,
   dispatchTextCommand,
+  isEmptyInboundMessage,
   mergeSkippedMessages,
   summarizeMessageAttachments,
 } from './utils';
@@ -80,6 +81,22 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
       // recorder refuses them) and never the bot's own.
       remember('catchAll', [...(context?.skipped ?? []), message], thread);
       if (message.author.isBot === true) return;
+      // Blank events (recalls, unsupported types, whitespace) carry nothing for the agent. Drop them
+      // before the access gates, commands and wake judgement, all of which can reply or call a model.
+      // No wake decision record either: `record()` would run the shadow policies, the classifier
+      // included, on the blank text.
+      const burst = mergeSkippedMessages(message, context);
+      if (isEmptyInboundMessage(burst)) {
+        log(
+          'onNewMessage (catch-all): skip empty message (no text, attachments or quote), agent=%s, platform=%s, thread=%s, msgId=%s, merged=%d',
+          agentId,
+          platform,
+          thread.id,
+          message.id,
+          (context?.skipped?.length ?? 0) + 1,
+        );
+        return;
+      }
 
       // Skip text-based slash commands — already handled by registerCommands
       // (which applies the same gates).
