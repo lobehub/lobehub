@@ -8,7 +8,7 @@ const guidelines = ({ withSkills }: { withSkills: boolean }) => `<guidelines>
 </guidelines>`;
 
 const skillStoreDiscovery = `<skill_store_discovery>
-For marketplace skill searches, skill install requests (SKILL.md, GitHub, or LobeHub skill URLs), or capabilities missing from \`<available_tools>\` and \`<available_skills>\`, activate \`lobe-skill-store\` from \`<available_tools>\` before browsing or using a CLI.
+For marketplace skill searches, skill install requests (including SKILL.md, GitHub or LobeHub skill URLs), or a specialized task that needs a capability missing from the available tools and skills, use the Skill Store. If lobe-skill-store is in <available_tools>, activate it before browsing or trying a CLI. If already active, call it directly.
 </skill_store_discovery>`;
 
 export const systemPrompt = `${intro}
