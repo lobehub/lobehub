@@ -135,9 +135,19 @@ describe('the direct Channel of a new Agent', () => {
     expect(create).toHaveBeenCalledWith({ agentConfig: {}, agentId: 'agt_new', title: 'Windy' });
   });
 
-  it('opens nothing for a runtime Channels do not support', async () => {
+  it.each(['hermes', 'openclaw'])('opens a remote %s Agent without a device', async (type) => {
     getAgent.mockResolvedValue({
-      agencyConfig: { heterogeneousProvider: { type: 'openclaw' } },
+      agencyConfig: { heterogeneousProvider: { type } },
+      name: 'Agent',
+    });
+    await expect(createDirect()).resolves.toEqual({ channel: { id: 'chn_1' } });
+    expect(findDevice).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledWith({ agentConfig: {}, agentId: 'agt_new', title: 'Agent' });
+  });
+
+  it('opens nothing for an unknown runtime', async () => {
+    getAgent.mockResolvedValue({
+      agencyConfig: { heterogeneousProvider: { type: 'unknown-cli' } },
       name: 'Agent',
     });
     await expect(createDirect()).resolves.toBeUndefined();
