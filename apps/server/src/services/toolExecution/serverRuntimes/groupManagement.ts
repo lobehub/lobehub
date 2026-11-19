@@ -39,8 +39,16 @@ const buildError = (content: string, code: string): BuiltinServerRuntimeOutput =
   success: false,
 });
 
+/**
+ * The runner is only injected for a run that can dispatch group members: one
+ * with an agent, a topic and a group, a member launcher, and no share visitor
+ * (see `buildServerAgentMemberRunner`). Name that condition and the way out so
+ * the model stops retrying.
+ */
 const AGENT_MEMBER_UNAVAILABLE = buildError(
-  'Group orchestration is not available in this runtime.',
+  'Group orchestration is not available in this runtime: it needs a group conversation run ' +
+    'that can dispatch group members, and this run cannot. Do not retry this tool. ' +
+    'Continue the task yourself, or delegate with another available agent tool.',
   'AGENT_MEMBER_UNAVAILABLE',
 );
 
