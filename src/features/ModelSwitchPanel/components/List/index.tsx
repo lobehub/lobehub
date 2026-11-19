@@ -12,7 +12,7 @@ import type { EnabledProviderWithModels } from '@/types/aiProvider';
 import { filterHiddenModels } from '@/utils/filterHiddenModels';
 
 import { FOOTER_HEIGHT, ITEM_HEIGHT, MAX_PANEL_HEIGHT, TOOLBAR_HEIGHT } from '../../const';
-import { useBuildListItems } from '../../hooks/useBuildListItems';
+import { resolveListGuardOptions, useBuildListItems } from '../../hooks/useBuildListItems';
 import { useModelAndProvider } from '../../hooks/useModelAndProvider';
 import { usePanelHandlers } from '../../hooks/usePanelHandlers';
 import { styles } from '../../styles';
@@ -77,14 +77,14 @@ export const List: FC<ListProps> = ({
     onModelChange: onModelChangeProp,
     onOpenChange,
   });
-  // The guard's featured models describe the chat model list only; a host passing
-  // its own list (image / video generation) keeps it as given.
+  // Generation lists (image, video, music) are the only ones rendered with their own row
+  // component.
   const listItems = useBuildListItems(
     enabledList,
     groupMode,
     searchKeyword,
     sortModelLast,
-    enabledListProp ? undefined : { featuredModels },
+    resolveListGuardOptions(!!ModelItemComponent, { featuredModels }),
   );
 
   const resolvePricing = useBusinessModelPricing();
