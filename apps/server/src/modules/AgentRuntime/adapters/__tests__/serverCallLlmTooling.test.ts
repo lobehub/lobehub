@@ -1,4 +1,6 @@
 import { type AgentState, normalizeAgentState } from '@lobechat/agent-runtime';
+import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
+import { CredsIdentifier, CredsManifest } from '@lobechat/builtin-tool-creds';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { describe, expect, it } from 'vitest';
 
@@ -30,6 +32,44 @@ const searchTool = {
 } as unknown as NonNullable<AgentState['tools']>[number];
 
 describe('resolveServerCallLlmTooling', () => {
+  it('offers credential discovery before activation and the credential workflow afterwards', () => {
+    const ctx = { operationId: 'op-1', stepIndex: 0 };
+    const state = buildState({
+      operationToolSet: {
+        enabledToolIds: [LobeActivatorManifest.identifier],
+        manifestMap: {
+          [LobeActivatorManifest.identifier]: LobeActivatorManifest,
+          [CredsIdentifier]: CredsManifest,
+        },
+        sourceMap: {},
+        tools: [],
+      },
+    });
+    const before = resolveServerCallLlmTooling(ctx, state);
+    const discovery = before.toolDiscoveryConfig?.availableTools.find(
+      (tool) => tool.identifier === CredsIdentifier,
+    );
+    expect(discovery?.description).toContain('API keys');
+    expect(before.resolved.promptManifestMap).not.toHaveProperty(CredsIdentifier);
+
+    const after = resolveServerCallLlmTooling(
+      { ...ctx, stepIndex: 1 },
+      {
+        ...state,
+        activatedStepTools: [
+          { activatedAtStep: 0, id: CredsIdentifier, manifest: CredsManifest, source: 'discovery' },
+        ],
+      },
+    );
+    for (const { name } of CredsManifest.api) {
+      expect(
+        before.resolved.promptManifestMap[LobeActivatorManifest.identifier].systemRole,
+      ).not.toContain(name);
+      expect(discovery?.description).not.toContain(name);
+      expect(after.resolved.promptManifestMap[CredsIdentifier].systemRole).toContain(name);
+    }
+  });
+
   it.each([false, true])(
     'limits tools after mid-run device selection to the operation pool (allowed=%s)',
     (allowed) => {
