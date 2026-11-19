@@ -558,12 +558,14 @@ export const gatherContextFacts = async (
   const docsAgentId = documentsAgentId(request);
   const sandboxEnabled = request.enabledToolIds.includes(CloudSandboxIdentifier);
   // Two tools reach the sandbox, and the optional one is not the common case:
-  // `lobe-skills` is always on, and its runCommand / execScript open the SAME
-  // session in the SAME directory as the cloud-sandbox tool. Asking only
-  // whether the optional tool is enabled told a skills-driven run the
-  // ephemeral wording while its commands ran in a persistent workspace — so it
-  // cloned into /tmp and the user's file browser stayed empty.
-  const sandboxShellEnabled = sandboxEnabled || request.enabledToolIds.includes(SkillsIdentifier);
+  // `lobe-skills` is always on, and when no device is routed its runCommand /
+  // execScript open the SAME session in the SAME directory as the cloud-sandbox
+  // tool. When a device IS routed and the cloud-sandbox tool is not enabled,
+  // `lobe-skills` executes on the device and uses `deviceSystemPrompt` (which
+  // has no `{{sandbox_workspace}}` placeholder), so no sandbox lookup is needed.
+  const sandboxShellEnabled =
+    sandboxEnabled ||
+    (!request.activeDeviceId && request.enabledToolIds.includes(SkillsIdentifier));
 
   const tasks = [
     () =>
