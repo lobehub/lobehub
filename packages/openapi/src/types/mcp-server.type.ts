@@ -88,10 +88,10 @@ export interface McpServerResponse {
 const uuidSchema = z.string().meta({ format: 'uuid' });
 
 /** Values of `ConnectorToolPermission`, the only ones the column ever stores. */
-const MCP_TOOL_PERMISSIONS = ['auto', 'disabled', 'needs_approval'] as const;
+export const MCP_TOOL_PERMISSIONS = ['auto', 'disabled', 'needs_approval'] as const;
 
 /** Values of `ConnectorStatus`, the only ones the connector column ever stores. */
-const MCP_SERVER_STATUSES = ['connected', 'disconnected', 'error'] as const;
+export const MCP_SERVER_STATUSES = ['connected', 'disconnected', 'error'] as const;
 
 export const McpServerToolSchema = z
   .object({
@@ -131,3 +131,52 @@ export const McpServerSyncResultSchema = z
   })
   .strict()
   .meta({ id: 'McpServerSyncResult' });
+
+// ==================== Live server capabilities ====================
+
+/** A tool exactly as the MCP server lists it right now (not the synced copy). */
+export const McpServerLiveToolSchema = z
+  .object({
+    description: z.string().nullable(),
+    inputSchema: jsonObjectSchema.nullable(),
+    name: z.string(),
+  })
+  .strict()
+  .meta({ id: 'McpServerLiveTool' });
+
+export const McpServerResourceSchema = z
+  .object({
+    description: z.string().nullable(),
+    mimeType: z.string().nullable(),
+    name: z.string(),
+    uri: z.string(),
+  })
+  .strict()
+  .meta({ id: 'McpServerResource' });
+
+export const McpServerPromptSchema = z
+  .object({
+    arguments: z.array(
+      z
+        .object({
+          description: z.string().nullable(),
+          name: z.string(),
+          required: z.boolean(),
+        })
+        .strict(),
+    ),
+    description: z.string().nullable(),
+    name: z.string(),
+  })
+  .strict()
+  .meta({ id: 'McpServerPrompt' });
+
+export const McpServerLiveToolListSchema = z
+  .object({ items: z.array(McpServerLiveToolSchema) })
+  .strict();
+export const McpServerResourceListSchema = z
+  .object({ items: z.array(McpServerResourceSchema) })
+  .strict();
+export const McpServerPromptListSchema = z
+  .object({ items: z.array(McpServerPromptSchema) })
+  .strict();

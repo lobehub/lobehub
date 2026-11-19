@@ -7,9 +7,12 @@ import {
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { syncConnectorToolsById } from '@/server/services/connector/sync';
+import { buildConnectorMcpParams, syncConnectorToolsById } from '@/server/services/connector/sync';
+import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
+import { mcpService } from '@/server/services/mcp';
 
 import { BaseService } from '../common/base.service';
+import { ApiException } from '../common/errors';
 import type { DeletedResource } from '../types/common.type';
 import type {
   CreateMcpServerRequest,
@@ -30,6 +33,20 @@ const isPublicMcpServer = (value: PublicConnectorRecord) =>
   value.sourceType === ConnectorSourceType.custom &&
   value.mcpConnectionType === ConnectorMcpConnectionType.http &&
   !!value.mcpServerUrl;
+
+/**
+ * A failed request to an MCP server, as the REST error catalogue reads it. The
+ * server's own message is kept: it describes the remote failure, not ours.
+ */
+export const toMcpUpstreamError = (error: unknown) => {
+  const { code, message } = error as { code?: string; message?: string };
+  const reason = message || 'unknown error';
+  if (code === 'SERVICE_UNAVAILABLE' || code === 'TIMEOUT') {
+    return new ApiException(503, 'service_unavailable', `MCP server unavailable: ${reason}`);
+  }
+  if ((error as Error)?.name === 'TRPCError' && code !== 'INTERNAL_SERVER_ERROR') return error;
+  return new ApiException(502, 'upstream_error', `MCP server request failed: ${reason}`);
+};
 
 export class McpServerService extends BaseService {
   private connectorModel: ConnectorModel;
@@ -172,5 +189,66 @@ export class McpServerService extends BaseService {
       userId: this.userId,
     });
     return { id, status: ConnectorStatus.connected, toolCount };
+  }
+
+  /**
+   * Ask the server itself, with the connector's (refreshed) credentials.
+   * `mcpService` reports failures as tRPC errors: an unreachable server is
+   * `SERVICE_UNAVAILABLE`/`TIMEOUT` (503), refused upstream auth `FORBIDDEN`
+   * (kept), anything the server got wrong `INTERNAL_SERVER_ERROR` (502).
+   */
+  private async withLiveServer<T>(
+    id: string,
+    run: (params: ReturnType<typeof buildConnectorMcpParams>) => Promise<T>,
+  ): Promise<T> {
+    await this.requireServer(id);
+    const model = await this.getCredentialConnectorModel();
+    const connector = await model.findById(id);
+    if (!connector) throw this.createNotFoundError('MCP server not found');
+    const fresh = await ensureFreshConnectorToken(connector, model);
+
+    try {
+      return await run(buildConnectorMcpParams(fresh));
+    } catch (error) {
+      throw toMcpUpstreamError(error);
+    }
+  }
+
+  async listLiveTools(id: string) {
+    const tools = await this.withLiveServer(id, (params) => mcpService.listRawTools(params));
+    return {
+      items: tools.map((tool) => ({
+        description: tool.description ?? null,
+        inputSchema: (tool.inputSchema ?? null) as null | Record<string, unknown>,
+        name: tool.name,
+      })),
+    };
+  }
+
+  async listResources(id: string) {
+    const resources = await this.withLiveServer(id, (params) => mcpService.listResources(params));
+    return {
+      items: resources.map((resource) => ({
+        description: resource.description ?? null,
+        mimeType: resource.mimeType ?? null,
+        name: resource.name,
+        uri: resource.uri,
+      })),
+    };
+  }
+
+  async listPrompts(id: string) {
+    const prompts = await this.withLiveServer(id, (params) => mcpService.listPrompts(params));
+    return {
+      items: prompts.map((prompt) => ({
+        arguments: (prompt.arguments ?? []).map((argument) => ({
+          description: argument.description ?? null,
+          name: argument.name,
+          required: !!argument.required,
+        })),
+        description: prompt.description ?? null,
+        name: prompt.name,
+      })),
+    };
   }
 }

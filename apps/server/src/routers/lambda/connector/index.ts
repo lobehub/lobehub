@@ -722,6 +722,8 @@ const connectorCoreRouter = router({
         /** Resolve the identifier for this agent (agent-owned connector first). */
         agentId: z.string().optional(),
         args: z.string().optional(),
+        /** Pin the call to this connector row (`/mcp-servers/{id}/tools/call`). */
+        connectorId: z.string().uuid().optional(),
         /** An MCP App view's `tools/call`: only tools visible to the app run. */
         fromApp: z.boolean().optional(),
         fromEntrypoint: z.boolean().optional(),
@@ -733,6 +735,8 @@ const connectorCoreRouter = router({
         toolName: z.string().min(1),
         /** The conversation the call runs in, reported as the call's session. */
         topicId: z.string().optional(),
+        /** No human can approve (the public API): refuse approval-gated tools. */
+        unattended: z.boolean().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {

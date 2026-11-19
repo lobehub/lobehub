@@ -29,6 +29,7 @@ describe('toggleScopeSelection', () => {
       'chat:write',
     ]);
     expect(toggleScopeSelection([], 'model:invoke', true)).toEqual(['model:invoke']);
+    expect(toggleScopeSelection([], 'tool:invoke', true)).toEqual(['tool:invoke']);
     expect(toggleScopeSelection(['agent:read', 'agent:write'], 'agent:write', false)).toEqual([
       'agent:read',
     ]);

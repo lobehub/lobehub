@@ -157,7 +157,7 @@ const openDetail = async (name: string) => {
 };
 
 describe('ApiKey', () => {
-  it('offers MCP read/write and read-only usage scopes when access is restricted', () => {
+  it('offers MCP read/write, direct tool invocation and read-only usage scopes when access is restricted', () => {
     const onSelectedChange = vi.fn();
     render(
       <ScopeSelector
@@ -170,11 +170,14 @@ describe('ApiKey', () => {
 
     const mcpGroup = screen.getByText('apikey.scopes.groups.mcp').parentElement!;
     const usageGroup = screen.getByText('apikey.scopes.groups.usage').parentElement!;
-    expect(within(mcpGroup).getAllByRole('checkbox')).toHaveLength(2);
+    expect(within(mcpGroup).getAllByRole('checkbox')).toHaveLength(3);
     expect(within(usageGroup).getAllByRole('checkbox')).toHaveLength(1);
 
     fireEvent.click(within(mcpGroup).getByRole('checkbox', { name: 'apikey.scopes.write' }));
     expect(onSelectedChange).toHaveBeenCalledWith(['mcp:write', 'mcp:read']);
+
+    fireEvent.click(within(mcpGroup).getByRole('checkbox', { name: 'apikey.scopes.toolInvoke' }));
+    expect(onSelectedChange).toHaveBeenLastCalledWith(['tool:invoke']);
   });
 
   it('offers the account-credential scope with the agent scopes it relies on, without inventing a read twin', () => {
