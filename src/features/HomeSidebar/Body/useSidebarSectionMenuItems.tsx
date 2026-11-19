@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useChannelsEnabled } from '@/features/Channels/useChannelsEnabled';
+import { useFetchFavorites } from '@/features/Favorites';
 import { useNavLayout } from '@/hooks/useNavLayout';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -27,6 +28,8 @@ const useSectionRenders = (): ((key: string) => boolean) => {
   const channelsEnabled = useChannelsEnabled();
   const isLogin = useUserStore(authSelectors.isLogin);
   const favoriteCount = useHomeStore((s) => favoriteSelectors.favoriteList(s)?.length);
+  // SWR dedupes this with the Favorites section's own request.
+  const { error: favoritesError } = useFetchFavorites();
   const recentPageSize = useGlobalStore(systemStatusSelectors.recentPageSize);
   const recentCount = useHomeStore(
     (s) => homeRecentSelectors.query(createRecentQueryKey(recentPageSize + 1))(s)?.length,
@@ -47,9 +50,9 @@ const useSectionRenders = (): ((key: string) => boolean) => {
         case 'channels': {
           return channelsEnabled;
         }
-        // An unloaded list renders nothing either; only a failed load shows the section.
+        // Mirrors the section: shown with items, or with a retry after a failed first load.
         case 'favorites': {
-          return !!favoriteCount;
+          return favoriteCount === undefined ? !!favoritesError : favoriteCount > 0;
         }
         // Recents show a skeleton while loading and disappear once known to be empty.
         case 'recents': {
@@ -65,7 +68,15 @@ const useSectionRenders = (): ((key: string) => boolean) => {
         }
       }
     };
-  }, [bottomMenuItems, channelsEnabled, favoriteCount, isLogin, recentCount, topNavItems]);
+  }, [
+    bottomMenuItems,
+    channelsEnabled,
+    favoriteCount,
+    favoritesError,
+    isLogin,
+    recentCount,
+    topNavItems,
+  ]);
 };
 
 /**
@@ -91,9 +102,10 @@ export const useSidebarSectionMenuItems = (sectionKey: string): DropdownItem[] =
     () =>
       sidebarItems.filter(
         // Agents ignore the hidden list, as the sidebar body does.
-        (k) => (k === 'agent' || !hiddenSections.includes(k)) && renders(k),
+        // The section whose menu this is is on screen, whatever the stores say.
+        (k) => k === sectionKey || ((k === 'agent' || !hiddenSections.includes(k)) && renders(k)),
       ),
-    [sidebarItems, hiddenSections, renders],
+    [sectionKey, sidebarItems, hiddenSections, renders],
   );
   const visibleIndex = visibleItems.indexOf(sectionKey);
   const isFirst = visibleIndex <= 0;

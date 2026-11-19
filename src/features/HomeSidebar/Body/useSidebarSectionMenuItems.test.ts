@@ -6,6 +6,7 @@ import { useSidebarSectionMenuItems } from './useSidebarSectionMenuItems';
 const mocks = vi.hoisted(() => ({
   channelsEnabled: true,
   favorites: [{ id: 'f1' }] as unknown[] | undefined,
+  favoritesError: undefined as Error | undefined,
   links: ['tasks', 'image'],
   recents: [{ id: 'r1' }] as unknown[] | undefined,
   openCustomizeSidebarModal: vi.fn(),
@@ -23,6 +24,9 @@ vi.mock('@/store/global', () => ({
 }));
 vi.mock('@/features/Channels/useChannelsEnabled', () => ({
   useChannelsEnabled: () => mocks.channelsEnabled,
+}));
+vi.mock('@/features/Favorites', () => ({
+  useFetchFavorites: () => ({ error: mocks.favoritesError }),
 }));
 vi.mock('@/hooks/useNavLayout', () => ({
   useNavLayout: () => ({
@@ -57,6 +61,7 @@ describe('useSidebarSectionMenuItems', () => {
   beforeEach(() => {
     mocks.channelsEnabled = true;
     mocks.favorites = [{ id: 'f1' }];
+    mocks.favoritesError = undefined;
     mocks.links = ['tasks', 'image'];
     mocks.recents = [{ id: 'r1' }];
     mocks.openCustomizeSidebarModal.mockReset();
@@ -171,5 +176,14 @@ describe('useSidebarSectionMenuItems', () => {
     mocks.status.sidebarItems = ['recents', 'channels', 'agent', '__spacer__'];
 
     expect(find(itemsFor('channels'), 'moveUp').disabled).toBe(false);
+  });
+
+  it('counts Favorites that failed to load, since they show a retry', () => {
+    mocks.favorites = undefined;
+    mocks.favoritesError = new Error('offline');
+    mocks.status.sidebarItems = ['favorites', 'recents', 'agent', '__spacer__'];
+
+    expect(find(itemsFor('favorites'), 'moveDown').disabled).toBe(false);
+    expect(find(itemsFor('recents'), 'moveUp').disabled).toBe(false);
   });
 });
