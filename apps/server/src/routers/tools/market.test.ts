@@ -6,10 +6,12 @@ import { marketRouter } from './market';
 
 const mockPreprocessLhCommand = vi.hoisted(() => vi.fn());
 const mockSandboxCallTool = vi.hoisted(() => vi.fn());
+const mockSandboxExportAndUploadFile = vi.hoisted(() => vi.fn());
 const mockCreateSandboxService = vi.hoisted(() =>
   vi.fn(function () {
     return {
       callTool: mockSandboxCallTool,
+      exportAndUploadFile: mockSandboxExportAndUploadFile,
     };
   }),
 );
@@ -178,6 +180,42 @@ describe('tools marketRouter', () => {
     expect(mockCreateSandboxService).toHaveBeenCalledWith(
       expect.objectContaining({ sandboxSpecification: specification }),
     );
+  });
+
+  // Regression: exportAndUploadFile opened its session bare while
+  // execInSandbox resolved the topic's, so a file `runCommand` wrote under the
+  // persistent `/mnt/workspace` was looked up in a disposable sandbox and
+  // always came back "File not found".
+  it('exports from the same session the topic resolved for its tool calls', async () => {
+    const caller = marketRouter.createCaller({
+      serverDB: {},
+      userId: 'caller-user',
+      workspaceId: 'ws-1',
+    } as any);
+    mockResolveSandboxSessionConfig.mockResolvedValueOnce({
+      claim: { key: 'ws-org-ws-1', quotaBytes: 1024 },
+      cwd: 'reports',
+      mode: 'drive',
+    } as never);
+    mockSandboxExportAndUploadFile.mockResolvedValue({
+      fileId: 'file-1',
+      filename: 'report.pdf',
+      success: true,
+    });
+
+    await caller.exportAndUploadFile({
+      filename: 'report.pdf',
+      path: 'report.pdf',
+      topicId: 'topic-1',
+    });
+
+    expect(mockResolveSandboxSessionConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ topicId: 'topic-1', userId: 'caller-user', workspaceId: 'ws-1' }),
+    );
+    expect(mockCreateSandboxService).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxCwd: 'reports', sandboxMode: 'drive', topicId: 'topic-1' }),
+    );
+    expect(mockSandboxExportAndUploadFile).toHaveBeenCalledWith('report.pdf', 'report.pdf');
   });
 
   // Regression: `input.userId` used to override `ctx.userId`, so any
