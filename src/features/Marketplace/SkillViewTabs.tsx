@@ -9,6 +9,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import { MARKETPLACE_INSTALLED_SKILLS_PATH, MARKETPLACE_SKILL_PATH } from './paths';
+import { pillTabClassNames } from './pillTabs';
 
 export type SkillView = 'discover' | 'installed';
 
@@ -19,8 +20,9 @@ const SKILL_VIEW_PATHS: Record<SkillView, string> = {
 
 const styles = stylex.create({
   root: { flexShrink: 0 },
-  // Under the installed list header: aligns with the header's 12px inset.
-  inset: { paddingBlockStart: '12px', paddingBlockEnd: '4px', paddingInline: '12px' },
+  // Under the installed list header: aligns with the header's 12px inset, and
+  // its 8px bottom + 12px give the Codex 20px from description to tabs.
+  inset: { paddingBlockStart: '12px', paddingInline: '12px' },
 });
 
 interface SkillViewTabsProps {
@@ -54,6 +56,7 @@ const SkillViewTabs = memo<SkillViewTabsProps>(({ active, inset }) => {
     <div {...stylex.props(styles.root, inset && styles.inset)}>
       <Tabs
         activeKey={active}
+        classNames={pillTabClassNames}
         items={items}
         size={'middle'}
         variant={'rounded'}

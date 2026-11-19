@@ -211,3 +211,18 @@ export const getVisibleSectionItems = <T>(
   if (expanded || items.length <= limit) return { hiddenCount: 0, visible: items };
   return { hiddenCount: items.length - limit, visible: items.slice(0, limit) };
 };
+
+/**
+ * Whether a page group's heading is its expand control (the Codex `Popular >`):
+ * only a group with rows beyond its preview, or one already expanded, gets the
+ * chevron. A search already shows every hit, so it has nothing to expand.
+ */
+export const isSectionExpandable = ({
+  expanded,
+  hiddenCount,
+  searching,
+}: {
+  expanded: boolean;
+  hiddenCount: number;
+  searching: boolean;
+}): boolean => !searching && (hiddenCount > 0 || expanded);

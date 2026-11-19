@@ -40,14 +40,12 @@ const styles = stylex.create({
     alignItems: 'flex-start',
     justifyContent: 'center',
     height: '100%',
-    paddingInline: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-page-padding-inline'],
   },
   /**
-   * The connector list insets its rows and intro 12px, so the body is 12px wider
-   * than the shared 1024px settings column on each side: text then lines up with
-   * every other settings tab, and the bottom space matches their 128px. The body
-   * grows with its content (the page aligns it to the top instead of stretching it
-   * to the scroll box), otherwise the list overflows it and the bottom padding is lost.
+   * The body grows with its content (the page aligns it to the top instead of
+   * stretching it to the scroll box), otherwise the list overflows it and the
+   * bottom padding is lost. A detail keeps the wider 1048px reading column.
    */
   pageBody: {
     display: 'flex',
@@ -57,6 +55,12 @@ const styles = stylex.create({
     minHeight: '100%',
     paddingBlockEnd: '104px',
   },
+  /**
+   * The Codex Plugins catalog column: ~900px of two ~430px columns. The rows and
+   * header inset 12px inside it, so titles, headings and icon tiles share one
+   * left edge.
+   */
+  listBody: { maxWidth: '920px' },
   resourceDetailPage: { height: '100%', minHeight: 0, paddingBlockEnd: '24px' },
 });
 
@@ -203,6 +207,7 @@ export const ToolSettings = memo<ToolSettingsProps>(({ headerExtra, viewMode }) 
         <div
           {...stylex.props(
             styles.pageBody,
+            !stackedSelected && styles.listBody,
             stackedSelected?.type === 'agent-skill' && styles.resourceDetailPage,
           )}
         >

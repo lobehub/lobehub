@@ -45,12 +45,14 @@ import {
   getVisibleSectionItems,
   type IntegrationItem,
   isIntegrationConnected,
+  isSectionExpandable,
   matchesConnectorKeyword,
   matchesIntegrationKeyword,
   partitionByInstalled,
 } from './connectorSections';
 import LobehubSkillItem from './LobehubSkillItem';
 import McpSkillItem from './McpSkillItem';
+import PageSectionHeading from './PageSectionHeading';
 import { privateTabState } from './privateTabState';
 import type { ToolDetailType } from './SkillDetail';
 import { useSkillListVariant } from './SkillListRow';
@@ -70,33 +72,31 @@ const styles = stylex.create({
     fontWeight: 500,
     color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
   },
-  // Page groups: a heading with its count, then a two-column catalog of
-  // borderless rows; groups are separated by whitespace, not rules.
-  pageSection: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  // Page groups (the Codex Plugins catalog): a 16px heading, then a
+  // two-column catalog of borderless rows; groups are separated by 32px of
+  // whitespace, not rules. The rows' 12px inset plus the 16px column gap
+  // leave ~40px between the two columns' content.
+  // 12px + the row's 14px tile inset ≈ the Codex 24px from heading to icon tile.
+  pageSection: { display: 'flex', flexDirection: 'column', gap: '12px' },
   pageSections: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '40px',
+    gap: '32px',
     paddingBlockStart: '24px',
   },
   pageGrid: {
     display: 'grid',
     gridTemplateColumns: { default: 'repeat(2, minmax(0, 1fr))', [media.lg]: 'minmax(0, 1fr)' },
-    columnGap: '32px',
+    columnGap: '16px',
     rowGap: '4px',
   },
-  sectionHeaderPage: {
-    cursor: 'default',
-    gap: '8px',
-    paddingBlock: '0',
-    paddingInline: densityTokens['--lobe-density-content-gap'],
-    fontSize: cssVar.fontSizeHeading5,
-    fontWeight: 600,
-    color: { 'default': cssVar.colorText, ':hover': cssVar.colorText },
-  },
-  sectionCount: { fontWeight: 400, color: cssVar.colorTextDescription },
-  showAll: { alignSelf: 'flex-start', marginInlineStart: '4px' },
 });
+
+/** What the page header can drive in the list: re-fetch every source it shows. */
+export interface SkillListHeaderContext {
+  onRefresh: () => void;
+  refreshing: boolean;
+}
 
 export type SkillViewMode = 'connector' | 'skill';
 
@@ -107,7 +107,7 @@ interface SkillListProps {
   onDeleteSelected?: () => void;
   onSelect?: (identifier: string, type: ToolDetailType) => void;
   /** Page header above the groups. */
-  renderHeader?: () => React.ReactNode;
+  renderHeader?: (context: SkillListHeaderContext) => React.ReactNode;
   selectedIdentifier?: string;
   viewMode?: SkillViewMode;
   /**
@@ -132,6 +132,7 @@ const SkillList = memo<SkillListProps>(
     const { t } = useTranslation('setting');
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
+    const [refreshing, setRefreshing] = useState(false);
     const isPage = useSkillListVariant() === 'page';
 
     const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
@@ -288,7 +289,21 @@ const SkillList = memo<SkillListProps>(
           customMCPs.length > 0 ||
           agentBoundConnectors.length > 0;
 
-    const header = isPage ? renderHeader?.() : undefined;
+    // The page header's refresh re-fetches every list this view shows, keeping
+    // the painted rows until the new data lands.
+    const refreshAll = () => {
+      if (refreshing) return;
+      setRefreshing(true);
+      void Promise.allSettled([
+        lobehubSkillsSWR.mutate(),
+        composioSWR.mutate(),
+        agentSkillsSWR.mutate(),
+        Promise.resolve(builtinToolsSWR.revalidate()),
+        connectorsSWR.mutate(),
+        ...(isConnectorView ? [fetchAgentBoundConnectors()] : []),
+      ]).finally(() => setRefreshing(false));
+    };
+    const header = isPage ? renderHeader?.({ onRefresh: refreshAll, refreshing }) : undefined;
 
     const privateState = isPrivateTab
       ? privateTabState({
@@ -649,29 +664,29 @@ const SkillList = memo<SkillListProps>(
               {sections.map(({ items, key, label }) => {
                 const isExpanded = expanded.has(key);
                 // A search shows every hit; otherwise long groups preview their first rows.
+                const searching = !!keyword?.trim();
                 const { hiddenCount, visible } = getVisibleSectionItems(
                   items,
-                  isExpanded || !!keyword?.trim(),
+                  isExpanded || searching,
                 );
+                const expandable = isSectionExpandable({
+                  expanded: isExpanded,
+                  hiddenCount,
+                  searching,
+                });
+                const toggleLabel = isExpanded
+                  ? t('connectorMarket.section.showLess')
+                  : `${t('connectorMarket.section.showAll')} (${items.length})`;
                 return (
                   <section key={key} {...stylex.props(styles.pageSection)}>
-                    <h3 {...stylex.props(styles.sectionHeader, styles.sectionHeaderPage)}>
-                      {label}
-                      <span {...stylex.props(styles.sectionCount)}>{items.length}</span>
-                    </h3>
+                    <PageSectionHeading
+                      expandable={expandable}
+                      expanded={isExpanded}
+                      label={label}
+                      toggleLabel={toggleLabel}
+                      onToggle={() => toggleExpanded(key)}
+                    />
                     <div {...stylex.props(styles.pageGrid)}>{visible}</div>
-                    {(hiddenCount > 0 || isExpanded) && (
-                      <Button
-                        className={stylex.props(styles.showAll).className}
-                        size={'small'}
-                        type={'text'}
-                        onClick={() => toggleExpanded(key)}
-                      >
-                        {isExpanded
-                          ? t('connectorMarket.section.showLess')
-                          : `${t('connectorMarket.section.showAll')} (${items.length})`}
-                      </Button>
-                    )}
                   </section>
                 );
               })}
