@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   OPPORTUNISTIC_SWEEP_INTERVAL_MS,
@@ -7,9 +7,12 @@ import {
   OPPORTUNISTIC_VERIFY_SWEEP_INTERVAL_MS,
   OPPORTUNISTIC_VERIFY_SWEEP_SLOT_KEY,
   runOpportunisticSweep,
+  runPeriodicStaleSweepTick,
   scheduleOpportunisticStaleSweep,
   scheduleOpportunisticVerifySweep,
+  startPeriodicStaleSweep,
 } from '../opportunisticSweep';
+import { StaleOperationReaper } from '../StaleOperationReaper';
 
 const sweepMock = vi.fn().mockResolvedValue({ abandoned: 0, redriven: 1 });
 vi.mock('../StaleOperationReaper', () => ({
@@ -21,6 +24,11 @@ vi.mock('../StaleOperationReaper', () => ({
 const verifySweepMock = vi.fn().mockResolvedValue({ abandoned: [], redriven: [], settled: [] });
 vi.mock('@/server/services/verify/sweep', () => ({
   sweepStuckVerifyRuns: (...args: any[]) => verifySweepMock(...args),
+}));
+
+let queueModeEnabled = false;
+vi.mock('@/server/services/queue/impls', () => ({
+  isQueueAgentRuntimeEnabled: () => queueModeEnabled,
 }));
 
 const getServerDBMock = vi.fn().mockResolvedValue({ db: 'server' });
@@ -209,5 +217,102 @@ describe('scheduleOpportunisticVerifySweep', () => {
     await expect(flush()).resolves.toBeUndefined();
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+});
+
+describe('periodic stale sweep', () => {
+  beforeEach(() => {
+    sweepMock.mockReset().mockResolvedValue({ abandoned: 0, failed: 0, redriven: 0 });
+    redisSetMock.mockReset().mockResolvedValue('OK');
+    redisClient = { set: redisSetMock };
+    queueModeEnabled = false;
+    vi.mocked(StaleOperationReaper).mockClear();
+  });
+
+  it('claims the shared slot, so replicas and the step-borne sweep run once per interval', async () => {
+    await expect(runPeriodicStaleSweepTick()).resolves.toBe(true);
+
+    expect(redisSetMock).toHaveBeenCalledWith(
+      OPPORTUNISTIC_SWEEP_SLOT_KEY,
+      expect.any(String),
+      'PX',
+      OPPORTUNISTIC_SWEEP_INTERVAL_MS,
+      'NX',
+    );
+    expect(sweepMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips the tick while another sweeper holds the slot', async () => {
+    redisSetMock.mockResolvedValue(null);
+
+    await expect(runPeriodicStaleSweepTick()).resolves.toBe(false);
+    expect(sweepMock).not.toHaveBeenCalled();
+  });
+
+  it('sweeps every tick when the single-process runtime has no Redis', async () => {
+    // Unlike the step-borne sweep, which needs Redis: this one is the only
+    // sweep a Redis-less self-hosted server ever runs.
+    redisClient = null;
+
+    await expect(runPeriodicStaleSweepTick()).resolves.toBe(true);
+    expect(redisSetMock).not.toHaveBeenCalled();
+    expect(sweepMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives the reaper no queue on the in-process runtime, so it never redrives into nothing', async () => {
+    await runPeriodicStaleSweepTick();
+
+    expect(StaleOperationReaper).toHaveBeenCalledWith({ db: 'server' }, { queueService: null });
+  });
+
+  it('keeps the default queue when steps run through the queue', async () => {
+    queueModeEnabled = true;
+
+    await runPeriodicStaleSweepTick();
+
+    expect(StaleOperationReaper).toHaveBeenCalledWith(
+      { db: 'server' },
+      { queueService: undefined },
+    );
+  });
+
+  it('never rejects when the sweep throws', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    sweepMock.mockRejectedValue(new Error('db down'));
+
+    await expect(runPeriodicStaleSweepTick()).resolves.toBe(true);
+    expect(consoleError).toHaveBeenCalledWith(
+      '[periodic-stale-sweep] sweep failed: %O',
+      expect.any(Error),
+    );
+    consoleError.mockRestore();
+  });
+
+  describe('timer', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('sweeps once per interval until stopped, and starts only one timer', async () => {
+      const stop = startPeriodicStaleSweep(1000);
+      expect(startPeriodicStaleSweep(1000)).toBe(stop);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(sweepMock).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(sweepMock).toHaveBeenCalledTimes(2);
+
+      stop();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(sweepMock).toHaveBeenCalledTimes(2);
+
+      // A stopped timer can be started again.
+      const restarted = startPeriodicStaleSweep(1000);
+      expect(restarted).not.toBe(stop);
+      restarted();
+    });
   });
 });

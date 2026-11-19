@@ -42,6 +42,22 @@ export async function register() {
     });
   }
 
+  // Retire agent runs stranded `running` by a server or agent-gateway restart.
+  // The stale-operation sweep otherwise only rides QStash step deliveries and
+  // a Vercel cron, neither of which a self-hosted server has, so it never ran
+  // there (lobehub-gateway#12). Vercel deployments keep those paths instead.
+  if (
+    process.env.NEXT_RUNTIME === 'nodejs' &&
+    process.env.DATABASE_URL &&
+    !process.env.VERCEL_ENV
+  ) {
+    void import('@/server/services/agentRuntime/opportunisticSweep')
+      .then(({ startPeriodicStaleSweep }) => startPeriodicStaleSweep())
+      .catch((err) => {
+        console.error('[Instrumentation] Failed to start the stale-operation sweep:', err);
+      });
+  }
+
   // Note: messenger system bot connections (Discord/Telegram) are managed
   // entirely from dc-center's System Bots admin — save / enable / forceReconnect
   // mutations call MessageGateway directly. The main app's only role here is

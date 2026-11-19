@@ -3,6 +3,7 @@ import debug from 'debug';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { recoverChannels } from '@/server/services/channel/recover';
+import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 import { sweepStuckVerifyRuns } from '@/server/services/verify/sweep';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
@@ -179,3 +180,78 @@ export const scheduleOpportunisticVerifySweep = (): void => {
     },
   );
 };
+
+/**
+ * Run the stale-operation sweep every interval in a long-lived server process,
+ * independent of any request.
+ *
+ * `scheduleOpportunisticStaleSweep` rides `/api/agent/run`, the QStash step
+ * delivery, and the only other entry point is a Vercel cron. A self-hosted
+ * server runs agent steps in-process by default (the local queue) and has no
+ * cron, so neither ever fired and the sweep never ran there: a run whose
+ * server or agent gateway restarted mid-run stayed `running` for good, its
+ * conversation spinning and its Task refusing new messages
+ * (lobehub-gateway#12).
+ *
+ * Shares the opportunistic sweep's Redis slot, so replicas and the
+ * request-borne sweep still run it at most once per interval between them.
+ * Without Redis the runtime is single-process, so every tick sweeps.
+ *
+ * On the local queue the reaper gets no queue: a redrive would go to a fresh
+ * in-process queue with no step executor behind it and silently do nothing,
+ * so there it only retires runs past their orphan window.
+ *
+ * Returns a function that stops the timer. Calling it again while a timer is
+ * running returns the existing one's stop function.
+ */
+export const startPeriodicStaleSweep = (
+  intervalMs: number = OPPORTUNISTIC_SWEEP_INTERVAL_MS,
+): (() => void) => {
+  const holder = globalThis as typeof globalThis & {
+    __lobePeriodicStaleSweep?: () => void;
+  };
+  if (holder.__lobePeriodicStaleSweep) return holder.__lobePeriodicStaleSweep;
+
+  const timer = setInterval(() => {
+    void runPeriodicStaleSweepTick();
+  }, intervalMs);
+  (timer as { unref?: () => void }).unref?.();
+
+  const stop = () => {
+    clearInterval(timer);
+    if (holder.__lobePeriodicStaleSweep === stop) holder.__lobePeriodicStaleSweep = undefined;
+  };
+  holder.__lobePeriodicStaleSweep = stop;
+  return stop;
+};
+
+/** One tick of {@link startPeriodicStaleSweep}. Never rejects. */
+export const runPeriodicStaleSweepTick = (): Promise<boolean> =>
+  runOpportunisticSweep({
+    claim: async () => {
+      const redis = getAgentRuntimeRedisClient();
+      if (!redis) return true;
+
+      const claimed = await redis.set(
+        OPPORTUNISTIC_SWEEP_SLOT_KEY,
+        String(Date.now()),
+        'PX',
+        OPPORTUNISTIC_SWEEP_INTERVAL_MS,
+        'NX',
+      );
+      return claimed === 'OK';
+    },
+    onError: (error, phase) => {
+      console.error(`[periodic-stale-sweep] ${phase} failed: %O`, error);
+    },
+    sweep: async () => {
+      const db = await getServerDB();
+      const result = await new StaleOperationReaper(db, {
+        queueService: isQueueAgentRuntimeEnabled() ? undefined : null,
+      }).sweep();
+      if (result.abandoned > 0 || result.redriven > 0 || result.failed > 0) {
+        console.info('[periodic-stale-sweep] %O', result);
+      }
+      log('periodic sweep: %O', result);
+    },
+  });

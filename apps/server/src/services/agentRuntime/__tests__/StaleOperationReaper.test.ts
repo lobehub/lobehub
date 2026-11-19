@@ -1,7 +1,7 @@
 // @vitest-environment node
 import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StaleOperationReaper } from '../StaleOperationReaper';
 
@@ -260,20 +260,131 @@ describe('StaleOperationReaper', () => {
     expect(result).toMatchObject({ abandoned: 0, alive: 1 });
   });
 
-  it('still skips a stateless non-heterogeneous run however long it has been quiet', async () => {
-    const result = await buildReaper(
-      [
-        candidate('op_x', {
-          provider: 'openai',
-          updatedAt: new Date(Date.now() - 3 * 60 * 60_000),
-        }),
-      ],
-      null,
-    ).sweep();
+  describe('runs nothing can recover (orphan window)', () => {
+    // lobehub-gateway#12: the sweep used to leave every run it could not
+    // recover to the agent-gateway watchdog, which only watches operations it
+    // still holds in memory. A gateway restart left such a run `running` for
+    // good. Past twice the watchdog's 30-min window the sweep retires it.
+    const NOW = new Date('2026-11-19T12:00:00.000Z').getTime();
+    const ORPHAN_WINDOW_MS = 60 * 60_000;
+    const silentFor = (ms: number) => new Date(NOW - ms);
 
-    expect(settleStaleRunningMock).not.toHaveBeenCalled();
-    expect(finalizeAbandonedMock).not.toHaveBeenCalled();
-    expect(result).toMatchObject({ skipped: 1 });
+    beforeEach(() => {
+      vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('retires a stateless run silent past the orphan window', async () => {
+      const queue = buildQueue();
+      const result = await buildReaper(
+        [candidate('op_x', { updatedAt: silentFor(ORPHAN_WINDOW_MS + 1) })],
+        null,
+        queue,
+      ).sweep();
+
+      // The CAS re-checks the lease against the orphan window, so a heartbeat
+      // that lands meanwhile keeps the run.
+      const [operationId, staleBefore] = settleStaleRunningMock.mock.calls[0];
+      expect(operationId).toBe('op_x');
+      expect(staleBefore.getTime()).toBe(NOW - ORPHAN_WINDOW_MS);
+      expect(finalizeAbandonedMock).toHaveBeenCalledWith('op_x', 'stale_lease_orphan_silent', {
+        settledAsAbandoned: true,
+      });
+      expect(queue.scheduleMessage).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ abandoned: 1, skipped: 0 });
+    });
+
+    it('keeps a stateless run whose lease moved exactly at the window edge', async () => {
+      const result = await buildReaper(
+        [candidate('op_x', { updatedAt: silentFor(ORPHAN_WINDOW_MS) })],
+        null,
+      ).sweep();
+
+      expect(settleStaleRunningMock).not.toHaveBeenCalled();
+      expect(finalizeAbandonedMock).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ abandoned: 0, skipped: 1 });
+    });
+
+    it('keeps a stateless run that is quiet but inside the window', async () => {
+      const result = await buildReaper(
+        [candidate('op_x', { updatedAt: silentFor(45 * 60_000) })],
+        null,
+      ).sweep();
+
+      expect(settleStaleRunningMock).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ skipped: 1 });
+    });
+
+    it('leaves an orphan alone when a heartbeat wins the CAS', async () => {
+      settleStaleRunningMock.mockResolvedValue(false);
+
+      const result = await buildReaper(
+        [candidate('op_x', { updatedAt: silentFor(3 * 60 * 60_000) })],
+        null,
+      ).sweep();
+
+      expect(finalizeAbandonedMock).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ abandoned: 0, alive: 1 });
+    });
+
+    it('never redrives without a queue, and retires the run past the window', async () => {
+      // The self-hosted in-process runtime: its step died with the process.
+      const inside = await buildReaper(
+        [candidate('op_x', { updatedAt: silentFor(10 * 60_000) })],
+        runningState(),
+        null,
+      ).sweep();
+      expect(claimStaleRedriveMock).not.toHaveBeenCalled();
+      expect(settleStaleRunningMock).not.toHaveBeenCalled();
+      expect(inside).toMatchObject({ redriven: 0, skipped: 1 });
+
+      const past = await buildReaper(
+        [candidate('op_x', { updatedAt: silentFor(ORPHAN_WINDOW_MS + 60_000) })],
+        runningState(),
+        null,
+      ).sweep();
+      expect(claimStaleRedriveMock).not.toHaveBeenCalled();
+      expect(finalizeAbandonedMock).toHaveBeenCalledWith('op_x', 'stale_lease_orphan_silent', {
+        settledAsAbandoned: true,
+      });
+      expect(past).toMatchObject({ abandoned: 1, redriven: 0 });
+    });
+
+    it('retires a run whose step context stays unrecoverable past the window', async () => {
+      const queue = buildQueue();
+      const result = await buildReaper(
+        [candidate('op_x', { updatedAt: silentFor(ORPHAN_WINDOW_MS + 60_000) })],
+        runningState(),
+        queue,
+        [],
+      ).sweep();
+
+      expect(queue.scheduleMessage).not.toHaveBeenCalled();
+      expect(claimStaleRedriveMock).not.toHaveBeenCalled();
+      expect(finalizeAbandonedMock).toHaveBeenCalledWith('op_x', 'stale_lease_orphan_silent', {
+        settledAsAbandoned: true,
+      });
+      expect(result).toMatchObject({ abandoned: 1 });
+    });
+
+    it.each(['waiting_for_human', 'waiting_for_async_tool'])(
+      'never retires a parked operation however long it is quiet (%s)',
+      async (status) => {
+        // A parent parked on a long sub-agent keeps its gateway channel busy
+        // with the child's progress while its own lease stays still.
+        const result = await buildReaper(
+          [candidate('op_x', { updatedAt: silentFor(3 * 60 * 60_000) })],
+          runningState({ status }),
+          null,
+        ).sweep();
+
+        expect(settleStaleRunningMock).not.toHaveBeenCalled();
+        expect(finalizeAbandonedMock).not.toHaveBeenCalled();
+        expect(result).toMatchObject({ skipped: 1 });
+      },
+    );
   });
 
   it.each(['waiting_for_human', 'waiting_for_async_tool'])(

@@ -25,6 +25,22 @@ export const OPERATION_LEASE_STALE_MS = 5 * 60_000;
  */
 export const HETERO_OPERATION_SILENCE_MS = 60 * 60_000;
 
+/**
+ * How long a `running` operation the stale-operation sweep cannot recover may
+ * go without refreshing its lease before the sweep retires it itself.
+ *
+ * Twice the agent-gateway inactivity watchdog's 30-minute window. That
+ * watchdog is what normally declares such a run dead, but it only watches
+ * operations it still holds in memory: a restarted gateway, or one that
+ * dropped the operation early, leaves the run with nothing watching it and the
+ * row `running` for good (lobehub-gateway#12). A watchdog that was still
+ * watching has fired, and its finalize call landed, well inside twice its
+ * window, so the sweep only ever acts as the backstop. Nothing alive is this
+ * quiet: a running step refreshes the lease every 90s, and a parked run has
+ * left `running`.
+ */
+export const ORPHAN_OPERATION_SILENCE_MS = 2 * 30 * 60_000;
+
 /** Whether a `running` row's lease was refreshed recently enough to count as alive. */
 export const isOperationLeaseFresh = (
   operation: { updatedAt: Date },

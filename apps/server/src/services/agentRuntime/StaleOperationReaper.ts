@@ -19,6 +19,7 @@ import { BACKGROUND_OPERATION_TRIGGERS } from './foregroundOperation';
 import {
   HETERO_OPERATION_SILENCE_MS as HETERO_SILENCE_MS,
   OPERATION_LEASE_STALE_MS as DEFAULT_STALE_AFTER_MS,
+  ORPHAN_OPERATION_SILENCE_MS as ORPHAN_SILENCE_MS,
 } from './operationLease';
 
 const log = debug('lobe-server:stale-operation-reaper');
@@ -54,6 +55,10 @@ const isHeterogeneousProvider = (provider: string | null | undefined): boolean =
     isRemoteHeterogeneousType(provider) ||
     isLocalRuntimeHeterogeneousType(provider));
 
+/** Whether a candidate's lease last moved before `cutoff`. */
+const isSilentSince = (candidate: { updatedAt: Date }, cutoff: Date): boolean =>
+  new Date(candidate.updatedAt).getTime() < cutoff.getTime();
+
 /** Bound how many overlapping topics one sweep reports. */
 const CONCURRENT_FOREGROUND_REPORT_LIMIT = 20;
 
@@ -64,6 +69,8 @@ export interface ReapStaleOperationsParams {
   /** Ignore rows whose lease froze longer ago than this. */
   lookbackMs?: number;
   maxRedriveAttempts?: number;
+  /** Silence after which a run this sweep cannot recover is retired. */
+  orphanSilenceMs?: number;
   staleAfterMs?: number;
 }
 
@@ -146,6 +153,7 @@ export class StaleOperationReaper {
     const now = Date.now();
     const staleBefore = new Date(now - staleAfterMs);
     const heteroStaleBefore = new Date(now - (params?.heteroSilenceMs ?? HETERO_SILENCE_MS));
+    const orphanStaleBefore = new Date(now - (params?.orphanSilenceMs ?? ORPHAN_SILENCE_MS));
     const notBefore = new Date(now - (params?.lookbackMs ?? DEFAULT_LOOKBACK_MS));
 
     const candidates = await this.listStaleRunning(staleBefore, notBefore, limit);
@@ -161,12 +169,12 @@ export class StaleOperationReaper {
 
     for (const candidate of candidates) {
       try {
-        const outcome = await this.recover(
-          candidate,
-          staleBefore,
+        const outcome = await this.recover(candidate, {
           heteroStaleBefore,
           maxRedriveAttempts,
-        );
+          orphanStaleBefore,
+          staleBefore,
+        });
         result[outcome] += 1;
       } catch (e) {
         // One poisoned row must not abort the rest of the sweep.
@@ -291,10 +299,14 @@ export class StaleOperationReaper {
       userId: string;
       workspaceId: string | null;
     },
-    staleBefore: Date,
-    heteroStaleBefore: Date,
-    maxRedriveAttempts: number,
+    windows: {
+      heteroStaleBefore: Date;
+      maxRedriveAttempts: number;
+      orphanStaleBefore: Date;
+      staleBefore: Date;
+    },
   ): Promise<'abandoned' | 'alive' | 'redriven' | 'skipped'> {
+    const { heteroStaleBefore, maxRedriveAttempts, orphanStaleBefore, staleBefore } = windows;
     const operationId = candidate.id;
     const operationModel = new AgentOperationModel(
       this.db,
@@ -329,28 +341,34 @@ export class StaleOperationReaper {
     // `abandonIfStillStale` re-checks the lease inside its UPDATE, so a batch
     // that lands meanwhile keeps the run alive.
     if (!state) {
-      if (
-        isHeterogeneousProvider(candidate.provider) &&
-        new Date(candidate.updatedAt).getTime() < heteroStaleBefore.getTime()
-      ) {
-        return this.abandonIfStillStale(
-          operationModel,
-          operationId,
-          heteroStaleBefore,
-          'hetero_silent',
-        );
+      if (isHeterogeneousProvider(candidate.provider)) {
+        return isSilentSince(candidate, heteroStaleBefore)
+          ? this.abandonIfStillStale(
+              operationModel,
+              operationId,
+              heteroStaleBefore,
+              'hetero_silent',
+            )
+          : 'skipped';
       }
 
-      return 'skipped';
+      // Any other stateless run cannot be resumed (its coordinator state
+      // expired, or lived in a process that restarted), so it is left to the
+      // watchdog until the orphan window says nothing is watching it.
+      return this.retireIfOrphaned(operationModel, candidate, orphanStaleBefore);
     }
 
-    // Any other stateless operation is left alone: this sweep only acts on
-    // runs it can resume or can prove dead.
-    if (!this.queueService) return 'skipped';
-
     // Parked operations have their own resume paths; a plain step would run
-    // past whatever they are waiting on.
+    // past whatever they are waiting on. Never retired here either: a parent
+    // parked on a long sub-agent keeps its gateway channel busy with the
+    // child's progress while its own lease stays still.
     if (!this.canRedrive(state)) return 'skipped';
+
+    // No queue to redrive through: the self-hosted in-process runtime, whose
+    // steps lived in the process that died. Only the orphan window applies.
+    if (!this.queueService) {
+      return this.retireIfOrphaned(operationModel, candidate, orphanStaleBefore);
+    }
 
     // `stepCount` is the number of completed steps, so it is also the index of
     // the step that never finished.
@@ -371,10 +389,10 @@ export class StaleOperationReaper {
       // transient Redis blip is indistinguishable here from a genuinely
       // missing entry. Retiring an operation is irreversible and user-visible,
       // and this one is otherwise resumable — a later tick may well recover it
-      // once the read succeeds, and the inactivity watchdog still declares it
-      // dead if it never does.
+      // once the read succeeds. A read that still fails past the orphan window
+      // is no blip, and the watchdog this used to wait for may never fire.
       log('[%s][%d] no persisted context to resume from', operationId, stepIndex);
-      return 'skipped';
+      return this.retireIfOrphaned(operationModel, candidate, orphanStaleBefore);
     }
 
     const attempt = await operationModel.claimStaleRedrive(
@@ -489,6 +507,32 @@ export class StaleOperationReaper {
       (state.status === 'running' || state.status === 'idle') &&
       typeof state.stepCount === 'number' &&
       state.stepCount >= 0
+    );
+  }
+
+  /**
+   * Retire a `running` operation this sweep cannot recover, once it has been
+   * silent past the orphan window (see `ORPHAN_OPERATION_SILENCE_MS`).
+   *
+   * Before this the sweep left such a run to the agent-gateway inactivity
+   * watchdog, which only watches operations it still holds in memory. A
+   * gateway restart (or an operation the gateway dropped early) left the row
+   * `running` forever: the conversation spinning, its Task refusing new
+   * messages. Self-hosted deployments hit it most, because their in-process
+   * runtime also loses the step itself when the server restarts.
+   */
+  private async retireIfOrphaned(
+    operationModel: AgentOperationModel,
+    candidate: { id: string; updatedAt: Date },
+    orphanStaleBefore: Date,
+  ): Promise<'abandoned' | 'alive' | 'skipped'> {
+    if (!isSilentSince(candidate, orphanStaleBefore)) return 'skipped';
+
+    return this.abandonIfStillStale(
+      operationModel,
+      candidate.id,
+      orphanStaleBefore,
+      'orphan_silent',
     );
   }
 
