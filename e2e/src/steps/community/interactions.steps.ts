@@ -434,21 +434,7 @@ Then('I should see its details in a dialog on the same page', async function (th
 });
 
 Then('I should be navigated to {string}', async function (this: CustomWorld, expectedPath: string) {
-  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
-  await this.page.waitForTimeout(500); // Extra wait for client-side routing
-
-  const currentUrl = this.page.url();
-  console.log(`   📍 Expected path: ${expectedPath}, Current URL: ${currentUrl}`);
-
-  // Verify that URL contains the expected path
-  const urlMatches = currentUrl.includes(expectedPath);
-
-  if (!urlMatches) {
-    console.log(`   ⚠️ URL mismatch, but page might still be correct`);
-  }
-
-  expect(
-    urlMatches,
-    `Expected URL to contain "${expectedPath}", but got: ${currentUrl}`,
-  ).toBeTruthy();
+  await expect(this.page).toHaveURL((url) => url.pathname.endsWith(expectedPath), {
+    timeout: 20_000,
+  });
 });
