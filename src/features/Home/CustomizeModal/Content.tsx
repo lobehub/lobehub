@@ -13,6 +13,8 @@ import { RotateCcw, XIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useDensityTokens } from '@/styles/density';
+
 import CountStepper from './components/CountStepper';
 import PresetBar from './components/PresetBar';
 import SettingRow from './components/SettingRow';
@@ -40,6 +42,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const CustomizeModalContent = memo(() => {
   const { t } = useTranslation('home');
   const { close } = useModalContext();
+  const { pageTitleFontSize, sectionGap } = useDensityTokens();
   const {
     applyPreset,
     isWidgetHidden,
@@ -61,10 +64,10 @@ const CustomizeModalContent = memo(() => {
         horizontal
         align={'center'}
         className={styles.header}
-        gap={16}
+        gap={sectionGap}
         justify={'space-between'}
       >
-        <Text as={'h2'} fontSize={16} weight={600}>
+        <Text as={'h2'} fontSize={pageTitleFontSize} weight={600}>
           {t('dashboard.customize.title')}
         </Text>
         <ActionIcon

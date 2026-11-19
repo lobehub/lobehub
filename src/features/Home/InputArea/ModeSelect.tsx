@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
+import { densityVars } from '@/styles/densityVars';
 
 import type { HomeMode } from '../types';
 import { isHomeModeDisabled, resolvePermittedHomeMode } from './modePermission';
@@ -17,7 +18,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 6px;
     align-items: center;
 
-    height: 32px;
+    height: ${densityVars.controlHeight};
     padding-inline: 8px;
     border: 0;
     border-radius: ${cssVar.borderRadius};

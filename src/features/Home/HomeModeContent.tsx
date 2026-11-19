@@ -36,6 +36,8 @@ import { taskListSelectors } from '@/store/task/selectors';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
+import { useDensityTokens } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { HOME_ENTITY_PORTAL_SCOPE } from './acceptancePortalView';
@@ -55,7 +57,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     white-space: nowrap;
   `,
   empty: css`
-    padding-block: 16px;
+    padding-block: ${densityVars.cardPadding};
     color: ${cssVar.colorTextTertiary};
   `,
   blockAction: css`
@@ -179,31 +181,36 @@ const normalizeTaskStatus = (status: string): TaskStatus =>
  */
 const TIME_COLUMN_WIDTH = 56;
 
-const Row = memo<RowProps>(({ description, href, icon, title, titleExtra, trailing }) => (
-  <WorkspaceLink className={cx(styles.rowBox, styles.row)} to={href}>
-    <Flexbox horizontal align={'flex-start'} gap={12}>
-      <Flexbox flex={'none'} paddingBlock={3}>
-        {icon}
-      </Flexbox>
-      <Flexbox className={styles.rowText} gap={3}>
-        {/* The name takes the space and truncates; anything after it keeps its
-            full width, so an identifier stays readable however long the name is. */}
-        <Flexbox horizontal align={'center'} gap={8} style={FLEX_MIN_WIDTH_0}>
-          <Text ellipsis className={homeType.itemTitle}>
-            {title}
-          </Text>
-          {titleExtra}
+const Row = memo<RowProps>(({ description, href, icon, title, titleExtra, trailing }) => {
+  const { contentGap } = useDensityTokens();
+
+  return (
+    <WorkspaceLink className={cx(styles.rowBox, styles.row)} to={href}>
+      <Flexbox horizontal align={'flex-start'} gap={contentGap}>
+        <Flexbox flex={'none'} paddingBlock={3}>
+          {icon}
         </Flexbox>
-        {description && (
-          <Text className={cx(homeType.supporting, styles.description)}>{description}</Text>
-        )}
+        <Flexbox className={styles.rowText} gap={3}>
+          {/* The name takes the space and truncates; anything after it keeps its
+              full width, so an identifier stays readable however long the name is. */}
+          <Flexbox horizontal align={'center'} gap={8} style={FLEX_MIN_WIDTH_0}>
+            <Text ellipsis className={homeType.itemTitle}>
+              {title}
+            </Text>
+            {titleExtra}
+          </Flexbox>
+          {description && (
+            <Text className={cx(homeType.supporting, styles.description)}>{description}</Text>
+          )}
+        </Flexbox>
+        {trailing}
       </Flexbox>
-      {trailing}
-    </Flexbox>
-  </WorkspaceLink>
-));
+    </WorkspaceLink>
+  );
+});
 
 const RecentTopicRow = memo<{ topic: RecentItem }>(({ topic }) => {
+  const { largeIconSize } = useDensityTokens();
   const agent = useAgentDisplayMeta(topic.agentId);
   const raw = topic.description?.trim() || topic.lastAssistantMessage?.trim();
   // The snippet is raw markdown (a user note or the last assistant reply);
@@ -226,7 +233,7 @@ const RecentTopicRow = memo<{ topic: RecentItem }>(({ topic }) => {
             background={agent.backgroundColor}
             className={styles.topicAvatar}
             shape={'circle'}
-            size={22}
+            size={largeIconSize}
             title={agentDisplayName(agent)}
           />
         ) : (
