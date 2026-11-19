@@ -12,7 +12,8 @@ vi.mock('i18next', () => ({
   t: vi.fn((key) => `translated_${key}`),
 }));
 
-vi.mock('@lobechat/utils/client/fetchEventSource/index', () => ({
+vi.mock('@lobechat/utils/client/fetchEventSource/index', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   fetchEventSource: vi.fn(),
 }));
 

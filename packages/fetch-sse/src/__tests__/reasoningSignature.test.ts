@@ -8,7 +8,8 @@ vi.mock('@lobechat/model-runtime', () => ({
   parseToolCalls: vi.fn(),
 }));
 
-vi.mock('@lobechat/utils/client/fetchEventSource/index', () => ({
+vi.mock('@lobechat/utils/client/fetchEventSource/index', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   fetchEventSource: vi.fn(),
 }));
 
