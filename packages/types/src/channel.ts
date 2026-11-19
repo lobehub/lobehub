@@ -965,5 +965,37 @@ export interface ShareVisitorConversation {
   totalCost: number;
   totalTokens: number;
   updatedAt: Date;
-  visitor: { avatar: string | null; id: string; name: string | null };
+  visitor: ShareVisitorIdentity;
+}
+
+/** A share visitor as the shared Agent's owner sees them. */
+export interface ShareVisitorIdentity {
+  avatar: string | null;
+  id: string;
+  name: string | null;
+}
+
+/**
+ * One run topic of a visitor's conversation with a shared Agent. A visitor's conversation spans
+ * several: a new one starts after a long pause or when the Agent's configuration changes.
+ */
+export interface ShareVisitorTopic {
+  createdAt: Date;
+  id: string;
+  /**
+   * The start of the visitor's first message. Run topics get no generated title, so this is what
+   * names one when `title` is empty.
+   */
+  preview: string | null;
+  title: string | null;
+  /** USD cost of the topic's runs. */
+  totalCost: number;
+  totalTokens: number;
+  updatedAt: Date;
+}
+
+/** A visitor's run topics with a shared Agent, newest first, for its owner's sidebar. */
+export interface ShareVisitorTopicGroup {
+  topics: ShareVisitorTopic[];
+  visitor: ShareVisitorIdentity;
 }

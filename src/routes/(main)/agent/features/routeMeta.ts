@@ -28,6 +28,7 @@ import AgentShareSkeleton from '@/components/Skeleton/AgentShare';
 import AgentStatisticsSkeleton from '@/components/Skeleton/AgentStatistics';
 import AgentConversationLayoutSkeleton from '@/components/Skeleton/Conversation/AgentLayout';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
+import ReadOnlyConversationSkeleton from '@/components/Skeleton/Conversation/ReadOnly';
 import ProfileSkeleton from '@/components/Skeleton/Profile';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import TopicsSkeleton from '@/components/Skeleton/Topics';
@@ -144,6 +145,13 @@ export const agentRouteMeta = routeMeta({
 export const agentChatDesktopRouteMeta = routeMeta({
   ...agentRouteMeta,
   Skeleton: AgentConversationLayoutSkeleton,
+});
+
+/** A share visitor's run topic, read-only beside the Agent sidebar. */
+export const agentShareVisitorTopicRouteMeta = routeMeta({
+  icon: MessagesSquareIcon,
+  Skeleton: ReadOnlyConversationSkeleton,
+  titleKey: 'navigation.topics',
 });
 
 export const topicsRouteMeta = routeMeta({

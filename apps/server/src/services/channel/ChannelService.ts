@@ -15,6 +15,7 @@ import pMap from 'p-map';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { ContactModel, parseContactHandle } from '@/database/models/contact';
 import { DeviceModel } from '@/database/models/device';
+import { MessageModel } from '@/database/models/message';
 import type { ProjectModelOptions } from '@/database/models/project';
 import { ProjectModel } from '@/database/models/project';
 import type {
@@ -25,7 +26,9 @@ import type {
 import { ChannelError, ChannelRepository } from '@/database/repositories/channel';
 import { findProjectMainChannelId } from '@/database/repositories/channel/projectMainChannel';
 import {
+  findShareVisitorTopic,
   listShareVisitorConversations,
+  listShareVisitorTopics,
   readShareVisitorChannel,
 } from '@/database/repositories/channel/shareVisitors';
 import { users } from '@/database/schemas';
@@ -461,6 +464,37 @@ export class ChannelService {
 
   /** Visitor conversations with the caller's shared Agent, when its share lets the caller read them. */
   shareVisitors = (agentId: string) => listShareVisitorConversations(this.db, this.userId, agentId);
+
+  /** The run topics of those conversations, grouped by visitor, for the Agent's sidebar. */
+  shareVisitorTopics = (agentId: string) => listShareVisitorTopics(this.db, this.userId, agentId);
+
+  /**
+   * A visitor's run topic with its full transcript, for the share's owner to read. The owner pays
+   * for and is accountable for these runs, so the transcript keeps model, usage and error details;
+   * only this read opts in to visitor rows, and every write path still refuses them.
+   */
+  shareVisitorTopic = async (topicId: string) => {
+    const topic = await findShareVisitorTopic(this.db, this.userId, topicId);
+    if (!topic) throw new ChannelError('NOT_FOUND', 'Topic not found');
+    const files = new FileService(this.db, this.userId, this.workspaceId);
+    const messages = await new MessageModel(this.db, this.userId, this.workspaceId).query(
+      { agentId: topic.agentId, topicId },
+      {
+        allowShareVisitor: true,
+        postProcessUrl: (path, file) => files.getFileAccessUrl({ id: file.id, url: path }),
+      },
+    );
+    // Visitor turns persist under the owner, so their joined sender is the owner; the visitor
+    // wrote them.
+    const { visitor } = topic;
+    const sender = { avatar: visitor.avatar, fullName: visitor.name, id: visitor.id };
+    return {
+      messages: messages.map((message) =>
+        message.role === 'user' ? { ...message, sender } : message,
+      ),
+      topic,
+    };
+  };
 
   /**
    * A Channel the caller is a member of or can read openly; failing that, a visitor's conversation
