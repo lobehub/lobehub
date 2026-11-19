@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
-import { buildListItems, MAX_PINNED_NEW_MODELS } from './useBuildListItems';
+import {
+  buildListItems,
+  MAX_PINNED_NEW_MODELS,
+  resolveListGuardOptions,
+} from './useBuildListItems';
 
 const model = (id: string, displayName = id, releasedAt?: string) =>
   ({ abilities: {}, displayName, id, releasedAt }) satisfies AiModelForSelect;
@@ -242,5 +246,20 @@ describe('buildListItems featured and hidden models', () => {
     });
 
     expect(items.some((item) => item.type === 'featured-model-item')).toBe(false);
+  });
+});
+
+describe('resolveListGuardOptions', () => {
+  const guard = {
+    featuredModels: [{ modelId: 'auto', providerId: 'lobehub' }],
+    isModelHidden: () => true,
+  };
+
+  it('applies the guard to chat lists, including a list the host narrowed', () => {
+    expect(resolveListGuardOptions(false, guard)).toEqual(guard);
+  });
+
+  it('keeps generation lists as given', () => {
+    expect(resolveListGuardOptions(true, guard)).toBeUndefined();
   });
 });

@@ -242,6 +242,17 @@ export const buildListItems = (
   }
 };
 
+/**
+ * The guard's featured and hidden models describe chat models only. Any chat list applies them,
+ * including one a host narrows (a shared agent's picker); a generation list (image, video,
+ * music) keeps its models as given.
+ */
+export const resolveListGuardOptions = (
+  isGenerationList: boolean,
+  { featuredModels, isModelHidden }: BuildListItemsOptions,
+): BuildListItemsOptions | undefined =>
+  isGenerationList ? undefined : { featuredModels, isModelHidden };
+
 export const useBuildListItems = (
   enabledList: EnabledProviderWithModels[],
   groupMode: GroupMode,
