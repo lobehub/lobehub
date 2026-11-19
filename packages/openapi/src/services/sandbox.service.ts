@@ -256,7 +256,9 @@ export class SandboxRestService extends BaseService {
     // was later published). This write names a path, not the instance, so a
     // defaulted drive would create or overwrite the same relative path on the
     // workspace's public drive and report success for the wrong sandbox.
-    if (!instance.drive) {
+    // Hoisted into a local so the narrowing survives into the audited closure.
+    const { drive } = instance;
+    if (!drive) {
       throw new ApiException(403, 'forbidden', 'This sandbox is on a drive you cannot access');
     }
 
@@ -272,7 +274,7 @@ export class SandboxRestService extends BaseService {
       () =>
         this.caller.writeFile({
           content: request.content,
-          drive: instance.drive,
+          drive,
           path: this.drivePath(instance, request.path),
         }),
       () => ({ success: true }),
