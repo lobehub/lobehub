@@ -149,6 +149,11 @@ describe('Channel concurrent startup', () => {
     await coordinator(1).advance('channel');
 
     const [params] = execAgent.mock.calls[0];
+    // An ordinary Channel run keeps its own label and runs unattended.
+    expect(params).toMatchObject({
+      trigger: 'channel',
+      userInterventionConfig: { approvalMode: 'headless' },
+    });
     if ('deviceId' in environment) {
       expect(params).toMatchObject({ deviceId: 'dev-2', snapshotFollowsCallerDevice: false });
       expect(params.agentConfigSnapshot.agencyConfig).toEqual({

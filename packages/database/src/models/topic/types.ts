@@ -99,7 +99,7 @@ export interface CreateTopicParams {
    * attribution) plus the visitor's id here, so creator-facing listings
    * exclude them (`notShareVisitorTopic`, applied by `query`, `count`,
    * `queryTopics`, `queryRecent` and `rank`) while the share surface scopes
-   * reads per visitor (`queryBySender` / `countBySender`).
+   * reads per visitor (`queryBySender` / `countMessagesBySender`).
    *
    * A future opt-in surface (`allowCreatorViewSessions`) may let a creator
    * explicitly browse visitor sessions; that is not wired up yet — every

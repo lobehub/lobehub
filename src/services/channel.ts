@@ -84,6 +84,9 @@ class ChannelService {
   /** The caller's direct Channel with an Agent, opened if missing; null when it cannot answer there. */
   openDirect = async (input: { agentId: string }) =>
     (await lambdaClient.channel.openDirect.mutate(input)).data;
+  /** The caller's direct Channel with another person's shared Agent, from its share id or handle. */
+  openShared = async (input: { share: string }) =>
+    (await lambdaClient.channel.openShared.mutate(input)).data;
   detail = async (params: ChannelViewParams): Promise<ChannelDetail> =>
     (await lambdaClient.channel.detail.query(params)).data;
   list = async (): Promise<ChannelListItem[]> => (await lambdaClient.channel.list.query()).data;

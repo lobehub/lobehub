@@ -11,7 +11,7 @@ import { stripFinalStateInEventData } from './StreamEventManager';
 
 /**
  * Per-operation redaction policy for a shared-agent visitor run, derived from
- * the share's `AgentShareConfig` (`showModelInfo` / `showErrorDetails`) and
+ * the share's `AgentShareConfig` (`showErrorDetails`) and
  * carried on `state.principal.actor.shareVisitor`.
  *
  * `null` is the explicit "not a share run — push verbatim" marker, so a
@@ -57,10 +57,10 @@ export const isShareVisitorInit = (initialState: any): boolean =>
  */
 export const resolveRedactionFromState = (state: any): GatewayVisitorRedaction => {
   const share = state?.principal?.actor?.shareVisitor as
-    { showErrorDetails?: boolean; showModelInfo?: boolean; visitorUserId?: string } | undefined;
+    { showErrorDetails?: boolean; visitorUserId?: string } | undefined;
 
   if (share?.visitorUserId) {
-    return { showErrorDetails: share.showErrorDetails, showModelInfo: share.showModelInfo };
+    return { showErrorDetails: share.showErrorDetails };
   }
 
   if (!isShareVisitorInit(state)) return null;
@@ -170,8 +170,7 @@ const sanitizeErrorEventDataForVisitor = (
  *    `{ body, error, errorType }` shape with no `finalState`/`uiMessages` key
  *    for the other checks to even look at. Skipped when the share opted into
  *    `showErrorDetails`.
- * 3. Unless the share opted into `showModelInfo`,
- *    {@link redactCreatorPrivateBlob} runs over the WHOLE remaining payload.
+ * 3. {@link redactCreatorPrivateBlob} runs over the WHOLE remaining payload.
  *    Every other event type for a share run — `stream_start` (`{ model,
  *    provider }`), `tool_end` (a tool's own free-form `result.state` blob, e.g.
  *    `{ model, provider, usage }`), and `step_complete`'s `subagent_progress`
@@ -211,9 +210,7 @@ export const sanitizeGatewayEventData = (
 
   if (eventType === 'error') return sanitizeErrorEventDataForVisitor(withoutFinalState, redaction);
 
-  const redacted = redaction.showModelInfo
-    ? withoutFinalState
-    : redactCreatorPrivateBlob(withoutFinalState);
+  const redacted = redactCreatorPrivateBlob(withoutFinalState);
 
   if (!('uiMessages' in withoutFinalState)) return redacted;
 

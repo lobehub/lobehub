@@ -114,7 +114,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     data: {
       acceptsMemberRuntimeEnd?: boolean;
       agentConfig?: any;
-      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
+      visitorRedaction?: { showErrorDetails?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
       streamOwnerUserId?: string;
