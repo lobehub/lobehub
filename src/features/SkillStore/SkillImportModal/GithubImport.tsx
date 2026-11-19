@@ -57,6 +57,7 @@ export const GithubImport = ({ state }: { state: ReturnType<typeof useGithubSkil
   const outcomes = new Map(results.map((item) => [item.path, item.status]));
   const remaining = candidates.some((item) => canImportCandidate(item) && !outcomes.has(item.path));
   const failed = results.filter((item) => item.status === 'failed').map((item) => item.path);
+  const hasRetryableFailures = failed.length > 0;
   const failureCount = results.filter((item) =>
     ['failed', 'conflict', 'forbidden'].includes(item.status),
   ).length;
@@ -194,19 +195,19 @@ export const GithubImport = ({ state }: { state: ReturnType<typeof useGithubSkil
                 )}
               </Button>
             )}
-            {failed.length > 0 && (
-              <Button
-                disabled={!canCreate || loading}
-                loading={pending === 'import'}
-                type="primary"
-                onClick={() => install(failed)}
-              >
-                {t('agentSkillModal.github.retry')}
+            <Button
+              disabled={loading || (hasRetryableFailures && !canCreate)}
+              loading={hasRetryableFailures && pending === 'import'}
+              type="primary"
+              onClick={hasRetryableFailures ? () => install(failed) : close}
+            >
+              {t(hasRetryableFailures ? 'agentSkillModal.github.retry' : 'agentSkillModal.done')}
+            </Button>
+            {hasRetryableFailures && (
+              <Button disabled={loading} onClick={close}>
+                {t('agentSkillModal.done')}
               </Button>
             )}
-            <Button disabled={loading} type={failed.length ? 'default' : 'primary'} onClick={close}>
-              {t('agentSkillModal.done')}
-            </Button>
           </>
         ) : candidates.some(canImportCandidate) ? (
           <>
