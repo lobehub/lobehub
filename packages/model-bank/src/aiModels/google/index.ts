@@ -212,6 +212,49 @@ const googleChatModels: AIChatModelCard[] = [
       video: true,
       vision: true,
     },
+    // Unified input and output window. Synchronous output is limited to 65,536 tokens.
+    // https://aistudio.google.com/docs/models/gemini-4-neon
+    contextWindowTokens: 1_048_576,
+    description:
+      "Gemini 4 Neon is Google's multimodal reasoning model for complex software engineering, knowledge work, and scientific analysis.",
+    displayName: 'Gemini 4 Neon',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-4',
+    id: 'gemini-4-neon',
+    isOfficial: true,
+    knowledgeCutoff: '2026-03',
+    maxOutput: 65_536,
+    // Standard API rates with implicit caching. https://aistudio.google.com/docs/pricing#gemini-4-neon
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-11-18',
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['thinkingLevel5', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      audio: true,
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
     // Unified 1M window shared by input, thinking and output; a response defaults to 64K output
     // and can go up to 1M with long decode.
     // https://ai.google.dev/gemini-api/docs/models/gemini-4-argon
