@@ -418,6 +418,9 @@ describe('recent direct-provider models', () => {
     ['google', 'gemini-4-carbon', 'thinkingLevel3'],
     ['vertexai', 'gemini-4-carbon', 'thinkingLevel3'],
     ['openrouter', 'google/gemini-4-carbon', 'thinkingLevel3'],
+    ['google', 'gemini-4-neon', 'thinkingLevel5'],
+    ['vertexai', 'gemini-4-neon', 'thinkingLevel5'],
+    ['openrouter', 'google/gemini-4-neon', 'thinkingLevel5'],
     ['xai', 'grok-4.6', 'grok4_6ReasoningEffort'],
     ['qwen', 'qwen3.8-max', 'qwen38ReasoningEffort'],
     ['qwen', 'qwen3.8-max-0902', 'qwen38ReasoningEffort'],
@@ -602,5 +605,30 @@ describe('Google context-caching pricing', () => {
 
   it('lists the audio cache read for Gemini 3 Flash Preview', () => {
     expect(units('gemini-3-flash-preview')).toContainEqual(fixed('audioInput_cacheRead', 0.1));
+  });
+});
+
+describe('Gemini 4 Neon pricing', () => {
+  it.each([
+    ['google', 'gemini-4-neon'],
+    ['vertexai', 'gemini-4-neon'],
+    ['openrouter', 'google/gemini-4-neon'],
+  ])('bills %s/%s at $3 input and $15 output', (providerId, id) => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === providerId && entry.id === id,
+    );
+    expect(model?.pricing?.units).toEqual(
+      expect.arrayContaining([
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+      ]),
+    );
+  });
+
+  it('marks only the Gemini API card as the official price source', () => {
+    const official = LOBE_DEFAULT_MODEL_LIST.filter(
+      (entry) => entry.id === 'gemini-4-neon' && entry.isOfficial,
+    );
+    expect(official.map((entry) => entry.providerId)).toEqual(['google']);
   });
 });
