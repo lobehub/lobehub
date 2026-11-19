@@ -13,6 +13,7 @@ const holder = vi.hoisted(() => {
   process.env.S3_BUCKET ??= 'test-bucket';
   process.env.KEY_VAULTS_SECRET ??= Buffer.alloc(32, 7).toString('base64');
   return {
+    downloadTtls: [] as number[],
     metadataError: undefined as Error | undefined,
     serverDB: undefined as unknown,
     store: new Map<string, Buffer>(),
@@ -25,8 +26,10 @@ vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: async () => holder.s
 vi.mock('@/server/services/file', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   FileService: class {
-    createDownloadUrl = async (key: string, name: string) =>
-      `https://storage.test/${key}?download=${encodeURIComponent(name)}`;
+    createDownloadUrl = async (key: string, name: string, ttl?: number) => {
+      holder.downloadTtls.push(ttl ?? Number.NaN);
+      return `https://storage.test/${key}?download=${encodeURIComponent(name)}`;
+    };
     getFileContent = async (key: string) => {
       const value = holder.store.get(key);
       if (!value) throw new Error('NoSuchKey');
@@ -266,6 +269,22 @@ describe('GET /exports/:id', () => {
 
     expect((await call(`/exports/${stale}`, { key: KEYS.owner })).status).toBe(404);
     expect(holder.store.has(`exports/${OWNER}/personal/${stale}.json`)).toBe(false);
+  });
+
+  it('never signs a link that outlives the export retention', async () => {
+    // 23h59m into the 24h window: the signed lifetime must be the minute that
+    // is left, not another full hour.
+    const nearExpiry = `exp_${(Date.now() - (23 * 60 * 60 * 1000 + 59 * 60 * 1000)).toString(36)}_dddddddddddddddd`;
+    holder.store.set(`exports/${OWNER}/personal/${nearExpiry}.json`, Buffer.from('{}'));
+
+    const res = await call(`/exports/${nearExpiry}`, { key: KEYS.owner });
+    expect(res.status).toBe(200);
+    const data = ExportSchema.parse((await json(res)).data);
+
+    const ttl = holder.downloadTtls.at(-1)!;
+    expect(ttl).toBeLessThanOrEqual(60);
+    expect(ttl).toBeGreaterThan(0);
+    expect(new Date(data.expiresAt).getTime() - Date.now()).toBeLessThanOrEqual(61_000);
   });
 
   it('reports a storage failure as an error, not as a missing export', async () => {

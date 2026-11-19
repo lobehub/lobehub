@@ -150,16 +150,20 @@ export class DataTransferService extends BaseService {
     filename: string,
     size: number,
   ): Promise<ExportResult> {
-    const downloadUrl = await this.fileService.createDownloadUrl(
-      this.exportKey(id, format),
-      filename,
-      DOWNLOAD_URL_TTL_SECONDS,
-    );
-
-    // The link never outlives the stored file.
+    // The link never outlives the stored file: refreshing it during the last
+    // hour of retention must not sign a URL that stays valid after the dump is
+    // gone, so the signed lifetime is clamped to what is left, not only the
+    // reported `expiresAt`.
     const expiresAt = Math.min(
       Date.now() + DOWNLOAD_URL_TTL_SECONDS * 1000,
       (exportCreatedAt(id) ?? Date.now()) + EXPORT_RETENTION_MS,
+    );
+
+    const downloadUrl = await this.fileService.createDownloadUrl(
+      this.exportKey(id, format),
+      filename,
+      // Rounded down, and at least a second so the link is usable at the edge.
+      Math.max(1, Math.floor((expiresAt - Date.now()) / 1000)),
     );
 
     return {
