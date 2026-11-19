@@ -348,30 +348,21 @@ describe('shareChatRouter', () => {
       });
     });
 
-    it('rejects a new-topic run once the visitor has sent their message cap', async () => {
+    it('refuses new and existing topics once the visitor has sent their message cap', async () => {
       mockCountMessagesBySender.mockResolvedValue(3);
       const caller = await createCaller();
+      const refused = { code: 'TOO_MANY_REQUESTS', message: 'ShareMessageLimitExceeded' };
 
-      await expect(caller.execAgent({ prompt: 'hi', shareId: 'share-1' })).rejects.toMatchObject({
-        code: 'TOO_MANY_REQUESTS',
-        message: 'ShareMessageLimitExceeded',
-      });
+      await expect(caller.execAgent({ prompt: 'hi', shareId: 'share-1' })).rejects.toMatchObject(
+        refused,
+      );
+      // The cap spans all the visitor's topics, so an existing topic is refused too.
+      await expect(
+        caller.execAgent({ prompt: 'hi', shareId: 'share-1', topicId: 'tpc_visitor' }),
+      ).rejects.toMatchObject(refused);
       expect(mockCountMessagesBySender).toHaveBeenCalledWith({
         agentId: share.agentId,
         senderId: VISITOR,
-      });
-      expect(mockExecAgent).not.toHaveBeenCalled();
-    });
-
-    it('counts the cap across topics, so an existing topic is refused too', async () => {
-      mockCountMessagesBySender.mockResolvedValue(3);
-      const caller = await createCaller();
-
-      await expect(
-        caller.execAgent({ prompt: 'hi', shareId: 'share-1', topicId: 'tpc_visitor' }),
-      ).rejects.toMatchObject({
-        code: 'TOO_MANY_REQUESTS',
-        message: 'ShareMessageLimitExceeded',
       });
       expect(mockExecAgent).not.toHaveBeenCalled();
     });
