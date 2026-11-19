@@ -1,12 +1,13 @@
 import type { WorkListItem } from '@lobechat/types';
-import { ActionIcon, Center, Empty, Flexbox, Spin } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { ActionIcon, Center, Empty, Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { ClipboardListIcon, HistoryIcon, ListIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
+import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
 import { getAllWorkSummaries } from '@/features/Conversation/store/slices/data/workSummaries';
 import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
@@ -14,6 +15,7 @@ import { workService } from '@/services/work';
 import { useChatStore } from '@/store/chat';
 import { dbMessageSelectors, operationSelectors } from '@/store/chat/selectors';
 import { useWorkStore, workActions, workSelectors } from '@/store/work';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import WorkVersionHistoryCard from './WorkVersionHistoryCard';
 
@@ -24,21 +26,19 @@ const WORKS_VIEW_MODE_STORAGE_KEY = 'lobechat-working-panel-works-view-mode';
 const EMPTY_HISTORY: WorkListItem[] = [];
 
 const styles = stylex.create({
-  container: {
+  container: { minHeight: '0' },
+  list: {
     minHeight: '0',
-    paddingBlock: '8px',
-    paddingInlineStart: '8px',
-    paddingInlineEnd: '12px',
+    paddingBlockStart: sidebarRow.paneBlockStart,
+    paddingBlockEnd: sidebarRow.paneBlockEnd,
+    paddingInline: sidebarRow.paneInline,
   },
-  modeToolbar: { flexShrink: 0, alignSelf: 'flex-end' },
-  workCard: {
-    overflow: 'hidden',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: cssVar.colorBorderSecondary,
-    borderRadius: '8px',
-    backgroundColor: cssVar.colorFillQuaternary,
-    backgroundImage: 'none',
+  modeToolbar: {
+    flexShrink: 0,
+    justifyContent: 'flex-end',
+    height: sidebarRow.toolbarHeight,
+    paddingInlineStart: sidebarRow.toolbarPaddingInlineStart,
+    paddingInlineEnd: sidebarRow.toolbarPaddingInlineEnd,
   },
 });
 
@@ -49,7 +49,12 @@ const WorksModeToolbar = memo<{
   const { t } = useTranslation('chat');
 
   return (
-    <Flexbox horizontal className={stylex.props(styles.modeToolbar).className} gap={4}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.modeToolbar).className}
+      gap={4}
+    >
       <ActionIcon
         active={mode === 'summary'}
         icon={ListIcon}
@@ -161,45 +166,38 @@ const WorksSection = memo<WorksSectionProps>(({ active = true }) => {
   const content = (() => {
     if (isHydrating) return null;
 
-    if (isLoading) {
-      return (
-        <Center flex={1}>
-          <Spin size="middle" />
-        </Center>
-      );
-    }
+    if (isLoading) return <SkeletonList compact rows={4} />;
 
     if (error) {
       return (
-        <Center flex={1}>
-          <Empty description={t('workingPanel.works.error')} icon={ClipboardListIcon} />
-        </Center>
+        <AsyncError
+          align={'start'}
+          error={error}
+          title={t('workingPanel.works.error')}
+          variant={'inline'}
+        />
       );
     }
 
     if (data.length === 0) {
       return (
-        <Center flex={1}>
+        <Center flex={1} paddingBlock={24}>
           <Empty description={t('workingPanel.works.empty')} icon={ClipboardListIcon} />
         </Center>
       );
     }
 
     return mode === 'summary'
-      ? summaryData.map((work) => (
-          <WorkSummaryCard
-            className={stylex.props(styles.workCard).className}
-            item={work}
-            key={work.id}
-          />
-        ))
+      ? summaryData.map((work) => <WorkSummaryCard item={work} key={work.id} variant={'row'} />)
       : historyData.map((work) => <WorkVersionHistoryCard key={work.id} work={work} />);
   })();
 
   return (
-    <Flexbox className={stylex.props(styles.container).className} flex={1} gap={12}>
+    <Flexbox className={stylex.props(styles.container).className} flex={1}>
       <WorksModeToolbar mode={mode} setMode={setMode} />
-      {content}
+      <Flexbox className={stylex.props(styles.list).className} flex={1} gap={1}>
+        {content}
+      </Flexbox>
     </Flexbox>
   );
 });

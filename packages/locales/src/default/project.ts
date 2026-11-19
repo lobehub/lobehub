@@ -27,8 +27,6 @@ export default {
   'settings.workLocations': 'Working directories',
   'settings.directoryListDescription':
     'Device folders this project works in. Agents read and change files in them on that device.',
-  'settings.environmentDescription':
-    'Link environments configured in Settings → Environments, then add a folder on your device to start working.',
   'settings.allEnvironments': 'All environments',
   'settings.viewDirectories': 'View folders ({{count}})',
   'directories.noEnvironment': 'No environment linked',
@@ -98,9 +96,8 @@ export default {
   'settings.noDirectories':
     'No folders in this environment yet. Add an existing folder on a connected device to start working.',
   'settings.title': 'Project settings',
-  'settings.environments': 'Environments',
+  'settings.environments': 'Environment',
   'settings.addEnvironment': 'Add environment',
-  'settings.noEnvironments': 'No environments associated yet',
   'directories.environmentName': 'Environment name',
   'directories.editEnvironment': 'Configure environment',
 
@@ -190,7 +187,11 @@ export default {
     'Creates an agent named after the project, with its avatar and the Project label. It stays in your agents list.',
   'create.mainAgentDedicatedPlaceholder': 'Named after the project',
   'create.mainAgentDedicatedTag': 'New',
+  'create.mainAgentDescription': 'Manages this project’s conversations, tasks, and goals.',
   'create.mainAgentLabel': 'Main agent',
+  'create.mainAgentMode.dedicated': 'Create a dedicated agent',
+  'create.mainAgentMode.existing': 'Use an existing agent',
+  'create.mainAgentPlaceholder': 'Select an agent',
   'create.nameLabel': 'Project name',
   'create.namePlaceholder': 'What are you working on?',
   'create.slugDescription': 'Used for the project URL and generated from the project name.',
@@ -208,8 +209,6 @@ export default {
     'A project with this name already exists, including in the trash. Choose a different name.',
   'createFromGithub.empty':
     "The connected GitHub accounts haven't given LobeHub access to any repositories yet.",
-  'createFromGithub.environmentHint':
-    "The repository becomes this project's environment, so agents can check it out when they work on the project.",
   'createFromGithub.loadFailed': "Couldn't load repositories from GitHub.",
   'createFromGithub.manageAccess': 'Manage access',
   'createFromGithub.private': 'Private',
@@ -307,24 +306,6 @@ export default {
   'rename.nameLabel': 'Project name',
   'rename.success': 'Project renamed',
   'rename.title': 'Rename project',
-  'environment.add.action': 'Add',
-  'environment.add.existing': 'Add an existing one',
-  'environment.add.failed': "Couldn't add the environment to this project",
-  'environment.add.github': 'New from GitHub',
-  'environment.add.noExisting': 'All of your environments are already in this project.',
-  'environment.add.noPublished':
-    'No published environments to add. A shared project only uses published environments.',
-  'environment.add.title': 'Add environment',
-  'environment.create': 'New environment',
-  'environment.link': 'Link environment',
-  'environment.unlink': 'Unlink from project',
-  'environment.unlinkConfirm.desc':
-    "The environment stays in Settings → Environments. This project's folders that use it are kept, but can't run conversations until it is linked again.",
-  'environment.unlinkConfirm.title': 'Unlink "{{name}}" from this project?',
-  'environment.unlinkFailed': "Couldn't unlink the environment from this project",
-  'environment.privateInShared': 'Private',
-  'environment.privateInSharedTooltip':
-    "This project is shared, so its conversations only use published environments. This private environment won't be checked out.",
   'overview.context.location.devices': 'Devices',
   'overview.context.location.directories': 'Project folders',
   'overview.context.location.directoryUnavailable':
@@ -520,4 +501,19 @@ export default {
   'onboarding.connect.goal.title': 'Goals',
   'onboarding.connect.goal.description': 'Set a goal you can sign off',
   'onboarding.connect.goal.count': '{{count}} set',
+  'environment.configure': 'Configure environment',
+  'settings.environmentIntro':
+    'Every conversation in this project runs in this environment: its repositories are cloned, the setup command runs, and its variables are set.',
+  'createFromGithub.addRepository': 'Add',
+  'createFromGithub.removeRepository': 'Remove',
+  'createFromGithub.openIntegrations': 'Open GitHub settings',
+  'environment.none': 'No environment \u2014 start in an empty folder',
+  'createFromGithub.alreadyAdded': 'This repository is already added.',
+  'createFromGithub.layoutHint':
+    "Each repository is checked out in a folder of its own, side by side. You can change them later in the project's settings.",
+  'createFromGithub.repositoryTitle': 'Repository',
+  'createFromGithub.advanced': 'Advanced settings',
+  'createFromGithub.advancedWithCount': 'Advanced settings · {{count}} extra',
+  'createFromGithub.extraRepositoriesLabel': 'More repositories',
+  'createFromGithub.chooseFromGithub': 'Choose from GitHub',
 };

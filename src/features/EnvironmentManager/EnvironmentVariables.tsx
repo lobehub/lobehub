@@ -282,10 +282,9 @@ const EnvironmentVariables = memo<EnvironmentVariablesProps>(({ entries, onSave 
   return (
     <Flexbox gap={12}>
       <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-        <Text weight={600}>
-          {entries.length === 0
-            ? t('environments.form.env')
-            : t('environments.form.envCount', { count: entries.length })}
+        {/* The section around this editor carries its title; only the count is said here. */}
+        <Text fontSize={12} type={'secondary'}>
+          {entries.length > 0 && t('environments.form.envCount', { count: entries.length })}
         </Text>
         <Flexbox horizontal align={'center'} gap={4}>
           {raw === null ? (

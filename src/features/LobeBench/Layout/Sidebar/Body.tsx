@@ -47,6 +47,7 @@ import {
   useLobeBenchExperiments,
 } from '@/features/LobeBench/useLobeBench';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
@@ -65,6 +66,7 @@ const useActiveKey = () => {
 };
 
 const Body = memo(() => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation('eval');
   const navigate = useWorkspaceAwareNavigate();
   const activeKey = useActiveKey();
@@ -124,12 +126,10 @@ const Body = memo(() => {
         style={{ gap: 8 }}
       >
         <AccordionItem value={'experiments'}>
-          <AccordionHeader style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+          <AccordionHeader style={sectionTriggerStyle}>
             <AccordionTrigger>
               <Flexbox horizontal align="center" gap={4}>
-                <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-                  {t('lobeBench.sidebar.experiments')}
-                </Text>
+                <SectionTitle>{t('lobeBench.sidebar.experiments')}</SectionTitle>
                 {experiments.length > 0 && (
                   <Text fontSize={12} type="secondary">
                     {experiments.length}
@@ -224,12 +224,10 @@ const Body = memo(() => {
         </AccordionItem>
         {/* Same three groups as the Evaluation Lab: experiments, benchmarks, datasets. */}
         <AccordionItem value={'benchmarks'}>
-          <AccordionHeader style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+          <AccordionHeader style={sectionTriggerStyle}>
             <AccordionTrigger>
               <Flexbox horizontal align="center" gap={4}>
-                <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-                  {t('lobeBench.sidebar.benchmarks')}
-                </Text>
+                <SectionTitle>{t('lobeBench.sidebar.benchmarks')}</SectionTitle>
                 {benchmarks.length > 0 && (
                   <Text fontSize={12} type="secondary">
                     {benchmarks.length}
@@ -283,12 +281,10 @@ const Body = memo(() => {
         {/* The datasets the benchmarks are made of, then the account's own (cases
             picked from the library, or its own), flat like the Evaluation Lab's list. */}
         <AccordionItem value={'datasets'}>
-          <AccordionHeader style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+          <AccordionHeader style={sectionTriggerStyle}>
             <AccordionTrigger>
               <Flexbox horizontal align="center" gap={4}>
-                <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-                  {t('lobeBench.sidebar.datasets')}
-                </Text>
+                <SectionTitle>{t('lobeBench.sidebar.datasets')}</SectionTitle>
                 {sidebarDatasets.length > 0 && (
                   <Text fontSize={12} type="secondary">
                     {sidebarDatasets.length}

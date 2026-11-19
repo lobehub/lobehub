@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
@@ -176,6 +177,16 @@ describe('dispatching a contact’s shared Agent', () => {
     expect(executions.accepted).toHaveBeenCalledWith('channel', 'job');
   });
 
+  it('records the run as a share run that runs only granted tools without approval', async () => {
+    await coordinator().advance('channel');
+
+    const [params] = execAgent.mock.calls[0];
+    expect(params.trigger).toBe('agent_share');
+    // Nobody can approve mid-run; the share gate limits the run to the granted tools.
+    expect(params.userInterventionConfig).toEqual({ approvalMode: 'headless' });
+    expect(params.shareGate).toBeDefined();
+  });
+
   it.each([
     [
       'the share was paused',
@@ -191,6 +202,49 @@ describe('dispatching a contact’s shared Agent', () => {
     await coordinator().advance('channel');
 
     expect(execAgent).not.toHaveBeenCalled();
-    expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job');
+    expect(executions.retireReservation).toHaveBeenCalledWith(
+      'channel',
+      'job',
+      expect.toBeOneOf([undefined, expect.any(Object)]),
+    );
+  });
+
+  // The visitor saw only "no reason recorded" when the owner's monthly cap refused the reply.
+  it('records the spend-limit refusal so the visitor learns why', async () => {
+    checkSpend.mockResolvedValue({ allowed: false });
+    await coordinator().advance('channel');
+
+    expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
+      message: 'This shared Agent reached its monthly usage limit',
+      type: 'ShareSpendLimitExceeded',
+    });
+  });
+
+  // A shared Claude Code / Codex Agent's run stops at the share gate when the share grants the
+  // visitor no device, or the owner's device is offline; the visitor must learn which.
+  it.each(['ShareHeterogeneousAgentUnsupported', 'ShareHeteroDeviceUnavailable'])(
+    'records the share gate’s %s refusal so the visitor learns why',
+    async (type) => {
+      execAgent.mockRejectedValue(new TRPCError({ code: 'FORBIDDEN', message: type }));
+      await coordinator().advance('channel');
+
+      expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
+        message: type,
+        type,
+      });
+    },
+  );
+  // A visitor past the owner's message cap is refused by the atomic turn guard inside execAgent
+  // (the admission pre-check can race it); the receipt must still say why.
+  it('records the message-limit refusal raised by the turn guard', async () => {
+    execAgent.mockRejectedValue(
+      new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'ShareMessageLimitExceeded' }),
+    );
+    await coordinator().advance('channel');
+
+    expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
+      message: 'ShareMessageLimitExceeded',
+      type: 'ShareMessageLimitExceeded',
+    });
   });
 });

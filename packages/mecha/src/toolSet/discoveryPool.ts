@@ -2,12 +2,15 @@ import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
-import type { LobeToolManifest } from '@lobechat/context-engine';
+import { runtimeManagedToolIds } from '@lobechat/builtin-tools';
+import type { GenerateToolsParams, LobeToolManifest } from '@lobechat/context-engine';
 import {
   type BuiltinToolResolveContext,
   type DeviceExecutionTarget,
   executionTargetToRuntimeMode,
+  type LobeAgentChatConfig,
   type LobeBuiltinTool,
+  resolveToolMode,
   type ToolExecutor,
   type ToolSource,
 } from '@lobechat/types';
@@ -46,6 +49,22 @@ export const resolveInvocationToolIds = (request: InvocationToolIdsRequest): str
       ...(request.connectorIds ?? []),
     ]),
   ];
+};
+
+/** Build the initial invocation set. Subsequent explicit activations use the full eligible pool. */
+export const initialToolSelection = (
+  toolIds: string[] | undefined,
+  chatConfig?: Pick<LobeAgentChatConfig, 'enableAgentMode' | 'toolMode'> | null,
+  skipDefaultTools?: boolean,
+): Pick<GenerateToolsParams, 'toolIds' | 'excludeDefaultToolIds' | 'skipDefaultTools'> => {
+  const deferCapabilities = !skipDefaultTools && resolveToolMode(chatConfig) === 'agent';
+  return {
+    excludeDefaultToolIds: deferCapabilities ? runtimeManagedToolIds : undefined,
+    skipDefaultTools: skipDefaultTools || undefined,
+    toolIds: deferCapabilities
+      ? toolIds?.filter((id) => !runtimeManagedToolIds.includes(id))
+      : toolIds,
+  };
 };
 
 export interface DiscoveryPoolRequest {

@@ -25,6 +25,7 @@ import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory'
 import { shouldRecordGatewayError } from '@/server/modules/AgentRuntime/gatewayErrorRecord';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
+import type { OperationCompletionShareVisitor } from '@/server/services/agentRuntime/CompletionLifecycle/types';
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { createDefaultSnapshotStore } from '@/server/services/agentRuntime/snapshotStore';
 import { releaseHeteroSteers } from '@/server/services/aiAgent/steerQueue/hetero';
@@ -178,6 +179,13 @@ export interface HeterogeneousAgentServiceOptions {
   agentOperationModel?: AgentOperationModel;
   /** Inject a pre-built persistence handler (used by tests). */
   persistenceHandler?: HeterogeneousPersistenceHandler;
+  /**
+   * The share visitor this run belongs to (from the operation row the dispatch
+   * stamped). A visitor's topic and messages are hidden from default-scoped
+   * models, so without it every write of the run matches nothing; it also
+   * marks the completion as a share run.
+   */
+  shareVisitor?: OperationCompletionShareVisitor;
   /** Inject a snapshot store (used by tests); defaults to the env-resolved store. */
   snapshotStore?: ISnapshotStore | null;
   /**
@@ -222,6 +230,7 @@ export class HeterogeneousAgentService {
   private readonly streamEventManager: IStreamEventManager;
   private readonly topicModel: TopicModel;
   private readonly traceRecorder: HeteroTraceRecorder;
+  private readonly shareVisitor?: OperationCompletionShareVisitor;
   private readonly userId: string;
   private readonly workspaceId?: string;
 
@@ -237,9 +246,12 @@ export class HeterogeneousAgentService {
     this.queuedFollowUpStarter = options.startQueuedFollowUp;
     this.agentOperationModel =
       options.agentOperationModel ?? new AgentOperationModel(db, userId, workspaceId);
-    this.messageModel = new MessageModel(db, userId, workspaceId);
+    this.shareVisitor = options.shareVisitor;
+    const visitorScope = { includeShareVisitor: !!options.shareVisitor };
+    this.messageModel = new MessageModel(db, userId, workspaceId, undefined, visitorScope);
     this.streamEventManager = options.streamEventManager ?? createStreamEventManager();
-    this.topicModel = options.topicModel ?? new TopicModel(db, userId, workspaceId);
+    this.topicModel =
+      options.topicModel ?? new TopicModel(db, userId, workspaceId, undefined, visitorScope);
     this.traceRecorder = new HeteroTraceRecorder(
       options.snapshotStore !== undefined ? options.snapshotStore : createDefaultSnapshotStore(),
     );
@@ -723,7 +735,9 @@ export class HeterogeneousAgentService {
     // and on success the delivery-checker card + verify gate run against the task's
     // plan. `completeOperation` owns the (formerly hand-rolled) synthetic-state
     // build, so the goal+reply turns and trace aggregates are mapped in ONE place.
-    await new CompletionLifecycle(this.db, this.userId, this.workspaceId).completeOperation(
+    await new CompletionLifecycle(this.db, this.userId, this.workspaceId, {
+      includeShareVisitor: !!this.shareVisitor,
+    }).completeOperation(
       {
         agentId,
         assistantMessageId,
@@ -737,6 +751,7 @@ export class HeterogeneousAgentService {
         orchestrationRole,
         provider: totals?.provider,
         serializedHooks,
+        shareVisitor: this.shareVisitor,
         stepCount: totals?.stepCount ?? null,
         topicId,
         usage: {

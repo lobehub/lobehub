@@ -1,0 +1,42 @@
+import * as stylex from '@stylexjs/stylex';
+
+export const densityTokens = stylex.defineVars({
+  '--lobe-density-control-height': '32px',
+  '--lobe-density-font-size': '14px',
+  '--lobe-density-header-height': '44px',
+  '--lobe-density-icon-box': '28px',
+  '--lobe-density-icon-size': '18px',
+  '--lobe-density-line-height': '22px',
+  '--lobe-density-list-row-height': '48px',
+  '--lobe-density-page-title-font-size': '16px',
+  '--lobe-density-radius': '8px',
+  '--lobe-density-row-height': '36px',
+  '--lobe-density-section-gap': '16px',
+  '--lobe-density-toolbar-height': '40px',
+});
+
+export const sidebarRow = stylex.defineVars({
+  controlHeight: 'var(--lobe-density-control-height)',
+  gap: '8px',
+  headerHeight: 'var(--lobe-density-header-height)',
+  height: 'var(--lobe-density-row-height)',
+  iconBox: 'var(--lobe-density-icon-box)',
+  iconSize: 'var(--lobe-density-icon-size)',
+  labelFontSize: '12px',
+  labelFontWeight: '500',
+  listRowHeight: 'var(--lobe-density-list-row-height)',
+  metaFontSize: '12px',
+  pageTitleFontSize: 'var(--lobe-density-page-title-font-size)',
+  paddingInline: '4px',
+  paneBlockEnd: '12px',
+  paneBlockStart: '4px',
+  paneInline: '6px',
+  radius: 'var(--lobe-density-radius)',
+  sectionGap: 'var(--lobe-density-section-gap)',
+  sectionHeaderHeight: 'var(--lobe-density-control-height)',
+  textFontSize: 'var(--lobe-density-font-size)',
+  textLineHeight: 'var(--lobe-density-line-height)',
+  toolbarHeight: 'var(--lobe-density-toolbar-height)',
+  toolbarPaddingInlineEnd: '8px',
+  toolbarPaddingInlineStart: '12px',
+});

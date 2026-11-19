@@ -90,7 +90,8 @@ const AgentToolsSection = memo<{
     </DropdownMenu>
   );
 
-  const agentPlugins = useAgentStore((s) => agentSelectors.getAgentConfigById(agentId)(s)?.plugins);
+  const config = useAgentStore(agentSelectors.getAgentConfigById(agentId));
+  const agentPlugins = config?.plugins;
   const setEnabled = (identifier: string, enabled: boolean) =>
     updateAgentConfigById(agentId, {
       plugins: upsertConnectorEnabled(agentPlugins, identifier, enabled),
@@ -109,12 +110,14 @@ const AgentToolsSection = memo<{
       <PluginTag
         agentId={agentId}
         disabled={!canEdit}
-        enabled={getConnectorMode(agentPlugins, connector.identifier) === 'auto'}
         key={connector.id}
         pluginId={connector.identifier}
         removable={canManageRow}
         showAuthor={!!activeWorkspaceId}
         variant={isList ? 'row' : 'chip'}
+        enabled={
+          getConnectorMode(agentPlugins, connector.identifier, config?.chatConfig) === 'auto'
+        }
         onOpen={isList ? onOpenDetail : undefined}
         onToggle={isList ? (next) => void setEnabled(connector.identifier, next) : undefined}
         onRemove={() => {
@@ -133,7 +136,8 @@ const AgentToolsSection = memo<{
         rows={tags}
         activeCount={
           agentConnectors.filter(
-            (connector) => getConnectorMode(agentPlugins, connector.identifier) === 'auto',
+            (connector) =>
+              getConnectorMode(agentPlugins, connector.identifier, config?.chatConfig) === 'auto',
           ).length
         }
       />

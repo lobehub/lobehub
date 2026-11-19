@@ -6,6 +6,13 @@ export default {
   'people.noOthers': 'No one else is in this workspace yet',
   'people.searchMore': 'Showing the first 50 members. Search to find more.',
   'receipt.errorReason': 'Failure reason',
+  'receipt.errorShareHeteroDevice': "The creator's device is offline. Try again later.",
+  'receipt.errorShareHeteroUnsupported':
+    "This Agent can run for you only with its creator's permission. Ask its creator for access.",
+  'receipt.errorShareMessageLimit':
+    'You have sent all the messages its creator allows to this shared Agent.',
+  'receipt.errorShareSpendLimit':
+    'This shared Agent reached the monthly usage limit its creator set. It will be available again next month.',
   'receipt.errorUnavailable':
     'No detailed reason was recorded. Check the Agent’s model and device settings before sending again.',
   'sort.by': 'Sort by',
@@ -36,6 +43,7 @@ export default {
     'This Agent is no longer available. Remove it and choose another.',
   'environment.checkingDevice': 'Checking status',
   'environment.followAgent': "Use the Agent's own settings",
+  'environment.remoteHost': 'This Agent runs on its own host, so there is no device to choose.',
   'environment.configurationFailed': 'Could not load this Agent’s settings. Try again.',
   'environment.configurationLoading': 'Loading this Agent’s settings…',
   'environment.connectorUpgradeRequired':

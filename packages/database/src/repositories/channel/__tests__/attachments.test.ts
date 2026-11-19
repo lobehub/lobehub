@@ -15,11 +15,11 @@ const execution = new ChannelExecutionRepository(db);
 beforeEach(fixture.setup);
 afterEach(fixture.cleanup);
 
-const createFile = async (name: string) => {
+const createFile = async (name: string, fileType = 'text/plain') => {
   const [file] = await db
     .insert(files)
     .values({
-      fileType: 'text/plain',
+      fileType,
       name,
       size: 1,
       url: `files/${name}`,
@@ -81,5 +81,26 @@ describe('channel message attachments', () => {
     expect(await execution.input(channel.id, job.id)).toEqual([
       expect.objectContaining({ fileIds: [kept], id: message.id }),
     ]);
+  });
+
+  // A message of only an image left its list row's preview blank.
+  it('previews a message without text by its first attachment type and count', async () => {
+    const { asMember, channel } = await fixture.createTeamChannel();
+    const [image, text] = [await createFile('shot.png', 'image/png'), await createFile('a.txt')];
+
+    await asMember.send(channel.id, {
+      content: '',
+      fileIds: [image, text],
+      requestKey: 'req-1',
+      routing: 'decision',
+    });
+
+    expect((await asMember.list()).find((item) => item.id === channel.id)).toMatchObject({
+      lastMessage: {
+        attachments: { count: 2, fileType: 'image/png' },
+        author: { id: fixture.memberId, type: 'user' },
+        content: '',
+      },
+    });
   });
 });

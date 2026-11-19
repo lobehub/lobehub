@@ -6,6 +6,7 @@ import { advanceGoal } from '@/server/services/goal/advanceGoal';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 
 import { BaseService } from '../common/base.service';
+import { resolvePagination } from '../helpers/pagination';
 import type { ServiceResult } from '../types';
 import type { DeletedResource } from '../types/common.type';
 import type {
@@ -14,6 +15,9 @@ import type {
   RestartGoalRequest,
   UpdateGoalRequest,
 } from '../types/goal.type';
+
+/** The model's own default page size, kept so omitting `limit` still returns 50 rows. */
+export const GOAL_LIST_DEFAULT_LIMIT = 50;
 
 /**
  * Goals REST service.
@@ -47,11 +51,12 @@ export class GoalRestService extends BaseService {
     return goal;
   }
 
-  async listGoals(query: GoalListQuery): ServiceResult<unknown> {
+  async listGoals(query: GoalListQuery) {
+    const { limit, offset } = resolvePagination(query, GOAL_LIST_DEFAULT_LIMIT);
     return this.goalModel.list({
       agentId: query.agentId,
-      limit: query.limit,
-      offset: query.offset,
+      limit,
+      offset,
       projectId: query.projectId,
       statuses: query.statuses,
       topicId: query.topicId,

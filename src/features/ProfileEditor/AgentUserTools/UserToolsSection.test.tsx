@@ -128,6 +128,15 @@ describe('UserToolsSection — Workspace/User tool count', () => {
     expect(labelText()).toContain('· 1');
   });
 
+  it('counts a newly connected tool without an agent configuration entry', () => {
+    mocks.toolState.connectors = [
+      { identifier: 'notion', sourceType: 'custom', status: 'connected', isEnabled: true },
+      { identifier: 'slack', sourceType: 'custom', status: 'pending', isEnabled: true },
+    ];
+    renderSection();
+    expect(labelText()).toContain('· 1');
+  });
+
   it('counts a connector turned on with an auto entry and leaves out one turned off', () => {
     // A connector is two-state: on is an explicit `auto` entry, never a pin.
     mocks.agentConfig = {

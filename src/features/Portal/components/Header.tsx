@@ -1,10 +1,6 @@
 'use client';
 
-import {
-  AGENT_CHAT_TOPIC_PAGE_URL,
-  AGENT_CHAT_TOPIC_URL,
-  DESKTOP_HEADER_ICON_SMALL_SIZE,
-} from '@lobechat/const';
+import { AGENT_CHAT_TOPIC_PAGE_URL, AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { ArrowLeft, X } from 'lucide-react';
 import { type CSSProperties, Fragment, memo, type ReactNode } from 'react';
@@ -15,6 +11,7 @@ import NavHeader from '@/features/NavHeader';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 
 import { PortalMoreMenuSlot } from './PortalMoreMenu/context';
 
@@ -26,6 +23,7 @@ const Header = memo<{
   style?: CSSProperties;
   title: ReactNode;
 }>(({ onClose, paddingInline = 8, rightExtra, style, title }) => {
+  const headerActionSize = useHeaderActionSize(true);
   const { t } = useTranslation('common');
   const location = useLocation();
   const navigate = useWorkspaceAwareNavigate();
@@ -50,7 +48,7 @@ const Header = memo<{
             <ActionIcon
               aria-label={t('back')}
               icon={ArrowLeft}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              size={headerActionSize}
               title={t('back')}
               onClick={goBack}
             />
@@ -67,7 +65,7 @@ const Header = memo<{
           <ActionIcon
             aria-label={t('close')}
             icon={X}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={headerActionSize}
             title={t('close')}
             onClick={() => {
               if (onClose) {

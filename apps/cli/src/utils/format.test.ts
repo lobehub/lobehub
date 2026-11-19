@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  confirm,
   formatCost,
   formatNumber,
   outputJson,
@@ -209,5 +210,19 @@ describe('timeUntil', () => {
 
   it('degrades an unparseable date to a placeholder', () => {
     expect(timeUntil('not a date')).toBe('-');
+  });
+});
+
+describe('confirm', () => {
+  it('rejects instead of waiting on stdin when there is no terminal', async () => {
+    const isTTY = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+    Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: undefined });
+
+    try {
+      await expect(confirm('Delete it?')).rejects.toThrow(/Re-run with --yes/);
+    } finally {
+      if (isTTY) Object.defineProperty(process.stdin, 'isTTY', isTTY);
+      else delete (process.stdin as { isTTY?: boolean }).isTTY;
+    }
   });
 });

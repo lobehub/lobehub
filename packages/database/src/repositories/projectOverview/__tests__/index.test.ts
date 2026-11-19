@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
+import { deleteTestUsers } from '../../../core/testCleanup';
 import { AgentModel } from '../../../models/agent';
 import { ProjectModel } from '../../../models/project';
 import { TaskModel } from '../../../models/task';
@@ -40,12 +41,12 @@ const createTask = async (
 
 describe('ProjectOverviewRepository.list', () => {
   beforeEach(async () => {
-    await serverDB.delete(users);
+    await deleteTestUsers(serverDB);
     await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
   });
 
   afterEach(async () => {
-    await serverDB.delete(users);
+    await deleteTestUsers(serverDB);
   });
 
   it('returns nothing when the caller has no projects', async () => {

@@ -889,6 +889,10 @@ export default {
   'channel.statusStarting': 'Starting',
 
   'share.entry': 'Share this Agent',
+  'share.settings.device.desc':
+    'Choose who may run this Agent on your execution environment, for example to read files or run commands. Claude Code and Codex Agents run only there, so other visitors can’t use them. Chatting with the Agent doesn’t include device access.',
+  'share.settings.device.title': 'Device access',
+  'share.settings.device.who': 'Who can use your device',
   'share.settings.limits.desc':
     'Every visitor run is billed to your account, so these caps are what keep a shared link from running up your bill. They always apply — you can change the numbers, but not turn them off.',
   'share.settings.limits.maxFileStorageHint':
@@ -898,14 +902,10 @@ export default {
   'share.settings.limits.maxFileStorageLabel': 'File storage limit',
   'share.settings.limits.maxFileStorageWorkspaceHint':
     'Files visitors attach are stored in the Workspace. Uploads stop once they reach this total; set 0 to turn attachments off.',
-  'share.settings.limits.maxTopicsPerVisitor': 'Topics per visitor',
-  'share.settings.limits.maxTopicsPerVisitorHint':
-    'How many separate topics each signed-in visitor can start.',
-  'share.settings.limits.maxTopicsPerVisitorUnit': 'topics',
-  'share.settings.limits.maxTurnsPerTopic': 'Turns per topic',
-  'share.settings.limits.maxTurnsPerTopicHint':
-    'How many messages a visitor can send inside one topic.',
-  'share.settings.limits.maxTurnsPerTopicUnit': 'turns',
+  'share.settings.limits.maxMessagesPerVisitor': 'Messages per visitor',
+  'share.settings.limits.maxMessagesPerVisitorHint':
+    'How many messages each signed-in visitor can send to this Agent in total. The Agent’s replies don’t count.',
+  'share.settings.limits.maxMessagesPerVisitorUnit': 'messages',
   'share.settings.limits.monthlySpendLimit': 'Monthly spend cap',
   'share.settings.limits.monthlySpendLimitHint':
     'Visitor runs stop once this month’s spend on this Agent reaches the cap. Resets on the 1st of each month (UTC).',
@@ -958,24 +958,36 @@ export default {
   'share.settings.permissions.allowReadMemory': 'Allow reading my memory',
   'share.settings.permissions.allowReadMemoryHint':
     'The Agent may draw on your long-term memory while answering a visitor.',
-  'share.settings.permissions.deviceAccess': 'Execution environment',
-  'share.settings.permissions.deviceAccessHint':
-    'Lets visitors use this Agent’s execution environment to run commands and read or write files there.',
-  'share.settings.permissions.deviceAccessOption.all': 'All visitors',
-  'share.settings.permissions.deviceAccessOption.allowlist': 'Specific visitors',
+  'share.settings.permissions.deviceAccessConfirm.messageLimit':
+    'The monthly spend cap does not limit that usage. Only the message limit per visitor does.',
+  'share.settings.permissions.deviceAccessOption.allowlist': 'People from contacts',
   'share.settings.permissions.deviceAccessOption.none': 'No visitors',
-  'share.settings.permissions.deviceAllowEmailsHint':
-    'Matches the visitor’s verified account email. No one can use it until you add one.',
-  'share.settings.permissions.deviceAllowEmailsPlaceholder':
-    'Enter the visitors’ account emails, then press Enter',
+  'share.settings.permissions.deviceAccessConfirm.commands':
+    'They can run any command and read or write any file on the machine this Agent runs on, including through Claude Code or Codex.',
+  'share.settings.permissions.deviceAccessConfirm.intro':
+    'People you add will run this Agent on your execution environment:',
+  'share.settings.permissions.deviceAccessConfirm.ok': 'Allow listed people',
+  'share.settings.permissions.deviceAccessConfirm.subscription':
+    'Claude Code and Codex runs use the model subscription signed in on that machine.',
+  'share.settings.permissions.deviceAccessConfirm.title':
+    'Let people use your execution environment?',
+  'share.settings.permissions.deviceAllowContactsUnavailable':
+    'Only people in your contacts can be added, and contacts aren’t available for your account yet.',
+  'share.settings.permissions.deviceAllowHint':
+    'Only people in this Agent’s contacts can be added. Removing someone from contacts also removes their access.',
+  'share.settings.permissions.deviceAllowLimitReached': 'You can add up to {{limit}} people.',
+  'share.settings.permissions.deviceAllowLoadFailed':
+    'Couldn’t load your contacts. Refresh to try again.',
+  'share.settings.permissions.deviceAllowNoContacts':
+    'Your contacts are empty. Add people to your contacts first.',
+  'share.settings.permissions.deviceAllowPlaceholder': 'Choose people from your contacts',
+  'share.settings.permissions.deviceAllowUnlisted':
+    'No longer in contacts, so they can’t use it: {{names}}. They’re removed the next time you edit this list.',
   'share.settings.permissions.desc':
     'What a visitor’s run may read, and what the visitor gets to see back.',
   'share.settings.permissions.showErrorDetails': 'Show error details to visitors',
   'share.settings.permissions.showErrorDetailsHint':
     'Off by default: visitors see a generic failure notice instead of raw error text.',
-  'share.settings.permissions.showModelInfo': 'Show which model is used',
-  'share.settings.permissions.showModelInfoHint':
-    'Off by default: your model and provider choice stays hidden.',
   'share.settings.permissions.title': 'Permissions',
   'share.settings.tabs.access': 'Access',
   'share.settings.tabs.profile': 'Public profile',
@@ -1048,11 +1060,15 @@ export default {
   'share.visitor.access.signInDesc':
     'Sign in to start chatting with this shared agent. Your topics stay tied to your account.',
   'share.visitor.access.signInTitle': 'Sign in to continue',
+  'share.visitor.chat.channelsDisabled':
+    "Chatting with shared agents isn't available for your account yet.",
   'share.visitor.errors.fileUnavailable':
     'One of the attachments is no longer available. Remove it and try again.',
   'share.visitor.errors.generic': 'Failed to send the message. Please try again.',
+  'share.visitor.errors.heteroDeviceUnavailable':
+    "The creator's device is offline. Try again later.",
   'share.visitor.errors.heterogeneousUnsupported':
-    "This shared agent isn't available for visitor chat yet. Please contact its owner.",
+    "This agent can run for you only with its creator's permission. Ask its creator for access.",
   'share.visitor.errors.insufficientBudget':
     'This shared agent has run out of budget. Please contact its owner.',
   'share.visitor.errors.promptTooLong':
@@ -1064,9 +1080,6 @@ export default {
   'share.visitor.errors.spendLimit':
     'This shared agent has reached its monthly usage limit set by its creator. It will be available again next month.',
   'share.visitor.errors.stopFailed': "Couldn't stop the run. Please try again.",
-  'share.visitor.errors.topicLimit': 'You have reached the topic limit on this shared agent.',
-  'share.visitor.errors.turnLimit':
-    'This topic has reached its turn limit. Start a new topic to continue.',
   'share.visitor.errors.unavailable':
     'This topic is no longer available. Try switching to another topic or starting a new one.',
   'share.visitor.input.placeholder': 'Message this shared agent…',
@@ -1095,8 +1108,6 @@ export default {
   'share.visitor.profile.metrics.conversationsCaption': 'started so far',
   'share.visitor.profile.metrics.tools': 'Open tools',
   'share.visitor.profile.metrics.toolsCaption': 'available to you',
-  'share.visitor.profile.metrics.turns': 'Each topic',
-  'share.visitor.profile.metrics.turnsCaption': 'turns at most',
   'share.visitor.profile.metrics.views': 'Views',
   'share.visitor.profile.metrics.viewsCaption': 'on this page',
   'share.visitor.profile.metrics.visitors': 'People who used it',
@@ -1109,11 +1120,11 @@ export default {
     'It runs in the owner Workspace, and every reply is paid from the Workspace budget.',
   'share.visitor.profile.terms.desc':
     'Today these rules only show up as errors once you hit them. Here they are up front.',
+  'share.visitor.profile.terms.messages_one': 'You can send up to {{count}} message.',
+  'share.visitor.profile.terms.messages_other': 'You can send up to {{count}} messages.',
   'share.visitor.profile.terms.title': 'Before you start',
   'share.visitor.profile.terms.tools_one': '{{count}} tool is open to visitors.',
   'share.visitor.profile.terms.tools_other': '{{count}} tools are open to visitors.',
-  'share.visitor.profile.terms.topics': 'You can open up to {{count}} topics.',
-  'share.visitor.profile.terms.turns': 'Each topic allows up to {{count}} turns.',
   'share.visitor.profile.terms.uploads':
     'You can attach files; this Agent has {{size}} of file storage for visitors.',
   'share.visitor.profile.terms.uploadsOff': 'Attachments are turned off.',
@@ -1121,10 +1132,6 @@ export default {
     'The creator has turned on topic access and may read the messages in your topics.',
   'share.visitor.profile.terms.visibilityPrivate': 'Only you can see your topics.',
   'share.visitor.topBar.home': 'Go to my LobeHub',
-  'share.visitor.topics.empty': 'No topics yet',
-  'share.visitor.topics.new': 'New topic',
-  'share.visitor.topics.title': 'Topics',
-  'share.visitor.topics.untitled': 'Untitled topic',
   'share.visitor.upload.creatorStorageBlocked':
     "This Agent's upload space is full. Ask its creator to free up room or raise the cap.",
   'share.visitor.upload.fileTooLarge': 'Files must be under {{max}}.',

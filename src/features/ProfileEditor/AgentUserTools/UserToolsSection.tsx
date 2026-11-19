@@ -1,6 +1,6 @@
 'use client';
 
-import { getOptedInPluginIds } from '@lobechat/types';
+import { getConnectorMode, getOptedInPluginIds } from '@lobechat/types';
 import { Button, Flexbox, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
@@ -11,6 +11,7 @@ import type { AgentToolProps } from '@/features/ProfileEditor/AgentTool';
 import SharedAgentTool from '@/features/ProfileEditor/AgentTool';
 import PluginTag from '@/features/ProfileEditor/PluginTag';
 import { getVisibleProfileToolIds } from '@/features/ProfileEditor/profileToolVisibility';
+import { getConnectedConnectorIds } from '@/helpers/toolEngineering/connectorActivation';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
@@ -69,10 +70,21 @@ const UserToolsSection = memo<Props>(
       () => new Set(nonProfileConfigurableBuiltinToolIds),
       [nonProfileConfigurableBuiltinToolIds],
     );
-    const userToolCount = getVisibleProfileToolIds(getOptedInPluginIds(config?.plugins), {
-      agentConnectorIdentifiers,
-      nonConfigurableBuiltinToolIdentifiers: nonProfileConfigurableBuiltinToolIdentifiers,
-    }).length;
+    const connectedIds = useToolStore((s) => getConnectedConnectorIds(s, agentId), isEqual);
+    const userToolCount = getVisibleProfileToolIds(
+      [
+        ...new Set([
+          ...getOptedInPluginIds(config?.plugins),
+          ...connectedIds.filter(
+            (id) => getConnectorMode(config?.plugins, id, config?.chatConfig) === 'auto',
+          ),
+        ]),
+      ],
+      {
+        agentConnectorIdentifiers,
+        nonConfigurableBuiltinToolIdentifiers: nonProfileConfigurableBuiltinToolIdentifiers,
+      },
+    ).length;
     // In a workspace, this section's base tools are the WORKSPACE dimension
     // (`connector.list` is workspace-scoped), not the caller's personal tools —
     // label it so the user knows the tools are shared workspace-scoped, not

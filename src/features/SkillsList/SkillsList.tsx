@@ -1,15 +1,15 @@
 import { EMPTY_ARRAY } from '@lobechat/const';
-import { createStaticStyles, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
+import { createStaticStyles, cx, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { ChevronRightIcon, FileIcon, FolderIcon } from 'lucide-react';
 import type React from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 
 export interface SkillListItem {
   description?: string;
-  /** Manual invocation only, as declared by the skill; not a disabled state. */
-  disableModelInvocation?: boolean;
   /**
    * Optional file tree for skills that bundle markdown/script assets. When
    * empty or omitted the row stays atomic (no chevron, no expansion).
@@ -22,6 +22,8 @@ export interface SkillListItem {
 }
 
 interface SkillsListProps {
+  /** The WorkingSidebar row system. */
+  compact?: boolean;
   items: SkillListItem[];
   onOpenFile?: (item: SkillListItem, relativePath: string) => void;
   onOpenSkill?: (item: SkillListItem) => void;
@@ -34,6 +36,8 @@ interface SkillsListProps {
    */
   onSkillDragStart?: (item: SkillListItem, event: React.DragEvent) => void;
 }
+
+const COMPACT_CHEVRON_SLOT = 16;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chevron: css`
@@ -87,6 +91,37 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   itemIcon: css`
     flex-shrink: 0;
     color: ${cssVar.colorTextTertiary};
+  `,
+  compactItem: css`
+    height: auto;
+    min-height: ${sidebarRow.controlHeight};
+    padding-inline: ${sidebarRow.paddingInline};
+  `,
+  compactChildItem: css`
+    height: auto;
+    min-height: ${sidebarRow.controlHeight};
+    padding-inline-end: ${sidebarRow.paddingInline};
+    font-size: ${sidebarRow.textFontSize};
+  `,
+  compactIconBox: css`
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+
+    width: ${sidebarRow.iconBox};
+    height: ${sidebarRow.iconBox};
+
+    color: ${cssVar.colorTextTertiary};
+  `,
+  compactChevronSlot: css`
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+
+    width: ${COMPACT_CHEVRON_SLOT}px;
+    height: ${sidebarRow.textLineHeight};
   `,
   treeChevronSlot: css`
     display: flex;
@@ -142,8 +177,10 @@ const buildSkillTree = (paths: string[]): TreeNode[] => {
 
 const TREE_BASE_INSET = 24;
 const TREE_DEPTH_INDENT = 14;
+const COMPACT_TREE_DEPTH_INDENT = 12;
 
 interface TreeRowProps {
+  compact?: boolean;
   depth: number;
   expanded: Set<string>;
   node: TreeNode;
@@ -151,70 +188,97 @@ interface TreeRowProps {
   onToggleFolder: (folderPath: string) => void;
 }
 
-const TreeRow = memo<TreeRowProps>(({ depth, expanded, node, onOpenFile, onToggleFolder }) => {
-  const isOpen = expanded.has(node.path);
-  const paddingInlineStart = TREE_BASE_INSET + depth * TREE_DEPTH_INDENT;
+const TreeRow = memo<TreeRowProps>(
+  ({ compact, depth, expanded, node, onOpenFile, onToggleFolder }) => {
+    const density = useDensityTokens();
+    const isOpen = expanded.has(node.path);
+    const paddingInlineStart = compact
+      ? density.paddingInline +
+        COMPACT_CHEVRON_SLOT +
+        density.gap +
+        depth * COMPACT_TREE_DEPTH_INDENT
+      : TREE_BASE_INSET + depth * TREE_DEPTH_INDENT;
+    const rowClassName = cx(styles.childItem, compact && styles.compactChildItem);
+    const iconSize = compact ? density.iconSize : 12;
+    const rowGap = compact ? density.gap : 6;
+    const labelStyle = {
+      color: 'inherit',
+      flex: 1,
+      fontSize: compact ? density.fontSize : 12,
+      minWidth: 0,
+    };
+    const renderIcon = (icon: typeof FileIcon) =>
+      compact ? (
+        <span className={styles.compactIconBox}>
+          <Icon icon={icon} size={iconSize} />
+        </span>
+      ) : (
+        <Icon className={styles.childItemIcon} icon={icon} size={iconSize} />
+      );
 
-  if (node.isDirectory) {
+    if (node.isDirectory) {
+      return (
+        <>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={rowClassName}
+            gap={rowGap}
+            style={{ paddingInlineStart }}
+            onClick={() => onToggleFolder(node.path)}
+          >
+            <span className={compact ? styles.compactChevronSlot : styles.treeChevronSlot}>
+              <Icon
+                className={`${styles.chevron} ${isOpen ? styles.chevronExpanded : ''}`}
+                icon={ChevronRightIcon}
+                size={12}
+              />
+            </span>
+            {renderIcon(FolderIcon)}
+            <Text ellipsis style={labelStyle}>
+              {node.name}
+            </Text>
+          </Flexbox>
+          {isOpen &&
+            node.children.map((child) => (
+              <TreeRow
+                compact={compact}
+                depth={depth + 1}
+                expanded={expanded}
+                key={child.path}
+                node={child}
+                onOpenFile={onOpenFile}
+                onToggleFolder={onToggleFolder}
+              />
+            ))}
+        </>
+      );
+    }
+
     return (
-      <>
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={styles.childItem}
-          gap={6}
-          style={{ paddingInlineStart }}
-          onClick={() => onToggleFolder(node.path)}
-        >
-          <span className={styles.treeChevronSlot}>
-            <Icon
-              className={`${styles.chevron} ${isOpen ? styles.chevronExpanded : ''}`}
-              icon={ChevronRightIcon}
-              size={12}
-            />
-          </span>
-          <Icon className={styles.childItemIcon} icon={FolderIcon} size={12} />
-          <Text ellipsis style={{ color: 'inherit', flex: 1, fontSize: 12, minWidth: 0 }}>
-            {node.name}
-          </Text>
-        </Flexbox>
-        {isOpen &&
-          node.children.map((child) => (
-            <TreeRow
-              depth={depth + 1}
-              expanded={expanded}
-              key={child.path}
-              node={child}
-              onOpenFile={onOpenFile}
-              onToggleFolder={onToggleFolder}
-            />
-          ))}
-      </>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={rowClassName}
+        gap={rowGap}
+        style={{ paddingInlineStart }}
+        title={node.path}
+        onClick={() => onOpenFile(node.path)}
+      >
+        <span className={compact ? styles.compactChevronSlot : styles.treeChevronSlot} />
+        {renderIcon(FileIcon)}
+        <Text ellipsis style={labelStyle}>
+          {node.name}
+        </Text>
+      </Flexbox>
     );
-  }
-
-  return (
-    <Flexbox
-      horizontal
-      align={'center'}
-      className={styles.childItem}
-      gap={6}
-      style={{ paddingInlineStart }}
-      title={node.path}
-      onClick={() => onOpenFile(node.path)}
-    >
-      <span className={styles.treeChevronSlot} />
-      <Icon className={styles.childItemIcon} icon={FileIcon} size={12} />
-      <Text ellipsis style={{ color: 'inherit', flex: 1, fontSize: 12, minWidth: 0 }}>
-        {node.name}
-      </Text>
-    </Flexbox>
-  );
-});
+  },
+);
 
 TreeRow.displayName = 'SkillsListTreeRow';
 
 interface SkillRowProps {
+  compact?: boolean;
   expanded: boolean;
   item: SkillListItem;
   onOpenFile?: (item: SkillListItem, relativePath: string) => void;
@@ -230,6 +294,7 @@ interface SkillRowProps {
 // referentially equal and the memo actually bails out.
 const SkillRow = memo<SkillRowProps>(
   ({
+    compact,
     expanded,
     item,
     onOpenFile,
@@ -239,7 +304,12 @@ const SkillRow = memo<SkillRowProps>(
     onToggle,
     reserveChevronSlot,
   }) => {
-    const { t } = useTranslation('chat');
+    const density = useDensityTokens();
+    const slotStyle = {
+      flexShrink: 0,
+      height: compact ? density.lineHeight : 20,
+      width: compact ? COMPACT_CHEVRON_SLOT : 20,
+    };
     const activateSkill = onSelectSkill ?? onOpenSkill;
     const files = onSelectSkill ? EMPTY_ARRAY : (item.files ?? EMPTY_ARRAY);
     const hasFiles = files.length > 0;
@@ -270,9 +340,9 @@ const SkillRow = memo<SkillRowProps>(
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.item}
+        className={cx(styles.item, compact && styles.compactItem)}
         draggable={!!onSkillDragStart}
-        gap={6}
+        gap={compact ? density.gap : 6}
         role={activateSkill ? 'button' : undefined}
         tabIndex={activateSkill ? 0 : undefined}
         onClick={activateSkill ? () => activateSkill(item) : undefined}
@@ -289,7 +359,7 @@ const SkillRow = memo<SkillRowProps>(
           <Flexbox
             align={'center'}
             justify={'center'}
-            style={{ cursor: 'pointer', flexShrink: 0, height: 20, width: 20 }}
+            style={{ ...slotStyle, cursor: 'pointer' }}
             onClick={(e) => {
               e.stopPropagation();
               onToggle(item.id);
@@ -298,13 +368,19 @@ const SkillRow = memo<SkillRowProps>(
             <Icon
               className={`${styles.chevron} ${expanded ? styles.chevronExpanded : ''}`}
               icon={ChevronRightIcon}
-              size={14}
+              size={compact ? 12 : 14}
             />
           </Flexbox>
         ) : !onSelectSkill && reserveChevronSlot ? (
-          <span style={{ flexShrink: 0, height: 20, width: 20 }} />
+          <span style={slotStyle} />
         ) : null}
-        <Icon className={styles.itemIcon} icon={SkillsIcon} size={14} />
+        {compact ? (
+          <span className={styles.compactIconBox}>
+            <Icon icon={SkillsIcon} size={density.iconSize} />
+          </span>
+        ) : (
+          <Icon className={styles.itemIcon} icon={SkillsIcon} size={14} />
+        )}
         {item.description ? (
           <Tooltip
             placement={'left'}
@@ -314,11 +390,6 @@ const SkillRow = memo<SkillRowProps>(
           </Tooltip>
         ) : (
           nameNode
-        )}
-        {item.disableModelInvocation && (
-          <Tag size={'small'} style={{ flexShrink: 0 }}>
-            {t('workingPanel.skills.manualOnly')}
-          </Tag>
         )}
       </Flexbox>
     );
@@ -331,6 +402,7 @@ const SkillRow = memo<SkillRowProps>(
           onOpenFile &&
           tree.map((node) => (
             <TreeRow
+              compact={compact}
               depth={0}
               expanded={expandedFolders}
               key={node.path}
@@ -347,7 +419,7 @@ const SkillRow = memo<SkillRowProps>(
 SkillRow.displayName = 'SkillsListSkillRow';
 
 const SkillsList = memo<SkillsListProps>(
-  ({ items, onOpenFile, onOpenSkill, onSelectSkill, onSkillDragStart }) => {
+  ({ compact, items, onOpenFile, onOpenSkill, onSelectSkill, onSkillDragStart }) => {
     const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
     const toggle = useCallback((id: string) => {
@@ -365,9 +437,10 @@ const SkillsList = memo<SkillsListProps>(
     );
 
     return (
-      <Flexbox gap={2}>
+      <Flexbox gap={compact ? 1 : 2}>
         {items.map((item) => (
           <SkillRow
+            compact={compact}
             expanded={expanded.has(item.id)}
             item={item}
             key={item.id}

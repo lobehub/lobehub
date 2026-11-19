@@ -221,6 +221,23 @@ describe('GoalDetailPage', () => {
     ).toBeTruthy();
   });
 
+  // The conversation is the way to talk to the goal's agent, so it is on screen
+  // from the start rather than behind a header entry.
+  it('opens the goal conversation by default', () => {
+    render(<GoalDetailPage agentId={'agt_manager'} goalId={'goal_1'} />);
+
+    expect(screen.getByTestId('goal-right-panel')).toHaveAttribute('data-expand', 'true');
+    expect(screen.getByTestId('goal-supervision')).toHaveTextContent('tpc_manager');
+  });
+
+  it('opens the side conversation by default when the goal has no record', () => {
+    mocks.hasSupervision = false;
+    render(<GoalDetailPage agentId={'agt_manager'} goalId={'goal_1'} />);
+
+    expect(screen.getByTestId('goal-right-panel')).toHaveAttribute('data-expand', 'true');
+    expect(screen.getByTestId('goal-chat')).toHaveAttribute('data-agent-id', 'agt_manager');
+  });
+
   // On the agent-less route the task workspace owns the portal host, but the
   // supervision record has no other home: the supervising agent's avatar must
   // still open it, and must name it as the supervision record to open.

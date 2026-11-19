@@ -56,12 +56,7 @@ const RecentsList = memo<RecentsListProps>(({ error, onRetry }) => {
           return <ConnectedItem itemRef={itemRef} key={itemRef} queryKey={queryKey} />;
         })}
         {hasMore && (
-          <NavItem
-            height={32}
-            icon={MoreHorizontalIcon}
-            title={t('input.more')}
-            onClick={openDrawer}
-          />
+          <NavItem icon={MoreHorizontalIcon} title={t('input.more')} onClick={openDrawer} />
         )}
         <AllRecentsDrawer open={drawerOpen} onClose={closeDrawer} />
       </Flexbox>

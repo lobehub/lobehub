@@ -110,7 +110,7 @@ export const buildOperationSkillSet = async (
 
   try {
     const builtinMetas = builtinSkills.map((s) => ({
-      content: s.content,
+      content: selectedSkillIds.includes(s.identifier) ? s.content : undefined,
       description: s.description,
       identifier: s.identifier,
       name: s.name,
@@ -118,28 +118,15 @@ export const buildOperationSkillSet = async (
     const skillModel = new AgentSkillModel(deps.db, deps.userId, deps.workspaceId);
     const { data: dbSkills } = await skillModel.findAll();
 
-    // Pinned skills need their SKILL.md body injected into context directly,
-    // not lazily via the `activateSkill` tool. Gate on the agent's genuinely
-    // pinned entries (`getActivePluginIds(agentConfig.plugins)`), NOT the
-    // fully-expanded `agentPlugins`: the latter also carries turn-scoped tool
-    // ids (mentions, selected tools, `lobe-message`, …), which would
-    // eager-activate an auto-mode skill whose identifier merely collides with
-    // one of them. `findAll` uses `skillListColumns` (no `content`), so fetch
-    // bodies only for the pinned subset to keep the op-param payload bounded.
-    // Non-pinned skills stay content-less here and remain lazily activatable.
-    // Content lives in the DB `content` column already (SKILL.md body), so no
-    // zip unpack is needed; mirror `activateSkill` by appending the resource
-    // tree so pinned ZIP/GitHub skills keep their `readReference` paths.
-    //
-    // Skills the user explicitly selected in this topic are injected the same
-    // way: the selection names them directly, so no tool id can collide into it.
+    // Only a topic selection requests a body up front. A saved (legacy)
+    // pin, like auto, advertises the skill for on-demand activation.
     const pinnedSkillIds = new Set(getActivePluginIds(agentConfig.plugins));
-    const injectedSkillIds = new Set([...pinnedSkillIds, ...selectedSkillIds]);
+    const injectedSkillIds = new Set(selectedSkillIds);
     const pinnedDbSkillIds = dbSkills
       .filter((s) => injectedSkillIds.has(s.identifier))
       .map((s) => s.id);
     const pinnedDbContent = new Map(
-      (await skillModel.findByIds(pinnedDbSkillIds)).map((s) => {
+      (pinnedDbSkillIds.length ? await skillModel.findByIds(pinnedDbSkillIds) : []).map((s) => {
         const hasResources = !!(s.resources && Object.keys(s.resources).length > 0);
         const content =
           hasResources && s.resources

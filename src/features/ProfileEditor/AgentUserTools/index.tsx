@@ -16,6 +16,7 @@ import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
 import AgentToolsSection from './AgentToolsSection';
+import ProfileToolPicker from './ProfileToolPicker';
 import RunPriorityHint from './RunPriorityHint';
 import UserToolsSection from './UserToolsSection';
 
@@ -130,18 +131,27 @@ const AgentUserTools = memo<AgentToolProps & { variant?: 'chip' | 'list' }>((pro
             onStartCopy={() => setCopyMode(true)}
           />
         )}
-        <UserToolsSection
-          {...toolProps}
-          agentId={effectiveAgentId}
-          copyMode={copyMode}
-          copying={copying}
-          group={libraryGroup}
-          selected={selected}
-          toggleSelected={toggleSelected}
-          variant={'list'}
-          onCancelCopy={resetCopy}
-          onConfirmCopy={handleConfirmCopy}
-        />
+        {toolProps.kind === 'tools' && !copyMode ? (
+          <ProfileToolPicker
+            agentId={effectiveAgentId}
+            group={libraryGroup}
+            showAuthor={!!activeWorkspaceId}
+            onOpenDetail={toolProps.onOpenDetail}
+          />
+        ) : (
+          <UserToolsSection
+            {...toolProps}
+            agentId={effectiveAgentId}
+            copyMode={copyMode}
+            copying={copying}
+            group={libraryGroup}
+            selected={selected}
+            toggleSelected={toggleSelected}
+            variant={'list'}
+            onCancelCopy={resetCopy}
+            onConfirmCopy={handleConfirmCopy}
+          />
+        )}
       </Flexbox>
     );
   }

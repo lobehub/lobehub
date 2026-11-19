@@ -144,12 +144,6 @@ const agentConnectors =
   (s: ToolStore): ConnectorWithTools[] =>
     s.agentConnectors?.[agentId] ?? [];
 
-/**
- * The connector a conversation of `agentId` resolves `identifier` to, mirroring
- * the server's agent-aware resolution: the agent's own row first (agent-owned
- * over mounted), else the base connector. Agent tools are only known once that
- * agent's list has loaded.
- */
 /** Mounted (locked) to an agent other than `agentId`; without one, to any agent. */
 const isMountedByAnotherAgent = (connector: ConnectorWithTools, agentId?: string) => {
   const mountedBy = connector.metadata?.mountedByAgentId;
@@ -157,6 +151,28 @@ const isMountedByAnotherAgent = (connector: ConnectorWithTools, agentId?: string
   return typeof mountedBy === 'string' && mountedBy !== '' && mountedBy !== agentId;
 };
 
+/** Connected MCP rows a particular agent can use, with its own rows taking precedence. */
+const connectedMcpConnectorsForAgent = (
+  s: ToolStoreState,
+  agentId: string,
+): ConnectorWithTools[] => {
+  const agentRows = s.agentConnectors?.[agentId] ?? [];
+  const overridden = new Set(agentRows.map((row) => row.identifier));
+  const baseRows = (s.connectors ?? []).filter(
+    (row) => !overridden.has(row.identifier) && !isMountedByAnotherAgent(row, agentId),
+  );
+  return executableMcpConnectors({
+    connectors: [...agentRows, ...baseRows],
+    installedPlugins: s.installedPlugins,
+  }).filter((row) => row.isEnabled && row.status === 'connected');
+};
+
+/**
+ * The connector a conversation of `agentId` resolves `identifier` to, mirroring
+ * the server's agent-aware resolution: the agent's own row first (agent-owned
+ * over mounted), else the base connector. Agent tools are only known once that
+ * agent's list has loaded.
+ */
 const connectorByIdentifierForAgent =
   (identifier: string, agentId?: string) =>
   (s: ToolStore): ConnectorWithTools | undefined => {
@@ -247,6 +263,7 @@ export const connectorSelectors = {
   executableMcpConnectors,
   installedMarketplaceConnectors,
   isMarketplaceConnectorInstalled,
+  connectedMcpConnectorsForAgent,
   marketplaceMcpConnectorByIdentifier,
   marketplaceMcpConnectors,
   connectorToolsGroupedByIdentifier:

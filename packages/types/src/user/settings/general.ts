@@ -6,6 +6,8 @@ export type AnimationMode = 'disabled' | 'agile' | 'elegant';
 
 export type ContextMenuMode = 'disabled' | 'default';
 
+export type InterfaceDensity = 'compact' | 'loose';
+
 /**
  * What a message sent while the agent runs does (Better Coding Experience
  * lab): `queue` waits for the run to end and sends one message per turn;
@@ -62,6 +64,7 @@ export interface UserGeneralConfig {
   fontAntialiasing?: boolean;
   fontSize: number;
   highlighterTheme?: HighlighterProps['theme'];
+  interfaceDensity?: InterfaceDensity;
   isDevMode: boolean;
   isLiteMode: boolean;
   mermaidTheme?: MermaidProps['theme'];

@@ -22,7 +22,7 @@ import { ChannelMessage, ThreadRootMessage } from './ChannelMessage';
 import { Composer } from './Composer';
 import { hasReplyActivity } from './jobStatus';
 import { JoinEventLine } from './JoinEventLine';
-import { channelJoinEvents, channelTimeline, isSelfJoinable } from './joinEvents';
+import { channelJoinEvents, channelTimeline } from './joinEvents';
 import { isCurrentUserMember } from './memberName';
 import { channelTimeFormatters, presentChannelTimeline } from './messagePresentation';
 import { presentOutgoingMessage, timelineTail } from './outgoing';
@@ -43,12 +43,15 @@ interface ChannelConversationProps {
   onOpenThread?: (threadId: string, toggle?: boolean) => void;
   onOpenTopic?: (topic: ReplyTopic) => void;
   onStartThread?: (draft: ChannelThreadDraft) => void;
+  /** Markdown filling the main composer when nothing is saved for it; never sent by itself. */
+  starter?: string;
   threadId?: string | null;
 }
 
 const Timeline = ({
   channelId,
   inert,
+  starter,
   threadId = null,
   onOpenThread,
   onOpenTopic,
@@ -129,9 +132,7 @@ const Timeline = ({
         outgoing.length
           ? [...detail.messages, ...outgoing.map((item) => item.message)]
           : detail.messages,
-        threadId || direct
-          ? []
-          : channelJoinEvents(detail.members, { selfJoinable: isSelfJoinable(detail.channel) }),
+        threadId || direct ? [] : channelJoinEvents(detail.members),
         !detail.hasMore && before === undefined,
       )
     : [];
@@ -274,6 +275,7 @@ const Timeline = ({
                 key={channelDraftKey(channelId, threadId)}
                 members={activeMembers}
                 replyTarget={reply.target}
+                starter={threadId ? undefined : starter}
                 activity={
                   hasReplyActivity(detail, threadId) ? (
                     <ReplyActivity detail={detail} threadId={threadId} />

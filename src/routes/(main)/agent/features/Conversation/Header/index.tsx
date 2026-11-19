@@ -13,6 +13,7 @@ import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirecto
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useElectronStore } from '@/store/electron';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import HeaderActions from './HeaderActions';
 import ShareButton from './ShareButton';
@@ -110,7 +111,7 @@ const headerStyles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: center;
 
-    height: 44px;
+    height: ${sidebarRow.headerHeight};
 
     ${FLOATING_HEADER_QUERY} {
       display: flex;

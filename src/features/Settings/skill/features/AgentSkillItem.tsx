@@ -18,6 +18,7 @@ import { DownloadIcon, MoreHorizontalIcon, Plus, Settings2, Trash2 } from 'lucid
 import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { GitHubSkillUpdate, hasGitHubSource } from '@/features/AgentSkillDetail/GitHubSkillUpdate';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { createBuiltinAgentSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { usePermission } from '@/hooks/usePermission';
@@ -108,6 +109,9 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
   };
 
   // ===== Status & Actions =====
+
+  const updateAction =
+    !isBuiltin && hasGitHubSource(skill) ? <GitHubSkillUpdate compact skill={skill} /> : null;
 
   const renderStatus = () => {
     if (!isBuiltin) return null;
@@ -223,6 +227,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
       <>
         <SkillListRow
           active={isSelected}
+          description={updateAction}
           title={title}
           extra={
             showDisconnected ? (
@@ -299,6 +304,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
     return (
       <NavItem
         active={isSelected}
+        extra={updateAction}
         title={title}
         titleColor={showDisconnected ? cssVar.colorTextDescription : undefined}
         icon={() =>
@@ -343,6 +349,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
         {!onSelect && (
           <Flexbox horizontal align="center" gap={8} onClick={stopPropagation}>
             {isBuiltin && isBuiltinInstalled && renderStatus()}
+            {updateAction}
             {renderActions()}
           </Flexbox>
         )}

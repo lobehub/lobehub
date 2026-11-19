@@ -332,12 +332,13 @@ const gatherComposioServices = async (
   // Disabled services are dropped from both lists — neither "connected, use
   // directly" nor "available to connect" — the agent isn't meant to see them.
   const disabledIdSet = new Set(request.disabledPluginIds ?? []);
-  // A connector is opt-in per agent: a service that is connected but that this
-  // agent has not turned on cannot be reached, so it is not listed as usable.
-  const optedIn = request.optedInPluginIds && new Set(request.optedInPluginIds);
+  const reachable = new Set([
+    ...request.enabledToolIds,
+    ...(request.discoverableTools ?? []).map((tool) => tool.identifier),
+  ]);
   const connected: ComposioServiceSummary[] = excludeDisabledComposioServices(
     COMPOSIO_APP_TYPES.filter(
-      (tool) => connectedIds.has(tool.identifier) && (!optedIn || optedIn.has(tool.identifier)),
+      (tool) => connectedIds.has(tool.identifier) && reachable.has(tool.identifier),
     ),
     disabledIdSet,
   ).map((tool) => ({ identifier: tool.identifier, name: tool.label }));
@@ -671,7 +672,10 @@ export const gatherContextFacts = async (
       // Left out entirely for an ephemeral run so the variable generators'
       // fallback renders the original wording; spelling it out here would mean
       // two copies of the same ephemeral text to keep in step.
-      ...(isPersistentSandboxMode(sandboxPersistence?.mode)
+      // Also for an ephemeral run whose environment checks repositories out:
+      // the model is told where they are (see `formatSandboxRepositoriesPrompt`).
+      ...(isPersistentSandboxMode(sandboxPersistence?.mode) ||
+      sandboxPersistence?.repositories?.length
         ? formatSandboxStoragePromptVariables(sandboxPersistence)
         : {}),
       topic_id: request.topicId ?? '',

@@ -5,6 +5,7 @@ import { resolveActivationSets } from './useActivationSets';
 
 const resolve = (rawPlugins: Parameters<typeof resolveActivationSets>[0]['rawPlugins']) =>
   resolveActivationSets({
+    connectedConnectorIds: ['gmail', 'slack', 'linear'],
     connectorIds: ['gmail', 'slack', 'linear'],
     librarySkillIds: ['excalidraw'],
     // What `getActivePluginIds` yields: the entries that carry a pin.
@@ -15,10 +16,11 @@ const resolve = (rawPlugins: Parameters<typeof resolveActivationSets>[0]['rawPlu
   });
 
 describe('resolveActivationSets', () => {
-  it('lists a connector the agent never turned on under Disabled', () => {
+  it('puts inherited connectors under Auto and keeps library skills off', () => {
     const { checkedSet, disabledIdSet } = resolve([]);
 
-    expect([...disabledIdSet].sort()).toEqual(['excalidraw', 'gmail', 'linear', 'slack']);
+    expect([...disabledIdSet]).toEqual(['excalidraw']);
+    expect(disabledIdSet.has('lobe-creds')).toBe(false);
     expect(checkedSet.size).toBe(0);
   });
 
@@ -34,8 +36,9 @@ describe('resolveActivationSets', () => {
 
     expect(checkedSet.has('gmail')).toBe(false);
     expect(disabledIdSet.has('gmail')).toBe(false);
-    // A builtin tool keeps its pin.
-    expect(checkedSet.has('lobe-image-generation')).toBe(true);
+    // Legacy pins on configurable builtins also mean on demand.
+    expect(checkedSet.has('lobe-image-generation')).toBe(false);
+    expect(disabledIdSet.has('lobe-image-generation')).toBe(false);
   });
 
   it('keeps an explicitly disabled connector under Disabled', () => {
@@ -44,10 +47,10 @@ describe('resolveActivationSets', () => {
     expect(disabledIdSet.has('slack')).toBe(true);
   });
 
-  it('writes Auto explicitly for a connector, since no entry means off', () => {
+  it('inherits Auto for a connector in agent mode', () => {
     const { optInIds } = resolve([]);
 
-    expect(resolveImplicitMode('gmail', optInIds)).toBe('disabled');
+    expect(resolveImplicitMode('gmail', optInIds)).toBe('auto');
     expect(resolveImplicitMode('lobe-image-generation', optInIds)).toBe('auto');
   });
 });

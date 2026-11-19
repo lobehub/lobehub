@@ -10,6 +10,9 @@ import {
 } from '../types/eval-response.type';
 import { EvalService } from './eval.service';
 
+// Services return the page's rows and total; the controller adds `hasMore`/`nextCursor`.
+const SERVICE_PAGE_FIELDS = { hasMore: true, nextCursor: true } as const;
+
 /** What the client receives: `c.json` serializes Dates and drops undefined keys. */
 const toJson = (value: unknown) => JSON.parse(JSON.stringify(value));
 
@@ -144,7 +147,7 @@ describe('EvalService.listRuns', () => {
     expect(result.runs[0]).not.toHaveProperty('workspaceId');
     expect(result.runs[0]).not.toHaveProperty('clientId');
     expect(result.runs[0]).toMatchObject({ datasetId: 'ds-1', id: 'run-1', status: 'completed' });
-    expect(() => EvalRunListSchema.parse(toJson(result))).not.toThrow();
+    expect(() => EvalRunListSchema.omit(SERVICE_PAGE_FIELDS).parse(toJson(result))).not.toThrow();
   });
 });
 
@@ -263,7 +266,9 @@ describe('EvalService.getRunTopics', () => {
       testCaseId: 'tc-1',
       topicId: 'topic-1',
     });
-    expect(() => EvalRunTopicListSchema.parse(toJson(result))).not.toThrow();
+    expect(() =>
+      EvalRunTopicListSchema.omit(SERVICE_PAGE_FIELDS).parse(toJson(result)),
+    ).not.toThrow();
   });
 });
 
@@ -294,6 +299,6 @@ describe('EvalService.getRunResults', () => {
 
     expect(result.results[0].result).not.toHaveProperty('executionId');
     expect(result.results[0].result.threads[0]).not.toHaveProperty('executionId');
-    expect(() => EvalRunResultListSchema.parse(result)).not.toThrow();
+    expect(() => EvalRunResultListSchema.omit(SERVICE_PAGE_FIELDS).parse(result)).not.toThrow();
   });
 });

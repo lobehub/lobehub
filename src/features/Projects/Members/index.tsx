@@ -35,6 +35,7 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import type { ProjectDetail } from '@/store/project';
 import { useProjectStore } from '@/store/project';
+import { useDensityTokens } from '@/styles/density';
 
 import { directoryAgentName } from '../WorkingDirectories/useDirectoryAgent';
 import { openEditMemberModal } from './EditMemberModal';
@@ -61,6 +62,7 @@ const rowStyle = (index: number) =>
 
 export function ProjectMemberSettings({ detail }: { detail: ProjectDetail }) {
   const { t } = useTranslation('project');
+  const { pageTitleFontSize } = useDensityTokens();
   const [inviteOpen, setInviteOpen] = useState(false);
   const addProjectAgents = useProjectStore((s) => s.addProjectAgents);
   const updateProjectAgent = useProjectStore((s) => s.updateProjectAgent);
@@ -177,7 +179,7 @@ export function ProjectMemberSettings({ detail }: { detail: ProjectDetail }) {
     <Flexbox gap={20}>
       <Flexbox horizontal align="flex-start" gap={16} justify="space-between">
         <Flexbox gap={6}>
-          <Text fontSize={16} weight={600}>
+          <Text fontSize={pageTitleFontSize} weight={600}>
             {t('settings.members')}
           </Text>
           <Text type="secondary">{t('members.description')}</Text>

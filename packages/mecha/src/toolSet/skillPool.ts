@@ -6,7 +6,7 @@ import { type BuiltinSkillEnvironment, isBuiltinSkillEnabled } from './builtinSk
 const log = debug('mecha:skillPool');
 
 export type { BuiltinSkillEnvironment };
-export { isBuiltinSkillEnabled, USER_HIDDEN_BUILTIN_SKILLS } from './builtinSkillGate';
+export { isBuiltinSkillEnabled } from './builtinSkillGate';
 
 /**
  * The skill sources of a run, in precedence order. A host that has no such
@@ -24,12 +24,7 @@ export interface SkillPoolSources {
 }
 
 export interface AssembleSkillPoolOptions {
-  /**
-   * Library (`db`) skills the agent set to `auto`. A library skill is opt-in
-   * per agent — the profile is where one is turned on — so unlike every other
-   * source it is listed only when named here, in `enabledPluginIds` or in
-   * `turnSkillIds`. `manual` mode still narrows it to the latter two.
-   */
+  /** Builtin and library skills explicitly enabled for on-demand loading. */
   autoSkillIds?: readonly string[];
   /** Gates the device-only builtin skills. */
   canExecuteOnDevice?: boolean;
@@ -86,21 +81,17 @@ export const assembleSkillPool = (
           )
       : (skills: readonly SkillMeta[] = []) => skills;
 
-  // A library skill the agent never turned on is disabled for it, whatever the
-  // mode: installing a skill into the library does not hand it to every agent.
-  const autoSkillIds = new Set(options.autoSkillIds ?? []);
-  const optedIn = (sources.db ?? []).filter(
-    (skill) =>
-      enabledPluginIds.has(skill.identifier) ||
-      autoSkillIds.has(skill.identifier) ||
-      turnSkillIds.has(skill.identifier),
-  );
+  // Profile-managed skills are opt-in. A legacy pin and explicit auto both
+  // make a skill discoverable, even on agents with the old manual setting.
+  const on = new Set([...enabledPluginIds, ...turnSkillIds, ...(options.autoSkillIds ?? [])]);
+  const offered = (skills: readonly SkillMeta[] = []) =>
+    skills.filter((skill) => on.has(skill.identifier));
 
   const ordered = [
     ...(sources.project ?? []),
-    ...selectable(optedIn),
+    ...offered(sources.db),
     ...selectable(sources.agentSkills),
-    ...selectable(sources.builtin),
+    ...offered(sources.builtin),
   ];
   const disabled = new Set(options.disabledIds ?? []);
   const shareAllowed = options.shareAllowedIds ? new Set(options.shareAllowedIds) : undefined;

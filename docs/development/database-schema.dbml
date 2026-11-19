@@ -1145,6 +1145,7 @@ table agent_skills {
   description text [not null]
   identifier text [not null]
   source text [not null]
+  upstream jsonb
   manifest jsonb [not null, default: `{}`]
   content text
   editor_data jsonb
@@ -2169,6 +2170,7 @@ table environments {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
   workspace_id text
+  project_id text
   name varchar(255) [not null]
   description text
   enabled boolean [not null, default: true]
@@ -2181,6 +2183,7 @@ table environments {
   indexes {
     user_id [name: 'environments_user_id_idx']
     workspace_id [name: 'environments_workspace_id_idx']
+    project_id [name: 'environments_project_id_unique', unique]
     (workspace_id, visibility, user_id) [name: 'environments_workspace_visibility_idx']
     (user_id, name) [name: 'environments_user_name_unique', unique]
     (workspace_id, user_id, name) [name: 'environments_workspace_user_name_unique', unique]

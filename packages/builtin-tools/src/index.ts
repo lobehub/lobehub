@@ -58,7 +58,13 @@ import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
 import { WebhookManifest } from '@lobechat/builtin-tool-webhook';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
-import { type LobeBuiltinTool } from '@lobechat/types';
+import {
+  type AgentPluginEntry,
+  getDisabledPluginIds,
+  type LobeAgentChatConfig,
+  type LobeBuiltinTool,
+  resolveToolMode,
+} from '@lobechat/types';
 
 import { resolveCloudSandboxInPageScope } from './pageScope';
 
@@ -85,15 +91,21 @@ export const defaultToolIds = [
 
 /**
  * Builtins enabled by default in Agent mode. The activator loads other tools
- * on demand, and Skills loads skill instructions. Manual mode omits the activator.
+ * on demand, and Skills loads skill instructions.
  */
 export const alwaysOnToolIds = [LobeActivatorManifest.identifier, SkillsManifest.identifier];
 
-/**
- * Runtime tools represented by the skill activation mode control itself. They remain part
- * of the engine defaults but should not appear as independently configurable tool rows.
- */
-export const activationModeControlledToolIds = [LobeActivatorManifest.identifier];
+/** Ignore stale picker preferences for fixed infrastructure in ordinary Agent mode.
+ * Only use for saved user choices, never for a share allowlist or runtime exclusion. */
+export const getUserDisabledToolIds = (
+  plugins: AgentPluginEntry[] | undefined,
+  chatConfig?: Pick<LobeAgentChatConfig, 'toolMode' | 'enableAgentMode'> | null,
+) => {
+  const disabled = getDisabledPluginIds(plugins);
+  return resolveToolMode(chatConfig) === 'agent'
+    ? disabled.filter((id) => !alwaysOnToolIds.includes(id))
+    : disabled;
+};
 
 /**
  * Tool IDs to exclude from defaults when in manual skill-activate mode.
@@ -626,17 +638,76 @@ export const builtinTools: LobeBuiltinTool[] = builtinToolRegistry.map((tool) =>
   title: tool.manifest?.meta?.title,
 }));
 
+// A saved pin on a user-selectable tool predates on-demand loading. Runtime additions
+// (mentions, media fallback, exact toolsets) are not user preferences and bypass this filter.
+export const onDemandBuiltinToolIds = builtinTools
+  .filter(
+    (tool) =>
+      (tool.discoverable !== false || tool.identifier === AuvManifest.identifier) &&
+      !alwaysOnToolIds.includes(tool.identifier) &&
+      !runtimeManagedToolIds.includes(tool.identifier),
+  )
+  .map((tool) => tool.identifier);
+const onDemandBuiltinIds = new Set(onDemandBuiltinToolIds);
+
+/** Agent mode discovers installed builtins by default. Other modes keep their configured toolset. */
+export const getUnavailableBuiltinToolIds = (
+  available: Iterable<string>,
+  chatConfig?: Pick<LobeAgentChatConfig, 'toolMode' | 'enableAgentMode'> | null,
+  uninstalled: readonly string[] = [],
+) => {
+  if (resolveToolMode(chatConfig) === 'agent') return uninstalled.filter(isOnDemandBuiltinTool);
+
+  const allowed = new Set(available);
+  return onDemandBuiltinToolIds.filter((id) => !allowed.has(id));
+};
+export const isOnDemandBuiltinTool = (identifier: string) => onDemandBuiltinIds.has(identifier);
+
 const recommendedBuiltinIds = new Set(
   RECOMMENDED_SKILLS.filter((s) => s.type === RecommendedSkillType.Builtin).map((s) => s.id),
 );
 
 /**
- * Non-hidden builtin tools that are NOT in RECOMMENDED_SKILLS.
+ * Non-selectable, non-recommended tools that require installation from the Skill Store.
  * These tools default to uninstalled and must be explicitly installed by the user from the Skill Store.
  */
 export const defaultUninstalledBuiltinTools = builtinTools
-  .filter((t) => !t.hidden && !recommendedBuiltinIds.has(t.identifier))
+  .filter(
+    (t) =>
+      !t.hidden && !isOnDemandBuiltinTool(t.identifier) && !recommendedBuiltinIds.has(t.identifier),
+  )
   .map((t) => t.identifier);
+
+/**
+ * Minimal view of `settings.tool` covering just the builtin-tool install slots.
+ * Typed locally so the helpers accept the loosened shape returned by
+ * `getUserState()` while still spreading the rest of `tool` through at runtime.
+ */
+export interface UninstalledBuiltinToolsScope {
+  uninstalledBuiltinTools?: string[];
+  uninstalledBuiltinToolsByWorkspace?: Record<string, string[] | undefined>;
+}
+
+/**
+ * Resolve the uninstalled-builtin-tools list for the active scope.
+ *
+ * - Personal context (`workspaceId == null`) → the user's personal list.
+ * - Workspace context → the per-workspace list; a workspace with no stored
+ *   entry falls back to the default seed (a clean default state), never the
+ *   user's personal customization.
+ *
+ * `undefined` (never configured) maps to the default seed in both scopes.
+ */
+export const resolveUninstalledBuiltinTools = (
+  tool: UninstalledBuiltinToolsScope | null | undefined,
+  workspaceId?: string | null,
+): string[] => {
+  const stored = workspaceId
+    ? tool?.uninstalledBuiltinToolsByWorkspace?.[workspaceId]
+    : tool?.uninstalledBuiltinTools;
+
+  return stored === undefined ? defaultUninstalledBuiltinTools : stored;
+};
 
 const builtinIdentifierSet = new Set(builtinTools.map((tool) => tool.identifier));
 

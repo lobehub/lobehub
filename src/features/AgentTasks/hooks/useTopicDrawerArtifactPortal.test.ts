@@ -37,4 +37,24 @@ describe('resolveTopicDrawerPortalHostViewType', () => {
       }),
     ).toBe(PortalViewType.Artifact);
   });
+
+  it('keeps the parent task portal mounted while its drawer owns a file preview', () => {
+    expect(
+      resolveTopicDrawerPortalHostViewType({
+        currentViewType: PortalViewType.FilePreview,
+        parentViewType: PortalViewType.TaskDetail,
+        showArtifactPortal: true,
+      }),
+    ).toBe(PortalViewType.TaskDetail);
+  });
+
+  it('does not reroute views the drawer never hosts', () => {
+    expect(
+      resolveTopicDrawerPortalHostViewType({
+        currentViewType: PortalViewType.Document,
+        parentViewType: PortalViewType.TaskDetail,
+        showArtifactPortal: true,
+      }),
+    ).toBe(PortalViewType.Document);
+  });
 });

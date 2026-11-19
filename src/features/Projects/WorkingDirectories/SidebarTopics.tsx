@@ -31,6 +31,7 @@ import {
   useTopicListFilter,
 } from '@/features/AgentSidebar/Topic/TopicListScope';
 import { useOnlyMineTopics, useScopedTopics } from '@/features/AgentSidebar/Topic/useScopedTopics';
+import { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import {
   useProjectDirectories,
@@ -77,6 +78,7 @@ export function ProjectDirectoryTopics(props: ProjectDirectoryTopicsProps) {
 }
 
 function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDirectoryTopicsProps) {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation('project');
   const { t: tTopic } = useTranslation('topic');
   const { topicGroupMode } = useAgentTopicGroupMode();
@@ -100,7 +102,7 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
   return (
     <AccordionItem value={itemKey}>
       <AccordionHeader>
-        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+        <AccordionTrigger style={sectionTriggerStyle}>
           <Text ellipsis fontSize={12} type="secondary" weight={500}>
             {t('topics.title')}
           </Text>

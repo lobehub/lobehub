@@ -218,6 +218,7 @@ export class PluginTypesActionImpl {
             rootRuntimeOperationContext?.messageId,
           stepContext,
           subAgent,
+          subAgentId: operation?.context?.subAgentId ?? rootRuntimeOperationContext?.subAgentId,
           taskId,
           threadId,
           toolCallId: payload.id,

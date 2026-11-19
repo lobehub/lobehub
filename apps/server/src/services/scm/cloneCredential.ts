@@ -1,4 +1,5 @@
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { ScmInstallationModel } from '@/database/models/scm';
 import type { ScmInstallationItem } from '@/database/schemas';
@@ -7,6 +8,9 @@ import type { LobeChatDatabase } from '@/database/type';
 import { mintGitHubRepositoryToken } from './github/app';
 
 const log = debug('lobe-server:scm:clone-credential');
+
+/** Token mints in flight at once for one specification. */
+const CLONE_CREDENTIAL_CONCURRENCY = 3;
 
 /** The only checkout host the sandbox build knows how to authenticate. */
 export const GITHUB_HTTPS_PREFIX = 'https://github.com/';
@@ -129,4 +133,58 @@ export const resolveScmCloneCredential = async (params: {
     log('could not resolve a clone credential for %s: %s', repository, (error as Error)?.message);
     return null;
   }
+};
+
+/** Every GitHub repository a specification checks out, as `{ owner/name, url }`, in order. */
+export const githubRepositoriesOf = (
+  configuration: SourcedConfiguration | undefined,
+): { repository: string; url: string }[] => {
+  const seen = new Set<string>();
+  return (configuration?.sources ?? []).flatMap((source) => {
+    if (source.kind !== 'git' || !source.url) return [];
+    const repository = githubRepositoryOf({ sources: [source] });
+    if (!repository || seen.has(repository.toLowerCase())) return [];
+    seen.add(repository.toLowerCase());
+    return [{ repository, url: source.url.replace(/\/$/, '') }];
+  });
+};
+
+/**
+ * One clone credential per GitHub repository the specification checks out.
+ *
+ * A single repository keeps the host-wide header {@link resolveScmCloneCredential}
+ * has always produced. Several are each scoped to their own url: a minted
+ * token reads only the repository it was minted for, and git picks the most
+ * specific `http.<url>.extraHeader` — a path matches at a `/` boundary, so
+ * `…/owner/repo` covers `…/owner/repo/info/refs` and nothing of `…/owner/repo2`.
+ *
+ * Never throws; a repository without a credential still clones when public.
+ */
+export const resolveScmCloneCredentials = async (params: {
+  configuration: SourcedConfiguration | undefined;
+  db: LobeChatDatabase;
+  userId: string;
+  workspaceId?: string | null;
+}): Promise<ScmCloneCredential[]> => {
+  const repositories = githubRepositoriesOf(params.configuration);
+  if (repositories.length <= 1) {
+    const single = await resolveScmCloneCredential(params);
+    return single ? [single] : [];
+  }
+
+  // Each one reads the installations and mints a token, so a specification
+  // with many repositories is resolved a few at a time.
+  const credentials = await pMap(
+    repositories,
+    async ({ url }) => {
+      const credential = await resolveScmCloneCredential({
+        ...params,
+        configuration: { sources: [{ kind: 'git', url }] },
+      });
+      return credential ? { ...credential, urlPrefix: url } : undefined;
+    },
+    { concurrency: CLONE_CREDENTIAL_CONCURRENCY },
+  );
+
+  return credentials.filter((credential): credential is ScmCloneCredential => !!credential);
 };
