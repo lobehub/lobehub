@@ -1457,6 +1457,7 @@
   "notification.item.topic_comment_mentioned": "评论中被提及",
   "notification.item.video_generation_completed": "视频生成完成",
   "notification.item.workspace_credit_balance_low": "工作区余额即将用尽",
+  "notification.item.workspace_member_budget_exceeded": "成员预算已用尽",
   "notification.item.workspace_member_invited": "工作区邀请",
   "notification.item.workspace_member_joined": "新成员加入",
   "notification.item.workspace_member_removed": "已从工作区移除",
