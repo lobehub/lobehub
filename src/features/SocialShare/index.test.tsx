@@ -5,7 +5,7 @@ import type * as BaseUI from '@lobehub/ui';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import SocialShare from './SocialShare';
+import SocialShare from '.';
 
 const mocks = vi.hoisted(() => ({
   copyToClipboard: vi.fn(),
@@ -54,7 +54,9 @@ describe('SocialShare', () => {
 
   it('disables every entry and shows the hint without a share link', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
-    render(<SocialShare disabledHint={'turn on link sharing'} shareUrl={undefined} />);
+    render(
+      <SocialShare disabledHint={'turn on link sharing'} shareUrl={undefined} title={'My topic'} />,
+    );
 
     expect(screen.getByText('turn on link sharing')).toBeInTheDocument();
     for (const platform of ['x', 'weibo', 'instagram', 'wechat']) {

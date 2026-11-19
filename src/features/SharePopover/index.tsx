@@ -33,6 +33,7 @@ import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ArticleSkeleton } from '@/components/Skeleton';
+import SocialShare from '@/features/SocialShare';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
@@ -42,7 +43,6 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-import SocialShare from './SocialShare';
 import { styles } from './style';
 import { type ShareVisibility as Visibility, useTopicShare } from './useTopicShare';
 
@@ -275,10 +275,12 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ agentId, onOpenMod
 
       {/* Posting needs a public link; the section stays disabled until there is one. */}
       <SocialShare
+        className={styles.section}
+        description={t('shareModal.social.description')}
         // The publish restriction is already explained above.
         disabledHint={linkRestricted ? undefined : t('shareModal.social.disabledHint')}
         shareUrl={isLinkShared ? shareUrl : undefined}
-        title={topicTitle}
+        title={topicTitle || t('shareModal.social.untitled')}
         onLeave={close}
       />
 
