@@ -391,7 +391,7 @@ export const resolveAgentConfig = (
     // Inject response language preference into system role for regular agents
     const { userLocale } = snapshot;
     const localeInstruction = userLocale
-      ? `Preferred reply language: ${userLocale}. Use this language unless the user explicitly asks to switch.`
+      ? `Preferred reply language: ${userLocale}. Reply in the language of the user's message; default to ${userLocale} when the input has no clear natural language (e.g., code, logs, or files only).`
       : '';
     const systemRoleWithLocale = localeInstruction
       ? agentConfig.systemRole

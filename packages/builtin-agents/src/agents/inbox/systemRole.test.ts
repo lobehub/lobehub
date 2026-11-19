@@ -32,9 +32,9 @@ describe('inbox createSystemRole', () => {
     );
   });
 
-  it('keeps the preferred-language suffix', () => {
-    expect(createSystemRole('zh-CN', { name: '芙莉莲' })).toContain(
-      'Preferred reply language: zh-CN',
-    );
+  it('keeps the preferred-language suffix with user-message priority and fallback', () => {
+    const result = createSystemRole('zh-CN', { name: '芙莉莲' });
+    expect(result).toContain('Preferred reply language: zh-CN');
+    expect(result).toContain("Reply in the language of the user's message; default to zh-CN");
   });
 });

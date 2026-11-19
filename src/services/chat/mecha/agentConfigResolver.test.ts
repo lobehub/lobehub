@@ -1424,7 +1424,7 @@ describe('resolveAgentConfig', () => {
       const result = resolveAgentConfig({ agentId: 'test-agent' });
 
       expect(result.agentConfig.systemRole).toBe(
-        'You are a helpful assistant\n\nPreferred reply language: zh-CN. Use this language unless the user explicitly asks to switch.',
+        "You are a helpful assistant\n\nPreferred reply language: zh-CN. Reply in the language of the user's message; default to zh-CN when the input has no clear natural language (e.g., code, logs, or files only).",
       );
     });
 
@@ -1444,7 +1444,7 @@ describe('resolveAgentConfig', () => {
       const result = resolveAgentConfig({ agentId: 'test-agent' });
 
       expect(result.agentConfig.systemRole).toBe(
-        'Preferred reply language: ja-JP. Use this language unless the user explicitly asks to switch.',
+        "Preferred reply language: ja-JP. Reply in the language of the user's message; default to ja-JP when the input has no clear natural language (e.g., code, logs, or files only).",
       );
     });
 

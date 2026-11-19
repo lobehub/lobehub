@@ -519,7 +519,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
   // language appended — the same rule the client runtime applies, now shared
   // through `@lobechat/mecha`.
   const REPLY_LANGUAGE_ONLY =
-    'Preferred reply language: en-US. Use this language unless the user explicitly asks to switch.';
+    "Preferred reply language: en-US. Reply in the language of the user's message; default to en-US when the input has no clear natural language (e.g., code, logs, or files only).";
 
   it('should not apply runtime config for non-builtin agents', async () => {
     mockGetAgentConfig.mockResolvedValue({
