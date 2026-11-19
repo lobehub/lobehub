@@ -333,10 +333,14 @@ export default {
   'agentSkillModal.descriptionPlaceholder': 'Briefly describe this skill',
   'agentSkillModal.done': 'Done',
   'agentSkillModal.file': 'File',
+  'agentSkillModal.github.allSkills': 'All skills ({{count}})',
   'agentSkillModal.github.batchFailed':
     'Couldn’t import the selected skills. Try again or rescan the repository.',
+  'agentSkillModal.github.browseAll': 'Browse all skills',
   'agentSkillModal.github.change': 'Change source',
+  'agentSkillModal.github.chooseMore': 'Choose more skills',
   'agentSkillModal.github.clear': 'Clear selection',
+  'agentSkillModal.github.clearSearch': 'Clear search',
   'agentSkillModal.github.complete_one': '{{count}} skill is ready to use',
   'agentSkillModal.github.complete_other': '{{count}} skills are ready to use',
   'agentSkillModal.github.desc':
@@ -348,8 +352,6 @@ export default {
   'agentSkillModal.github.findFailed':
     'Couldn’t read this GitHub link. Check the URL and try again.',
   'agentSkillModal.github.finding': 'Finding skills…',
-  'agentSkillModal.github.found_one': '{{count}} skill found',
-  'agentSkillModal.github.found_other': '{{count}} skills found',
   'agentSkillModal.github.hint': 'Find skills in a public repository, then choose which to import.',
   'agentSkillModal.github.importFailed':
     'Couldn’t import the selected skills. Find skills again, then retry.',
@@ -359,13 +361,17 @@ export default {
   'agentSkillModal.github.install': 'Import {{count}} ({{updates}} updates)',
   'agentSkillModal.github.label': 'Repository or folder URL',
   'agentSkillModal.github.noMatch': 'No matching skills',
+  'agentSkillModal.github.noneSelected': 'No skills selected yet',
   'agentSkillModal.github.refreshFailed':
     'The import finished, but the skill list couldn’t refresh.',
   'agentSkillModal.github.rescan': 'Scan again',
   'agentSkillModal.github.retry': 'Retry failed imports',
   'agentSkillModal.github.sameName': 'Choose one of the skills with this name.',
   'agentSkillModal.github.search': 'Search by name, description or path',
-  'agentSkillModal.github.selectMatches': 'Select eligible matches',
+  'agentSkillModal.github.selectAvailable': 'Select all available ({{count}})',
+  'agentSkillModal.github.selectFiltered': 'Select matches ({{count}})',
+  'agentSkillModal.github.selectedSkills': 'Selected ({{count}})',
+  'agentSkillModal.github.skillDetails': 'Details for {{name}}',
   'agentSkillModal.github.status.conflict': 'Conflict · check the library and scan again',
   'agentSkillModal.github.status.created': 'Imported',
   'agentSkillModal.github.status.failed': 'Import failed',

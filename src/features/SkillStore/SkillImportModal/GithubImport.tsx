@@ -1,14 +1,15 @@
-import type { GitHubSkillCandidate } from '@lobechat/types';
-import { Button, Checkbox, Flexbox, Icon, Input, Tag, Text, useModalContext } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Input, Tag, Text, useModalContext } from '@lobehub/ui';
 import { GithubIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { CheckCircle2, CircleAlert, Search } from 'lucide-react';
+import { CheckCircle2, CircleAlert } from 'lucide-react';
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 
+import { GithubSkillPicker } from './GithubSkillPicker';
+import { canImportCandidate } from './githubSkillSelection';
 import type { useGithubSkillImport } from './useGithubSkillImport';
 
 const styles = stylex.create({
@@ -30,8 +31,6 @@ const styles = stylex.create({
   },
 });
 
-const eligible = (item: GitHubSkillCandidate) => item.status === 'new' || item.status === 'update';
-
 export const GithubImport = ({ state }: { state: ReturnType<typeof useGithubSkillImport> }) => {
   const { t } = useTranslation(['setting', 'common']);
   const { close } = useModalContext();
@@ -44,43 +43,23 @@ export const GithubImport = ({ state }: { state: ReturnType<typeof useGithubSkil
     install,
     loading,
     pending,
-    query,
     refreshLibrary,
     results,
     scan,
     selected,
-    setQuery,
-    setSelected,
     setUrl,
     url,
   } = state;
 
   const chosen = candidates.filter((item) => selected.includes(item.path));
   const updates = chosen.filter((item) => item.status === 'update').length;
-  const selectedNames = new Set(chosen.map((item) => item.name.toLowerCase()));
   const finished = results.length > 0;
   const outcomes = new Map(results.map((item) => [item.path, item.status]));
-  const visible = finished
-    ? candidates.filter((item) => outcomes.has(item.path))
-    : candidates.filter(({ name, path, description }) =>
-        [name, path, description].some((field) =>
-          field.toLowerCase().includes(query.trim().toLowerCase()),
-        ),
-      );
+  const remaining = candidates.some((item) => canImportCandidate(item) && !outcomes.has(item.path));
   const failed = results.filter((item) => item.status === 'failed').map((item) => item.path);
   const failureCount = results.filter((item) =>
     ['failed', 'conflict', 'forbidden'].includes(item.status),
   ).length;
-  const duplicateNames = new Set<string>();
-  const allNames = new Set<string>();
-  for (const item of candidates.filter(eligible)) {
-    const name = item.name.toLowerCase();
-    if (allNames.has(name)) duplicateNames.add(name);
-    allNames.add(name);
-  }
-  const bulk = visible.filter(
-    (item) => eligible(item) && !duplicateNames.has(item.name.toLowerCase()),
-  );
   const error = failure && (
     <AsyncError
       align="start"
@@ -160,126 +139,59 @@ export const GithubImport = ({ state }: { state: ReturnType<typeof useGithubSkil
       </Flexbox>
       {error}
       {finished ? (
-        <Flexbox horizontal align="center" gap={8} role="status">
-          <Icon icon={failureCount ? CircleAlert : CheckCircle2} />
-          <Text strong>
-            {failureCount
-              ? t('agentSkillModal.github.summary', {
-                  success: results.length - failureCount,
-                  failed: failureCount,
-                })
-              : t('agentSkillModal.github.complete', { count: results.length })}
-          </Text>
-        </Flexbox>
-      ) : (
-        candidates.length > 0 && (
-          <Flexbox gap={8}>
-            <Text strong>{t('agentSkillModal.github.found', { count: candidates.length })}</Text>
-            {candidates.length > 1 && (
-              <>
-                <Input
-                  allowClear
-                  aria-label={t('agentSkillModal.github.search')}
-                  placeholder={t('agentSkillModal.github.search')}
-                  prefix={<Icon icon={Search} />}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-                <Flexbox horizontal align="center" gap={8} wrap="wrap">
-                  <Button
-                    disabled={loading || !bulk.some((item) => !selected.includes(item.path))}
-                    size="small"
-                    type="text"
-                    onClick={() =>
-                      setSelected([...new Set([...selected, ...bulk.map((item) => item.path)])])
-                    }
-                  >
-                    {t('agentSkillModal.github.selectMatches')}
-                  </Button>
-                  <Button
-                    disabled={loading || !selected.length}
-                    size="small"
-                    type="text"
-                    onClick={() => setSelected([])}
-                  >
-                    {t('agentSkillModal.github.clear')}
-                  </Button>
-                </Flexbox>
-              </>
-            )}
+        <>
+          <Flexbox horizontal align="center" gap={8} role="status">
+            <Icon icon={failureCount ? CircleAlert : CheckCircle2} />
+            <Text strong>
+              {failureCount
+                ? t('agentSkillModal.github.summary', {
+                    success: results.length - failureCount,
+                    failed: failureCount,
+                  })
+                : t('agentSkillModal.github.complete', { count: results.length })}
+            </Text>
           </Flexbox>
-        )
-      )}
-      {visible.length ? (
-        <Flexbox {...stylex.props(styles.list)}>
-          {visible.map((item) => {
-            const checked = selected.includes(item.path);
-            const status = outcomes.get(item.path) ?? item.status;
-            return (
-              <Flexbox gap={4} key={item.path} {...stylex.props(styles.row)}>
-                <Flexbox horizontal align="center" gap={8} justify="space-between" wrap="wrap">
-                  {finished ? (
+          <Flexbox {...stylex.props(styles.list)}>
+            {candidates
+              .filter((item) => outcomes.has(item.path))
+              .map((item) => (
+                <Flexbox gap={4} key={item.path} {...stylex.props(styles.row)}>
+                  <Flexbox horizontal align="center" gap={8} justify="space-between" wrap="wrap">
                     <Text strong wordBreak="break-word">
                       {item.name}
                     </Text>
-                  ) : (
-                    <Checkbox
-                      aria-label={item.name + ' ' + (item.path || '/')}
-                      checked={checked}
-                      textProps={{ strong: true, wordBreak: 'break-word' }}
-                      disabled={
-                        loading ||
-                        !canCreate ||
-                        !eligible(item) ||
-                        (!checked && selectedNames.has(item.name.toLowerCase()))
-                      }
-                      onChange={(next) =>
-                        setSelected(
-                          next
-                            ? [...selected, item.path]
-                            : selected.filter((path) => path !== item.path),
-                        )
-                      }
-                    >
-                      {item.name}
-                    </Checkbox>
-                  )}
-                  <Tag size="small" style={{ whiteSpace: 'normal' }}>
-                    {t(`agentSkillModal.github.status.${status}`)}
-                  </Tag>
+                    <Tag size="small" style={{ whiteSpace: 'normal' }}>
+                      {t(`agentSkillModal.github.status.${outcomes.get(item.path)!}`)}
+                    </Tag>
+                  </Flexbox>
+                  <Text fontSize={12} type="secondary" wordBreak="break-all">
+                    {item.path || '/'}
+                  </Text>
                 </Flexbox>
-                {!finished && item.description && (
-                  <Text fontSize={13} type="secondary" wordBreak="break-word">
-                    {item.description}
-                  </Text>
-                )}
-                <Text fontSize={12} type="secondary" wordBreak="break-all">
-                  {item.path || '/'}
-                </Text>
-                {!finished && duplicateNames.has(item.name.toLowerCase()) && (
-                  <Text fontSize={13} type="secondary">
-                    {t('agentSkillModal.github.sameName')}
-                  </Text>
-                )}
-              </Flexbox>
-            );
-          })}
-        </Flexbox>
+              ))}
+          </Flexbox>
+        </>
+      ) : candidates.length ? (
+        <GithubSkillPicker state={state} />
       ) : (
         <Text role="status" type="secondary">
-          {t(candidates.length ? 'agentSkillModal.github.noMatch' : 'agentSkillModal.github.empty')}
+          {t('agentSkillModal.github.empty')}
         </Text>
       )}
       <Flexbox horizontal align="center" gap={8} justify="flex-end" wrap="wrap">
         {finished ? (
           <>
-            {failureCount > failed.length && (
+            {(failureCount > failed.length || remaining) && (
               <Button
                 disabled={!canCreate || loading}
                 loading={pending === 'find'}
                 onClick={discover}
               >
-                {t('agentSkillModal.github.find')}
+                {t(
+                  failureCount > failed.length
+                    ? 'agentSkillModal.github.rescan'
+                    : 'agentSkillModal.github.chooseMore',
+                )}
               </Button>
             )}
             {failed.length > 0 && (
@@ -296,7 +208,7 @@ export const GithubImport = ({ state }: { state: ReturnType<typeof useGithubSkil
               {t('agentSkillModal.done')}
             </Button>
           </>
-        ) : candidates.some(eligible) ? (
+        ) : candidates.some(canImportCandidate) ? (
           <>
             {updates > 0 && (
               <Text fontSize={13} type="secondary">
