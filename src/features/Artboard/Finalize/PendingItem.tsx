@@ -17,6 +17,23 @@ const styles = stylex.create({
   },
 });
 
+const copyOf = (blocker: BoardBlocker) => {
+  if (blocker.kind === 'round')
+    return {
+      action: 'artboard.finalize.pending.goChoose',
+      note: 'artboard.finalize.pending.round',
+    } as const;
+  if (blocker.answered)
+    return {
+      action: 'artboard.finalize.pending.view',
+      note: 'artboard.finalize.pending.answered',
+    } as const;
+  return {
+    action: 'artboard.finalize.pending.goAnswer',
+    note: 'artboard.finalize.pending.question',
+  } as const;
+};
+
 interface PendingItemProps {
   blocker: BoardBlocker;
   onDiscuss?: () => void;
@@ -24,6 +41,7 @@ interface PendingItemProps {
 
 const PendingItem = ({ blocker, onDiscuss }: PendingItemProps) => {
   const { t } = useTranslation('project');
+  const copy = copyOf(blocker);
   const jump = () => {
     onDiscuss?.();
     if (blocker.kind === 'question')
@@ -41,19 +59,11 @@ const PendingItem = ({ blocker, onDiscuss }: PendingItemProps) => {
     <Flexbox gap={8} {...stylex.props(styles.item)}>
       <Text strong>{blocker.text}</Text>
       <Text style={{ fontSize: 13 }} type="secondary">
-        {t(
-          blocker.kind === 'round'
-            ? 'artboard.finalize.pending.round'
-            : 'artboard.finalize.pending.question',
-        )}
+        {t(copy.note)}
       </Text>
       <Flexbox horizontal gap={8}>
         <Button size={'small'} onClick={jump}>
-          {t(
-            blocker.kind === 'round'
-              ? 'artboard.finalize.pending.goChoose'
-              : 'artboard.finalize.pending.goAnswer',
-          )}
+          {t(copy.action)}
         </Button>
       </Flexbox>
     </Flexbox>

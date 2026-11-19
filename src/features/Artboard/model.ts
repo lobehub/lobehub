@@ -41,7 +41,14 @@ export type BoardEdge = ArtboardEdgeView &
 
 export type BoardBlocker =
   | { groupId: string | null; id: string; kind: 'round'; pageId: string; text: string }
-  | { boardId: string | null; id: string; kind: 'question'; pageId: string | null; text: string };
+  | {
+      answered: boolean;
+      boardId: string | null;
+      id: string;
+      kind: 'question';
+      pageId: string | null;
+      text: string;
+    };
 
 export interface BoardModel {
   artboard: ArtboardItem;
@@ -286,6 +293,7 @@ export const buildBoardModel = (
         text: round.title,
       })),
       ...content.questions.map((question) => ({
+        answered: question.answered,
         boardId: question.boardId,
         id: question.id,
         kind: 'question' as const,

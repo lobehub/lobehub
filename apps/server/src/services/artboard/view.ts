@@ -114,7 +114,8 @@ export const toArtboardContent = (
     })),
     questions: openThreads
       .filter((thread) => thread.root.authorAgentId)
-      .map(({ root }) => ({
+      .map(({ replies, root }) => ({
+        answered: replies.some((reply) => !reply.authorAgentId),
         boardId: root.boardId,
         content: root.content,
         groupId: root.groupId,

@@ -116,6 +116,7 @@ export interface ArtboardEdgeView {
 }
 
 export interface ArtboardQuestionView {
+  answered: boolean;
   boardId: string | null;
   content: string;
   groupId: string | null;

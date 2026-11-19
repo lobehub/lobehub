@@ -520,6 +520,8 @@ export default {
   'artboard.finalize.lockNote':
     'After finalizing, the user journey is locked as the acceptance reference. Later edits are recorded as changes.',
   'artboard.finalize.missingCheck': 'No acceptance check written for this screen yet',
+  'artboard.finalize.pending.answered':
+    'You answered. The agent closes this once it reads your answer, or you can close it yourself.',
   'artboard.finalize.pending.question': 'The agent is waiting for your answer.',
   'artboard.finalize.pending.round': 'This choice has not been submitted yet.',
   'artboard.finalize.pendingTitle_one': '{{count}} open item to settle first',
@@ -630,6 +632,7 @@ export default {
   'artboard.gallery.openConversation': 'Open conversation',
   'artboard.finalize.pending.goChoose': 'Go to the choice',
   'artboard.finalize.pending.goAnswer': 'Answer',
+  'artboard.finalize.pending.view': 'View',
   'artboard.header.noTask': 'This artboard has no task, so it can’t be finalized',
   'artboard.header.questions_one': '{{count}} question to answer',
   'artboard.header.questions_other': '{{count}} questions to answer',

@@ -800,6 +800,7 @@ describe('ArtboardService agent questions', () => {
 
     expect((await service().read(artboard.id)).artboard.content.questions).toEqual([
       {
+        answered: false,
         boardId: board.id,
         content: '这一步能跳过吗？',
         groupId: null,
@@ -807,6 +808,8 @@ describe('ArtboardService agent questions', () => {
         pageId: board.pageId,
       },
     ]);
+    await service().replyComment(question.id, { clientId: 'c1', content: '能' });
+    expect((await service().read(artboard.id)).artboard.content.questions[0].answered).toBe(true);
     await service().resolveComment(question.id);
     expect((await service().read(artboard.id)).artboard.content.questions).toEqual([]);
   });

@@ -172,7 +172,24 @@ const content: ArtboardContent = {
     { id: 'p1', name: 'Page 1', sortOrder: 0 },
     { id: 'p2', name: 'Page 2', sortOrder: 1 },
   ],
-  questions: [{ boardId: 'b1', content: '要保留吗？', groupId: null, id: 'c1', pageId: 'p1' }],
+  questions: [
+    {
+      answered: false,
+      boardId: 'b1',
+      content: '要保留吗？',
+      groupId: null,
+      id: 'c1',
+      pageId: 'p1',
+    },
+    {
+      answered: true,
+      boardId: 'b1',
+      content: '要加按钮吗？',
+      groupId: null,
+      id: 'c2',
+      pageId: 'p1',
+    },
+  ],
   rounds: [
     {
       batchId: null,
@@ -252,7 +269,22 @@ describe('buildBoardModel', () => {
   it('lists open rounds and unanswered agent questions as what blocks finalizing', () => {
     expect(model.blockers).toEqual([
       { groupId: 'g1', id: 'r1', kind: 'round', pageId: 'p1', text: '布局' },
-      { boardId: 'b1', id: 'c1', kind: 'question', pageId: 'p1', text: '要保留吗？' },
+      {
+        answered: false,
+        boardId: 'b1',
+        id: 'c1',
+        kind: 'question',
+        pageId: 'p1',
+        text: '要保留吗？',
+      },
+      {
+        answered: true,
+        boardId: 'b1',
+        id: 'c2',
+        kind: 'question',
+        pageId: 'p1',
+        text: '要加按钮吗？',
+      },
     ]);
   });
 
