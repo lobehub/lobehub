@@ -92,6 +92,8 @@ describe('AgentAvailabilityService', () => {
   it('answers only for agents the caller can see', async () => {
     mocks.visible = ['mine'];
     mocks.routed = ['mine', 'someone-elses'];
+    mocks.deviceByAgent = { 'mine': 'd1', 'someone-elses': 'd2' };
+    mocks.online = [{ deviceId: 'd1', online: true }];
     jobCounts.push({ agentId: 'mine', value: 1 });
 
     const result = await service().getAvailability(['mine', 'someone-elses'], now);
@@ -132,6 +134,17 @@ describe('AgentAvailabilityService', () => {
     expect(mocks.quotaCalls).toEqual([]);
     expect(result['own-login']).toMatchObject({ dispatchable: true, status: 'online' });
     expect(result.native).toMatchObject({ dispatchable: true, status: 'online' });
+  });
+
+  it('never judges a Claude Code agent that runs in the Cloud Sandbox', async () => {
+    mocks.visible = ['sandbox'];
+    mocks.routed = ['sandbox'];
+    mocks.quota = { sandbox: { status: 'exhausted' } };
+
+    const result = await service().getAvailability(['sandbox'], now);
+
+    expect(mocks.quotaCalls).toEqual([]);
+    expect(result.sandbox).toMatchObject({ dispatchable: true, status: 'online' });
   });
 
   it('keeps an agent with untracked quota on duty', async () => {

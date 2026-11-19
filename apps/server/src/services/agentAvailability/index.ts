@@ -25,7 +25,7 @@ import { resolveAgentAvailability } from './resolve';
 const log = debug('lobe-server:agent-availability');
 
 /**
- * Whether a run of this agent is routed through its bound accounts at all, as device dispatch
+ * Whether a device run of this agent is routed through its bound accounts, as device dispatch
  * decides it (`resolveClaudeAccountRouting`): only Claude Code is, and not when the agent's env
  * picks its own login (an API key, a config dir). Any other agent is never judged by quota.
  */
@@ -99,7 +99,11 @@ export class AgentAvailabilityService {
     const [devices, quotas, activeJobs] = await Promise.all([
       this.readDevices([...new Set(Object.values(deviceByAgent))]),
       this.readQuotas(
-        visible.filter((agent) => routesThroughQuota(agent.agencyConfig)).map((agent) => agent.id),
+        // Account routing runs only for a run dispatched to a device; a Cloud Sandbox run uses
+        // its own vault credential, so bindings kept from a device setup do not bench it.
+        visible
+          .filter((agent) => deviceByAgent[agent.id] && routesThroughQuota(agent.agencyConfig))
+          .map((agent) => agent.id),
         deviceByAgent,
         now,
       ),
