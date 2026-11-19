@@ -24,6 +24,7 @@ import DeepSeekProvider from './deepseek';
 import DoubaoSpeechProvider from './doubaospeech';
 import ElevenLabsProvider from './elevenlabs';
 import FalProvider from './fal';
+import GmicloudSpeechProvider from './gmicloudspeech';
 import FireworksAIProvider from './fireworksai';
 import FishAudioProvider from './fishaudio';
 import GiteeAIProvider from './giteeai';
@@ -175,6 +176,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   AiHubMixProvider,
   OpenRouterProvider,
   FalProvider,
+  GmicloudSpeechProvider,
   ElevenLabsProvider,
   FishAudioProvider,
   DoubaoSpeechProvider,
@@ -334,6 +336,7 @@ export { default as DeepSeekProviderCard } from './deepseek';
 export { default as DoubaoSpeechProviderCard } from './doubaospeech';
 export { default as ElevenLabsProviderCard } from './elevenlabs';
 export { default as FalProviderCard } from './fal';
+export { default as GmicloudSpeechProviderCard } from './gmicloudspeech';
 export { default as FireworksAIProviderCard } from './fireworksai';
 export { default as FishAudioProviderCard } from './fishaudio';
 export { default as GiteeAIProviderCard } from './giteeai';

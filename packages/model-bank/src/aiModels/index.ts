@@ -24,6 +24,7 @@ import { default as deepseek } from './deepseek';
 import { default as doubaospeech } from './doubaospeech';
 import { default as elevenlabs } from './elevenlabs';
 import { default as fal } from './fal';
+import { default as gmicloudspeech } from './gmicloudspeech';
 import { default as fireworksai } from './fireworksai';
 import { default as fishaudio } from './fishaudio';
 import { default as giteeai } from './giteeai';
@@ -141,6 +142,7 @@ const staticModelMap: ModelsMap = {
   doubaospeech,
   elevenlabs,
   fal,
+  gmicloudspeech,
   fireworksai,
   fishaudio,
   giteeai,
@@ -264,6 +266,7 @@ export { default as deepseek } from './deepseek';
 export { default as doubaospeech } from './doubaospeech';
 export { default as elevenlabs } from './elevenlabs';
 export { default as fal, fluxSchnellParamsSchema } from './fal';
+export { default as gmicloudspeech } from './gmicloudspeech';
 export { default as fireworksai } from './fireworksai';
 export { default as fishaudio } from './fishaudio';
 export { default as giteeai } from './giteeai';

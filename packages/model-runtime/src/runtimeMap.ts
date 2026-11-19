@@ -20,6 +20,7 @@ import { LobeComfyUI } from './providers/comfyui';
 import { LobeDeepSeekAI } from './providers/deepseek';
 import { LobeDoubaoSpeechAI } from './providers/doubaospeech';
 import { LobeElevenLabsAI } from './providers/elevenlabs';
+import { LobeGmicloudSpeechAI } from './providers/gmicloudspeech';
 import { LobeFalAI } from './providers/fal';
 import { LobeFireworksAI } from './providers/fireworksai';
 import { LobeFishAudioAI } from './providers/fishaudio';
@@ -112,6 +113,7 @@ export const providerRuntimeMap = {
   deepseek: LobeDeepSeekAI,
   doubaospeech: LobeDoubaoSpeechAI,
   elevenlabs: LobeElevenLabsAI,
+  gmicloudspeech: LobeGmicloudSpeechAI,
   fal: LobeFalAI,
   fireworksai: LobeFireworksAI,
   fishaudio: LobeFishAudioAI,

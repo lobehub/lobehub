@@ -604,3 +604,43 @@ export const googleTTSSchema: TTSModelParamsSchema = {
   },
   voice: { default: 'Kore' },
 };
+
+/**
+ * GMI Cloud speech voices, one documented default per model family. The API accepts
+ * arbitrary family voice ids; Chatterbox models take a Resemble `voice_uuid` instead
+ * and are not listed here.
+ * @see https://docs.gmicloud.ai/guides-overview
+ */
+export const gmicloudInworldTTSVoices: TTSVoice[] = [
+  {
+    description: 'Default Inworld family voice, low latency.',
+    displayName: 'Dennis',
+    gender: 'male',
+    id: 'Dennis',
+    language: 'en-US',
+  },
+];
+
+export const gmicloudMinimaxTTSVoices: TTSVoice[] = [
+  {
+    description: 'Default MiniMax family voice, expressive narration.',
+    displayName: 'English Expressive Narrator',
+    gender: 'male',
+    id: 'English_expressive_narrator',
+    language: 'en-US',
+  },
+];
+
+/** `audio_encoding` accepts WAV and MP3; the request queue returns either. */
+export const gmicloudInworldTTSSchema: TTSModelParamsSchema = {
+  format: { default: 'mp3', enum: ['mp3', 'wav'] },
+  speed: { default: 1, max: 2, min: 0.5, step: 0.05 },
+  voice: { default: 'Dennis' },
+};
+
+/** `format` accepts wav and mp3; speed is sent as a string. */
+export const gmicloudMinimaxTTSSchema: TTSModelParamsSchema = {
+  format: { default: 'mp3', enum: ['mp3', 'wav'] },
+  speed: { default: 1, max: 2, min: 0.5, step: 0.05 },
+  voice: { default: 'English_expressive_narrator' },
+};

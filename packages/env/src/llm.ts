@@ -59,6 +59,9 @@ export const getLLMConfig = () => {
       ENABLED_ELEVENLABS: z.boolean(),
       ELEVENLABS_API_KEY: z.string().optional(),
 
+      ENABLED_GMICLOUDSPEECH: z.boolean(),
+      GMICLOUDSPEECH_API_KEY: z.string().optional(),
+
       ENABLED_FISHAUDIO: z.boolean(),
       FISHAUDIO_API_KEY: z.string().optional(),
 
@@ -316,6 +319,9 @@ export const getLLMConfig = () => {
 
       ENABLED_ELEVENLABS: !!process.env.ELEVENLABS_API_KEY,
       ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
+
+      ENABLED_GMICLOUDSPEECH: !!process.env.GMICLOUDSPEECH_API_KEY,
+      GMICLOUDSPEECH_API_KEY: process.env.GMICLOUDSPEECH_API_KEY,
 
       ENABLED_FISHAUDIO: !!process.env.FISHAUDIO_API_KEY,
       FISHAUDIO_API_KEY: process.env.FISHAUDIO_API_KEY,
