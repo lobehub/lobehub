@@ -36,7 +36,7 @@ export const POST = async (req: Request) => {
   }
 
   after(async () => {
-    await traceClient.shutdownAsync();
+    await traceClient.flush();
   });
 
   return new Response(undefined, { status: 201 });

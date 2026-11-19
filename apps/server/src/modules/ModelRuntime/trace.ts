@@ -1,6 +1,6 @@
 import { INBOX_SESSION_ID, LOBE_CHAT_OBSERVATION_ID, LOBE_CHAT_TRACE_ID } from '@lobechat/const';
 import { type ChatStreamCallbacks, type ChatStreamPayload } from '@lobechat/model-runtime';
-import { type TracePayload } from '@lobechat/types';
+import { type ModelUsage, type TracePayload } from '@lobechat/types';
 import { TraceTagMap } from '@lobechat/types';
 
 import { TraceClient } from '@/libs/traces';
@@ -11,6 +11,39 @@ export interface AgentChatOptions {
   provider: string;
   trace?: TracePayload;
 }
+
+type ModelParameters = Record<string, string | number>;
+
+/**
+ * Langfuse model parameters are flat strings and numbers. Objects such as `thinking` are sent as
+ * JSON, and unset values are left out.
+ */
+const toModelParameters = (parameters: Record<string, unknown>): ModelParameters => {
+  const result: ModelParameters = {};
+
+  for (const [key, value] of Object.entries(parameters)) {
+    if (value === undefined || value === null) continue;
+    result[key] =
+      typeof value === 'string' || typeof value === 'number' ? value : JSON.stringify(value);
+  }
+
+  return result;
+};
+
+/** Usage keys as Langfuse ingests them for OpenTelemetry generations. */
+const toUsageDetails = (usage?: ModelUsage): Record<string, number> | undefined => {
+  if (!usage) return;
+
+  const details: Record<string, number | undefined> = {
+    input: usage.totalInputTokens,
+    output: usage.totalOutputTokens,
+    total: usage.totalTokens,
+  };
+
+  return Object.fromEntries(
+    Object.entries(details).filter((entry): entry is [string, number] => entry[1] !== undefined),
+  );
+};
 
 export const createTraceOptions = (
   payload: ChatStreamPayload,
@@ -34,13 +67,11 @@ export const createTraceOptions = (
     userId: tracePayload?.userId,
   });
 
-  const generation = trace?.generation({
+  const generation = trace?.generation(`Chat Completion (${provider})`, {
     input: messages,
     metadata: { messageLength, model, provider },
     model,
-    modelParameters: parameters as any,
-    name: `Chat Completion (${provider})`,
-    startTime: new Date(),
+    modelParameters: toModelParameters(parameters),
   });
 
   const headers = new Headers();
@@ -68,29 +99,24 @@ export const createTraceOptions = (
               : text;
 
         generation?.update({
-          endTime: new Date(),
           metadata: { grounding, thinking },
           output,
-          usage: usage
-            ? {
-                completionTokens: usage.outputTextTokens,
-                input: usage.totalInputTokens,
-                output: usage.totalOutputTokens,
-                promptTokens: usage.inputTextTokens,
-                totalTokens: usage.totalTokens,
-              }
-            : undefined,
+          usageDetails: toUsageDetails(usage),
         });
 
         trace?.update({ output });
       },
 
       onFinal: () => {
+        // Spans are exported only once they end, including when the stream ended without a
+        // completion.
+        trace?.end();
+
         after(async () => {
           try {
-            await traceClient.shutdownAsync();
+            await traceClient.flush();
           } catch (e) {
-            console.error('TraceClient shutdown error:', e);
+            console.error('TraceClient flush error:', e);
           }
         });
       },
@@ -100,9 +126,7 @@ export const createTraceOptions = (
       },
 
       onToolsCalling: async () => {
-        trace?.update({
-          tags: [...(tracePayload?.tags || []), TraceTagMap.ToolsCalling],
-        });
+        trace?.setTags([...(tracePayload?.tags || []), TraceTagMap.ToolsCalling]);
       },
     } as ChatStreamCallbacks,
     headers,
