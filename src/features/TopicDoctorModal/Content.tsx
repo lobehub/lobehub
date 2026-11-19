@@ -19,6 +19,7 @@ import useSWR from 'swr';
 
 import { messageService } from '@/services/message';
 import { useChatStore } from '@/store/chat';
+import { densityVars } from '@/styles/densityVars';
 
 export interface TopicDoctorContentProps {
   agentId?: string | null;
@@ -27,7 +28,7 @@ export interface TopicDoctorContentProps {
 
 const styles = createStaticStyles(({ css }) => ({
   issue: css`
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 8px;
   `,

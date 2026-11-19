@@ -6,6 +6,8 @@ import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { rowStyles } from '../Overview/OverviewRow';
 import { sectionStyles } from '../Overview/sectionStyles';
 import { statusTint } from '../Overview/statusTint';
@@ -50,7 +52,7 @@ export const headStyles = stylex.create({
   title: {
     flex: '1',
     minWidth: '0',
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 600,
     lineHeight: '20px',
     color: cssVar.colorText,

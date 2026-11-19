@@ -14,6 +14,7 @@ import { useChatStore } from '@/store/chat';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
 import { isGoalRequestGenerating, linkedGoalConfirmState, selectLinkedGoals } from './linkedGoals';
@@ -37,7 +38,7 @@ const styles = stylex.create({
   row: {
     cursor: 'pointer',
     paddingBlock: '6px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockStartWidth: { default: null, [stylex.when.siblingBefore(':is(*)')]: '1px' },
     borderBlockStartStyle: { default: null, [stylex.when.siblingBefore(':is(*)')]: 'solid' },
     borderBlockStartColor: {

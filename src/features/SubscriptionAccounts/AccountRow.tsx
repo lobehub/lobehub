@@ -36,6 +36,7 @@ import { type QuotaAccount, useAgentQuotaStore } from '@/store/agentQuota';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { useDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import {
   type AccountStatus,
@@ -81,9 +82,9 @@ const styles = stylex.create({
   row: {
     display: 'flex',
     alignItems: 'center',
-    gap: '16px',
-    paddingBlock: '12px',
-    paddingInline: '12px',
+    gap: densityTokens['--lobe-density-section-gap'],
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadius,
     cursor: 'pointer',
     backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },

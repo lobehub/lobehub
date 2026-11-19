@@ -7,11 +7,16 @@ import { MessagesSquareIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import Link from '@/libs/router/Link';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useStoryFormat } from '../format';
 
 const styles = stylex.create({
-  row: { columnGap: '16px', display: 'grid', gridTemplateColumns: '88px 1fr' },
+  row: {
+    columnGap: densityTokens['--lobe-density-section-gap'],
+    display: 'grid',
+    gridTemplateColumns: '88px 1fr',
+  },
   date: {
     color: cssVar.colorTextTertiary,
     fontSize: '12px',
@@ -19,7 +24,12 @@ const styles = stylex.create({
     lineHeight: '22px',
   },
   body: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 },
-  title: { fontSize: '14px', fontWeight: 500, lineHeight: '22px', margin: 0 },
+  title: {
+    fontSize: densityTokens['--lobe-density-font-size'],
+    fontWeight: 500,
+    lineHeight: '22px',
+    margin: 0,
+  },
   narrative: {
     color: cssVar.colorTextSecondary,
     display: '-webkit-box',

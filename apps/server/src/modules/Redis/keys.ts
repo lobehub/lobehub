@@ -248,6 +248,11 @@ export const RedisKeys = {
     followUps: (userId: string, topicId: string, threadId?: string | null): string =>
       `follow_ups:v1:${userId}:${topicId}:${threadId || 'main'}`,
     /**
+     * Set when a Channel Thread watch (`lobe-channel.watchThreads`) is stopped, so its next
+     * scheduled report is dropped. Full key: agentSteer:channel_watch_stopped:v1:{watchId}
+     */
+    channelWatchStopped: (watchId: string): string => `channel_watch_stopped:v1:${watchId}`,
+    /**
      * Ids of follow-ups a drain already took from that queue, so a retried
      * append of the same id is recognized instead of queued again.
      * Full key: agentSteer:follow_ups_taken:v1:{userId}:{topicId}:{threadId|main}

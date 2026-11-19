@@ -7,13 +7,15 @@ import { CircleCheck, FolderInput, Trash2, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { useAcceptanceProjectMenu } from './useAcceptanceProjectMenuItem';
 
 const styles = stylex.create({
   bar: {
     flex: 'none',
     paddingBlock: '8px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockStartWidth: '1px',
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,

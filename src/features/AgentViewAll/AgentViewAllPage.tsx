@@ -48,6 +48,7 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
 import { useInterfaceDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import AgentCard, { AgentCardGrid } from './AgentCard';
 import AgentRow, { type AgentRowAuthor } from './AgentRow';
@@ -81,7 +82,7 @@ const groupHeaderStyles = createStaticStyles(({ css, cssVar }) => ({
 
     width: 100%;
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadiusLG};
 
     transition: background 0.15s;

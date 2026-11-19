@@ -91,7 +91,6 @@
   "events.youInvited": "Zaprosiłeś {{names}} do kanału",
   "events.youInvitedMembers": "Zaprosiłeś <members/> do kanału",
   "failure.locate": "Pokaż wiadomość",
-  "failure.messageLabel": "Odpowiedź nie powiodła się: {{names}}",
   "failure.title": "Nieudane odpowiedzi · {{count}}",
   "followers": "Odpowiedzi od: {{names}}",
   "invite.directHint": "Zaproszenie tutaj rozpoczyna nowy kanał z {{name}} i wybranymi przez Ciebie członkami. Ta rozmowa z {{name}} pozostaje bez zmian.",

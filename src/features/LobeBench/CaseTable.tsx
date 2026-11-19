@@ -42,6 +42,7 @@ import { type LobeBenchCase, useDatasetCases } from '@/features/LobeBench/useLob
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { agentEvalService } from '@/services/agentEval';
 import { useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 /** The preset Memory records an attempt starts with, flattened across layers. */
 const presetMemoryRecords = (environment?: EvalCaseEnvironment) =>
@@ -72,7 +73,7 @@ const styles = stylex.create({
   table: {
     display: 'grid',
     gridTemplateColumns: '36px minmax(0, 1fr) 150px 110px 240px',
-    columnGap: 12,
+    columnGap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
   },
   // The same columns behind a checkbox, where cases can be picked.
@@ -81,14 +82,14 @@ const styles = stylex.create({
   },
   head: {
     paddingBlock: 8,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     fontSize: 12,
     color: cssVar.colorTextSecondary,
   },
   row: {
     cursor: 'pointer',
     paddingBlock: 10,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadius,
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
   },
@@ -102,7 +103,7 @@ const styles = stylex.create({
     overflow: 'auto',
     maxHeight: 240,
     margin: 0,
-    padding: 12,
+    padding: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadius,
     fontFamily: cssVar.fontFamilyCode,
     fontSize: 12,

@@ -19,11 +19,12 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { linearService } from '@/services/linear';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
   `,

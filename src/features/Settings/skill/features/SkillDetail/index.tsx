@@ -26,6 +26,7 @@ import {
 import { loadBuiltinSkill } from '@/store/tool/slices/builtin/loadBuiltinSkills';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { pluginSelectors } from '@/store/tool/slices/plugin/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { getLocalizedBuiltinSkillDetail, getNoPermissionsTitle } from './localization';
 
@@ -52,26 +53,38 @@ const styles = stylex.create({
   },
   header: {
     display: 'flex',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingBlockStart: '20px',
-    paddingBlockEnd: '16px',
+    paddingBlockEnd: densityTokens['--lobe-density-card-padding'],
     paddingInline: '24px',
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorBorderSecondary,
   },
-  name: { fontSize: '16px', fontWeight: 600, color: cssVar.colorText },
-  noPermissions: { padding: '24px', fontSize: '14px', color: cssVar.colorTextTertiary },
+  name: {
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
+    fontWeight: 600,
+    color: cssVar.colorText,
+  },
+  noPermissions: {
+    padding: '24px',
+    fontSize: densityTokens['--lobe-density-font-size'],
+    color: cssVar.colorTextTertiary,
+  },
   noPermissionsHeader: {
     display: 'flex',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBlockEnd: '8px',
   },
-  noPermissionsTitle: { fontSize: '16px', fontWeight: 600, color: cssVar.colorText },
+  noPermissionsTitle: {
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
+    fontWeight: 600,
+    color: cssVar.colorText,
+  },
 });
 
 interface SkillDetailProps {

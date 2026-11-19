@@ -12,6 +12,7 @@ import { formatGoalCost } from '@/features/AgentGoals/GoalProgress';
 import GoalStatusGlyph from '@/features/AgentGoals/GoalStatusGlyph';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { useChatStore } from '@/store/chat';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { buildGoalCardModel } from './goalCardModel';
 import GoalElapsedTime from './GoalElapsedTime';
@@ -26,7 +27,7 @@ const styles = stylex.create({
   card: {
     cursor: 'pointer',
     width: '100%',
-    paddingBlock: '12px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     paddingInline: '14px',
     borderWidth: '1px',
     borderStyle: 'solid',
@@ -42,7 +43,7 @@ const styles = stylex.create({
     color: cssVar.colorTextTertiary,
     whiteSpace: 'nowrap',
   },
-  title: { minWidth: '0', fontSize: '14px', fontWeight: 500 },
+  title: { minWidth: '0', fontSize: densityTokens['--lobe-density-font-size'], fontWeight: 500 },
 });
 
 const GoalCard = memo<{ goal: OperationGoal }>(({ goal }) => {

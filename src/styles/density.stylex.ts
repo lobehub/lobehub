@@ -3,6 +3,10 @@
 import * as stylex from '@stylexjs/stylex';
 
 export const densityTokens = stylex.defineVars({
+  '--lobe-density-badge-height': '18px',
+  '--lobe-density-badge-min-width': '20px',
+  '--lobe-density-card-padding': '16px',
+  '--lobe-density-content-gap': '12px',
   '--lobe-density-control-height': '32px',
   '--lobe-density-font-size': '14px',
   '--lobe-density-gap': '8px',
@@ -12,9 +16,14 @@ export const densityTokens = stylex.defineVars({
   '--lobe-density-header-small-icon-size': '16px',
   '--lobe-density-icon-box': '28px',
   '--lobe-density-icon-size': '18px',
+  '--lobe-density-large-icon-size': '22px',
   '--lobe-density-line-height': '22px',
   '--lobe-density-list-row-height': '48px',
+  '--lobe-density-modal-padding': '20px',
   '--lobe-density-padding-inline': '4px',
+  '--lobe-density-page-padding-block-end': '24px',
+  '--lobe-density-page-padding-block-start': '32px',
+  '--lobe-density-page-padding-inline': '24px',
   '--lobe-density-page-title-font-size': '16px',
   '--lobe-density-panel-padding-inline': '4px',
   '--lobe-density-radius': '8px',

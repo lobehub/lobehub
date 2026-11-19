@@ -8,6 +8,7 @@ import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useTaskSelectionStore } from './store';
 import TaskBulkActionsPanel from './TaskBulkActionsPanel';
@@ -22,7 +23,7 @@ const styles = stylex.create({
     boxShadow: cssVar.boxShadowSecondary,
     paddingBlock: 6,
     paddingInlineEnd: 8,
-    paddingInlineStart: 16,
+    paddingInlineStart: densityTokens['--lobe-density-card-padding'],
     pointerEvents: 'auto',
   },
   overlay: {

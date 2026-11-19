@@ -111,7 +111,6 @@
   "events.youInvited": "You invited {{names}} to the channel",
   "events.youInvitedMembers": "You invited <members/> to the channel",
   "failure.locate": "Show message",
-  "failure.messageLabel": "Reply failed: {{names}}",
   "failure.title": "Failed replies · {{count}}",
   "followers": "Replies from: {{names}}",
   "invite.directHint": "Inviting here starts a new channel with {{name}} and the members you choose. This conversation with {{name}} stays as it is.",

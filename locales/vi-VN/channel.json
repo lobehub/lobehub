@@ -91,7 +91,6 @@
   "events.youInvited": "Bạn đã mời {{names}} vào kênh",
   "events.youInvitedMembers": "Bạn đã mời <members/> vào kênh",
   "failure.locate": "Hiển thị tin nhắn",
-  "failure.messageLabel": "Trả lời thất bại: {{names}}",
   "failure.title": "Các trả lời thất bại · {{count}}",
   "followers": "Trả lời từ: {{names}}",
   "invite.directHint": "Mời tại đây sẽ bắt đầu một kênh mới với {{name}} và các thành viên bạn chọn. Cuộc trò chuyện này với {{name}} vẫn giữ nguyên.",

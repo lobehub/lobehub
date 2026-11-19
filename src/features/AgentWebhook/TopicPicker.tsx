@@ -8,6 +8,8 @@ import { CheckIcon, ChevronDownIcon, SearchIcon } from 'lucide-react';
 import { memo, type UIEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { useWebhookTopics, type WebhookTopicOption } from './useWebhookTopics';
 
 const styles = stylex.create({
@@ -38,7 +40,7 @@ const styles = stylex.create({
     gap: '8px',
     inlineSize: '100%',
     paddingBlock: '6px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorder,

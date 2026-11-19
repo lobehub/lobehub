@@ -10,6 +10,7 @@ import AgentAvatar from '@/components/AgentAvatar';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import SelectCircle from '../SelectCircle';
 import { useForwardTargets } from '../useForwardTargets';
@@ -19,7 +20,7 @@ const styles = stylex.create({
   body: { blockSize: '460px' },
   context: {
     flex: '1',
-    padding: '12px',
+    padding: densityTokens['--lobe-density-content-gap'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,

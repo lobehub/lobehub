@@ -28,6 +28,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import AgentProfileCard from '.';
 import { resolveAgentRuntimeLabel } from './runtime';
@@ -72,13 +73,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   footer: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   section: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
   `,
   sectionTitle: css`
     margin-block-end: 8px;

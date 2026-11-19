@@ -13,6 +13,7 @@ import { clientInterventionAudits } from '@/store/chat/slices/agentRun/actions/t
 import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 import { useUserStore } from '@/store/user';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useConversationResourceAccess } from '../../../../../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../../../../../store';
@@ -88,7 +89,7 @@ const styles = stylex.create({
     alignItems: 'center',
     minHeight: '40px',
     paddingBlock: '7px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderRadius: `calc(${cssVar.borderRadiusLG} - 2px)`,
     color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },

@@ -12,6 +12,7 @@ import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDispla
 import ClarificationQuestions, {
   type ClarificationAnswer,
 } from '@/features/ClarificationQuestions';
+import { densityVars } from '@/styles/densityVars';
 
 import {
   type CoordinatorGateKind,
@@ -185,7 +186,7 @@ const contextStyles = createStaticStyles(({ css, cssVar }) => ({
     grid-template-columns: max-content 1fr;
     gap: 8px 16px;
 
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 14px;
     border-radius: ${cssVar.borderRadiusLG};
 

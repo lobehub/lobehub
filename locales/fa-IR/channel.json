@@ -91,7 +91,6 @@
   "events.youInvited": "شما {{names}} را به کانال دعوت کردید",
   "events.youInvitedMembers": "شما <members/> را به کانال دعوت کردید",
   "failure.locate": "نمایش پیام",
-  "failure.messageLabel": "پاسخ ناموفق: {{names}}",
   "failure.title": "پاسخ‌های ناموفق · {{count}}",
   "followers": "پاسخ‌ها از: {{names}}",
   "invite.directHint": "دعوت در اینجا یک کانال جدید با {{name}} و اعضایی که انتخاب می‌کنید ایجاد می‌کند. این گفت‌وگو با {{name}} به همین شکل باقی می‌ماند.",

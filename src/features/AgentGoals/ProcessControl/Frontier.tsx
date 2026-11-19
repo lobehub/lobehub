@@ -22,6 +22,7 @@ import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useChatStore } from '@/store/chat';
 import { useDensityTokens } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import GoalClarification, { type PendingGoalClarification } from '../GoalClarification';
 import GoalDecisionCase, {
@@ -68,7 +69,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
@@ -85,7 +86,7 @@ const styles = createStaticStyles(({ css }) => ({
   // A gate is an intent card: lifted off the list so it reads as the one thing
   // asking for the owner, not another row.
   decisionCard: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
