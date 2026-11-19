@@ -1,6 +1,8 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
+import { sidebarRow } from '@/styles/density.stylex';
+
 // StyleX can only fold constants declared in this module (or in a `.stylex.ts` file), so
 // these mirror ./constants — keep the two in sync.
 const SKILL_ICON_GAP = 14;
@@ -14,15 +16,15 @@ export const styles = stylex.create({
     gap: `${SKILL_ICON_GAP}px`,
     alignItems: 'center',
     width: 'calc(100% + 24px)',
-    minHeight: '32px',
+    minHeight: sidebarRow.controlHeight,
     // The footer adds 8px block padding; cancel it on the last action row so the
     // bottom row sits flush against the popup edge instead of leaving a gap.
     marginBlockEnd: { 'default': null, ':last-child': '-8px' },
     marginInline: '-12px',
     paddingInline: '12px',
     borderStyle: 'none',
-    borderRadius: '6px',
-    fontSize: '14px',
+    borderRadius: sidebarRow.radius,
+    fontSize: sidebarRow.textFontSize,
     color: cssVar.colorText,
     backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': 'none', ':hover': 'none' },
@@ -34,12 +36,12 @@ export const styles = stylex.create({
     gap: '10px',
     alignItems: 'center',
     width: '100%',
-    minHeight: '36px',
-    paddingBlock: '8px',
+    minHeight: sidebarRow.controlHeight,
+    paddingBlock: '4px',
     paddingInline: '10px',
     borderStyle: 'none',
-    borderRadius: '6px',
-    fontSize: '14px',
+    borderRadius: sidebarRow.radius,
+    fontSize: sidebarRow.textFontSize,
     lineHeight: '20px',
     color: cssVar.colorError,
     opacity: { 'default': null, ':disabled': 0.45 },
@@ -102,12 +104,12 @@ export const styles = stylex.create({
     gap: '10px',
     alignItems: 'center',
     width: '100%',
-    minHeight: '36px',
-    paddingBlock: '8px',
+    minHeight: sidebarRow.controlHeight,
+    paddingBlock: '4px',
     paddingInline: '10px',
     borderStyle: 'none',
-    borderRadius: '6px',
-    fontSize: '14px',
+    borderRadius: sidebarRow.radius,
+    fontSize: sidebarRow.textFontSize,
     lineHeight: '20px',
     color: cssVar.colorText,
     opacity: { 'default': null, ':disabled': 0.45 },

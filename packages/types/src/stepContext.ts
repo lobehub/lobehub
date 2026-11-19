@@ -162,6 +162,8 @@ export interface RuntimeStepContext {
    * Tools once activated remain active for the rest of the conversation
    */
   activatedToolIds?: string[];
+  /** Tools the current operation can load through the client activator. */
+  discoverableToolIds?: string[];
   /**
    * Whether there are queued user messages waiting to be processed.
    * When true after tool completion, the agent should finish early

@@ -640,7 +640,8 @@ describe('execAgent', () => {
       const [agentWithTools] = await serverDB
         .insert(agents)
         .values({
-          chatConfig: { searchMode: 'auto' },
+          // The mock calls search on the first turn, as supported in chat mode.
+          chatConfig: { searchMode: 'auto', toolMode: 'chat' },
           model: 'gpt-5-pro',
           plugins: [],
           provider: 'openai',

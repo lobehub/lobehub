@@ -3,7 +3,7 @@ import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { VideoGenerationIdentifier } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { getConnectorCatalog } from '@lobechat/const';
-import { parsePluginEntry, upsertPluginMode } from '@lobechat/types';
+import { parsePluginEntry, resolveToolMode, upsertPluginMode } from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
 import { Avatar, confirmModal, Icon, Popover, Tag, Tooltip } from '@lobehub/ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
@@ -21,7 +21,7 @@ import {
   Zap,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { buildAgentProfileTabPath } from '@/features/AgentProfileTabs/tabOptions';
@@ -43,7 +43,6 @@ import {
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
-import { connectorSelectors } from '@/store/tool/slices/connector';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
 import { useAgentId } from '../../hooks/useAgentId';
@@ -53,6 +52,7 @@ import { closeToolDetailPopovers } from '../components/useDetailPopoverState';
 import { MemoryEffortControl } from '../Memory/Controls';
 import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
 import { SearchAdvancedControls } from '../Search/Controls';
+import { useAgentMenuConnectors, useUnpinDeletedConnector } from './agentMenuConnectors';
 import { isCapabilityTool, resolveCapabilityConfigPatch } from './capabilityTools';
 import ComposioServerItem from './ComposioServerItem';
 import ComposioSkillIcon from './ComposioSkillIcon';
@@ -60,6 +60,7 @@ import { SKILL_ICON_SIZE } from './constants';
 import { resolveImplicitMode } from './librarySkillPolicy';
 import LobehubSkillIcon from './LobehubSkillIcon';
 import LobehubSkillServerItem from './LobehubSkillServerItem';
+import PrivateConnectorTag from './PrivateConnectorTag';
 import SkillRow from './SkillRow';
 import ToolItemDetailPopover from './ToolItemDetailPopover';
 import { ToolPickerHeader } from './ToolPickerHeader';
@@ -155,7 +156,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   );
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
-  const activationSets = useActivationSets(checked, rawPlugins);
+  const discoverBuiltins = useAgentStore(
+    (s) =>
+      resolveToolMode(agentByIdSelectors.getAgentConfigById(agentId)(s)?.chatConfig) === 'agent',
+  );
+  const activationSets = useActivationSets(agentId, checked, rawPlugins, discoverBuiltins);
   const { disabledIdSet, optInIds } = activationSets;
   const builtinList = useToolStore(builtinToolSelectors.metaListIncludingHidden, isEqual);
 
@@ -209,12 +214,12 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             plugins,
             id,
             pinMediaTool ? 'pinned' : mode,
-            resolveImplicitMode(id, optInIds),
+            mode === 'auto' && !discoverBuiltins ? 'disabled' : resolveImplicitMode(id, optInIds),
           ),
         });
       }
     },
-    [agentId, canEdit, optInIds, updateAgentConfig],
+    [agentId, canEdit, discoverBuiltins, optInIds, updateAgentConfig],
   );
 
   const openSkillPolicyMenu = useCallback((id: string) => {
@@ -507,15 +512,13 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   // Agent Skills related state
   const installedBuiltinSkills = useToolStore(builtinToolSelectors.installedBuiltinSkills, isEqual);
 
-  // MCP connectors the user added: custom ones and marketplace installs
-  const customConnectors = useToolStore(connectorSelectors.userMcpConnectors, isEqual);
+  // MCP connectors the user added that this agent loads (custom and marketplace)
+  const customConnectors = useAgentMenuConnectors(agentId);
+  // A deleted connector's switch turns off, unless the agent still loads a row of it
+  const unpinDeleted = useUnpinDeletedConnector(agentId, (identifier) =>
+    updateSkillPolicy(identifier, 'disabled'),
+  );
   const getConfigure = useConnectorConfigure();
-  const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
-  const fetchConnectors = useToolStore((s) => s.fetchConnectors);
-  useEffect(() => {
-    if (!isConnectorsInit) fetchConnectors();
-  }, [isConnectorsInit, fetchConnectors]);
-
   const [
     useFetchUserComposioConnections,
     useFetchLobehubSkillConnections,
@@ -864,9 +867,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     ],
   );
 
-  // Connector MCP list items (custom ones and marketplace installs).
-  // Toggling adds the connector identifier to agents.plugins[] — the same field
-  // the runtime resolves connectors from, so they become callable immediately.
+  // Connector MCP rows (custom and marketplace). Toggling adds the identifier to
+  // agents.plugins[], the field the runtime resolves connectors from.
   const customConnectorItems = useMemo(
     () =>
       customConnectors.map((connector) => {
@@ -889,15 +891,10 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             displayName: title,
             onDelete: async () => {
               await deleteConnector(connector.id);
-              // Mirror removeComposioServer: drop the identifier from agent.plugins so
-              // no orphaned pin survives the connector deletion.
-              try {
-                await updateSkillPolicy(connector.identifier, 'disabled');
-              } catch (error) {
-                console.error('[Connector] Failed to unpin plugin after delete:', error);
-              }
+              await unpinDeleted(connector);
             },
           },
+          extraTag: connector.visibility === 'private' ? <PrivateConnectorTag /> : undefined,
           icon,
           id: connector.identifier,
           popoverContent,
@@ -905,7 +902,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           title,
         });
       }),
-    [customConnectors, t, createManagedSkillItem, deleteConnector, getConfigure, updateSkillPolicy],
+    [customConnectors, t, createManagedSkillItem, deleteConnector, getConfigure, unpinDeleted],
   );
 
   // Distinguish community plugins and custom plugins.

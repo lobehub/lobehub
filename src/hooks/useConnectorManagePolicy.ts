@@ -35,6 +35,7 @@ export interface ConnectorManageable {
 interface ConnectorManageRow {
   agentId?: string | null;
   userId?: string | null;
+  visibility?: string | null;
 }
 
 const resolveConnectorManageable = (
@@ -43,8 +44,10 @@ const resolveConnectorManageable = (
   policyError: unknown,
   isCreatorOrOwner: boolean,
 ): ConnectorManageable => {
-  // Agent-scoped rows belong to that agent's setup and keep the creator rule.
-  if (connector?.agentId)
+  // Agent-scoped rows belong to that agent's setup, and a private row is its
+  // creator's own: both keep the creator rule and skip the member policy, as
+  // the server's `assertConnectorMaintainable` does.
+  if (connector?.agentId || connector?.visibility === 'private')
     return {
       canManage: isCreatorOrOwner,
       canManageCredentials: isCreatorOrOwner,

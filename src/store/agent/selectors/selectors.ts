@@ -66,6 +66,10 @@ const currentAgentCreatedAt = (s: AgentStoreState) => currentAgentData(s)?.creat
 
 const currentAgentVisibility = (s: AgentStoreState) => currentAgentData(s)?.visibility;
 
+/** An agent's visibility by id — for a conversation whose agent is not the active one. */
+const getAgentVisibilityById = (agentId: string) => (s: AgentStoreState) =>
+  s.agentMap[agentId]?.visibility;
+
 /**
  * Get complete meta data for the current agent
  * Used to replace sessionMetaSelectors.currentAgentMeta
@@ -407,6 +411,7 @@ export const agentSelectors = {
   currentAgentDisplayName,
   currentAgentTitle,
   currentAgentVisibility,
+  getAgentVisibilityById,
   currentAgentWorkingDirectory,
   currentEnabledKnowledge,
   currentKnowledgeIds,

@@ -15,6 +15,80 @@ export const UPLOAD_NETWORK_ERROR = 'NetWorkError';
 const MAX_MULTIPART_PARTS = 10_000;
 const MULTIPART_PART_SIZE = 32 * 1024 * 1024;
 const MULTIPART_UPLOAD_THRESHOLD = 64 * 1024 * 1024;
+/** One part is sent at most this many times when storage fails it transiently. */
+const MULTIPART_PART_MAX_ATTEMPTS = 3;
+const MULTIPART_PART_RETRY_DELAY_MS = 1000;
+
+/** S3 error codes that only mean "try again", returned with a 4xx status. */
+const RETRYABLE_STORAGE_ERROR_CODES = new Set([
+  'RequestTimeout',
+  'RequestTimeTooSkewed',
+  'SlowDown',
+  'ServiceUnavailable',
+  'InternalError',
+]);
+
+/**
+ * Object storage refused a PUT. Browsers leave `statusText` empty over HTTP/2,
+ * so the status and the storage's own error code are kept explicitly: without
+ * them the failure reached the user as an error with no reason at all.
+ */
+export class UploadRequestError extends Error {
+  readonly code?: string;
+  readonly status: number;
+
+  constructor({ code, detail, status }: { code?: string; detail?: string; status: number }) {
+    super(
+      `Storage rejected the upload (HTTP ${status}${code ? ` ${code}` : ''})${detail ? `: ${detail}` : ''}`,
+    );
+    this.name = 'UploadRequestError';
+    this.code = code;
+    this.status = status;
+  }
+
+  /** Whether sending the same bytes again can succeed. */
+  get retryable(): boolean {
+    return (
+      this.status === 408 ||
+      this.status === 429 ||
+      this.status >= 500 ||
+      (!!this.code && RETRYABLE_STORAGE_ERROR_CODES.has(this.code))
+    );
+  }
+}
+
+const readStorageError = (xhr: XMLHttpRequest): UploadRequestError => {
+  let body = '';
+  try {
+    body = typeof xhr.responseText === 'string' ? xhr.responseText : '';
+  } catch {
+    // responseText throws for non-text response types; the status is enough then.
+  }
+  const code = /<Code>([^<]+)<\/Code>/.exec(body)?.[1]?.trim();
+  const detail = /<Message>([^<]+)<\/Message>/.exec(body)?.[1]?.trim() || xhr.statusText || '';
+
+  return new UploadRequestError({ code, detail: detail || undefined, status: xhr.status });
+};
+
+const isRetryableUploadError = (error: unknown) =>
+  error === UPLOAD_NETWORK_ERROR || (error instanceof UploadRequestError && error.retryable);
+
+const waitBeforeRetry = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new Error('Upload cancelled by user'));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new Error('Upload cancelled by user'));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
 
 /**
  * Generate file storage path metadata for S3-compatible storage
@@ -284,11 +358,11 @@ class UploadService {
         xhr.addEventListener('load', () => {
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve(xhr.getResponseHeader?.('ETag') || undefined);
-          } else reject(xhr.statusText);
+          } else reject(readStorageError(xhr));
         });
         xhr.addEventListener('error', () => {
           if (xhr.status === 0) reject(UPLOAD_NETWORK_ERROR);
-          else reject(xhr.statusText);
+          else reject(readStorageError(xhr));
         });
         xhr.addEventListener('abort', () => reject(new Error('Upload cancelled by user')));
         xhr.open('PUT', url);
@@ -297,6 +371,49 @@ class UploadService {
       });
     } finally {
       signal?.removeEventListener('abort', abort);
+    }
+  };
+
+  /**
+   * Send one multipart part, retrying a transient storage or network failure
+   * with a freshly signed URL so a single dropped part does not fail a large file.
+   */
+  private uploadPart = async ({
+    blob,
+    onProgress,
+    partNumber,
+    pathname,
+    signal,
+    uploadId,
+  }: {
+    blob: Blob;
+    onProgress: (loaded: number) => void;
+    partNumber: number;
+    pathname: string;
+    signal: AbortSignal | undefined;
+    uploadId: string;
+  }): Promise<string | undefined> => {
+    for (let attempt = 1; ; attempt++) {
+      const url = await lambdaClient.upload.createS3MultipartUploadPartUrl.mutate({
+        partNumber,
+        pathname,
+        uploadId,
+      });
+
+      try {
+        return await this.putBlob(url, blob, signal, onProgress);
+      } catch (error) {
+        if (
+          signal?.aborted ||
+          attempt >= MULTIPART_PART_MAX_ATTEMPTS ||
+          !isRetryableUploadError(error)
+        ) {
+          throw error;
+        }
+
+        onProgress(0);
+        await waitBeforeRetry(MULTIPART_PART_RETRY_DELAY_MS * attempt, signal);
+      }
     }
   };
 
@@ -323,25 +440,29 @@ class UploadService {
 
         const offset = (partNumber - 1) * partSize;
         const end = Math.min(offset + partSize, file.size);
-        const url = await lambdaClient.upload.createS3MultipartUploadPartUrl.mutate({
+        const etag = await this.uploadPart({
+          blob: file.slice(offset, end),
+          onProgress: (loaded) => onProgress(offset + loaded),
           partNumber,
           pathname,
+          signal,
           uploadId,
-        });
-
-        const etag = await this.putBlob(url, file.slice(offset, end), signal, (loaded) => {
-          onProgress(offset + loaded);
         });
         if (etag) parts.push({ etag, partNumber });
         onProgress(end);
       }
 
-      await lambdaClient.upload.completeS3MultipartUpload.mutate({
-        partCount,
-        parts: parts.length === partCount ? parts : undefined,
-        pathname,
-        uploadId,
-      });
+      if (signal?.aborted) throw signal.reason ?? new Error('Upload cancelled by user');
+      // Removing the chip while the parts are being merged cancels this request too.
+      await lambdaClient.upload.completeS3MultipartUpload.mutate(
+        {
+          partCount,
+          parts: parts.length === partCount ? parts : undefined,
+          pathname,
+          uploadId,
+        },
+        { signal },
+      );
     } catch (error) {
       try {
         await lambdaClient.upload.abortS3MultipartUpload.mutate({ pathname, uploadId });

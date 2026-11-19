@@ -2,7 +2,7 @@ import { ChannelIdentifier } from '@lobechat/builtin-tool-channel';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { buildChannelPrompt, CHANNEL_INSTRUCTIONS } from '@lobechat/prompts';
 import type { ChannelExecutionConfig, ChannelSharedAgentAccess } from '@lobechat/types';
-import { agentDisplayName } from '@lobechat/types';
+import { agentDisplayName, ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { and, eq, inArray } from 'drizzle-orm';
 import { groupBy } from 'es-toolkit';
@@ -41,6 +41,39 @@ import { createRoutedDevicePresence, resolveChannelRoutedDevice } from './routed
 import { createChannelWorktree } from './worktree';
 
 const LEASE_MS = 60_000;
+
+/**
+ * A dispatch refused for a reason the requester can act on. Its `type` is kept on the failed
+ * job, so the visitor of a shared Agent (whose failure text is otherwise redacted) still learns
+ * why, in their own language.
+ */
+class ChannelDispatchError extends Error {
+  constructor(
+    readonly type: string,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Refusals of a shared Agent's run its visitor can act on, raised by the run's share guards before
+ * the visitor's message is written: the share grants them no device for a Claude Code / Codex
+ * Agent, the owner's device is offline, or the visitor has sent all the messages the share allows.
+ * Kept as the job's failure type, as the share page shows them.
+ */
+const SHARE_REFUSAL_TYPES = new Set<string>([
+  ChatErrorType.ShareHeterogeneousAgentUnsupported,
+  ChatErrorType.ShareHeteroDeviceUnavailable,
+  ChatErrorType.ShareMessageLimitExceeded,
+]);
+
+const dispatchFailureType = (error: unknown) =>
+  error instanceof ChannelDispatchError
+    ? error.type
+    : error instanceof Error && SHARE_REFUSAL_TYPES.has(error.message)
+      ? error.message
+      : undefined;
 
 /** A co-addressed Agent as the run reads it: its name, and its title when that says more. */
 const describePeer = (agent: ChannelCoAddressedAgent) => {
@@ -91,7 +124,11 @@ export class ChannelCoordinator {
       visitorUserId: requesterId,
       workspaceId: share.workspaceId ?? undefined,
     });
-    if (!spend.allowed) throw new Error('This shared Agent reached its monthly usage limit');
+    if (!spend.allowed)
+      throw new ChannelDispatchError(
+        ChatErrorType.ShareSpendLimitExceeded,
+        'This shared Agent reached its monthly usage limit',
+      );
     return {
       agentId,
       canUseDevice: await resolveShareVisitorDeviceAccess(this.db, share, requesterId),
@@ -137,10 +174,11 @@ export class ChannelCoordinator {
             and(eq(channelMembers.channelId, channelId), inArray(channelMembers.id, requesterIds)),
           )
       : [];
-    const routedPresence = createRoutedDevicePresence(this.db, channel.workspaceId);
+    // A shared Agent's run executes as its owner; the claim reads that presence on demand.
+    const routedPresence = createRoutedDevicePresence(this.db);
     await pMap(
       requesters.flatMap(({ userId }) => (userId ? [userId] : [])),
-      (userId) => routedPresence.prefetch(userId),
+      (userId) => routedPresence.prefetch(userId, channel.workspaceId),
       { concurrency: 5 },
     );
     const owners = [
@@ -343,23 +381,35 @@ export class ChannelCoordinator {
         }),
         reservedOperationId: job.operationId,
         shareGate,
-        trigger: 'channel',
+        // A shared Agent's run is the owner's, paid by the share and read by a visitor: it is
+        // recorded as a share run so usage separates it from the owner's own Channel runs. The
+        // Channel reply flow keys off the reserved operation and job, never this label.
+        trigger: share ? RequestTrigger.AgentShare : 'channel',
+        // Nobody can approve a tool mid-run, so tools run without approval. For a shared Agent
+        // that is limited to what the creator granted: `shareGate` keeps ungranted tools out of
+        // the run and blocks their calls, so granting a tool is the creator's consent to run it.
         userInterventionConfig: { approvalMode: 'headless' },
       });
       if (!result.success) throw new Error(result.error || 'Agent could not start');
       await this.executions.accepted(job.channelId, job.id);
     } catch (error) {
       console.error('[channel:dispatch]', error);
+      const type = dispatchFailureType(error);
       const operation = await new AgentOperationModel(
         this.db,
         topic.userId,
         workspaceId ?? undefined,
       ).findById(job.operationId);
       if (operation?.status === 'idle') {
-        await this.executions.retireReservation(job.channelId, job.id);
+        await this.executions.retireReservation(
+          job.channelId,
+          job.id,
+          type && error instanceof Error ? { message: error.message, type } : undefined,
+        );
       } else
         await this.executions.fail(job.channelId, job.id, {
           message: error instanceof Error ? error.message : 'Agent could not start',
+          ...(type && { type }),
         });
     } finally {
       clearInterval(renew);

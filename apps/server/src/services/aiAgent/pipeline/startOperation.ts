@@ -282,7 +282,6 @@ export const startOperation = async (
             // offered still reaches the runtime.
             skillGrants: shareGate.shareConfig.skillGrants,
             showErrorDetails: shareGate.shareConfig.showErrorDetails,
-            showModelInfo: shareGate.shareConfig.showModelInfo,
             visitorUserId: shareGate.visitorUserId,
           }
         : undefined,

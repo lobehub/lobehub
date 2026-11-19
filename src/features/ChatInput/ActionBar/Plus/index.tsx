@@ -28,6 +28,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
+import { useDensityTokens } from '@/styles/density';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
@@ -461,11 +462,12 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
  */
 const PlusAction = memo(() => {
   const { t } = useTranslation('chat');
+  const { controlHeight, iconSize } = useDensityTokens();
 
   return (
     <ChatInputAction
       icon={PlusIcon}
-      size={{ blockSize: 32, borderRadius: 16, size: 18 }}
+      size={{ blockSize: controlHeight, borderRadius: controlHeight / 2, size: iconSize }}
       title={t('plus.contextTooltip')}
       tooltipProps={{ placement: 'top' }}
       dropdown={{
@@ -479,19 +481,23 @@ const PlusAction = memo(() => {
 
 PlusAction.displayName = 'PlusAction';
 
-const Plus = () => (
-  <Suspense
-    fallback={
-      <ChatInputAction
-        disabled
-        icon={PlusIcon}
-        size={{ blockSize: 32, borderRadius: 16, size: 18 }}
-        title=""
-      />
-    }
-  >
-    <PlusAction />
-  </Suspense>
-);
+const Plus = () => {
+  const { controlHeight, iconSize } = useDensityTokens();
+
+  return (
+    <Suspense
+      fallback={
+        <ChatInputAction
+          disabled
+          icon={PlusIcon}
+          size={{ blockSize: controlHeight, borderRadius: controlHeight / 2, size: iconSize }}
+          title=""
+        />
+      }
+    >
+      <PlusAction />
+    </Suspense>
+  );
+};
 
 export default Plus;

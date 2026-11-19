@@ -4,10 +4,12 @@ import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { ChatGroupModel } from '@/database/models/chatGroup';
+import { ConnectorModel } from '@/database/models/connector';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { TaskModel } from '@/database/models/task';
 import type { ResourceAccessLevel } from '@/database/schemas';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS, RESOURCE_ACCESS_LEVELS_BY_TYPE } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import {
   assertCanPerformResourceAction,
@@ -16,6 +18,31 @@ import {
 
 import { releasePrivatePin } from '../_helpers/sidebarPin';
 import { agentProcedure } from './procedures';
+
+/**
+ * A private connector serves only its creator's private agents, and a shared
+ * agent's runs leave it out. Publishing an agent that still uses one would
+ * drop its configured tool for everyone, or silently answer it with a shared
+ * connector of the same identifier running another account. Both publish
+ * paths guard it, as group publishing guards private member agents.
+ */
+const assertNoPrivateConnectorBindings = async (
+  ctx: { serverDB: LobeChatDatabase; userId: string; workspaceId?: string | null },
+  agentId: string,
+) => {
+  if (!ctx.workspaceId) return;
+  const bindings = await new ConnectorModel(
+    ctx.serverDB,
+    ctx.userId,
+    ctx.workspaceId,
+  ).countPrivateAgentBindings(agentId);
+  if (bindings > 0)
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        'Cannot publish an agent that still uses private connectors. Remove them from the agent or share them with the workspace first.',
+    });
+};
 
 export const visibilityRouter = router({
   /**
@@ -33,6 +60,7 @@ export const visibilityRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertNoPrivateConnectorBindings(ctx, input.id);
       // Hand a private pin to the creator's personal list BEFORE the row goes
       // public: done afterwards, a failure in between would leave a public
       // pinned row — a team pin no owner/admin chose.
@@ -172,6 +200,8 @@ export const visibilityRouter = router({
           });
         }
       }
+
+      if (input.visibility === 'public') await assertNoPrivateConnectorBindings(ctx, input.id);
 
       // Before the row turns public, so a failure never leaves a team pin
       // nobody with the role set (see `publishAgentToWorkspace`).

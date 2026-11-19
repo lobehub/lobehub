@@ -545,6 +545,13 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     tab: SettingsTabs.ServiceModel,
   },
   {
+    anchor: 'service-model-fileEmbedding',
+    descKey: 'systemAgent.fileEmbedding.modelDesc',
+    keywords: ['embedding', 'file', 'knowledge base', 'vector', 'DEFAULT_FILES_CONFIG'],
+    labelKey: 'systemAgent.fileEmbedding.title',
+    tab: SettingsTabs.ServiceModel,
+  },
+  {
     anchor: 'service-model-asr',
     keywords: ['voice', 'transcription', 'speech to text'],
     labelKey: 'systemAgent.asr.title',

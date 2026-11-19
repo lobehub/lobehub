@@ -210,7 +210,7 @@ export interface AgentOperationMetadata {
    * can still apply the OWNER-configured policy instead of falling back to the
    * fail-closed full strip.
    */
-  visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
+  visitorRedaction?: { showErrorDetails?: boolean };
   /**
    * Workspace the operation runs in (null/undefined = personal). Persisted so
    * queue workers (e.g. QStash `runStep`) can reconstruct a workspace-scoped
@@ -564,7 +564,7 @@ export class AgentStateManager {
     data: {
       acceptsMemberRuntimeEnd?: boolean;
       agentConfig?: any;
-      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
+      visitorRedaction?: { showErrorDetails?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
       streamOwnerUserId?: string;

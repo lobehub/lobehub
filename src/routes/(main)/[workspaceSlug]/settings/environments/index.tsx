@@ -3,11 +3,14 @@
 import type { EnvironmentVisibility } from '@lobechat/types';
 import { Flexbox, Icon, Tabs } from '@lobehub/ui';
 import { LockIcon, UsersIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams, useSearchParams } from 'react-router';
 
 import { MAX_WIDTH } from '@/const/layoutTokens';
 import EnvironmentManager from '@/features/EnvironmentManager';
+import EnvironmentDetailPage from '@/features/EnvironmentManager/EnvironmentDetailPage';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 /**
  * The workspace's environments, in two pools behind tabs — the same split the
@@ -22,16 +25,37 @@ import EnvironmentManager from '@/features/EnvironmentManager';
  *
  * The tabs are handed to the manager rather than rendered above it: they belong
  * on the same row as the actions, and the manager owns that row.
+ *
+ * The pool lives in `?visibility=` and one environment's page is
+ * `environments/:sub`, so going back from it lands on the tab it is in.
  */
 const WorkspaceEnvironmentsSetting = memo(() => {
   const { t } = useTranslation('setting');
-  const [visibility, setVisibility] = useState<EnvironmentVisibility>('public');
+  const { sub: environmentId } = useParams<{ sub?: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const visibility: EnvironmentVisibility =
+    searchParams.get('visibility') === 'private' ? 'private' : 'public';
+  const navigate = useWorkspaceAwareNavigate();
+  const query = visibility === 'private' ? '?visibility=private' : '';
+
+  const setVisibility = (next: EnvironmentVisibility) =>
+    setSearchParams(next === 'private' ? { visibility: next } : {}, { replace: true });
+
+  if (environmentId)
+    return (
+      <Flexbox style={{ maxWidth: MAX_WIDTH, width: '100%' }}>
+        <EnvironmentDetailPage
+          environmentId={environmentId}
+          key={environmentId}
+          visibility={visibility}
+          onBack={() => navigate(`/settings/environments${query}`)}
+        />
+      </Flexbox>
+    );
 
   return (
     <Flexbox style={{ maxWidth: MAX_WIDTH, width: '100%' }}>
-      {/* Keyed on the pool so the selected row and its open panel do not
-            survive a tab switch — the environment they pointed at is not in
-            the list any more. */}
+      {/* Keyed on the pool so a refresh in flight does not survive a tab switch. */}
       <EnvironmentManager
         key={visibility}
         visibility={visibility}
@@ -55,6 +79,9 @@ const WorkspaceEnvironmentsSetting = memo(() => {
             ]}
             onChange={(key) => setVisibility(key as EnvironmentVisibility)}
           />
+        }
+        onOpenEnvironment={(id) =>
+          navigate(`/settings/environments/${encodeURIComponent(id)}${query}`)
         }
       />
     </Flexbox>

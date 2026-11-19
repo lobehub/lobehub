@@ -155,6 +155,16 @@ export class GitHub {
       headers: { 'Accept': 'application/vnd.github.sha', 'User-Agent': this.userAgent },
       signal: AbortSignal.timeout(15_000),
     });
+    // A missing repository answers 404, a missing ref answers 422.
+    if (response.status === 404 || response.status === 422)
+      throw new GitHubNotFoundError('GitHub repository or ref not found');
+    if (
+      response.status === 429 ||
+      (response.status === 403 &&
+        (response.headers.has('retry-after') ||
+          response.headers.get('x-ratelimit-remaining') === '0'))
+    )
+      throw new GitHubRateLimitError('GitHub rate limit reached');
     if (!response.ok)
       throw new GitHubDownloadError(`Could not resolve GitHub revision (HTTP ${response.status})`);
     const commit = (await response.text()).trim();
@@ -165,7 +175,29 @@ export class GitHub {
   async downloadCommitZip(info: GitHubRepoInfo, commit: string) {
     if (!/^[a-f0-9]{40}$/.test(commit)) throw new GitHubParseError('Invalid commit SHA');
     const url = `https://codeload.github.com/${encodeURIComponent(info.owner)}/${encodeURIComponent(info.repo)}/zip/${commit}`;
-    const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+    return this.readArchive(await fetch(url, { signal: AbortSignal.timeout(30_000) }));
+  }
+
+  /**
+   * Download a ref's archive and read the commit it was cut from out of the ZIP
+   * comment. Uses no REST API quota, so it still works when `resolveCommit` is
+   * rate limited.
+   */
+  async downloadRefZip(info: GitHubRepoInfo) {
+    const response = await fetch(this.buildRepoZipUrl(info), {
+      headers: { 'User-Agent': this.userAgent },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (response.status === 404)
+      throw new GitHubNotFoundError('GitHub repository or ref not found');
+    const buffer = await this.readArchive(response);
+    const commit = zipComment(buffer);
+    if (!/^[a-f0-9]{40}$/.test(commit))
+      throw new GitHubDownloadError('GitHub archive does not name its commit');
+    return { buffer, commit };
+  }
+
+  private async readArchive(response: Response) {
     if (!response.ok || !response.body)
       throw new GitHubDownloadError(`Could not download repository (HTTP ${response.status})`);
     const reader = response.body.getReader();
@@ -299,5 +331,24 @@ export class GitHubDownloadError extends GitHubError {
     this.name = 'GitHubDownloadError';
   }
 }
+
+export class GitHubRateLimitError extends GitHubError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'GitHubRateLimitError';
+  }
+}
+
+/** The archive comment sits after the end-of-central-directory record that closes a ZIP. */
+const zipComment = (zip: Buffer) => {
+  for (let at = zip.length - 22; at >= Math.max(0, zip.length - 22 - 0xff_ff); at--) {
+    if (
+      zip.readUInt32LE(at) === 0x06_05_4b_50 &&
+      at + 22 + zip.readUInt16LE(at + 20) === zip.length
+    )
+      return zip.toString('latin1', at + 22);
+  }
+  return '';
+};
 
 export const github = new GitHub();

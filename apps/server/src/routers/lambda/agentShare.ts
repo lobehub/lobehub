@@ -2,7 +2,6 @@ import { builtinSkills } from '@lobechat/builtin-skills';
 import {
   AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
   AGENT_SHARE_DEVICE_ALLOW_USERS_LIMIT,
-  AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT,
 } from '@lobechat/const';
 import { assembleSkillPool } from '@lobechat/mecha';
 import { getActivePluginIds, getAutoPluginIds, getDisabledPluginIds } from '@lobechat/types';
@@ -85,22 +84,9 @@ export const agentShareConfigSchema = z
       .optional(),
     /** Bytes; `0` is a real value (attachments off), so non-negative rather than positive. */
     maxFileStorage: z.number().int().nonnegative().optional(),
-    /**
-     * The visitor topic list (`TopicModel.queryBySender`) is not paginated
-     * and is bounded by `AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT`, so a cap
-     * above that constant would let visitors create topics they can never
-     * reopen.
-     */
-    maxTopicsPerVisitor: z
-      .number()
-      .int()
-      .positive()
-      .max(AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT)
-      .optional(),
-    maxTurnsPerTopic: z.number().int().positive().optional(),
+    maxMessagesPerVisitor: z.number().int().positive().optional(),
     monthlySpendLimit: z.number().nonnegative().optional(),
     showErrorDetails: z.boolean().optional(),
-    showModelInfo: z.boolean().optional(),
     /**
      * Skill identifiers the creator opened to visitors. An empty array is
      * accepted rather than rejected: unticking the last skill is a normal

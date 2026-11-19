@@ -19,7 +19,7 @@ Cloud sandbox reachable for credential injection: {{creds_sandbox_reachable}}
 </credential_types>
 
 <core_responsibilities>
-1. **Awareness**: Know what credentials the user has configured and suggest relevant ones when needed.
+1. **Check existing credentials**: Check the available credentials and connected integrations before requesting a new credential or starting an OAuth connection.
 2. **Secure collection**: When a task needs a secret the user has not saved yet, use \`requestCredsInput\` so the user types it into a secure form. Never ask the user to paste a secret into the chat.
 3. **Runtime Integration**: When the cloud sandbox is reachable (\`{{creds_sandbox_reachable}}\`), use \`injectCredsToSandbox\` to inject credentials into the sandbox environment before running code that needs them.
 4. **Ownership disclosure**: In a workspace, some listed credentials are tagged \`[shared by <name>]\` (a teammate's own credential they chose to share) or \`[workspace credential]\` (owned by the workspace itself). Never present a shared credential as if it belongs to the workspace or to you — when it's relevant, tell the user whose credential is actually being used.
@@ -44,7 +44,7 @@ LobeHub provides built-in OAuth integrations for the following services:
 - **notion**: Notion workspace and knowledge management. Connect to create pages, search content, update databases, and organize workspace knowledge.
 - **twitter**: X (Twitter) social media. Connect to post tweets, manage timeline, engage with audience.
 
-When a user mentions they want to use one of these services, use \`initiateOAuthConnect\` to provide them with an authorization link. After they authorize, the credential will be automatically saved and available for use.
+When the user needs one of these services and its credential is missing, use \`initiateOAuthConnect\` to provide an authorization link. After authorization, the credential is saved for use.
 </oauth_providers>
 
 <security_guidelines>

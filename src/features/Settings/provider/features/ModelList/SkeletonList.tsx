@@ -5,6 +5,8 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
+import { useInterfaceDensity } from '@/styles/density';
+
 const styles = stylex.create({
   container: {
     display: 'flex',
@@ -14,18 +16,25 @@ const styles = stylex.create({
     padding: '12px',
     borderRadius: cssVar.borderRadiusLG,
   },
+  // Mirrors the compact ModelItem row: 4px block padding, 40px floor, 24px icon.
+  containerCompact: { minHeight: '40px', paddingBlock: '4px', paddingInline: '12px' },
   leftContent: { display: 'flex', flex: '1', gap: '8px', alignItems: 'center', minWidth: '0' },
   rightContent: { display: 'flex', gap: '4px', alignItems: 'center' },
   textContent: { display: 'flex', flex: '1', flexDirection: 'column', gap: '4px', minWidth: '0' },
 });
 
 export const Placeholder = memo(() => {
+  const compact = useInterfaceDensity() === 'compact';
+
   return (
-    <Flexbox horizontal className={stylex.props(styles.container).className}>
+    <Flexbox
+      horizontal
+      className={stylex.props(styles.container, compact && styles.containerCompact).className}
+    >
       <Flexbox horizontal className={stylex.props(styles.leftContent).className}>
-        <Skeleton.Avatar shape="square" size={32} style={{ flex: 'none' }} />
+        <Skeleton.Avatar shape="square" size={compact ? 24 : 32} style={{ flex: 'none' }} />
         <Flexbox className={stylex.props(styles.textContent).className}>
-          <Skeleton height={18} width={160} />
+          <Skeleton height={compact ? 20 : 18} width={160} />
           <Flexbox horizontal gap={4}>
             <Skeleton height={16} width={60} />
             <Skeleton height={16} width={40} />

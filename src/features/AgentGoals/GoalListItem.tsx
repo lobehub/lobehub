@@ -6,7 +6,7 @@ import { memo } from 'react';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
-import { useDensityTokens } from '@/styles/density';
+import { DENSITY_TOKENS, useInterfaceDensity } from '@/styles/density';
 
 import GoalAgentLabel from './GoalAgentLabel';
 import GoalArchivedMark from './GoalArchivedMark';
@@ -50,7 +50,8 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 export const GoalListItem = memo<GoalItemProps>(({ globalScopeId, goal: item, projectId }) => {
-  const { listRowHeight } = useDensityTokens();
+  const density = useInterfaceDensity();
+  const { listRowHeight } = DENSITY_TOKENS[density];
   const navigate = useWorkspaceAwareNavigate();
   const { aid } = useActiveRouteParams<{ aid?: string }>();
   const { goal } = item;
@@ -94,7 +95,7 @@ export const GoalListItem = memo<GoalItemProps>(({ globalScopeId, goal: item, pr
         <Flexbox className={styles.title} gap={4}>
           <Flexbox horizontal align={'center'} gap={7}>
             <GoalStatusGlyph size={13} status={goal.status} />
-            <Text ellipsis fontSize={15} weight={600}>
+            <Text ellipsis fontSize={density === 'compact' ? 14 : 15} weight={600}>
               {goal.title}
             </Text>
             <GoalPrivateMark goal={goal} />

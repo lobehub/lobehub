@@ -1,6 +1,9 @@
 import { type AgentState, selectToolSourceMap } from '@lobechat/agent-runtime';
 import { formatWebOnboardingStateMessage } from '@lobechat/builtin-tool-web-onboarding/utils';
-import { defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
+import {
+  resolveUninstalledBuiltinTools,
+  type UninstalledBuiltinToolsScope,
+} from '@lobechat/builtin-tools';
 import { AGENT_PLAN_FILE_TYPE } from '@lobechat/const';
 import type { AvailablePluginInfo } from '@lobechat/context-engine';
 import {
@@ -336,7 +339,10 @@ export const createServerContextFactProviders = ({
     // discovered for this run (their manifests are only fetched for connected
     // providers, so presence in the tool set is the connection).
     listConnectedConnectorIds: async (agentId) => {
-      const connected = await loadConnectedComposioIds(db, userId, ctx.workspaceId, agentId);
+      const connected = await loadConnectedComposioIds(db, userId, ctx.workspaceId, {
+        agentId,
+        topicId: ctx.topicId,
+      });
       const sourceMap = selectToolSourceMap(state);
       for (const [identifier, source] of Object.entries(sourceMap)) {
         if (source === 'lobehubSkill') connected.add(identifier);
@@ -462,20 +468,10 @@ export const createServerContextFactProviders = ({
     // workspace plus the personal one — the same slot the tool store reads.
     listUninstalledBuiltinIds: async () => {
       const settings = await new UserModel(db, userId).getUserSettings();
-      const tool = settings?.tool as
-        | {
-            uninstalledBuiltinTools?: string[];
-            uninstalledBuiltinToolsByWorkspace?: Record<string, string[] | undefined>;
-          }
-        | null
-        | undefined;
-      const stored = workspaceId
-        ? tool?.uninstalledBuiltinToolsByWorkspace?.[workspaceId]
-        : tool?.uninstalledBuiltinTools;
-      // Never configured (new account, or a workspace without its own slot)
-      // means the default seed — non-recommended builtins start uninstalled —
-      // exactly as the browser's tool store resolves it.
-      return stored === undefined ? defaultUninstalledBuiltinTools : stored;
+      return resolveUninstalledBuiltinTools(
+        settings?.tool as UninstalledBuiltinToolsScope | undefined,
+        workspaceId,
+      );
     },
 
     listSandboxFiles: async (topicId) =>
@@ -487,7 +483,7 @@ export const createServerContextFactProviders = ({
     // the runtime is: that is the workspace the trust token carries, and the
     // entitlement has to agree with the token that presents it.
     resolveSandboxPersistence: async () => {
-      const { mode, cwd, claim, workingDir } = await resolveSandboxSessionConfig({
+      const { mode, cwd, claim, initialization, workingDir } = await resolveSandboxSessionConfig({
         isShareVisitorRun: Boolean(ctx.agentShareVisitor),
         serverDB: db,
         topicId: ctx.topicId ?? state.origin?.topicId,
@@ -500,7 +496,19 @@ export const createServerContextFactProviders = ({
         workspaceId,
       });
 
-      return claim ? { cwd, mode, workingDir } : undefined;
+      // What the topic's environment checks out, for the model to be told where
+      // each repository is — on any sandbox, persistent or not.
+      const repositories = (initialization?.sources ?? []).map((source) => ({
+        ...(source.path && source.path !== '.' && { folder: source.path }),
+        ...(source.ref && { ref: source.ref }),
+        repository: source.url
+          .replace(/^https:\/\/(www\.)?github\.com\//, '')
+          .replace(/\.git$/, '')
+          .replace(/\/$/, ''),
+      }));
+
+      if (claim) return { cwd, mode, workingDir, ...(repositories.length && { repositories }) };
+      return repositories.length ? { mode: 'ephemeral' as const, repositories } : undefined;
     },
 
     listTopicMessages: async (topic) => {

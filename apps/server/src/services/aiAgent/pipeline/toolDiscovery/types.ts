@@ -105,6 +105,7 @@ export interface ToolDiscoveryResult {
   executionPlan?: ExecutionPlan;
   hasAgentDocuments: boolean;
   hasEnabledKnowledgeBases: boolean;
+  implicitBuiltinSkillIds?: readonly string[];
   lobehubSkillManifests: LobeToolManifest[];
   /** Model facts read once for the whole operation; see {@link FrozenModelFacts}. */
   modelFacts: FrozenModelFacts;

@@ -41,7 +41,9 @@ describe('sidebar app entries', () => {
       },
     );
     expect(selectMcpAppEntrypoints(inaccessible as ToolStore, false)).toEqual([]);
-    expect(selectMcpAppEntrypoints(state, true)).toEqual([{ ...entry, identifier: 'notes' }]);
+    expect(selectMcpAppEntrypoints(state, true)).toEqual([
+      { ...entry, connectorIdentifier: 'notes', identifier: 'notes' },
+    ]);
   });
   it('uses the agent connector and hides disabled tools even if a plugin declares the entry', () => {
     const connector = {
@@ -54,6 +56,74 @@ describe('sidebar app entries', () => {
     };
     const scoped = { ...state, agentConnectors: { agent: [connector] } } as unknown as ToolStore;
     expect(selectMcpAppEntrypoints(scoped, true, 'agent')).toEqual([]);
+  });
+  it("lists a personal row the conversation's listing holds, under its listed prefix", () => {
+    // A private agent's own topic runs its owner's personal connector: no local
+    // list holds that row, only the server's listing for the conversation
+    const personal = {
+      id: 'personal-row',
+      identifier: 'docs',
+      isEnabled: true,
+      mcpServerUrl: 'https://docs.example.com',
+      toolIdentifier: 'docs-personal',
+      tools: [{ toolName: 'open', permission: 'auto', metadata: { threadEntry: entry } }],
+    };
+    const listed = selectMcpAppEntrypoints(state, true, 'agent', [personal] as any);
+    expect(listed).toContainEqual({
+      ...entry,
+      connectorIdentifier: 'docs',
+      identifier: 'docs-personal',
+    });
+    // Without the listing the local lists stand in, which do not hold it
+    expect(
+      selectMcpAppEntrypoints(state, true, 'agent').some((e) => e.identifier === 'docs-personal'),
+    ).toBe(false);
+  });
+  it("shows a listed row's entries once a later sync discovers them locally", () => {
+    const listedRow = {
+      id: 'shared-row',
+      identifier: 'docs',
+      isEnabled: true,
+      mcpServerUrl: 'https://docs.example.com',
+      toolIdentifier: 'docs',
+      tools: [{ toolName: 'open', permission: 'auto' }],
+    };
+    // The listing predates discovery; the local copy has since been synced
+    const synced = {
+      ...state,
+      connectors: [
+        { ...listedRow, tools: [{ ...listedRow.tools[0], metadata: { threadEntry: entry } }] },
+      ],
+    } as unknown as ToolStore;
+    expect(selectMcpAppEntrypoints(synced, true, 'agent', [listedRow] as any)).toContainEqual({
+      ...entry,
+      connectorIdentifier: 'docs',
+      identifier: 'docs',
+    });
+  });
+  it('lists a private row mounted on the agent once, under the prefix its calls run by', () => {
+    // Regression: the mounted row is in both the base and the agent list; the
+    // agent list added its bare identifier, a second entry the server refuses.
+    const mounted = {
+      agentId: null,
+      id: '3f9a1c2e-mounted',
+      identifier: 'notes',
+      isEnabled: true,
+      mcpServerUrl: 'https://example.com',
+      metadata: { mountedByAgentId: 'agent' },
+      tools: [{ toolName: 'open', permission: 'auto', metadata: { threadEntry: entry } }],
+      visibility: 'private',
+    };
+    const scoped = {
+      ...state,
+      agentConnectors: { agent: [mounted] },
+      connectors: [mounted],
+      installedPlugins: [],
+    } as unknown as ToolStore;
+
+    expect(selectMcpAppEntrypoints(scoped, true, 'agent')).toEqual([
+      { ...entry, connectorIdentifier: 'notes', identifier: 'notes-3f9a1c2e' },
+    ]);
   });
   it('round trips entry identifiers containing colons and rejects malformed tabs', () => {
     expect(parseMcpEntryTab(mcpEntryTabKey('notes:mine', 'open/page'))).toEqual({
@@ -89,11 +159,23 @@ describe('sidebar app entries', () => {
         true,
       ),
     ).toEqual([
-      { ...entry, accountName: 'Work', identifier: 'mail', linkId: 'lnk_a' },
-      { ...entry, accountName: 'Personal', identifier: 'mail', linkId: 'lnk_b' },
+      {
+        ...entry,
+        accountName: 'Work',
+        connectorIdentifier: 'mail',
+        identifier: 'mail',
+        linkId: 'lnk_a',
+      },
+      {
+        ...entry,
+        accountName: 'Personal',
+        connectorIdentifier: 'mail',
+        identifier: 'mail',
+        linkId: 'lnk_b',
+      },
     ]);
     expect(selectMcpAppEntrypoints(connector([{ id: 'lnk_a', name: 'Work' }]), true)).toEqual([
-      { ...entry, identifier: 'mail' },
+      { ...entry, connectorIdentifier: 'mail', identifier: 'mail' },
     ]);
   });
   it("keeps an entry's account in its tab", () => {
