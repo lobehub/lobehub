@@ -5,6 +5,7 @@ import { resolveActivationSets } from './useActivationSets';
 
 const resolve = (rawPlugins: Parameters<typeof resolveActivationSets>[0]['rawPlugins']) =>
   resolveActivationSets({
+    connectedConnectorIds: ['gmail', 'slack', 'linear'],
     connectorIds: ['gmail', 'slack', 'linear'],
     librarySkillIds: ['excalidraw'],
     // What `getActivePluginIds` yields: the entries that carry a pin.
