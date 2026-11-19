@@ -71,8 +71,3 @@ This foundation does not migrate existing runtime, bot or OAuth stores.
 - `inboundWebhook`: delivery replay claims (24 hours), wake debounce (10 seconds), manual checks
   (30 seconds), maintenance/sweep slots (one minute). Claims fall back to a process-local map;
   durable signal uniqueness remains the event deduplication boundary across instances.
-
-- `budgetRequest`: a workspace member's open request for more member budget (hash per workspace,
-  seven days) and its 24 hour cooldown, claimed with `SET NX` so repeats resolve to one request.
-  The cooldown is released when the claim cannot be stored. Reads answer `null` / `[]` without
-  Redis and `create` reports `persisted: false`; the caller then dedupes by day.
