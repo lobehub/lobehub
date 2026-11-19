@@ -23,7 +23,7 @@ export class TavilyImpl implements SearchServiceImpl {
 
   private get baseUrl(): string {
     // Assuming the base URL is consistent with the crawl endpoint
-    return 'https://api.tavily.com';
+    return process.env.TAVILY_URL || 'https://api.tavily.com';
   }
 
   async query(query: string, params: SearchParams = {}): Promise<UniformSearchResponse> {

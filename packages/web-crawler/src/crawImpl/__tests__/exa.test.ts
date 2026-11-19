@@ -14,6 +14,7 @@ describe('exa crawler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.EXA_API_KEY;
+    delete process.env.EXA_URL;
   });
 
   it('should successfully crawl content with API key', async () => {
@@ -246,5 +247,28 @@ describe('exa crawler', () => {
     const result = await exa('https://example.com', { filterOptions: {} });
 
     expect(result?.url).toBe('https://example.com');
+  });
+
+  it('should use EXA_URL from env when set', async () => {
+    process.env.EXA_URL = 'https://exa-proxy.example.com';
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      createMockResponse({
+        results: [{ text: 'Proxy content. '.repeat(10), title: 'T', url: 'https://example.com' }],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { withTimeout } = await import('../../utils/withTimeout');
+    vi.mocked(withTimeout).mockImplementation((fn) => fn(new AbortController().signal));
+
+    await exa('https://example.com', { filterOptions: {} });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://exa-proxy.example.com/contents',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    vi.unstubAllGlobals();
   });
 });
