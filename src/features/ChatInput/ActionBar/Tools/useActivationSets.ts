@@ -24,9 +24,11 @@ export const CONNECTOR_MODES: AgentPluginMode[] = ['auto', 'disabled'];
 export const resolveActivationSets = ({
   connectorIds: connectorIdList,
   librarySkillIds,
+  discoverBuiltins = true,
   pinnedIds,
   rawPlugins,
 }: {
+  discoverBuiltins?: boolean;
   connectorIds: readonly string[];
   librarySkillIds: readonly string[];
   /** The agent's pinned identifiers. */
@@ -35,14 +37,19 @@ export const resolveActivationSets = ({
   rawPlugins: AgentPluginEntry[] | undefined;
 }) => {
   const connectorIds = new Set(connectorIdList);
-  const optInIds = new Set([...onDemandBuiltinToolIds, ...librarySkillIds, ...connectorIdList]);
+  const optInIds = new Set([...librarySkillIds, ...connectorIdList]);
 
   return {
     checkedSet: new Set(
       pinnedIds.filter((id) => !connectorIds.has(id) && !onDemandBuiltinToolIds.includes(id)),
     ),
     connectorIds,
-    disabledIdSet: new Set(resolveDisabledIds(rawPlugins, optInIds)),
+    disabledIdSet: new Set(
+      resolveDisabledIds(
+        rawPlugins,
+        discoverBuiltins ? optInIds : [...optInIds, ...onDemandBuiltinToolIds],
+      ),
+    ),
     /** Identifiers that are off without an entry, so Auto must be written explicitly. */
     optInIds,
   };
@@ -52,6 +59,7 @@ export const resolveActivationSets = ({
 export const useActivationSets = (
   pinnedIds: string[],
   rawPlugins: AgentPluginEntry[] | undefined,
+  discoverBuiltins: boolean,
 ) => {
   const connectorIds = useToolStore(getConnectorIdentifiers, isEqual);
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
@@ -61,12 +69,13 @@ export const useActivationSets = (
     () =>
       resolveActivationSets({
         connectorIds,
+        discoverBuiltins,
         librarySkillIds: [...marketAgentSkills, ...userAgentSkills].map(
           (skill) => skill.identifier,
         ),
         pinnedIds,
         rawPlugins,
       }),
-    [connectorIds, marketAgentSkills, userAgentSkills, pinnedIds, rawPlugins],
+    [connectorIds, discoverBuiltins, marketAgentSkills, userAgentSkills, pinnedIds, rawPlugins],
   );
 };

@@ -3,7 +3,7 @@
  */
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import {
-  getUnselectedBuiltinToolIds,
+  getUnavailableBuiltinToolIds,
   getUserDisabledToolIds,
   isOnDemandBuiltinTool,
 } from '@lobechat/builtin-tools';
@@ -212,11 +212,15 @@ export const createAgentToolsEngine = (
     disabledPluginIds: [
       ...getUserDisabledToolIds(agent.plugins, chatConfig),
       ...connectors.offIds,
-      ...getUnselectedBuiltinToolIds([
-        ...getOptedInPluginIds(agent.plugins),
-        ...(options.runAgent?.enabledPluginIds ?? []),
-        ...(pluginIds ?? []),
-      ]),
+      ...getUnavailableBuiltinToolIds(
+        [
+          ...getOptedInPluginIds(agent.plugins),
+          ...(options.runAgent?.enabledPluginIds ?? []),
+          ...(pluginIds ?? []),
+        ],
+        chatConfig,
+        getToolStoreState().uninstalledBuiltinTools,
+      ),
       ...getFeatureDisabledToolIds(getServerConfigStoreState()?.featureFlags),
       // This engine serves runs the browser executes; server-only tools have nothing to run here.
       ...serverOnlyToolIds,

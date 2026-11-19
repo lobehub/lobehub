@@ -19,8 +19,9 @@ describe('resolveActivationSets', () => {
     const { checkedSet, disabledIdSet } = resolve([]);
 
     expect([...disabledIdSet]).toEqual(
-      expect.arrayContaining(['excalidraw', 'gmail', 'linear', 'slack', 'lobe-skill-store']),
+      expect.arrayContaining(['excalidraw', 'gmail', 'linear', 'slack']),
     );
+    expect(disabledIdSet.has('lobe-creds')).toBe(false);
     expect(checkedSet.size).toBe(0);
   });
 
@@ -51,6 +52,6 @@ describe('resolveActivationSets', () => {
     const { optInIds } = resolve([]);
 
     expect(resolveImplicitMode('gmail', optInIds)).toBe('disabled');
-    expect(resolveImplicitMode('lobe-image-generation', optInIds)).toBe('disabled');
+    expect(resolveImplicitMode('lobe-image-generation', optInIds)).toBe('auto');
   });
 });

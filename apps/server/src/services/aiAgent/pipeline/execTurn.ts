@@ -1,7 +1,12 @@
 import type { SandboxStorageClaim } from '@lobechat/builtin-tool-cloud-sandbox';
+import { isOnDemandBuiltinTool } from '@lobechat/builtin-tools';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { AgentSenderMetadata, ExecAgentResult, UserInterventionConfig } from '@lobechat/types';
-import { agentShareFileAccessScope, ordinaryFileAccessScope } from '@lobechat/types';
+import {
+  agentShareFileAccessScope,
+  ordinaryFileAccessScope,
+  resolveToolMode,
+} from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
@@ -621,10 +626,13 @@ export const execAgentTurn = async (
   }
 
   // 4. Fetch user settings (memory config + timezone)
-  const { enableExpertise, globalMemoryEnabled, userTimezone } = await traceSendStage(
-    'run_settings',
-    () => resolveRunSettings({ agentConfig, runFacts, shareGate }),
-  );
+  const { enableExpertise, globalMemoryEnabled, uninstalledBuiltinIds, userTimezone } =
+    await traceSendStage('run_settings', () =>
+      resolveRunSettings({ agentConfig, runFacts, shareGate, workspaceId: deps.workspaceId }),
+    );
+  if (!shareGate && !exclusivePluginIds && resolveToolMode(agentConfig.chatConfig) === 'agent') {
+    disabledPluginIds.push(...uninstalledBuiltinIds.filter(isOnDemandBuiltinTool));
+  }
   log(
     'execAgent: globalMemoryEnabled=%s, timezone=%s',
     globalMemoryEnabled,

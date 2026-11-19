@@ -1,5 +1,5 @@
 import { stripAssistantReasoningForReplay } from '@lobechat/agent-runtime';
-import { getUnselectedBuiltinToolIds, getUserDisabledToolIds } from '@lobechat/builtin-tools';
+import { getUnavailableBuiltinToolIds, getUserDisabledToolIds } from '@lobechat/builtin-tools';
 import {
   REQUEST_AGENT_ID_HEADER,
   REQUEST_OPERATION_ID_HEADER,
@@ -35,6 +35,7 @@ import { oneShotRelay } from '@/services/llmRelay';
 import { getAgentStoreState } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
+import { getToolStoreState } from '@/store/tool';
 import { getUserStoreState, useUserStore } from '@/store/user';
 import {
   settingsSelectors,
@@ -240,10 +241,11 @@ class ChatService {
       // discovery list too; one this turn already enabled (an @-mention) stays.
       disabledPluginIds: [
         ...getUserDisabledToolIds(agentConfig.plugins, chatConfig),
-        ...getUnselectedBuiltinToolIds([
-          ...getOptedInPluginIds(agentConfig.plugins),
-          ...(enabledToolIds ?? []),
-        ]),
+        ...getUnavailableBuiltinToolIds(
+          [...getOptedInPluginIds(agentConfig.plugins), ...(enabledToolIds ?? [])],
+          chatConfig,
+          getToolStoreState().uninstalledBuiltinTools,
+        ),
         ...resolveAgentConnectorActivation(
           { chatConfig, plugins: agentConfig.plugins },
           enabledToolIds,

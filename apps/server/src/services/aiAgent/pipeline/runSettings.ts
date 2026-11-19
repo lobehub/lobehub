@@ -1,3 +1,7 @@
+import {
+  resolveUninstalledBuiltinTools,
+  type UninstalledBuiltinToolsScope,
+} from '@lobechat/builtin-tools';
 import debug from 'debug';
 
 import type { AgentConfigWithId } from '@/server/services/agent';
@@ -11,11 +15,13 @@ export interface RunSettingsInput {
   agentConfig: AgentConfigWithId;
   runFacts: RunFacts;
   shareGate?: AgentShareGate;
+  workspaceId?: string;
 }
 
 export interface RunSettings {
   enableExpertise: boolean;
   globalMemoryEnabled: boolean;
+  uninstalledBuiltinIds: string[];
   userTimezone?: string;
 }
 
@@ -24,14 +30,20 @@ export const resolveRunSettings = async ({
   agentConfig,
   runFacts,
   shareGate,
+  workspaceId,
 }: RunSettingsInput): Promise<RunSettings> => {
   // Agent-level memory config takes priority; fallback to user-level setting
   const agentMemoryEnabled = agentConfig.chatConfig?.memory?.enabled;
   let globalMemoryEnabled = agentMemoryEnabled ?? false;
   let enableExpertise = false;
+  let uninstalledBuiltinIds: string[] = [];
   let userTimezone: string | undefined;
   try {
     const settings = await runFacts.userSettings();
+    uninstalledBuiltinIds = resolveUninstalledBuiltinTools(
+      settings?.tool as UninstalledBuiltinToolsScope | undefined,
+      workspaceId,
+    );
     const memorySettings = settings?.memory as { enabled?: boolean } | undefined;
 
     globalMemoryEnabled = agentMemoryEnabled ?? memorySettings?.enabled !== false;
@@ -67,5 +79,5 @@ export const resolveRunSettings = async ({
     enableExpertise = false;
   }
 
-  return { enableExpertise, globalMemoryEnabled, userTimezone };
+  return { enableExpertise, globalMemoryEnabled, uninstalledBuiltinIds, userTimezone };
 };

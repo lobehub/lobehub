@@ -624,10 +624,6 @@ describe('toolEngineering', () => {
         skipDefaultTools: true,
         toolIds: ['lobe-agent'],
       };
-      expect(
-        createAgentToolsEngine(model).generateToolsDetailed(activation).enabledToolIds,
-      ).toEqual([]);
-      mockCurrentAgentAutoPlugins = ['lobe-agent'];
       const engine = createAgentToolsEngine(model);
 
       expect(engine.generateToolsDetailed({ ...model, toolIds: [] }).enabledToolIds).not.toContain(
@@ -661,7 +657,7 @@ describe('toolEngineering', () => {
       expect(result.enabledToolIds).toEqual([]);
       expect(result.filteredTools).toContainEqual({
         id: 'lobe-agent',
-        reason: 'not_found',
+        reason: 'incompatible',
       });
       expect(result.filteredTools).toContainEqual({
         id: 'lobe-web-browsing',
