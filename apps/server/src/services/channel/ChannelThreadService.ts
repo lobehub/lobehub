@@ -87,10 +87,15 @@ const integer = (value: number | undefined, fallback: number, min: number, max: 
   return result;
 };
 
-/** A UUID-shaped id of one tool call, stable across that call's retries. */
+/**
+ * A UUID of one tool call, stable across that call's retries. Version 8 (custom, RFC 9562) with the
+ * RFC 4122 variant: the digests are not random, and `z.uuid()` rejects an id whose version or
+ * variant nibble is unset — every watch report would be refused instead of posted.
+ */
 const keyedUuid = (namespace: string, operationId: string, requestId: string) => {
   const hex = createHash('sha256').update(`${namespace}:${operationId}:${requestId}`).digest('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+  const variant = '89ab'.charAt(Number.parseInt(hex.slice(16, 17), 16) & 0b11);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 };
 
 /**

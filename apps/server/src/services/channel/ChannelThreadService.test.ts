@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import { ChannelError } from '@/database/repositories/channel';
 
@@ -167,7 +168,8 @@ describe('ChannelThreadService.steerThread', () => {
     const [first, retry] = mocks.steerAppend.mock.calls.map(([, entry]) => entry.id);
     expect(first).toBe(retry);
     expect(first).toBe(steerEntryId('op-main', 'call-1'));
-    expect(first).toMatch(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/);
+    // `z.uuid()` gates the ids the report callback accepts: the version and variant nibbles count.
+    expect(z.uuid().safeParse(first).success).toBe(true);
     expect(steerEntryId('op-main', 'call-2')).not.toBe(first);
   });
 
@@ -256,7 +258,7 @@ describe('Thread watches', () => {
 
     expect(first.watchId).toBe(retry.watchId);
     expect(first.watchId).toBe(channelWatchId('op-main', 'call-1'));
-    expect(first.watchId).toMatch(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/);
+    expect(z.uuid().safeParse(first.watchId).success).toBe(true);
     expect(channelWatchId('op-main', 'call-2')).not.toBe(first.watchId);
     expect(mocks.scheduleMessage).toHaveBeenCalledTimes(2);
     const ids = mocks.scheduleMessage.mock.calls.map(([job]) => job.deduplicationId);
