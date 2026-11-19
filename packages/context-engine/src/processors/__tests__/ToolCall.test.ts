@@ -278,6 +278,35 @@ describe('ToolCallProcessor', () => {
       expect(result.messages[0].tool_calls[0].function.arguments).toBe('{}');
     });
 
+    it('keeps a history value the model wrote with literal newlines', async () => {
+      const processor = new ToolCallProcessor(defaultConfig);
+      const content = '<!doctype html>\n<html>\n\t<body>Report</body>\n</html>';
+      const context = createContext([
+        {
+          content: '',
+          id: 'msg1',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'createCanvas',
+              arguments: `{"title":"Report","files":[{"path":"index.html","content":"${content}"}]}`,
+              id: 'call_1',
+              identifier: 'lobe-canvas',
+              type: 'builtin',
+            },
+          ],
+        },
+      ]);
+
+      const result = await processor.process(context);
+
+      // partial-json used to replay this call as files: [{ path }] without its content.
+      expect(JSON.parse(result.messages[0].tool_calls[0].function.arguments)).toEqual({
+        files: [{ content, path: 'index.html' }],
+        title: 'Report',
+      });
+    });
+
     it('should pass through valid tool arguments unchanged (prompt-cache stable)', async () => {
       const processor = new ToolCallProcessor(defaultConfig);
       const rawArgs = '{"description":"Create data models","language":"python"}';

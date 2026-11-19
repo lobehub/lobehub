@@ -71,3 +71,39 @@ describe('internal_transformToolCalls with connector-only MCPs', () => {
     expect(transform(wireName)[0]?.apiName).not.toBe(apiName);
   });
 });
+
+describe('internal_transformToolCalls arguments', () => {
+  const transformCanvasCall = (args: string) =>
+    new PluginInternalsActionImpl(
+      () => {},
+      () => ({}) as never,
+    ).internal_transformToolCalls([
+      {
+        function: {
+          arguments: args,
+          name: new ToolNameResolver().generate('lobe-canvas', 'createCanvas', 'builtin'),
+        },
+        id: 'call-1',
+        type: 'function',
+      },
+    ]);
+
+  it('keeps a file content the model wrote with literal newlines', () => {
+    const content = '<!doctype html>\n<html>\n\t<body>Report</body>\n</html>';
+
+    const [payload] = transformCanvasCall(
+      `{"title":"Report","files":[{"path":"index.html","content":"${content}"}]}`,
+    );
+
+    expect(JSON.parse(payload.arguments)).toEqual({
+      files: [{ content, path: 'index.html' }],
+      title: 'Report',
+    });
+  });
+
+  it('passes arguments that are not JSON through unchanged', () => {
+    const invalid = String.raw`{"title":"Report","files":[{"path":"index.html","content":"it\'s"}]}`;
+
+    expect(transformCanvasCall(invalid)[0].arguments).toBe(invalid);
+  });
+});

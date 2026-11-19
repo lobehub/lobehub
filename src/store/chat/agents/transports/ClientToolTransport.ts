@@ -5,6 +5,10 @@ import type {
   ToolTransport,
   ToolWorkRegistration,
 } from '@lobechat/agent-runtime';
+import {
+  describeUnparseableToolArguments,
+  parseToolArgumentsLossless,
+} from '@lobechat/context-engine';
 import type { ChatToolPayload, CreateMessageParams } from '@lobechat/types';
 
 import { didToolMutateWorkView, workService } from '@/services/work';
@@ -107,6 +111,19 @@ export class ClientToolTransport implements ToolTransport {
 
       if (store.operations[toolOperationId]?.abortController.signal.aborted) {
         return this.createInterruptedExecution(toolMessageId);
+      }
+
+      const invalidArguments = this.describeInvalidArguments(call.arguments);
+      if (invalidArguments) {
+        const { code, content, message } = invalidArguments;
+        store.failOperation(toolOperationId, { message, type: 'ToolExecutionError' });
+        // Not persisted here: the runtime writes this result into the tool message.
+        return {
+          attempts: 1,
+          result: { content, error: { code, message }, executionTime: 0, success: false },
+          resultPersisted: false,
+          toolMessageId,
+        };
       }
 
       const { operationId: executeOperationId } = store.startOperation({
@@ -282,6 +299,17 @@ export class ClientToolTransport implements ToolTransport {
 
     store.completeOperation(createOperationId);
     return createResult.id;
+  }
+
+  /**
+   * Same contract as the server builtin executor: arguments that are not JSON even after
+   * lossless repair never reach the tool, because the only way to run it was on a partial
+   * object. The result echoes the raw string so the model can resend a valid call.
+   */
+  private describeInvalidArguments(argsStr: string | undefined) {
+    if (!argsStr?.trim() || parseToolArgumentsLossless<unknown>(argsStr) !== undefined) return;
+
+    return describeUnparseableToolArguments(argsStr);
   }
 
   private createInterruptedExecution(toolMessageId: string): ToolRunExecution {

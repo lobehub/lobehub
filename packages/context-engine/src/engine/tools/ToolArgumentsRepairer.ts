@@ -1,5 +1,7 @@
 import { parse as parsePartialJSON } from 'partial-json';
 
+import { detectTruncatedJSON } from '../../utils/detectTruncatedJSON';
+import { escapeJsonStringControlChars, parseToolArgumentsLossless } from './toolArguments';
 import type { LobeToolManifest } from './types';
 
 /**
@@ -12,20 +14,26 @@ export interface ToolParameterSchema {
 }
 
 /**
- * Safe JSON parse with partial JSON fallback.
- * When strict JSON.parse fails (e.g. stream interrupted mid-arguments),
- * falls back to partial-json to recover as many fields as possible.
+ * Parse tool-call arguments without silently losing fields.
+ *
+ * Valid JSON, and JSON whose only defect is raw control characters inside strings, parse
+ * losslessly. partial-json then recovers the fields of an interrupted stream (unterminated
+ * text). It is not used on complete but malformed text (e.g. an invalid `\'` escape): there it
+ * drops the broken value and every field after it yet still returns an object, so createCanvas
+ * reached the tool without the `content` the model sent. That text returns `undefined`.
  */
-const safeParseJSON = <T = Record<string, unknown>>(text?: string): T | undefined => {
-  if (typeof text !== 'string') return undefined;
+const parseArguments = (text?: string): unknown => {
+  if (typeof text !== 'string' || !text.trim()) return {};
+
+  const parsed = parseToolArgumentsLossless<unknown>(text);
+  if (parsed !== undefined) return parsed;
+
+  if (!detectTruncatedJSON(text)) return undefined;
+
   try {
-    return JSON.parse(text) as T;
+    return parsePartialJSON(escapeJsonStringControlChars(text));
   } catch {
-    try {
-      return parsePartialJSON(text) as T;
-    } catch {
-      return undefined;
-    }
+    return undefined;
   }
 };
 
@@ -69,15 +77,17 @@ export class ToolArgumentsRepairer {
    *
    * @param apiName - API name
    * @param argumentsStr - Raw arguments string from LLM
-   * @returns Parsed and repaired arguments object
+   * @returns Parsed and repaired arguments object, or `undefined` when the string is complete
+   * but not JSON, so the caller can report it instead of running the tool on a guess
    */
-  parse(apiName: string, argumentsStr: string): Record<string, unknown> {
-    const parsed = safeParseJSON<Record<string, unknown>>(argumentsStr) || {};
+  parse(apiName: string, argumentsStr: string): Record<string, unknown> | undefined {
+    const parsed = parseArguments(argumentsStr);
+    if (parsed === undefined) return undefined;
 
     // Get API schema for repair
     const apiSchema = this.manifest?.api?.find((a) => a.name === apiName)?.parameters;
 
-    return this.repair(parsed, apiSchema);
+    return this.repair((parsed || {}) as Record<string, unknown>, apiSchema);
   }
 
   /**
