@@ -1,10 +1,12 @@
 import { createStaticStyles } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   badge: css`
-    width: var(--lobe-density-icon-box);
-    height: var(--lobe-density-icon-box);
-    border-radius: var(--lobe-density-radius);
+    width: ${densityVars.iconBox};
+    height: ${densityVars.iconBox};
+    border-radius: ${densityVars.radius};
 
     color: ${cssVar.colorTextSecondary};
 
@@ -19,7 +21,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorSuccessBg};
   `,
   container: css`
-    padding: var(--lobe-density-section-gap);
+    padding: ${densityVars.sectionGap};
   `,
   divider: css`
     height: 1px;
@@ -50,14 +52,14 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     width: 100%;
-    min-height: var(--lobe-density-row-height);
+    min-height: ${densityVars.rowHeight};
     margin-block-start: 6px;
     padding-inline: 10px;
     border: none;
-    border-radius: var(--lobe-density-radius);
+    border-radius: ${densityVars.radius};
 
     font: inherit;
-    font-size: var(--lobe-density-font-size);
+    font-size: ${densityVars.fontSize};
     color: ${cssVar.colorText};
 
     background: transparent;
@@ -76,7 +78,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   notice: css`
     padding-block: 8px;
     padding-inline: 10px;
-    border-radius: var(--lobe-density-radius);
+    border-radius: ${densityVars.radius};
 
     font-size: 12px;
     line-height: 1.5;

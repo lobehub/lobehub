@@ -2,7 +2,7 @@
 
 import { cssVar, Flexbox } from '@lobehub/ui';
 
-import { useDensityTokens, useInterfaceDensity } from '@/styles/density';
+import { useDensity, useDensityTokens } from '@/styles/density';
 
 import SkeletonBar from '../../Bar';
 import type { SettingsTabSkeleton } from './types';
@@ -21,7 +21,7 @@ const ROW_WIDTHS = [
  */
 export const CredsListSkeleton = ({ rows = 4 }: { rows?: number }) => {
   // Compact `CredItem`: 6px padding, 36px tile, 22px title line + 2 + 18px key line = 54px.
-  const compact = useInterfaceDensity() === 'compact';
+  const { compact, tokens } = useDensity();
   const { controlHeight } = useDensityTokens();
 
   return (
@@ -32,16 +32,16 @@ export const CredsListSkeleton = ({ rows = 4 }: { rows?: number }) => {
           <Flexbox
             horizontal
             align={'center'}
-            gap={compact ? 12 : 16}
+            gap={tokens.sectionGap}
             justify={'space-between'}
             key={index}
             style={{ paddingBlock: compact ? 6 : 12 }}
           >
-            <Flexbox horizontal align={'center'} flex={1} gap={compact ? 12 : 16}>
+            <Flexbox horizontal align={'center'} flex={1} gap={tokens.sectionGap}>
               <SkeletonBar
-                height={compact ? 36 : 48}
+                height={tokens.listRowHeight}
                 radius={compact ? 10 : 12}
-                width={compact ? 36 : 48}
+                width={tokens.listRowHeight}
               />
               <Flexbox gap={compact ? 2 : 4}>
                 <Flexbox horizontal align={'center'} gap={8} height={22}>

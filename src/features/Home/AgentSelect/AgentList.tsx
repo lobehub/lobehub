@@ -22,6 +22,7 @@ import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useDensityTokens, useInterfaceDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import { type AgentRow, useHomeAgentRows } from './useHomeAgentRows';
 
@@ -35,7 +36,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 24px;
     padding-inline: 12px;
 
-    font-size: var(--lobe-density-font-size);
+    font-size: ${densityVars.fontSize};
     color: ${cssVar.colorTextTertiary};
     text-align: center;
   `,
@@ -49,10 +50,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 8px;
     align-items: center;
 
-    height: var(--lobe-density-row-height);
+    height: ${densityVars.rowHeight};
     padding-block: 0;
     padding-inline: 8px;
-    border-radius: var(--lobe-density-radius);
+    border-radius: ${densityVars.radius};
 
     &:hover {
       background: ${cssVar.colorFillSecondary};
@@ -65,7 +66,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   // Same spec as the agent-detail SwitchPanel's section header.
   section: css`
-    height: var(--lobe-density-control-height);
+    height: ${densityVars.controlHeight};
     padding-block: 4px 2px;
     padding-inline: 8px;
 
