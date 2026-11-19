@@ -48,7 +48,7 @@ import {
   entrySize,
   sortDriveEntries,
 } from './entryColumns';
-import { useDriveFiles, useRefreshDrive } from './useDriveData';
+import { useDriveFiles, useRefreshDrive, useRemeasureDrive } from './useDriveData';
 import { useDriveDownload } from './useDriveDownload';
 
 /**
@@ -147,6 +147,7 @@ const DriveExplorer = memo<DriveExplorerProps>(({ drive, isWorkspace, toolbarExt
   const [creating, setCreating] = useState(false);
   const files = useDriveFiles(drive, path);
   const refreshDrive = useRefreshDrive();
+  const remeasureDrive = useRemeasureDrive();
   const download = useDriveDownload(drive);
 
   const tSetting = (key: string, options?: Record<string, unknown>) =>
@@ -199,6 +200,9 @@ const DriveExplorer = memo<DriveExplorerProps>(({ drive, isWorkspace, toolbarExt
             recursive: entry.isDirectory,
           });
           await refreshDrive();
+          // See `useRemeasureDrive`: the usage figure would otherwise stay at
+          // what was measured before the delete.
+          void remeasureDrive(drive);
         } catch (error) {
           failed(error, t('workingDirectory.drive.actionFailed', { ns: 'device' }));
         }

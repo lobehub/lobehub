@@ -5,9 +5,13 @@ import { useStorageAnalysis } from './useStorageAnalysis';
 
 const service = vi.hoisted(() => ({ analyzeStorage: vi.fn(), deleteFiles: vi.fn() }));
 const refreshDrive = vi.hoisted(() => vi.fn());
+const remeasureDrive = vi.hoisted(() => vi.fn());
 
 vi.mock('@/services/sandboxStorage', () => ({ sandboxStorageService: service }));
-vi.mock('../useDriveData', () => ({ useRefreshDrive: () => refreshDrive }));
+vi.mock('../useDriveData', () => ({
+  useRefreshDrive: () => refreshDrive,
+  useRemeasureDrive: () => remeasureDrive,
+}));
 
 const items = [
   {
@@ -39,6 +43,7 @@ beforeEach(() => {
   service.analyzeStorage.mockReset();
   service.deleteFiles.mockReset();
   refreshDrive.mockReset().mockResolvedValue(undefined);
+  remeasureDrive.mockReset().mockResolvedValue(undefined);
 });
 
 describe('useStorageAnalysis', () => {
@@ -115,6 +120,9 @@ describe('useStorageAnalysis', () => {
     expect(result.current.analysis?.result?.totalBytes).toBe(0);
     // The usage figure and listings reload to show the space coming back.
     expect(refreshDrive).toHaveBeenCalled();
+    // Reloading alone returns the figure measured before the delete
+    // (T-14518): the drive is measured again.
+    expect(remeasureDrive).toHaveBeenCalledWith('personal');
   });
 
   it('should leave in the figures what could not be deleted in time', async () => {
@@ -138,6 +146,8 @@ describe('useStorageAnalysis', () => {
     expect(result.current.analysis?.result?.items.map((item) => item.path)).toContain(
       'app/data.bin',
     );
+    // Nothing left the drive, so there is nothing to measure again.
+    expect(remeasureDrive).not.toHaveBeenCalled();
   });
 });
 
