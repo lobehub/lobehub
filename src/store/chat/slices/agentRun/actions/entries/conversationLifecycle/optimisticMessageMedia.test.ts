@@ -67,6 +67,37 @@ describe('getOptimisticMessageMedia', () => {
     expect(media.fileList).toBeUndefined();
   });
 
+  it('classifies by the type the upload was stored with', () => {
+    const media = getOptimisticMessageMedia([
+      { ...upload('png', 'p', ''), fileType: 'image/png' },
+      { ...upload('m4a', 'a.m4a', 'video/mp4'), fileType: 'audio/mp4' },
+      { ...upload('bin', 'b.bin', ''), fileType: 'application/octet-stream' },
+    ]);
+
+    expect(media.imageList?.map((item) => item.id)).toEqual(['png']);
+    expect(media.audioList?.map((item) => item.id)).toEqual(['m4a']);
+    expect(media.fileList).toEqual([
+      expect.objectContaining({ fileType: 'application/octet-stream', id: 'bin' }),
+    ]);
+  });
+
+  it('keeps the stored type through a queued send', () => {
+    const queued = snapshotQueuedFiles([{ ...upload('png', 'p', ''), fileType: 'image/png' }]);
+    const media = getOptimisticMessageMedia(reconstructUploadFilesFromQueue(queued!));
+
+    expect(media.imageList?.map((item) => item.id)).toEqual(['png']);
+  });
+
+  it('shows no zero-byte card for a queued file saved without its size', () => {
+    const media = getOptimisticMessageMedia(
+      reconstructUploadFilesFromQueue([
+        { id: 'legacy', mimeType: 'application/zip', name: 'old.zip', url: '' },
+      ]),
+    );
+
+    expect(media.fileList).toBeUndefined();
+  });
+
   it('keeps the file size through a queued send', () => {
     const queued = snapshotQueuedFiles([upload('zip-1', 'a.zip', 'application/zip', 177_500_000)]);
     const media = getOptimisticMessageMedia(reconstructUploadFilesFromQueue(queued!));

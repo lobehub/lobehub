@@ -1,5 +1,6 @@
 import type { ChatAudioItem, ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
 
+import { isSizeUnknownPlaceholder } from '@/store/chat/slices/operation/types';
 import type { UploadFileItem } from '@/types/files/upload';
 import { rememberLocalImagePreview } from '@/utils/localImagePreview';
 
@@ -18,8 +19,10 @@ const MESSAGE_IMAGE_MIME_TYPES = new Set([
   'image/webp',
 ]);
 
-const mimeTypeOf = (file: UploadFileItem) =>
-  (file.file?.type || '').split(';')[0].trim().toLowerCase();
+/** The type the upload was stored with, else the browser's. */
+const fileTypeOf = (file: UploadFileItem) => file.fileType || file.file?.type || '';
+
+const mimeTypeOf = (file: UploadFileItem) => fileTypeOf(file).split(';')[0].trim().toLowerCase();
 
 type MediaKind = 'audio' | 'file' | 'image' | 'video';
 
@@ -66,12 +69,12 @@ export const getOptimisticMessageMedia = (files: UploadFileItem[] = []) => {
     id: file.id,
     url: urlOf(file),
   }));
-  // An id-only entry (a legacy queued message) has no name or size to show;
-  // the persisted message brings its card.
+  // An id-only entry, or a queued one saved without its size by an older client,
+  // has no name or size to show; the persisted message brings its card.
   const fileList: ChatFileItem[] = byKind('file')
-    .filter((file) => !!file.file)
+    .filter((file) => !!file.file && !isSizeUnknownPlaceholder(file.file))
     .map((file) => ({
-      fileType: file.file.type,
+      fileType: fileTypeOf(file),
       id: file.id,
       name: file.file.name,
       size: file.file.size,

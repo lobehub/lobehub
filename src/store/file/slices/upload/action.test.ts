@@ -374,6 +374,7 @@ describe('FileUploadAction', () => {
           type: 'updateFile',
           value: {
             dimensions: mockDimensions,
+            fileType: 'image/jpeg',
             fileUrl: mockFileResponse.url,
             id: mockFileResponse.id,
             status: 'success',
@@ -945,6 +946,7 @@ describe('FileUploadAction', () => {
           type: 'updateFile',
           value: {
             dimensions: mockDimensions,
+            fileType: 'image/jpeg',
             fileUrl: mockFileResponse.url,
             id: mockFileResponse.id,
             status: 'success',

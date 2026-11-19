@@ -314,17 +314,24 @@ export const snapshotQueuedFiles = (files?: UploadFileItem[]): QueuedFile[] | un
   return files.map((f) => ({
     audioMetadata: f.audioMetadata,
     id: f.id,
-    mimeType: f.file?.type ?? '',
+    mimeType: f.fileType || f.file?.type || '',
     name: f.file?.name ?? f.id,
     size: f.file?.size,
     url: f.fileUrl || f.base64Url || f.previewUrl || '',
   }));
 };
 
+/** Placeholders rebuilt from a queued preview saved without its size (older clients). */
+const sizeUnknownPlaceholders = new WeakSet<File>();
+
+/** Whether `file` stands in for a queued upload whose real size was never recorded. */
+export const isSizeUnknownPlaceholder = (file: File) => sizeUnknownPlaceholders.has(file);
+
 /** A zero-byte `File` that reports the original upload's size. */
 const placeholderFile = ({ mimeType, name, size }: QueuedFile) => {
   const file = new File([], name, { type: mimeType });
-  if (size) Object.defineProperty(file, 'size', { value: size });
+  if (size === undefined) sizeUnknownPlaceholders.add(file);
+  else Object.defineProperty(file, 'size', { value: size });
   return file;
 };
 
