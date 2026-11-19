@@ -301,6 +301,8 @@
   "connectAgent.providerDesc.pi": "Minimal coding agent CLI",
   "connectAgent.providerDesc.qoder": "Qoder coding agent CLI",
   "connectAgent.providerDesc.trae": "TRAE Enterprise coding agent CLI",
+  "contextSelection.file.page": "p. {{page}}",
+  "contextSelection.file.pages": "pp. {{start}}–{{end}}",
   "copilotInstallGuide.actions.openDocs": "Open Install Guide",
   "copilotInstallGuide.actions.openSystemTools": "Open System Tools",
   "copilotInstallGuide.afterInstall": "After installing, run `copilot login`, then retry your message or click Re-detect in System Tools.",

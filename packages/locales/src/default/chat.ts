@@ -1721,6 +1721,8 @@ export default {
   'pageCopilot.title': 'Page Agent',
   'pageSelection.lines': 'Lines {{start}}-{{end}}',
   'pageSelection.reference': 'Selected Text',
+  'contextSelection.file.page': 'p. {{page}}',
+  'contextSelection.file.pages': 'pp. {{start}}–{{end}}',
   'textSelection.copied': 'Copied',
   'textSelection.copy': 'Copy',
   'textSelection.quote': 'Quote',

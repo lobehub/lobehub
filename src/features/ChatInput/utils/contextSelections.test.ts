@@ -71,4 +71,32 @@ describe('buildMessageContextSelections', () => {
     ]);
     expect(result.pageSelections).toEqual([]);
   });
+
+  it('keeps a file selection anchored to its file and pages', () => {
+    const result = buildMessageContextSelections([
+      {
+        content: 'Theorem 1. Every bounded sequence has a convergent subsequence.',
+        fileId: 'file_abc',
+        id: 'pdf-1',
+        pageRange: { endPage: 4, startPage: 3 },
+        source: 'file',
+        title: 'paper.pdf',
+        type: 'text',
+      },
+    ]);
+
+    expect(result.contextSelections).toEqual([
+      {
+        content: 'Theorem 1. Every bounded sequence has a convergent subsequence.',
+        fileId: 'file_abc',
+        format: undefined,
+        id: 'pdf-1',
+        pageRange: { endPage: 4, startPage: 3 },
+        preview: undefined,
+        source: 'file',
+        title: 'paper.pdf',
+      },
+    ]);
+    expect(result.pageSelections).toEqual([]);
+  });
 });

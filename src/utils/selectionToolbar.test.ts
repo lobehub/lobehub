@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { getRangeFirstLineRect, getSelectionToolbarPosition } from './helpers';
+import { getRangeFirstLineRect, getSelectionToolbarPosition } from './selectionToolbar';
 
-describe('TextSelectionActionLayer helpers', () => {
+describe('selection toolbar helpers', () => {
   it('keeps toolbar position inside viewport margins', () => {
     const rect = DOMRect.fromRect({ height: 18, width: 30, x: -20, y: 4 });
 

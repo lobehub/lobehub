@@ -10,6 +10,7 @@ import type {
   ContextSelection,
   ContextSelectionBase,
   ContextSelectionLineRange,
+  ContextSelectionPageRange,
   ElementContextSelection,
 } from '../common/contextSelection';
 // Import for local use
@@ -89,10 +90,13 @@ export interface CreateNewMessageParams {
 export interface ChatContextContent extends ContextSelectionBase {
   /** Present when `source` is `element` — the picked DOM element's details. */
   element?: ElementContextSelection['element'];
+  /** Present when `source` is `file` — the stored file the text was selected from. */
+  fileId?: string;
   filePath?: string;
   language?: string;
   lineRange?: ContextSelectionLineRange;
   pageId?: string;
+  pageRange?: ContextSelectionPageRange;
   side?: 'additions' | 'context' | 'deletions';
   source?: ContextSelection['source'];
   type: 'text';
@@ -105,12 +109,14 @@ export type {
   CodeContextSelection,
   ContextSelection,
   ElementContextSelection,
+  FileContextSelection,
   PageContextSelection,
 } from '../common';
 export {
   CodeContextSelectionSchema,
   ContextSelectionSchema,
   ElementContextSelectionSchema,
+  FileContextSelectionSchema,
   PageContextSelectionSchema,
 } from '../common';
 export type { PageSelection } from '../common/pageSelection';

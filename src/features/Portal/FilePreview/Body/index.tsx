@@ -13,6 +13,7 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
 import { usePreviewFileItem } from '../usePreviewFileItem';
+import { useAddSelectionToChat } from './useAddSelectionToChat';
 
 enum FilePreviewTab {
   Chunk = 'chunk',
@@ -34,6 +35,12 @@ const FilePreview = () => {
   const [tabByTopic, setTabByTopic] = useState<Record<string, FilePreviewTab>>({});
   const tab = tabByTopic[topicKey] ?? getDefaultTab(chunkText);
   const { data, error, fromSource, isLoading, mutate } = usePreviewFileItem();
+  // A pre-resolved source is a file the viewer does not own (a shared work),
+  // so it has no stored file id to quote. A document-coalesced item carries a
+  // `docs_*` id; the agent needs the persisted file behind it.
+  const addSelectionToChat = useAddSelectionToChat(
+    data && !fromSource ? { fileId: data.fileId ?? data.id, name: data.name } : undefined,
+  );
 
   useEffect(() => {
     setTabByTopic((prev) => ({ ...prev, [topicKey]: getDefaultTab(chunkText) }));
@@ -90,6 +97,7 @@ const FilePreview = () => {
             {...data}
             imageTools={fromSource ? undefined : <ImageEditTools />}
             showChunkHighlights={!fromSource}
+            onAddSelectionToChat={addSelectionToChat}
           />
         </Flexbox>
       )}

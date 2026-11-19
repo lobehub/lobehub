@@ -2,11 +2,14 @@ import type { ChatContextContent } from '@lobechat/types';
 import { Tag, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Code2Icon, TextIcon } from 'lucide-react';
+import { Code2Icon, FileTextIcon, TextIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { useFileStore } from '@/store/file';
+
+import { getFileSelectionLocation } from '../../utils/fileSelectionLocation';
 
 const styles = stylex.create({
   codeLine: { display: 'grid', gridTemplateColumns: '36px minmax(0, 1fr)', gap: '10px' },
@@ -49,6 +52,13 @@ const styles = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
+  filePreview: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '8',
+    paddingBlockStart: '6px',
+  },
   textPreview: { maxWidth: 'min(420px, 70vw)', color: cssVar.colorText, whiteSpace: 'pre-wrap' },
   truncated: { paddingBlockStart: '4px', color: cssVar.colorTextQuaternary },
 });
@@ -84,17 +94,33 @@ const getLocationText = ({
 };
 
 const SelectionItem = memo<ChatContextContent>(
-  ({ content, filePath, id, lineRange, preview, source, title }) => {
+  ({ content, filePath, id, lineRange, pageRange, preview, source, title }) => {
+    const { t } = useTranslation('chat');
     const contextSelectionKey = useChatInputStore((s) => s.contextSelectionKey);
     const [removeSelection] = useFileStore((s) => [s.removeChatContextSelection]);
 
+    const isFileSelection = source === 'file';
     const displayText = useMemo(
-      () => getPreviewText(preview || getLocationText({ filePath, lineRange, title }), content),
-      [content, filePath, lineRange, preview, title],
+      () =>
+        isFileSelection
+          ? getPreviewText(content)
+          : getPreviewText(preview || getLocationText({ filePath, lineRange, title }), content),
+      [content, filePath, isFileSelection, lineRange, preview, title],
     );
     const isCodeSelection = source === 'code' || Boolean(filePath);
 
     const tooltip = useMemo(() => {
+      if (isFileSelection) {
+        return (
+          <div>
+            <div {...stylex.props(styles.meta)}>
+              {getFileSelectionLocation({ pageRange, title }, t)}
+            </div>
+            <div {...stylex.props(styles.textPreview, styles.filePreview)}>{content}</div>
+          </div>
+        );
+      }
+
       if (!isCodeSelection) {
         return <div {...stylex.props(styles.textPreview)}>{preview || content}</div>;
       }
@@ -124,12 +150,30 @@ const SelectionItem = memo<ChatContextContent>(
           </pre>
         </div>
       );
-    }, [content, filePath, isCodeSelection, lineRange, preview, title]);
+    }, [
+      content,
+      filePath,
+      isCodeSelection,
+      isFileSelection,
+      lineRange,
+      pageRange,
+      preview,
+      t,
+      title,
+    ]);
+
+    const icon = isFileSelection ? (
+      <FileTextIcon size={16} />
+    ) : isCodeSelection ? (
+      <Code2Icon size={16} />
+    ) : (
+      <TextIcon size={16} />
+    );
 
     return (
       <Tag
         closable
-        icon={isCodeSelection ? <Code2Icon size={16} /> : <TextIcon size={16} />}
+        icon={icon}
         size={'large'}
         onClose={() => {
           if (contextSelectionKey) removeSelection({ contextKey: contextSelectionKey, id });

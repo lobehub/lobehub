@@ -11,9 +11,9 @@ import { useTranslation } from 'react-i18next';
 
 import type { ChatInputEditor } from '@/features/ChatInput/hooks/useChatInputEditor';
 import { useChatStore } from '@/store/chat';
+import { getRangeFirstLineRect, getSelectionToolbarPosition } from '@/utils/selectionToolbar';
 
 import { useConversationStore } from '../../../store';
-import { getRangeFirstLineRect, getSelectionToolbarPosition } from './helpers';
 import { quoteIntoEditor } from './quote';
 
 interface ActiveSelection {

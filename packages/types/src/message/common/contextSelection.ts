@@ -21,6 +21,17 @@ export interface ContextSelectionLineRange {
   startLine: number;
 }
 
+export const ContextSelectionPageRangeSchema = z.object({
+  endPage: z.number().optional(),
+  startPage: z.number(),
+});
+
+/** 1-based page numbers of a paged document, such as a PDF. */
+export interface ContextSelectionPageRange {
+  endPage?: number;
+  startPage: number;
+}
+
 export interface ContextSelectionBase {
   content: string;
   /**
@@ -110,6 +121,22 @@ export interface ElementContextSelection extends ContextSelectionBase {
   source: 'element';
 }
 
+/**
+ * Text selected in a stored file's preview, such as the text layer of a PDF.
+ * `fileId` lets the agent go back to the whole file; `title` carries its name.
+ */
+export const FileContextSelectionSchema = ContextSelectionBaseSchema.extend({
+  fileId: z.string(),
+  pageRange: ContextSelectionPageRangeSchema.optional(),
+  source: z.literal('file'),
+});
+
+export interface FileContextSelection extends ContextSelectionBase {
+  fileId: string;
+  pageRange?: ContextSelectionPageRange;
+  source: 'file';
+}
+
 export const McpAppContextSelectionSchema = ContextSelectionBaseSchema.extend({
   identifier: z.string(),
   source: z.literal('mcpApp'),
@@ -124,6 +151,7 @@ export const ContextSelectionSchema = z.discriminatedUnion('source', [
   CodeContextSelectionSchema,
   TextContextSelectionSchema,
   ElementContextSelectionSchema,
+  FileContextSelectionSchema,
   McpAppContextSelectionSchema,
 ]);
 
@@ -132,4 +160,5 @@ export type ContextSelection =
   | CodeContextSelection
   | TextContextSelection
   | ElementContextSelection
+  | FileContextSelection
   | McpAppContextSelection;

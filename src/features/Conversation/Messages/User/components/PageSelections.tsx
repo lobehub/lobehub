@@ -1,10 +1,17 @@
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Code2Icon, SquareDashedMousePointer } from 'lucide-react';
+import { Code2Icon, FileTextIcon, SquareDashedMousePointer } from 'lucide-react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import type { ContextSelection, ElementContextSelection, PageSelection } from '@/types/index';
+import { getFileSelectionLocation } from '@/features/ChatInput/utils/fileSelectionLocation';
+import type {
+  ContextSelection,
+  ElementContextSelection,
+  FileContextSelection,
+  PageSelection,
+} from '@/types/index';
 
 type UserContextSelection = ContextSelection | PageSelection;
 
@@ -117,6 +124,9 @@ const isElementSelection = (
 ): selection is ElementContextSelection =>
   isContextSelection(selection) && selection.source === 'element';
 
+const isFileSelection = (selection: UserContextSelection): selection is FileContextSelection =>
+  isContextSelection(selection) && selection.source === 'file';
+
 const getCodeSelectionMeta = (selection: ContextSelection): string => {
   if (selection.source !== 'code') return selection.title || '';
 
@@ -162,6 +172,25 @@ const ElementSelection = memo<{ selection: ElementContextSelection }>(({ selecti
 
 ElementSelection.displayName = 'UserMessageElementSelection';
 
+/** Text quoted from a stored file keeps the file name and page it came from. */
+const FileSelection = memo<{ selection: FileContextSelection }>(({ selection }) => {
+  const { t } = useTranslation('chat');
+
+  return (
+    <Flexbox className={stylex.props(styles.codeContainer).className}>
+      <Flexbox horizontal className={stylex.props(styles.codeHeader).className} gap={6}>
+        <FileTextIcon size={14} />
+        <div {...stylex.props(styles.codeMeta)}>
+          {getFileSelectionLocation({ pageRange: selection.pageRange, title: selection.title }, t)}
+        </div>
+      </Flexbox>
+      <div {...stylex.props(styles.elementText)}>{selection.content}</div>
+    </Flexbox>
+  );
+});
+
+FileSelection.displayName = 'UserMessageFileSelection';
+
 const QuoteSelection = memo<{ selection: UserContextSelection }>(({ selection }) => (
   <Flexbox className={stylex.props(styles.container).className}>
     <Flexbox horizontal gap={4} padding={4}>
@@ -176,6 +205,7 @@ QuoteSelection.displayName = 'UserMessageQuoteSelection';
 const SelectionItem = memo<{ selection: UserContextSelection }>(({ selection }) => {
   if (isCodeSelection(selection)) return <CodeSelection selection={selection} />;
   if (isElementSelection(selection)) return <ElementSelection selection={selection} />;
+  if (isFileSelection(selection)) return <FileSelection selection={selection} />;
 
   return <QuoteSelection selection={selection} />;
 });

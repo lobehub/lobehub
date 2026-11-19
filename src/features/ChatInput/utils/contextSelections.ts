@@ -20,6 +20,19 @@ const toPageSelection = (context: ChatContextContent): PageSelection | undefined
 };
 
 const toContextSelection = (context: ChatContextContent): ContextSelection => {
+  if (context.source === 'file' && context.fileId) {
+    return {
+      content: context.content,
+      fileId: context.fileId,
+      format: context.format,
+      id: context.id,
+      pageRange: context.pageRange,
+      preview: context.preview,
+      source: 'file',
+      title: context.title,
+    };
+  }
+
   if (context.source === 'code' || context.filePath) {
     return {
       content: context.content,

@@ -55,4 +55,22 @@ describe('foldLegacyUserMessageFields', () => {
 
     expect(input.userMessage).toEqual({ metadata: { contextSelections: [quote] } });
   });
+
+  it('keeps a PDF selection anchored to its file and pages', () => {
+    const fileQuote = {
+      content: 'Table 2: ablation results',
+      fileId: 'file_abc',
+      id: 'pdf-selection-1',
+      pageRange: { endPage: 4, startPage: 3 },
+      source: 'file' as const,
+      title: 'paper.pdf',
+    };
+    const input = ExecAgentSchema.parse({
+      agentId: 'agent-1',
+      prompt: 'Explain this table',
+      userMessage: { metadata: { contextSelections: [fileQuote] } },
+    });
+
+    expect(input.userMessage).toEqual({ metadata: { contextSelections: [fileQuote] } });
+  });
 });

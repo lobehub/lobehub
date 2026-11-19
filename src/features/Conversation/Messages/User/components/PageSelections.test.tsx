@@ -39,4 +39,24 @@ describe('PageSelections', () => {
     expect(screen.getByText('selected paragraph')).toBeInTheDocument();
     expect(screen.queryByText('page-1')).not.toBeInTheDocument();
   });
+
+  it('renders file selections with the file name, page and quoted text', () => {
+    render(
+      <PageSelections
+        selections={[
+          {
+            content: 'Table 2: ablation results',
+            fileId: 'file_abc',
+            id: 'selection-1',
+            pageRange: { startPage: 3 },
+            source: 'file',
+            title: 'paper.pdf',
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('paper.pdf · contextSelection.file.page')).toBeInTheDocument();
+    expect(screen.getByText('Table 2: ablation results')).toBeInTheDocument();
+  });
 });

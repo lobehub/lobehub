@@ -301,6 +301,8 @@
   "connectAgent.providerDesc.pi": "轻量编码助理 CLI",
   "connectAgent.providerDesc.qoder": "Qoder 编码助理 CLI",
   "connectAgent.providerDesc.trae": "TRAE 企业版编码助理 CLI",
+  "contextSelection.file.page": "第 {{page}} 页",
+  "contextSelection.file.pages": "第 {{start}}–{{end}} 页",
   "copilotInstallGuide.actions.openDocs": "打开安装指南",
   "copilotInstallGuide.actions.openSystemTools": "打开系统工具",
   "copilotInstallGuide.afterInstall": "安装完成后，请运行 `copilot login` 登录，然后重试刚才的消息，或在系统工具中点击“重新检测”。",

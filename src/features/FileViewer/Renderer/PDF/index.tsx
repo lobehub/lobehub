@@ -11,6 +11,8 @@ import { Document, Page, pdfjs } from '@/libs/pdfjs';
 import { toSameOriginFileProxyUrl } from '../../fileProxyUrl';
 import HighlightLayer from './HighlightLayer';
 import { styles } from './style';
+import type { PDFTextSelection } from './textSelection';
+import TextSelectionAction from './TextSelectionAction';
 import { useChunkHighlights } from './useChunkHighlights';
 import useResizeObserver from './useResizeObserver';
 
@@ -24,6 +26,11 @@ const maxWidth = 1200;
 export interface PDFViewerProps {
   fileId: string;
   /**
+   * Offer an "Add to chat" action over text selected on the pages. Omit where
+   * no conversation can take the selection.
+   */
+  onAddSelectionToChat?: (selection: PDFTextSelection) => void;
+  /**
    * Overlay the file's retrieval chunks on the pages. Turn off for a file the
    * viewer does not own; see {@link useChunkHighlights}.
    * @default true
@@ -32,7 +39,8 @@ export interface PDFViewerProps {
   url: string | null;
 }
 
-const PDFViewer = memo<PDFViewerProps>(({ url, fileId, showChunkHighlights = true }) => {
+const PDFViewer = memo<PDFViewerProps>((props) => {
+  const { url, fileId, onAddSelectionToChat, showChunkHighlights = true } = props;
   const [numPages, setNumPages] = useState<number>(0);
   const [containerRef, setContainerRef] = useState<HTMLElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>();
@@ -84,6 +92,9 @@ const PDFViewer = memo<PDFViewerProps>(({ url, fileId, showChunkHighlights = tru
           })}
         </Document>
       </Flexbox>
+      {onAddSelectionToChat && (
+        <TextSelectionAction root={containerRef} onAdd={onAddSelectionToChat} />
+      )}
     </Flexbox>
   );
 });

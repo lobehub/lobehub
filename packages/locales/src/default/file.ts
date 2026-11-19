@@ -565,6 +565,7 @@ export default {
   'preview.audioLoadFailed':
     'This audio could not be played in the browser. Download it to listen.',
   'preview.downloadFile': 'Download File',
+  'preview.pdf.addSelectionToChat': 'Add to chat',
   'preview.raw': 'Raw',
   'preview.render': 'Preview',
   'preview.unsupportedFileAndContact':

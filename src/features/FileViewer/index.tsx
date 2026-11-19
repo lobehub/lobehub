@@ -106,6 +106,8 @@ interface FileViewerProps extends FileListItem {
    * persisted library file mount them; omit for read-only previews.
    */
   imageTools?: ReactNode;
+  /** Forwarded to the PDF renderer; see {@link PDFViewerProps.onAddSelectionToChat}. */
+  onAddSelectionToChat?: PDFViewerProps['onAddSelectionToChat'];
   /** Host close action, surfaced in the image viewer's top bar. */
   onClose?: () => void;
   /** Forwarded to the PDF renderer; see {@link PDFViewerProps.showChunkHighlights}. */
@@ -153,7 +155,17 @@ const usePDFRenderer = (enabled: boolean) => {
  * Preview any file type.
  */
 const FileViewer = memo<FileViewerProps>((props) => {
-  const { id, style, fileType, url, name, imageTools, onClose, showChunkHighlights } = props;
+  const {
+    id,
+    style,
+    fileType,
+    url,
+    name,
+    imageTools,
+    onAddSelectionToChat,
+    onClose,
+    showChunkHighlights,
+  } = props;
   const isPDF = isPdfFile({ fileName: name, fileType, path: url });
   const { retry: retryPDFRenderer, state: pdfRendererState } = usePDFRenderer(isPDF);
 
@@ -168,7 +180,14 @@ const FileViewer = memo<FileViewerProps>((props) => {
 
     if (pdfRendererState.status === 'ready') {
       const { Renderer } = pdfRendererState;
-      return <Renderer fileId={id} showChunkHighlights={showChunkHighlights} url={url} />;
+      return (
+        <Renderer
+          fileId={id}
+          showChunkHighlights={showChunkHighlights}
+          url={url}
+          onAddSelectionToChat={onAddSelectionToChat}
+        />
+      );
     }
 
     return (
