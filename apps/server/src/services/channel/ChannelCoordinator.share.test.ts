@@ -177,16 +177,14 @@ describe('dispatching a contact’s shared Agent', () => {
     expect(executions.accepted).toHaveBeenCalledWith('channel', 'job');
   });
 
-  it('records the run as a share run and denies tools that need approval', async () => {
+  it('records the run as a share run that runs only granted tools without approval', async () => {
     await coordinator().advance('channel');
 
     const [params] = execAgent.mock.calls[0];
     expect(params.trigger).toBe('agent_share');
-    // Never `headless`: that would auto-approve `required` tools with the owner's credentials.
-    expect(params.userInterventionConfig).toEqual({
-      approvalMode: 'manual',
-      denyIntervention: true,
-    });
+    // Nobody can approve mid-run; the share gate limits the run to the granted tools.
+    expect(params.userInterventionConfig).toEqual({ approvalMode: 'headless' });
+    expect(params.shareGate).toBeDefined();
   });
 
   it.each([

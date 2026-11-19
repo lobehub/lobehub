@@ -384,12 +384,10 @@ export class ChannelCoordinator {
         // recorded as a share run so usage separates it from the owner's own Channel runs. The
         // Channel reply flow keys off the reserved operation and job, never this label.
         trigger: share ? RequestTrigger.AgentShare : 'channel',
-        // Nobody can approve a tool mid-run: `headless` would auto-approve every `required` tool
-        // with the owner's credentials, which the share never granted. Deny them instead, telling
-        // the Agent why, so the run neither parks nor acts without consent.
-        userInterventionConfig: share
-          ? { approvalMode: 'manual', denyIntervention: true }
-          : { approvalMode: 'headless' },
+        // Nobody can approve a tool mid-run, so tools run without approval. For a shared Agent
+        // that is limited to what the creator granted: `shareGate` keeps ungranted tools out of
+        // the run and blocks their calls, so granting a tool is the creator's consent to run it.
+        userInterventionConfig: { approvalMode: 'headless' },
       });
       if (!result.success) throw new Error(result.error || 'Agent could not start');
       await this.executions.accepted(job.channelId, job.id);
