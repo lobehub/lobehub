@@ -547,7 +547,6 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
           multiline
           desc={t('environments.form.bootstrapHint')}
           label={t('environments.form.bootstrap')}
-          placeholder={'pnpm install'}
           value={configuration.bootstrapCommand ?? ''}
           onSave={(bootstrapCommand) => saveConfiguration({ bootstrapCommand })}
         />
