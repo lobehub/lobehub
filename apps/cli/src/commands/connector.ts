@@ -24,6 +24,8 @@ export type ConnectorAuthType = 'none' | 'bearer' | 'oauth2';
 
 export interface ConnectorAddOptions {
   auth?: string;
+  clientId?: string;
+  clientSecret?: string;
   force?: boolean;
   header?: string[];
   identifier?: string;
@@ -108,7 +110,8 @@ export function buildCreateInput(options: ConnectorAddOptions): {
     throw new Error('Provide --url <mcp url> or --stdio-cmd <command>.');
   }
 
-  const authType = (options.auth ?? (options.token ? 'bearer' : 'none')) as ConnectorAuthType;
+  const authType = (options.auth ??
+    (options.token ? 'bearer' : options.clientId ? 'oauth2' : 'none')) as ConnectorAuthType;
   if (!AUTH_TYPES.includes(authType)) {
     throw new Error(`Invalid --auth "${options.auth}". Expected one of: ${AUTH_TYPES.join(', ')}.`);
   }
@@ -117,6 +120,12 @@ export function buildCreateInput(options: ConnectorAddOptions): {
   }
   if (authType !== 'bearer' && options.token) {
     throw new Error('--token is only valid with --auth bearer.');
+  }
+  if (authType !== 'oauth2' && (options.clientId || options.clientSecret)) {
+    throw new Error('--client-id and --client-secret are only valid with --auth oauth2.');
+  }
+  if (options.clientSecret && !options.clientId) {
+    throw new Error('--client-secret requires --client-id <id>.');
   }
   if (options.stdioCmd && authType !== 'none') {
     throw new Error(
@@ -155,6 +164,15 @@ export function buildCreateInput(options: ConnectorAddOptions): {
           mcpStdioConfig: { args: options.stdioArg ?? [], command: options.stdioCmd! },
         }),
     ...(authType === 'bearer' && { credentials: { token: options.token!, type: 'bearer' } }),
+    // A client the user registered with the OAuth server (same as the web
+    // form's Client ID field); without one the server registers dynamically.
+    ...(options.clientId && {
+      oidcConfig: {
+        clientId: options.clientId,
+        ...(options.clientSecret && { clientSecret: options.clientSecret }),
+        scheme: 'pre_registration' as const,
+      },
+    }),
     ...(headers && { metadata: { customHeaders: headers } }),
   };
 
@@ -406,6 +424,11 @@ export function registerConnectorCommand(program: Command) {
     .option('--identifier <id>', 'Connector identifier (derived from --name or --url if omitted)')
     .option('--auth <type>', 'Auth type: none, bearer or oauth2')
     .option('--token <token>', 'Bearer token (with --auth bearer)')
+    .option(
+      '--client-id <id>',
+      'OAuth Client ID registered with the MCP server, for servers that reject dynamic registration (implies --auth oauth2)',
+    )
+    .option('--client-secret <secret>', 'OAuth client secret (with --client-id, if it has one)')
     .option('--header <key:value>', 'Custom request header (repeatable)', collect, [])
     .option('--stdio-cmd <command>', 'stdio MCP server command')
     .option('--stdio-arg <arg>', 'stdio MCP server argument (repeatable)', collect, [])
@@ -454,7 +477,20 @@ export function registerConnectorCommand(program: Command) {
         try {
           ({ authorizationUrl } = await client.connector.startOAuth.mutate({ id }));
         } catch (error) {
-          fail(error, await rollback());
+          // The server ends client-resolution failures by asking for a Client ID:
+          // tell CLI users which flag supplies it.
+          const askedForClientId =
+            !options.clientId && /Client ID/.test((error as Error)?.message ?? '');
+          fail(
+            error,
+            [
+              askedForClientId &&
+                'Re-run with --client-id <id> (and --client-secret <secret> if it has one) to use an OAuth app you registered with this server.',
+              await rollback(),
+            ]
+              .filter(Boolean)
+              .join('\n') || undefined,
+          );
         }
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;

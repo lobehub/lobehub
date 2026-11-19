@@ -17,6 +17,7 @@ import {
   OAuthErrorCode,
   refreshAuthorization,
   registerClient,
+  RegistrationRejectedError,
   startAuthorization,
 } from '@modelcontextprotocol/client';
 import debug from 'debug';
@@ -241,6 +242,52 @@ export const registerDynamicClient = async (params: {
   });
 };
 
+/** Longest slice of a non-JSON registration response body quoted back to the user. */
+const MAX_QUOTED_BODY_LENGTH = 300;
+
+/**
+ * `HTTP <status> <error>: <error_description>` from an RFC 7591 error response,
+ * else the status and a bounded, whitespace-collapsed excerpt of the raw body.
+ */
+const describeRegistrationResponse = (error: RegistrationRejectedError) => {
+  let code: string | undefined;
+  let detail: string | undefined;
+  try {
+    const parsed = JSON.parse(error.body) as { error?: unknown; error_description?: unknown };
+    if (typeof parsed?.error === 'string') code = parsed.error;
+    if (typeof parsed?.error_description === 'string') detail = parsed.error_description;
+  } catch {
+    // Not JSON: quote the raw body below.
+  }
+  if (!code && !detail) {
+    const raw = error.body.replaceAll(/\s+/g, ' ').trim();
+    detail = raw.length > MAX_QUOTED_BODY_LENGTH ? `${raw.slice(0, MAX_QUOTED_BODY_LENGTH)}…` : raw;
+  }
+  const reason = [code, detail].filter(Boolean).join(': ');
+  return { code, summary: `HTTP ${error.status}${reason ? ` ${reason}` : ''}` };
+};
+
+/**
+ * Turn a dynamic registration failure into a message the user can act on: the
+ * authorization server's own response, which redirect URI it judged, and
+ * what to do next. Registration rejections are always the server's policy, so
+ * the next step is on its side or a pre-registered client, never a retry.
+ */
+export const describeRegistrationFailure = (
+  error: unknown,
+  params: { metadata: AuthorizationServerMetadata; redirectUri: string },
+): string => {
+  if (!RegistrationRejectedError.isInstance(error)) {
+    return `Dynamic client registration failed: ${(error as Error)?.message ?? String(error)}`;
+  }
+  const server = new URL(params.metadata.registration_endpoint ?? params.metadata.issuer).host;
+  const { code, summary } = describeRegistrationResponse(error);
+  if (code === OAuthErrorCode.InvalidRedirectUri) {
+    return `Dynamic client registration failed: ${server} rejected the redirect URI ${params.redirectUri} (${summary}). This server only registers redirect URIs it allows. Ask its provider to allow this redirect URI, or register an OAuth app with them using it and enter that app's Client ID.`;
+  }
+  return `Dynamic client registration failed: ${server} rejected the registration (${summary}). Check this server's OAuth client requirements, or enter the OAuth Client ID you registered with it.`;
+};
+
 export interface ConnectorClient {
   clientId: string;
   clientSecret?: string;
@@ -293,10 +340,7 @@ export const resolveConnectorClient = async (params: {
     );
   }
   const registration = await registerDynamicClient(params).catch((error: unknown) => {
-    throw new Error(
-      `Dynamic client registration failed: ${(error as Error)?.message ?? String(error)}`,
-      { cause: error },
-    );
+    throw new Error(describeRegistrationFailure(error, params), { cause: error });
   });
   return {
     clientId: registration.client_id,
