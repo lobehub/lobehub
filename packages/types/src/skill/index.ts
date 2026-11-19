@@ -132,6 +132,22 @@ export interface SkillResourceContent {
 
 // ===== Skill Item (full structure, for detail queries) =====
 
+export interface GitHubSkillUpstream {
+  installedCommit: string;
+  /** Fingerprint of editable fields when this package was installed. */
+  installedFingerprint?: string;
+  owner: string;
+  path: string;
+  /** HEAD follows the default branch. A full commit SHA is pinned. */
+  ref: string;
+  repo: string;
+}
+
+export type GitHubSkillCheck =
+  | { status: 'current' | 'missing' | 'unavailable' | 'limited' | 'pinned' }
+  | { revision: string; status: 'chooseRef' }
+  | { commit: string; localChanges: boolean; revision: string; status: 'update' };
+
 export interface SkillItem {
   content?: string | null;
   createdAt: Date;
@@ -144,6 +160,7 @@ export interface SkillItem {
   resources?: Record<string, SkillResourceMeta> | null;
   source: SkillSource;
   updatedAt: Date;
+  upstream?: GitHubSkillUpstream | null;
   /** Creator attribution — drives the workspace row-level manage gate. */
   userId?: string | null;
   zipFileHash?: string | null;
@@ -160,6 +177,7 @@ export interface SkillListItem {
   name: string;
   source: SkillSource;
   updatedAt: Date;
+  upstream?: GitHubSkillUpstream | null;
   /** Creator attribution — drives the workspace row-level manage gate. */
   userId?: string | null;
   zipFileHash?: string | null;

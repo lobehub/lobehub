@@ -45,7 +45,6 @@ describe('GitHub skill collection import', () => {
     model = new AgentSkillModel(db, userId);
     vi.spyOn(GitHub.prototype, 'resolveCommit').mockResolvedValue(commit);
     vi.spyOn(GitHub.prototype, 'downloadCommitZip').mockResolvedValue(zip);
-    vi.spyOn(GitHub.prototype, 'downloadRepoZip').mockResolvedValue(zip);
   });
 
   afterEach(async () => {
@@ -137,6 +136,110 @@ describe('GitHub skill collection import', () => {
       )[0].status,
     ).toBe('updated');
     expect((await model.findById(row.id))?.identifier).toBe(row.identifier);
+  });
+
+  it('checks a shared snapshot once, updates only the changed package and protects local edits', async () => {
+    const sibling = '.agents/skills/other';
+    const scan = await importer.discoverGitHubSkills(repo);
+    await importer.importGitHubSkills({
+      ...scan,
+      gitUrl: repo,
+      selections: [review, sibling].map((path) => ({ path, revision: null })),
+    });
+    const a = (await model.findByName('review'))!;
+    const b = (await model.findByName('other'))!;
+    expect(a.upstream).toMatchObject({ path: review, ref: 'HEAD', installedCommit: commit });
+    const next = 'b'.repeat(40);
+    vi.mocked(GitHub.prototype.resolveCommit).mockResolvedValue(next);
+    vi.mocked(GitHub.prototype.downloadCommitZip)
+      .mockClear()
+      .mockResolvedValue(
+        Buffer.from(
+          zipSync({
+            ['repo-new/' + review + '/SKILL.md']: doc('review'),
+            ['repo-new/' + review + '/scripts/run.sh']: strToU8('echo updated'),
+            ['repo-new/' + sibling + '/SKILL.md']: doc('other'),
+          }),
+        ),
+      );
+    const checks = await importer.checkGitHubUpdates();
+    expect(checks[a.id]).toMatchObject({ commit: next, localChanges: false, status: 'update' });
+    expect(checks[b.id]).toEqual({ status: 'current' });
+    expect(GitHub.prototype.downloadCommitZip).toHaveBeenCalledTimes(1);
+    const before = checks[a.id];
+    if (before.status !== 'update') throw new Error('Expected update');
+    await model.update(a.id, { content: 'My edited instructions' });
+    await expect(importer.applyGitHubUpdate({ ...before, id: a.id })).rejects.toThrow(/changed/);
+    const edited = (await importer.checkGitHubUpdates())[a.id];
+    if (edited.status !== 'update') throw new Error('Expected update');
+    expect(edited.localChanges).toBe(true);
+    await expect(importer.applyGitHubUpdate({ ...edited, id: a.id })).rejects.toThrow(
+      /local changes/,
+    );
+    expect((await model.findById(a.id))?.content).toBe('My edited instructions');
+    const result = await importer.applyGitHubUpdate({ ...edited, id: a.id, overwriteLocal: true });
+    expect(result.skill).toMatchObject({
+      id: a.id,
+      identifier: a.identifier,
+      upstream: { installedCommit: next },
+    });
+    expect(result.skill.resources?.['scripts/run.sh']).toBeDefined();
+    expect((await model.findById(b.id))?.zipFileHash).toEqual(b.zipFileHash);
+    expect((await importer.checkGitHubUpdates())[a.id]).toEqual({ status: 'current' });
+  });
+
+  it('applies the previewed commit with one click even if the branch advances again', async () => {
+    const { skill } = await importer.importFromGitHub({ gitUrl: repo + '/tree/release/' + review });
+    const next = 'd'.repeat(40);
+    vi.mocked(GitHub.prototype.resolveCommit).mockResolvedValue(next);
+    vi.mocked(GitHub.prototype.downloadCommitZip).mockResolvedValue(
+      Buffer.from(
+        zipSync({
+          ['repo-new/' + review + '/SKILL.md']: strToU8(
+            '---\nname: review\ndescription: Updated\n---\nUse the new instructions',
+          ),
+        }),
+      ),
+    );
+    const preview = (await importer.checkGitHubUpdates())[skill.id];
+    if (preview.status !== 'update') throw new Error('Expected update');
+    expect(preview.localChanges).toBe(false);
+    vi.mocked(GitHub.prototype.resolveCommit).mockResolvedValue('e'.repeat(40));
+    const { skill: updated } = await importer.applyGitHubUpdate({ id: skill.id, ...preview });
+    expect(updated).toMatchObject({
+      id: skill.id,
+      identifier: skill.identifier,
+      upstream: { ref: 'release', installedCommit: next },
+    });
+    expect(updated.content).toContain('Use the new instructions');
+    expect(GitHub.prototype.downloadCommitZip).toHaveBeenLastCalledWith(expect.anything(), next);
+  });
+
+  it('keeps explicit commit installs pinned and lets a legacy snapshot opt into a branch', async () => {
+    const { skill } = await importer.importFromGitHub({
+      gitUrl: repo + '/tree/' + commit + '/' + review,
+    });
+    expect((await importer.checkGitHubUpdates())[skill.id]).toEqual({ status: 'pinned' });
+    await model.replaceImportedSkill(skill, { upstream: null });
+    const legacy = (await importer.checkGitHubUpdates())[skill.id];
+    if (legacy.status !== 'chooseRef') throw new Error('Expected branch choice');
+    await importer.trackLegacyGitHubSkill(skill.id, legacy.revision, 'release/stable');
+    expect((await model.findById(skill.id))?.upstream).toMatchObject({
+      ref: 'release/stable',
+      installedCommit: commit,
+    });
+  });
+
+  it('reports a removed directory separately from an unavailable source and keeps the installation', async () => {
+    const { skill } = await importer.importFromGitHub({ gitUrl: repo + '/tree/main/' + review });
+    vi.mocked(GitHub.prototype.resolveCommit).mockResolvedValue('c'.repeat(40));
+    vi.mocked(GitHub.prototype.downloadCommitZip).mockResolvedValue(
+      Buffer.from(zipSync({ 'repo-new/README.md': doc('docs') })),
+    );
+    expect((await importer.checkGitHubUpdates())[skill.id]).toEqual({ status: 'missing' });
+    vi.mocked(GitHub.prototype.resolveCommit).mockRejectedValue(new Error('offline'));
+    expect((await importer.checkGitHubUpdates())[skill.id]).toEqual({ status: 'unavailable' });
+    expect((await model.findById(skill.id))?.zipFileHash).toEqual(skill.zipFileHash);
   });
 
   it('checks the library and creator permissions again when committing', async () => {

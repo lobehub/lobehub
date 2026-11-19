@@ -155,6 +155,15 @@ export class GitHub {
       headers: { 'Accept': 'application/vnd.github.sha', 'User-Agent': this.userAgent },
       signal: AbortSignal.timeout(15_000),
     });
+    if (response.status === 404)
+      throw new GitHubNotFoundError('GitHub repository or ref not found');
+    if (
+      response.status === 429 ||
+      (response.status === 403 &&
+        (response.headers.has('retry-after') ||
+          response.headers.get('x-ratelimit-remaining') === '0'))
+    )
+      throw new GitHubRateLimitError('GitHub rate limit reached');
     if (!response.ok)
       throw new GitHubDownloadError(`Could not resolve GitHub revision (HTTP ${response.status})`);
     const commit = (await response.text()).trim();
@@ -299,5 +308,7 @@ export class GitHubDownloadError extends GitHubError {
     this.name = 'GitHubDownloadError';
   }
 }
+
+export class GitHubRateLimitError extends GitHubError {}
 
 export const github = new GitHub();
