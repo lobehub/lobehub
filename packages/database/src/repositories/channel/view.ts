@@ -3,6 +3,7 @@ import {
   channelMessageDeletedAt,
   channelMessageEditedAt,
   channelMessageReceipt,
+  channelMessageReplyError,
   channelMessageVia,
   type ChatMessageError,
   defaultChannelAgentDirectory,
@@ -99,6 +100,8 @@ export const publicMessage = (row: MessageRow, fileIds: string[]) => {
       const { agent, ...rest } = receipt;
       return { ...rest, agent: agent && { ...agent, avatar: null as string | null } };
     })(),
+    // An Agent's failed reply, shown as a card in its reply slot.
+    replyError: (isAgent && channelMessageReplyError(message.metadata)) || null,
     via: isAgent
       ? null
       : (() => {
@@ -194,10 +197,14 @@ const THREAD_PREVIEW_LENGTH = 240;
  */
 const OPENING_REQUEST_KEY_PATTERN = 'opening:%';
 
-/** An Agent's acknowledgement before its run: it says the work started, not what came of it. */
+/**
+ * An Agent's acknowledgement before its run: it says the work started, not what came of it. One
+ * a failure turned into the reply's card is news again.
+ */
 const isOpeningAck = and(
   eq(channelMessages.routingStatus, 'reply'),
   like(channelMessages.requestKey, OPENING_REQUEST_KEY_PATTERN),
+  sql`COALESCE(${channelMessages.metadata} ->> 'replyError', '') = ''`,
 );
 
 type ThreadSummary = {

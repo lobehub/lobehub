@@ -2,7 +2,7 @@ import type { ChannelContextMessage } from '@lobechat/types';
 import { and, desc, eq, inArray, isNull, lt, ne } from 'drizzle-orm';
 import pMap from 'p-map';
 
-import type { ChannelJobItem } from '../../schemas';
+import type { ChannelJobItem, ChannelMessageItem } from '../../schemas';
 import {
   agents,
   channelAudit,
@@ -628,9 +628,13 @@ export const findOpeningReply = async (
   db: LobeChatDatabase | Transaction,
   channelId: string,
   jobId: string,
-): Promise<{ content: string; id: string } | undefined> => {
+): Promise<Pick<ChannelMessageItem, 'content' | 'id' | 'metadata'> | undefined> => {
   const [message] = await db
-    .select({ content: channelMessages.content, id: channelMessages.id })
+    .select({
+      content: channelMessages.content,
+      id: channelMessages.id,
+      metadata: channelMessages.metadata,
+    })
     .from(channelMessages)
     .where(
       and(

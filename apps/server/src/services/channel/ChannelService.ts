@@ -554,8 +554,16 @@ export class ChannelService {
     return message;
   };
 
+  /** Runs a failed reply again from the start. */
   retryJob = async (channelId: string, jobId: string) => {
     const job = await this.repository.retryJob(channelId, jobId);
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+    return job;
+  };
+
+  /** Runs a failed reply again in the conversation (and CLI session) it stopped in. */
+  resumeJob = async (channelId: string, jobId: string) => {
+    const job = await this.repository.retryJob(channelId, jobId, 'resume');
     await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
     return job;
   };
