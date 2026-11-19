@@ -232,7 +232,9 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
    * The single place a browser session key is minted, for all three execution
    * paths (local runtime, cloud gateway, CC MCP). Keyed by topic, not agent: a
    * topic is what the user sees as "this conversation", so its page is the one
-   * they expect the agent to be driving.
+   * they expect the agent to be driving. A sub-agent runs inside its parent's
+   * topic, so its thread gets a page of its own: concurrent sub-agents sharing
+   * one page read each other's navigations.
    *
    * A tool call always runs inside a persisted topic (the topic is created
    * before the first tool ever executes), so a missing topicId means a caller
@@ -240,7 +242,8 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
    */
   private sessionIdOf(ctx?: BuiltinToolContext): string {
     if (!ctx?.topicId) throw new Error('Browser tool requires a topic context');
-    return `topic:${ctx.topicId}`;
+    const topicSession = `topic:${ctx.topicId}`;
+    return ctx.isSubAgent && ctx.threadId ? `${topicSession}:thread:${ctx.threadId}` : topicSession;
   }
 
   /**
@@ -261,6 +264,8 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
     ]);
     if (!ctx?.agentId || useAgentStore.getState().activeAgentId !== ctx.agentId) return;
     if (!ctx.topicId || useChatStore.getState().activeTopicId !== ctx.topicId) return;
+    // The panel shows the topic's page, not a sub-agent thread's.
+    if (ctx.isSubAgent && ctx.threadId) return;
 
     const store = useGlobalStore.getState();
     store.toggleRightPanel(true);
