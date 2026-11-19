@@ -68,7 +68,7 @@ import {
   useHeaderActionSize,
   useInterfaceDensity,
 } from '@/styles/density';
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { type ComposerTarget, createComposerTarget, resolveThreadComposerTarget } from '../types';
@@ -113,7 +113,7 @@ const styles = stylex.create({
   header: { flexShrink: 0, minWidth: '0' },
   pane: { overflowY: 'auto', flex: '1', minHeight: '0' },
   paneHidden: { display: 'none' },
-  paramsLoading: { width: '100%', padding: '16px' },
+  paramsLoading: { width: '100%', padding: densityTokens['--lobe-density-card-padding'] },
   add: { flexShrink: 0 },
   overviewBody: { overflowY: 'auto', minHeight: '0' },
   overviewPanel: {

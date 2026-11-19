@@ -37,7 +37,7 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { gitService } from '@/services/git';
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 import { openCreateWorktreeModal } from './CreateWorktreeModal';
 import { gitMenuTriggerStyles } from './gitMenuTrigger';
@@ -136,7 +136,7 @@ const styles = stylex.create({
     minWidth: '44px',
   },
   emptyState: {
-    paddingBlock: '16px',
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
     fontSize: '12px',
     color: cssVar.colorTextTertiary,
     textAlign: 'center',
@@ -223,7 +223,7 @@ const styles = stylex.create({
   },
   searchBar: {
     paddingBlock: '4px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorSplit,
