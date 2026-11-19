@@ -6,8 +6,9 @@ import { getAllScopePermissions, getScopePermissions } from '@/utils/rbac';
 import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { UserController } from '../controllers';
+import { UserSettingsController } from '../controllers/user-settings.controller';
 import { requireAuth } from '../middleware/auth';
-import { requireAnyPermission } from '../middleware/permission-check';
+import { requireAnyPermission, requireApiKeyScope } from '../middleware/permission-check';
 import { DeletedResourceSchema, DeletedResourcesSchema } from '../types/common.type';
 import {
   CreateUserRequestSchema,
@@ -20,6 +21,12 @@ import {
   UserSchema,
   UserSearchRequestSchema,
 } from '../types/user.type';
+import {
+  UpdateUserProfileRequestSchema,
+  UpdateUserSettingsRequestSchema,
+  UserProfileSchema,
+  UserSettingsSchema,
+} from '../types/user-settings.type';
 
 const UserRoutes = new Hono();
 
@@ -56,6 +63,66 @@ UserRoutes.get(
     const userController = new UserController();
     return await userController.getCurrentUser(c);
   },
+);
+
+/**
+ * The caller's own settings and preference
+ * GET /api/v1/users/me/settings
+ */
+UserRoutes.get(
+  '/me/settings',
+  routeDoc({
+    data: UserSettingsSchema,
+    description:
+      'Every settings section plus the UI preference. Credentials are never returned: provider / tool keys (`keyVaults`) are managed through `/providers`, and Marketplace tokens are not exposed.',
+    operationId: 'users.getSettings',
+    summary: 'Get my settings',
+    tags: ['users'],
+  }),
+  requireAuth,
+  requireApiKeyScope('user:read'),
+  async (c) => new UserSettingsController().getSettings(c),
+);
+
+/**
+ * Patch the caller's settings and / or preference
+ * PATCH /api/v1/users/me/settings
+ */
+UserRoutes.patch(
+  '/me/settings',
+  routeDoc({
+    data: UserSettingsSchema,
+    description:
+      'Each settings section sent is deep-merged into the stored one (objects merge key by key; arrays and scalars replace); `preference` merges the same way. Returns the settings after the write. `keyVaults` and `market` are refused (400) — set provider keys through `PATCH /providers/{id}`. Inside a workspace, changing `defaultAgent`, `image`, `memory`, `systemAgent` or `tts` needs the workspace update permission, and `tool` needs agent update permission (403 otherwise).',
+    operationId: 'users.updateSettings',
+    summary: 'Update my settings',
+    tags: ['users'],
+  }),
+  requireAuth,
+  requireApiKeyScope('user:write'),
+  zValidator('json', UpdateUserSettingsRequestSchema),
+  async (c) => new UserSettingsController().updateSettings(c),
+);
+
+/**
+ * Update the caller's profile: display name, username, avatar
+ * PATCH /api/v1/users/me/profile
+ */
+UserRoutes.patch(
+  '/me/profile',
+  routeDoc({
+    data: UserProfileSchema,
+    description:
+      '`avatar` takes a base64 `data:image/png` / `data:image/webp` URL (uploaded to storage; the previous uploaded avatar is deleted), an absolute `http(s)` URL, or `""` to clear. `username` must be unique (409 when another user holds it). Fields are applied username first, so a conflict changes nothing.',
+    errors: [409],
+    operationId: 'users.updateProfile',
+    summary: 'Update my profile',
+    tags: ['users'],
+  }),
+  requireAuth,
+  requireApiKeyScope('user:write'),
+  zValidator('json', UpdateUserProfileRequestSchema),
+  async (c) => new UserSettingsController().updateProfile(c),
 );
 
 /**

@@ -3,6 +3,7 @@ import { and, count, desc, eq, ilike, inArray, isNull, notInArray } from 'drizzl
 import { agentsToSessions, messages, topics, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
+import { TrashService } from '@/server/services/trash';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
@@ -282,11 +283,22 @@ export class TopicService extends BaseService {
       if (permissionWhere) whereConditions.push(permissionWhere);
 
       const [existingTopic] = await this.db
-        .delete(topics)
+        .select({ id: topics.id })
+        .from(topics)
         .where(and(...whereConditions))
-        .returning();
+        .limit(1);
 
       if (!existingTopic) {
+        throw this.createNotFoundError('话题不存在');
+      }
+
+      // Recycle bin, as the app's own delete: the topic and its messages are
+      // stamped, not dropped, so the deletion shows up in `GET /trash` and can
+      // be restored. A topic already in the bin stamps nothing.
+      const trashed = await new TrashService(this.db, this.userId, this.workspaceId).trashTopics([
+        topicId,
+      ]);
+      if (trashed.length === 0) {
         throw this.createNotFoundError('话题不存在');
       }
 

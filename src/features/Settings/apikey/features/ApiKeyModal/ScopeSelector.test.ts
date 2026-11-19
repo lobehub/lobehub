@@ -33,4 +33,15 @@ describe('toggleScopeSelection', () => {
       'agent:read',
     ]);
   });
+
+  it('selects oauth app and trash read together with their write', () => {
+    expect(sorted(toggleScopeSelection([], 'oauth_app:write', true))).toEqual([
+      'oauth_app:read',
+      'oauth_app:write',
+    ]);
+    expect(sorted(toggleScopeSelection([], 'trash:write', true))).toEqual([
+      'trash:read',
+      'trash:write',
+    ]);
+  });
 });

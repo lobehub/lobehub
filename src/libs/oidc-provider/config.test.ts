@@ -1,5 +1,6 @@
 // @vitest-environment node
 import type * as BusinessConst from '@lobechat/business-const';
+import { API_KEY_FULL_ACCESS_SCOPE, API_KEY_SCOPES } from '@lobechat/const';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // The consent screen shows these names to the person signing in, so they name
@@ -95,5 +96,41 @@ describe('distribution OIDC clients', () => {
     await expect(loadClients([{ ...nativeClient, client_id: 'lobehub-desktop' }])).rejects.toThrow(
       'OIDC client "lobehub-desktop" is registered more than once',
     );
+  });
+});
+
+describe('OIDC scope catalog', () => {
+  it('offers only the OIDC scopes while API scopes are switched off', async () => {
+    const { buildDefaultScopes } = await import('./config');
+    const scopes = buildDefaultScopes(false);
+
+    expect(scopes).toEqual(
+      expect.arrayContaining(['openid', 'profile', 'email', 'offline_access']),
+    );
+    expect(scopes).not.toContain('agent:read');
+    expect(scopes).not.toContain('*');
+  });
+
+  it('adds every API key scope once the server enables them, never full access', async () => {
+    const { buildDefaultScopes } = await import('./config');
+    const scopes = buildDefaultScopes(true);
+
+    // The REST app registration accepts exactly this catalog; anything it
+    // accepts but the provider does not list would only fail later, at login.
+    for (const scope of API_KEY_SCOPES) {
+      if (scope === API_KEY_FULL_ACCESS_SCOPE) continue;
+      expect(scopes).toContain(scope);
+    }
+    expect(scopes).not.toContain(API_KEY_FULL_ACCESS_SCOPE);
+  });
+
+  it('reads OIDC_ENABLE_API_SCOPES when the provider configuration loads', async () => {
+    vi.resetModules();
+    vi.stubEnv('OIDC_ENABLE_API_SCOPES', '1');
+    const { defaultScopes } = await import('./config');
+
+    expect(defaultScopes).toContain('agent:read');
+    vi.unstubAllEnvs();
+    vi.resetModules();
   });
 });

@@ -3,6 +3,7 @@ import { LayersEnum } from '@lobechat/types';
 import { z } from 'zod';
 
 import type { QueuedAgentSignalEmissionResult } from '@/server/services/agentSignal/enqueue';
+import type { AgentSignalReceiptRollbackResult } from '@/server/services/agentSignal/services/receiptRollbackService';
 import type {
   AgentSignalReceipt,
   AgentSignalReceiptListResult,
@@ -57,13 +58,7 @@ export const ListReceiptsQuerySchema = z.object({
 });
 export type ListReceiptsQuery = z.infer<typeof ListReceiptsQuerySchema>;
 
-export const RollbackReceiptRequestSchema = z.object({
-  agentDocumentId: z.string().min(1).optional(),
-  documentId: z.string().min(1),
-  historyId: z.string().min(1),
-  receiptId: z.string().min(1),
-});
-export type RollbackReceiptRequest = z.infer<typeof RollbackReceiptRequestSchema>;
+export type AgentSignalReceiptIdParam = z.infer<typeof AgentSignalReceiptIdParamSchema>;
 
 // ==================== Response Schemas ====================
 
@@ -284,3 +279,35 @@ export const AgentSignalReceiptListSchema = z
   } satisfies Record<keyof AgentSignalReceiptListResult, z.ZodType>)
   .strict()
   .meta({ id: 'AgentSignalReceiptList' });
+
+/**
+ * Outcome of undoing a receipt. `rolled_back`: the change was reverted (a
+ * skill document restored to its pre-change version, or the created memory
+ * deleted); `already_rolled_back`: an earlier call did it; `conflict`: the
+ * document changed after the receipt, so restoring would lose later edits;
+ * `not_found`: the target document, history entry or memory no longer exists;
+ * `unsupported`: this kind of change cannot be undone; `failed`: the revert
+ * errored (see `reason`).
+ */
+export const AgentSignalReceiptRollbackSchema = z
+  .object({
+    /** Managed-skill binding of a skill receipt. */
+    agentDocumentId: z.string().optional(),
+    /** Document a skill receipt restores. */
+    documentId: z.string().optional(),
+    /** Document version a skill receipt restores to. */
+    historyId: z.string().optional(),
+    /** Why the rollback did not complete; absent on success. */
+    reason: z.string().optional(),
+    receiptId: z.string(),
+    status: z.enum([
+      'already_rolled_back',
+      'conflict',
+      'failed',
+      'not_found',
+      'rolled_back',
+      'unsupported',
+    ]),
+  } satisfies Record<keyof AgentSignalReceiptRollbackResult, z.ZodType>)
+  .strict()
+  .meta({ id: 'AgentSignalReceiptRollback' });

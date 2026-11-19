@@ -475,6 +475,25 @@ describe('FileS3', () => {
     });
   });
 
+  describe('uploadBuffer ACL', () => {
+    it('grants public-read under S3_SET_ACL unless the object is private', async () => {
+      const s3 = new FileS3();
+      const body = Buffer.from('{}');
+
+      await s3.uploadBuffer('files/public.json', body, 'application/json');
+      expect(PutObjectCommand).toHaveBeenLastCalledWith(
+        expect.objectContaining({ ACL: 'public-read', Key: 'files/public.json' }),
+      );
+
+      await s3.uploadBuffer('exports/u/personal/x.json', body, 'application/json', undefined, {
+        private: true,
+      });
+      expect(PutObjectCommand).toHaveBeenLastCalledWith(
+        expect.objectContaining({ ACL: undefined, Key: 'exports/u/personal/x.json' }),
+      );
+    });
+  });
+
   describe('createPreSignedUrl', () => {
     it('should create presigned URL for upload with ACL', async () => {
       const s3 = new FileS3();

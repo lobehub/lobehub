@@ -8,6 +8,7 @@ import type {
   ImSendRequest,
   ImSyncQuery,
   ImTopicParam,
+  LiveActivityRegisterRequest,
   PushTokenParam,
   PushTokenRegisterRequest,
   PushTokenUnregisterQuery,
@@ -79,6 +80,22 @@ export class ImController extends BaseController {
         c,
         { deleted: true, id: deviceId },
         'Device unregistered',
+      );
+    } catch (error) {
+      return this.handleError(c, error);
+    }
+  }
+
+  /** PUT /api/v1/push-tokens/:deviceId/live-activities */
+  async registerLiveActivity(c: Context): Promise<Response> {
+    try {
+      const { deviceId } = this.getParams<PushTokenParam>(c);
+      const body = await this.getBody<LiveActivityRegisterRequest>(c);
+      const service = await this.service(c);
+      return this.success(
+        c,
+        await service.registerLiveActivity(deviceId, body),
+        'Live Activity registered',
       );
     } catch (error) {
       return this.handleError(c, error);

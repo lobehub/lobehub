@@ -7,6 +7,8 @@ import { requireAuth } from '../middleware/auth';
 import { requireApiKeyScope } from '../middleware/permission-check';
 import { DeletedResourceSchema } from '../types/common.type';
 import {
+  LiveActivityRegisterRequestSchema,
+  LiveActivityRegistrationSchema,
   PushTokenParamSchema,
   PushTokenRegisterRequestSchema,
   PushTokenRegistrationSchema,
@@ -59,6 +61,25 @@ PushTokenRoutes.delete(
   zValidator('param', PushTokenParamSchema),
   zValidator('query', PushTokenUnregisterQuerySchema),
   async (c) => new ImController().unregisterPushToken(c),
+);
+
+/** PUT /api/v1/push-tokens/:deviceId/live-activities */
+PushTokenRoutes.put(
+  '/:deviceId/live-activities',
+  routeDoc({
+    data: LiveActivityRegistrationSchema,
+    description:
+      "Registers or rotates the ActivityKit update token of an iOS Live Activity that shows a run's pending intervention (approval / question), keyed by `activityKey`. The device must already be registered with `PUT /push-tokens/{deviceId}`, and the run must be visible to the caller; otherwise 404. A workspace credential may register for a workspace run. The answer carries the intervention's current state so a late registration can end its activity at once.",
+    errors: [404],
+    operationId: 'pushTokens.registerLiveActivity',
+    summary: 'Register a Live Activity push token',
+    tags: ['push-tokens'],
+  }),
+  requireAuth,
+  pushScope,
+  zValidator('param', PushTokenParamSchema),
+  zValidator('json', LiveActivityRegisterRequestSchema),
+  async (c) => new ImController().registerLiveActivity(c),
 );
 
 export default PushTokenRoutes;

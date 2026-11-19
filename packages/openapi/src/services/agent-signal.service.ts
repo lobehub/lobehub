@@ -5,7 +5,14 @@ import type {
 
 import type { LobeChatDatabase } from '@/database/type';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
-import { listAgentSignalReceipts } from '@/server/services/agentSignal/services/receiptService';
+import {
+  type AgentSignalReceiptRollbackResult,
+  rollbackAgentSignalReceipt,
+} from '@/server/services/agentSignal/services/receiptRollbackService';
+import {
+  getAgentSignalReceipt,
+  listAgentSignalReceipts,
+} from '@/server/services/agentSignal/services/receiptService';
 import { assertAgentSignalTriggerRateLimit } from '@/server/services/agentSignal/triggerRateLimit';
 import {
   buildTriggerSourceEvent,
@@ -76,5 +83,23 @@ export class AgentSignalRestService extends BaseService {
       topicId: query.topicId,
       userId: this.userId,
     });
+  }
+
+  /**
+   * Undo the change behind one receipt. The rollback service re-reads its
+   * target from the stored receipt; a receipt that does not exist or is not
+   * the caller's is a 404 here rather than a `not_found` status, which this
+   * endpoint keeps for a target that is gone.
+   */
+  async rollbackReceipt(receiptId: string): Promise<AgentSignalReceiptRollbackResult> {
+    const receipt = await getAgentSignalReceipt(receiptId);
+    if (!receipt || receipt.userId !== this.userId) {
+      throw this.createNotFoundError('Receipt not found');
+    }
+
+    return rollbackAgentSignalReceipt(
+      { receiptId },
+      { db: this.db, userId: this.userId, workspaceId: this.workspaceId },
+    );
   }
 }

@@ -12,7 +12,9 @@ import {
 } from '../middleware/permission-check';
 import {
   AgentSignalEmissionSchema,
+  AgentSignalReceiptIdParamSchema,
   AgentSignalReceiptListSchema,
+  AgentSignalReceiptRollbackSchema,
   EmitSourceEventRequestSchema,
   ListReceiptsQuerySchema,
   TriggerSourceEventRequestSchema,
@@ -39,6 +41,16 @@ const signalWrite = requireAnyPermissionWithApiKeyScope(
 
 /** Enqueueing a signal can start model-backed analysis, so it needs `model:invoke`. */
 const signalRun = requireApiKeyScope('model:invoke');
+
+/**
+ * Undoing a receipt rewrites the agent's skill document or deletes a memory,
+ * the same `agent:update` gate as the tRPC `rollbackReceipt` procedure.
+ */
+const signalRollback = requireAnyPermissionWithApiKeyScope(
+  getAllScopePermissions('AGENT_UPDATE'),
+  'agent:write',
+  'You do not have permission to roll back agent signal receipts',
+);
 
 /** Reading your own receipts is the namespace's read capability. */
 const signalRead = requireApiKeyScope('agent:read');
@@ -94,6 +106,24 @@ AgentSignalRoutes.get(
   signalRead,
   zValidator('query', ListReceiptsQuerySchema),
   async (c) => new AgentSignalController().listReceipts(c),
+);
+
+/** POST /api/v1/signals/receipts/:id/rollback — undo the change a receipt records. */
+AgentSignalRoutes.post(
+  '/receipts/:id/rollback',
+  routeDoc({
+    data: AgentSignalReceiptRollbackSchema,
+    description:
+      'Reverts the change an agent made on its own and reported as a receipt: a refined skill document is restored to the version before the change, a created memory is deleted. The outcome is in `status`; calling again after success answers `already_rolled_back`. A receipt that does not exist or belongs to someone else answers 404.',
+    errors: [404],
+    operationId: 'signals.rollbackReceipt',
+    summary: 'Roll back an agent signal receipt',
+    tags: ['signals'],
+  }),
+  requireAuth,
+  signalRollback,
+  zValidator('param', AgentSignalReceiptIdParamSchema),
+  async (c) => new AgentSignalController().rollbackReceipt(c),
 );
 
 export default AgentSignalRoutes;
