@@ -8,6 +8,13 @@ const sameDraft = (a: Draft | undefined, b: Draft | undefined) =>
   a?.projectWorkingDirectoryId === b?.projectWorkingDirectoryId &&
   a?.projectId === b?.projectId;
 
+/** Clear the staged draft when it is still this one. */
+const withdraw = (own: Draft | undefined) => {
+  if (!own) return;
+  const { pendingNewTopicDirectory, setPendingNewTopicDirectory } = useChatStore.getState();
+  if (sameDraft(pendingNewTopicDirectory, own)) setPendingNewTopicDirectory();
+};
+
 /**
  * Keep this pane's blank draft staged for the send.
  *
@@ -17,6 +24,11 @@ const sameDraft = (a: Draft | undefined, b: Draft | undefined) =>
  * opened in another pane can't make this one send to the wrong agent/device.
  * A device switch in this pane's composer restages the global value; the pane
  * follows it while it stays on the same agent and project.
+ *
+ * Leaving the draft — the pane unmounts or its route no longer names one —
+ * withdraws it while it is still the staged one. Left behind, it outlived the
+ * draft: the agent's next blank conversation anywhere sent into this project
+ * and offered its environment. Another pane's staged draft is left alone.
  */
 export const useProjectDraftStaging = (
   draft: Draft | undefined,
@@ -34,9 +46,12 @@ export const useProjectDraftStaging = (
   }, []);
 
   useEffect(() => {
+    if (!draft) withdraw(ownRef.current);
     ownRef.current = draft;
     restage();
   }, [draft?.agentId, draft?.projectWorkingDirectoryId, draft?.projectId, restage]);
+
+  useEffect(() => () => withdraw(ownRef.current), []);
 
   useEffect(
     () =>

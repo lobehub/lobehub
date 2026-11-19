@@ -1,7 +1,10 @@
 import { useCallback } from 'react';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { seedPendingSandboxSelection } from '@/store/chat/pendingSandboxSelection';
+import {
+  seedPendingSandboxSelection,
+  setPendingSandboxSelection,
+} from '@/store/chat/pendingSandboxSelection';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -11,7 +14,9 @@ import {
   getRememberedSandboxRepository,
   rememberSandboxSelection,
 } from './rememberedSandboxDirectory';
+import { projectStartEnvironmentId } from './sandboxEnvironmentOptions';
 import { setPrefersTemporarySandbox } from './temporarySandboxPreference';
+import { useIsSharedAgent, useProjectSandboxEnvironments } from './useSandboxEnvironmentList';
 import {
   isPersistentSelection,
   type SandboxSelection,
@@ -49,8 +54,20 @@ export const useSandboxModeSelect = (
   const workspaceId = useActiveWorkspaceId();
   const userId = useUserStore(userProfileSelectors.userId);
   const driveStatus = useSandboxDriveStatus(enabled);
-  const { selection, setSelection, topicId: scopeTopicId } = useSandboxPlacement(agentId, topicId);
+  const {
+    projectId,
+    selection,
+    setSelection,
+    topicId: scopeTopicId,
+  } = useSandboxPlacement(agentId, topicId);
   const onDrive = isPersistentSelection(selection);
+  const sharedAgent = useIsSharedAgent();
+  const { environments: projectEnvironments } = useProjectSandboxEnvironments(
+    projectId,
+    sharedAgent,
+    enabled,
+  );
+  const projectEnvironmentId = projectStartEnvironmentId(projectEnvironments);
 
   const toTemporary = useCallback(async () => {
     // Without a drive there is only one sandbox, and nothing to remember.
@@ -60,7 +77,18 @@ export const useSandboxModeSelect = (
     // it where it was, and new conversations must not start elsewhere.
     // Leaving the drive, the conversation starts from the repository the
     // agent's last temporary sandbox used, or none.
-    if (onDrive) {
+    if (onDrive && projectId) {
+      // A project conversation starts from its project's environment, never the
+      // agent's repository from elsewhere, and is not remembered for it. Before
+      // a topic exists it is a default, so the server still applies the
+      // project's; with none, the server decides.
+      const next: SandboxSelection = projectEnvironmentId
+        ? { environmentId: projectEnvironmentId }
+        : {};
+      if (scopeTopicId) await setSelection(next);
+      else if (next.environmentId) seedPendingSandboxSelection(agentId, next);
+      else setPendingSandboxSelection(agentId);
+    } else if (onDrive) {
       const next =
         getRememberedSandboxRepository({ userId, workspaceId }, agentId) ??
         temporarySelection(selection);
@@ -70,7 +98,18 @@ export const useSandboxModeSelect = (
       rememberSandboxSelection({ userId, workspaceId }, agentId, next);
     }
     setPrefersTemporarySandbox({ userId, workspaceId }, agentId, true);
-  }, [agentId, driveStatus, onDrive, selection, setSelection, userId, workspaceId]);
+  }, [
+    agentId,
+    driveStatus,
+    onDrive,
+    projectEnvironmentId,
+    projectId,
+    scopeTopicId,
+    selection,
+    setSelection,
+    userId,
+    workspaceId,
+  ]);
 
   const toPersistent = useCallback(async () => {
     if (!onDrive) {

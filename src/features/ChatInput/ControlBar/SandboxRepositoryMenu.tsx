@@ -43,7 +43,8 @@ interface SandboxRepositoryMenuProps {
    * empty one — rather than one level under a list of places.
    */
   none?: { active: boolean; onPick: () => void };
-  onAdd: () => void;
+  /** Adds an environment and picks it. Absent where there is no other one to add — a project's. */
+  onAdd?: () => void;
   /** Closes the whole work-location menu; a final pick leaves it. */
   onClose: () => void;
   onManage: () => void;
@@ -136,12 +137,14 @@ const SandboxRepositoryMenu = memo<SandboxRepositoryMenuProps>(
           </Flexbox>
         )}
 
-        <OptionRow
-          compact
-          icon={<Icon icon={PlusIcon} size={16} />}
-          label={t('sandboxEnvironment.add')}
-          onClick={onAdd}
-        />
+        {onAdd && (
+          <OptionRow
+            compact
+            icon={<Icon icon={PlusIcon} size={16} />}
+            label={t('sandboxEnvironment.add')}
+            onClick={onAdd}
+          />
+        )}
       </Flexbox>
     );
   },
