@@ -57,6 +57,25 @@ const isRetained = (request: BudgetRequest, now: number) =>
 export const isBudgetRequestCoolingDown = (request: BudgetRequest, now = Date.now()) =>
   now - request.createdAt < BUDGET_REQUEST_COOLDOWN_SECONDS * 1000;
 
+/** HSET + EXPIRE in one step, so a stored request always carries the retention TTL. */
+const STORE_SCRIPT = `
+redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
+redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3]))
+return 1
+`;
+
+/**
+ * Compare-and-delete: close the request only if it is still the version that
+ * was read (a member may have replaced it after its cooldown ran out), and
+ * release the cooldown only if it still belongs to that version.
+ */
+const REMOVE_SCRIPT = `
+if redis.call('HGET', KEYS[1], ARGV[1]) ~= ARGV[2] then return 0 end
+redis.call('HDEL', KEYS[1], ARGV[1])
+if ARGV[3] == '1' and redis.call('GET', KEYS[2]) == ARGV[4] then redis.call('DEL', KEYS[2]) end
+return 1
+`;
+
 const warn = (action: string, workspaceId: string, error: unknown) =>
   console.warn(`[redisService.budgetRequest] Failed to ${action}`, { error, workspaceId });
 
@@ -126,20 +145,34 @@ export const budgetRequest = {
         };
       }
 
-      const key = RedisKeys.lobechat.budgetRequests(workspaceId);
-      await redis.hset(key, input.userId, JSON.stringify(request));
-      await redis.expire(key, BUDGET_REQUEST_RETENTION_SECONDS);
+      await redis.eval(
+        STORE_SCRIPT,
+        1,
+        RedisKeys.lobechat.budgetRequests(workspaceId),
+        input.userId,
+        JSON.stringify(request),
+        String(BUDGET_REQUEST_RETENTION_SECONDS),
+      );
 
       return { created: true, persisted: true, request };
     } catch (error) {
       warn('store request', workspaceId, error);
-      if (claimed) await redis.del(cooldownKey).catch(() => undefined);
+      if (claimed) {
+        // Undo whatever may have been written before giving the claim back, so
+        // the caller's `persisted: false` holds and a retry cannot double-notify.
+        // The claim still blocks every other writer for this member here.
+        await redis
+          .hdel(RedisKeys.lobechat.budgetRequests(workspaceId), input.userId)
+          .catch(() => undefined);
+        await redis.del(cooldownKey).catch(() => undefined);
+      }
       return { created: true, persisted: false, request };
     }
   },
 
   /**
-   * Close the member's request; returns the request that was open.
+   * Close the member's request; returns the request that was open, or `null`
+   * when there was none (or it was replaced concurrently and is left alone).
    * `keepCooldown` leaves the cooldown running, so a dismissed request cannot
    * be sent again right away.
    */
@@ -152,13 +185,23 @@ export const budgetRequest = {
       const redis = await getClient();
       if (!redis) return null;
 
-      const request = await budgetRequest.get(workspaceId, userId, now);
-      await redis.hdel(RedisKeys.lobechat.budgetRequests(workspaceId), userId);
-      if (!keepCooldown) {
-        await redis.del(RedisKeys.lobechat.budgetRequestCooldown(workspaceId, userId));
-      }
+      const key = RedisKeys.lobechat.budgetRequests(workspaceId);
+      const raw = await redis.hget(key, userId);
+      if (!raw) return null;
 
-      return request;
+      const request = parseRequest(raw);
+      const removed = await redis.eval<number>(
+        REMOVE_SCRIPT,
+        2,
+        key,
+        RedisKeys.lobechat.budgetRequestCooldown(workspaceId, userId),
+        userId,
+        raw,
+        keepCooldown ? '0' : '1',
+        String(request?.createdAt ?? ''),
+      );
+
+      return Number(removed) === 1 && request && isRetained(request, now) ? request : null;
     } catch (error) {
       warn('remove request', workspaceId, error);
       return null;

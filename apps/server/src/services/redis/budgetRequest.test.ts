@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   hashes: new Map<string, Map<string, string>>(),
   scope: undefined as string | undefined,
   strings: new Map<string, string>(),
+  ttls: new Map<string, number>(),
 }));
 
 const guard = (command: string) => {
@@ -24,7 +25,26 @@ const memoryClient = {
     guard('del');
     return state.strings.delete(key) ? 1 : 0;
   }),
-  expire: vi.fn(async () => 1),
+  // Emulates the two Lua scripts of the domain: store (HSET + EXPIRE) and
+  // compare-and-delete (HGET == version → HDEL, then cooldown DEL if it matches).
+  eval: vi.fn(async (script: string, _numkeys: number, ...args: string[]) => {
+    if (script.includes('EXPIRE')) {
+      guard('eval');
+      const [key, field, value] = args;
+      const hash = state.hashes.get(key) ?? new Map<string, string>();
+      state.hashes.set(key, hash);
+      hash.set(field, value);
+      state.ttls.set(key, Number(args[3]));
+      if (state.failOn === 'evalAfterWrite') throw new Error('reply lost');
+      return 1;
+    }
+    const [key, cooldownKey, field, version, releaseCooldown, cooldownVersion] = args;
+    if (state.hashes.get(key)?.get(field) !== version) return 0;
+    state.hashes.get(key)?.delete(field);
+    if (releaseCooldown === '1' && state.strings.get(cooldownKey) === cooldownVersion)
+      state.strings.delete(cooldownKey);
+    return 1;
+  }),
   hdel: vi.fn(async (key: string, field: string) => {
     guard('hdel');
     return state.hashes.get(key)?.delete(field) ? 1 : 0;
@@ -70,6 +90,7 @@ describe('redisService.budgetRequest', () => {
     state.failOn = undefined;
     state.hashes.clear();
     state.strings.clear();
+    state.ttls.clear();
   });
 
   it('stores the first request under the lobechat scope and dedupes repeats in the cooldown', async () => {
@@ -91,10 +112,7 @@ describe('redisService.budgetRequest', () => {
       ex: BUDGET_REQUEST_COOLDOWN_SECONDS,
       nx: true,
     });
-    expect(memoryClient.expire).toHaveBeenCalledWith(
-      'budget_request:v1:ws-1',
-      BUDGET_REQUEST_RETENTION_SECONDS,
-    );
+    expect(state.ttls.get('budget_request:v1:ws-1')).toBe(BUDGET_REQUEST_RETENTION_SECONDS);
   });
 
   it('resolves concurrent calls to a single created request', async () => {
@@ -128,7 +146,7 @@ describe('redisService.budgetRequest', () => {
   });
 
   it('releases the cooldown when the request cannot be stored', async () => {
-    state.failOn = 'hset';
+    state.failOn = 'eval';
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const result = await budgetRequest.create('ws-1', { userId: 'u-1' }, NOW);
@@ -138,6 +156,34 @@ describe('redisService.budgetRequest', () => {
     state.failOn = undefined;
     expect((await budgetRequest.create('ws-1', { userId: 'u-1' }, NOW + 1)).persisted).toBe(true);
     warn.mockRestore();
+  });
+
+  it('undoes a write whose reply was lost before releasing the cooldown', async () => {
+    state.failOn = 'evalAfterWrite';
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await budgetRequest.create('ws-1', { userId: 'u-1' }, NOW);
+
+    expect(result).toMatchObject({ created: true, persisted: false });
+    expect(state.hashes.get('budget_request:v1:ws-1')?.has('u-1')).toBe(false);
+    expect(state.strings.has(COOLDOWN_KEY)).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('remove leaves a request that replaced the one it read', async () => {
+    await budgetRequest.create('ws-1', { userId: 'u-1' }, NOW);
+    // The member's cooldown ran out and they asked again between the admin's
+    // read and delete.
+    memoryClient.hget.mockImplementationOnce(async (key: string, field: string) => {
+      const read = state.hashes.get(key)?.get(field) ?? null;
+      state.strings.delete(COOLDOWN_KEY);
+      await budgetRequest.create('ws-1', { note: 'again', userId: 'u-1' }, NOW + 2);
+      return read;
+    });
+
+    expect(await budgetRequest.remove('ws-1', 'u-1', { now: NOW + 3 })).toBeNull();
+    expect((await budgetRequest.get('ws-1', 'u-1', NOW + 3))?.note).toBe('again');
+    expect(state.strings.get(COOLDOWN_KEY)).toBe(String(NOW + 2));
   });
 
   it('remove closes the request and lifts the cooldown', async () => {
