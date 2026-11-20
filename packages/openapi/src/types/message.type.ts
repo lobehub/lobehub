@@ -321,3 +321,127 @@ export const MessageListSchema = z
   .strict();
 
 export const MessageCountSchema = z.object({ count: z.number().int().min(0) }).strict();
+
+// ==================== Message Edit Types ====================
+
+export const MessageUpdateRequestSchema = z
+  .object({
+    content: z.string().optional().describe('Replaces the message text.'),
+    metadata: jsonObjectSchema
+      .optional()
+      .describe('Merged into the stored metadata. Server-owned keys are ignored.'),
+    pluginError: jsonObjectSchema
+      .nullable()
+      .optional()
+      .describe("The tool call's error, for a `tool` message; `null` clears it."),
+    pluginState: jsonObjectSchema
+      .optional()
+      .describe("Merged into the tool call's state, for a `tool` message."),
+    toolArguments: z
+      .object({
+        arguments: z
+          .union([z.string(), jsonObjectSchema])
+          .describe('New arguments: a JSON string or an object.'),
+        toolCallId: z.string().min(1).describe('A tool call this message made or answers.'),
+      })
+      .strict()
+      .optional()
+      .describe('Rewrites the arguments of one tool call, on the assistant call and its result.'),
+  })
+  .strict()
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: 'Provide at least one field to update',
+  });
+
+export type MessageUpdateRequest = z.infer<typeof MessageUpdateRequestSchema>;
+
+export const MessageAddFilesRequestSchema = z
+  .object({ fileIds: z.array(z.string().min(1)).min(1).max(50) })
+  .strict();
+
+export type MessageAddFilesRequest = z.infer<typeof MessageAddFilesRequestSchema>;
+
+export const MESSAGE_SEARCH_MAX_LIMIT = 50;
+
+export const MessagesSearchQuerySchema = z.object({
+  agentId: z.string().min(1).optional().describe('Only messages of this agent.'),
+  cursor: z
+    .string()
+    .min(1)
+    .max(512)
+    .optional()
+    .describe("Opaque cursor from the previous page's `nextCursor`. Omit for the first page."),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(MESSAGE_SEARCH_MAX_LIMIT)
+    .optional()
+    .describe(`Page size, 1–${MESSAGE_SEARCH_MAX_LIMIT}. Defaults to 20.`),
+  q: z.string().trim().min(1).max(200).describe('Keywords to look for in message text.'),
+  topicId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Search one topic's main conversation instead: a literal, case-insensitive match, oldest first.",
+    ),
+});
+
+export type MessagesSearchQuery = z.infer<typeof MessagesSearchQuerySchema>;
+
+export const MessageSearchHitSchema = z
+  .object({
+    agentId: z.string().nullable(),
+    createdAt: dateTimeSchema,
+    groupId: z.string().nullable(),
+    id: z.string(),
+    role: z.string(),
+    snippet: z.string().describe('The matched text with surrounding context.'),
+    threadId: z.string().nullable(),
+    topicId: z.string().nullable(),
+    topicTitle: z.string().nullable(),
+  })
+  .strict()
+  .meta({ id: 'MessageSearchHit' });
+
+export type MessageSearchHit = z.infer<typeof MessageSearchHitSchema>;
+
+export const MessageSearchResultSchema = z
+  .object({ ...pageInfoShape, items: z.array(MessageSearchHitSchema) })
+  .strict();
+
+export const MessageStatsQuerySchema = z.object({
+  agentId: z.string().min(1).optional(),
+  endDate: z.string().date().optional().describe('Inclusive, `YYYY-MM-DD`.'),
+  role: z.enum(['user', 'system', 'assistant', 'tool']).optional(),
+  startDate: z.string().date().optional().describe('Inclusive, `YYYY-MM-DD`.'),
+});
+
+export type MessageStatsQuery = z.infer<typeof MessageStatsQuerySchema>;
+
+export const TopicMessageStatsSchema = z
+  .object({
+    histogram: z
+      .array(
+        z
+          .object({
+            topics: z.number().int().describe('How many topics hold this many messages.'),
+            userCount: z.number().int().describe('The message count.'),
+          })
+          .strict(),
+      )
+      .describe('Per distinct message count, ascending.'),
+    max: z.number(),
+    mean: z.number(),
+    median: z.number(),
+    min: z.number(),
+    oneshot: z.number().int().describe('Topics with exactly one matching message.'),
+    oneshotRatio: z.number().min(0).max(1),
+    p90: z.number(),
+    p99: z.number(),
+    topics: z.number().int().describe('Topics with at least one matching message.'),
+    totalMessages: z.number().int(),
+  })
+  .strict()
+  .meta({ id: 'TopicMessageStats' });

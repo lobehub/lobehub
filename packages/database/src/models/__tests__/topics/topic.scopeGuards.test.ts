@@ -81,6 +81,31 @@ describe('TopicModel lookup guards', () => {
     expect(rows.map((row) => row.id)).toEqual(['kw-group']);
   });
 
+  it('leaves an unscoped keyword search unrestricted so group topics survive', async () => {
+    await serverDB.insert(topics).values([
+      { agentId, groupId, id: 'kw-unscoped-group', userId },
+      { agentId, id: 'kw-unscoped-agent', userId },
+      { id: 'kw-unscoped-bare', userId },
+    ]);
+    const ctx = createTopicModelContext({ db: serverDB, includeShareVisitor: false, userId });
+
+    // No conversation owner named → no scope predicate at all. The caller (the
+    // `/topics` search service) applies its own view filter afterwards.
+    expect(ctx.matchKeywordScope({ agentId: undefined, groupId: undefined })).toBeUndefined();
+
+    // An explicit `containerId: null` stays the legacy "topics with neither a
+    // session nor a group" request the string-arg callers rely on — note it still
+    // drops the group topic, which is exactly what unscoped search must not do.
+    const legacy = await serverDB
+      .select({ id: topics.id })
+      .from(topics)
+      .where(ctx.matchKeywordScope({ containerId: null }));
+    expect(legacy.map((row) => row.id).sort()).toEqual([
+      'kw-unscoped-agent',
+      'kw-unscoped-bare',
+    ]);
+  });
+
   it('answers empty id lists and blank keywords without a query', async () => {
     await serverDB.insert(topics).values({ id: 'empty-guard', senderId: 'visitor-1', userId });
 

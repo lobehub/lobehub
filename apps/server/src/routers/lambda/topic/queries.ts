@@ -23,8 +23,8 @@ import {
   assertCanViewTopicTargets,
 } from '../_helpers/conversationResourceGuard';
 import { batchResolveAgentIdFromSessions, resolveContext } from '../_helpers/resolveContext';
+import { readTopicTranscript, topicTranscriptInput } from '../_helpers/topicTranscript';
 import { guardCtx, topicProcedure, topicSearchProcedure } from './procedures';
-import { readTopicTranscript, topicTranscriptInput } from './transcript';
 
 /**
  * Child topics may run any agent of the workspace: the ones among `agentIds`

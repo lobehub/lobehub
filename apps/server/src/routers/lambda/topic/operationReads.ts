@@ -8,7 +8,7 @@ import {
 } from '@/server/services/heterogeneousAgent/operationPrincipal';
 import { TopicReferenceService } from '@/server/services/topicReference';
 
-import { readTopicTranscript, topicTranscriptInput } from './transcript';
+import { readTopicTranscript, topicTranscriptInput } from '../_helpers/topicTranscript';
 
 /**
  * The topic read a device-dispatched run needs, under its own identity.

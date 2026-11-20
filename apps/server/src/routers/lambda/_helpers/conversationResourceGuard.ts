@@ -8,6 +8,7 @@ import {
   canPerformResourceAction,
   getResourceMeta,
 } from '@/server/services/resourcePermission';
+import { resolveWorkspaceGrantedPermissions } from '@/server/services/workspacePermission';
 
 import { getWorkspaceAgentParentGroupIds } from './workspaceAgentGuard';
 
@@ -319,6 +320,94 @@ export const filterUserIdsByTopicViewAccess = async (
   );
 
   return activeUserIds.filter((_, index) => access[index]);
+};
+
+/** A conversation reference for {@link createConversationViewFilter}. */
+export interface ConversationVisibilityRef extends ConversationTarget {
+  /** Fallback owner when the row carries no direct `agentId` / `groupId`. */
+  topicId?: string | null;
+}
+
+const conversationVisibilityKey = (ref: ConversationVisibilityRef): string =>
+  ref.agentId || ref.groupId
+    ? `conversation:${ref.agentId ?? ''}:${ref.groupId ?? ''}`
+    : `topic:${ref.topicId ?? ''}`;
+
+/**
+ * Read-side counterpart of the `assert…` guards, for surfaces that list many
+ * conversations at once (search). The assert variants stop at the first
+ * refusal — right for a single requested id, wrong for a result page, where it
+ * would either blank valid hits or leak the ones past the refusal.
+ *
+ * Every distinct conversation in `refs` is resolved once and evaluated against
+ * the caller's workspace grants and the resource's General-access row; the
+ * returned predicate then answers `view` for a ref without further round trips.
+ * Ownership alone (`buildWorkspaceWhere`) is not authorization: a workspace
+ * member reads every member's rows, so a hit must additionally carry `view` on
+ * the agent/group that owns it.
+ *
+ * Refs resolving to no resource of this workspace are a vacuous pass, matching
+ * {@link assertCanViewTopicTargets}: a topic backed by no agent, group or
+ * resolvable session has nothing to gate, and the row is still scoped by the
+ * model's ownership WHERE. Personal mode (no workspaceId) is a no-op.
+ */
+export const createConversationViewFilter = async (
+  ctx: ConversationGuardCtx,
+  refs: ConversationVisibilityRef[],
+): Promise<(ref: ConversationVisibilityRef) => boolean> => {
+  const workspaceId = ctx.workspaceId ?? undefined;
+  if (!workspaceId || refs.length === 0) return () => true;
+
+  const distinct = new Map<string, ConversationVisibilityRef>();
+  for (const ref of refs) distinct.set(conversationVisibilityKey(ref), ref);
+
+  // One read for the whole page; every verdict below is a comparison on the
+  // same grants plus the resource's own General-access row.
+  const grantedPermissions =
+    ctx.grantedPermissions ??
+    (await resolveWorkspaceGrantedPermissions({ db: ctx.db, userId: ctx.userId, workspaceId }));
+
+  const resourceVerdicts = new Map<string, boolean>();
+  const canViewResource = async (target: ResolvedConversationTarget): Promise<boolean> => {
+    const key = `${target.resourceType}:${target.resourceId}`;
+    const cached = resourceVerdicts.get(key);
+    if (cached !== undefined) return cached;
+
+    const verdict = await canPerformResourceAction({
+      action: 'view',
+      db: ctx.db,
+      effectiveAccessLevel: 'view',
+      grantedPermissions,
+      meta: target.meta,
+      resourceId: target.resourceId,
+      resourceType: target.resourceType,
+      userId: ctx.userId,
+      workspaceId,
+    });
+    resourceVerdicts.set(key, verdict);
+    return verdict;
+  };
+
+  const verdicts = new Map<string, boolean>();
+  for (const [key, ref] of distinct) {
+    const resolved =
+      ref.agentId || ref.groupId
+        ? await resolveConversationTargets(ctx, [{ agentId: ref.agentId, groupId: ref.groupId }])
+        : ref.topicId
+          ? await resolveTopicTargets(ctx, [ref.topicId])
+          : [];
+
+    let verdict = true;
+    for (const target of resolved) {
+      if (!(await canViewResource(target))) {
+        verdict = false;
+        break;
+      }
+    }
+    verdicts.set(key, verdict);
+  }
+
+  return (ref) => verdicts.get(conversationVisibilityKey(ref)) ?? true;
 };
 
 /**

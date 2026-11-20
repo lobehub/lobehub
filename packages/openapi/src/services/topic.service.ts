@@ -1,8 +1,12 @@
+import { TRPCError } from '@trpc/server';
 import { and, count, desc, eq, ilike, inArray, isNull, notInArray } from 'drizzle-orm';
 
+import { TopicModel } from '@/database/models/topic';
 import { agentsToSessions, messages, topics, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
+import { assertCanUseTopicTargets } from '@/server/routers/lambda/_helpers/conversationResourceGuard';
+import { assertCreatorTopicTargets } from '@/server/routers/lambda/_helpers/shareVisitorTargetGuard';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
@@ -243,9 +247,17 @@ export class TopicService extends BaseService {
       const permissionWhere = this.buildPermissionWhere(topics, permissionResult.condition);
       if (permissionWhere) whereConditions.push(permissionWhere);
 
+      const { model, provider, ...fields } = payload;
+      // Same co-editing gates as tRPC `updateTopicModel`: `use` access on the
+      // conversation, and never a share visitor's topic.
+      if (model && provider) {
+        const guardCtx = { db: this.db, userId: this.userId, workspaceId: this.workspaceId };
+        await assertCanUseTopicTargets(guardCtx, [topicId]);
+        await assertCreatorTopicTargets(guardCtx, [topicId]);
+      }
       const [updatedTopic] = await this.db
         .update(topics)
-        .set(payload)
+        .set({ ...fields, updatedAt: new Date() })
         .where(and(...whereConditions))
         .returning();
 
@@ -253,8 +265,19 @@ export class TopicService extends BaseService {
         throw this.createNotFoundError('话题不存在');
       }
 
+      // The model pin carries a model-scoped effort pin in the metadata, so it
+      // goes through the model's row-locked switch rather than a plain write.
+      if (model && provider) {
+        await new TopicModel(this.db, this.userId, this.workspaceId).updateModelPin(topicId, {
+          model,
+          provider,
+        });
+      }
+
       return this.getTopicById(updatedTopic.id);
     } catch (error) {
+      // The conversation guards throw `TRPCError`; the controller maps its code.
+      if (error instanceof TRPCError) throw error;
       return this.handleServiceError(error, '更新话题');
     }
   }

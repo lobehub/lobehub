@@ -234,8 +234,16 @@ export class MessageAnalyticsQueries extends MessageScope {
       .where(genWhere([...this.analyticsConditions(params), isNotNull(messages.topicId)]))
       .groupBy(messages.topicId);
 
-    return computeTopicMessageStats(rows.map((r) => r.count));
+    return this.topicStatsFromCounts(rows.map((r) => r.count));
   };
+
+  /**
+   * Reduce already-fetched per-topic counts into the analytics summary. Exposed
+   * for callers that must drop topics the caller may not see before
+   * aggregating — the REST stats route resolves conversation access per topic.
+   */
+  topicStatsFromCounts = (counts: number[]): TopicMessageStats =>
+    computeTopicMessageStats(counts);
 
   hasTopicMessages = async (topicId: string): Promise<boolean> => {
     const rows = await this.db

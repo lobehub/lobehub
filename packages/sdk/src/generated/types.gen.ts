@@ -78,11 +78,9 @@ export type DeletedResource = {
     id: string;
 };
 
-export type AgentList = {
-    hasMore: PageHasMore;
-    nextCursor: PageNextCursor;
-    agents: Array<Agent>;
-    total: PageTotal;
+export type AgentPlugin = {
+    identifier: string;
+    mode: 'pinned' | 'auto' | 'disabled';
 };
 
 export type Agent = {
@@ -109,35 +107,11 @@ export type Agent = {
     updatedAt: string;
 };
 
-export type AgentPlugin = {
-    identifier: string;
-    mode: 'pinned' | 'auto' | 'disabled';
-};
-
-export type AgentDetail = {
-    agencyConfig: {
-        [key: string]: unknown;
-    } | null;
-    avatar: string | null;
-    chatConfig: {
-        [key: string]: unknown;
-    } | null;
-    createdAt: string;
-    description: string | null;
-    id: string;
-    model: string | null;
-    params: {
-        [key: string]: unknown;
-    } | null;
-    personal: boolean;
-    plugins: Array<AgentPlugin>;
-    provider: string | null;
-    slug: string | null;
-    systemRole: string | null;
-    title: string | null;
-    updatedAt: string;
-    files: Array<AgentFile>;
-    knowledgeBases: Array<AgentKnowledgeBase>;
+export type AgentList = {
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
+    agents: Array<Agent>;
+    total: PageTotal;
 };
 
 export type AgentFile = {
@@ -173,9 +147,37 @@ export type AgentKnowledgeBase = {
     visibility: 'private' | 'public';
 };
 
-export type AgentAccountList = {
-    accounts: Array<AgentAccount>;
-    total: number;
+export type AgentDetail = {
+    agencyConfig: {
+        [key: string]: unknown;
+    } | null;
+    avatar: string | null;
+    chatConfig: {
+        [key: string]: unknown;
+    } | null;
+    createdAt: string;
+    description: string | null;
+    id: string;
+    model: string | null;
+    params: {
+        [key: string]: unknown;
+    } | null;
+    personal: boolean;
+    plugins: Array<AgentPlugin>;
+    provider: string | null;
+    slug: string | null;
+    systemRole: string | null;
+    title: string | null;
+    updatedAt: string;
+    files: Array<AgentFile>;
+    knowledgeBases: Array<AgentKnowledgeBase>;
+};
+
+export type AgentAccountCapabilities = {
+    login?: boolean;
+    receive: boolean;
+    send: boolean;
+    sign?: boolean;
 };
 
 export type AgentAccount = {
@@ -212,11 +214,9 @@ export type AgentAccount = {
     workspaceId: string | null;
 };
 
-export type AgentAccountCapabilities = {
-    login?: boolean;
-    receive: boolean;
-    send: boolean;
-    sign?: boolean;
+export type AgentAccountList = {
+    accounts: Array<AgentAccount>;
+    total: number;
 };
 
 export type ApiKey = {
@@ -261,11 +261,11 @@ export type ChatGenerateReplyResponse = {
     reply: string;
 };
 
-export type ChatGroupList = {
-    hasMore: PageHasMore;
-    nextCursor: PageNextCursor;
-    chatGroups: Array<ChatGroup>;
-    total: PageTotal;
+export type ChatGroupMember = {
+    agentId: string;
+    enabled: boolean | null;
+    order: number | null;
+    role: 'supervisor' | 'participant' | 'assistant' | null;
 };
 
 export type ChatGroup = {
@@ -281,11 +281,11 @@ export type ChatGroup = {
     updatedAt: string;
 };
 
-export type ChatGroupMember = {
-    agentId: string;
-    enabled: boolean | null;
-    order: number | null;
-    role: 'supervisor' | 'participant' | 'assistant' | null;
+export type ChatGroupList = {
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
+    chatGroups: Array<ChatGroup>;
+    total: PageTotal;
 };
 
 export type DocumentSummary = {
@@ -310,31 +310,6 @@ export type Document = {
      * Markdown body.
      */
     content: string | null;
-};
-
-export type EvalRun = {
-    config: {
-        caseSelection?: {
-            caseIds?: Array<string>;
-            mode: 'all' | 'include' | 'exclude';
-        };
-        k: number;
-        maxConcurrency?: number;
-        maxSteps?: number;
-        timeout?: number;
-    };
-    createdAt: string;
-    datasetId: string;
-    executionMode: 'internal' | 'external';
-    experimentId: string | null;
-    id: string;
-    metrics: EvalRunMetrics | null;
-    name: string | null;
-    parentRunId: string | null;
-    startedAt: string | null;
-    status: 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'aborted' | 'external';
-    targetAgentId: string | null;
-    updatedAt: string;
 };
 
 export type EvalRunMetrics = {
@@ -375,16 +350,40 @@ export type EvalRunMetrics = {
     totalTokens?: number;
 };
 
-export type EvalRunTopic = {
+export type EvalRun = {
+    config: {
+        caseSelection?: {
+            caseIds?: Array<string>;
+            mode: 'all' | 'include' | 'exclude';
+        };
+        k: number;
+        maxConcurrency?: number;
+        maxSteps?: number;
+        timeout?: number;
+    };
     createdAt: string;
-    evalResult: EvalStoredResult | null;
-    input: string;
-    passed: boolean | null;
-    runId: string;
-    score: number | null;
-    status: 'pending' | 'running' | 'passed' | 'failed' | 'error' | 'timeout' | 'external' | 'completed' | 'judge_error' | null;
-    testCaseId: string;
-    topicId: string;
+    datasetId: string;
+    executionMode: 'internal' | 'external';
+    experimentId: string | null;
+    id: string;
+    metrics: EvalRunMetrics | null;
+    name: string | null;
+    parentRunId: string | null;
+    startedAt: string | null;
+    status: 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'aborted' | 'external';
+    targetAgentId: string | null;
+    updatedAt: string;
+};
+
+export type EvalRubricScore = {
+    reason?: string;
+    rubricId: string;
+    score: number;
+    verdicts?: Array<{
+        reason?: string;
+        rule: string;
+        verdict: 'satisfied' | 'unverifiable' | 'violated';
+    }>;
 };
 
 export type EvalStoredResult = {
@@ -451,26 +450,32 @@ export type EvalStoredResult = {
     operationId?: string;
 };
 
-export type EvalRubricScore = {
-    reason?: string;
-    rubricId: string;
-    score: number;
-    verdicts?: Array<{
-        reason?: string;
-        rule: string;
-        verdict: 'satisfied' | 'unverifiable' | 'violated';
-    }>;
-};
-
-export type EvalRunResult = {
+export type EvalRunTopic = {
     createdAt: string;
+    evalResult: EvalStoredResult | null;
     input: string;
     passed: boolean | null;
-    result: EvalCaseResult | null;
+    runId: string;
     score: number | null;
     status: 'pending' | 'running' | 'passed' | 'failed' | 'error' | 'timeout' | 'external' | 'completed' | 'judge_error' | null;
     testCaseId: string;
     topicId: string;
+};
+
+export type EvalThreadResult = {
+    completionReason?: string;
+    cost?: number;
+    duration?: number;
+    error?: string;
+    llmCalls?: number;
+    passed?: boolean;
+    rubricScores?: Array<EvalRubricScore>;
+    score?: number;
+    status?: 'error' | 'external' | 'failed' | 'passed' | 'running' | 'timeout' | 'completed' | 'judge_error';
+    steps?: number;
+    threadId: string;
+    tokens?: number;
+    toolCalls?: number;
 };
 
 export type EvalCaseResult = {
@@ -499,35 +504,15 @@ export type EvalCaseResult = {
     totalTokens?: number;
 };
 
-export type EvalThreadResult = {
-    completionReason?: string;
-    cost?: number;
-    duration?: number;
-    error?: string;
-    llmCalls?: number;
-    passed?: boolean;
-    rubricScores?: Array<EvalRubricScore>;
-    score?: number;
-    status?: 'error' | 'external' | 'failed' | 'passed' | 'running' | 'timeout' | 'completed' | 'judge_error';
-    steps?: number;
-    threadId: string;
-    tokens?: number;
-    toolCalls?: number;
-};
-
-export type EvalBenchmark = {
+export type EvalRunResult = {
     createdAt: string;
-    description: string | null;
-    id: string;
-    identifier: string;
-    isSystem: boolean;
-    metadata: {
-        [key: string]: unknown;
-    } | null;
-    name: string;
-    referenceUrl: string | null;
-    rubrics: Array<EvalBenchmarkRubric>;
-    updatedAt: string;
+    input: string;
+    passed: boolean | null;
+    result: EvalCaseResult | null;
+    score: number | null;
+    status: 'pending' | 'running' | 'passed' | 'failed' | 'error' | 'timeout' | 'external' | 'completed' | 'judge_error' | null;
+    testCaseId: string;
+    topicId: string;
 };
 
 export type EvalBenchmarkRubric = {
@@ -593,6 +578,21 @@ export type EvalBenchmarkRubric = {
     threshold?: number;
     type: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'rule-checklist' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external';
     weight: number;
+};
+
+export type EvalBenchmark = {
+    createdAt: string;
+    description: string | null;
+    id: string;
+    identifier: string;
+    isSystem: boolean;
+    metadata: {
+        [key: string]: unknown;
+    } | null;
+    name: string;
+    referenceUrl: string | null;
+    rubrics: Array<EvalBenchmarkRubric>;
+    updatedAt: string;
 };
 
 export type EvalDataset = {
@@ -739,13 +739,6 @@ export type EvalReportResult = {
     runStatus: 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'aborted' | 'external';
 };
 
-export type EvalBatchReportResult = {
-    items: Array<EvalReportReceipt>;
-    runId: string;
-    runStatus: 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'aborted' | 'external';
-    success: true;
-};
-
 export type EvalReportReceipt = {
     idempotent: boolean;
     reportedThreads: number;
@@ -757,11 +750,11 @@ export type EvalReportReceipt = {
     totalThreads: number;
 };
 
-export type InstalledPluginList = {
-    hasMore: PageHasMore;
-    nextCursor: PageNextCursor;
-    plugins: Array<InstalledPlugin>;
-    total: PageTotal;
+export type EvalBatchReportResult = {
+    items: Array<EvalReportReceipt>;
+    runId: string;
+    runStatus: 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'aborted' | 'external';
+    success: true;
 };
 
 export type InstalledPlugin = {
@@ -771,12 +764,42 @@ export type InstalledPlugin = {
     updatedAt: string;
 };
 
-export type FileList = {
+export type InstalledPluginList = {
     hasMore: PageHasMore;
     nextCursor: PageNextCursor;
-    files: Array<FileListItem>;
+    plugins: Array<InstalledPlugin>;
     total: PageTotal;
-    totalSize: string;
+};
+
+export type AsyncTaskError = {
+    body: string | {
+        detail: string;
+        retryAt?: string;
+    };
+    name: string;
+};
+
+export type FileAsyncTask = {
+    count?: number | null;
+    error: AsyncTaskError | null;
+    id?: string;
+    status: 'error' | 'pending' | 'processing' | 'success' | null;
+    type?: 'chunk' | 'embedding';
+};
+
+export type FileKnowledgeBaseRef = {
+    avatar: string | null;
+    description: string | null;
+    id: string;
+    name: string;
+};
+
+export type FileUser = {
+    avatar: string | null;
+    email: string | null;
+    fullName: string | null;
+    id: string;
+    username: string | null;
 };
 
 export type FileListItem = {
@@ -799,40 +822,12 @@ export type FileListItem = {
     users: Array<FileUser>;
 };
 
-export type FileAsyncTask = {
-    count?: number | null;
-    error: AsyncTaskError | null;
-    id?: string;
-    status: 'error' | 'pending' | 'processing' | 'success' | null;
-    type?: 'chunk' | 'embedding';
-};
-
-export type AsyncTaskError = {
-    body: string | {
-        detail: string;
-        retryAt?: string;
-    };
-    name: string;
-};
-
-export type FileKnowledgeBaseRef = {
-    avatar: string | null;
-    description: string | null;
-    id: string;
-    name: string;
-};
-
-export type FileUser = {
-    avatar: string | null;
-    email: string | null;
-    fullName: string | null;
-    id: string;
-    username: string | null;
-};
-
-export type FileDetail = {
-    file: File;
-    parsed?: FileParseResult;
+export type FileList = {
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
+    files: Array<FileListItem>;
+    total: PageTotal;
+    totalSize: string;
 };
 
 export type File = {
@@ -865,6 +860,11 @@ export type FileParseResult = {
     name: string;
     parseStatus: 'completed' | 'failed';
     parsedAt?: string;
+};
+
+export type FileDetail = {
+    file: File;
+    parsed?: FileParseResult;
 };
 
 export type FileUrl = {
@@ -915,24 +915,6 @@ export type BatchGetFilesResult = {
     total: number;
 };
 
-export type GoalList = {
-    hasMore: PageHasMore;
-    nextCursor: PageNextCursor;
-    goals: Array<GoalListItem>;
-    total: PageTotal;
-};
-
-export type GoalListItem = {
-    findingCount: number;
-    goal: Goal;
-    pendingDecisions: number;
-    signedOff: boolean;
-    taskDone: number;
-    taskTotal: number;
-    totalRunCost: number;
-    totalRunDuration: number;
-};
-
 export type Goal = {
     agentId: string | null;
     archivedAt: string | null;
@@ -959,13 +941,33 @@ export type Goal = {
     workspaceId: string | null;
 };
 
-export type GoalGraphSnapshot = {
-    decisions: Array<GoalGraphDecision>;
-    edges: Array<GoalGraphEdge>;
-    events: Array<GoalGraphEvent>;
+export type GoalListItem = {
+    findingCount: number;
     goal: Goal;
-    nodes: Array<GoalGraphNode>;
-    workVersions: Array<GoalGraphWorkVersionLink>;
+    pendingDecisions: number;
+    signedOff: boolean;
+    taskDone: number;
+    taskTotal: number;
+    totalRunCost: number;
+    totalRunDuration: number;
+};
+
+export type GoalList = {
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
+    goals: Array<GoalListItem>;
+    total: PageTotal;
+};
+
+export type GoalDecisionOption = {
+    alsoRetires?: Array<{
+        nodeId: string;
+        title: string;
+    }>;
+    description?: string;
+    effect?: 'retry' | 'retire' | 'retry_after_reset';
+    id: string;
+    label: string;
 };
 
 export type GoalGraphDecision = {
@@ -987,17 +989,6 @@ export type GoalGraphDecision = {
     resolvedOptionId: string | null;
     status: 'pending' | 'resolved' | 'canceled';
     updatedAt: string;
-};
-
-export type GoalDecisionOption = {
-    alsoRetires?: Array<{
-        nodeId: string;
-        title: string;
-    }>;
-    description?: string;
-    effect?: 'retry' | 'retire' | 'retry_after_reset';
-    id: string;
-    label: string;
 };
 
 export type GoalGraphEdge = {
@@ -1062,6 +1053,15 @@ export type GoalGraphWorkVersionLink = {
         workId: string;
     };
     workVersionId: string;
+};
+
+export type GoalGraphSnapshot = {
+    decisions: Array<GoalGraphDecision>;
+    edges: Array<GoalGraphEdge>;
+    events: Array<GoalGraphEvent>;
+    goal: Goal;
+    nodes: Array<GoalGraphNode>;
+    workVersions: Array<GoalGraphWorkVersionLink>;
 };
 
 export type GoalGraph = {
@@ -1220,13 +1220,6 @@ export type GoalRestartResult = {
     restartedTaskIds: Array<string>;
 };
 
-export type ImSendResult = {
-    accepted: boolean;
-    operationId: string | null;
-    topicId: string;
-    userMessage: ImMessage;
-};
-
 export type ImMessage = {
     agentId: string | null;
     content: string;
@@ -1241,6 +1234,13 @@ export type ImMessage = {
     }>;
     id: string;
     role: 'assistant' | 'user';
+};
+
+export type ImSendResult = {
+    accepted: boolean;
+    operationId: string | null;
+    topicId: string;
+    userMessage: ImMessage;
 };
 
 export type ImSyncResult = {
@@ -1259,13 +1259,6 @@ export type ImReadResult = {
     unread: number;
 };
 
-export type KnowledgeBaseList = {
-    hasMore: PageHasMore;
-    nextCursor: PageNextCursor;
-    knowledgeBases: Array<KnowledgeBaseListItem>;
-    total: PageTotal;
-};
-
 export type KnowledgeBaseListItem = {
     avatar: string | null;
     createdAt: string;
@@ -1282,8 +1275,11 @@ export type KnowledgeBaseListItem = {
     accessType: 'owner' | 'userGrant' | 'roleGrant' | 'public';
 };
 
-export type KnowledgeBaseDetail = {
-    knowledgeBase: KnowledgeBase;
+export type KnowledgeBaseList = {
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
+    knowledgeBases: Array<KnowledgeBaseListItem>;
+    total: PageTotal;
 };
 
 export type KnowledgeBase = {
@@ -1301,12 +1297,26 @@ export type KnowledgeBase = {
     visibility: 'private' | 'public';
 };
 
+export type KnowledgeBaseDetail = {
+    knowledgeBase: KnowledgeBase;
+};
+
 export type KnowledgeBaseFileOperationResult = {
     failed: Array<{
         fileId: string;
         reason: string;
     }>;
     successed: Array<string>;
+};
+
+export type McpServerTool = {
+    description: string | null;
+    id: string;
+    inputSchema: {
+        [key: string]: unknown;
+    } | null;
+    name: string;
+    permission: 'auto' | 'disabled' | 'needs_approval';
 };
 
 export type McpServer = {
@@ -1321,16 +1331,6 @@ export type McpServer = {
     status: 'connected' | 'disconnected' | 'error';
     tools: Array<McpServerTool>;
     updatedAt: string;
-};
-
-export type McpServerTool = {
-    description: string | null;
-    id: string;
-    inputSchema: {
-        [key: string]: unknown;
-    } | null;
-    name: string;
-    permission: 'auto' | 'disabled' | 'needs_approval';
 };
 
 export type McpServerSyncResult = {
@@ -1357,8 +1357,6 @@ export type DeletedResources = {
     count: number;
     deleted: true;
 };
-
-export type MemoryCategoryEntries = Array<MemoryIdentity> | Array<MemoryPreference> | Array<MemoryContext> | Array<MemoryActivity> | Array<MemoryExperience>;
 
 export type MemoryIdentity = {
     accessedAt: string;
@@ -1510,6 +1508,8 @@ export type MemoryExperience = {
     userMemoryId: string | null;
 };
 
+export type MemoryCategoryEntries = Array<MemoryIdentity> | Array<MemoryPreference> | Array<MemoryContext> | Array<MemoryActivity> | Array<MemoryExperience>;
+
 export type MessageTranslationWrite = {
     content?: string;
     from?: string;
@@ -1525,6 +1525,39 @@ export type MessageTranslation = {
     id: string;
     to: string | null;
     userId: string;
+};
+
+export type TopicSummary = {
+    agentId: string | null;
+    completedAt: string | null;
+    content: string | null;
+    cost: {
+        [key: string]: unknown;
+    } | null;
+    createdAt: string;
+    description: string | null;
+    favorite: boolean | null;
+    groupId: string | null;
+    historySummary: string | null;
+    id: string;
+    metadata: {
+        [key: string]: unknown;
+    } | null;
+    mode: string | null;
+    model: string | null;
+    provider: string | null;
+    sessionId: string | null;
+    status: 'active' | 'running' | 'waitingForHuman' | 'scheduled' | 'failed' | 'completed' | 'archived' | 'unread' | null;
+    title: string | null;
+    totalCost: number | null;
+    totalInputTokens: number | null;
+    totalOutputTokens: number | null;
+    totalTokens: number | null;
+    trigger: string | null;
+    updatedAt: string;
+    usage: {
+        [key: string]: unknown;
+    } | null;
 };
 
 export type Message = {
@@ -1597,37 +1630,51 @@ export type Message = {
     } | null;
 };
 
-export type TopicSummary = {
+export type MessageSearchHit = {
     agentId: string | null;
-    completedAt: string | null;
-    content: string | null;
-    cost: {
-        [key: string]: unknown;
-    } | null;
     createdAt: string;
-    description: string | null;
-    favorite: boolean | null;
     groupId: string | null;
-    historySummary: string | null;
     id: string;
-    metadata: {
-        [key: string]: unknown;
-    } | null;
-    mode: string | null;
-    model: string | null;
-    provider: string | null;
-    sessionId: string | null;
-    status: 'active' | 'running' | 'waitingForHuman' | 'scheduled' | 'failed' | 'completed' | 'archived' | 'unread' | null;
-    title: string | null;
-    totalCost: number | null;
-    totalInputTokens: number | null;
-    totalOutputTokens: number | null;
-    totalTokens: number | null;
-    trigger: string | null;
-    updatedAt: string;
-    usage: {
-        [key: string]: unknown;
-    } | null;
+    role: string;
+    /**
+     * The matched text with surrounding context.
+     */
+    snippet: string;
+    threadId: string | null;
+    topicId: string | null;
+    topicTitle: string | null;
+};
+
+export type TopicMessageStats = {
+    /**
+     * Per distinct message count, ascending.
+     */
+    histogram: Array<{
+        /**
+         * How many topics hold this many messages.
+         */
+        topics: number;
+        /**
+         * The message count.
+         */
+        userCount: number;
+    }>;
+    max: number;
+    mean: number;
+    median: number;
+    min: number;
+    /**
+     * Topics with exactly one matching message.
+     */
+    oneshot: number;
+    oneshotRatio: number;
+    p90: number;
+    p99: number;
+    /**
+     * Topics with at least one matching message.
+     */
+    topics: number;
+    totalMessages: number;
 };
 
 export type Model = {
@@ -1754,13 +1801,6 @@ export type NotificationCategoryCount = {
     unreadCount: number;
 };
 
-export type PermissionList = {
-    hasMore: PageHasMore;
-    nextCursor: PageNextCursor;
-    permissions: Array<Permission>;
-    total: PageTotal;
-};
-
 export type Permission = {
     category: string;
     code: string;
@@ -1770,6 +1810,13 @@ export type Permission = {
     isActive: boolean;
     name: string;
     updatedAt: string;
+};
+
+export type PermissionList = {
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
+    permissions: Array<Permission>;
+    total: PageTotal;
 };
 
 export type Provider = {
@@ -1795,6 +1842,77 @@ export type Provider = {
 export type PushTokenRegistration = {
     deviceId: string;
     platform: string;
+};
+
+export type ResponseError = {
+    code: 'server_error' | 'invalid_request_error' | 'not_found' | 'model_error' | 'rate_limit_error';
+    message: string;
+};
+
+export type ResponseOutputText = {
+    annotations: Array<{
+        end_index: number;
+        start_index: number;
+        title: string;
+        type: 'url_citation';
+        url: string;
+    } | {
+        file_id: string;
+        filename: string;
+        index: number;
+        type: 'file_citation';
+    }>;
+    logprobs: Array<{
+        bytes: Array<number>;
+        logprob: number;
+        token: string;
+        top_logprobs: Array<{
+            bytes: Array<number>;
+            logprob: number;
+            token: string;
+        }>;
+    }>;
+    text: string;
+    type: 'output_text';
+};
+
+export type ResponseOutputMessage = {
+    content: Array<ResponseOutputText>;
+    id: string;
+    role: 'assistant';
+    status: 'completed' | 'in_progress';
+    type: 'message';
+};
+
+export type ResponseFunctionCall = {
+    arguments: string;
+    call_id: string;
+    id: string;
+    name: string;
+    status: 'completed' | 'in_progress';
+    type: 'function_call';
+};
+
+export type ResponseFunctionCallOutput = {
+    call_id: string;
+    id: string;
+    output: string;
+    status: 'completed' | 'in_progress';
+    type: 'function_call_output';
+};
+
+export type ResponseOutputItem = ResponseOutputMessage | ResponseFunctionCall | ResponseFunctionCallOutput;
+
+export type ResponseUsage = {
+    input_tokens: number;
+    input_tokens_details: {
+        cached_tokens: number;
+    };
+    output_tokens: number;
+    output_tokens_details: {
+        reasoning_tokens: number;
+    };
+    total_tokens: number;
 };
 
 export type ResponseObject = {
@@ -1856,79 +1974,6 @@ export type ResponseObject = {
     usage: ResponseUsage;
     user: string | null;
 };
-
-export type ResponseError = {
-    code: 'server_error' | 'invalid_request_error' | 'not_found' | 'model_error' | 'rate_limit_error';
-    message: string;
-};
-
-export type ResponseOutputItem = ResponseOutputMessage | ResponseFunctionCall | ResponseFunctionCallOutput;
-
-export type ResponseOutputMessage = {
-    content: Array<ResponseOutputText>;
-    id: string;
-    role: 'assistant';
-    status: 'completed' | 'in_progress';
-    type: 'message';
-};
-
-export type ResponseOutputText = {
-    annotations: Array<{
-        end_index: number;
-        start_index: number;
-        title: string;
-        type: 'url_citation';
-        url: string;
-    } | {
-        file_id: string;
-        filename: string;
-        index: number;
-        type: 'file_citation';
-    }>;
-    logprobs: Array<{
-        bytes: Array<number>;
-        logprob: number;
-        token: string;
-        top_logprobs: Array<{
-            bytes: Array<number>;
-            logprob: number;
-            token: string;
-        }>;
-    }>;
-    text: string;
-    type: 'output_text';
-};
-
-export type ResponseFunctionCall = {
-    arguments: string;
-    call_id: string;
-    id: string;
-    name: string;
-    status: 'completed' | 'in_progress';
-    type: 'function_call';
-};
-
-export type ResponseFunctionCallOutput = {
-    call_id: string;
-    id: string;
-    output: string;
-    status: 'completed' | 'in_progress';
-    type: 'function_call_output';
-};
-
-export type ResponseUsage = {
-    input_tokens: number;
-    input_tokens_details: {
-        cached_tokens: number;
-    };
-    output_tokens: number;
-    output_tokens_details: {
-        reasoning_tokens: number;
-    };
-    total_tokens: number;
-};
-
-export type ResponseStreamEvent = ResponseCreatedEvent | ResponseInProgressEvent | ResponseCompletedEvent | ResponseFailedEvent | ResponseIncompleteEvent | ResponseOutputItemAddedEvent | ResponseOutputItemDoneEvent | ResponseContentPartAddedEvent | ResponseContentPartDoneEvent | ResponseOutputTextDeltaEvent | ResponseOutputTextDoneEvent | ResponseFunctionCallArgumentsDeltaEvent | ResponseFunctionCallArgumentsDoneEvent;
 
 export type ResponseCreatedEvent = {
     sequence_number: number;
@@ -2046,12 +2091,7 @@ export type ResponseFunctionCallArgumentsDoneEvent = {
     arguments: string;
 };
 
-export type RoleList = {
-    hasMore: PageHasMore;
-    nextCursor: PageNextCursor;
-    roles: Array<Role>;
-    total: PageTotal;
-};
+export type ResponseStreamEvent = ResponseCreatedEvent | ResponseInProgressEvent | ResponseCompletedEvent | ResponseFailedEvent | ResponseIncompleteEvent | ResponseOutputItemAddedEvent | ResponseOutputItemDoneEvent | ResponseContentPartAddedEvent | ResponseContentPartDoneEvent | ResponseOutputTextDeltaEvent | ResponseOutputTextDoneEvent | ResponseFunctionCallArgumentsDeltaEvent | ResponseFunctionCallArgumentsDoneEvent;
 
 export type Role = {
     createdAt: string;
@@ -2064,10 +2104,10 @@ export type Role = {
     updatedAt: string;
 };
 
-export type RolePermissionList = {
+export type RoleList = {
     hasMore: PageHasMore;
     nextCursor: PageNextCursor;
-    permissions: Array<RolePermission>;
+    roles: Array<Role>;
     total: PageTotal;
 };
 
@@ -2080,6 +2120,13 @@ export type RolePermission = {
     name: string;
 };
 
+export type RolePermissionList = {
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
+    permissions: Array<RolePermission>;
+    total: PageTotal;
+};
+
 export type RolePermissionsUpdateResult = {
     granted: number;
     revoked: number;
@@ -2090,11 +2137,6 @@ export type AgentSignalEmission = {
     accepted: boolean;
     scopeKey: string;
     workflowRunId: string;
-};
-
-export type AgentSignalReceiptList = {
-    cursor?: number;
-    receipts: Array<AgentSignalReceipt>;
 };
 
 export type AgentSignalReceipt = {
@@ -2241,11 +2283,16 @@ export type AgentSignalReceipt = {
     userId: string;
 };
 
-export type TaskList = {
-    hasMore: PageHasMore;
-    nextCursor: PageNextCursor;
-    tasks: Array<TaskListItem>;
-    total: PageTotal;
+export type AgentSignalReceiptList = {
+    cursor?: number;
+    receipts: Array<AgentSignalReceipt>;
+};
+
+export type TaskLabelRef = {
+    color?: string | null;
+    id: string;
+    name: string;
+    parentId?: string | null;
 };
 
 export type TaskListItem = {
@@ -2298,11 +2345,11 @@ export type TaskListItem = {
     };
 };
 
-export type TaskLabelRef = {
-    color?: string | null;
-    id: string;
-    name: string;
-    parentId?: string | null;
+export type TaskList = {
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
+    tasks: Array<TaskListItem>;
+    total: PageTotal;
 };
 
 export type Task = {
@@ -2348,101 +2395,6 @@ export type Task = {
     updatedAt: string;
     visibility: 'private' | 'public';
     workspaceId: string | null;
-};
-
-export type TaskDetail = {
-    activities?: Array<TaskDetailActivity>;
-    agentId?: string | null;
-    archivedAt?: string | null;
-    automationMode?: 'heartbeat' | 'schedule' | null;
-    checkpoint?: {
-        onAgentRequest?: boolean;
-        tasks?: {
-            afterIds?: Array<string>;
-            afterTasks?: Array<{
-                id: string;
-                identifier: string;
-            }>;
-            beforeIds?: Array<string>;
-            beforeTasks?: Array<{
-                id: string;
-                identifier: string;
-            }>;
-        };
-        topic?: {
-            after?: boolean;
-            before?: boolean;
-        };
-    };
-    config?: {
-        [key: string]: unknown;
-    };
-    createdAt?: string;
-    createdByUserId?: string | null;
-    dependencies?: Array<{
-        dependsOn: string;
-        dependsOnId?: string;
-        type: string;
-    }>;
-    description?: string | null;
-    editorData?: unknown;
-    error?: string | null;
-    files?: Array<{
-        content?: string;
-        downloadUrl?: string;
-        fileType: string;
-        id: string;
-        inaccessible?: boolean;
-        name: string;
-        originalCharCount?: number;
-        size: number;
-        url: string;
-    }>;
-    goal?: {
-        id: string;
-        title: string;
-    } | null;
-    heartbeat?: {
-        interval?: number | null;
-        lastAt?: string | null;
-        scheduledAt?: string | null;
-        timeout?: number | null;
-    };
-    id?: string;
-    identifier: string;
-    instruction: string;
-    labels?: Array<TaskLabelRef>;
-    name?: string | null;
-    parent?: {
-        agentId?: string | null;
-        id?: string;
-        identifier: string;
-        name: string | null;
-    } | null;
-    priority?: number | null;
-    projectId?: string | null;
-    schedule?: {
-        maxExecutions?: number | null;
-        pattern?: string | null;
-        timezone?: string | null;
-    };
-    startedAt?: string;
-    status: string;
-    subtasks?: Array<TaskDetailSubtask>;
-    topicCount?: number;
-    updatedAt?: string;
-    userId?: string | null;
-    verify?: {
-        enabled?: boolean;
-        maxIterations?: number;
-        requirement?: string;
-        verifierAgentId?: string;
-        verifyCriteriaIds?: Array<string>;
-        verifyRubricId?: string;
-    } | null;
-    visibility?: 'private' | 'public';
-    workspace?: Array<TaskDetailWorkspaceNode>;
-    workspaceId?: string | null;
 };
 
 export type TaskDetailActivity = {
@@ -2612,6 +2564,101 @@ export type TaskDetailWorkspaceNode = {
     title?: string;
 };
 
+export type TaskDetail = {
+    activities?: Array<TaskDetailActivity>;
+    agentId?: string | null;
+    archivedAt?: string | null;
+    automationMode?: 'heartbeat' | 'schedule' | null;
+    checkpoint?: {
+        onAgentRequest?: boolean;
+        tasks?: {
+            afterIds?: Array<string>;
+            afterTasks?: Array<{
+                id: string;
+                identifier: string;
+            }>;
+            beforeIds?: Array<string>;
+            beforeTasks?: Array<{
+                id: string;
+                identifier: string;
+            }>;
+        };
+        topic?: {
+            after?: boolean;
+            before?: boolean;
+        };
+    };
+    config?: {
+        [key: string]: unknown;
+    };
+    createdAt?: string;
+    createdByUserId?: string | null;
+    dependencies?: Array<{
+        dependsOn: string;
+        dependsOnId?: string;
+        type: string;
+    }>;
+    description?: string | null;
+    editorData?: unknown;
+    error?: string | null;
+    files?: Array<{
+        content?: string;
+        downloadUrl?: string;
+        fileType: string;
+        id: string;
+        inaccessible?: boolean;
+        name: string;
+        originalCharCount?: number;
+        size: number;
+        url: string;
+    }>;
+    goal?: {
+        id: string;
+        title: string;
+    } | null;
+    heartbeat?: {
+        interval?: number | null;
+        lastAt?: string | null;
+        scheduledAt?: string | null;
+        timeout?: number | null;
+    };
+    id?: string;
+    identifier: string;
+    instruction: string;
+    labels?: Array<TaskLabelRef>;
+    name?: string | null;
+    parent?: {
+        agentId?: string | null;
+        id?: string;
+        identifier: string;
+        name: string | null;
+    } | null;
+    priority?: number | null;
+    projectId?: string | null;
+    schedule?: {
+        maxExecutions?: number | null;
+        pattern?: string | null;
+        timezone?: string | null;
+    };
+    startedAt?: string;
+    status: string;
+    subtasks?: Array<TaskDetailSubtask>;
+    topicCount?: number;
+    updatedAt?: string;
+    userId?: string | null;
+    verify?: {
+        enabled?: boolean;
+        maxIterations?: number;
+        requirement?: string;
+        verifierAgentId?: string;
+        verifyCriteriaIds?: Array<string>;
+        verifyRubricId?: string;
+    } | null;
+    visibility?: 'private' | 'public';
+    workspace?: Array<TaskDetailWorkspaceNode>;
+    workspaceId?: string | null;
+};
+
 export type TaskStatusUpdateResult = {
     allSubtasksDone?: boolean;
     checkpointTriggered?: boolean;
@@ -2724,6 +2771,120 @@ export type Topic = {
         updatedAt: string;
         username: string | null;
     };
+};
+
+export type ExportedTopicMessage = {
+    content: string;
+    createdAt: string;
+    error?: {
+        [key: string]: unknown;
+    };
+    id: string;
+    metadata?: {
+        [key: string]: unknown;
+    };
+    model?: string;
+    parentId?: string;
+    /**
+     * Set on a `tool` message: the call it answers.
+     */
+    plugin?: {
+        apiName: string | null;
+        arguments: string | null;
+        identifier: string | null;
+        type: string | null;
+    };
+    pluginError?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Set on a `tool` message: the intervention payload the chat UI exports.
+     */
+    pluginIntervention?: {
+        [key: string]: unknown;
+    };
+    pluginState?: {
+        [key: string]: unknown;
+    };
+    provider?: string;
+    reasoning?: {
+        [key: string]: unknown;
+    };
+    role: 'user' | 'assistant' | 'system' | 'tool' | 'task' | 'supervisor' | 'verify' | 'taskCallback';
+    search?: {
+        [key: string]: unknown;
+    };
+    tool_call_id?: string;
+    tools?: Array<{
+        [key: string]: unknown;
+    }>;
+    traceId?: string;
+    updatedAt: string;
+};
+
+export type ExportedTopic = {
+    exportedAt: string;
+    messages: Array<ExportedTopicMessage>;
+    title?: string;
+    version: '2.0';
+};
+
+export type ImportedTopicMessage = {
+    content: string;
+    createdAt?: string | number;
+    id?: string;
+    model?: string;
+    parentId?: string | null;
+    provider?: string;
+    role: 'user' | 'assistant' | 'system' | 'tool' | 'task' | 'supervisor' | 'verify' | 'taskCallback';
+};
+
+export type TopicTranscriptMessage = {
+    agentId: string | null;
+    content: string | null;
+    createdAt: string;
+    error: {
+        [key: string]: unknown;
+    } | null;
+    id: string;
+    messageGroupId: string | null;
+    metadata: {
+        [key: string]: unknown;
+    } | null;
+    model: string | null;
+    parentId: string | null;
+    pluginError: {
+        [key: string]: unknown;
+    } | null;
+    provider: string | null;
+    reasoning: {
+        [key: string]: unknown;
+    } | null;
+    role: string;
+    threadId: string | null;
+    /**
+     * Set on a `tool` message: the call it answers.
+     */
+    toolCallId: string | null;
+    tools: Array<{
+        [key: string]: unknown;
+    }> | null;
+    usage: {
+        [key: string]: unknown;
+    } | null;
+};
+
+export type TopicShare = {
+    /**
+     * `null` once sharing is revoked.
+     */
+    shareId: string | null;
+    topicId: string;
+    /**
+     * Public URL while `visibility` is `link`.
+     */
+    url: string | null;
+    visibility: 'link' | 'private';
 };
 
 export type TopicThread = {
@@ -10799,6 +10960,150 @@ export type PostApiV1MessagesResponses = {
 
 export type PostApiV1MessagesResponse = PostApiV1MessagesResponses[keyof PostApiV1MessagesResponses];
 
+export type GetApiV1MessagesSearchData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path?: never;
+    query: {
+        /**
+         * Only messages of this agent.
+         */
+        agentId?: string;
+        /**
+         * Opaque cursor from the previous page's `nextCursor`. Omit for the first page.
+         */
+        cursor?: string;
+        /**
+         * Page size, 1–50. Defaults to 20.
+         */
+        limit?: number;
+        /**
+         * Keywords to look for in message text.
+         */
+        q: string;
+        /**
+         * Search one topic's main conversation instead: a literal, case-insensitive match, oldest first.
+         */
+        topicId?: string;
+    };
+    url: '/api/v1/messages/search';
+};
+
+export type GetApiV1MessagesSearchErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1MessagesSearchError = GetApiV1MessagesSearchErrors[keyof GetApiV1MessagesSearchErrors];
+
+export type GetApiV1MessagesSearchResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
+            items: Array<MessageSearchHit>;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1MessagesSearchResponse = GetApiV1MessagesSearchResponses[keyof GetApiV1MessagesSearchResponses];
+
+export type GetApiV1MessagesStatsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path?: never;
+    query?: {
+        agentId?: string;
+        /**
+         * Inclusive, `YYYY-MM-DD`.
+         */
+        endDate?: string;
+        role?: 'user' | 'system' | 'assistant' | 'tool';
+        /**
+         * Inclusive, `YYYY-MM-DD`.
+         */
+        startDate?: string;
+    };
+    url: '/api/v1/messages/stats';
+};
+
+export type GetApiV1MessagesStatsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1MessagesStatsError = GetApiV1MessagesStatsErrors[keyof GetApiV1MessagesStatsErrors];
+
+export type GetApiV1MessagesStatsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: TopicMessageStats;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1MessagesStatsResponse = GetApiV1MessagesStatsResponses[keyof GetApiV1MessagesStatsResponses];
+
 export type DeleteApiV1MessagesByIdData = {
     body?: never;
     headers?: {
@@ -10915,6 +11220,102 @@ export type GetApiV1MessagesByIdResponses = {
 
 export type GetApiV1MessagesByIdResponse = GetApiV1MessagesByIdResponses[keyof GetApiV1MessagesByIdResponses];
 
+export type PatchApiV1MessagesByIdData = {
+    body: {
+        /**
+         * Replaces the message text.
+         */
+        content?: string;
+        /**
+         * Merged into the stored metadata. Server-owned keys are ignored.
+         */
+        metadata?: {
+            [key: string]: unknown;
+        };
+        /**
+         * The tool call's error, for a `tool` message; `null` clears it.
+         */
+        pluginError?: {
+            [key: string]: unknown;
+        } | null;
+        /**
+         * Merged into the tool call's state, for a `tool` message.
+         */
+        pluginState?: {
+            [key: string]: unknown;
+        };
+        /**
+         * Rewrites the arguments of one tool call, on the assistant call and its result.
+         */
+        toolArguments?: {
+            /**
+             * New arguments: a JSON string or an object.
+             */
+            arguments: string | {
+                [key: string]: unknown;
+            };
+            /**
+             * A tool call this message made or answers.
+             */
+            toolCallId: string;
+        };
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/messages/{id}';
+};
+
+export type PatchApiV1MessagesByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1MessagesByIdError = PatchApiV1MessagesByIdErrors[keyof PatchApiV1MessagesByIdErrors];
+
+export type PatchApiV1MessagesByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Message;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1MessagesByIdResponse = PatchApiV1MessagesByIdResponses[keyof PatchApiV1MessagesByIdResponses];
+
 export type PostApiV1MessagesRepliesData = {
     body: {
         content: string;
@@ -10989,6 +11390,70 @@ export type PostApiV1MessagesRepliesResponses = {
 };
 
 export type PostApiV1MessagesRepliesResponse = PostApiV1MessagesRepliesResponses[keyof PostApiV1MessagesRepliesResponses];
+
+export type PostApiV1MessagesByIdFilesData = {
+    body: {
+        fileIds: Array<string>;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/messages/{id}/files';
+};
+
+export type PostApiV1MessagesByIdFilesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1MessagesByIdFilesError = PostApiV1MessagesByIdFilesErrors[keyof PostApiV1MessagesByIdFilesErrors];
+
+export type PostApiV1MessagesByIdFilesResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Message;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1MessagesByIdFilesResponse = PostApiV1MessagesByIdFilesResponses[keyof PostApiV1MessagesByIdFilesResponses];
 
 export type GetApiV1ModelsData = {
     body?: never;
@@ -14168,6 +14633,240 @@ export type PostApiV1TopicsResponses = {
 
 export type PostApiV1TopicsResponse = PostApiV1TopicsResponses[keyof PostApiV1TopicsResponses];
 
+export type GetApiV1TopicsSearchData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path?: never;
+    query: {
+        /**
+         * Only topics of this agent.
+         */
+        agentId?: string;
+        /**
+         * Only topics of this group chat.
+         */
+        groupId?: string;
+        /**
+         * In a workspace, only topics the caller created.
+         */
+        onlyMine?: 'true' | 'false';
+        /**
+         * Keywords matched against titles and messages.
+         */
+        q: string;
+        /**
+         * Opaque cursor from the previous page's `nextCursor`. Omit for the first page.
+         */
+        cursor?: string;
+        /**
+         * Page size, 1–100. Defaults to 20.
+         */
+        limit?: number;
+    };
+    url: '/api/v1/topics/search';
+};
+
+export type GetApiV1TopicsSearchErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1TopicsSearchError = GetApiV1TopicsSearchErrors[keyof GetApiV1TopicsSearchErrors];
+
+export type GetApiV1TopicsSearchResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            items: Array<TopicSummary>;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
+            total: PageTotal;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1TopicsSearchResponse = GetApiV1TopicsSearchResponses[keyof GetApiV1TopicsSearchResponses];
+
+export type PostApiV1TopicsImportData = {
+    body: {
+        /**
+         * The agent the imported topic belongs to.
+         */
+        agentId: string;
+        /**
+         * An export, or a list of `{ role, content }` messages. System messages are dropped.
+         */
+        data: ExportedTopic | Array<ImportedTopicMessage>;
+        groupId?: string | null;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/topics/import';
+};
+
+export type PostApiV1TopicsImportErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1TopicsImportError = PostApiV1TopicsImportErrors[keyof PostApiV1TopicsImportErrors];
+
+export type PostApiV1TopicsImportResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: {
+            messageCount: number;
+            topic: Topic;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TopicsImportResponse = PostApiV1TopicsImportResponses[keyof PostApiV1TopicsImportResponses];
+
+export type PostApiV1TopicsBatchData = {
+    body: {
+        /**
+         * Moves the topics to the trash.
+         */
+        action: 'delete';
+        topicIds: Array<string>;
+    } | {
+        /**
+         * Re-homes the topics, with their messages, on an agent.
+         */
+        action: 'move';
+        targetAgentId: string;
+        topicIds: Array<string>;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/topics/batch';
+};
+
+export type PostApiV1TopicsBatchErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1TopicsBatchError = PostApiV1TopicsBatchErrors[keyof PostApiV1TopicsBatchErrors];
+
+export type PostApiV1TopicsBatchResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            action: 'delete' | 'move';
+            /**
+             * Topics the call acted on.
+             */
+            count: number;
+            /**
+             * Goals supervised from a moved topic that followed it; empty for `delete`.
+             */
+            movedGoalIds: Array<string>;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TopicsBatchResponse = PostApiV1TopicsBatchResponses[keyof PostApiV1TopicsBatchResponses];
+
 export type DeleteApiV1TopicsByIdData = {
     body?: never;
     headers?: {
@@ -14294,6 +14993,11 @@ export type PatchApiV1TopicsByIdData = {
             boundDeviceId?: string;
             workingDirectory?: string;
         };
+        /**
+         * Pins the model the topic runs on; send together with `provider`.
+         */
+        model?: string;
+        provider?: string;
         title?: string;
     };
     headers?: {
@@ -14351,6 +15055,511 @@ export type PatchApiV1TopicsByIdResponses = {
 };
 
 export type PatchApiV1TopicsByIdResponse = PatchApiV1TopicsByIdResponses[keyof PatchApiV1TopicsByIdResponses];
+
+export type PostApiV1TopicsByIdCloneData = {
+    body: {
+        /**
+         * Defaults to the source's title.
+         */
+        title?: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/topics/{id}/clone';
+};
+
+export type PostApiV1TopicsByIdCloneErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1TopicsByIdCloneError = PostApiV1TopicsByIdCloneErrors[keyof PostApiV1TopicsByIdCloneErrors];
+
+export type PostApiV1TopicsByIdCloneResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: Topic;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TopicsByIdCloneResponse = PostApiV1TopicsByIdCloneResponses[keyof PostApiV1TopicsByIdCloneResponses];
+
+export type PostApiV1TopicsByIdForkData = {
+    body: {
+        /**
+         * Defaults to the source's title.
+         */
+        title?: string;
+        /**
+         * The last message to copy: the conversation from the first message to this one.
+         */
+        messageId: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/topics/{id}/fork';
+};
+
+export type PostApiV1TopicsByIdForkErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1TopicsByIdForkError = PostApiV1TopicsByIdForkErrors[keyof PostApiV1TopicsByIdForkErrors];
+
+export type PostApiV1TopicsByIdForkResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: Topic;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TopicsByIdForkResponse = PostApiV1TopicsByIdForkResponses[keyof PostApiV1TopicsByIdForkResponses];
+
+export type PostApiV1TopicsByIdBranchData = {
+    body: {
+        /**
+         * Replacement content for the user message.
+         */
+        content: string;
+        /**
+         * A user message of the topic. The branch ends at it, with the new content.
+         */
+        messageId: string;
+        title?: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/topics/{id}/branch';
+};
+
+export type PostApiV1TopicsByIdBranchErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1TopicsByIdBranchError = PostApiV1TopicsByIdBranchErrors[keyof PostApiV1TopicsByIdBranchErrors];
+
+export type PostApiV1TopicsByIdBranchResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: {
+            /**
+             * The edited user message in the new topic.
+             */
+            messageId: string;
+            topic: Topic;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TopicsByIdBranchResponse = PostApiV1TopicsByIdBranchResponses[keyof PostApiV1TopicsByIdBranchResponses];
+
+export type GetApiV1TopicsByIdTranscriptData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from the previous page's `nextCursor`. Omit for the first page.
+         */
+        cursor?: string;
+        /**
+         * `json` answers message rows; `markdown` answers the page rendered as one document.
+         */
+        format?: 'json' | 'markdown';
+        /**
+         * Messages per page, 1–500. Defaults to 50.
+         */
+        limit?: number;
+    };
+    url: '/api/v1/topics/{id}/transcript';
+};
+
+export type GetApiV1TopicsByIdTranscriptErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1TopicsByIdTranscriptError = GetApiV1TopicsByIdTranscriptErrors[keyof GetApiV1TopicsByIdTranscriptErrors];
+
+export type GetApiV1TopicsByIdTranscriptResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
+            total: PageTotal;
+            topic: {
+                id: string;
+                title: string | null;
+                updatedAt: string;
+            };
+            format: 'json';
+            items: Array<TopicTranscriptMessage>;
+        } | {
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
+            total: PageTotal;
+            topic: {
+                id: string;
+                title: string | null;
+                updatedAt: string;
+            };
+            format: 'markdown';
+            /**
+             * This page of the conversation as Markdown.
+             */
+            markdown: string;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1TopicsByIdTranscriptResponse = GetApiV1TopicsByIdTranscriptResponses[keyof GetApiV1TopicsByIdTranscriptResponses];
+
+export type GetApiV1TopicsByIdExportData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/topics/{id}/export';
+};
+
+export type GetApiV1TopicsByIdExportErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1TopicsByIdExportError = GetApiV1TopicsByIdExportErrors[keyof GetApiV1TopicsByIdExportErrors];
+
+export type GetApiV1TopicsByIdExportResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: ExportedTopic;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1TopicsByIdExportResponse = GetApiV1TopicsByIdExportResponses[keyof GetApiV1TopicsByIdExportResponses];
+
+export type PostApiV1TopicsByIdShareData = {
+    body: {
+        /**
+         * `link` publishes the topic to anyone with the URL; `private` revokes it.
+         */
+        visibility: 'link' | 'private';
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/topics/{id}/share';
+};
+
+export type PostApiV1TopicsByIdShareErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1TopicsByIdShareError = PostApiV1TopicsByIdShareErrors[keyof PostApiV1TopicsByIdShareErrors];
+
+export type PostApiV1TopicsByIdShareResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: TopicShare;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TopicsByIdShareResponse = PostApiV1TopicsByIdShareResponses[keyof PostApiV1TopicsByIdShareResponses];
+
+export type PostApiV1TopicsByIdReadData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/topics/{id}/read';
+};
+
+export type PostApiV1TopicsByIdReadErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1TopicsByIdReadError = PostApiV1TopicsByIdReadErrors[keyof PostApiV1TopicsByIdReadErrors];
+
+export type PostApiV1TopicsByIdReadResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            id: string;
+            /**
+             * Whether the call cleared the mark.
+             */
+            wasUnread: boolean;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TopicsByIdReadResponse = PostApiV1TopicsByIdReadResponses[keyof PostApiV1TopicsByIdReadResponses];
 
 export type GetApiV1TopicsByTopicIdThreadsData = {
     body?: never;
@@ -14441,6 +15650,213 @@ export type GetApiV1TopicsByTopicIdThreadsResponses = {
 };
 
 export type GetApiV1TopicsByTopicIdThreadsResponse = GetApiV1TopicsByTopicIdThreadsResponses[keyof GetApiV1TopicsByTopicIdThreadsResponses];
+
+export type PostApiV1TopicsByTopicIdThreadsData = {
+    body: {
+        /**
+         * First message of the thread. Its first 80 characters become the title.
+         */
+        message?: {
+            content: string;
+            role?: 'user' | 'assistant';
+        };
+        /**
+         * Nest under a thread of the topic.
+         */
+        parentThreadId?: string;
+        /**
+         * The topic message the thread branches from.
+         */
+        sourceMessageId?: string;
+        title?: string;
+        type: 'continuation' | 'standalone' | 'isolation' | 'eval';
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        topicId: string;
+    };
+    query?: never;
+    url: '/api/v1/topics/{topicId}/threads';
+};
+
+export type PostApiV1TopicsByTopicIdThreadsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1TopicsByTopicIdThreadsError = PostApiV1TopicsByTopicIdThreadsErrors[keyof PostApiV1TopicsByTopicIdThreadsErrors];
+
+export type PostApiV1TopicsByTopicIdThreadsResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: {
+            /**
+             * The first message, when one was given.
+             */
+            messageId: string | null;
+            thread: TopicThread;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TopicsByTopicIdThreadsResponse = PostApiV1TopicsByTopicIdThreadsResponses[keyof PostApiV1TopicsByTopicIdThreadsResponses];
+
+export type DeleteApiV1TopicsByTopicIdThreadsByThreadIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        threadId: string;
+        topicId: string;
+    };
+    query?: never;
+    url: '/api/v1/topics/{topicId}/threads/{threadId}';
+};
+
+export type DeleteApiV1TopicsByTopicIdThreadsByThreadIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1TopicsByTopicIdThreadsByThreadIdError = DeleteApiV1TopicsByTopicIdThreadsByThreadIdErrors[keyof DeleteApiV1TopicsByTopicIdThreadsByThreadIdErrors];
+
+export type DeleteApiV1TopicsByTopicIdThreadsByThreadIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: DeletedResource;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1TopicsByTopicIdThreadsByThreadIdResponse = DeleteApiV1TopicsByTopicIdThreadsByThreadIdResponses[keyof DeleteApiV1TopicsByTopicIdThreadsByThreadIdResponses];
+
+export type PatchApiV1TopicsByTopicIdThreadsByThreadIdData = {
+    body: {
+        status?: 'active' | 'processing' | 'pending' | 'inReview' | 'todo' | 'cancel' | 'completed' | 'failed';
+        title?: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        threadId: string;
+        topicId: string;
+    };
+    query?: never;
+    url: '/api/v1/topics/{topicId}/threads/{threadId}';
+};
+
+export type PatchApiV1TopicsByTopicIdThreadsByThreadIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1TopicsByTopicIdThreadsByThreadIdError = PatchApiV1TopicsByTopicIdThreadsByThreadIdErrors[keyof PatchApiV1TopicsByTopicIdThreadsByThreadIdErrors];
+
+export type PatchApiV1TopicsByTopicIdThreadsByThreadIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: TopicThread;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1TopicsByTopicIdThreadsByThreadIdResponse = PatchApiV1TopicsByTopicIdThreadsByThreadIdResponses[keyof PatchApiV1TopicsByTopicIdThreadsByThreadIdResponses];
 
 export type GetApiV1UsersMeData = {
     body?: never;

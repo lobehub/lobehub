@@ -143,10 +143,20 @@ export const createTopicModelContext = ({
      * (b) leak topics owned by another agent that shares the same session mapping.
      * Legacy rows are backfilled with an agentId by the migration the list query
      * triggers, after which the agentId match finds them.
+     *
+     * A scope that names no conversation owner at all (`{}`) is not the legacy
+     * "topics with neither a session nor a group" query: it means the caller
+     * searched across every conversation it can read, and the caller applies the
+     * visibility filter itself. Returning `matchContainer(undefined)` there made
+     * an unscoped search drop every group topic, because group rows always carry
+     * a `groupId`. `containerId: null` is still the explicit legacy request —
+     * string-arg callers go through it — so only an omitted `containerId` means
+     * "unscoped".
      */
     matchKeywordScope: ({ agentId, containerId, groupId }: TopicKeywordScope): SQL | undefined => {
       if (groupId) return eq(topics.groupId, groupId);
       if (agentId) return eq(topics.agentId, agentId);
+      if (containerId === undefined) return undefined;
       return ctx.matchContainer(containerId);
     },
   };

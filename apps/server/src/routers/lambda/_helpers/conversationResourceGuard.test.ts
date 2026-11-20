@@ -8,6 +8,7 @@ import {
   canPerformResourceAction,
   getResourceMeta,
 } from '@/server/services/resourcePermission';
+import { resolveWorkspaceGrantedPermissions } from '@/server/services/workspacePermission';
 
 import {
   assertCanUseConversationTargets,
@@ -17,6 +18,7 @@ import {
   assertCanUseTopicTargets,
   assertCanViewConversationTargets,
   assertCanViewTopicTargets,
+  createConversationViewFilter,
   filterUserIdsByTopicViewAccess,
 } from './conversationResourceGuard';
 import { getWorkspaceAgentParentGroupIds } from './workspaceAgentGuard';
@@ -29,11 +31,15 @@ vi.mock('@/server/services/resourcePermission', () => ({
 vi.mock('./workspaceAgentGuard', () => ({
   getWorkspaceAgentParentGroupIds: vi.fn(),
 }));
+vi.mock('@/server/services/workspacePermission', () => ({
+  resolveWorkspaceGrantedPermissions: vi.fn(),
+}));
 
 const getResourceMetaMock = vi.mocked(getResourceMeta);
 const assertActionMock = vi.mocked(assertCanPerformResourceAction);
 const canPerformActionMock = vi.mocked(canPerformResourceAction);
 const getParentGroupIdsMock = vi.mocked(getWorkspaceAgentParentGroupIds);
+const resolveGrantsMock = vi.mocked(resolveWorkspaceGrantedPermissions);
 
 /** Minimal drizzle stub: every select().from().where() resolves `rows`. */
 const createDb = (rowsPerCall: any[][]) => {
@@ -61,6 +67,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   getResourceMetaMock.mockResolvedValue(wsMeta as any);
   getParentGroupIdsMock.mockResolvedValue([]);
+  resolveGrantsMock.mockResolvedValue(['agent:read:all']);
 });
 
 describe('assertCanUseConversationTargets', () => {
@@ -313,5 +320,42 @@ describe('assertCanUseCreateMessageTargets', () => {
     expect(assertActionMock).toHaveBeenCalledWith(
       expect.objectContaining({ resourceId: 'agent-1', resourceType: 'agent' }),
     );
+  });
+});
+
+describe('createConversationViewFilter', () => {
+  it('resolves grants once and memoizes one verdict per conversation', async () => {
+    canPerformActionMock.mockImplementation(async ({ resourceId }) => resourceId === 'agent-mine');
+
+    const visible = await createConversationViewFilter(baseCtx(createDb([])), [
+      { agentId: 'agent-mine' },
+      { agentId: 'agent-other' },
+      { agentId: 'agent-mine' },
+    ]);
+
+    expect(resolveGrantsMock).toHaveBeenCalledTimes(1);
+    expect(canPerformActionMock).toHaveBeenCalledTimes(2);
+    expect(visible({ agentId: 'agent-mine' })).toBe(true);
+    expect(visible({ agentId: 'agent-other' })).toBe(false);
+  });
+
+  it("resolves the owner through a hit's topic when it carries no agent or group", async () => {
+    const db = createDb([[{ agentId: 'agent-other', groupId: null, sessionId: null }]]);
+    canPerformActionMock.mockResolvedValue(false);
+
+    const visible = await createConversationViewFilter(baseCtx(db), [{ topicId: 'topic-1' }]);
+
+    expect(getResourceMetaMock).toHaveBeenCalledWith(db, 'agent', 'agent-other');
+    expect(visible({ topicId: 'topic-1' })).toBe(false);
+  });
+
+  it('is a no-op in personal mode', async () => {
+    const visible = await createConversationViewFilter(baseCtx(createDb([]), null), [
+      { agentId: 'agent-other' },
+    ]);
+
+    expect(visible({ agentId: 'agent-other' })).toBe(true);
+    expect(resolveGrantsMock).not.toHaveBeenCalled();
+    expect(canPerformActionMock).not.toHaveBeenCalled();
   });
 });

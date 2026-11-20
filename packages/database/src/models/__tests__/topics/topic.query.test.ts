@@ -1691,6 +1691,31 @@ describe('TopicModel - Query', () => {
       expect(result[0].id).toBe('topic1');
     });
 
+    it('should include group topics when no scope is named', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(agents).values([{ id: 'kw-scope-agent', userId }]);
+        await tx.insert(chatGroups).values({ id: 'kw-scope-group', userId });
+        await tx.insert(topics).values([
+          {
+            agentId: 'kw-scope-agent',
+            groupId: 'kw-scope-group',
+            id: 'kw-group',
+            title: 'Pelican migration',
+            userId,
+          },
+          { agentId: 'kw-scope-agent', id: 'kw-agent', title: 'Pelican notes', userId },
+          { agentId: 'kw-scope-agent', id: 'kw-other', title: 'Unrelated', userId },
+        ]);
+      });
+
+      // Unscoped search: every topic the caller can read, not only the rows with
+      // neither a session nor a group (the old `matchContainer(undefined)` fallback
+      // dropped all group topics).
+      const result = await topicModel.queryByKeyword('pelican', {});
+
+      expect(result.map((topic) => topic.id).sort()).toEqual(['kw-agent', 'kw-group']);
+    });
+
     it('should return topics matching message content keyword', async () => {
       await serverDB.transaction(async (tx) => {
         await tx.insert(topics).values([
