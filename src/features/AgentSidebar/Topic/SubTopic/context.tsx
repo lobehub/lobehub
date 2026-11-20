@@ -4,19 +4,15 @@ import isEqual from 'fast-deep-equal';
 import { createContext, type ReactNode, use, useCallback, useMemo, useState } from 'react';
 
 import { useChatStore } from '@/store/chat';
-import { subTopicSelectors, topicSelectors } from '@/store/chat/selectors';
+import { operationSelectors, topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
 
 import { useTopicListScope } from '../TopicListScope';
-import {
-  buildSubTopicTree,
-  isInFlight,
-  type SubTopicNode,
-  type SubTopicTree,
-} from './buildSubTopicTree';
+import { buildSubTopicTree, type SubTopicNode, type SubTopicTree } from './buildSubTopicTree';
+import { useSubTopicTreeSync } from './useSubTopicTreeSync';
 
 interface SubTopicTreeValue {
   childrenOf: (topicId: string) => SubTopicNode[];
@@ -51,9 +47,18 @@ export const SubTopicTreeProvider = ({ children }: { children: ReactNode }) => {
   );
   const openerIds = useMemo(() => (rows ?? []).map((row) => row.id), [rows]);
 
-  const useFetchSubTopics = useChatStore((s) => s.useFetchSubTopics);
-  const fetched = useChatStore(subTopicSelectors.treeOf(openerIds), isEqual);
-  useFetchSubTopics(enabled, openerIds, fetched.some(isInFlight));
+  // A parent on this page that is running may open a sub-topic at any moment.
+  const parentRunning = useChatStore(
+    (s) =>
+      (rows ?? []).some((row) => row.status === 'running') ||
+      (!!s.activeTopicId &&
+        openerIds.includes(s.activeTopicId) &&
+        operationSelectors.isAgentRuntimeRunningByContext({
+          agentId: s.activeAgentId,
+          topicId: s.activeTopicId,
+        })(s)),
+  );
+  const fetched = useSubTopicTreeSync(enabled, openerIds, parentRunning);
 
   const tree = useMemo(
     () =>

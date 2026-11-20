@@ -101,6 +101,13 @@ describe('sub-topic link (metadata.openedBy)', () => {
       ),
     ).toBeUndefined();
     expect(await resolveTopicOpenedBy({ findById: vi.fn() } as any, undefined)).toBeUndefined();
+    // A group conversation never receives sub-topic receipts: refused, not linked.
+    await expect(
+      resolveTopicOpenedBy(
+        { findById: vi.fn().mockResolvedValue({ groupId: 'grp_1', id: 'tpc_group' }) } as any,
+        'tpc_group',
+      ),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 });
 

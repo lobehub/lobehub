@@ -145,6 +145,17 @@ describe('prepareParentWorkspace', () => {
     });
   });
 
+  // Regression: a group parent was accepted (and could get a worktree), yet a
+  // group never receives sub-topic receipts, so the promised reply never came.
+  it('refuses a group parent before making anything', async () => {
+    mocks.findById.mockResolvedValue({ ...parent, groupId: 'grp_1' });
+
+    await expect(
+      prepareParentWorkspace(scope, { ...base, parentWorkspace: 'new-worktree' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mocks.createFirstSendWorktree).not.toHaveBeenCalled();
+  });
+
   it("carries a cloud-sandbox parent's placement", async () => {
     mocks.findById.mockResolvedValue({
       id: 'tpc_parent',

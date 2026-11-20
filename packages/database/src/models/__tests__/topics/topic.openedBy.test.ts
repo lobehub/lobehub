@@ -239,6 +239,15 @@ describe('TopicModel - sub-topics (metadata.openedBy)', () => {
     expect(result.items.map((row: any) => row.id)).not.toContain('child-same');
   });
 
+  // Regression: with "show completed" on, a completed child of a live parent was
+  // hidden from its agent's list while the tree also leaves it out.
+  it('keeps a completed sub-topic at the top level, since the tree leaves it out', async () => {
+    const result = await topicModel.query({ agentId: 'agent-a', excludeOpenedTopics: true });
+
+    expect(result.items.map((row: any) => row.id)).toContain('archived-child');
+    expect(result.items.map((row: any) => row.id)).not.toContain('child-same');
+  });
+
   it('treats an opener in the recycle bin as gone', async () => {
     await topicModel.softDelete(['parent'], { deletedAt: new Date() });
 
