@@ -183,10 +183,12 @@ const SubscriptionAccounts = () => {
             </>
           )}
           <ActionIcon
-            icon={RefreshCwIcon}
             loading={isValidating || refreshing}
             title={t('subscriptionAccounts.refresh')}
             onClick={() => void refresh()}
+            icon={RefreshCwIcon}
+            // A row that runs short of width shrinks its children; the icon keeps its square.
+            style={{ flex: 'none' }}
           />
         </Flexbox>
       </Flexbox>

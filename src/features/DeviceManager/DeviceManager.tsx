@@ -383,11 +383,13 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
       {/* Last, as on the subscription accounts page: refreshing is secondary to
           adding a device. */}
       <ActionIcon
-        icon={RefreshCwIcon}
         loading={isValidating}
         size={size}
         title={t('devices.actions.refresh')}
         onClick={() => mutate()}
+        icon={RefreshCwIcon}
+        // A row that runs short of width shrinks its children; the icon keeps its square.
+        style={{ flex: 'none' }}
       />
     </Flexbox>
   );

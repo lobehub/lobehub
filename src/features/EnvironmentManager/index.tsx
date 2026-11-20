@@ -150,10 +150,12 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(
         </Button>
         {/* Last and borderless, as on the subscription accounts page. */}
         <ActionIcon
-          icon={RefreshCwIcon}
           loading={refreshing}
           title={t('environments.refresh')}
           onClick={refresh}
+          icon={RefreshCwIcon}
+          // A row that runs short of width shrinks its children; the icon keeps its square.
+          style={{ flex: 'none' }}
         />
       </Flexbox>
     );
