@@ -3,6 +3,7 @@ import { Flexbox, Select } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
+import { getWorkspaceMemberNickname } from '@/utils/workspaceMemberName';
 
 const ALL = 'all';
 const SELECT_STYLE = { width: 180 };
@@ -48,7 +49,14 @@ const BoardFilters = ({
           { label: t('team.filter.allMembers'), value: ALL },
           ...options.memberIds.map((id) => {
             const member = profiles.get(id);
-            return { label: member?.fullName || member?.username || id, value: id };
+            return {
+              label:
+                (member && getWorkspaceMemberNickname(member)) ||
+                member?.fullName ||
+                member?.username ||
+                id,
+              value: id,
+            };
           }),
         ]}
         onChange={(value) => onUserChange(value === ALL ? undefined : String(value))}

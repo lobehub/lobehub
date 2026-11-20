@@ -22,6 +22,7 @@ import { claimJob } from './claim';
 import { activeMembers, appendMessage, deliver } from './delivery';
 import { ChannelError } from './error';
 import { countManifestMessages, readManifestMessages } from './manifest';
+import { channelMemberNicknameSql } from './nickname';
 import type { ChannelOpeningDecision } from './opening';
 import {
   applyOpening,
@@ -606,7 +607,7 @@ export class ChannelExecutionRepository {
         .select({
           actorType: channelMembers.actorType,
           id: channelMembers.id,
-          name: sql<string>`coalesce(nullif(${channelMembers.name}, ''), nullif(${users.fullName}, ''), ${users.username}, '')`,
+          name: sql<string>`coalesce(nullif(${channelMembers.name}, ''), ${channelMemberNicknameSql(channelMembers.channelId, channelMembers.userId)}, nullif(${users.fullName}, ''), ${users.username}, '')`,
         })
         .from(channelMembers)
         .leftJoin(users, eq(users.id, channelMembers.userId))
