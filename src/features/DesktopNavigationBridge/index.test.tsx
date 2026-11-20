@@ -13,6 +13,8 @@ let openDirectoryHandler: OpenDirectoryHandler | null = null;
 
 const navigateMock = vi.hoisted(() => vi.fn());
 const openDirectoryInAppMock = vi.hoisted(() => vi.fn());
+const clientReadyMock = vi.hoisted(() => vi.fn());
+const DEVICE_ID = 'device-local';
 
 vi.mock('@lobechat/electron-client-ipc', () => ({
   useWatchBroadcast: (event: string, handler: any) => {
@@ -27,6 +29,14 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
 
 vi.mock('@/features/AppLaunch/openDirectory', () => ({
   openDirectoryInApp: openDirectoryInAppMock,
+}));
+
+vi.mock('@/store/electron', () => ({
+  useElectronStore: (selector: any) => selector({ gatewayDeviceInfo: { deviceId: 'device-local' } }),
+}));
+
+vi.mock('@/utils/electron/ipc', () => ({
+  ensureElectronIpc: () => ({ appLaunch: { clientReady: clientReadyMock } }),
 }));
 
 const emitNavigate = (payload: NavigatePayload) => {
@@ -48,6 +58,8 @@ describe('DesktopNavigationBridge', () => {
     navigateMock.mockReset();
     openDirectoryInAppMock.mockReset();
     openDirectoryInAppMock.mockResolvedValue({ status: 'opened-topic' });
+    clientReadyMock.mockReset();
+    clientReadyMock.mockResolvedValue(false);
   });
 
   it('uses escaped navigation for literal desktop notification paths', () => {
@@ -94,6 +106,7 @@ describe('DesktopNavigationBridge', () => {
     emitOpenDirectory({ newWindow: false, path: '/repo' });
 
     expect(openDirectoryInAppMock).toHaveBeenCalledWith({
+      deviceId: DEVICE_ID,
       navigate: navigateMock,
       reuseExisting: true,
       targetPath: '/repo',
@@ -107,9 +120,18 @@ describe('DesktopNavigationBridge', () => {
 
     // `--new-window` means "do not take over the conversation I already have".
     expect(openDirectoryInAppMock).toHaveBeenCalledWith({
+      deviceId: DEVICE_ID,
       navigate: navigateMock,
       reuseExisting: false,
       targetPath: '/repo',
     });
+  });
+
+  it('tells the main process the launch listeners exist', () => {
+    // A cold start holds the directory until this handshake; without it the
+    // broadcast is sent into a page that has not subscribed and is dropped.
+    render(<DesktopNavigationBridge />);
+
+    expect(clientReadyMock).toHaveBeenCalled();
   });
 });
