@@ -2,7 +2,7 @@ import type { ChannelPublicMessage } from '@lobechat/types';
 import { Button, Empty, Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { MessageSquare } from 'lucide-react';
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
@@ -44,6 +44,11 @@ interface ChannelConversationProps {
   /** Mounted beside a thread panel that covers it, so keep it out of the tab order. */
   inert?: boolean;
   /**
+   * Fills the main conversation's blank start in place of the empty state, and leaves with the
+   * first message (sent or received) so it never sits above the conversation itself.
+   */
+  intro?: ReactNode;
+  /**
    * Caps the feed and composer column width, centered. A Channel spans the full width by default;
    * a standalone chat page (an Agent share) caps it like a regular Agent conversation.
    */
@@ -59,6 +64,7 @@ interface ChannelConversationProps {
 const Timeline = ({
   channelId,
   inert,
+  intro,
   maxWidth,
   starter,
   threadId = null,
@@ -236,12 +242,13 @@ const Timeline = ({
                     {failureRows(detail.rootMessage.id)}
                   </>
                 )}
-                {/* A new direct conversation starts blank, like an IM chat. */}
+                {/* A new direct conversation starts blank, like an IM chat, unless the host fills it. */}
                 {!timeline.length &&
                   (threadId ? (
                     <p {...stylex.props(styles.muted)}>{t('threadEmpty')}</p>
-                  ) : direct ? null : (
-                    <Empty icon={MessageSquare} title={t('conversationEmpty')} />
+                  ) : (
+                    (intro ??
+                    (direct ? null : <Empty icon={MessageSquare} title={t('conversationEmpty')} />))
                   ))}
                 {presentChannelTimeline(timeline, new Set(failures.afterMessage.keys())).map(
                   ({ item, date, startsDay, continuation }) => (
