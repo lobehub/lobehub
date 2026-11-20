@@ -138,6 +138,9 @@ export class CanvasExecutionRuntime {
       })}`;
 
     const fileBlock = (path: string, window: TextWindow) => {
+      // An offset past the end returns no lines: say so for this file instead of an empty block.
+      if (window.endLine === 0) return `File ${path}: ${formatTextWindowNotice(window)}`;
+
       const whole = window.startLine === 1 && !window.truncated;
       const attributes = whole ? '' : formatTextWindowAttributes(window);
       const block = `<file path="${path}"${attributes}>\n${window.content}\n</file>`;

@@ -299,8 +299,9 @@ describe('CanvasExecutionRuntime', () => {
 
       expect(result.success).toBe(true);
       expect(result.content).toContain(
-        '[Line 5 is past the end of this text (2 lines, 3 characters)',
+        'File index.html: [Line 5 is past the end of this text (2 lines, 3 characters)',
       );
+      expect(result.content).not.toContain('<file path="index.html"');
       expect(nextCall(result.content)).toBeUndefined();
     });
 
