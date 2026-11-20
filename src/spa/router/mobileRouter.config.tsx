@@ -50,9 +50,10 @@ const settingsTabSubElement = dynamicElement(
 );
 
 // Skills and connectors moved to the Marketplace; their old tabs are redirects.
+// Credentials keep their own mobile page: mobile has no environments page to
+// share, while desktop redirects `/settings/credential` to it.
 const TABS_WITHOUT_SETTINGS_PAGE = new Set<string>([
   SettingsTabs.Connector,
-  SettingsTabs.Creds,
   SettingsTabs.Provider,
   SettingsTabs.Skill,
 ]);

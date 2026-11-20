@@ -19,7 +19,6 @@ import {
   Info,
   KeyboardIcon,
   KeyIcon,
-  KeyRound,
   Map,
   MessageCircleIcon,
   MonitorSmartphoneIcon,
@@ -245,19 +244,13 @@ export const useCategory = () => {
         key: SettingsTabs.SubscriptionAccounts,
         label: t('tab.subscriptionAccounts'),
       },
-      // Always there: a code environment is a definition, written down before
-      // anything runs it, and useful with or without a drive to run it on.
+      // Environments & Credentials, always there: what a run starts from and
+      // the secrets it reads, in one place. An environment is a definition,
+      // written down before anything runs it, so it needs no drive.
       {
         icon: ContainerIcon,
         key: SettingsTabs.Environments,
-        label: t('tab.environments'),
-      },
-      // Secrets the agents' runs read at execution time, next to the
-      // environments that consume them.
-      {
-        icon: KeyRound,
-        key: SettingsTabs.Creds,
-        label: t('tab.creds'),
+        label: t('tab.environmentsAndCreds'),
       },
       isDesktop && {
         icon: EthernetPort,

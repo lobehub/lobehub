@@ -4800,6 +4800,16 @@ When I am ___, I need ___
   'tools.tabs.installed': 'Enabled',
   'tools.title': 'Skills',
   'tab.environments': 'Environments',
+  'tab.environmentsAndCreds': 'Environments & Credentials',
+  'environmentsAndCreds.workspaceDesc':
+    'Environments and credentials shared with this workspace, plus your private ones (marked with a lock). New ones start private; publish one to share it with the workspace.',
+  'environmentsAndCreds.section.environments': 'Environments',
+  'environmentsAndCreds.section.creds': 'Credentials',
+  'creds.writeOnly.tag': 'Write-only',
+  'creds.writeOnly.tooltip':
+    'Shared with the workspace: its values are no longer shown in settings and can only be replaced.',
+  'creds.writeOnly.editHint':
+    'Stored values are not shown. Leave the pairs empty to keep them, or enter every pair to replace them all.',
   'environments.desc':
     "How to set up a project: the repository to check out, the setup command, the variables. Pick one from the environment menu under the chat input, and the conversation's working directory — a temporary sandbox or a folder on your drive — is initialized from it once.",
   'environments.create': 'New environment',
@@ -5465,10 +5475,6 @@ When I am ___, I need ___
   'environments.form.bootstrapAfterRepositories':
     "Runs at the top of the working directory, after each repository's own setup. Setup for a single repository goes on that repository.",
   'environments.form.duplicateFolder': 'Another repository already uses this folder.',
-  'creds.listDesc':
-    'Shared credentials everyone in this workspace can use, plus your private ones (marked with a lock). New credentials start private; publish one to share it with the workspace.',
-  'environments.workspaceListDesc':
-    'Environments published to this workspace, plus your private ones (marked with a lock). New environments start private; publish one to share it with the workspace.',
   'workspaceSetting.devices.enrollPrivateDesc':
     'Run this on the machine you want to connect. It starts private to you; publish it to the workspace from its card menu.',
 };

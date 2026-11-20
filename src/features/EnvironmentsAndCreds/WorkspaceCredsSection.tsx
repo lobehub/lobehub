@@ -1,14 +1,13 @@
 'use client';
 
-import { Block, Button, Empty, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { Block, Button, Empty, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { Plus } from 'lucide-react';
-import { useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsWorkspaceViewer } from '@/business/client/hooks/useIsWorkspaceViewer';
-import VisibilityFilter, { type VisibilityFilterValue } from '@/components/VisibilityFilter';
+import { type VisibilityFilterValue } from '@/components/VisibilityFilter';
 import { createCreateCredModal } from '@/features/Settings/creds/features/CreateCredModal';
 import MarketSignInGate from '@/features/Settings/creds/features/MarketSignInGate';
 import { type CredsApi } from '@/features/Settings/creds/features/useCredsApi';
@@ -17,6 +16,10 @@ import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
 import { densityTokens } from '@/styles/density.stylex';
 
+import { CREDENTIALS_SECTION_ID } from './const';
+import SectionTitle from './SectionTitle';
+import { useScrollToSection } from './useScrollToSection';
+
 const styles = stylex.create({
   container: {
     overflow: 'hidden',
@@ -24,7 +27,6 @@ const styles = stylex.create({
     paddingBlock: '4px',
     paddingInline: densityTokens['--lobe-density-card-padding'],
   },
-  desc: { fontSize: '13px', color: cssVar.colorTextSecondary },
 });
 
 type Visibility = 'private' | 'public';
@@ -44,37 +46,42 @@ interface WorkspaceCredsClient {
 const workspaceClient = lambdaClient.workspaceCreds as unknown as CredsApi['client'] &
   WorkspaceCredsClient;
 
-const workspaceCredsApi = (createVisibility: Visibility): CredsApi => ({
-  client: workspaceClient,
-  createVisibility,
-  query: lambdaQuery.workspaceCreds as unknown as CredsApi['query'],
-  setVisibility: (id, visibility) => workspaceClient.setVisibility.mutate({ id, visibility }),
-});
-
 /**
  * A new credential starts private: any non-viewer member may create one, and
  * nothing is shared until its row's "Publish to Workspace" says so.
  */
-const credsApi = workspaceCredsApi('private');
+const credsApi: CredsApi = {
+  client: workspaceClient,
+  createVisibility: 'private',
+  query: lambdaQuery.workspaceCreds as unknown as CredsApi['query'],
+  setVisibility: (id, visibility) => workspaceClient.setVisibility.mutate({ id, visibility }),
+};
+
+interface WorkspaceCredsSectionProps {
+  /** The page's one header filter, shared with the environments section. */
+  visibilityFilter: VisibilityFilterValue;
+}
 
 /**
- * Workspace credential management: one list of every credential the caller
- * can use here — the shared ones (the workspace's own and members' personal
- * credentials published here) and the caller's private ones, marked with a
- * lock. Personal credentials are shared in from the personal settings page
- * ("Share to Workspace…"), not listed here wholesale.
+ * The credentials section of the workspace Environments & Credentials page:
+ * every credential the caller can use here — the shared ones (the
+ * workspace's own and members' personal credentials published here) and the
+ * caller's private ones, marked with a lock. Personal credentials are shared
+ * in from the personal settings page ("Share to Workspace…").
  *
  * When the workspace has no Market organization yet (Community Profile not
- * completed), the backend returns NOT_FOUND and the page shows a setup prompt.
+ * completed), the backend returns NOT_FOUND and the section shows a setup
+ * prompt.
  */
-const WorkspaceCredsSetting = () => {
+const WorkspaceCredsSection = memo<WorkspaceCredsSectionProps>(({ visibilityFilter }) => {
   const { t } = useTranslation('setting');
   const { isAuthenticated } = useMarketAuth();
   const isViewer = useIsWorkspaceViewer();
+  const ref = useScrollToSection<HTMLDivElement>(CREDENTIALS_SECTION_ID);
 
   // Shares its query key with the list inside WorkspaceCredsList, so
   // `refetch` here refreshes the list.
-  const { data, error, isLoading, refetch } = credsApi.query.list.useQuery(undefined, {
+  const { error, isLoading, refetch } = credsApi.query.list.useQuery(undefined, {
     enabled: isAuthenticated,
     // No retry for NOT_FOUND — the org won't materialise on its own.
     // Cap retries for other errors (500s, network) so failures surface instead of looping.
@@ -87,13 +94,8 @@ const WorkspaceCredsSetting = () => {
 
   const orgMissing = isAuthenticated && !isLoading && error?.data?.code === 'NOT_FOUND';
 
-  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilterValue>('all');
-  const credentials = data?.data ?? [];
-  const privateCount = credentials.filter((cred) => cred.visibility === 'private').length;
-
   // New credentials are private, which any non-viewer member may create.
   const canCreate = !isViewer;
-  const createBlockedReason = isViewer ? t('creds.viewerHint') : '';
 
   const handleCreate = () => {
     if (!canCreate) return;
@@ -112,27 +114,16 @@ const WorkspaceCredsSetting = () => {
   );
 
   return (
-    <Flexbox gap={16}>
+    <Flexbox gap={16} id={CREDENTIALS_SECTION_ID} ref={ref}>
       <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
-        <Text className={stylex.props(styles.desc).className}>{t('creds.listDesc')}</Text>
+        <SectionTitle title={t('environmentsAndCreds.section.creds')} />
         {isAuthenticated && !orgMissing && (
-          <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
-            {credentials.length > 0 && (
-              <VisibilityFilter
-                value={visibilityFilter}
-                counts={{
-                  all: credentials.length,
-                  private: privateCount,
-                  workspace: credentials.length - privateCount,
-                }}
-                onChange={setVisibilityFilter}
-              />
-            )}
+          <Flexbox style={{ flex: 'none' }}>
             {
               // Disabled buttons swallow hover events, so the tooltip needs the
               // span wrapper to fire (see the usePermission docstring pattern).
-              createBlockedReason ? (
-                <Tooltip title={createBlockedReason}>
+              isViewer ? (
+                <Tooltip title={t('creds.viewerHint')}>
                   <span>{createButton}</span>
                 </Tooltip>
               ) : (
@@ -155,8 +146,8 @@ const WorkspaceCredsSetting = () => {
       </Block>
     </Flexbox>
   );
-};
+});
 
-WorkspaceCredsSetting.displayName = 'WorkspaceCredsSetting';
+WorkspaceCredsSection.displayName = 'WorkspaceCredsSection';
 
-export default WorkspaceCredsSetting;
+export default WorkspaceCredsSection;
