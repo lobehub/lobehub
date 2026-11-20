@@ -104,3 +104,64 @@ describe('agentRouter.publishOrCreate', () => {
     expect(mockMarketSDK.headers['x-lobe-owner-account-id']).toBeUndefined();
   });
 });
+
+describe('agentRouter.getOnboardingFull', () => {
+  const caller = () => agentRouter.createCaller({ serverDB: {}, userId: 'user-1' } as any);
+
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fetchSpy = vi.spyOn(globalThis, 'fetch');
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
+  it('returns the upstream catalog when Market accepts the request', async () => {
+    const catalog = { writing: [{ identifier: 'writer', name: 'Writer' }] };
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify(catalog), { status: 200 }));
+
+    await expect(caller().getOnboardingFull({ locale: 'en-US' })).resolves.toEqual(catalog);
+  });
+
+  it.each([401, 403])('returns an empty catalog when Market answers %s', async (status) => {
+    fetchSpy.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: 'unauthorized',
+          error_description: 'Missing bearer token',
+        }),
+        {
+          status,
+          statusText: status === 401 ? 'Unauthorized' : 'Forbidden',
+        },
+      ),
+    );
+
+    await expect(caller().getOnboardingFull()).resolves.toEqual({});
+  });
+
+  it.each([
+    [404, 'Not Found'],
+    [500, 'Internal Server Error'],
+    [503, 'Service Unavailable'],
+  ])('still throws when Market answers %s', async (status, statusText) => {
+    fetchSpy.mockResolvedValue(new Response('unavailable', { status, statusText }));
+
+    await expect(caller().getOnboardingFull()).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: `Failed to get onboarding full: ${statusText}`,
+    });
+  });
+
+  it('still throws when the Market request fails', async () => {
+    fetchSpy.mockRejectedValue(new Error('network down'));
+
+    await expect(caller().getOnboardingFull()).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'network down',
+    });
+  });
+});
