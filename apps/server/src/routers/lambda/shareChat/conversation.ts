@@ -18,12 +18,8 @@ export const conversationRouter = router({
     .query(async ({ input, ctx }) => {
       const share = await resolveLinkShareOrThrow(ctx.serverDB, input.shareId, ctx.userId);
 
-      // The list is intentionally NOT bounded by the share's live
-      // `maxTopicsPerVisitor`: that cap gates ADMISSION of new topics (the
-      // COUNT check in `execAgent`, `exec.ts`), and a creator may lower it below
-      // what a visitor already created. Tying the page size to it would hide
-      // those older conversations with no pagination or deep link to reach
-      // them, so the model applies its own fixed, generous list bound instead.
+      // No share setting caps a visitor's topics, so the model applies its own
+      // fixed, generous list bound.
       const topicModel = new TopicModel(
         ctx.serverDB,
         share.ownerId,
@@ -68,9 +64,9 @@ export const conversationRouter = router({
         share.workspaceId ?? undefined,
       );
 
-      // queryForVisitor strips the creator's `sender` identity, and — unless the
-      // share opts in via `showModelInfo` / `showErrorDetails` — the spend/model
-      // snapshot and raw error payload too. Share messages persist under the
+      // queryForVisitor strips the creator's `sender` identity and the
+      // spend/model snapshot, and — unless the share opts in via
+      // `showErrorDetails` — the raw error payload too. Share messages persist under the
       // CREATOR's account (see the `shareChatProcedure` doc in `procedures.ts`), so the raw `query()` result
       // would otherwise leak the creator's account identity to the visitor.
       return messageModel.queryForVisitor(
@@ -79,7 +75,6 @@ export const conversationRouter = router({
           postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
           redaction: {
             showErrorDetails: share.shareConfig.showErrorDetails,
-            showModelInfo: share.shareConfig.showModelInfo,
           },
           // Work summaries are assembled under the visitor's OWN share scope:
           // only Works registered from this share topic resolve, never the

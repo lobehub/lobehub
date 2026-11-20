@@ -1,16 +1,13 @@
 'use client';
 
 import { ActionIcon } from '@lobehub/ui';
+import { PanelRightOpenIcon } from 'lucide-react';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
-import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
-
-/** Fits the 28px header control without crowding it. */
-const AVATAR_SIZE = 20;
+import { useHeaderActionSize } from '@/styles/density';
 
 interface GoalSupervisorToggleProps {
-  /** The agent that supervises the goal; its avatar is the panel's entry. */
+  /** The agent that supervises the goal; its name goes into the tooltip. */
   agentId: string;
   /** Whether the panel is open — drives the pressed state. */
   expand: boolean;
@@ -21,12 +18,14 @@ interface GoalSupervisorToggleProps {
 }
 
 /**
- * The supervising agent's avatar as the goal panel's entry.
+ * The goal panel's single header entry once the panel is folded.
  *
- * The header used to carry two entries for one destination — a panel toggle and a
- * separate "view supervision progress" button. The avatar replaces both, so who
- * is watching and where to see it read as one affordance, and the entry names a
- * person instead of a generic panel glyph.
+ * The panel opens by default, so this only shows after someone folds it. It is
+ * the same open-panel glyph the task detail page and the document editor use,
+ * and the mirror of the panel's own fold button, so folding and unfolding read
+ * as one control. It used to be the supervising agent's avatar, which people
+ * did not read as a way back into the conversation; the tooltip still names
+ * the agent and what the panel holds.
  */
 const GoalSupervisorToggle = ({
   agentId,
@@ -36,12 +35,11 @@ const GoalSupervisorToggle = ({
   onToggle,
 }: GoalSupervisorToggleProps) => {
   const meta = useAgentDisplayMeta(agentId);
+  const headerActionSmallSize = useHeaderActionSize(true);
 
   if (hideWhenExpanded && expand) return null;
 
-  // The avatar carries the identity; the tooltip has to carry the action too,
-  // because an avatar alone does not tell a screen reader (or a hovering user)
-  // that pressing it opens something.
+  // The icon carries the action; the tooltip says whose conversation it reopens.
   const title = meta?.title ? `${meta.title} · ${label}` : label;
 
   return (
@@ -49,8 +47,8 @@ const GoalSupervisorToggle = ({
       active={expand}
       aria-label={title}
       data-testid={'goal-supervisor-toggle'}
-      icon={<AssigneeAvatar agentId={agentId} size={AVATAR_SIZE} />}
-      size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+      icon={PanelRightOpenIcon}
+      size={headerActionSmallSize}
       title={title}
       onClick={onToggle}
     />

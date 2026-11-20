@@ -118,7 +118,7 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
   if (contentState !== 'ready')
     return (
       <>
-        {!hideInbox && <InboxItem style={{ minHeight: 36 }} />}
+        {!hideInbox && <InboxItem />}
         {contentState === 'loading' && <SkeletonList rows={3} />}
       </>
     );
@@ -127,7 +127,7 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
 
   return (
     <>
-      {!hideInbox && <InboxItem style={{ minHeight: 36 }} />}
+      {!hideInbox && <InboxItem />}
       {myPinned.length > 0 && (
         <Flexbox data-testid={'sidebar-my-pinned'} gap={1}>
           <SubHeader

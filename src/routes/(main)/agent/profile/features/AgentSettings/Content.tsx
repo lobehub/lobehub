@@ -1,6 +1,7 @@
 'use client';
 
 import { DEFAULT_INBOX_TITLE } from '@lobechat/const';
+import { agentDisplayName } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { GitBranchIcon, MessageSquareHeartIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
@@ -74,15 +75,16 @@ const Content = memo(() => {
     [availableTabs, t],
   );
 
-  const displayTitle = isInbox
-    ? DEFAULT_INBOX_TITLE
-    : meta.title || t('defaultSession', { ns: 'common' });
+  const displayTitle = agentDisplayName(
+    meta,
+    isInbox ? DEFAULT_INBOX_TITLE : t('defaultSession', { ns: 'common' }),
+  );
 
   return (
     <SettingsModalLayout
       activeTab={activeTab}
       agentId={agentId}
-      avatar={isInbox ? DEFAULT_INBOX_AVATAR : meta.avatar || ''}
+      avatar={meta.avatar || (isInbox ? DEFAULT_INBOX_AVATAR : '')}
       background={meta.backgroundColor || undefined}
       tabs={tabs}
       title={displayTitle}

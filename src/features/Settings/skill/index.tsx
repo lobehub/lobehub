@@ -1,5 +1,6 @@
 'use client';
 
+import type { ConnectorVisibility } from '@lobechat/types';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
@@ -8,9 +9,11 @@ import { Activity, memo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import NavHeader from '@/features/NavHeader';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import DetailBreadcrumb from './features/DetailBreadcrumb';
@@ -37,7 +40,7 @@ const styles = stylex.create({
     alignItems: 'flex-start',
     justifyContent: 'center',
     height: '100%',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   /**
    * The connector list insets its rows and intro 12px, so the body is 12px wider
@@ -74,6 +77,27 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const querySkillIdentifier = searchParams.get('skill');
   const stackedSelected = parseMobileSelection(searchParams.get(MOBILE_SELECTION_PARAM));
+  // Workspace connectors sit behind two tabs, as devices do: the shared pool
+  // every member and agent uses, and the caller's private connectors, which
+  // only their private agents load. The tab lives in `?visibility=`, so a
+  // detail opened from it returns to it and names that tab's row.
+  const workspaceId = useActiveWorkspaceId();
+  const visibility: ConnectorVisibility | undefined =
+    viewMode === 'connector' && workspaceId
+      ? searchParams.get('visibility') === 'private'
+        ? 'private'
+        : 'public'
+      : undefined;
+  const changeVisibility = (next: ConnectorVisibility) =>
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (next === 'private') params.set('visibility', next);
+        else params.delete('visibility');
+        return params;
+      },
+      { replace: true },
+    );
 
   // Stacked: opening a detail is a history entry, so back returns to the list.
   const openStackedDetail = useCallback(
@@ -135,8 +159,10 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
         fullWidth
         page={!mobile || viewMode === 'skill'}
         viewMode={viewMode}
+        visibility={visibility}
         onDeleteSelected={closeStackedDetail}
         onSelect={handleSelect}
+        onVisibilityChange={changeVisibility}
       />
     </Activity>
   );
@@ -155,6 +181,7 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
             <SkillDetail
               identifier={stackedSelected.identifier}
               type={stackedSelected.type}
+              visibility={visibility}
               onDelete={closeStackedDetail}
             />
           </Flexbox>
@@ -181,6 +208,7 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
               <DetailBreadcrumb
                 identifier={stackedSelected.identifier}
                 type={stackedSelected.type}
+                visibility={visibility}
                 listLabel={t(viewMode === 'skill' ? 'skillView.skills' : 'skillView.connectors', {
                   ns: 'setting',
                 })}
@@ -190,6 +218,7 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
                 <SkillDetail
                   identifier={stackedSelected.identifier}
                   type={stackedSelected.type}
+                  visibility={visibility}
                   onDelete={closeStackedDetail}
                 />
               </Flexbox>

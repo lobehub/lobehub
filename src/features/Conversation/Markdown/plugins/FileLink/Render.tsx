@@ -5,18 +5,19 @@ import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import { A, copyToClipboard, Icon, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { CopyIcon } from 'lucide-react';
+import { CopyIcon, ExternalLinkIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
 import { EntityLinkRender, parseLobeLink } from '@/features/EntityLink';
-import { useChatStore } from '@/store/chat';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 import { useFileStore } from '@/store/file';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
+import { useOpenConversationFilePreview } from '../../../hooks/useOpenConversationFilePreview';
 import { useConversationStore } from '../../../store';
 import type { MarkdownElementProps } from '../type';
 import { fileLinkMarker } from './markers.stylex';
@@ -54,7 +55,7 @@ const stylesAtomic = stylex.create({
     outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
     outlineOffset: { 'default': null, ':focus-visible': '2px' },
   },
-  copy: {
+  action: {
     cursor: 'pointer',
     display: 'inline-flex',
     alignItems: 'center',
@@ -123,25 +124,32 @@ OwnedFileLabel.displayName = 'FileLinkOwnedFileLabel';
 
 const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
   const { fileId, linkHref, linkLabel, linkScope, proxyHref } = node?.properties || {};
-  const openFilePreview = useChatStore((s) => s.openFilePreview);
+  const openFilePreview = useOpenConversationFilePreview();
   // A share reader previews and copies the public proxy, not the owner's page.
   const isShareVisitor = useConversationStore((s) => isShareVisitorContext(s.context));
   const { t } = useTranslation('common');
+  const { t: tVerify } = useTranslation('verify');
   const label = linkLabel || linkHref || '';
   const isBareLink = !linkLabel || linkLabel === linkHref || linkLabel === fileId;
   const targetHref = getFileLinkTargetHref({ isShareVisitor, linkHref, proxyHref });
 
+  // The absolute address both the copy and the open-in-browser actions use.
+  const getAbsoluteHref = useCallback(
+    () => getFileLinkCopyHref({ isShareVisitor, linkHref, origin: getAppOrigin(), proxyHref }),
+    [isShareVisitor, linkHref, proxyHref],
+  );
+
   const handleCopy = useCallback(async () => {
-    const href = getFileLinkCopyHref({
-      isShareVisitor,
-      linkHref,
-      origin: getAppOrigin(),
-      proxyHref,
-    });
+    const href = getAbsoluteHref();
     if (!href) return;
     await copyToClipboard(href);
     toast.success(t('copySuccess'));
-  }, [isShareVisitor, linkHref, proxyHref, t]);
+  }, [getAbsoluteHref, t]);
+
+  const handleOpenInBrowser = useCallback(() => {
+    const href = getAbsoluteHref();
+    if (href) openTrustedExternalUrl(href);
+  }, [getAbsoluteHref]);
 
   const handleClick = useCallback(
     (event: MouseEvent<HTMLAnchorElement>) => {
@@ -195,15 +203,28 @@ const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
         )}
       </A>
       {targetHref && (
-        <button
-          aria-label={t('copy')}
-          {...stylex.props(stylesAtomic['copy'])}
-          title={t('copy')}
-          type={'button'}
-          onClick={handleCopy}
-        >
-          <Icon icon={CopyIcon} size={12} />
-        </button>
+        <>
+          <button
+            aria-label={t('copy')}
+            {...stylex.props(stylesAtomic['action'])}
+            title={t('copy')}
+            type={'button'}
+            onClick={handleCopy}
+          >
+            <Icon icon={CopyIcon} size={12} />
+          </button>
+          {/* Outside the anchor: the desktop preload claims clicks via
+              `closest('a')`, so a nested button would never fire. */}
+          <button
+            aria-label={tVerify('report.actions.openInBrowser')}
+            {...stylex.props(stylesAtomic['action'])}
+            title={tVerify('report.actions.openInBrowser')}
+            type={'button'}
+            onClick={handleOpenInBrowser}
+          >
+            <Icon icon={ExternalLinkIcon} size={12} />
+          </button>
+        </>
       )}
     </>
   );

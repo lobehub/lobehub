@@ -20,6 +20,7 @@ import { autoUpdateService } from '@/services/electron/autoUpdate';
 import { rendererOtaService } from '@/services/electron/rendererOta';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import { applyCoreUpdate } from './applyCoreUpdate';
 import { formatCoreVersion } from './coreVersion';
@@ -67,7 +68,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     max-inline-size: calc(100vw - 32px);
     padding-block: 8px;
-    padding-inline: 12px 8px;
+    padding-inline: ${densityVars.contentGap} 8px;
     border-radius: ${cssVar.borderRadiusLG};
 
     font-size: ${cssVar.fontSizeSM};

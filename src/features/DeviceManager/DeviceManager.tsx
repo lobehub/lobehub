@@ -23,6 +23,7 @@ import SettingsPageActions from '@/features/Settings/features/SettingsPageAction
 import { useDeviceList } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { densityVars } from '@/styles/densityVars';
 
 import DeviceCard from './DeviceCard';
 import DeviceGrid from './DeviceGrid';
@@ -43,7 +44,7 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorPrimaryBg};
   `,
   capabilityCard: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};

@@ -7,7 +7,6 @@ import { z } from 'zod';
 
 import { checkEmbeddingUsage } from '@/business/server/trpc-middlewares/async';
 import { FILE_PARSE_SIZE_LIMIT_ERROR_MESSAGE, MAX_FILE_PARSE_SIZE } from '@/const/file';
-import { DEFAULT_FILE_EMBEDDING_MODEL_ITEM } from '@/const/settings/knowledge';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { ChunkModel } from '@/database/models/chunk';
 import { EmbeddingModel } from '@/database/models/embedding';
@@ -16,12 +15,12 @@ import { type NewChunkItem, type NewEmbeddingsItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { fileEnv } from '@/envs/file';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
-import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { ChunkService } from '@/server/services/chunk';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { isSharedLimitFailure, toAsyncTaskErrorType } from '@/server/services/fileParse/failure';
+import { resolveFileEmbeddingModel } from '@/server/services/knowledgeBase/fileEmbeddingModel';
 import { type IAsyncTaskError } from '@/types/asyncTask';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 import { safeParseJSON } from '@/utils/safeParseJSON';
@@ -138,8 +137,11 @@ export const fileRouter = router({
 
       const asyncTask = await asyncTaskModel.findById(input.taskId);
 
-      const { model, provider } =
-        getServerDefaultFilesConfig().embeddingModel || DEFAULT_FILE_EMBEDDING_MODEL_ITEM;
+      const { model, provider } = await resolveFileEmbeddingModel(
+        ctx.serverDB,
+        ctx.userId,
+        workspaceId,
+      );
 
       if (!asyncTask) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Async Task not found' });
 

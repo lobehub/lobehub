@@ -23,6 +23,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { electronSystemService } from '@/services/electron/system';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { type DeviceCliState, getDeviceInstallCommands } from './deviceCliStatus';
 import { useDeviceCliStatus } from './useDeviceCliStatus';
@@ -34,8 +35,8 @@ const styles = stylex.create({
     borderRadius: cssVar.borderRadiusLG,
     borderStyle: 'solid',
     borderWidth: 1,
-    paddingBlock: 16,
-    paddingInline: 16,
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   metaText: {
     color: cssVar.colorTextSecondary,

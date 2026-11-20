@@ -22,6 +22,7 @@ import { useIsWorkspaceViewer } from '@/business/client/hooks/useIsWorkspaceView
 import AsyncError from '@/components/AsyncError';
 import { linearKeys } from '@/features/Integrations/Linear/swrKeys';
 import { linearService } from '@/services/linear';
+import { densityTokens } from '@/styles/density.stylex';
 
 import {
   formatLinearSyncResult,
@@ -39,8 +40,8 @@ const styles = stylex.create({
     overflow: 'hidden',
   },
   row: {
-    paddingBlock: 12,
-    paddingInline: 16,
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   rowDivider: {
     borderBlockStartColor: cssVar.colorBorderSecondary,

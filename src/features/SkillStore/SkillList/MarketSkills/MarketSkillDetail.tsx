@@ -15,6 +15,7 @@ import { useDiscoverStore } from '@/store/discover';
 import { marketSelectors, skillSelectors } from '@/store/discover/selectors';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
+import { densityVars } from '@/styles/densityVars';
 import { type DiscoverSkillDetail as DiscoverSkillDetailType } from '@/types/discover';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -50,11 +51,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   meta: css`
     flex-shrink: 0;
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   name: css`
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     font-weight: 500;
     line-height: 20px;
     color: ${cssVar.colorText};

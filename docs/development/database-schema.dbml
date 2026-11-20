@@ -312,6 +312,70 @@ table agent_cron_jobs {
   }
 }
 
+table agent_deliveries {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  agent_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  subject_type text [not null]
+  subject_id text [not null]
+  parent_delivery_id uuid
+  requester_user_id text
+  project_id text
+  channel_id text
+  task_id text
+  title text
+  summary text
+  category text
+  outcome text [not null, default: 'unknown']
+  outcome_source text
+  outcome_confidence real
+  shots integer
+  frictions jsonb
+  total_cost "numeric(20, 6)"
+  total_tokens integer
+  tool_calls integer
+  user_messages integer
+  agent_messages integer
+  duration_ms integer
+  started_at "timestamp with time zone"
+  delivered_at "timestamp with time zone"
+  settled_at "timestamp with time zone"
+  distilled_at "timestamp with time zone"
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (subject_type, subject_id, agent_id) [name: 'agent_deliveries_subject_agent_unique', unique]
+    (agent_id, settled_at) [name: 'agent_deliveries_agent_id_settled_at_idx']
+    (user_id, settled_at) [name: 'agent_deliveries_user_id_settled_at_idx']
+    (workspace_id, settled_at) [name: 'agent_deliveries_workspace_id_settled_at_idx']
+    parent_delivery_id [name: 'agent_deliveries_parent_delivery_id_idx']
+    project_id [name: 'agent_deliveries_project_id_idx']
+    task_id [name: 'agent_deliveries_task_id_idx']
+  }
+}
+
+table agent_delivery_works {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  delivery_id uuid [not null]
+  work_id text [not null]
+  workspace_id text
+  role text [not null]
+  work_version_id uuid
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (delivery_id, work_id) [name: 'agent_delivery_works_delivery_id_work_id_unique', unique]
+    work_id [name: 'agent_delivery_works_work_id_idx']
+    workspace_id [name: 'agent_delivery_works_workspace_id_idx']
+  }
+}
+
 table agent_documents {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
@@ -902,6 +966,7 @@ table agent_operations {
     chat_group_id [name: 'agent_operations_chat_group_id_idx']
     parent_operation_id [name: 'agent_operations_parent_operation_id_idx']
     status [name: 'agent_operations_status_idx']
+    created_at [name: 'agent_operations_running_created_at_idx']
     (user_id, created_at) [name: 'agent_operations_user_id_created_at_idx']
     (workspace_id, created_at) [name: 'agent_operations_workspace_id_created_at_idx']
     metadata [name: 'agent_operations_metadata_idx']
@@ -1145,6 +1210,7 @@ table agent_skills {
   description text [not null]
   identifier text [not null]
   source text [not null]
+  upstream jsonb
   manifest jsonb [not null, default: `{}`]
   content text
   editor_data jsonb
@@ -1918,6 +1984,7 @@ table user_contact_requests {
   addressee_id text [not null]
   workspace_id text
   message text
+  source jsonb
   status text [not null, default: 'pending']
   responded_at "timestamp with time zone"
   accessed_at "timestamp with time zone" [not null, default: `now()`]
@@ -3394,6 +3461,7 @@ table messages {
     parent_id [name: 'messages_parent_id_idx']
     quota_id [name: 'messages_quota_id_idx']
     user_id [name: 'messages_user_id_idx']
+    (user_id, topic_id) [name: 'messages_user_id_topic_id_idx']
     session_id [name: 'messages_session_id_idx']
     thread_id [name: 'messages_thread_id_idx']
     agent_id [name: 'messages_agent_id_idx']

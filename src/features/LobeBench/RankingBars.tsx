@@ -5,6 +5,8 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 const ROW_HEIGHT = 44;
 const BAR_SIZE = 24;
 const GRID_TICKS = [25, 50, 75];
@@ -12,7 +14,12 @@ const GRID_TICKS = [25, 50, 75];
 const REACH_TEXT_ROOM = 120;
 
 const styles = stylex.create({
-  root: { display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 },
+  root: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: densityTokens['--lobe-density-content-gap'],
+    minWidth: 0,
+  },
   // One grid for every row, so the label column is as wide as the longest
   // name (up to a cap), the ranked score sits right before its bar, and every
   // bar starts on the same axis.
@@ -33,12 +40,18 @@ const styles = stylex.create({
     backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillQuaternary },
   },
   clickable: { cursor: 'pointer' },
-  label: { display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, paddingInlineEnd: 16 },
+  label: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    minWidth: 0,
+    paddingInlineEnd: densityTokens['--lobe-density-card-padding'],
+  },
   rank: {
     flexShrink: 0,
     minWidth: 24,
     fontFamily: cssVar.fontFamilyCode,
-    fontSize: 14,
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontVariantNumeric: 'tabular-nums',
     lineHeight: 1.3,
     color: cssVar.colorTextQuaternary,
@@ -61,7 +74,7 @@ const styles = stylex.create({
   },
   name: {
     overflow: 'hidden',
-    fontSize: 14,
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 600,
     lineHeight: 1.3,
     color: cssVar.colorText,
@@ -140,17 +153,17 @@ const styles = stylex.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     minWidth: 48,
-    paddingInlineEnd: 12,
+    paddingInlineEnd: densityTokens['--lobe-density-content-gap'],
   },
   scoreMain: {
     fontFamily: cssVar.fontFamilyCode,
-    fontSize: 14,
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 600,
     fontVariantNumeric: 'tabular-nums',
     lineHeight: 1.3,
     color: cssVar.colorText,
   },
-  legend: { display: 'flex', flexWrap: 'wrap', gap: 16 },
+  legend: { display: 'flex', flexWrap: 'wrap', gap: densityTokens['--lobe-density-section-gap'] },
   legendItem: {
     display: 'flex',
     alignItems: 'center',

@@ -22,10 +22,12 @@ const mocks = vi.hoisted(() => {
     connectors: [] as Array<{ id: string; identifier: string }>,
     createComposioConnection: vi.fn(),
     deleteAgentSkill: vi.fn(),
+    useFetchAgentBoundConnectors: vi.fn(() => ({ isValidating: false })),
     fetchConnectors: vi.fn(),
     getLobehubSkillAuthorizeUrl: vi.fn(),
     installBuiltinTool: vi.fn(),
     installedBuiltinIds: [] as string[],
+    isAgentBoundInit: false,
     installedPlugins: [] as Array<{
       customParams?: { mcp?: Record<string, unknown> };
       identifier: string;
@@ -360,5 +362,18 @@ describe('SkillDetail', () => {
       ).toBeInTheDocument(),
     );
     expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+  });
+
+  it('loads the agents’ connectors when an agent connector’s detail is opened by link', () => {
+    render(<SkillDetail identifier="row-1" type="agent-connector" />);
+
+    expect(mocks.toolState.useFetchAgentBoundConnectors).toHaveBeenCalledWith(true);
+    expect(screen.getByTestId('connector-detail')).toHaveTextContent('row-1');
+  });
+
+  it('leaves the agent connector query disabled for other details', () => {
+    render(<SkillDetail identifier="agent-skill-1" type="agent-skill" />);
+
+    expect(mocks.toolState.useFetchAgentBoundConnectors).toHaveBeenCalledWith(false);
   });
 });

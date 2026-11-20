@@ -137,6 +137,80 @@ describe('resolveLinkedCall', () => {
   });
 });
 
+/**
+ * A private agent's workspace run can resolve its owner's personal connector
+ * (`workspace_id IS NULL`). The run's workspace-scoped models can neither list
+ * nor write its accounts, so they are read and refreshed in its own scope.
+ */
+describe("a personal connector's accounts in a workspace run", () => {
+  const personal = { ...connector, userId: 'owner', workspaceId: null } as DecryptedConnector;
+  const shared = {
+    ...connector,
+    id: 's',
+    userId: 'owner',
+    workspaceId: 'ws',
+  } as DecryptedConnector;
+  const setup = () => {
+    const personalLinks = { listByConnectorIds: vi.fn().mockResolvedValue([links[0]]) };
+    const personalModel = {
+      forRow() {
+        return this;
+      },
+      getLinkModel: () => personalLinks,
+    };
+    const workspaceLinks = {
+      listByConnectorIds: vi
+        .fn()
+        .mockResolvedValue([{ ...links[1], id: 'lnk_s', userConnectorId: 's' }]),
+    };
+    const workspaceModel = {
+      forRow: vi.fn((row: { workspaceId: string | null }) =>
+        row.workspaceId === null ? personalModel : workspaceModel,
+      ),
+    };
+    return {
+      ctx: {
+        connectorLinkModel: workspaceLinks as unknown as ConnectorLinkModel,
+        connectorModel: workspaceModel as never,
+      },
+      personalLinks,
+      personalModel,
+      workspaceLinks,
+    };
+  };
+
+  it('lists each row in its own scope', async () => {
+    const { ctx, personalLinks, workspaceLinks } = setup();
+
+    const map = await loadConnectorLinksMap([personal, shared], ctx);
+
+    expect(personalLinks.listByConnectorIds).toHaveBeenCalledWith(['c']);
+    expect(workspaceLinks.listByConnectorIds).toHaveBeenCalledWith(['s']);
+    expect(map.get('c')?.map((link) => link.id)).toEqual(['lnk_a']);
+    expect(map.get('s')?.map((link) => link.id)).toEqual(['lnk_s']);
+  });
+
+  it("resolves a personal row's primary account through the personal scope", async () => {
+    const { ctx, personalModel, workspaceLinks } = setup();
+
+    const result = await resolveConnectorAccount(personal, ctx);
+
+    expect(result).toMatchObject({ accountCount: 1, linkId: 'lnk_a' });
+    expect(workspaceLinks.listByConnectorIds).not.toHaveBeenCalled();
+    expect(ensureFreshLinkToken).toHaveBeenLastCalledWith(personal, links[0], personalModel);
+  });
+
+  it('calls as, and refreshes through, the personal scope', async () => {
+    const { ctx, personalModel, workspaceLinks } = setup();
+
+    const result = await resolveLinkedCall({ connector: personal }, ctx);
+
+    expect(result).toMatchObject({ linkId: 'lnk_a' });
+    expect(workspaceLinks.listByConnectorIds).not.toHaveBeenCalled();
+    expect(ensureFreshLinkToken).toHaveBeenLastCalledWith(personal, links[0], personalModel);
+  });
+});
+
 describe('resolveConnectorAccount', () => {
   it('calls as the primary account, with its refreshed credentials, and says which one', async () => {
     const result = await resolveConnectorAccount(connector, context());

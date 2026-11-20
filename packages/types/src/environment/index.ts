@@ -9,7 +9,20 @@ export type EnvironmentVisibility = 'private' | 'public';
 
 /** Abstract source material; paths are relative destinations within an instance. */
 export type EnvironmentSource =
-  | { kind: 'git'; path?: string; ref?: string; url: string }
+  | {
+      kind: 'git';
+      path?: string;
+      ref?: string;
+      /**
+       * Setup for this repository alone, run inside its folder once it is
+       * checked out and before the environment's own
+       * {@link EnvironmentConfiguration.bootstrapCommand}. Folded into that one
+       * command by {@link withRepositorySetup} before anything reaches the
+       * execution plane, which only knows the environment-wide one.
+       */
+      setupCommand?: string;
+      url: string;
+    }
   | { kind: 'files'; path?: string; uri: string };
 
 export interface EnvironmentResourceRequirements {
@@ -122,7 +135,124 @@ export const DEFAULT_REGENERABLE_PATHS = ['node_modules', '.venv', 'target'] as 
 export const toExecutionConfiguration = (
   configuration: EnvironmentConfiguration,
 ): EnvironmentConfiguration => {
-  const { kind: _kind, ...rest } = configuration;
+  const { kind: _kind, ...rest } = withRepositorySetup(configuration);
 
-  return rest;
+  return rest.sources ? { ...rest, sources: layoutRepositorySources(rest.sources) } : rest;
+};
+
+/** The last segment of a checkout url — the repository's name, without `.git`. */
+export const repositoryFolderName = (url: string): string =>
+  url
+    .replace(/\.git$/, '')
+    .replace(/\/+$/, '')
+    .split('/')
+    .pop() || 'repository';
+
+/** `owner-name` of a checkout url, the fallback when two repositories share a name. */
+const repositoryOwnerFolderName = (url: string): string => {
+  const [owner, name] = url
+    .replace(/\.git$/, '')
+    .replace(/\/+$/, '')
+    .split('/')
+    .slice(-2);
+  return owner && name ? `${owner}-${name}` : repositoryFolderName(url);
+};
+
+const isRootPath = (path: string | undefined) => {
+  const value =
+    path
+      ?.trim()
+      .replace(/^\.?\/+/, '')
+      .replace(/\/+$/, '') ?? '';
+  return value === '' || value === '.';
+};
+
+/**
+ * Where each repository of an environment is checked out.
+ *
+ * One repository is checked out at the top of the working directory, as it
+ * always was. Several are laid out side by side, each in a folder of its own
+ * named after it (`lobehub/`, `lobe-ui/`), and the working directory itself is
+ * none of them. Nesting one checkout inside another would put the second
+ * repository in the first one's working tree — untracked in its `git status`,
+ * one `git add -A` away from being committed into it as an embedded repository,
+ * and inside every search, lint and build the first one runs.
+ *
+ * A folder the author set explicitly is kept; only a repository left at the
+ * top gets one. Two repositories of the same name fall back to `owner-name`,
+ * then a numeric suffix.
+ */
+export const layoutRepositorySources = (sources: EnvironmentSource[]): EnvironmentSource[] => {
+  const repositories = sources.filter((source) => source.kind === 'git');
+  if (repositories.length <= 1) return sources;
+
+  const taken = new Set(
+    repositories.flatMap((source) =>
+      isRootPath(source.path)
+        ? []
+        : [
+            source
+              .path!.trim()
+              .replace(/^\.?\/+/, '')
+              .replace(/\/+$/, ''),
+          ],
+    ),
+  );
+  const claim = (url: string) => {
+    let folder = repositoryFolderName(url);
+    if (taken.has(folder)) folder = repositoryOwnerFolderName(url);
+    for (let suffix = 2; taken.has(folder); suffix++)
+      folder = `${repositoryOwnerFolderName(url)}-${suffix}`;
+    taken.add(folder);
+    return folder;
+  };
+
+  return sources.map((source) =>
+    source.kind === 'git' && isRootPath(source.path)
+      ? { ...source, path: claim(source.url) }
+      : source,
+  );
+};
+
+const shellQuote = (value: string): string => `'${value.replaceAll("'", String.raw`'\''`)}'`;
+
+/**
+ * The definition with each repository's own setup folded into the one setup
+ * command the execution plane runs, and taken off the sources.
+ *
+ * Every repository's setup runs in its own folder, in the order the
+ * repositories are checked out, each in a subshell so a `cd` in one does not
+ * move the next; then the environment's own setup at the top of the working
+ * directory. Chained with `&&`: the first failure stops the rest, as one
+ * command failing always did.
+ *
+ * A definition without any repository setup comes back as it was, so the
+ * digest of every build made before repositories had one is unchanged.
+ */
+export const withRepositorySetup = (
+  configuration: EnvironmentConfiguration,
+): EnvironmentConfiguration => {
+  const sources = configuration.sources ?? [];
+  const hasRepositorySetup = sources.some(
+    (source) => source.kind === 'git' && source.setupCommand?.trim(),
+  );
+  if (!hasRepositorySetup) return configuration;
+
+  const steps = layoutRepositorySources(sources).flatMap((source) => {
+    const command = source.kind === 'git' ? source.setupCommand?.trim() : undefined;
+    if (!command) return [];
+    const folder = isRootPath(source.path) ? '.' : source.path!.trim();
+    return [`(cd ${shellQuote(folder)} && ${command}\n)`];
+  });
+  const own = configuration.bootstrapCommand?.trim();
+
+  return {
+    ...configuration,
+    bootstrapCommand: [...steps, ...(own ? [`(${own}\n)`] : [])].join(' && '),
+    sources: sources.map((source) => {
+      if (source.kind !== 'git' || source.setupCommand === undefined) return source;
+      const { setupCommand: _setupCommand, ...rest } = source;
+      return rest;
+    }),
+  };
 };

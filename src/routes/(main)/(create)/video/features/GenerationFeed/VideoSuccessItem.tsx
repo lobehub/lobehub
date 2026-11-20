@@ -43,10 +43,11 @@ interface VideoSuccessItemProps {
   isEditing?: boolean;
   onDelete: () => void;
   onDownload: () => void;
+  onShare?: () => void;
 }
 
 const VideoSuccessItem = memo<VideoSuccessItemProps>(
-  ({ generation, isEditing, onDelete, onDownload }) => {
+  ({ generation, isEditing, onDelete, onDownload, onShare }) => {
     const { t } = useTranslation('video');
     const asset = generation.asset as VideoGenerationAsset;
 
@@ -70,7 +71,7 @@ const VideoSuccessItem = memo<VideoSuccessItemProps>(
             {t('generation.editing.badge')}
           </div>
         )}
-        <ActionButtons showDownload onDelete={onDelete} onDownload={onDownload} />
+        <ActionButtons showDownload onDelete={onDelete} onDownload={onDownload} onShare={onShare} />
       </Block>
     );
   },

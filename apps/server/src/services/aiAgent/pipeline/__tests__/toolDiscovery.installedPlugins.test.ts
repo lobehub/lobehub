@@ -1,8 +1,12 @@
+import { AuvManifest } from '@lobechat/builtin-tool-auv';
+import { onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
+import { isToolEnabledByFeatureFlags } from '@lobechat/builtin-tools/featureGates';
 import { type LobeToolManifest, ToolResolver } from '@lobechat/context-engine';
 import { describe, expect, it, vi } from 'vitest';
 
 import { buildToolDiscoveryConfig } from '@/server/modules/AgentRuntime/executorHelpers';
 
+import { toolSetsFrom } from '../../__tests__/helpers/connectorToolSets';
 import { discoverTools } from '../toolDiscovery';
 
 vi.mock('@/business/client/model-bank/loadModels', () => ({
@@ -67,6 +71,7 @@ interface RunOptions {
   disabledPluginIds?: string[];
   /** A device gateway is configured for the deployment. */
   gatewayConfigured?: boolean;
+  memoryEnabled?: boolean;
   /** The agent's legacy pinned entries, which also read as on. */
   plugins?: string[];
   /** This turn's @-mention picks. */
@@ -82,7 +87,10 @@ const run = (options: RunOptions = {}) => {
     {
       agentDocumentsService: { hasDocuments: vi.fn().mockResolvedValue(false) },
       composioService: { getComposioManifests: vi.fn().mockResolvedValue([]) },
-      connectorModel: { resolveByIdentifiers: vi.fn().mockResolvedValue([]) },
+      connectorModel: {
+        resolveByIdentifiers: vi.fn().mockResolvedValue([]),
+        resolveToolSets: toolSetsFrom(),
+      },
       connectorToolModel: {
         queryAllByConnectorIds: vi.fn().mockResolvedValue([]),
         queryByConnector: vi.fn().mockResolvedValue([]),
@@ -114,7 +122,7 @@ const run = (options: RunOptions = {}) => {
     } as never,
     {
       disabledPluginIds: options.disabledPluginIds ?? [],
-      globalMemoryEnabled: false,
+      globalMemoryEnabled: options.memoryEnabled ?? false,
       hasMentionedAgents: false,
       isFixedDeviceTarget: false,
       loadHistoryMessages: vi.fn().mockResolvedValue([]),
@@ -140,9 +148,77 @@ const offeredToolNames = (result: { tools?: { function: { name: string } }[] }) 
 const ON = { autoSkillIds: [FEISHU] };
 const MANUAL = { chatConfig: { skillActivateMode: 'manual' } };
 
-describe('discoverTools — installed plugins are opt-in per agent', () => {
-  it('keeps an installed plugin the agent never turned on out of the run', async () => {
+describe('Agent first-turn tool payload', () => {
+  it.each([
+    { expected: ['lobe-user-memory', 'lobe-web-browsing'], memory: true, search: true },
+    { expected: ['lobe-user-memory'], memory: true, search: false },
+    { expected: ['lobe-web-browsing'], memory: false, search: true },
+    { expected: [], memory: false, search: false },
+  ])(
+    'only lists available capabilities (memory=$memory, search=$search)',
+    async ({ expected, memory, search }) => {
+      const result = await run({
+        chatConfig: { searchMode: search ? 'auto' : 'off' },
+        memoryEnabled: memory,
+      });
+      const loaders = ['lobe-activator', 'lobe-skills'];
+      const capabilities = ['lobe-user-memory', 'lobe-web-browsing'];
+      expect(result.toolsResult.enabledToolIds.toSorted()).toEqual(loaders);
+      expect(offeredToolNames(result)).toHaveLength(6);
+      expect(
+        availableToolIds(result.toolManifestMap, loaders)
+          .filter((id) => capabilities.includes(id))
+          .toSorted(),
+      ).toEqual(expected);
+      const activated = result.toolsEngine!.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        model: 'test-model',
+        provider: 'test-provider',
+        skipDefaultTools: true,
+        toolIds: [
+          ...capabilities,
+          'lobe-attachments',
+          'lobe-agent-account',
+          'lobe-browser',
+          'lobe-knowledge-base',
+          'lobe-mcp-events',
+        ],
+      });
+      expect(activated.enabledToolIds.toSorted()).toEqual(expected);
+    },
+  );
+});
+
+describe('discoverTools — installed plugin discovery', () => {
+  // This server fixture has no device and no optional feature flags.
+  const availableBuiltins = onDemandBuiltinToolIds.filter(
+    (id) => id !== AuvManifest.identifier && isToolEnabledByFeatureFlags(id, {}),
+  );
+  it.each(availableBuiltins)('defers %s until activation and respects opt-out', async (id) => {
     const result = await run();
+    expect(availableToolIds(result.toolManifestMap, result.toolsResult.enabledToolIds)).toContain(
+      id,
+    );
+    expect(result.toolsResult.enabledToolIds).not.toContain(id);
+    expect(offeredToolNames(result).filter((name) => name.startsWith(`${id}____`))).toEqual([]);
+    const activate = (engine: typeof result.toolsEngine) =>
+      engine!.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        model: 'test-model',
+        provider: 'test-provider',
+        skipDefaultTools: true,
+        toolIds: [id],
+      });
+    const activated = activate(result.toolsEngine);
+    expect(activated.enabledToolIds).toEqual([id]);
+    expect(offeredToolNames(activated)).toContainEqual(expect.stringMatching(`^${id}____`));
+    const off = await run({ disabledPluginIds: [id] });
+    expect(off.toolManifestMap[id]).toBeUndefined();
+    expect(activate(off.toolsEngine).enabledToolIds).not.toContain(id);
+  });
+
+  it('keeps a disabled installed plugin out of the run', async () => {
+    const result = await run({ disabledPluginIds: [FEISHU] });
 
     expect(result.toolManifestMap[FEISHU]).toBeUndefined();
     expect(result.toolsResult.enabledToolIds).not.toContain(FEISHU);
@@ -153,7 +229,10 @@ describe('discoverTools — installed plugins are opt-in per agent', () => {
   });
 
   it.each([
+    { label: 'inherits', options: {} },
     { label: 'turned on', options: ON },
+    { label: 'turned on with an old manual preference', options: { ...ON, ...MANUAL } },
+    { label: 'pinned with an old manual preference', options: { ...MANUAL, plugins: [FEISHU] } },
     { label: 'pinned', options: { plugins: [FEISHU] } },
   ])(
     'offers an installed plugin the agent $label to the activator without enabling it',
@@ -177,9 +256,6 @@ describe('discoverTools — installed plugins are opt-in per agent', () => {
   );
 
   it.each([
-    // Manual mode has no activator, so on is the only way to reach the model.
-    { label: 'the agent turned on, in manual mode', options: { ...ON, ...MANUAL } },
-    { label: 'the agent pinned, in manual mode', options: { ...MANUAL, plugins: [FEISHU] } },
     // The turn brings the plugin in itself, whatever the agent's switch says.
     { label: 'the turn @-mentions', options: { selectedToolIds: [FEISHU] } },
   ])('enables a plugin $label directly', async ({ options }) => {
@@ -197,7 +273,7 @@ describe('discoverTools — installed plugins are opt-in per agent', () => {
   });
 
   it('keeps an installed plugin that is off out of a manual-mode run', async () => {
-    const result = await run(MANUAL);
+    const result = await run({ ...MANUAL, disabledPluginIds: [FEISHU] });
 
     expect(result.toolManifestMap[FEISHU]).toBeUndefined();
     expect(result.toolsResult.enabledToolIds).not.toContain(FEISHU);

@@ -1,7 +1,6 @@
 'use client';
 
 import { Button, Flexbox } from '@lobehub/ui';
-import * as stylex from '@stylexjs/stylex';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,7 +11,8 @@ import { getLocalBackgroundTaskStopper } from '@/store/chat/slices/agentRun/acti
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
-import { sectionProps, sectionStyles } from '../sectionStyles';
+import { SectionHeader } from '../SectionHeader';
+import { sectionProps } from '../sectionStyles';
 import {
   type BackgroundTaskItem,
   groupBackgroundTasks,
@@ -88,12 +88,10 @@ const BackgroundTasksBody = ({
 
   return (
     <Flexbox {...sectionProps(afterBreak)}>
-      <Flexbox horizontal align={'center'} {...stylex.props(sectionStyles.sectionHeader)} gap={6}>
-        <span {...stylex.props(sectionStyles.sectionTitle)}>
-          {t('workingPanel.overview.backgroundTasks.title')}
-        </span>
-        {running.length > 0 && <span {...stylex.props(sectionStyles.count)}>{running.length}</span>}
-      </Flexbox>
+      <SectionHeader
+        count={running.length > 0 ? running.length : undefined}
+        title={t('workingPanel.overview.backgroundTasks.title')}
+      />
       {running.map(renderRow)}
       {finished.map(renderRow)}
       {(hiddenCount > 0 || showAllFinished) && (

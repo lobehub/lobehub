@@ -91,7 +91,6 @@
   "events.youInvited": "Вие поканихте {{names}} в канала",
   "events.youInvitedMembers": "Вие поканихте <members/> в канала",
   "failure.locate": "Показване на съобщението",
-  "failure.messageLabel": "Отговорът не успя: {{names}}",
   "failure.title": "Неуспешни отговори · {{count}}",
   "followers": "Отговори от: {{names}}",
   "invite.directHint": "Поканването тук започва нов канал с {{name}} и избраните от вас членове. Този разговор с {{name}} остава както е.",

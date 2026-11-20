@@ -34,6 +34,11 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
 
 vi.mock('@/components/LobeIcons', () => ({ ModelIcon: () => null }));
 
+vi.mock('@/features/GenerationShareModal', () => ({
+  openGenerationShareModal: vi.fn(),
+  useCanShareGeneration: () => false,
+}));
+
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => navigate,
 }));

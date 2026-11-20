@@ -181,7 +181,7 @@ export const userConnectors = pgTable(
     isEnabled: boolean('is_enabled').notNull().default(true),
 
     // ── OIDC/OAuth config (plaintext — non-sensitive) ─────────────────────
-    oidcConfig: jsonb('oidc_config').$type<OIDCConfig>(),
+    oidcConfig: jsonb('oidc_config').$type<ConnectorOIDCConfig>(),
 
     // ── Encrypted credentials ─────────────────────────────────────────────
     /**

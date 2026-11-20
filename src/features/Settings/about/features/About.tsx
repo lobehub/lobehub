@@ -14,6 +14,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BLOG, mailTo, OFFICIAL_SITE, PRIVACY_URL, TERMS_URL } from '@/const/url';
+import { densityTokens } from '@/styles/density.stylex';
 
 import AboutList from './AboutList';
 import ItemCard from './ItemCard';
@@ -21,7 +22,11 @@ import ItemLink from './ItemLink';
 import Version from './Version';
 
 const styles = stylex.create({
-  title: { fontSize: '14px', fontWeight: 'bold', color: cssVar.colorTextSecondary },
+  title: {
+    fontSize: densityTokens['--lobe-density-font-size'],
+    fontWeight: 'bold',
+    color: cssVar.colorTextSecondary,
+  },
 });
 
 const About = memo<{ mobile?: boolean }>(({ mobile }) => {

@@ -15,6 +15,7 @@ import type { UserConnectorToolItem } from '@/database/schemas';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
+  connectorLinksContextForRow,
   loadConnectorLinksMap,
   pickPrimaryLink,
   withLinkCredentials,
@@ -59,13 +60,12 @@ export interface ToolReadsContext {
    * resolution or the stale-tools refresh.
    */
   candidateIds: string[];
+  disabledPluginIds?: string[];
   exclusivePluginIds?: string[];
   isGoalTurn: boolean;
   /**
-   * The identifiers the agent turned on. A connector is opt-in per agent, so
-   * only these are resolved as discoverable; an off connector never has its
-   * credentials decrypted. `undefined` = no opt-in cut (an exact toolset, or a
-   * share run, which reads `shareGrantedExtensionIds` instead).
+   * Explicit connector allowlist for custom toolsets. Ordinary agents use their
+   * scoped connections, and shared agents use their grants.
    */
   optedInExtensionIds?: Set<string>;
   /** Project the run belongs to (`appContext.projectId`). */
@@ -125,20 +125,21 @@ const CONNECTOR_REFRESH_CONCURRENCY = 5;
  * expired OAuth tokens first. Rotated credentials are persisted encrypted,
  * which needs the gatekeeper; without one, keep the stored tokens.
  */
-const refreshConnectorTokens = async (
+const refreshConnectorTokens = async <T extends DecryptedConnector>(
   deps: ToolDiscoveryDeps,
   gateKeeper: KeyVaultsGateKeeper | undefined,
-  connectors: DecryptedConnector[],
+  connectors: T[],
   onTimeout: () => void,
   anonymous = false,
-): Promise<DecryptedConnector[]> => {
+): Promise<T[]> => {
   if (!gateKeeper || connectors.length === 0) return connectors;
   const model = new ConnectorModel(deps.db, deps.userId, deps.workspaceId, gateKeeper);
   const linksContext = { connectorModel: model };
   const map = await loadConnectorLinksMap(connectors, linksContext);
   return pMap(
     connectors,
-    async (connector) => {
+    // Every row keeps what it was resolved with (its tool prefix among them)
+    async (connector): Promise<T> => {
       const links = map.get(connector.id) ?? [];
       const choices = links.map(({ id, name, userId }, index) => ({
         id,
@@ -148,18 +149,29 @@ const refreshConnectorTokens = async (
       if (links.length > 1) return { ...connector, credentials: null, links: choices };
       const primary = pickPrimaryLink(links);
       if (primary) {
-        const [fresh] = await refreshExpiredLinkTokens(connector, [primary], model, { onTimeout });
-        return { ...withLinkCredentials(connector, fresh), links: choices };
+        // A private agent's personal connector refreshes in its own scope
+        const rowContext = connectorLinksContextForRow(linksContext, connector);
+        const [fresh] = await refreshExpiredLinkTokens(
+          connector,
+          [primary],
+          rowContext.connectorModel,
+          { onTimeout },
+        );
+        return { ...connector, ...withLinkCredentials(connector, fresh), links: choices };
       }
-      return (await refreshExpiredConnectorTokens([connector], model, { onTimeout }))[0];
+      const [fresh] = await refreshExpiredConnectorTokens([connector], model, { onTimeout });
+      return { ...connector, ...fresh };
     },
     { concurrency: CONNECTOR_REFRESH_CONCURRENCY },
   );
 };
 
+/** A connector row the run resolved, with its tool prefix (`resolveToolSets`). */
+type RunConnector = DecryptedConnector & { toolIdentifier: string };
+
 /** Drop unfinished marketplace installs (see `isMarketplaceInstallRunnable`). */
-const filterInstalledMarketplaceConnectors = (
-  connectors: DecryptedConnector[],
+const filterInstalledMarketplaceConnectors = <T extends DecryptedConnector>(
+  connectors: T[],
   installedIds: Set<string>,
 ) =>
   connectors.filter((connector) =>
@@ -195,10 +207,12 @@ const readConnectors = async (
       installedPluginIds,
     );
     const [resolved, installedIds] = await Promise.all([
+      // One tool set per row: a private agent's own topic keeps the owner's
+      // private and personal rows beside the shared one of an identifier
       candidateIds.length > 0
-        ? deps.connectorModel.resolveByIdentifiers(
+        ? deps.connectorModel.resolveToolSets(
+            { agentId: resolvedAgentId, topicId: ctx.topicId },
             candidateIds,
-            resolvedAgentId,
             connectorGateKeeper,
           )
         : [],
@@ -267,7 +281,7 @@ const readDiscoverableConnectors = async (
   onRefreshTimeout: () => void,
   installedPluginIds: Promise<Set<string>>,
 ): Promise<{
-  connectorsMcp: DecryptedConnector[];
+  connectorsMcp: RunConnector[];
   manifests: LobeToolManifest[];
   tools: UserConnectorToolItem[];
 }> => {
@@ -282,14 +296,23 @@ const readDiscoverableConnectors = async (
       ? [...discoverableIds].filter((identifier) => !candidates.has(identifier))
       : undefined;
     if (unresolvedIds?.length === 0) return none;
+    // One tool set per row, in the run's conversation (see `readConnectors`)
     const [resolved, installedIds] = await Promise.all([
-      unresolvedIds
-        ? deps.connectorModel.resolveByIdentifiers(unresolvedIds, ctx.resolvedAgentId, gateKeeper)
-        : deps.connectorModel.resolveAll(ctx.resolvedAgentId, gateKeeper),
+      deps.connectorModel.resolveToolSets(
+        { agentId: ctx.resolvedAgentId, topicId: ctx.topicId },
+        unresolvedIds,
+        gateKeeper,
+        unresolvedIds ? [] : [...candidates, ...(ctx.disabledPluginIds ?? [])],
+      ),
       installedPluginIds,
     ]);
     const connectorsMcp = filterInstalledMarketplaceConnectors(resolved, installedIds).filter(
-      (c) => !candidates.has(c.identifier) && hasCallableMcpEndpoint(c),
+      (c) =>
+        !candidates.has(c.identifier) &&
+        !ctx.disabledPluginIds?.includes(c.identifier) &&
+        c.isEnabled &&
+        c.status === 'connected' &&
+        hasCallableMcpEndpoint(c),
     );
     if (connectorsMcp.length === 0) return none;
 
@@ -522,7 +545,7 @@ export const startToolReads = (deps: ToolDiscoveryDeps, ctx: ToolReadsContext) =
         ? Promise.resolve<LobeToolManifest[]>([])
         : traceDiscoveryStage('composio', () =>
             deps.composioService.getComposioManifests(
-              ctx.resolvedAgentId,
+              { agentId: ctx.resolvedAgentId, topicId: ctx.topicId },
               ctx.shareGrantedExtensionIds && { identifiers: [...ctx.shareGrantedExtensionIds] },
             ),
           )

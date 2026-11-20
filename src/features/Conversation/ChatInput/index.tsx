@@ -58,6 +58,7 @@ import { transcribeVoiceMessage } from './transcribeVoiceMessage';
 import { useConversationChatInputUiState } from './useConversationChatInputUiState';
 import { useRestoreServerQueue } from './useRestoreServerQueue';
 import {
+  clearSentAttachments,
   getContextWindow,
   getConversationSendButtonProps,
   partitionSendableUploads,
@@ -415,11 +416,7 @@ const ChatInput = memo<ChatInputProps>(
 
         const clearComposer = () => {
           clearContent();
-          fileStore.clearChatUploadFileList(
-            contextKey,
-            currentFileList.map((file) => file.id),
-          );
-          fileStore.clearChatContextSelections(contextKey);
+          clearSentAttachments(fileStore, contextKey, currentFileList);
         };
 
         // A deferred send was armed from the composer (see `scheduledSendAt`):
@@ -455,8 +452,7 @@ const ChatInput = memo<ChatInputProps>(
           stillHere: messageMapKey(storeApi.getState().context) === messageMapKey(sendContext),
         });
         if (handoff.clearEditor) clearContent();
-        fileStore.clearChatUploadFileList(contextKey);
-        fileStore.clearChatContextSelections(contextKey);
+        clearSentAttachments(fileStore, contextKey, currentFileList);
 
         const { contextSelections, pageSelections } =
           buildMessageContextSelections(currentContextList);
@@ -477,7 +473,12 @@ const ChatInput = memo<ChatInputProps>(
             // message owned the content must hand every part of it back —
             // uploads and context selections, not just the editor text the
             // lifecycle restores on its own.
-            store.restoreChatUploadFileList(contextKey, currentFileList);
+            // Back in their original places, around any failed upload that stayed.
+            store.restoreChatUploadFileList(
+              contextKey,
+              currentFileList,
+              uploadList.map((file) => file.id),
+            );
             store.restoreChatContextSelections(contextKey, currentContextList);
           },
           pageSelections,

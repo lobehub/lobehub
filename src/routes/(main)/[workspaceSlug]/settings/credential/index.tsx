@@ -15,9 +15,15 @@ import WorkspaceCredsList from '@/features/Settings/creds/features/WorkspaceCred
 import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
-  container: { overflow: 'hidden', width: '100%', paddingBlock: '4px', paddingInline: '16px' },
+  container: {
+    overflow: 'hidden',
+    width: '100%',
+    paddingBlock: '4px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
+  },
   desc: { fontSize: '13px', color: cssVar.colorTextSecondary },
 });
 

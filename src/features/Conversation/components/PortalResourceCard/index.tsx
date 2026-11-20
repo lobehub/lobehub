@@ -7,6 +7,7 @@ import { FileText } from 'lucide-react';
 import type { KeyboardEvent, MouseEvent, ReactNode } from 'react';
 import { memo } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 const FOCUS_RING = {
@@ -36,7 +37,7 @@ const styles = stylex.create({
     display: 'flex',
     alignItems: 'center',
     height: '28px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorder,
@@ -51,7 +52,7 @@ const styles = stylex.create({
   actionButton: {
     cursor: 'pointer',
     height: '28px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorder,

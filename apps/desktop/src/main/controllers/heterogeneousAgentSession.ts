@@ -39,6 +39,7 @@ import {
 } from '@lobechat/heterogeneous-agents/spawn';
 import type {
   HeterogeneousServerDefaultApiConfig,
+  HeteroPermissionMode,
   HeteroSessionImportMessage,
 } from '@lobechat/types';
 import { app as electronApp } from 'electron';
@@ -68,6 +69,12 @@ export interface SendPromptParams {
    * reach the renderer they must already carry the operation they belong to.
    */
   operationId: string;
+  /**
+   * (Claude Code, Better Coding Experience lab) Permission mode the run starts
+   * in; Claude Code then asks before acting as the mode requires and each
+   * request raises a card. Absent: every action is allowed, as before the lab.
+   */
+  permissionMode?: HeteroPermissionMode;
   prompt: string;
   /**
    * Do not spawn the CLI. Instead, read the last turn of the session's on-disk
@@ -842,6 +849,11 @@ export interface StopSessionParams {
 }
 
 export interface GetSessionInfoParams {
+  sessionId: string;
+}
+
+export interface SetPermissionModeParams {
+  mode: HeteroPermissionMode;
   sessionId: string;
 }
 

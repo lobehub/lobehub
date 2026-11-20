@@ -55,8 +55,6 @@ export const useChatItemContextMenu = ({
   inPortalThread,
   topic,
 }: UseChatItemContextMenuProps) => {
-  const contextMenuMode = useUserStore(userGeneralSettingsSelectors.contextMenuMode);
-
   const { t } = useTranslation('common');
   const { allowed: canCreateContent } = usePermission('create_content');
   const { allowed: canEditContent } = usePermission('edit_own_content');
@@ -384,10 +382,6 @@ export const useChatItemContextMenu = ({
 
   const handleContextMenu = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
-      if (contextMenuMode === 'disabled') {
-        return;
-      }
-
       if (editing) {
         return;
       }
@@ -425,7 +419,7 @@ export const useChatItemContextMenu = ({
 
       showContextMenu(contextMenuItems);
     },
-    [contextMenuItems, contextMenuMode, editing],
+    [contextMenuItems, editing],
   );
 
   return {

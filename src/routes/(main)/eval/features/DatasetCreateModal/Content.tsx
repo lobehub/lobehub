@@ -19,6 +19,7 @@ import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { agentEvalService } from '@/services/agentEval';
+import { densityVars } from '@/styles/densityVars';
 
 import { DATASET_PRESETS, getPresetsByCategory } from '../../config/datasetPresets';
 
@@ -51,7 +52,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     position: relative;
 
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
 

@@ -189,3 +189,15 @@ Source: user corrections while simplifying the conversation Skills panel, includ
 The chat Tools picker lists services with connection records. Keep authorization actions on pending or failed connections in their existing activation group. First-time connection discovery belongs in connector management.
 
 Enforcement: `useControls.test.ts` covers missing connection records, cached unconnected providers, and pending or failed authorization rows. Source: user correction while debugging Kai’s chat Tools picker.
+
+## LOBE-UX-026 — Tool menus expose choices, not fixed loaders
+
+Keep fixed Agent infrastructure (the skill loader and tool activator) out of both loading-policy lists. Hiding the loader must not hide individual skills or the optional Skill Store.
+
+Enforcement: the picker metadata excludes always-on identifiers; builtin selector and AgentToolsEngine tests cover the visible list and the runtime defaults.
+
+## LOBE-UX-027 — One agent, one tool configuration
+
+The profile library picker and chat Tools menu are two views of the same agent configuration. Share the tool inventory, translated names, state and agent-scoped write path, **not the popup**. The profile keeps its searchable checklist; chat keeps its loading-policy filters. Derive profile counts from the same unfiltered options. Agent-owned connector provisioning and the Skills invocation picker are separate tasks.
+
+Enforcement: both surfaces use the same tool controls; regression tests cover the profile summary, runtime-backed settings and fixed-loader exclusions.

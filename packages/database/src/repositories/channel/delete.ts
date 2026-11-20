@@ -1,3 +1,4 @@
+import type { ChannelMessageMetadata } from '@lobechat/types';
 import { channelMessageDeletedAt } from '@lobechat/types';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
@@ -18,6 +19,11 @@ import { OPEN_JOB_STATUSES } from './writer';
  *
  * Returns the jobs whose writer is still held: the caller must stop them physically.
  */
+const omitCard = (metadata: ChannelMessageMetadata | null) => {
+  const { card: _card, ...rest } = metadata ?? {};
+  return rest;
+};
+
 export const deleteMessage = async (
   tx: Transaction,
   channelId: string,
@@ -54,7 +60,8 @@ export const deleteMessage = async (
     .set({
       content: '',
       mentions: [],
-      metadata: { ...message.metadata, deletedAt: new Date().toISOString() },
+      // A shared card is the message's payload, so it goes with the text.
+      metadata: { ...omitCard(message.metadata), deletedAt: new Date().toISOString() },
       // A late decision model answer must not route a deleted message.
       ...(message.routingStatus === 'pending' && {
         routingAttempt: sql`${channelMessages.routingAttempt} + 1`,

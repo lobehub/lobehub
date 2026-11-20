@@ -21,6 +21,7 @@ describe('settingsSelectors', () => {
         costEstimateWarningThreshold: 0.5,
         fontSize: 12,
         highlighterTheme: 'lobe-theme',
+        interfaceDensity: 'loose',
         isDevMode: false,
         isLiteMode: false,
         mermaidTheme: 'lobe-theme',
@@ -41,6 +42,22 @@ describe('settingsSelectors', () => {
       const result = userGeneralSettingsSelectors.fontSize(s as UserStore);
 
       expect(result).toBe(12);
+    });
+  });
+
+  describe('interfaceDensity', () => {
+    it('defaults to loose when unset', () => {
+      expect(userGeneralSettingsSelectors.interfaceDensity(initialState as UserStore)).toBe(
+        'loose',
+      );
+    });
+
+    it('returns compact when chosen', () => {
+      const s: UserState = merge(initialState, {
+        settings: { general: { interfaceDensity: 'compact' } },
+      });
+
+      expect(userGeneralSettingsSelectors.interfaceDensity(s as UserStore)).toBe('compact');
     });
   });
 

@@ -37,6 +37,8 @@ import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
 import { usePermission } from '@/hooks/usePermission';
 import { useHomeStore } from '@/store/home';
 import { agentLabelSelectors } from '@/store/home/selectors';
+import { useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { LABEL_COLUMN_WIDTHS } from './constants';
 import { openDeleteLabelModal } from './DeleteLabelModal';
@@ -54,10 +56,14 @@ const styles = stylex.create({
   },
   row: {
     paddingBlock: '10px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadius,
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  // Compact density: 6px block padding around the 24px menu icon → 36px rows.
+  rowCompact: {
+    paddingBlock: '6px',
   },
 });
 
@@ -83,6 +89,7 @@ const LabelRow = memo<LabelRowProps>(
   ({ canManage, label, manageBlockedReason, onDelete, onEdit, onRestoreConflict }) => {
     const { t } = useTranslation(['setting', 'common']);
     const updateAgentLabel = useHomeStore((s) => s.updateAgentLabel);
+    const compact = useInterfaceDensity() === 'compact';
 
     const toggleArchive = () => {
       if (label.archived) {
@@ -159,7 +166,12 @@ const LabelRow = memo<LabelRowProps>(
     );
 
     return (
-      <Flexbox horizontal align={'center'} className={stylex.props(styles.row).className} gap={12}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.row, compact && styles.rowCompact).className}
+        gap={12}
+      >
         <Flexbox
           horizontal
           align={'center'}
@@ -171,7 +183,7 @@ const LabelRow = memo<LabelRowProps>(
             className={stylex.props(styles.dot).className}
             style={label.color ? { background: label.color } : undefined}
           />
-          <Text ellipsis weight={500}>
+          <Text ellipsis fontSize={compact ? 13 : undefined} weight={500}>
             {label.name}
           </Text>
         </Flexbox>

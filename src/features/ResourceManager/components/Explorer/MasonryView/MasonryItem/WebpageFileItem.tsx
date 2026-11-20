@@ -2,6 +2,8 @@ import { createStaticStyles, Flexbox, Icon, stopPropagation } from '@lobehub/ui'
 import { ExternalLinkIcon, GlobeIcon } from 'lucide-react';
 import { memo } from 'react';
 
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   domain: css`
     overflow: hidden;
@@ -43,7 +45,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       ${cssVar.colorFillQuaternary};
   `,
   info: css`
-    padding: 12px;
+    padding: ${densityVars.contentGap};
   `,
   openLink: css`
     cursor: pointer;

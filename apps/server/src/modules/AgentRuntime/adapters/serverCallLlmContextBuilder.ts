@@ -14,7 +14,7 @@ import {
   CONTEXT_ENGINEERING_SPAN_NAME,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
-import { getOptedInPluginIds, type UIChatMessage } from '@lobechat/types';
+import { type UIChatMessage } from '@lobechat/types';
 
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
 import {
@@ -145,12 +145,6 @@ export const buildServerCallLlmContext = async ({
       isSubAgent: state.origin?.lineage?.isSubAgent === true,
       mentionedAgents: (state as any).initialContext?.initialContext?.mentionedAgents,
       messages: messagesForContext,
-      // `agent.plugins` is collapsed to pinned ids; the `auto` entries ride on
-      // the world. Together they are what the agent turned on.
-      optedInPluginIds: [
-        ...getOptedInPluginIds(agentConfig.plugins ?? undefined),
-        ...(state.world?.autoSkillIds ?? []),
-      ],
       shareVisitor: state.principal?.actor?.shareVisitor ?? ctx.agentShareVisitor,
       topicId,
       workspaceId: state.origin?.workspaceId ?? ctx.workspaceId,

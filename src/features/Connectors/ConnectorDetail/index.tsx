@@ -18,6 +18,7 @@ import { refreshConnectorManagePolicy } from '@/services/connectorManagePolicy';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
+import { densityTokens } from '@/styles/density.stylex';
 import { type ConnectorActionError, toConnectorActionError } from '@/utils/connectorActionError';
 
 import ConnectorActionErrorText from '../ConnectorActionErrorText';
@@ -56,11 +57,11 @@ const styles = stylex.create({
     overflowY: 'auto',
     paddingBlockStart: 8,
     paddingBlockEnd: 24,
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   description: {
     color: cssVar.colorText,
-    fontSize: 14,
+    fontSize: densityTokens['--lobe-density-font-size'],
     lineHeight: 1.6,
   },
   // Identity on the left (icon, name, who made it and what it is), the
@@ -70,11 +71,11 @@ const styles = stylex.create({
     flexWrap: 'wrap',
     paddingBlockStart: '8px',
     paddingBlockEnd: '24px',
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   meta: {
     color: cssVar.colorTextSecondary,
-    fontSize: 14,
+    fontSize: densityTokens['--lobe-density-font-size'],
   },
   root: {
     display: 'flex',

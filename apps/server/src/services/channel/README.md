@@ -251,6 +251,15 @@ chosen Agents (`ChannelMessagingService`).
   Agent's own message (`postAgentMessage`, with `metadata.receipt` linking back and naming the
   answering Agent in `receipt.agent`; the timeline shows a "Messages from <Agent>" line above it). Asking again
   from that run continues the exchange (`hops + 1`) up to three asks; the answering Agent's run (`requestByAgent`) cannot pass the question on. `deliverRelayReceipt` skips Agent-written requests.
+- **@mentions in replies.** An Agent's published reply has its `@Name` text turned into real
+  mentions (`ChannelExecutionRepository.deliverReplyMentions`, called from
+  `ChannelCoordinator.complete`): the reply is parsed as Markdown (remark + GFM) and only its
+  text nodes are matched against active members, like the timeline highlight. Code, link and
+  image destinations, HTML and an autolink's own address never count; the replying Agent itself
+  is skipped. People are notified; each mentioned Agent is queued on the reply for the same requester and follows the Thread. The reply records the
+  Agent-to-Agent hops since a person spoke (`metadata.mentionHops`); past
+  `MAX_REPLY_MENTION_HOPS` (3) the mentions are still recorded but wake no one. A conversation
+  between two Agents only records them; its exchange has its own limit.
 - **External runtimes.** `lh channel list` and `lh channel send` call the same service through
   `channel.listChannels` / `channel.sendMessage`, authorised by the run's operation token with
   the `channel:message` capability that every Channel dispatch is minted alongside

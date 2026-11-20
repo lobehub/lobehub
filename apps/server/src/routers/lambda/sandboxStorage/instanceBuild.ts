@@ -3,7 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { router } from '@/libs/trpc/lambda';
-import { resolveScmCloneCredential } from '@/server/services/scm/cloneCredential';
+import { resolveScmCloneCredentials } from '@/server/services/scm/cloneCredential';
 
 import { assertNotLeftOnPublicDrive, resolveInstanceDrive } from './driveScope';
 import { isBuildable } from './instanceOperations';
@@ -73,7 +73,7 @@ export const instanceBuildRouter = router({
       // private key lives on this side; the execution plane is handed the
       // result and never the inputs, the same way it is handed the workspace
       // claim.
-      const credential = await resolveScmCloneCredential({
+      const credentials = await resolveScmCloneCredentials({
         configuration: specification,
         db: ctx.serverDB,
         userId: ctx.userId,
@@ -82,7 +82,7 @@ export const instanceBuildRouter = router({
 
       try {
         const { buildId } = await client.buildInstance({
-          credentials: credential ? [credential] : undefined,
+          credentials: credentials.length > 0 ? credentials : undefined,
           // Where the checkout lands on the volume: the instance's own folder,
           // which is what its file browser opens.
           instanceDir: instance.workingDirectory,

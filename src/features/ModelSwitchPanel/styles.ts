@@ -1,5 +1,7 @@
 import { createStaticStyles } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     pointer-events: auto;
@@ -21,6 +23,15 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       padding-block: 8px;
       padding-inline: 8px;
       border-radius: ${cssVar.borderRadiusSM};
+    }
+
+    html[data-density='compact'] & [role='menuitem'] {
+      min-height: ${densityVars.controlHeight};
+      padding-block: calc((${densityVars.controlHeight} - 20px) / 2);
+      border-radius: ${densityVars.radius};
+
+      font-size: ${densityVars.fontSize};
+      line-height: 20px;
     }
   `,
   groupHeader: css`
@@ -46,6 +57,28 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 8px;
     padding-inline: 8px;
     border-radius: ${cssVar.borderRadiusSM};
+
+    html[data-density='compact'] & {
+      min-height: ${densityVars.controlHeight};
+      padding-block: calc((${densityVars.controlHeight} - 20px) / 2);
+      border-radius: ${densityVars.radius};
+
+      font-size: ${densityVars.fontSize};
+      line-height: 20px;
+    }
+  `,
+  rowTrigger: css`
+    padding-block: 8px;
+    padding-inline: 8px;
+
+    html[data-density='compact'] & {
+      min-height: ${densityVars.controlHeight};
+      padding-block: calc((${densityVars.controlHeight} - 20px) / 2);
+      border-radius: ${densityVars.radius};
+
+      font-size: ${densityVars.fontSize};
+      line-height: 20px;
+    }
   `,
   menuItemActive: css`
     background: ${cssVar.colorFillTertiary};

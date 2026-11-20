@@ -4,21 +4,24 @@ import type { DeviceExecutionTarget } from '@lobechat/types';
 import { Flexbox, Icon, Popover, Text, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronDownIcon, FolderIcon, PlusIcon } from 'lucide-react';
+import { ChevronDownIcon, CircleOffIcon, FolderIcon, PlusIcon, SettingsIcon } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import RepositoryAvatar from '@/components/RepositoryAvatar';
 import OptionRow from '@/features/ChatInput/ControlBar/OptionRow';
-import { repositorySlug } from '@/features/ChatInput/ControlBar/sandboxEnvironmentOptions';
+import {
+  repositoriesLabel,
+  repositorySlug,
+} from '@/features/ChatInput/ControlBar/sandboxEnvironmentOptions';
 import { workingDirectoryChipStyles } from '@/features/ChatInput/ControlBar/workingDirectoryChipStyles';
 import { ExecutionTargetDeviceStatus, ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
-import { openAddEnvironmentModal } from '../AddEnvironmentModal';
 import { environmentRepositoryUrl } from '../environmentSource';
 import { openAddDirectoryModal } from '../WorkingDirectories/AddDirectoryModal';
 import { addedFolderTarget, type useProjectDirectory } from './useProjectDirectory';
-import type { useProjectRepository } from './useProjectRepository';
+import { NO_ENVIRONMENT, type useProjectRepository } from './useProjectRepository';
 import type { useProjectWorkLocation } from './useProjectWorkLocation';
 
 /**
@@ -76,8 +79,6 @@ interface ProjectWorkLocationPickerProps {
   /** Where the agent runs and where it can be moved to. */
   location: ReturnType<typeof useProjectWorkLocation>;
   projectId: string;
-  /** Environments added here are published: the agent is workspace-public and applies nothing else. */
-  publish?: boolean;
   /** A task starts no conversation, so it has no code environment or folder to pick. */
   showRepositories?: boolean;
   state: ReturnType<typeof useProjectRepository>;
@@ -96,12 +97,12 @@ const ProjectWorkLocationPicker = ({
   disabled,
   location,
   projectId,
-  publish,
   showRepositories = true,
   state,
 }: ProjectWorkLocationPickerProps) => {
   const { t } = useTranslation('project');
   const { t: tChat } = useTranslation('chat');
+  const navigate = useWorkspaceAwareNavigate();
   const [open, setOpen] = useState(false);
   const {
     boundDevice,
@@ -116,7 +117,7 @@ const ProjectWorkLocationPicker = ({
   } = location;
   const onSandbox = target === 'sandbox';
 
-  const { repositories, repository, setPickedId } = state;
+  const { repositories, repository, setPickedId, withoutEnvironment } = state;
   const repositoryShown = showRepositories && onSandbox && !!repository;
 
   const select = async (next: DeviceExecutionTarget, deviceId?: string) => {
@@ -152,9 +153,11 @@ const ProjectWorkLocationPicker = ({
     });
   };
 
-  const addEnvironment = () => {
+  // A project has one environment; its repositories are edited on the
+  // project's settings, not picked or added here.
+  const configureEnvironment = () => {
     setOpen(false);
-    openAddEnvironmentModal({ onAdded: pickRepository, projectId, publish });
+    navigate(`/project/${projectId}/settings/environments`);
   };
 
   // What the chip says: the code environment when the run checks one out,
@@ -177,7 +180,7 @@ const ProjectWorkLocationPicker = ({
 
   const hint = onSandbox
     ? repositoryShown
-      ? `${repositorySlug(repository) ?? repository.name} · ${tChat('heteroAgent.executionTarget.sandbox')}`
+      ? `${repositoriesLabel(repository) ?? repository.name} · ${tChat('heteroAgent.executionTarget.sandbox')}`
       : t('overview.context.target.sandboxTooltip')
     : target === 'none'
       ? t('overview.context.target.noneTooltip')
@@ -204,6 +207,17 @@ const ProjectWorkLocationPicker = ({
     <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 260 }}>
       <div {...stylex.props(styles.header)}>{t('overview.context.location.environments')}</div>
       <div {...stylex.props(styles.list)}>
+        {/* Not every conversation needs the checkout: this one starts in an
+            empty working directory. */}
+        {repositories.length > 0 && (
+          <OptionRow
+            compact
+            active={onSandbox && withoutEnvironment}
+            icon={<Icon icon={CircleOffIcon} size={16} />}
+            label={t('environment.none')}
+            onClick={() => pickRepository(NO_ENVIRONMENT)}
+          />
+        )}
         {repositories.map((environment) => (
           <OptionRow
             compact
@@ -214,9 +228,9 @@ const ProjectWorkLocationPicker = ({
             active={onSandbox && environment.id === repository?.id}
             // A name that already is the slug needs no second copy of it.
             hint={
-              repositorySlug(environment) === environment.name
+              repositoriesLabel(environment) === environment.name
                 ? undefined
-                : repositorySlug(environment)
+                : repositoriesLabel(environment)
             }
           />
         ))}
@@ -229,9 +243,9 @@ const ProjectWorkLocationPicker = ({
       {canManage && (
         <OptionRow
           compact
-          icon={<Icon icon={PlusIcon} size={16} />}
-          label={t('environment.add.title')}
-          onClick={addEnvironment}
+          icon={<Icon icon={SettingsIcon} size={16} />}
+          label={t('environment.configure')}
+          onClick={configureEnvironment}
         />
       )}
     </Flexbox>

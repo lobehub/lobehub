@@ -452,6 +452,7 @@ export default {
   'navPanel.createWorkspaceAgent': 'New workspace agent',
   'navPanel.managePrivateFolders': 'Manage private categories',
   'navPanel.myPinned': 'Pinned',
+  'navPanel.newChat': 'New chat',
   'navPanel.privateTooltip': 'Private · only you can see this',
   'navPanel.showLessTeamPinned': 'Show less',
   'navPanel.showMoreTeamPinned': 'Show {{count}} more',

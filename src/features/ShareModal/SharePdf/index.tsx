@@ -4,6 +4,8 @@ import { DownloadIcon, RotateCwIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import ExportLayout from '../components/ExportLayout';
 import TextOptions from '../ShareText/TextOptions';
 import { type FieldType } from '../ShareText/type';
@@ -32,7 +34,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     height: 32px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: 16px;
 
     font-size: 12px;

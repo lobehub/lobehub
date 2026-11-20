@@ -2,14 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { BotPromptIcon } from '@lobehub/ui/icons';
-import {
-  DnaIcon,
-  ListTodoIcon,
-  MessageSquarePlusIcon,
-  MessagesSquareIcon,
-  SearchIcon,
-  TargetIcon,
-} from 'lucide-react';
+import { DnaIcon, ListTodoIcon, MessageSquarePlusIcon, SearchIcon, TargetIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
@@ -50,9 +43,6 @@ const Nav = ({ onOpenProfile, showProfile }: NavProps) => {
   const isProfileActive = isAgentProfileRoute(pathname) && !isSelfLearningActive;
   const isGoalsActive = pathname.endsWith('/goals');
   const isTasksActive = pathname.endsWith('/tasks') || pathname.includes('/task/');
-  // Topic IDs are prefixed `topics_`, so /agent/:aid/topics_abc would also match
-  // pathname.includes('/topics') — anchor to end to avoid that false positive.
-  const isTopicsActive = pathname.endsWith('/topics');
   const router = useQueryRoute();
   const { allowed: canCreateTopic } = usePermission('create_content');
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
@@ -90,15 +80,6 @@ const Nav = ({ onOpenProfile, showProfile }: NavProps) => {
         title={t('tab.search')}
         onClick={() => {
           toggleCommandMenu(true);
-        }}
-      />
-      <NavItem
-        active={isTopicsActive}
-        icon={MessagesSquareIcon}
-        title={tTopic('management.sidebarEntry')}
-        onClick={() => {
-          switchTopic(null, { skipRefreshMessage: true });
-          router.push(urlJoin('/agent', agentId!, 'topics'));
         }}
       />
       {showProfile && isMobileSurface() && (

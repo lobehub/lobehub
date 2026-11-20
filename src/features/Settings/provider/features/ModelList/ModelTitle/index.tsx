@@ -18,6 +18,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
+import { useDensityTokens } from '@/styles/density';
 
 import { createCreateNewModelModal } from '../CreateNewModelModal';
 import { ProviderSettingsContext } from '../ProviderSettingsContext';
@@ -59,6 +60,7 @@ const ModelTitle = memo<ModelFetcherProps>(
     const { showDeployName } = use(ProviderSettingsContext);
 
     const mobile = useIsMobile();
+    const { pageTitleFontSize } = useDensityTokens();
 
     useEffect(() => {
       useAiInfraStore.setState({ modelSearchKeyword: '' });
@@ -79,7 +81,7 @@ const ModelTitle = memo<ModelFetcherProps>(
       >
         <Flexbox horizontal align={'center'} gap={0} justify={'space-between'}>
           <Flexbox horizontal align={'center'} gap={8}>
-            <Text strong style={{ fontSize: 16 }}>
+            <Text strong style={{ fontSize: pageTitleFontSize }}>
               {t('providerModels.list.title')}
             </Text>
 

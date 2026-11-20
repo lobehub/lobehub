@@ -5,6 +5,7 @@ import { memo, useMemo } from 'react';
 import { Link } from 'react-router';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import { getTabUrl, SearchSection } from '@/features/SettingsSearch';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
@@ -16,6 +17,7 @@ import { useExpandedSettingsGroups } from '../../hooks/useExpandedSettingsGroups
 import { usePersonalSettingsSearchScope } from '../../hooks/useSettingsSearchScope';
 
 const Body = memo(() => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const categoryGroups = useCategory();
   const searchScope = usePersonalSettingsSearchScope(categoryGroups);
   const navigate = useWorkspaceAwareNavigate();
@@ -43,15 +45,11 @@ const Body = memo(() => {
         <Accordion
           gap={8}
           indicatorPlacement="inline"
-          styles={{ trigger: { paddingBlock: 4, paddingInline: '8px 4px' } }}
+          styles={{ trigger: sectionTriggerStyle }}
           value={expandedGroups}
           items={categoryGroups.map((group) => ({
             key: group.key,
-            title: (
-              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-                {group.title}
-              </Text>
-            ),
+            title: <SectionTitle>{group.title}</SectionTitle>,
             children: (
               <Flexbox gap={1} paddingBlock={1}>
                 {group.items.map((item) => {
