@@ -1,3 +1,5 @@
+import { readTaskExecutionConfig } from '@lobechat/types';
+
 import { resolveTaskOrThrow } from '@/server/services/task/utils';
 
 import type { TaskRuntimeDeps } from './task';
@@ -50,20 +52,26 @@ export const runTaskDispatch = async (
     // explicit request would move an unpinned topic created on device A to
     // device B, stranding its device-local cwd / CLI session. Fresh topics
     // have no binding yet — that is where the dispatching run's device
-    // inheritance applies. Same carve-outs as the fresh path: the task's own
-    // pin (readTaskExecutionConfig) wins inside the runner, and an agent
-    // whose selection policy is `fixed` overrides the request at plan
-    // resolve.
+    // inheritance applies.
     const continueTopicId = args.continueTopicId;
-    const inheritDevice = !continueTopicId && !!activeDeviceId;
+    // A task's own execution pin outranks the inherited context. The task
+    // caller forwards this deviceId as the run's requested device, and
+    // `resolveRunDeviceId` gives the request precedence over
+    // `execution.boundDeviceId` — an inherited device would win over the pin
+    // and `resolveTaskRunExecution` would then drop the pin's working
+    // directory (it may only travel with its own machine). So inherit only
+    // when the task pins nothing: the pin keeps full authority over both the
+    // device and its cwd. A `fixed` agent selection policy still overrides
+    // any request at plan resolve. Mirrors the callSubAgent device
+    // inheritance in executorHelpers.buildServerVirtualSubAgentRunner.
+    const inheritDevice =
+      !continueTopicId && !!activeDeviceId && !readTaskExecutionConfig(task.config);
     const result = await deps.taskCaller.run({
       ...(continueTopicId ? { continueTopicId } : {}),
       // Inherit the dispatching run's device when it executes on one: a task
       // topic spawned from a device-routed session must reach the same
       // machine (its engagement/workspace paths live there), not fall back to
-      // the assignee agent's stored target or the cloud sandbox. Mirrors the
-      // callSubAgent device inheritance in
-      // executorHelpers.buildServerVirtualSubAgentRunner.
+      // the assignee agent's stored target or the cloud sandbox.
       ...(inheritDevice ? { deviceId: activeDeviceId } : {}),
       id: task.id,
       model: args.model,
@@ -111,10 +119,12 @@ export const runTasksDispatch = async (
   for (const task of resolved.tasks) {
     const refs = identifiers.filter((ref) => resolved.byRef.get(ref)?.id === task.id);
     try {
-      // Same device inheritance as runTask's fresh-topic path (runTasks never
-      // continues a topic, so the continuation carve-out does not apply).
+      // Same inheritance rules as runTask's fresh-topic path (runTasks never
+      // continues a topic): inherit only when the task carries no execution
+      // pin, so a pin keeps both its device and its working directory.
+      const inheritDevice = !!deps.activeDeviceId && !readTaskExecutionConfig(task.config);
       await deps.taskCaller.run({
-        ...(deps.activeDeviceId ? { deviceId: deps.activeDeviceId } : {}),
+        ...(inheritDevice ? { deviceId: deps.activeDeviceId } : {}),
         id: task.id,
         model: args.model,
         provider: args.provider,

@@ -62,11 +62,13 @@ vi.mock('@/server/services/verify/planGenerator', () => ({
 }));
 
 // runTask / runTasks resolve refs to stable task ids before dispatching.
-const createTaskModel = () => {
+// `config` carries the task's own execution pin (readTaskExecutionConfig);
+// rows default to no pin so the plain cases keep the fresh-topic inheritance.
+const createTaskModel = (rowsWithConfig?: Record<string, { config?: unknown }>) => {
   const rows = new Map([
-    ['T-1', { id: 'task_1', identifier: 'T-1' }],
-    ['T-A', { id: 'task_a', identifier: 'T-A' }],
-    ['T-B', { id: 'task_b', identifier: 'T-B' }],
+    ['T-1', { id: 'task_1', identifier: 'T-1', ...rowsWithConfig?.['T-1'] }],
+    ['T-A', { id: 'task_a', identifier: 'T-A', ...rowsWithConfig?.['T-A'] }],
+    ['T-B', { id: 'task_b', identifier: 'T-B', ...rowsWithConfig?.['T-B'] }],
   ]);
   const resolveRefs = async (refs: string[]) => {
     const byRef = new Map(
@@ -105,6 +107,30 @@ describe('runTask / runTasks device inheritance', () => {
     );
   });
 
+  it('does not inherit the device when the task pins its own execution device', async () => {
+    const taskCaller = {
+      run: vi.fn().mockResolvedValue({ operationId: 'op', topicId: 'tpc' }),
+    };
+    const runtime = createTaskRuntime({
+      activeDeviceId: 'device-parent',
+      agentModel: { existsById: vi.fn() } as any,
+      taskCaller: taskCaller as any,
+      taskModel: createTaskModel({
+        'T-1': {
+          config: { execution: { boundDeviceId: 'device-pinned', workingDirectory: '/a' } },
+        },
+      }),
+      taskService: {} as any,
+    });
+
+    await runtime.runTask({ identifier: 'T-1' });
+
+    const call = taskCaller.run.mock.calls[0][0] as Record<string, unknown>;
+    // The pin keeps full authority: no request overrides it, or
+    // resolveRunDeviceId would drop the pin's working directory.
+    expect('deviceId' in call).toBe(false);
+  });
+
   it('does not inherit the device when continuing a topic: turnSetup keeps the existing topic binding', async () => {
     const taskCaller = {
       run: vi.fn().mockResolvedValue({ operationId: 'op', topicId: 'tpc' }),
@@ -139,6 +165,29 @@ describe('runTask / runTasks device inheritance', () => {
 
     const call = taskCaller.run.mock.calls[0][0] as Record<string, unknown>;
     expect('deviceId' in call).toBe(false);
+  });
+
+  it('runTasks skips the inherited deviceId for pinned tasks and forwards it for unpinned ones', async () => {
+    const taskCaller = {
+      run: vi.fn().mockResolvedValue({ topicId: 'tpc' }),
+    };
+    const runtime = createTaskRuntime({
+      activeDeviceId: 'device-parent',
+      agentModel: { existsById: vi.fn() } as any,
+      taskCaller: taskCaller as any,
+      taskModel: createTaskModel({
+        'T-B': { config: { execution: { boundDeviceId: 'device-pinned' } } },
+      }),
+      taskService: {} as any,
+    });
+
+    await runtime.runTasks({ identifiers: ['T-A', 'T-B'] });
+
+    const byId = new Map(
+      taskCaller.run.mock.calls.map((c) => [(c[0] as any).id, c[0] as Record<string, unknown>]),
+    );
+    expect(byId.get('task_a')?.deviceId).toBe('device-parent');
+    expect('deviceId' in (byId.get('task_b') as Record<string, unknown>)).toBe(false);
   });
 
   it('runTasks forwards the inherited deviceId to every dispatch', async () => {
