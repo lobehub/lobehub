@@ -2907,6 +2907,145 @@ components:
         - success
         - total
       additionalProperties: false
+    FileSearchResult:
+      type: object
+      properties:
+        chunks:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchChunk"
+          description: Matching chunks, most similar first.
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchFileResult"
+          description: The same chunks grouped by source file.
+        total:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+          description: Number of chunks returned.
+      required:
+        - chunks
+        - files
+        - total
+      additionalProperties: false
+    SearchChunk:
+      type: object
+      properties:
+        fileId:
+          description: The source file.
+          type:
+            - string
+            - "null"
+        fileName:
+          type:
+            - string
+            - "null"
+        id:
+          type: string
+          description: Chunk id.
+        index:
+          anyOf:
+            - type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: "null"
+          description: Position of the chunk inside its file.
+        similarity:
+          type: number
+          description: Cosine similarity to the query, 0–1 (higher is closer).
+        text:
+          type:
+            - string
+            - "null"
+      required:
+        - fileId
+        - fileName
+        - id
+        - index
+        - similarity
+        - text
+      additionalProperties: false
+    SearchFileResult:
+      type: object
+      properties:
+        fileId:
+          type: string
+        fileName:
+          type: string
+        relevanceScore:
+          type: number
+          description: Mean similarity of the file’s top three chunks.
+        topChunks:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              similarity:
+                type: number
+              text:
+                type: string
+            required:
+              - id
+              - similarity
+              - text
+            additionalProperties: false
+      required:
+        - fileId
+        - fileName
+        - relevanceScore
+        - topChunks
+      additionalProperties: false
+    FileSearchRequest:
+      type: object
+      properties:
+        fileIds:
+          minItems: 1
+          maxItems: 100
+          type: array
+          items:
+            type: string
+            minLength: 1
+          description: The files to search; every one must be visible to the caller.
+        query:
+          type: string
+          minLength: 1
+          maxLength: 8000
+          description: Natural-language query; it is embedded and matched against chunk
+            vectors.
+        topK:
+          description: Maximum number of chunks (and documents) to return. Defaults to 20.
+          type: integer
+          minimum: 1
+          maximum: 50
+      required:
+        - fileIds
+        - query
+      additionalProperties: false
+    FileTaskAccepted:
+      type: object
+      properties:
+        fileId:
+          type: string
+        status:
+          type: string
+          enum:
+            - error
+            - pending
+            - processing
+            - success
+          description: Initial task status; poll `GET /files/{id}/chunks`.
+        taskId:
+          type: string
+          description: Async task id.
+      required:
+        - fileId
+        - status
+        - taskId
+      additionalProperties: false
     GoalList:
       type: object
       properties:
@@ -4378,6 +4517,81 @@ components:
         - failed
         - successed
       additionalProperties: false
+    KnowledgeBaseSearchResult:
+      type: object
+      properties:
+        chunks:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchChunk"
+          description: Matching chunks, most similar first.
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchFileResult"
+          description: The same chunks grouped by source file.
+        total:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+          description: Chunks plus documents returned.
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchDocumentHit"
+          description: Full-text matches on documents stored in the knowledge base.
+      required:
+        - chunks
+        - files
+        - total
+        - documents
+      additionalProperties: false
+    SearchDocumentHit:
+      type: object
+      properties:
+        documentId:
+          type: string
+        fileId:
+          type:
+            - string
+            - "null"
+        knowledgeBaseId:
+          type: string
+        relevance:
+          type: number
+        snippet:
+          type: string
+        title:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - documentId
+        - fileId
+        - knowledgeBaseId
+        - relevance
+        - snippet
+        - title
+        - updatedAt
+      additionalProperties: false
+    KnowledgeBaseSearchRequest:
+      type: object
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 8000
+          description: Natural-language query; it is embedded and matched against chunk
+            vectors.
+        topK:
+          description: Maximum number of chunks (and documents) to return. Defaults to 20.
+          type: integer
+          minimum: 1
+          maximum: 50
+      required:
+        - query
+      additionalProperties: false
     McpServer:
       type: object
       properties:
@@ -4525,37 +4739,867 @@ components:
         - snapshotPersona
         - snapshotTagline
       additionalProperties: false
-    DeletedResources:
+    MemorySearchResult:
       type: object
       properties:
-        count:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
-        deleted:
-          type: boolean
-          const: true
+        activities:
+          type: array
+          items:
+            type: object
+            properties:
+              accessedAt:
+                type: string
+                format: date-time
+              capturedAt:
+                type: string
+                format: date-time
+              createdAt:
+                type: string
+                format: date-time
+              id:
+                type: string
+              metadata:
+                anyOf:
+                  - type: object
+                    propertyNames:
+                      type: string
+                    additionalProperties: {}
+                  - type: "null"
+              tags:
+                anyOf:
+                  - type: array
+                    items:
+                      type: string
+                  - type: "null"
+              type:
+                type: string
+              updatedAt:
+                type: string
+                format: date-time
+              associatedLocations:
+                anyOf:
+                  - type: array
+                    items:
+                      type: object
+                      properties:
+                        address:
+                          type: string
+                        name:
+                          type: string
+                        tags:
+                          type: array
+                          items:
+                            type: string
+                        type:
+                          type: string
+                      additionalProperties: false
+                  - type: "null"
+              associatedObjects:
+                anyOf:
+                  - type: array
+                    items:
+                      type: object
+                      properties:
+                        extra:
+                          type: object
+                          propertyNames:
+                            type: string
+                          additionalProperties: {}
+                        name:
+                          type: string
+                        type:
+                          type: string
+                      additionalProperties: false
+                  - type: "null"
+              associatedSubjects:
+                anyOf:
+                  - type: array
+                    items:
+                      type: object
+                      properties:
+                        extra:
+                          type: object
+                          propertyNames:
+                            type: string
+                          additionalProperties: {}
+                        name:
+                          type: string
+                        type:
+                          type: string
+                      additionalProperties: false
+                  - type: "null"
+              dossierId:
+                type:
+                  - string
+                  - "null"
+              endsAt:
+                anyOf:
+                  - type: string
+                    format: date-time
+                  - type: "null"
+              feedback:
+                type:
+                  - string
+                  - "null"
+              injectable:
+                type: boolean
+              narrative:
+                type:
+                  - string
+                  - "null"
+              notes:
+                type:
+                  - string
+                  - "null"
+              startsAt:
+                anyOf:
+                  - type: string
+                    format: date-time
+                  - type: "null"
+              status:
+                type: string
+              timezone:
+                type:
+                  - string
+                  - "null"
+              userMemoryId:
+                type:
+                  - string
+                  - "null"
+            required:
+              - accessedAt
+              - capturedAt
+              - createdAt
+              - id
+              - metadata
+              - tags
+              - type
+              - updatedAt
+              - associatedLocations
+              - associatedObjects
+              - associatedSubjects
+              - dossierId
+              - endsAt
+              - feedback
+              - injectable
+              - narrative
+              - notes
+              - startsAt
+              - status
+              - timezone
+              - userMemoryId
+            additionalProperties: false
+        contexts:
+          type: array
+          items:
+            type: object
+            properties:
+              accessedAt:
+                type: string
+                format: date-time
+              capturedAt:
+                type: string
+                format: date-time
+              createdAt:
+                type: string
+                format: date-time
+              id:
+                type: string
+              metadata:
+                anyOf:
+                  - type: object
+                    propertyNames:
+                      type: string
+                    additionalProperties: {}
+                  - type: "null"
+              tags:
+                anyOf:
+                  - type: array
+                    items:
+                      type: string
+                  - type: "null"
+              type:
+                type:
+                  - string
+                  - "null"
+              updatedAt:
+                type: string
+                format: date-time
+              associatedObjects:
+                anyOf:
+                  - type: array
+                    items:
+                      type: object
+                      properties:
+                        extra:
+                          type: object
+                          propertyNames:
+                            type: string
+                          additionalProperties: {}
+                        name:
+                          type: string
+                        type:
+                          type: string
+                      additionalProperties: false
+                  - type: "null"
+              associatedSubjects:
+                anyOf:
+                  - type: array
+                    items:
+                      type: object
+                      properties:
+                        extra:
+                          type: object
+                          propertyNames:
+                            type: string
+                          additionalProperties: {}
+                        name:
+                          type: string
+                        type:
+                          type: string
+                      additionalProperties: false
+                  - type: "null"
+              currentStatus:
+                type:
+                  - string
+                  - "null"
+              description:
+                type:
+                  - string
+                  - "null"
+              firstSeenAt:
+                anyOf:
+                  - type: string
+                    format: date-time
+                  - type: "null"
+              lastEvidenceAt:
+                anyOf:
+                  - type: string
+                    format: date-time
+                  - type: "null"
+              nextSteps:
+                anyOf:
+                  - type: array
+                    items:
+                      type: string
+                  - type: "null"
+              now:
+                type:
+                  - string
+                  - "null"
+              openQuestions:
+                anyOf:
+                  - type: array
+                    items:
+                      type: string
+                  - type: "null"
+              scoreImpact:
+                type:
+                  - number
+                  - "null"
+              scoreUrgency:
+                type:
+                  - number
+                  - "null"
+              synthesizedAt:
+                anyOf:
+                  - type: string
+                    format: date-time
+                  - type: "null"
+              title:
+                type:
+                  - string
+                  - "null"
+              userMemoryId:
+                type:
+                  - string
+                  - "null"
+              userMemoryIds:
+                anyOf:
+                  - type: array
+                    items:
+                      type: string
+                  - type: "null"
+            required:
+              - accessedAt
+              - capturedAt
+              - createdAt
+              - id
+              - metadata
+              - tags
+              - type
+              - updatedAt
+              - associatedObjects
+              - associatedSubjects
+              - currentStatus
+              - description
+              - firstSeenAt
+              - lastEvidenceAt
+              - nextSteps
+              - now
+              - openQuestions
+              - scoreImpact
+              - scoreUrgency
+              - synthesizedAt
+              - title
+              - userMemoryId
+              - userMemoryIds
+            additionalProperties: false
+        experiences:
+          type: array
+          items:
+            type: object
+            properties:
+              accessedAt:
+                type: string
+                format: date-time
+              capturedAt:
+                type: string
+                format: date-time
+              createdAt:
+                type: string
+                format: date-time
+              id:
+                type: string
+              metadata:
+                anyOf:
+                  - type: object
+                    propertyNames:
+                      type: string
+                    additionalProperties: {}
+                  - type: "null"
+              tags:
+                anyOf:
+                  - type: array
+                    items:
+                      type: string
+                  - type: "null"
+              type:
+                type:
+                  - string
+                  - "null"
+              updatedAt:
+                type: string
+                format: date-time
+              action:
+                type:
+                  - string
+                  - "null"
+              keyLearning:
+                type:
+                  - string
+                  - "null"
+              possibleOutcome:
+                type:
+                  - string
+                  - "null"
+              reasoning:
+                type:
+                  - string
+                  - "null"
+              scoreConfidence:
+                type:
+                  - number
+                  - "null"
+              situation:
+                type:
+                  - string
+                  - "null"
+              userMemoryId:
+                type:
+                  - string
+                  - "null"
+            required:
+              - accessedAt
+              - capturedAt
+              - createdAt
+              - id
+              - metadata
+              - tags
+              - type
+              - updatedAt
+              - action
+              - keyLearning
+              - possibleOutcome
+              - reasoning
+              - scoreConfidence
+              - situation
+              - userMemoryId
+            additionalProperties: false
+        identities:
+          type: array
+          items:
+            type: object
+            properties:
+              accessedAt:
+                type: string
+                format: date-time
+              capturedAt:
+                type: string
+                format: date-time
+              createdAt:
+                type: string
+                format: date-time
+              id:
+                type: string
+              metadata:
+                anyOf:
+                  - type: object
+                    propertyNames:
+                      type: string
+                    additionalProperties: {}
+                  - type: "null"
+              tags:
+                anyOf:
+                  - type: array
+                    items:
+                      type: string
+                  - type: "null"
+              type:
+                type:
+                  - string
+                  - "null"
+              updatedAt:
+                type: string
+                format: date-time
+              description:
+                type:
+                  - string
+                  - "null"
+              entityId:
+                type:
+                  - string
+                  - "null"
+              episodicDate:
+                anyOf:
+                  - type: string
+                    format: date-time
+                  - type: "null"
+              relationship:
+                type:
+                  - string
+                  - "null"
+              role:
+                type:
+                  - string
+                  - "null"
+              userMemoryId:
+                type:
+                  - string
+                  - "null"
+            required:
+              - accessedAt
+              - capturedAt
+              - createdAt
+              - id
+              - metadata
+              - tags
+              - type
+              - updatedAt
+              - description
+              - entityId
+              - episodicDate
+              - relationship
+              - role
+              - userMemoryId
+            additionalProperties: false
+        meta:
+          anyOf:
+            - type: object
+              properties:
+                appliedQueries:
+                  type: array
+                  items:
+                    type: string
+                layers:
+                  type: object
+                  properties:
+                    activities:
+                      type: object
+                      properties:
+                        hasMore:
+                          type: boolean
+                        returned:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        total:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                      required:
+                        - hasMore
+                        - returned
+                        - total
+                      additionalProperties: false
+                    contexts:
+                      type: object
+                      properties:
+                        hasMore:
+                          type: boolean
+                        returned:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        total:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                      required:
+                        - hasMore
+                        - returned
+                        - total
+                      additionalProperties: false
+                    experiences:
+                      type: object
+                      properties:
+                        hasMore:
+                          type: boolean
+                        returned:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        total:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                      required:
+                        - hasMore
+                        - returned
+                        - total
+                      additionalProperties: false
+                    identities:
+                      type: object
+                      properties:
+                        hasMore:
+                          type: boolean
+                        returned:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        total:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                      required:
+                        - hasMore
+                        - returned
+                        - total
+                      additionalProperties: false
+                    preferences:
+                      type: object
+                      properties:
+                        hasMore:
+                          type: boolean
+                        returned:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                        total:
+                          type: integer
+                          minimum: -9007199254740991
+                          maximum: 9007199254740991
+                      required:
+                        - hasMore
+                        - returned
+                        - total
+                      additionalProperties: false
+                  required:
+                    - activities
+                    - contexts
+                    - experiences
+                    - identities
+                    - preferences
+                  additionalProperties: false
+              required:
+                - appliedQueries
+                - layers
+              additionalProperties: false
+            - type: "null"
+        preferences:
+          type: array
+          items:
+            type: object
+            properties:
+              accessedAt:
+                type: string
+                format: date-time
+              capturedAt:
+                type: string
+                format: date-time
+              createdAt:
+                type: string
+                format: date-time
+              id:
+                type: string
+              metadata:
+                anyOf:
+                  - type: object
+                    propertyNames:
+                      type: string
+                    additionalProperties: {}
+                  - type: "null"
+              tags:
+                anyOf:
+                  - type: array
+                    items:
+                      type: string
+                  - type: "null"
+              type:
+                type:
+                  - string
+                  - "null"
+              updatedAt:
+                type: string
+                format: date-time
+              appliesToEntityId:
+                type:
+                  - string
+                  - "null"
+              conclusionDirectives:
+                type:
+                  - string
+                  - "null"
+              evidenceCount:
+                type: integer
+                minimum: -9007199254740991
+                maximum: 9007199254740991
+              evidenceSource:
+                anyOf:
+                  - type: string
+                    enum:
+                      - stated
+                      - reported
+                      - inferred
+                  - type: "null"
+              holderEntityId:
+                type:
+                  - string
+                  - "null"
+              lastEvidenceAt:
+                anyOf:
+                  - type: string
+                    format: date-time
+                  - type: "null"
+              scope:
+                type:
+                  - string
+                  - "null"
+              scorePriority:
+                type:
+                  - number
+                  - "null"
+              suggestions:
+                type:
+                  - string
+                  - "null"
+              userMemoryId:
+                type:
+                  - string
+                  - "null"
+            required:
+              - accessedAt
+              - capturedAt
+              - createdAt
+              - id
+              - metadata
+              - tags
+              - type
+              - updatedAt
+              - appliesToEntityId
+              - conclusionDirectives
+              - evidenceCount
+              - evidenceSource
+              - holderEntityId
+              - lastEvidenceAt
+              - scope
+              - scorePriority
+              - suggestions
+              - userMemoryId
+            additionalProperties: false
       required:
-        - count
-        - deleted
+        - activities
+        - contexts
+        - experiences
+        - identities
+        - meta
+        - preferences
       additionalProperties: false
-    MemoryCategoryEntries:
-      anyOf:
-        - type: array
+    MemorySearchRequest:
+      type: object
+      properties:
+        categories:
+          maxItems: 20
+          type: array
           items:
-            $ref: "#/components/schemas/MemoryIdentity"
-        - type: array
+            type: string
+            minLength: 1
+        effort:
+          description: Retrieval depth; defaults to the user’s memory setting.
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+        layers:
+          description: Limit to these layers.
+          maxItems: 5
+          type: array
           items:
-            $ref: "#/components/schemas/MemoryPreference"
-        - type: array
+            type: string
+            enum:
+              - activity
+              - context
+              - experience
+              - identity
+              - preference
+        queries:
+          description: Natural-language queries; required unless `topicId` is sent.
+          maxItems: 10
+          type: array
           items:
-            $ref: "#/components/schemas/MemoryContext"
-        - type: array
+            type: string
+            minLength: 1
+            maxLength: 8000
+        tags:
+          maxItems: 20
+          type: array
           items:
-            $ref: "#/components/schemas/MemoryActivity"
-        - type: array
-          items:
-            $ref: "#/components/schemas/MemoryExperience"
+            type: string
+            minLength: 1
+        topicId:
+          description: Retrieve the memories relevant to a conversation topic, using its
+            user messages as the query. Mutually exclusive with `queries`.
+          type: string
+          minLength: 1
+        topK:
+          description: Per-layer result caps.
+          type: object
+          properties:
+            activities:
+              type: integer
+              minimum: 0
+              maximum: 50
+            contexts:
+              type: integer
+              minimum: 0
+              maximum: 50
+            experiences:
+              type: integer
+              minimum: 0
+              maximum: 50
+            identities:
+              type: integer
+              minimum: 0
+              maximum: 50
+            preferences:
+              type: integer
+              minimum: 0
+              maximum: 50
+          additionalProperties: false
+      additionalProperties: false
+    MemoryExtractionTask:
+      type: object
+      properties:
+        deduped:
+          type: boolean
+          description: True when an extraction was already running and that task is
+            returned instead.
+        error:
+          anyOf:
+            - type: object
+              properties:
+                message:
+                  type: string
+                name:
+                  type: string
+              required:
+                - message
+                - name
+              additionalProperties: false
+            - type: "null"
+        id:
+          type: string
+          description: Async task id; poll `GET /memories/extractions/{id}`.
+        progress:
+          type: object
+          properties:
+            completedTopics:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            totalTopics:
+              anyOf:
+                - type: integer
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                - type: "null"
+          required:
+            - completedTopics
+            - totalTopics
+          additionalProperties: false
+        range:
+          type: object
+          properties:
+            from:
+              anyOf:
+                - type: string
+                  format: date-time
+                - type: "null"
+            to:
+              anyOf:
+                - type: string
+                  format: date-time
+                - type: "null"
+          required:
+            - from
+            - to
+          additionalProperties: false
+        status:
+          type: string
+          enum:
+            - error
+            - pending
+            - processing
+            - success
+      required:
+        - deduped
+        - error
+        - id
+        - progress
+        - range
+        - status
+      additionalProperties: false
+    StartMemoryExtraction:
+      type: object
+      properties:
+        fromDate:
+          description: Only topics updated at or after this time.
+          type: string
+          format: date-time
+        toDate:
+          description: Only topics updated at or before this time.
+          type: string
+          format: date-time
+      additionalProperties: false
+    RestoredPersona:
+      type: object
+      properties:
+        historyId:
+          type: string
+          description: The version that was restored.
+        persona:
+          $ref: "#/components/schemas/MemoryPersona"
+        version:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+          description: Version number of the new current persona.
+      required:
+        - historyId
+        - persona
+        - version
+      additionalProperties: false
     MemoryIdentity:
       type: object
       properties:
@@ -4635,6 +5679,166 @@ components:
         - relationship
         - role
         - userMemoryId
+      additionalProperties: false
+    CreateMemoryIdentity:
+      type: object
+      properties:
+        category:
+          description: Free-form memory category, e.g. `work`, `health`. Defaults to
+            `general`.
+          type: string
+          minLength: 1
+          maxLength: 100
+        details:
+          description: Longer supporting notes.
+          type: string
+          maxLength: 10000
+        memoryType:
+          description: What kind of fact this is. Each layer has its own default.
+          type: string
+          enum:
+            - activity
+            - context
+            - event
+            - fact
+            - location
+            - other
+            - people
+            - preference
+            - technology
+            - topic
+        summary:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: One-paragraph overview; it is embedded.
+        tags:
+          maxItems: 50
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Short headline.
+        description:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: Who this person is to the user.
+        episodicDate:
+          description: When the identity fact became true.
+          type: string
+          format: date-time
+        relationship:
+          description: Relationship to the user; `self` (default) describes the user.
+          type: string
+          enum:
+            - self
+            - father
+            - mother
+            - son
+            - daughter
+            - brother
+            - sister
+            - sibling
+            - husband
+            - wife
+            - spouse
+            - partner
+            - couple
+            - friend
+            - colleague
+            - coworker
+            - classmate
+            - mentor
+            - mentee
+            - manager
+            - teammate
+            - grandfather
+            - grandmother
+            - grandson
+            - granddaughter
+            - uncle
+            - aunt
+            - nephew
+            - niece
+            - other
+        role:
+          type: string
+          maxLength: 255
+        type:
+          type: string
+          enum:
+            - personal
+            - professional
+            - demographic
+      required:
+        - summary
+        - title
+        - description
+      additionalProperties: false
+    UpdateMemoryIdentity:
+      type: object
+      properties:
+        description:
+          type: string
+          maxLength: 4000
+        episodicDate:
+          type: string
+          format: date-time
+        relationship:
+          type: string
+          enum:
+            - self
+            - father
+            - mother
+            - son
+            - daughter
+            - brother
+            - sister
+            - sibling
+            - husband
+            - wife
+            - spouse
+            - partner
+            - couple
+            - friend
+            - colleague
+            - coworker
+            - classmate
+            - mentor
+            - mentee
+            - manager
+            - teammate
+            - grandfather
+            - grandmother
+            - grandson
+            - granddaughter
+            - uncle
+            - aunt
+            - nephew
+            - niece
+            - other
+        role:
+          type: string
+          maxLength: 255
+        tags:
+          maxItems: 50
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+        type:
+          type: string
+          enum:
+            - personal
+            - professional
+            - demographic
       additionalProperties: false
     MemoryPreference:
       type: object
@@ -4739,6 +5943,82 @@ components:
         - scorePriority
         - suggestions
         - userMemoryId
+      additionalProperties: false
+    CreateMemoryPreference:
+      type: object
+      properties:
+        category:
+          description: Free-form memory category, e.g. `work`, `health`. Defaults to
+            `general`.
+          type: string
+          minLength: 1
+          maxLength: 100
+        details:
+          description: Longer supporting notes.
+          type: string
+          maxLength: 10000
+        memoryType:
+          description: What kind of fact this is. Each layer has its own default.
+          type: string
+          enum:
+            - activity
+            - context
+            - event
+            - fact
+            - location
+            - other
+            - people
+            - preference
+            - technology
+            - topic
+        summary:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: One-paragraph overview; it is embedded.
+        tags:
+          maxItems: 50
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Short headline.
+        conclusionDirectives:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: The instruction an assistant should follow, in the user’s words.
+        scorePriority:
+          description: 0–1; higher is more important to respect.
+          type: number
+          minimum: 0
+          maximum: 1
+        suggestions:
+          maxItems: 20
+          type: array
+          items:
+            type: string
+            maxLength: 1000
+      required:
+        - summary
+        - title
+        - conclusionDirectives
+      additionalProperties: false
+    UpdateMemoryPreference:
+      type: object
+      properties:
+        conclusionDirectives:
+          type: string
+          maxLength: 4000
+        suggestions:
+          description: Newline-separated suggestions.
+          type: string
+          maxLength: 10000
       additionalProperties: false
     MemoryContext:
       type: object
@@ -4899,6 +6179,95 @@ components:
         - userMemoryId
         - userMemoryIds
       additionalProperties: false
+    CreateMemoryContext:
+      type: object
+      properties:
+        category:
+          description: Free-form memory category, e.g. `work`, `health`. Defaults to
+            `general`.
+          type: string
+          minLength: 1
+          maxLength: 100
+        details:
+          description: Longer supporting notes.
+          type: string
+          maxLength: 10000
+        memoryType:
+          description: What kind of fact this is. Each layer has its own default.
+          type: string
+          enum:
+            - activity
+            - context
+            - event
+            - fact
+            - location
+            - other
+            - people
+            - preference
+            - technology
+            - topic
+        summary:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: One-paragraph overview; it is embedded.
+        tags:
+          maxItems: 50
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Short headline.
+        currentStatus:
+          description: Defaults to `ongoing`.
+          type: string
+          enum:
+            - aborted
+            - cancelled
+            - completed
+            - ongoing
+            - on_hold
+            - planned
+        description:
+          type: string
+          minLength: 1
+          maxLength: 10000
+          description: The situation or project.
+        scoreImpact:
+          type: number
+          minimum: 0
+          maximum: 1
+        scoreUrgency:
+          type: number
+          minimum: 0
+          maximum: 1
+        type:
+          description: Archetype, e.g. `project`, `goal`.
+          type: string
+          maxLength: 100
+      required:
+        - summary
+        - title
+        - description
+      additionalProperties: false
+    UpdateMemoryContext:
+      type: object
+      properties:
+        currentStatus:
+          type: string
+          maxLength: 50
+        description:
+          type: string
+          maxLength: 10000
+        title:
+          type: string
+          maxLength: 255
+      additionalProperties: false
     MemoryActivity:
       type: object
       properties:
@@ -5049,6 +6418,98 @@ components:
         - timezone
         - userMemoryId
       additionalProperties: false
+    CreateMemoryActivity:
+      type: object
+      properties:
+        category:
+          description: Free-form memory category, e.g. `work`, `health`. Defaults to
+            `general`.
+          type: string
+          minLength: 1
+          maxLength: 100
+        details:
+          description: Longer supporting notes.
+          type: string
+          maxLength: 10000
+        memoryType:
+          description: What kind of fact this is. Each layer has its own default.
+          type: string
+          enum:
+            - activity
+            - context
+            - event
+            - fact
+            - location
+            - other
+            - people
+            - preference
+            - technology
+            - topic
+        summary:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: One-paragraph overview; it is embedded.
+        tags:
+          maxItems: 50
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Short headline.
+        endsAt:
+          type: string
+          format: date-time
+        feedback:
+          description: How it went or felt.
+          type: string
+          maxLength: 4000
+        narrative:
+          type: string
+          minLength: 1
+          maxLength: 10000
+          description: What happened.
+        notes:
+          type: string
+          maxLength: 10000
+        startsAt:
+          type: string
+          format: date-time
+        status:
+          description: Defaults to `pending`.
+          type: string
+          maxLength: 50
+        timezone:
+          description: IANA zone, e.g. `Asia/Shanghai`.
+          type: string
+          maxLength: 100
+        type:
+          description: e.g. `meeting`, `call`. Defaults to `other`.
+          type: string
+          maxLength: 50
+      required:
+        - summary
+        - title
+        - narrative
+      additionalProperties: false
+    UpdateMemoryActivity:
+      type: object
+      properties:
+        narrative:
+          type: string
+          maxLength: 10000
+        notes:
+          type: string
+          maxLength: 10000
+        status:
+          type: string
+          maxLength: 50
+      additionalProperties: false
     MemoryExperience:
       type: object
       properties:
@@ -5133,6 +6594,120 @@ components:
         - situation
         - userMemoryId
       additionalProperties: false
+    CreateMemoryExperience:
+      type: object
+      properties:
+        category:
+          description: Free-form memory category, e.g. `work`, `health`. Defaults to
+            `general`.
+          type: string
+          minLength: 1
+          maxLength: 100
+        details:
+          description: Longer supporting notes.
+          type: string
+          maxLength: 10000
+        memoryType:
+          description: What kind of fact this is. Each layer has its own default.
+          type: string
+          enum:
+            - activity
+            - context
+            - event
+            - fact
+            - location
+            - other
+            - people
+            - preference
+            - technology
+            - topic
+        summary:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: One-paragraph overview; it is embedded.
+        tags:
+          maxItems: 50
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Short headline.
+        action:
+          type: string
+          maxLength: 4000
+        keyLearning:
+          type: string
+          maxLength: 4000
+        possibleOutcome:
+          type: string
+          maxLength: 4000
+        reasoning:
+          type: string
+          maxLength: 4000
+        scoreConfidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        situation:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: The situation that was faced.
+      required:
+        - summary
+        - title
+        - situation
+      additionalProperties: false
+    UpdateMemoryExperience:
+      type: object
+      properties:
+        action:
+          type: string
+          maxLength: 4000
+        keyLearning:
+          type: string
+          maxLength: 4000
+        situation:
+          type: string
+          maxLength: 4000
+      additionalProperties: false
+    DeletedResources:
+      type: object
+      properties:
+        count:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        deleted:
+          type: boolean
+          const: true
+      required:
+        - count
+        - deleted
+      additionalProperties: false
+    MemoryCategoryEntries:
+      anyOf:
+        - type: array
+          items:
+            $ref: "#/components/schemas/MemoryIdentity"
+        - type: array
+          items:
+            $ref: "#/components/schemas/MemoryPreference"
+        - type: array
+          items:
+            $ref: "#/components/schemas/MemoryContext"
+        - type: array
+          items:
+            $ref: "#/components/schemas/MemoryActivity"
+        - type: array
+          items:
+            $ref: "#/components/schemas/MemoryExperience"
     MessageTranslationWrite:
       type: object
       properties:
@@ -22903,6 +24478,12 @@ paths:
   /api/v1/files/{id}/parses:
     post:
       operationId: files.parse
+      description: >-
+        Extracts the text content of a document file. Answers 400 when the file
+        type does not support parsing and 422 when parsing the file fails.
+
+
+        **API key scopes:** `file:write`.
       summary: Parse file content
       tags:
         - files
@@ -22985,6 +24566,36 @@ paths:
               $ref: "#/components/headers/RateLimitRemaining"
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Unprocessable content
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
         "429":
           content:
             application/json:
@@ -23034,7 +24645,6 @@ paths:
               - "null"
         - $ref: "#/components/parameters/WorkspaceId"
         - $ref: "#/components/parameters/IdempotencyKey"
-      description: "**API key scopes:** `file:write`."
   /api/v1/files/{id}/chunks:
     post:
       operationId: files.createChunks
@@ -23613,6 +25223,507 @@ paths:
         - $ref: "#/components/parameters/WorkspaceId"
         - $ref: "#/components/parameters/IdempotencyKey"
       description: "**API key scopes:** `file:read`."
+  /api/v1/files/search:
+    post:
+      operationId: files.search
+      description: >-
+        Embeds `query` with the deployment embedding model and ranks the chunks
+        of `fileIds` by cosine similarity. Files must be parsed and embedded
+        first (`POST /files/{id}/chunks` with `autoEmbedding`, or `POST
+        /files/{id}/embeddings`). Answers 404 when any file is not visible to
+        the caller, 403 when a file sits in a knowledge base restricted for the
+        caller, 401 / 429 when the embedding provider rejects the deployment key
+        or quota, and 502 when the provider fails otherwise.
+
+
+        **API key scopes:** `file:read`.
+      summary: Semantic search across files
+      tags:
+        - files
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/FileSearchResult"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Upstream error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - file:read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileSearchRequest"
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/files/{id}/embeddings:
+    post:
+      operationId: files.embed
+      description: >-
+        Vectorizes the chunks of an already-parsed file so it becomes
+        searchable. Runs asynchronously; poll `GET /files/{id}/chunks` for
+        `embeddingStatus`. Answers 409 when the file has no chunks yet.
+
+
+        **API key scopes:** `file:write`.
+      summary: Start a file embedding task
+      tags:
+        - files
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/FileTaskAccepted"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - file:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/files/{id}/parses/retry:
+    post:
+      operationId: files.retryParse
+      description: >-
+        Discards the previous chunking task (typically a failed one) and queues
+        a new one. Runs asynchronously; poll `GET /files/{id}/chunks` for
+        `chunkingStatus`. Answers 422, without discarding the previous task,
+        when no loader supports the file extension; 403 when the file sits in a
+        knowledge base restricted for the caller.
+
+
+        **API key scopes:** `file:write`.
+      summary: Retry parsing a file into chunks
+      tags:
+        - files
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/FileTaskAccepted"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Unprocessable content
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - file:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
   /api/v1/goals:
     get:
       operationId: goals.list
@@ -27222,6 +29333,181 @@ paths:
                 - fileIds
                 - targetKnowledgeBaseId
       description: "**API key scopes:** `knowledge:write`."
+  /api/v1/knowledge-bases/{id}/search:
+    post:
+      operationId: knowledgeBases.search
+      description: >-
+        Embeds `query` and ranks the chunks of every file in the knowledge base
+        by cosine similarity (`chunks`, grouped per file in `files`), and runs a
+        full-text search over the documents stored in it (`documents`). Answers
+        404 when the knowledge base is not visible to the caller, 403 when it is
+        restricted for the caller, 401 / 429 when the embedding provider rejects
+        the deployment key or quota, and 502 when the provider fails otherwise
+        and nothing matched.
+
+
+        **API key scopes:** `knowledge:read`.
+      summary: Semantic search in a knowledge base
+      tags:
+        - knowledge-bases
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/KnowledgeBaseSearchResult"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Upstream error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - knowledge:read
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KnowledgeBaseSearchRequest"
   /api/v1/mcp-servers:
     get:
       operationId: mcpServers.list
@@ -28468,6 +30754,2051 @@ paths:
       parameters:
         - $ref: "#/components/parameters/WorkspaceId"
       description: "**API key scopes:** `user:read`."
+  /api/v1/memories/search:
+    post:
+      operationId: memories.search
+      description: >-
+        Embeds `queries` and ranks every memory layer by semantic, keyword and
+        recency signals (the retrieval the agent memory tool uses). Send
+        `topicId` instead to retrieve the memories relevant to a conversation
+        topic; the other filters then do not apply. A failing embedding provider
+        yields empty layers rather than an error. Memory belongs to the user,
+        not to a workspace: a workspace-bound key searches the same personal
+        memory.
+
+
+        **API key scopes:** `user:read`.
+      summary: Search memories
+      tags:
+        - memories
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MemorySearchResult"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - user:read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemorySearchRequest"
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/memories/extractions:
+    post:
+      operationId: memories.startExtraction
+      description: >-
+        Queues memory extraction over the caller’s chat topics in the optional
+        date range and answers at once with the async task; poll `GET
+        /memories/extractions/{id}`. While one extraction is running, the same
+        task is returned with `deduped: true`. Needs `model:invoke` as well as
+        `user:write`.
+
+
+        **API key scopes:** `model:invoke` + `user:write`.
+      summary: Start a memory extraction
+      tags:
+        - memories
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MemoryExtractionTask"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - model:invoke
+        - user:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartMemoryExtraction"
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/memories/extractions/{id}:
+    get:
+      operationId: memories.getExtraction
+      summary: Get a memory extraction task
+      tags:
+        - memories
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MemoryExtractionTask"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - user:read
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+      description: "**API key scopes:** `user:read`."
+  /api/v1/memories/persona/versions/{id}/restore:
+    post:
+      operationId: memories.restorePersonaVersion
+      description: >-
+        Makes a previous persona version current again by writing it as a new
+        version. Personal scope only: answers 403 with `X-Workspace-Id`. Answers
+        412 when that version has no stored snapshot.
+
+
+        **API key scopes:** `user:write`.
+      summary: Restore a persona version
+      tags:
+        - memories
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RestoredPersona"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "412":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Precondition failed
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - user:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/memories/identities:
+    post:
+      operationId: memories.createIdentity
+      description: >-
+        Writes a identity memory and embeds its text so `POST /memories/search`
+        can find it; answers with the stored entry. Memory belongs to the user,
+        not to a workspace: a workspace-bound key writes the same personal
+        memory.
+
+
+        **API key scopes:** `user:write`.
+      summary: Create a identity memory
+      tags:
+        - memories
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MemoryIdentity"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - user:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMemoryIdentity"
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/memories/identities/{id}:
+    patch:
+      operationId: memories.updateIdentity
+      description: >-
+        Patches a identity memory the caller owns. Memory belongs to the user,
+        not to a workspace, so a workspace-bound key edits the same personal
+        memory.
+
+
+        **API key scopes:** `user:write`.
+      summary: Update a identity memory
+      tags:
+        - memories
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MemoryIdentity"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - user:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemoryIdentity"
+  /api/v1/memories/preferences:
+    post:
+      operationId: memories.createPreference
+      description: >-
+        Writes a preference memory and embeds its text so `POST
+        /memories/search` can find it; answers with the stored entry. Memory
+        belongs to the user, not to a workspace: a workspace-bound key writes
+        the same personal memory.
+
+
+        **API key scopes:** `user:write`.
+      summary: Create a preference memory
+      tags:
+        - memories
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MemoryPreference"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - user:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMemoryPreference"
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/memories/preferences/{id}:
+    patch:
+      operationId: memories.updatePreference
+      description: >-
+        Patches a preference memory the caller owns. Memory belongs to the user,
+        not to a workspace, so a workspace-bound key edits the same personal
+        memory.
+
+
+        **API key scopes:** `user:write`.
+      summary: Update a preference memory
+      tags:
+        - memories
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MemoryPreference"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - user:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemoryPreference"
+  /api/v1/memories/contexts:
+    post:
+      operationId: memories.createContext
+      description: >-
+        Writes a context memory and embeds its text so `POST /memories/search`
+        can find it; answers with the stored entry. Memory belongs to the user,
+        not to a workspace: a workspace-bound key writes the same personal
+        memory.
+
+
+        **API key scopes:** `user:write`.
+      summary: Create a context memory
+      tags:
+        - memories
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MemoryContext"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - user:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMemoryContext"
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/memories/contexts/{id}:
+    patch:
+      operationId: memories.updateContext
+      description: >-
+        Patches a context memory the caller owns. Memory belongs to the user,
+        not to a workspace, so a workspace-bound key edits the same personal
+        memory.
+
+
+        **API key scopes:** `user:write`.
+      summary: Update a context memory
+      tags:
+        - memories
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MemoryContext"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - user:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemoryContext"
+  /api/v1/memories/activities:
+    post:
+      operationId: memories.createActivity
+      description: >-
+        Writes a activity memory and embeds its text so `POST /memories/search`
+        can find it; answers with the stored entry. Memory belongs to the user,
+        not to a workspace: a workspace-bound key writes the same personal
+        memory.
+
+
+        **API key scopes:** `user:write`.
+      summary: Create a activity memory
+      tags:
+        - memories
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MemoryActivity"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - user:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMemoryActivity"
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/memories/activities/{id}:
+    patch:
+      operationId: memories.updateActivity
+      description: >-
+        Patches a activity memory the caller owns. Memory belongs to the user,
+        not to a workspace, so a workspace-bound key edits the same personal
+        memory.
+
+
+        **API key scopes:** `user:write`.
+      summary: Update a activity memory
+      tags:
+        - memories
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MemoryActivity"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - user:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemoryActivity"
+  /api/v1/memories/experiences:
+    post:
+      operationId: memories.createExperience
+      description: >-
+        Writes a experience memory and embeds its text so `POST
+        /memories/search` can find it; answers with the stored entry. Memory
+        belongs to the user, not to a workspace: a workspace-bound key writes
+        the same personal memory.
+
+
+        **API key scopes:** `user:write`.
+      summary: Create a experience memory
+      tags:
+        - memories
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MemoryExperience"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - user:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMemoryExperience"
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/memories/experiences/{id}:
+    patch:
+      operationId: memories.updateExperience
+      description: >-
+        Patches a experience memory the caller owns. Memory belongs to the user,
+        not to a workspace, so a workspace-bound key edits the same personal
+        memory.
+
+
+        **API key scopes:** `user:write`.
+      summary: Update a experience memory
+      tags:
+        - memories
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MemoryExperience"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - user:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemoryExperience"
   /api/v1/memories:
     delete:
       operationId: memories.deleteAll

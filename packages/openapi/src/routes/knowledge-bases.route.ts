@@ -5,6 +5,7 @@ import { getAllScopePermissions } from '@/utils/rbac';
 import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { KnowledgeBaseController } from '../controllers/knowledge-base.controller';
+import { RetrievalController } from '../controllers/retrieval.controller';
 import { requireAnyPermission } from '../middleware';
 import { requireAuth } from '../middleware/auth';
 import { DeletedResourceSchema } from '../types/common.type';
@@ -21,6 +22,10 @@ import {
   MoveKnowledgeBaseFilesSchema,
   UpdateKnowledgeBaseSchema,
 } from '../types/knowledge-base.type';
+import {
+  KnowledgeBaseSearchRequestSchema,
+  KnowledgeBaseSearchResultSchema,
+} from '../types/retrieval.type';
 
 const app = new Hono();
 
@@ -289,6 +294,34 @@ app.post(
     const controller = new KnowledgeBaseController();
     return await controller.moveFilesBetweenKnowledgeBases(c);
   },
+);
+
+/**
+ * Semantic search inside a knowledge base
+ * POST /knowledge-bases/:id/search
+ *
+ * Vector search over the base's files plus full-text search over the documents
+ * written directly into it.
+ */
+app.post(
+  '/:id/search',
+  routeDoc({
+    data: KnowledgeBaseSearchResultSchema,
+    description:
+      'Embeds `query` and ranks the chunks of every file in the knowledge base by cosine similarity (`chunks`, grouped per file in `files`), and runs a full-text search over the documents stored in it (`documents`). Answers 404 when the knowledge base is not visible to the caller, 403 when it is restricted for the caller, 401 / 429 when the embedding provider rejects the deployment key or quota, and 502 when the provider fails otherwise and nothing matched.',
+    errors: [404, 429, 502],
+    operationId: 'knowledgeBases.search',
+    summary: 'Semantic search in a knowledge base',
+    tags: ['knowledge-bases'],
+  }),
+  requireAuth,
+  requireAnyPermission(
+    getAllScopePermissions('KNOWLEDGE_BASE_READ'),
+    'You do not have permission to search this knowledge base',
+  ),
+  zValidator('param', KnowledgeBaseIdParamSchema),
+  zValidator('json', KnowledgeBaseSearchRequestSchema),
+  async (c) => new RetrievalController().searchKnowledgeBase(c),
 );
 
 export default app;

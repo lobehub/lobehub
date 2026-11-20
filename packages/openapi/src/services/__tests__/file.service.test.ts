@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { ApiException } from '../../common/errors';
 import { DeletedResourceSchema } from '../../types/common.type';
 import {
   FileChunkStatusResponseSchema,
@@ -100,5 +101,48 @@ describe('FileUploadService response payloads', () => {
     const result = asJson(await service.getFileChunkStatus('file-1'));
 
     expect(() => FileChunkStatusResponseSchema.parse(result)).not.toThrow();
+  });
+});
+
+describe('FileUploadService.parseFile', () => {
+  const buildParseService = (parseFile: () => Promise<unknown>) => {
+    const service = buildService();
+    service.findFileByIdWithPermission = vi
+      .fn()
+      .mockResolvedValue({ ...fileRow, fileType: 'application/pdf', name: 'a.pdf' });
+    service.documentModel = { findByFileId: vi.fn().mockResolvedValue(undefined) };
+    service.documentService = { parseFile: vi.fn(parseFile) };
+    return service;
+  };
+
+  it('returns the parsed content when parsing succeeds', async () => {
+    const service = buildParseService(async () => ({
+      content: 'hello',
+      pages: [{}],
+      title: 'Doc',
+      totalCharCount: 5,
+      totalLineCount: 1,
+    }));
+
+    const result = await service.parseFile('file-1');
+
+    expect(result).toMatchObject({ content: 'hello', fileId: 'file-1', parseStatus: 'completed' });
+  });
+
+  // Regression: a failed parse answered HTTP 200 "File parsed successfully" with
+  // `parseStatus: 'failed'` in the payload instead of an error.
+  it('raises a 422 unprocessable_entity error when parsing fails', async () => {
+    const service = buildParseService(async () => {
+      throw new Error('corrupt PDF');
+    });
+
+    const error = await service.parseFile('file-1').catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ApiException);
+    expect(error).toMatchObject({
+      code: 'unprocessable_entity',
+      message: 'File could not be parsed: corrupt PDF',
+      status: 422,
+    });
   });
 });
