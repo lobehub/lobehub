@@ -6,7 +6,6 @@ import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { agents } from '../../schemas/agent';
 import { channelMembers } from '../../schemas/channel';
 import { chatGroupsAgents } from '../../schemas/chatGroup';
-import { environments } from '../../schemas/environment';
 import { knowledgeBases } from '../../schemas/file';
 import {
   projectAgents,
@@ -14,7 +13,6 @@ import {
   projectKnowledgeBases,
   projects,
 } from '../../schemas/project';
-import { projectEnvironments } from '../../schemas/projectEnvironment';
 import { projectWorks } from '../../schemas/projectWork';
 import { agentsToSessions } from '../../schemas/relations';
 import { tasks } from '../../schemas/task';
@@ -31,13 +29,13 @@ import {
   normalizeWorkspaceId,
 } from '../../utils/workspace';
 import { AgentModel } from '../agent';
-import { EnvironmentModel } from '../environment';
 import {
   isProjectIdentifierConflict,
   normalizeProjectIdentifier,
   ProjectIdentifierTakenError,
 } from '../projectIdentifier';
 import { topicHasGoal } from '../topicGoal';
+import { releaseProjectEnvironment } from '../utils/projectEnvironmentCleanup';
 import type { ProjectAgentInput, ProjectAgentPatch } from './agents';
 import {
   deleteProjectAgent,
@@ -51,6 +49,8 @@ export { normalizeProjectIdentifier, ProjectIdentifierTakenError } from '../proj
 export type { ProjectAgentInput, ProjectAgentPatch } from './agents';
 
 export interface CreateProjectInput {
+  /** More repositories the project's environment checks out beside `repository`. */
+  additionalRepositories?: { defaultBranch?: string; url: string }[];
   avatar?: string;
   /** Lead the project with an existing agent instead of creating one named after it. */
   coordinatorAgentId?: string;
@@ -250,6 +250,17 @@ export class ProjectModel {
    * coordinator provisioned for it, which belongs to another aggregate.
    */
   async delete(id: string) {
+    const [manageable] = await this.db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(eq(projects.id, id), this.manageable()));
+    if (!manageable) return null;
+
+    // `environments.project_id` is `restrict`: the project's environment is
+    // dealt with first, whichever path deletes the project. Callers that need
+    // both steps atomic run this inside their transaction
+    // (`ProjectRepository.delete` does).
+    await releaseProjectEnvironment(this.db, id);
     const [deleted] = await this.db
       .delete(projects)
       .where(and(eq(projects.id, id), this.manageable()))
@@ -972,74 +983,6 @@ export class ProjectModel {
       canManageKnowledgeBases: true,
       canManageMembers: isCreator || (!!this.options.canManageAllMembers && !!project.workspaceId),
     };
-  }
-
-  /** Link an existing environment to a project; re-attaching is a no-op. */
-  async attachEnvironment(projectId: string, environmentId: string) {
-    if (!(await this.findManageableById(projectId)))
-      throw new Error('Project not found or access denied');
-    const environment = await new EnvironmentModel(
-      this.db,
-      this.userId,
-      this.workspaceId,
-    ).findEnabledById(environmentId);
-    if (!environment) throw new Error('Environment not found or access denied');
-    await this.db
-      .insert(projectEnvironments)
-      .values({
-        projectId,
-        environmentId,
-        workspaceId: this.workspaceId,
-        addedByUserId: this.userId,
-      })
-      .onConflictDoNothing();
-    return { projectId, environmentId };
-  }
-
-  /**
-   * Unlink an environment from a project. The environment itself stays — it is
-   * shared by every project that lists it — and so do the project's folders
-   * and conversations made from it; unlinking twice is a no-op.
-   */
-  async detachEnvironment(projectId: string, environmentId: string) {
-    if (!(await this.findManageableById(projectId)))
-      throw new Error('Project not found or access denied');
-    await this.db
-      .delete(projectEnvironments)
-      .where(
-        and(
-          eq(projectEnvironments.projectId, projectId),
-          eq(projectEnvironments.environmentId, environmentId),
-        ),
-      );
-    return { projectId, environmentId };
-  }
-
-  /** Enabled environments linked to this project. */
-  async listEnvironments(projectId: string) {
-    if (!(await this.findById(projectId))) throw new Error('Project not found or access denied');
-    return this.db
-      .select({
-        id: environments.id,
-        name: environments.name,
-        configuration: environments.configuration,
-        visibility: environments.visibility,
-      })
-      .from(environments)
-      .innerJoin(
-        projectEnvironments,
-        and(
-          eq(projectEnvironments.environmentId, environments.id),
-          eq(projectEnvironments.projectId, projectId),
-          eq(projectEnvironments.enabled, true),
-        ),
-      )
-      .where(
-        and(
-          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, environments),
-          eq(environments.enabled, true),
-        ),
-      );
   }
 
   /** All conversations belonging to the project, with or without a working directory. */

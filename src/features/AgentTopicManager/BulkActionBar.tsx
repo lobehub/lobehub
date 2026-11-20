@@ -9,6 +9,7 @@ import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { openAssociateTopicModal } from '@/features/Projects/WorkingDirectories/AssociateTopicModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
+import { densityVars } from '@/styles/densityVars';
 import type { ChatTopic } from '@/types/topic';
 
 import MoveToAgentButton from './MoveToAgentButton';
@@ -20,7 +21,7 @@ const styles = createStaticStyles(({ css }) => ({
     pointer-events: auto;
 
     padding-block: 8px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 999px;
 

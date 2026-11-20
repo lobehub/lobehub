@@ -243,28 +243,6 @@ export interface MessageModelOptions {
   includeShareVisitor?: boolean;
 }
 
-/**
- * Per-share switches that relax {@link toVisitorMessage}'s default redaction.
- * Both default to `false` (strip everything), so a caller that forgets to pass
- * options gets the fail-closed projection.
- */
-export interface VisitorRedactionOptions {
-  /**
-   * `AgentShareConfig.showErrorDetails`. When false, a run failure is
-   * projected down to a generic classified `type` (see
-   * {@link sanitizeVisitorError}) instead of the raw
-   * message/provider/budget/upstream-body payload `formatErrorForState`
-   * builds.
-   */
-  showErrorDetails?: boolean;
-  /**
-   * `AgentShareConfig.showModelInfo`. When false, the creator's model /
-   * provider choice and the token/cost snapshot are stripped everywhere they
-   * appear, at any nesting depth.
-   */
-  showModelInfo?: boolean;
-}
-
 export interface SoftDeletedMessage {
   /** Live children that were re-parented away from this message at trash time. */
   childIds: string[];

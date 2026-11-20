@@ -15,6 +15,7 @@ import {
 import { EvalConnectorUpdateError, normalizeEvalConnectorPatch } from './connectorEval';
 import {
   type BaseIdentifierScope,
+  changeBaseVisibilityUnlessHeld,
   claimBaseIdentifier,
   ConnectorIdentifierHeldError,
   moveToBaseUnlessIdentifierHeld,
@@ -23,12 +24,18 @@ import {
 } from './connectorIdentifierClaim';
 import { ConnectorLinkModel, isConnectorOAuthAccounts } from './connectorLink';
 import { deleteIfMetadataContains, updateMetadataIfContains } from './connectorMetadataGuard';
+import { countPrivateConnectorBindings } from './connectorPrivateBindings';
 import {
   connectorAccessScope,
   connectorAgentConfigScope,
   connectorRunScope,
   type ConnectorRunTarget,
 } from './connectorScope';
+import {
+  pickConfigurableConnectors,
+  pickConnectorByPriority,
+  selectConnectorToolSets,
+} from './connectorToolSets';
 
 export { ConnectorIdentifierHeldError } from './connectorIdentifierClaim';
 export type { ConnectorRunTarget } from './connectorScope';
@@ -275,45 +282,14 @@ export class ConnectorModel {
   };
 
   /**
-   * Reduce candidate rows to at most one per identifier. Rows are ranked by
-   * binding first, then by whose connection it is:
-   *
-   * 1. binding — agent-OWNED by this agent > MOUNTED by this agent > free base;
-   * 2. within a binding — the owner's private row in this workspace > the
-   *    owner's personal row > the workspace's shared row. A private agent's
-   *    owner chose their own connection for their own agent, so it shadows
-   *    the shared one; a row made inside this workspace beats one carried
-   *    over from personal space.
-   *
-   * Equal ranks keep the first row in {@link resolutionOrder} (identifier,
-   * then id), so the pick never follows the physical row order. The result
-   * drives the order of the model's tool schema array.
-   *
-   * Only a private agent's run in its own topic can see private or personal
-   * rows at all (see {@link connectorRunScope}); every other run only ranks
-   * shared rows here.
+   * At most one row per identifier, ranked by binding to the agent, then by
+   * whose connection it is (`connectorRunRank`): a private agent's owner's own
+   * row shadows the shared one. Equal ranks keep the first row in
+   * {@link resolutionOrder}, never the physical order. Only a private agent's
+   * own topic sees private or personal rows at all ({@link connectorRunScope}).
    */
-  private pickByPriority = (rows: UserConnectorItem[], agentId?: string): UserConnectorItem[] => {
-    const workspaceId = normalizeWorkspaceId(this.workspaceId);
-    const bindingRank = (row: UserConnectorItem): number => {
-      if (agentId && row.agentId === agentId) return 2;
-      if (agentId && row.metadata?.mountedByAgentId === agentId) return 1;
-      return 0;
-    };
-    const ownershipRank = (row: UserConnectorItem): number => {
-      if (!workspaceId) return 0;
-      if (row.workspaceId === workspaceId && row.visibility === 'private') return 2;
-      if (row.workspaceId === null) return 1;
-      return 0;
-    };
-    const rank = (row: UserConnectorItem) => bindingRank(row) * 3 + ownershipRank(row);
-    const byIdentifier = new Map<string, UserConnectorItem>();
-    for (const row of rows) {
-      const current = byIdentifier.get(row.identifier);
-      if (!current || rank(row) > rank(current)) byIdentifier.set(row.identifier, row);
-    }
-    return [...byIdentifier.values()];
-  };
+  private pickByPriority = (rows: UserConnectorItem[], agentId?: string): UserConnectorItem[] =>
+    pickConnectorByPriority(rows, { agentId, workspaceId: normalizeWorkspaceId(this.workspaceId) });
 
   /**
    * The model for a resolved row's own scope. A private agent's workspace run
@@ -385,6 +361,14 @@ export class ConnectorModel {
   /** See {@link moveToBaseUnlessIdentifierHeld}. */
   moveToBaseUnlessIdentifierHeld = async (id: string, identifier: string) =>
     moveToBaseUnlessIdentifierHeld(this.db, this.baseIdentifierScope(), id, identifier);
+
+  /** {@link changeBaseVisibilityUnlessHeld} */
+  changeVisibilityUnlessHeld = (id: string, identifier: string, visibility: ConnectorVisibility) =>
+    changeBaseVisibilityUnlessHeld(this.db, this.baseIdentifierScope(), id, identifier, visibility);
+
+  /** See {@link countPrivateConnectorBindings}; zero outside a workspace. */
+  countPrivateAgentBindings = (agentId: string): Promise<number> =>
+    countPrivateConnectorBindings(this.db, normalizeWorkspaceId(this.workspaceId), agentId);
 
   /** See {@link queryBaseHolders}. */
   queryBaseHolders = async (
@@ -645,6 +629,31 @@ export class ConnectorModel {
     });
   };
 
+  /** The run's rows as tool sets, each with its prefix (`toolIdentifier`, {@link pickConnectorToolSets}). */
+  resolveToolSets = async (
+    runTarget: ConnectorRunTargetInput = {},
+    identifiers?: string[],
+    gateKeeper: GateKeeper | undefined = this.gateKeeper,
+    excludedIdentifiers: string[] = [],
+  ): Promise<(DecryptedConnector & { toolIdentifier: string })[]> => {
+    const target = toRunTarget(runTarget);
+    const picked = await selectConnectorToolSets(this.db, {
+      agentId: target.agentId,
+      excludedIdentifiers,
+      identifiers,
+      scope: this.scopePredicate(target),
+      workspaceId: normalizeWorkspaceId(this.workspaceId),
+    });
+    return pMap(
+      picked,
+      async (row) => ({
+        ...(await decryptRow(row, gateKeeper)),
+        toolIdentifier: row.toolIdentifier,
+      }),
+      { concurrency: 5 },
+    );
+  };
+
   /**
    * Agent-aware variant of {@link query}: every connector the run may resolve,
    * deduped by identifier with {@link pickByPriority}. Used to enumerate
@@ -691,7 +700,10 @@ export class ConnectorModel {
       .where(this.agentNarrowing(base, agentId))
       .orderBy(...this.resolutionOrder());
 
-    return this.pickByPriority(rows, agentId).map(({ id, identifier, isEnabled, status }) => ({
+    return pickConfigurableConnectors(rows, {
+      agentId,
+      workspaceId: normalizeWorkspaceId(this.workspaceId),
+    }).map(({ id, identifier, isEnabled, status }) => ({
       id,
       identifier,
       isEnabled,

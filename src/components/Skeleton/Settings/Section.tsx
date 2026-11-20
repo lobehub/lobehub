@@ -7,6 +7,7 @@ import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { useDensityTokens, useInterfaceDensity } from '@/styles/density';
 
 import SkeletonBar from '../Bar';
 import { sectionGroupStyles } from './sectionGroupStyles';
@@ -26,6 +27,11 @@ const styles = stylex.create({
     minHeight: '64px',
     paddingBlock: '16px',
   },
+  // Compact forms drop `--lobe-form-item-padding-block` to 10px around a 28px control.
+  rowCompact: {
+    minHeight: '48px',
+    paddingBlock: '10px',
+  },
 });
 
 export interface SettingsSectionSkeletonControl {
@@ -43,29 +49,34 @@ const Row = ({
   index: number;
   label?: ReactNode;
   withDesc: boolean;
-}) => (
-  <div {...stylex.props(styles.row)}>
-    {/* Line boxes match the loaded label (14px / 22px) and description (12px / 13px) stack. */}
-    <Flexbox gap={4}>
-      <Flexbox height={22} justify={'center'}>
-        {label ?? <SkeletonBar height={16} width={112 + (index % 2) * 40} />}
-      </Flexbox>
-      {withDesc && (
-        <Flexbox height={13} justify={'center'}>
-          <SkeletonBar height={12} width={224 + (index % 3) * 36} />
+}) => {
+  const compact = useInterfaceDensity() === 'compact';
+  const { controlHeight } = useDensityTokens();
+
+  return (
+    <div {...stylex.props(styles.row, compact && styles.rowCompact)}>
+      {/* Line boxes match the loaded label (14px / 22px) and description (12px / 13px) stack. */}
+      <Flexbox gap={4}>
+        <Flexbox height={22} justify={'center'}>
+          {label ?? <SkeletonBar height={16} width={112 + (index % 2) * 40} />}
         </Flexbox>
-      )}
-    </Flexbox>
-    <SkeletonBar
-      height={control?.height ?? 32}
-      radius={control ? cssVar.borderRadiusLG : undefined}
-      width={control?.width ?? (index % 2 ? 152 : 88)}
-    />
-  </div>
-);
+        {withDesc && (
+          <Flexbox height={13} justify={'center'}>
+            <SkeletonBar height={12} width={224 + (index % 3) * 36} />
+          </Flexbox>
+        )}
+      </Flexbox>
+      <SkeletonBar
+        height={control?.height ?? controlHeight}
+        radius={control ? cssVar.borderRadiusLG : undefined}
+        width={control?.width ?? (index % 2 ? 152 : 88)}
+      />
+    </div>
+  );
+};
 
 export interface SettingsSectionSkeletonGroup {
-  /** Control size for every row without an entry in `controls` (default 32px tall). */
+  /** Control size for rows without a `controls` entry (default: control height, 32 / 28px). */
   control?: SettingsSectionSkeletonControl;
   /**
    * Control size overrides keyed by row index, for fields taller than a 32px input
@@ -149,7 +160,8 @@ const Group = ({
 export interface SettingsSectionSkeletonProps {
   /**
    * Gap between groups. Groups of one `<Form itemsType="group">` sit 16px apart;
-   * separate forms stacked in the settings container sit 36px apart.
+   * separate forms stacked in the settings container sit 36px (compact 24px) apart,
+   * the default.
    */
   gap?: number;
   /** One entry per `Form.Group` in the loaded form. Defaults to a 2-row + 3-row pair. */
@@ -162,20 +174,24 @@ export interface SettingsSectionSkeletonProps {
  * per field, so the real form swaps in without relayout.
  */
 const SettingsSectionSkeleton = ({
-  gap = 36,
+  gap,
   groups = DEFAULT_GROUPS,
-}: SettingsSectionSkeletonProps) => (
-  <Flexbox aria-busy data-testid={'settings-section-skeleton'} gap={gap}>
-    {groups.map((group, index) => (
-      <Group key={index} {...group} />
-    ))}
-  </Flexbox>
-);
+}: SettingsSectionSkeletonProps) => {
+  const compact = useInterfaceDensity() === 'compact';
+
+  return (
+    <Flexbox aria-busy data-testid={'settings-section-skeleton'} gap={gap ?? (compact ? 24 : 36)}>
+      {groups.map((group, index) => (
+        <Group key={index} {...group} />
+      ))}
+    </Flexbox>
+  );
+};
 
 export default SettingsSectionSkeleton;
 
 export interface SettingsFormSkeletonItem {
-  /** Placeholder for the field's control; defaults to a 32px input filling the control column. */
+  /** Placeholder for the field's control; defaults to a control-height bar filling the column. */
   control?: { height: number; radius?: number | string; width?: number | string } | ReactNode;
   /** The field's real description (static copy). */
   desc?: ReactNode;
@@ -210,12 +226,13 @@ const isControlSize = (
  */
 export const SettingsFormSkeleton = ({ groups }: { groups: SettingsFormSkeletonGroup[] }) => {
   const form = useForm();
+  const { controlHeight } = useDensityTokens();
   const items: FormGroupItem[] = groups.map((group) => ({
     children: group.items.map(({ control, desc, label, layout, ...rest }) => ({
       children: isControlSize(control) ? (
         <SkeletonBar height={control.height} radius={control.radius} width={control.width} />
       ) : (
-        (control ?? <SkeletonBar height={32} />)
+        (control ?? <SkeletonBar height={controlHeight} />)
       ),
       desc,
       label,

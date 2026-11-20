@@ -33,7 +33,6 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { isDesktop } from '@/const/version';
 import {
   getPullRequestState,
@@ -63,6 +62,13 @@ import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import {
+  PanelDensityContext,
+  useDensityTokens,
+  useHeaderActionSize,
+  useInterfaceDensity,
+} from '@/styles/density';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { type ComposerTarget, createComposerTarget, resolveThreadComposerTarget } from '../types';
@@ -107,7 +113,7 @@ const styles = stylex.create({
   header: { flexShrink: 0, minWidth: '0' },
   pane: { overflowY: 'auto', flex: '1', minHeight: '0' },
   paneHidden: { display: 'none' },
-  paramsLoading: { width: '100%', padding: '16px' },
+  paramsLoading: { width: '100%', padding: densityTokens['--lobe-density-card-padding'] },
   add: { flexShrink: 0 },
   overviewBody: { overflowY: 'auto', minHeight: '0' },
   overviewPanel: {
@@ -120,7 +126,7 @@ const styles = stylex.create({
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
-    borderRadius: '16px',
+    borderRadius: '12px',
     backgroundColor: cssVar.colorBgContainer,
     backgroundImage: 'none',
     boxShadow: cssVar.boxShadowTertiary,
@@ -133,7 +139,7 @@ const styles = stylex.create({
     height: '100%',
     paddingBlockStart: {
       'default': null,
-      '@container agent-chat-layout (min-width: 1200px)': '44px',
+      '@container agent-chat-layout (min-width: 1200px)': sidebarRow.headerHeight,
     },
   },
   tabs: {
@@ -141,7 +147,7 @@ const styles = stylex.create({
     'scrollbarWidth': 'none',
     'overflowX': 'auto',
     'display': 'flex',
-    'gap': '4px',
+    'gap': '2px',
     'alignItems': 'center',
     'minWidth': '0',
     '::-webkit-scrollbar': { display: 'none' },
@@ -167,6 +173,9 @@ interface AgentWorkingSidebarProps {
 }
 
 const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) => {
+  const interfaceDensity = useInterfaceDensity();
+  const { headerHeight } = useDensityTokens();
+  const headerActionSize = useHeaderActionSize(true);
   const { t } = useTranslation(['chat', 'setting']);
   // Keep the panel frame + tabs on the navigation commit; the pane contents
   // mount in a deferred follow-up pass behind a skeleton.
@@ -838,6 +847,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     scope: composerTarget.writable ? composerTarget.contextKey : undefined,
     terminalAvailable,
     toggleTerminalPanel,
+    topicId: topicId ?? undefined,
   });
 
   // The floating card keeps a 16px margin on each side.
@@ -894,7 +904,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   );
 
   return (
-    <>
+    <PanelDensityContext value={interfaceDensity}>
       {overviewPanel}
       <TopicPullRequestProbes
         deviceId={remoteDeviceId}
@@ -923,9 +933,9 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
             align={'center'}
             className={stylex.props(styles.header).className}
             gap={4}
-            height={44}
+            height={headerHeight}
             justify={'space-between'}
-            paddingInline={4}
+            paddingInline={6}
           >
             <div {...stylex.props(styles.tabsArea)}>
               <div {...stylex.props(styles.tabs)} ref={tabsRef}>
@@ -958,7 +968,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                 <ActionIcon
                   className={stylex.props(styles.add).className}
                   icon={PlusIcon}
-                  size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                  size={headerActionSize}
                   title={t('workingPanel.openMenu.title')}
                 />
               </DropdownMenu>
@@ -966,7 +976,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
             <ActionIcon
               className={stylex.props(styles.close).className}
               icon={PanelRightCloseIcon}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              size={headerActionSize}
               onClick={() => toggleRightPanel(false)}
             />
           </Flexbox>
@@ -1065,6 +1075,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                   browserSessionId={browserSessionId}
                   composerTarget={composerTarget}
                   openedTabs={openedTabs}
+                  topicId={topicId ?? undefined}
                   visible={!!showRightPanel}
                   onCloseTab={closeTab}
                   onBrowserMetadataChange={(tab, metadata) => {
@@ -1117,7 +1128,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
           </Flexbox>
         </Flexbox>
       </RightPanel>
-    </>
+    </PanelDensityContext>
   );
 });
 

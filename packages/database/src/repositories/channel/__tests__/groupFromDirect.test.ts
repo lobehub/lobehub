@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, channelMembers, channels, workspaceMembers } from '../../../schemas';
+import { agents, channelMembers, channels, userContacts, workspaceMembers } from '../../../schemas';
 import { ChannelRepository } from '..';
 import { createChannelFixture } from './testUtils';
 
@@ -16,7 +16,10 @@ beforeEach(async () => {
     { workspaceId: fixture.workspaceId, userId: fixture.memberId },
   ]);
 });
-afterEach(fixture.cleanup);
+afterEach(async () => {
+  await db.delete(userContacts);
+  await fixture.cleanup();
+});
 
 const environment = () => ({
   deviceId: 'device-1',
@@ -97,17 +100,33 @@ describe('inviting from a direct conversation', () => {
   });
 
   it.each([
-    ['people into a personal group', null, { userIds: [fixture.memberId] }],
-    ['an empty invitation', 'workspace', {}],
-  ])('refuses %s without creating anything', async (_, scope, invitees) => {
+    ['someone who is not a personal contact', null, { userIds: [fixture.memberId] }, 'FORBIDDEN'],
+    ['an empty invitation', 'workspace', {}, 'BAD_REQUEST'],
+  ])('refuses %s without creating anything', async (_, scope, invitees, code) => {
     const workspaceId = scope ? fixture.workspaceId : null;
     const { direct, owner } = await createDirect(workspaceId);
     await expect(
       owner.createGroupFromDirect(direct.id, { title: 'Group', ...invitees }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    ).rejects.toMatchObject({ code });
     expect(await db.select().from(channels).where(eq(channels.userId, fixture.ownerId))).toEqual([
       expect.objectContaining({ id: direct.id }),
     ]);
+  });
+
+  it('invites a personal contact into the personal group it starts', async () => {
+    await db.insert(userContacts).values([
+      { contactUserId: fixture.memberId, type: 'user', userId: fixture.ownerId },
+      { contactUserId: fixture.ownerId, type: 'user', userId: fixture.memberId },
+    ]);
+    const { direct, owner } = await createDirect(null);
+    const { channel } = await owner.createGroupFromDirect(direct.id, {
+      title: 'Group',
+      userIds: [fixture.memberId],
+    });
+    expect(channel.workspaceId).toBeNull();
+    expect((await membersOf(channel.id)).map(({ userId }) => userId)).toEqual(
+      expect.arrayContaining([fixture.ownerId, fixture.memberId]),
+    );
   });
 
   it('only starts groups from a direct conversation', async () => {

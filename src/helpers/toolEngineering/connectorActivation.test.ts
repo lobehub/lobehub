@@ -9,14 +9,21 @@ import {
 } from './connectorActivation';
 
 const toolState = {
-  agentConnectors: { 'agent-1': [{ identifier: 'agent-only-mcp' }] },
+  agentConnectors: {
+    'agent-1': [
+      { identifier: 'agent-only-mcp', sourceType: 'custom', isEnabled: true, status: 'connected' },
+    ],
+  },
   agentSkillListMap: { all: [{ identifier: 'library-skill' }] },
   builtinSkills: [{ identifier: 'builtin-skill' }],
   builtinTools: [{ identifier: 'lobe-image-generation' }],
-  composioServers: [{ identifier: 'gmail' }],
-  connectors: [{ identifier: 'custom-mcp' }, { identifier: 'lobe-image-generation' }],
+  composioServers: [{ identifier: 'gmail', status: 'active' }],
+  connectors: [
+    { identifier: 'custom-mcp', sourceType: 'custom', isEnabled: true, status: 'connected' },
+    { identifier: 'lobe-image-generation' },
+  ],
   installedPlugins: [{ identifier: 'community-mcp' }, { identifier: 'library-skill' }],
-  lobehubSkillServers: [{ identifier: 'linear' }],
+  lobehubSkillServers: [{ identifier: 'linear', status: 'connected' }],
 } as unknown as ToolStoreState;
 
 describe('getConnectorIdentifiers', () => {
@@ -32,16 +39,22 @@ describe('getConnectorIdentifiers', () => {
 });
 
 describe('resolveAgentConnectorActivation', () => {
-  it('turns every connector off for an agent that has no entry for it', () => {
-    const { offIds } = resolveAgentConnectorActivation({ plugins: [] }, [], toolState);
+  it('offers a new connection to ordinary agents without injecting it', () => {
+    const { activation, offIds } = resolveAgentConnectorActivation({ plugins: [] }, [], toolState);
+    expect(offIds).toEqual(['agent-only-mcp']);
+    expect(resolveAgentConnectorActivation({ id: 'agent-1' }, [], toolState).offIds).toEqual([]);
+    expect(activation.isAllowed('linear')).toBe(true);
+    expect(activation.isInjected('linear')).toBe(false);
+  });
 
-    expect(offIds.sort()).toEqual([
-      'agent-only-mcp',
-      'community-mcp',
-      'custom-mcp',
-      'gmail',
-      'linear',
-    ]);
+  it('keeps another agent’s scoped connector out even when mentioned', () => {
+    const { activation } = resolveAgentConnectorActivation(
+      { id: 'agent-2' },
+      ['agent-only-mcp'],
+      toolState,
+    );
+    expect(activation.isAllowed('agent-only-mcp')).toBe(false);
+    expect(activation.isInjected('agent-only-mcp')).toBe(false);
   });
 
   it('keeps a connector on for an auto entry and for one pinned before the switch', () => {

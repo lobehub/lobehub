@@ -5,7 +5,7 @@ import type { LobeChatDatabase } from '../../type';
 import { ilikeContains } from '../../utils/like';
 import { notTrashed } from '../../utils/softDelete';
 import { ChannelError } from './error';
-import { requireWorkspaceMember } from './people';
+import { memberInviterMetadata, requireWorkspaceMember } from './people';
 import { audit, lockChannel } from './transaction';
 import type { ChannelAccess } from './types';
 
@@ -102,7 +102,12 @@ export const joinPublicChannel = async (
     const [member] = existing
       ? await tx
           .update(channelMembers)
-          .set({ lastReadSequence: channel.sequence, role: 'member', status: 'active' })
+          .set({
+            lastReadSequence: channel.sequence,
+            metadata: memberInviterMetadata(null),
+            role: 'member',
+            status: 'active',
+          })
           .where(eq(channelMembers.id, existing.id))
           .returning()
       : await tx

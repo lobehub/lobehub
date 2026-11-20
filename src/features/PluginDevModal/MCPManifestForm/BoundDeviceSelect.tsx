@@ -17,22 +17,38 @@ const AUTO = 'auto';
 const STATUS_PREFIX = 'status:';
 
 /**
- * The devices an MCP server of the current scope may be bound to: the user's
- * personal devices for a personal server, the workspace's public devices for a
- * workspace one (a private enrollment only resolves for the member who
- * enrolled it, while every member's runs use the server). The server checks
- * the same rule on save (`assertConnectorDeviceBindingAllowed`).
+ * The devices an MCP server of the current scope may be bound to, grouped as
+ * the picker lists them. They follow who runs the server, the same split as
+ * connector loading:
+ *
+ * - personal server: the user's personal devices;
+ * - shared workspace server: the workspace's public devices (a private
+ *   enrollment only resolves for the member who enrolled it, while every
+ *   member's runs use the server);
+ * - private workspace server (`privateConnector`): also the user's own private
+ *   devices of the workspace, since only their private agents run it. A device
+ *   list only ever carries the caller's own private rows, and only the creator
+ *   sees a private connector, so these are the creator's.
+ *
+ * The server checks the same rule on save (`assertConnectorDeviceBindingAllowed`).
  */
-export const bindableMcpDevices = (
+export const bindableMcpDeviceGroups = (
   devices: DeviceListItem[] | undefined,
   workspaceScoped: boolean,
-): DeviceListItem[] => {
+  privateConnector = false,
+): { private: DeviceListItem[]; shared: DeviceListItem[] } => {
   const groups = groupExecutionTargetDevices(devices);
-  return workspaceScoped ? groups.publicWorkspace : groups.personal;
+  if (!workspaceScoped) return { private: [], shared: groups.personal };
+  return {
+    private: privateConnector ? groups.privateWorkspace : [],
+    shared: groups.publicWorkspace,
+  };
 };
 
 interface BoundDeviceSelectProps {
   onChange?: (value: string | undefined) => void;
+  /** The server is a private workspace connector: its creator's private devices are bindable too. */
+  privateConnector?: boolean;
   /** The bound device id; `undefined` picks a device automatically. */
   value?: string;
 }
@@ -43,11 +59,15 @@ interface BoundDeviceSelectProps {
  * unshared) stays selected as unavailable, so the user sees why its calls fail
  * instead of the binding silently reading as automatic.
  */
-const BoundDeviceSelect = memo<BoundDeviceSelectProps>(({ onChange, value }) => {
+const BoundDeviceSelect = memo<BoundDeviceSelectProps>(({ onChange, privateConnector, value }) => {
   const { t } = useTranslation(['plugin', 'chat']);
   const workspaceScoped = !!useActiveWorkspaceId();
   const { data, error, isConfirmed, isLoading, mutate } = useDeviceList();
-  const devices = useMemo(() => bindableMcpDevices(data, workspaceScoped), [data, workspaceScoped]);
+  const groups = useMemo(
+    () => bindableMcpDeviceGroups(data, workspaceScoped, privateConnector),
+    [data, privateConnector, workspaceScoped],
+  );
+  const devices = useMemo(() => [...groups.private, ...groups.shared], [groups]);
   const deviceName = (device: DeviceListItem) =>
     device.friendlyName || device.hostname || device.deviceId;
 
@@ -85,6 +105,12 @@ const BoundDeviceSelect = memo<BoundDeviceSelectProps>(({ onChange, value }) => 
   const isMissing = !!value && isConfirmed && !devices.some((d) => d.deviceId === value);
 
   const options = useMemo<SelectOptions<string>>(() => {
+    const toOption = (device: DeviceListItem) => ({
+      disabled: !isConfirmed,
+      label: renderDevice(device),
+      title: deviceName(device),
+      value: device.deviceId,
+    });
     // Until the server confirms the list, the stored copy may hold devices
     // since removed or unshared: show its rows, but only pick from the
     // confirmed list.
@@ -97,13 +123,8 @@ const BoundDeviceSelect = memo<BoundDeviceSelectProps>(({ onChange, value }) => 
               value: `${STATUS_PREFIX}loading`,
             },
           ]
-        : devices.length > 0
-          ? devices.map((device) => ({
-              disabled: !isConfirmed,
-              label: renderDevice(device),
-              title: deviceName(device),
-              value: device.deviceId,
-            }))
+        : groups.shared.length > 0
+          ? groups.shared.map(toOption)
           : [
               {
                 disabled: true,
@@ -126,6 +147,16 @@ const BoundDeviceSelect = memo<BoundDeviceSelectProps>(({ onChange, value }) => 
             },
           ]
         : []),
+      // Only the caller's own private devices reach this list, so the group
+      // is simply absent for anyone without one
+      ...(error || isLoading || groups.private.length === 0
+        ? []
+        : [
+            {
+              label: t('chat:heteroAgent.executionTarget.personalGroup'),
+              options: groups.private.map(toOption),
+            },
+          ]),
       ...(error
         ? []
         : [
@@ -140,6 +171,7 @@ const BoundDeviceSelect = memo<BoundDeviceSelectProps>(({ onChange, value }) => 
   }, [
     devices,
     error,
+    groups,
     isConfirmed,
     isLoading,
     isMissing,

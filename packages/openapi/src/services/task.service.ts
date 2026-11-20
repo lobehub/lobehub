@@ -16,6 +16,7 @@ import { normalizeTaskConfig, resolveTaskOrThrow } from '@/server/services/task/
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
 import { BaseService } from '../common/base.service';
+import { resolvePagination } from '../helpers/pagination';
 import type { ServiceResult } from '../types';
 import type { DeletedResource } from '../types/common.type';
 import type {
@@ -26,6 +27,9 @@ import type {
   UpdateTaskRequest,
   UpdateTaskStatusRequest,
 } from '../types/task.type';
+
+/** The model's own default page size, kept so omitting `limit` still returns 50 rows. */
+export const TASK_LIST_DEFAULT_LIMIT = 50;
 
 const DEFAULT_RUN_LIMIT = 20;
 
@@ -73,11 +77,12 @@ export class TaskRestService extends BaseService {
     this.taskTopicModel = new TaskTopicModel(db, userId ?? '', workspaceId);
   }
 
-  async listTasks(query: TaskListQuery): ServiceResult<unknown> {
+  async listTasks(query: TaskListQuery) {
+    const { limit, offset } = resolvePagination(query, TASK_LIST_DEFAULT_LIMIT);
     return this.taskModel.list({
       assigneeAgentId: query.assigneeAgentId,
-      limit: query.limit,
-      offset: query.offset,
+      limit,
+      offset,
       projectId: query.projectId,
       statuses: query.statuses,
     });

@@ -6,6 +6,7 @@ import type { DeviceUnavailableErrorData } from '../device';
 import { workingDirConfigSchema } from '../device';
 import type { EvalToolForwardingConfig } from '../eval/agentEval';
 import type { EvalMemoryReference } from '../eval/evalMemory';
+import { HETERO_PERMISSION_MODES } from '../heteroPermissionMode';
 import type { ComposerUserMessage, TaskDetail, UIChatMessage } from '../message';
 import type { ChatTopic } from '../topic';
 
@@ -24,6 +25,11 @@ export * from './modelFacts';
  * and the call still answers 200.
  */
 export const initialTopicMetadataSchema = z.object({
+  /**
+   * Claude Code permission mode the composer chip showed (Better Coding
+   * Experience); the topic's first dispatched run starts in it.
+   */
+  heteroPermissionMode: z.enum(HETERO_PERMISSION_MODES).optional(),
   repos: z.array(z.string()).optional(),
   /**
    * Cloud-sandbox placement the composer chose before any topic existed — an
@@ -371,6 +377,13 @@ export interface ExecAgentParams {
   localDeviceId?: string;
   /** Override the agent's default model */
   model?: string;
+  /**
+   * The conversation this NEW topic is opened from — its parent topic
+   * (`metadata.openedBy`). Resolved through the caller's own topic scope: an
+   * unknown or foreign topic records no link. Ignored when the run continues
+   * an existing topic.
+   */
+  openedByTopicId?: string;
   /**
    * Parent operation ID when this run is a sub-agent invocation. Forwarded
    * to `agent_operations.parent_operation_id` so analytics can join the

@@ -17,9 +17,9 @@ const normalizeIdentifierPart = (part: string) =>
     .replaceAll(/[^\w-]/g, '-')
     .replaceAll(/-+/g, '-')
     .replaceAll(/^-|-$/g, '');
-
 const mockGitHubInstance = {
-  downloadRepoZip: vi.fn(),
+  downloadCommitZip: vi.fn(),
+  resolveCommit: vi.fn().mockResolvedValue('a'.repeat(40)),
   generateIdentifier: vi
     .fn()
     .mockImplementation((info: { owner: string; path?: string; repo: string }) => {
@@ -36,6 +36,8 @@ vi.mock('@/server/modules/GitHub', () => ({
   GitHub: vi.fn(function () {
     return mockGitHubInstance;
   }),
+  GitHubError: class GitHubError extends Error {},
+  GitHubRateLimitError: class GitHubRateLimitError extends Error {},
   GitHubNotFoundError: class GitHubNotFoundError extends Error {
     constructor(message: string) {
       super(message);
@@ -369,7 +371,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-demo',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# GitHub Skill content',
         manifest: { name: 'GitHub Skill', description: 'A GitHub skill' },
@@ -404,7 +406,7 @@ describe('SkillImporter', () => {
         path: 'skills/skill-creator',
         repo: 'openclaw',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Skill Creator content',
         manifest: { name: 'skill-creator', description: 'Create skills' },
@@ -433,7 +435,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-update',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
 
       // First import
       mockParserInstance.parseZipPackage.mockResolvedValueOnce({
@@ -502,19 +504,13 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'non-existent',
       });
-      mockGitHubInstance.downloadRepoZip.mockImplementation(() => {
-        throw new GitHubNotFoundError('Repository not found');
-      });
+      mockGitHubInstance.resolveCommit.mockRejectedValueOnce(
+        new GitHubNotFoundError('GitHub repository or ref not found'),
+      );
 
       await expect(
         importer.importFromGitHub({ gitUrl: 'https://github.com/lobehub/non-existent' }),
-      ).rejects.toThrow(SkillImportError);
-
-      try {
-        await importer.importFromGitHub({ gitUrl: 'https://github.com/lobehub/non-existent' });
-      } catch (e) {
-        expect((e as SkillImportError).code).toBe('NOT_FOUND');
-      }
+      ).rejects.toMatchObject({ code: 'NOT_FOUND', name: 'SkillImportError' });
     });
 
     it('should use custom branch when provided', async () => {
@@ -523,7 +519,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-branch',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Branch Skill',
         manifest: { name: 'Branch Skill', description: 'From develop branch' },
@@ -550,7 +546,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-global-only',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Skill Content',
         manifest: { name: 'Global Only Skill', description: 'Test global files' },
@@ -595,7 +591,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-path-test',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Content',
         manifest: { name: 'Path Test Skill', description: 'Test path' },
@@ -621,7 +617,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'repack-test',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('large-repo-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('large-repo-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Skill',
         manifest: { name: 'Test', description: 'Test' },
@@ -655,7 +651,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'large-repo',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(largeRepoZip);
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(largeRepoZip);
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Skill',
         manifest: { name: 'Test', description: 'Test' },
@@ -684,7 +680,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-dedup',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Skill Content',
         manifest: { name: 'Dedup Skill', description: 'Test deduplication' },
@@ -743,7 +739,7 @@ describe('SkillImporter', () => {
         owner: 'lobehub',
         repo: 'skill-update-content',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
 
       // First import
       mockParserInstance.parseZipPackage.mockResolvedValueOnce({

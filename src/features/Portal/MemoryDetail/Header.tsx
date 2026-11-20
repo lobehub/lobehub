@@ -1,6 +1,5 @@
 'use client';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
 import { ActionIcon } from '@lobehub/ui';
 import { Maximize2Icon } from 'lucide-react';
 import { memo } from 'react';
@@ -10,11 +9,13 @@ import PortalChromeHeader from '@/features/Portal/components/Header';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 
 import { getMemoryDetailPath } from './memoryDetailRoutes';
 import Title from './Title';
 
 const Header = memo<{ onClose?: () => void }>(({ onClose }) => {
+  const headerActionSize = useHeaderActionSize(true);
   const { t } = useTranslation('chat');
   const view = useChatStore(chatPortalSelectors.memoryDetailView);
   const navigate = useWorkspaceAwareNavigate();
@@ -27,7 +28,7 @@ const Header = memo<{ onClose?: () => void }>(({ onClose }) => {
         view ? (
           <ActionIcon
             icon={Maximize2Icon}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={headerActionSize}
             title={t('agentSignal.receipts.memory.openInMemory')}
             onClick={() => {
               navigate(getMemoryDetailPath(view.layer, view.id));

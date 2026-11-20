@@ -81,6 +81,8 @@ export class ClientContextBuilder implements ContextBuilder {
         agentId: effectiveAgentId || undefined,
         additionalContexts: input.payload.additionalContexts,
         attachmentPreviewFileIds: input.payload.attachmentPreviewFileIds,
+        discoveryManifests:
+          input.state.operationToolSet?.manifestMap ?? input.state.toolManifestMap,
         groupId,
         messages,
         model: input.model,

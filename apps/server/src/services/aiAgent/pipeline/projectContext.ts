@@ -58,6 +58,7 @@ export const buildRunProjectContextPrompt = async (
         .filter(({ binding }) => binding.enabled)
         .map(({ agent, binding }) => ({
           agentId: agent.id,
+          name: agent.name,
           responsibility: binding.responsibility,
           role: binding.role,
           title: agent.title,

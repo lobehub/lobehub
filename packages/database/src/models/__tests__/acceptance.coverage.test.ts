@@ -1,8 +1,8 @@
 // @vitest-environment node
-import { inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { deleteTestUsers } from '../../core/testCleanup';
 import { ProjectRepository } from '../../repositories/project';
 import { topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
@@ -20,7 +20,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   // Acceptances, projects and topics all cascade with their owner.
-  await serverDB.delete(users).where(inArray(users.id, [userId]));
+  await deleteTestUsers(serverDB, [userId]);
 });
 
 describe('AcceptanceModel coverage', () => {

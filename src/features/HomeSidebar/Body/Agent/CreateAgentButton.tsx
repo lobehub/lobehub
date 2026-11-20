@@ -17,6 +17,7 @@ import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useNavItemMetrics } from '@/features/NavPanel/density';
 import { usePermission } from '@/hooks/usePermission';
 import { SessionDefaultGroup } from '@/types/session';
 
@@ -54,6 +55,7 @@ interface CreateAgentButtonProps {
 }
 
 const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, visibility }) => {
+  const metrics = useNavItemMetrics();
   const { t } = useTranslation('chat');
   const { allowed: canCreate, reason } = usePermission('create_content');
   const {
@@ -117,14 +119,18 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
       align={'center'}
       className={cx(styles.container, className)}
       clickable={canCreate}
-      gap={8}
-      height={36}
-      paddingInline={4}
-      style={canCreate ? { height: 36 } : { cursor: 'not-allowed', height: 36, opacity: 0.5 }}
+      gap={metrics.gap}
+      height={metrics.rowHeight}
+      paddingInline={metrics.paddingInline}
       variant={'borderless'}
+      style={
+        canCreate
+          ? { height: metrics.rowHeight }
+          : { cursor: 'not-allowed', height: metrics.rowHeight, opacity: 0.5 }
+      }
       onClick={handleClick}
     >
-      <Center flex={'none'} height={28} width={28}>
+      <Center flex={'none'} height={metrics.iconBox} width={metrics.iconBox}>
         <Icon icon={PlusIcon} size={'small'} />
       </Center>
       <Text style={{ flex: 1 }} type={'secondary'}>

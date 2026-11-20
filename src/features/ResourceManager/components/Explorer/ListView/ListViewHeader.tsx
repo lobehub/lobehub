@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useGlobalStore } from '@/store/global';
+import { densityVars } from '@/styles/densityVars';
 import type { FileListItem } from '@/types/files';
 import { SortType } from '@/types/files';
 
@@ -128,7 +129,7 @@ const ListViewHeader = ({
           minWidth: getListViewMinWidth(showUploader),
         }}
       >
-        <Center height={40} style={{ paddingInline: 4 }}>
+        <Center height={densityVars.toolbarHeight} style={{ paddingInline: 4 }}>
           <Checkbox
             checked={allSelected}
             disabled={!hasSelectableItems}

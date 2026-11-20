@@ -2,11 +2,13 @@ import { createStaticStyles, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Puzzle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
     justify-content: center;
 

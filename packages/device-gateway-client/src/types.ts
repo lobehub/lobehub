@@ -1,4 +1,4 @@
-import type { DeviceMetricSample } from '@lobechat/types';
+import type { DeviceMetricSample, HeteroPermissionMode } from '@lobechat/types';
 
 // ─── Device Info ───
 
@@ -361,13 +361,18 @@ export interface AgentRunRequestMessage {
   ingestWorkspaceId?: string;
   jwt: string;
   operationId: string;
-  prompt: string;
   /**
    * Full system context used only when native resume fails and the device CLI
    * retries with a fresh session. Optional for compatibility with older
    * servers and devices. The gateway relay must preserve this optional field;
    * older deployments safely degrade to a fresh retry without recovery history.
    */
+  /**
+   * Claude Code permission mode (Better Coding Experience lab), forwarded into
+   * the `lh hetero exec` input envelope. Absent: every action is allowed.
+   */
+  permissionMode?: HeteroPermissionMode;
+  prompt: string;
   resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
   /**

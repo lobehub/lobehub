@@ -213,7 +213,7 @@ const Scores = memo<ScoresProps>(
               query: {
                 activeTab: McpNavKey.Score,
               },
-              url: urlJoin('/community/mcp', identifier),
+              url: urlJoin('/marketplace/mcp', identifier),
             })}
           >
             {isValidated ? scoreTag : unvalidatedTag}
@@ -225,7 +225,7 @@ const Scores = memo<ScoresProps>(
               query: {
                 activeTab: McpNavKey.Schema,
               },
-              url: urlJoin('/community/mcp', identifier),
+              url: urlJoin('/marketplace/mcp', identifier),
             })}
           >
             <Flexbox horizontal align={'center'} className={styles.extraTag} gap={16}>

@@ -19,6 +19,8 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { channelActions, channelSelectors, useChannelStore } from '@/store/channel';
+import { useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   list: {
@@ -29,11 +31,15 @@ const styles = stylex.create({
   row: {
     display: 'flex',
     alignItems: 'center',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
     paddingBlock: 8,
     paddingInline: 8,
     borderRadius: cssVar.borderRadius,
     backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+  },
+  rowCompact: {
+    gap: 8,
+    paddingBlock: 4,
   },
   note: { paddingBlock: 24, textAlign: 'center' },
 });
@@ -46,6 +52,7 @@ interface BrowseChannelsProps {
 function BrowseChannels({ onJoined }: BrowseChannelsProps) {
   const { t } = useTranslation('channel');
   const { close } = useModalContext();
+  const compact = useInterfaceDensity() === 'compact';
   const [search, setSearch] = useState('');
   const [joining, setJoining] = useState<string>();
   const query = useDebounce(search.trim(), { wait: 200 });
@@ -91,10 +98,10 @@ function BrowseChannels({ onJoined }: BrowseChannelsProps) {
           onRetry={() => void sync.revalidate()}
         >
           {data?.map((channel) => (
-            <div key={channel.id} {...stylex.props(styles.row)}>
+            <div key={channel.id} {...stylex.props(styles.row, compact && styles.rowCompact)}>
               <Icon icon={Hash} size={16} />
               <Flexbox flex={1} style={{ minWidth: 0 }}>
-                <Text ellipsis weight={500}>
+                <Text ellipsis fontSize={compact ? 13 : undefined} weight={500}>
                   {channel.title}
                 </Text>
                 <Text fontSize={12} type="secondary">

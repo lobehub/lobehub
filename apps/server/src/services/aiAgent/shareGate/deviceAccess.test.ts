@@ -66,6 +66,26 @@ describe('resolveShareVisitorDeviceAccess', () => {
     expect(await resolveShareVisitorDeviceAccess(db, share(config), 'visitor-1')).toBe(false);
   });
 
+  it('grants every address-book person under `contacts`, without a list', async () => {
+    const config = { deviceAccess: 'contacts' } as const;
+
+    filterAddressBookPeople.mockResolvedValue(['visitor-1']);
+    expect(await resolveShareVisitorDeviceAccess(db, share(config, 'ws-1'), 'visitor-1')).toBe(
+      true,
+    );
+    expect(ContactModel).toHaveBeenCalledWith(db, 'owner', 'ws-1');
+    expect(filterAddressBookPeople).toHaveBeenCalledWith(['visitor-1']);
+
+    // A stranger, or someone removed from contacts, gets nothing.
+    filterAddressBookPeople.mockResolvedValue([]);
+    expect(await resolveShareVisitorDeviceAccess(db, share(config), 'visitor-1')).toBe(false);
+
+    // Contacts off for the owner grants nothing either.
+    filterAddressBookPeople.mockResolvedValue(['visitor-1']);
+    isChannelEnabled.mockResolvedValue(false);
+    expect(await resolveShareVisitorDeviceAccess(db, share(config), 'visitor-1')).toBe(false);
+  });
+
   it('denies a listed contact while contacts are off for the owner', async () => {
     const config = { deviceAccess: 'allowlist', deviceAllowUserIds: ['visitor-1'] } as const;
     filterAddressBookPeople.mockResolvedValue(['visitor-1']);

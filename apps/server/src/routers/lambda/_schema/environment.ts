@@ -30,6 +30,8 @@ const environmentSourceSchema = z.object({
   /** Where the checkout lands, relative to the instance's own directory. */
   path: relativePathSchema.optional(),
   ref: z.string().trim().min(1).max(255).optional(),
+  /** Run inside this repository's folder before the environment's own setup. */
+  setupCommand: z.string().max(8000).optional(),
   url: z
     .string()
     .url()
@@ -75,11 +77,31 @@ export const configurationSchema = z.object({
   // it would leave those environments impossible to change.
   kind: z.enum(['code', 'files']).optional(),
   maintenanceCommand: z.string().max(8000).optional(),
-  // One repository per environment. The wire format stays a list because the
-  // execution plane checks out an array of sources, but an environment that
-  // builds from two repositories has no single working directory to hand a
-  // conversation — and the picker that fills this offers exactly one.
-  sources: z.array(environmentSourceSchema).max(1).optional(),
+  // Any number of repositories, or none. The working directory a conversation
+  // gets is still one folder: the first repository is checked out at its top
+  // and each one after it into a folder of its own (`path`, which the form
+  // fills with the repository's name), the layout Codex environments use.
+  sources: z
+    .array(environmentSourceSchema)
+    .max(10)
+    // Two checkouts into one folder would merge their files and leave one
+    // repository's `.git` over the other's. Folders left blank are given
+    // distinct ones by `layoutRepositorySources`; one set by hand is kept as
+    // it is, so it is checked here.
+    .refine(
+      (sources) => {
+        const folders = sources.flatMap((source) => {
+          const folder = source.path
+            ?.trim()
+            .replace(/^\.?\/+/, '')
+            .replace(/\/+$/, '');
+          return folder && folder !== '.' ? [folder] : [];
+        });
+        return new Set(folders).size === folders.length;
+      },
+      { message: 'Two repositories cannot be checked out into the same folder' },
+    )
+    .optional(),
 });
 
 /**

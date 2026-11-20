@@ -151,15 +151,15 @@ const SearchResults = memo<SearchResultsProps>(
           break;
         }
         case 'mcp': {
-          navigate(`/community/mcp/${result.identifier}`);
+          navigate(`/marketplace/mcp/${result.identifier}`);
           break;
         }
         case 'plugin': {
-          navigate(`/community/mcp/${result.identifier}`);
+          navigate(`/marketplace/mcp/${result.identifier}`);
           break;
         }
         case 'communityAgent': {
-          navigate(`/community/agent/${result.identifier}`);
+          navigate(`/marketplace/agent/${result.identifier}`);
           break;
         }
         case 'memory': {

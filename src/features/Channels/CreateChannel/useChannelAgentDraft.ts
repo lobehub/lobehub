@@ -14,6 +14,7 @@ import type {
 import {
   changeChannelAgentDevice,
   getChannelAgentIssue,
+  isRemoteChannelAgent,
   reconcileChannelAgentDraft,
 } from './agentEnvironment';
 
@@ -80,6 +81,7 @@ export const useChannelAgentDraft = (
     change,
     changeDevice,
     draft: resolved,
+    remote: isRemoteChannelAgent(environment),
     retry: sync.mutate,
     sync,
   };

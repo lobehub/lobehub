@@ -19,6 +19,7 @@ import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import { withErrorBoundary } from '@/components/ErrorBoundary';
+import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
 import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
 import {
   type AgentDocumentListMutator,
@@ -45,9 +46,12 @@ import {
   useAgentDocumentStore,
 } from '@/store/agentDocument';
 import { useChatStore } from '@/store/chat';
+import { useDensityTokens } from '@/styles/density';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 import { standardizeIdentifier } from '@/utils/identifier';
 
 import DeviceLevelSkills from './DeviceLevelSkills';
+import { webDocumentRowMarker } from './markers.stylex';
 import ProjectLevelSkills from './ProjectLevelSkills';
 import { useCanManageUserSkills } from './useCanManageUserSkills';
 import UserLevelSkills, { useUserSkills } from './UserLevelSkills';
@@ -59,15 +63,67 @@ export type ResourceFilter = 'skills' | 'documents' | 'web';
 type DocumentOpenMode = 'portal' | 'route';
 
 const styles = stylex.create({
-  container: {
+  row: {
     cursor: 'pointer',
-    padding: '12px',
-    borderRadius: '8px',
-    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
+    position: 'relative',
+    display: 'flex',
+    gap: sidebarRow.gap,
+    alignItems: 'flex-start',
+    paddingBlock: '5px',
+    paddingInline: sidebarRow.paddingInline,
+    borderRadius: sidebarRow.radius,
+    color: cssVar.colorText,
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': 'none', ':hover': 'none' },
   },
-  description: { fontSize: '12px', lineHeight: 1.5, color: cssVar.colorTextSecondary },
-  meta: { fontSize: '12px', color: cssVar.colorTextTertiary },
+  rowActive: {
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
+  },
+  rowIcon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: sidebarRow.iconBox,
+    height: sidebarRow.textLineHeight,
+    color: cssVar.colorTextTertiary,
+  },
+  rowText: { display: 'flex', flex: '1', flexDirection: 'column', minWidth: 0 },
+  rowTitle: {
+    overflow: 'hidden',
+    paddingInlineEnd: {
+      default: 0,
+      [stylex.when.ancestor(':hover', webDocumentRowMarker)]:
+        `calc(24px + ${sidebarRow.paddingInline})`,
+      [stylex.when.ancestor(':focus-within', webDocumentRowMarker)]:
+        `calc(24px + ${sidebarRow.paddingInline})`,
+    },
+    fontSize: sidebarRow.textFontSize,
+    lineHeight: sidebarRow.textLineHeight,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  rowMeta: {
+    fontSize: sidebarRow.metaFontSize,
+    lineHeight: '18px',
+    color: cssVar.colorTextTertiary,
+  },
+  rowActions: {
+    position: 'absolute',
+    insetBlockStart: '3px',
+    insetInlineEnd: sidebarRow.paddingInline,
+    pointerEvents: {
+      default: 'none',
+      [stylex.when.ancestor(':hover', webDocumentRowMarker)]: 'auto',
+      [stylex.when.ancestor(':focus-within', webDocumentRowMarker)]: 'auto',
+    },
+    opacity: {
+      default: 0,
+      [stylex.when.ancestor(':hover', webDocumentRowMarker)]: 1,
+      [stylex.when.ancestor(':focus-within', webDocumentRowMarker)]: 1,
+    },
+    transition: 'opacity 0.12s',
+  },
   pillActive: {
     fontWeight: 500,
     color: cssVar.colorText,
@@ -78,7 +134,7 @@ const styles = stylex.create({
     cursor: 'pointer',
     userSelect: 'none',
     paddingBlock: '4px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: '999px',
     fontSize: '12px',
     lineHeight: 1.4,
@@ -88,7 +144,6 @@ const styles = stylex.create({
     transition: `background ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut},
       color ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut}`,
   },
-  title: { fontWeight: 500 },
 });
 
 const FILTER_OPTIONS = [
@@ -125,6 +180,7 @@ const DocumentItem = memo<DocumentItemProps>(
     onOpenDocument,
   }) => {
     const { t } = useTranslation(['chat', 'common']);
+    const { iconSize } = useDensityTokens();
 
     const [deleting, setDeleting] = useState(false);
 
@@ -179,40 +235,38 @@ const DocumentItem = memo<DocumentItemProps>(
       });
     };
 
+    const meta = [description, updatedAtLabel].filter(Boolean).join(' · ');
+
     return (
-      <Flexbox
-        horizontal
-        align={'flex-start'}
-        className={stylex.props(styles.container).className}
-        gap={8}
+      <div
+        {...stylex.props(styles.row, isActive && styles.rowActive, webDocumentRowMarker)}
         onClick={handleOpen}
       >
-        <IconComponent size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-        <Flexbox gap={4} style={{ flex: 1, minWidth: 0 }}>
-          <Flexbox horizontal align={'center'} distribution={'space-between'}>
-            <Text ellipsis className={stylex.props(styles.title).className}>
-              {title}
-            </Text>
-            {!hideDelete && (
-              <ActionIcon
-                icon={Trash2Icon}
-                loading={deleting}
-                size={'small'}
-                title={t('delete', { ns: 'common' })}
-                onClick={handleDelete}
-              />
-            )}
-          </Flexbox>
-          {description && (
-            <Text className={stylex.props(styles.description).className} ellipsis={{ rows: 2 }}>
-              {description}
+        <span {...stylex.props(styles.rowIcon)}>
+          <IconComponent size={iconSize} />
+        </span>
+        <span {...stylex.props(styles.rowText)}>
+          <span {...stylex.props(styles.rowTitle)} title={title}>
+            {title}
+          </span>
+          {meta && (
+            <Text className={stylex.props(styles.rowMeta).className} ellipsis={{ rows: 2 }}>
+              {meta}
             </Text>
           )}
-          {updatedAtLabel && (
-            <Text className={stylex.props(styles.meta).className}>{updatedAtLabel}</Text>
-          )}
-        </Flexbox>
-      </Flexbox>
+        </span>
+        {!hideDelete && (
+          <span {...stylex.props(styles.rowActions)}>
+            <ActionIcon
+              icon={Trash2Icon}
+              loading={deleting}
+              size={'small'}
+              title={t('delete', { ns: 'common' })}
+              onClick={handleDelete}
+            />
+          </span>
+        )}
+      </div>
     );
   },
 );
@@ -261,6 +315,8 @@ const buildSkillBundleViews = (data: AgentDocumentListItem[]): SkillBundleView[]
 
 interface AgentDocumentsGroupProps {
   activeFilter?: ResourceFilter;
+  /** The WorkingSidebar row system for the document tree and the loading / error states. */
+  compact?: boolean;
   /** Bound remote device id (device mode); skills are then scanned over RPC. */
   deviceId?: string;
   /**
@@ -280,6 +336,7 @@ interface AgentDocumentsGroupProps {
 const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
   ({
     activeFilter: controlledFilter,
+    compact,
     deviceId,
     enabled = true,
     openMode,
@@ -455,6 +512,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     if (!agentId) return null;
 
     if (isLoading) {
+      if (compact) return <SkeletonList compact rows={6} />;
       return (
         <Center flex={1} paddingBlock={24}>
           <Spin size="large" />
@@ -463,6 +521,17 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     }
 
     if (error) {
+      if (compact)
+        return (
+          <AsyncError
+            align={'start'}
+            error={error}
+            variant={'inline'}
+            onRetry={() => {
+              void mutate();
+            }}
+          />
+        );
       return (
         <Center flex={1} paddingBlock={24}>
           <AsyncError
@@ -483,6 +552,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
 
     const renderAgentSkillsList = () => (
       <SkillsList
+        compact
         items={matchedSkillItems}
         onOpenFile={openAgentSkillFile}
         onOpenSkill={openAgentSkill}
@@ -509,25 +579,17 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
 
       if (activeCount === 0) {
         if (showProjectSkills && projectSkillsError) {
-          return (
-            <Center flex={1} paddingBlock={24}>
-              <AsyncError error={projectSkillsError} variant={'block'} />
-            </Center>
-          );
+          return <AsyncError align={'start'} error={projectSkillsError} variant={'inline'} />;
         }
 
         // Project skills refetch on a working-directory switch (new SWR key →
         // empty items while in flight). Show the loader instead of flashing the
         // empty placeholder when there's nothing else to render yet.
         if (showProjectSkills && isProjectSkillsLoading) {
-          return (
-            <Center flex={1} paddingBlock={24}>
-              <Spin size="large" />
-            </Center>
-          );
+          return <SkeletonList compact rows={6} />;
         }
         return (
-          <Center flex={1} gap={8} paddingBlock={24}>
+          <Center flex={1} paddingBlock={24}>
             <Empty description={t('workingPanel.skills.empty')} icon={SkillsIcon} />
           </Center>
         );
@@ -544,10 +606,10 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
       const hasMatch = hasMatchedAgent || hasMatchedProject || hasMatchedDevice || hasMatchedUser;
 
       return (
-        <Flexbox gap={16} style={{ paddingBottom: 16 }}>
+        <Flexbox gap={12}>
           <SkillsSearchBar onSearch={setSkillSearchQuery} />
           {!hasMatch && !(hasUser && canManageSkills) && (
-            <Center flex={1} gap={8} paddingBlock={24}>
+            <Center flex={1} paddingBlock={24}>
               <Empty description={t('workingPanel.skills.noSearchResults')} icon={SkillsIcon} />
             </Center>
           )}
@@ -556,6 +618,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
               renderAgentSkillsList()
             ) : (
               <SkillSection
+                compact
                 sectionHeader={{
                   count: matchedSkillItems.length,
                   title: t('workingPanel.skills.section.agent'),
@@ -602,6 +665,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
         <DocumentExplorerTree
           agentId={agentId}
           data={documentsData}
+          density={compact ? 'compact' : 'default'}
           mutate={mutate}
           style={{ height: '100%' }}
           onDocumentDragStart={handleDocumentDragStart}
@@ -613,13 +677,13 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     const renderWeb = () => {
       if (webData.length === 0) {
         return (
-          <Center flex={1} gap={8} paddingBlock={24}>
+          <Center flex={1} paddingBlock={24}>
             <Empty description={t('workingPanel.resources.empty')} icon={GlobeIcon} />
           </Center>
         );
       }
       return (
-        <Flexbox gap={8}>
+        <Flexbox gap={1}>
           {webData.map((doc) => (
             <DocumentItem
               activeDocumentIdentifier={activeDocumentIdentifier}

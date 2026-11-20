@@ -45,6 +45,8 @@ interface DevModalProps {
   ) => Promise<void> | void;
   onValueChange?: (value: Partial<LobeToolCustomPlugin>) => void;
   open?: boolean;
+  /** The edited connector is private to its creator (see MCPManifestForm). */
+  privateConnector?: boolean;
   value?: LobeToolCustomPlugin;
 }
 
@@ -60,6 +62,7 @@ const DevModal = memo<DevModalProps>(
     enableDeviceBinding,
     enableOAuth,
     getOAuthPlan,
+    privateConnector,
   }) => {
     const isEditMode = mode === 'edit';
     const { t } = useTranslation('plugin');
@@ -238,6 +241,7 @@ const DevModal = memo<DevModalProps>(
               form={form}
               isEditMode={isEditMode}
               oauthNotice={oauthPlan.notice}
+              privateConnector={privateConnector}
               onAuthorizeOAuth={oauthPlan.authorize ? runOAuthFlow : undefined}
             />
           </Flexbox>

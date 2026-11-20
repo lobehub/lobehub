@@ -119,7 +119,7 @@ const MembersCard = memo<{ canManage: boolean }>(({ canManage }) => {
           const name =
             member.displayName || member.userName || member.namespace || `#${member.accountId}`;
           // Prefer `userName` — it's Market's URL-safe public handle
-          // (`/community/user/:slug`) and lines up with what shows on the
+          // (`/marketplace/user/:slug`) and lines up with what shows on the
           // user's own profile page. Fall back to `namespace` only when
           // there's no userName AND the namespace is a user-chosen handle;
           // the auto-assigned `user_<mixedCaseId>` placeholder is filtered
@@ -129,11 +129,11 @@ const MembersCard = memo<{ canManage: boolean }>(({ canManage }) => {
             (member.namespace && !isDefaultMarketNamespace(member.namespace)
               ? member.namespace
               : null);
-          // The `/community/user/:slug` page accepts either handle as a slug,
+          // The `/marketplace/user/:slug` page accepts either handle as a slug,
           // so we keep the row clickable even when we hide the literal handle
           // — the display name still links out to the user's profile.
           const profileSlug = publicHandle || member.namespace;
-          const profileUrl = profileSlug ? `/community/user/${profileSlug}` : undefined;
+          const profileUrl = profileSlug ? `/marketplace/user/${profileSlug}` : undefined;
 
           const nameNode = (
             <Text strong style={{ fontSize: 14 }}>
@@ -282,7 +282,7 @@ const CommunityWorkspaceSettings = memo(() => {
       return;
     }
 
-    navigate('/community/workspace');
+    navigate('/marketplace/workspace');
   }, [navigate]);
 
   const renderHeader = () => (

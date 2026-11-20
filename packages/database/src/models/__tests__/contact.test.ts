@@ -6,6 +6,9 @@ import { getTestDB } from '../../core/getTestDB';
 import {
   agents,
   agentShares,
+  channelMembers,
+  channelMessages,
+  channels,
   userContactRequests,
   userContacts,
   users,
@@ -615,5 +618,118 @@ describe('removing an external contact who is not one', () => {
     await expect(aliceInTeam.removeExternal('contact-test-missing')).rejects.toThrow(
       'External contact not found',
     );
+  });
+});
+
+describe('contact cards', () => {
+  const befriend = async (a: ContactModel, b: ContactModel, addressee: string) =>
+    b.acceptRequest((await a.sendRequest(addressee)).requestId);
+
+  it('shares oneself, a contact or a fellow member, with a server snapshot', async () => {
+    await befriend(aliceModel, bobModel, bob);
+    expect(await aliceModel.resolveCard({ type: 'user', userId: bob })).toEqual({
+      avatar: null,
+      name: 'Bob',
+      type: 'user',
+      userId: bob,
+      username: 'Bob',
+    });
+    expect(await aliceModel.resolveCard({ type: 'user', userId: alice })).toMatchObject({
+      name: 'Alice',
+    });
+    expect(await aliceInTeam.resolveCard({ type: 'user', userId: carol })).toMatchObject({
+      name: 'carol',
+    });
+  });
+
+  it('refuses a stranger', async () => {
+    await expect(aliceModel.resolveCard({ type: 'user', userId: carol })).rejects.toThrow(
+      'Share only your contacts',
+    );
+  });
+
+  it("shares an Agent whose link share is on, anyone's", async () => {
+    expect(await aliceModel.resolveCard({ agentId: bobAgent, type: 'agent' })).toEqual({
+      agentId: bobAgent,
+      avatar: null,
+      backgroundColor: null,
+      name: 'Bob Helper',
+      ownerName: 'Bob',
+      shareId: bobShareId,
+      type: 'agent',
+    });
+  });
+
+  it('asks the owner to turn sharing on instead of opening it', async () => {
+    await serverDB
+      .update(agentShares)
+      .set({ visibility: 'private' })
+      .where(eq(agentShares.agentId, aliceAgent));
+    await expect(aliceModel.resolveCard({ agentId: aliceAgent, type: 'agent' })).rejects.toThrow(
+      'Turn on sharing first',
+    );
+    await expect(bobModel.resolveCard({ agentId: aliceAgent, type: 'agent' })).rejects.toThrow(
+      'Agent not found',
+    );
+  });
+});
+
+describe('a contact request from a card', () => {
+  let channelId: string;
+  let cardMessageId: string;
+
+  beforeEach(async () => {
+    const [channel] = await serverDB
+      .insert(channels)
+      .values({ title: 'Card', userId: alice })
+      .returning();
+    channelId = channel.id;
+    await serverDB.insert(channelMembers).values([
+      { actorType: 'user', channelId, role: 'owner', userId: alice },
+      { actorType: 'user', channelId, role: 'member', userId: bob },
+    ]);
+    const [message] = await serverDB
+      .insert(channelMessages)
+      .values({
+        channelId,
+        content: '[Contact card] carol',
+        metadata: { card: { name: 'carol', type: 'user', userId: carol } },
+        requestKey: 'card',
+        routingStatus: 'skipped',
+        sequence: 1,
+        userId: alice,
+      })
+      .returning();
+    cardMessageId = message.id;
+  });
+
+  afterEach(async () => {
+    await serverDB.delete(channels);
+  });
+
+  it('records who shared the card and shows it to the addressee', async () => {
+    await bobModel.sendRequest(carol, undefined, { cardMessageId });
+    const [incoming] = await carolModel.listRequests();
+    expect(incoming.source).toEqual({
+      referrer: { avatar: null, fullName: 'Alice', id: alice, username: 'alice' },
+      type: 'card',
+    });
+    const [row] = await serverDB.select().from(userContactRequests);
+    expect(row.source).toEqual({
+      channelId,
+      messageId: cardMessageId,
+      referrerId: alice,
+      type: 'card',
+    });
+  });
+
+  it('drops a source the requester cannot see or that names someone else', async () => {
+    // Carol is not in the Channel.
+    await carolModel.sendRequest(bob, undefined, { cardMessageId });
+    // The card shares Carol, not Alice.
+    await bobModel.sendRequest(alice, undefined, { cardMessageId });
+    const rows = await serverDB.select().from(userContactRequests);
+    expect(rows.map((row) => row.source)).toEqual([null, null]);
+    expect((await aliceModel.listRequests())[0].source).toBeNull();
   });
 });

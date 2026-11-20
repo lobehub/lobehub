@@ -5,6 +5,7 @@ import pMap from 'p-map';
 
 import type { AgentItem } from '../../schemas';
 import { agents, agentsToSessions, sessions } from '../../schemas';
+import { getNewAgentPlugins } from '../../utils/agentConfig';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
 import { sanitizeAgentApiConfig } from '../../utils/sanitizeAgentApiConfig';
 import { buildWorkspacePayload } from '../../utils/workspace';
@@ -41,6 +42,7 @@ export const create = async (
           ...config,
           agencyConfig,
           model: typeof config.model === 'string' ? config.model : null,
+          plugins: getNewAgentPlugins(config),
         },
       ),
     ])
@@ -91,6 +93,7 @@ export const batchCreate = async (
           {
             ...config,
             model: typeof config.model === 'string' ? config.model : null,
+            plugins: getNewAgentPlugins(config),
           },
         ),
       ),

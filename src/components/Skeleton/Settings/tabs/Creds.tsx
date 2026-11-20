@@ -2,6 +2,8 @@
 
 import { cssVar, Flexbox } from '@lobehub/ui';
 
+import { useDensity, useDensityTokens } from '@/styles/density';
+
 import SkeletonBar from '../../Bar';
 import type { SettingsTabSkeleton } from './types';
 
@@ -17,37 +19,47 @@ const ROW_WIDTHS = [
  * tile, a name + type-tag line over a key line, and the "..." menu button. Rows
  * sit edge to edge (gap 0), like the settled list.
  */
-export const CredsListSkeleton = ({ rows = 4 }: { rows?: number }) => (
-  <Flexbox aria-busy data-testid={'settings-creds-skeleton'} gap={0} width={'100%'}>
-    {Array.from({ length: rows }, (_, index) => {
-      const [title, key] = ROW_WIDTHS[index % ROW_WIDTHS.length];
-      return (
-        <Flexbox
-          horizontal
-          align={'center'}
-          gap={16}
-          justify={'space-between'}
-          key={index}
-          style={{ paddingBlock: 12 }}
-        >
-          <Flexbox horizontal align={'center'} flex={1} gap={16}>
-            <SkeletonBar height={48} radius={12} width={48} />
-            <Flexbox gap={4}>
-              <Flexbox horizontal align={'center'} gap={8} height={22}>
-                <SkeletonBar height={15} width={title} />
-                <SkeletonBar height={22} radius={cssVar.borderRadiusSM} width={52} />
-              </Flexbox>
-              <Flexbox height={18} justify={'center'}>
-                <SkeletonBar height={12} width={key} />
+export const CredsListSkeleton = ({ rows = 4 }: { rows?: number }) => {
+  // Compact `CredItem`: 6px padding, 36px tile, 22px title line + 2 + 18px key line = 54px.
+  const { compact, tokens } = useDensity();
+  const { controlHeight } = useDensityTokens();
+
+  return (
+    <Flexbox aria-busy data-testid={'settings-creds-skeleton'} gap={0} width={'100%'}>
+      {Array.from({ length: rows }, (_, index) => {
+        const [title, key] = ROW_WIDTHS[index % ROW_WIDTHS.length];
+        return (
+          <Flexbox
+            horizontal
+            align={'center'}
+            gap={tokens.sectionGap}
+            justify={'space-between'}
+            key={index}
+            style={{ paddingBlock: compact ? 6 : 12 }}
+          >
+            <Flexbox horizontal align={'center'} flex={1} gap={tokens.sectionGap}>
+              <SkeletonBar
+                height={tokens.listRowHeight}
+                radius={compact ? 10 : 12}
+                width={tokens.listRowHeight}
+              />
+              <Flexbox gap={compact ? 2 : 4}>
+                <Flexbox horizontal align={'center'} gap={8} height={22}>
+                  <SkeletonBar height={compact ? 14 : 15} width={title} />
+                  <SkeletonBar height={22} radius={cssVar.borderRadiusSM} width={52} />
+                </Flexbox>
+                <Flexbox height={18} justify={'center'}>
+                  <SkeletonBar height={12} width={key} />
+                </Flexbox>
               </Flexbox>
             </Flexbox>
+            <SkeletonBar height={controlHeight} width={controlHeight} />
           </Flexbox>
-          <SkeletonBar height={32} width={32} />
-        </Flexbox>
-      );
-    })}
-  </Flexbox>
-);
+        );
+      })}
+    </Flexbox>
+  );
+};
 
 /** The small primary "Create" button the page portals into the header. */
 const PageActions = () => <SkeletonBar height={32} width={96} />;

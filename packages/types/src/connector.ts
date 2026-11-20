@@ -110,3 +110,14 @@ export interface ConnectorOAuthAccounts {
   accounts: ConnectorLinkRecord[];
   type: 'oauth2';
 }
+
+/**
+ * The `user_connectors` row a call resolved to: its id plus the owner and the
+ * workspace it lives in (`null` for a personal row). Writes that follow the call,
+ * such as connection health, go through this row's own scope.
+ */
+export interface ResolvedConnectorRef {
+  id: string;
+  userId: string;
+  workspaceId: string | null;
+}

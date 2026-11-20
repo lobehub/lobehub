@@ -1,6 +1,8 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 /** The advanced rows' picker column; every task picker ends on the same right edge. */
 export const PICKER_WIDTH = 280;
 
@@ -20,7 +22,11 @@ export const styles = stylex.create({
   },
   /** A tier's 「高级」 under its picker; the next tier's divider closes it. */
   advanced: {
-    paddingBlockEnd: 16,
+    paddingBlockEnd: densityTokens['--lobe-density-card-padding'],
+  },
+  /** Notes under a card's picker, closed by the next card's divider like 「高级」. */
+  note: {
+    paddingBlockEnd: densityTokens['--lobe-density-card-padding'],
   },
   /** Compact rows: the picker is 32px, so 40 leaves 4px above and below. */
   row: {

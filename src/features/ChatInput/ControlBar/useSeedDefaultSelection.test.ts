@@ -9,7 +9,7 @@ import {
 } from '@/store/chat/pendingSandboxSelection';
 
 import { rememberSandboxSelection } from './rememberedSandboxDirectory';
-import { useSeedDefaultSelection } from './useSeedDefaultSelection';
+import { useSeedDefaultSelection, useSeedTemporaryRepository } from './useSeedDefaultSelection';
 
 const getEntitlement = vi.hoisted(() => vi.fn());
 
@@ -132,5 +132,41 @@ describe('useSeedDefaultSelection', () => {
     rerender();
 
     expect(getPendingSandboxSelection(AGENT)).toEqual({ workingDirectory: 'projects/demo' });
+  });
+});
+
+describe('useSeedTemporaryRepository — the first-send default', () => {
+  const pane = (hasTopic: boolean, environmentId: string) => ({
+    eligible: true,
+    hasTopic,
+    project: { environmentId },
+    temporary: true,
+  });
+
+  it("registers a project draft's environment for its first send", async () => {
+    renderHook(() => useSeedTemporaryRepository(AGENT, pane(false, 'env-project')));
+    consumePendingSandboxSelection(AGENT);
+
+    await expect(resolvePendingSandboxSelection(AGENT)).resolves.toEqual({
+      environmentId: 'env-project',
+    });
+  });
+
+  // The entry is the agent's: a split pane already on another project's topic
+  // handed its environment to this pane's first send, or cleared it on unmount.
+  it("is neither replaced nor cleared by another pane's existing topic", async () => {
+    renderHook(() => useSeedTemporaryRepository(AGENT, pane(false, 'env-project')));
+    const topicPane = renderHook(() => useSeedTemporaryRepository(AGENT, pane(true, 'env-other')));
+    consumePendingSandboxSelection(AGENT);
+
+    await expect(resolvePendingSandboxSelection(AGENT)).resolves.toEqual({
+      environmentId: 'env-project',
+    });
+
+    consumePendingSandboxSelection(AGENT);
+    topicPane.unmount();
+    await expect(resolvePendingSandboxSelection(AGENT)).resolves.toEqual({
+      environmentId: 'env-project',
+    });
   });
 });

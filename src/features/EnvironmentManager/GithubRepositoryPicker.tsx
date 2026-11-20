@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { densityVars } from '@/styles/densityVars';
 
 import { useGithubRepositories } from './useGithubRepositories';
 
@@ -30,8 +31,8 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 10px;
     align-items: center;
 
-    padding-block: 12px;
-    padding-inline: 12px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
 
@@ -139,7 +140,9 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
           ),
         }
       : state === 'unconfigured'
-        ? { action: undefined, text: t('environments.github.unconfigured') }
+        ? // Connecting needs the deployment's GitHub App first; the settings
+          // page says what is missing, so the guide still leads somewhere.
+          { action: 'settings', text: t('environments.github.unconfigured') }
         : state === 'disconnected'
           ? { action: 'connect', text: t('environments.github.notConnected') }
           : state === 'empty'
@@ -160,7 +163,9 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
             : t(
                 guide.action === 'connect'
                   ? 'environments.github.connect'
-                  : 'environments.github.reviewAccess',
+                  : guide.action === 'settings'
+                    ? 'environments.github.openIntegrations'
+                    : 'environments.github.reviewAccess',
               )}
           {guide.action !== 'retry' && <Icon icon={ArrowRightIcon} size={12} />}
         </Button>

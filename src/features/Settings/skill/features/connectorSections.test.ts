@@ -7,6 +7,7 @@ import zhSetting from '../../../../../locales/zh-CN/setting.json';
 import {
   buildIntegrationItems,
   getVisibleSectionItems,
+  isSectionExpandable,
   matchesConnectorKeyword,
   matchesIntegrationKeyword,
   partitionByInstalled,
@@ -154,5 +155,21 @@ describe('getVisibleSectionItems', () => {
   it('shows everything when expanded or short', () => {
     expect(getVisibleSectionItems(items, true)).toEqual({ hiddenCount: 0, visible: items });
     expect(getVisibleSectionItems([1, 2], false)).toEqual({ hiddenCount: 0, visible: [1, 2] });
+  });
+});
+
+describe('isSectionExpandable', () => {
+  it('turns the heading into the toggle only when rows are hidden', () => {
+    expect(isSectionExpandable({ expanded: false, hiddenCount: 3, searching: false })).toBe(true);
+    expect(isSectionExpandable({ expanded: false, hiddenCount: 0, searching: false })).toBe(false);
+  });
+
+  it('keeps the toggle on an expanded group so it can fold back', () => {
+    expect(isSectionExpandable({ expanded: true, hiddenCount: 0, searching: false })).toBe(true);
+  });
+
+  it('drops the toggle while searching, which already lists every hit', () => {
+    expect(isSectionExpandable({ expanded: false, hiddenCount: 3, searching: true })).toBe(false);
+    expect(isSectionExpandable({ expanded: true, hiddenCount: 0, searching: true })).toBe(false);
   });
 });

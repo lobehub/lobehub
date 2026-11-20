@@ -55,8 +55,9 @@ export async function initWorkspace(
     const { instructions, skills } = result.data;
     return {
       instructions: instructions ?? [],
-      skills: (skills ?? []).map(({ description, name, path, scope }) => ({
+      skills: (skills ?? []).map(({ description, disableModelInvocation, name, path, scope }) => ({
         description,
+        ...(disableModelInvocation ? { disableModelInvocation: true } : {}),
         name,
         path,
         scope,

@@ -1,6 +1,7 @@
-import { getDisabledPluginIds } from '@lobechat/types';
-import { useEffect } from 'react';
+import { connectorToolIdentifier, getDisabledPluginIds } from '@lobechat/types';
+import { useEffect, useState } from 'react';
 
+import { getRunConnectors, refreshRunConnectors } from '@/services/runConnectors';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { refreshMcpAppDiscovery } from '@/store/mcpApp/discovery';
@@ -12,8 +13,22 @@ import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 import { selectMcpAppEntrypoints } from './entrypoints';
 
 /** Refresh legacy cached discovery once per user session, without schema migration. */
-export const useMcpAppEntrypoints = (agentId?: string) => {
+export const useMcpAppEntrypoints = (agentId?: string, topicId?: string) => {
   const enabled = useServerConfigStore(serverConfigSelectors.enableMcpApps);
+  // The conversation's connector rows as the server lists them, personal ones
+  // included; until listed (or outside a workspace) the local lists stand in
+  const [runRows, setRunRows] = useState(() => getRunConnectors({ agentId, topicId }));
+  useEffect(() => {
+    setRunRows(getRunConnectors({ agentId, topicId }));
+    if (!enabled || !agentId) return;
+    let live = true;
+    void refreshRunConnectors({ agentId, topicId }).then((rows) => {
+      if (live && rows) setRunRows(rows);
+    });
+    return () => {
+      live = false;
+    };
+  }, [enabled, agentId, topicId]);
   const agentPlugins = useAgentStore((s) =>
     enabled && agentId ? agentSelectors.getAgentConfigById(agentId)(s)?.plugins : undefined,
   );
@@ -37,7 +52,9 @@ export const useMcpAppEntrypoints = (agentId?: string) => {
     const state = getToolStoreState();
     for (const row of [...connectors, ...(agentId ? (agentConnectors[agentId] ?? []) : [])]) {
       const connector = connectorSelectors.connectorByIdentifierForAgent(
-        row.identifier,
+        row.agentId
+          ? row.identifier
+          : connectorToolIdentifier(row, undefined, new Set(connectors.map((c) => c.identifier))),
         agentId,
       )(state);
       if (connector?.id !== row.id || !connector.isEnabled) continue;
@@ -68,7 +85,9 @@ export const useMcpAppEntrypoints = (agentId?: string) => {
       });
     }
   }, [enabled, plugins, pluginsConfirmed, connectors, agentConnectors, agentId]);
-  return selectMcpAppEntrypoints(getToolStoreState(), enabled, agentId).filter(
-    (entry) => !getDisabledPluginIds(agentPlugins).includes(entry.identifier),
+  return selectMcpAppEntrypoints(getToolStoreState(), enabled, agentId, runRows).filter(
+    // The agent disables a connector, not one row's tool prefix
+    (entry) =>
+      !getDisabledPluginIds(agentPlugins).includes(entry.connectorIdentifier ?? entry.identifier),
   );
 };

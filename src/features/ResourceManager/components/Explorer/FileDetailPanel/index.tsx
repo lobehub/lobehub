@@ -7,6 +7,7 @@ import { memo, useState } from 'react';
 
 import FileDetail from '@/features/ResourceManager/FileDetail';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { useDensityTokens, useHeaderActionSize } from '@/styles/density';
 import { downloadFile } from '@/utils/client/downloadFile';
 
 import FilePreview from './FilePreview';
@@ -23,6 +24,8 @@ import { DETAIL_PANEL_MIN_WIDTH, useDetailPanelWidth } from './useDetailPanelWid
  */
 const FileDetailPanel = memo(() => {
   const theme = useTheme();
+  const { fontSize, headerHeight } = useDensityTokens();
+  const headerActionSize = useHeaderActionSize(true);
   const detailPanelId = useResourceManagerStore((s) => s.detailPanelId);
   const detailPanelIsPage = useResourceManagerStore((s) => s.detailPanelIsPage);
   const closeDetailPanel = useResourceManagerStore((s) => s.closeDetailPanel);
@@ -57,14 +60,14 @@ const FileDetailPanel = memo(() => {
             style={{
               flexShrink: 0,
               borderBottom: `1px solid ${cssVar.colorBorderSecondary}`,
-              minHeight: 48,
+              minHeight: headerHeight,
             }}
           >
             <span
               title={fileDetail.name}
               style={{
                 color: theme.colorText,
-                fontSize: 14,
+                fontSize,
                 fontWeight: 500,
                 minWidth: 0,
                 overflow: 'hidden',
@@ -78,6 +81,7 @@ const FileDetailPanel = memo(() => {
               {fileDetail.url && (
                 <ActionIcon
                   icon={DownloadIcon}
+                  size={headerActionSize}
                   title={i18nT('download', { ns: 'common' })}
                   onClick={() => {
                     if (fileDetail.url) downloadFile(fileDetail.url, fileDetail.name);
@@ -87,11 +91,13 @@ const FileDetailPanel = memo(() => {
               <ActionIcon
                 active={showProperties}
                 icon={InfoIcon}
+                size={headerActionSize}
                 title={i18nT('detail.basic.title', { ns: 'file' })}
                 onClick={() => setShowProperties((value) => !value)}
               />
               <ActionIcon
                 icon={PanelRightCloseIcon}
+                size={headerActionSize}
                 title={i18nT('close', { ns: 'common' })}
                 onClick={closeDetailPanel}
               />

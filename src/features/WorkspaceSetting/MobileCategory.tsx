@@ -9,6 +9,7 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import Cell from '@/components/Cell';
 import Divider from '@/components/Cell/Divider';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { densityTokens } from '@/styles/density.stylex';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
 import { useWorkspaceSettingCategory } from './hooks/useCategory';
@@ -19,9 +20,9 @@ const styles = stylex.create({
     color: cssVar.colorTextSecondary,
     fontSize: 12,
     fontWeight: 500,
-    paddingBlockStart: '16px',
+    paddingBlockStart: densityTokens['--lobe-density-card-padding'],
     paddingBlockEnd: '4px',
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
 });
 

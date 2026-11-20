@@ -1,16 +1,12 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { stripGoalCommand } from '@lobechat/builtin-tool-goal';
 import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
-import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import {
   appendAttachedFilesToPrompt,
-  buildHeterogeneousAgentAuthRequiredError,
   buildSubagentRunSnapshot,
   createMainAgentRunState,
   type HeteroAttachedFileRef,
-  isHeterogeneousAgentAuthRequired,
   isHeterogeneousProviderBindingSupported,
-  isLocalHeterogeneousType,
   isServerDefaultHeterogeneousAgentType,
   type MainAgentIntent,
   type MainAgentReduceCtx,
@@ -22,10 +18,7 @@ import {
   type SubagentRunSnapshot,
   usesHeterogeneousSessionInitialModel,
 } from '@lobechat/heterogeneous-agents';
-import {
-  isEchoedErrorText,
-  normalizeHeterogeneousMessageError,
-} from '@lobechat/heterogeneous-agents/errors';
+import { isPermissionModeReport } from '@lobechat/heterogeneous-agents/claudeCodePermission/shared';
 import type {
   ChatMessageError,
   ChatToolPayload,
@@ -41,7 +34,6 @@ import type {
   WorkingDirConfig,
 } from '@lobechat/types';
 import {
-  AgentRuntimeErrorType,
   buildHeteroSpawnArgs,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   normalizeHeterogeneousProviderConfig,
@@ -71,6 +63,11 @@ import {
 import { hydrateProjectedToolMessages } from '@/services/message/hydrateProjectedTools';
 import { threadService } from '@/services/thread';
 import { workService } from '@/services/work';
+import {
+  applyPermissionModeReport,
+  registerLocalPermissionModeSwitcher,
+  resolveRunPermissionMode,
+} from '@/store/chat/heteroPermissionMode';
 import { topicSelectors } from '@/store/chat/selectors';
 import { type StreamRetryMetadata } from '@/store/chat/slices/operation/types';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
@@ -89,6 +86,10 @@ import { isCompletedRuntimeEnd } from '../gateway/runtimeEndReason';
 import { withHeteroContext } from '../viewedTaskPrompt';
 import { registerLocalBackgroundTaskStopper, writeBackgroundTaskSnapshot } from './backgroundTasks';
 import { markUnfinishedToolsCancelled } from './cancelledTools';
+import {
+  shouldSuppressTerminalErrorEcho,
+  toHeterogeneousAgentMessageError,
+} from './heteroMessageError';
 import { getNativeHeteroSessionBindingKey, isRecoverableResumeError } from './heteroResume';
 import { preserveSkippedIntervention } from './interventionAck';
 import { claimLocalRunFee, type LocalRunFeeClaim, settleLocalRunFee } from './localRunFee';
@@ -116,112 +117,6 @@ const generateThreadId = () => `thd_${createNanoId(16)()}`;
 const markSkipMessageFetch = (event: AgentStreamEvent): void => {
   event.data = { ...event.data, skipMessageFetch: true };
 };
-
-const maybeClassifyCliAuthRequiredError = (
-  error: unknown,
-  agentType?: string,
-): HeterogeneousAgentSessionError | undefined => {
-  if (!agentType || !isLocalHeterogeneousType(agentType)) return;
-
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : typeof error === 'object' &&
-            error &&
-            'message' in error &&
-            typeof error.message === 'string'
-          ? error.message
-          : undefined;
-
-  if (!message) return;
-  if (!isHeterogeneousAgentAuthRequired(agentType, message)) return;
-
-  return buildHeterogeneousAgentAuthRequiredError({ agentType, stderr: message });
-};
-
-const shouldSuppressTerminalErrorEcho = (content: string, error: ChatMessageError): boolean => {
-  const errorBody = error.body as
-    (HeterogeneousAgentSessionError & { clearEchoedContent?: boolean }) | undefined;
-  if (
-    !errorBody?.clearEchoedContent &&
-    errorBody?.code !== HeterogeneousAgentSessionErrorCode.AuthRequired
-  ) {
-    return false;
-  }
-
-  return isEchoedErrorText(content, errorBody?.stderr || errorBody?.message || error.message);
-};
-
-const toRawHeterogeneousAgentMessageError = (
-  error: unknown,
-  agentType?: string,
-): ChatMessageError => {
-  const authRequiredError = maybeClassifyCliAuthRequiredError(error, agentType);
-  if (authRequiredError) {
-    return {
-      body: authRequiredError,
-      message: authRequiredError.message,
-      type: AgentRuntimeErrorType.AgentRuntimeError,
-    };
-  }
-
-  if (
-    typeof error === 'object' &&
-    error &&
-    'message' in error &&
-    typeof error.message === 'string' &&
-    ('agentType' in error || 'code' in error || 'docsUrl' in error || 'installCommands' in error)
-  ) {
-    return {
-      body: error as HeterogeneousAgentSessionError,
-      message: error.message,
-      type: AgentRuntimeErrorType.AgentRuntimeError,
-    };
-  }
-
-  // A plain `{message}` object (adapter wire data / IPC error envelope)
-  // without the session-error marker keys above still carries the only
-  // human-readable reason — don't flatten it to the generic fallback.
-  const objectMessage =
-    typeof error === 'object' && error && 'message' in error && typeof error.message === 'string'
-      ? error.message
-      : undefined;
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : (objectMessage ?? 'Agent execution failed');
-
-  // Surface the underlying `cause` (e.g. undici's `ENOTFOUND` / `ECONNREFUSED`
-  // hidden under a generic `TypeError: fetch failed`). The desktop IPC layer
-  // ferries `cause` across via an error envelope (see `~common/ipcError`).
-  // Flatten any Error cause to a plain object — `ChatMessageError.body` is
-  // persisted as DB JSONB, where a raw Error would serialize to `{}`.
-  const rawCause = error instanceof Error ? error.cause : undefined;
-  const cause =
-    rawCause instanceof Error
-      ? {
-          code: (rawCause as { code?: unknown }).code,
-          message: rawCause.message,
-          name: rawCause.name,
-        }
-      : rawCause;
-
-  return {
-    body: cause === undefined || cause === null ? { message } : { cause, message },
-    message,
-    type: AgentRuntimeErrorType.AgentRuntimeError,
-  };
-};
-
-const toHeterogeneousAgentMessageError = (error: unknown, agentType?: string): ChatMessageError =>
-  normalizeHeterogeneousMessageError(
-    toRawHeterogeneousAgentMessageError(error, agentType),
-    agentType,
-  );
 
 export interface HeterogeneousAgentExecutorParams {
   assistantMessageId: string;
@@ -2048,6 +1943,10 @@ export const executeHeterogeneousAgent = async (
         persistQueue = persistQueue.then(() => reduceAndApplyMain(event));
         return;
       }
+      if (event.type === 'step_complete' && isPermissionModeReport(event.data)) {
+        void applyPermissionModeReport(get, context.topicId, event.data, { persist: true });
+        return;
+      }
 
       // ─── stream_start with newStep: new LLM turn ───
       // The reducer flushes the prior turn's content/reasoning/model and opens
@@ -2495,9 +2394,17 @@ export const executeHeterogeneousAgent = async (
     });
     // Claude Code keeps its input (SDK stream or CLI stdin) open in every Follow-up mode.
     if (adapterType === 'claude-code') {
-      unregisterTaskStopper = registerLocalBackgroundTaskStopper(operationId, (taskId) =>
+      const unregisterStopper = registerLocalBackgroundTaskStopper(operationId, (taskId) =>
         heterogeneousAgentService.stopBackgroundTask(sidForCancel, taskId),
       );
+      // The mode chip switches this run's permission mode mid-run.
+      const unregisterSwitcher = registerLocalPermissionModeSwitcher(context.topicId, (mode) =>
+        heterogeneousAgentService.setPermissionMode(sidForCancel, mode),
+      );
+      unregisterTaskStopper = () => {
+        unregisterStopper();
+        unregisterSwitcher();
+      };
     }
     // Send the prompt — blocks until process exits
     const sendResult = await heterogeneousAgentService.sendPrompt({
@@ -2507,6 +2414,10 @@ export const executeHeterogeneousAgent = async (
       userId: userProfileSelectors.userId(getUserStoreState()),
       workspaceId: workspaceId ?? undefined,
       operationId,
+      permissionMode: resolveRunPermissionMode(
+        adapterType,
+        getTopicMetadataById(get(), context.topicId ?? undefined),
+      ),
       // `/goal` travels as system-context instructions; the CLI gets only the
       // request so its own `/goal` command does not take the message over.
       prompt: appendAttachedFilesToPrompt(stripGoalCommand(message), attachedFiles),

@@ -23,6 +23,7 @@ import OAuthAppStats from '@/business/client/OAuthAppStats';
 import AsyncError from '@/components/AsyncError';
 import { normalizeAsyncError } from '@/libs/swr/normalizeError';
 import { oauthAppSelectors, useOAuthAppStore } from '@/store/oauthApp';
+import { densityTokens } from '@/styles/density.stylex';
 import { type UpdateOAuthAppParams } from '@/types/oauthApp';
 
 import AppDetailSkeleton from '../AppDetailSkeleton';
@@ -37,7 +38,7 @@ import SectionCard from './SectionCard';
 
 const styles = stylex.create({
   dangerCard: {
-    padding: '16px',
+    padding: densityTokens['--lobe-density-card-padding'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorErrorBorder,
@@ -48,14 +49,14 @@ const styles = stylex.create({
   dangerDesc: { fontSize: '12px', color: cssVar.colorTextSecondary },
   dangerRow: {
     display: 'flex',
-    gap: '16px',
+    gap: densityTokens['--lobe-density-section-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   // The stats slot is a business stub that renders nothing in the open-source
   // build; an empty bordered card must not be left behind.
   statsCard: {
-    padding: '16px',
+    padding: densityTokens['--lobe-density-card-padding'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,

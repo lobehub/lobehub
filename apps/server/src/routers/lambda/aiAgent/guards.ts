@@ -121,18 +121,25 @@ export const assertCanUseOperationAgent = async (params: {
 export const assertCanUseAgentRunConversation = async (params: {
   db: LobeChatDatabase;
   messageIds?: Array<string | null | undefined>;
+  /**
+   * The topic a new topic is opened from (`openedByTopicId`): it receives the
+   * new topic's reports and is woken by them, so it needs `use` like the
+   * conversation itself.
+   */
+  openedByTopicId?: string | null;
   topicId?: string | null;
   userId: string;
   workspaceId?: string | null;
 }) => {
-  const { db, messageIds = [], topicId, userId, workspaceId } = params;
+  const { db, messageIds = [], openedByTopicId, topicId, userId, workspaceId } = params;
   if (!workspaceId) return;
 
   const uniqueMessageIds = [...new Set(messageIds.filter(Boolean) as string[])];
-  // Fixed two-call tuple, not a per-id fan-out: `assertCanUseMessageTargets`
-  // resolves every message id in one batched `inArray` query.
+  const topicIds = [...new Set([topicId, openedByTopicId].filter(Boolean) as string[])];
+  // Fixed two-call tuple, not a per-id fan-out: both guards resolve their ids
+  // in one batched `inArray` query.
   await Promise.all([
-    assertCanUseTopicTargets({ db, userId, workspaceId }, topicId ? [topicId] : []),
+    assertCanUseTopicTargets({ db, userId, workspaceId }, topicIds),
     assertCanUseMessageTargets({ db, userId, workspaceId }, uniqueMessageIds),
   ]);
 };

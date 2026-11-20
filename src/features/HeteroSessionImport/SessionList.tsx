@@ -17,12 +17,14 @@ import { Check, RotateCcw, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import { baseName, fmtTokens, type ImportRowState, selectable, type SessionStatus } from './utils';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   row: css`
     padding-block: 10px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-radius: ${cssVar.borderRadius};
 
     &:hover {

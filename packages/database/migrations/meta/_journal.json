@@ -1554,6 +1554,27 @@
       "when": 1794996111307,
       "tag": "0221_project_environment_owner",
       "breakpoints": true
+    },
+    {
+      "idx": 222,
+      "version": "7",
+      "when": 1795064606437,
+      "tag": "0222_agent_skill_upstream",
+      "breakpoints": true
+    },
+    {
+      "idx": 223,
+      "version": "7",
+      "when": 1795082781704,
+      "tag": "0223_running_operations_and_message_author_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 224,
+      "version": "7",
+      "when": 1795115161849,
+      "tag": "0224_agent_deliveries_and_contact_request_source",
+      "breakpoints": true
     }
   ],
   "version": "6"

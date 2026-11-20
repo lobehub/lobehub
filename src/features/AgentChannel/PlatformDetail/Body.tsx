@@ -18,6 +18,7 @@ import type {
   SerializedPlatformDefinition,
 } from '@/server/services/bot/platforms/types';
 import { useServerConfigStore } from '@/store/serverConfig';
+import { densityVars } from '@/styles/densityVars';
 
 import {
   platformCredentialBodyMap,
@@ -52,7 +53,7 @@ import {
 const fallback = createStaticStyles(({ css }) => ({
   moduleGroup: css`
     .lobe-form-form__group-header {
-      gap: 12px;
+      gap: ${densityVars.contentGap};
     }
 
     .lobe-form-form__group-header > .lobe-form-form__group-title {

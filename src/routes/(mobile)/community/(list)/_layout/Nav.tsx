@@ -7,6 +7,7 @@ import { MenuIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 
 import Menu from '@/components/Menu';
+import { MARKETPLACE_PATH } from '@/features/Marketplace/paths';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { DiscoverTab } from '@/types/discover';
 
@@ -73,9 +74,9 @@ const Nav = memo(() => {
           onClick={({ key }) => {
             scrollToTop();
             if (key === DiscoverTab.Home) {
-              navigate('/community');
+              navigate(MARKETPLACE_PATH);
             } else {
-              navigate(`/community/${key}`);
+              navigate(`${MARKETPLACE_PATH}/${key}`);
             }
             setOpen(false);
           }}

@@ -1,5 +1,7 @@
 import { createStaticStyles } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   bullets: css`
     display: flex;
@@ -67,7 +69,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   actionSlot: css`
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     margin-block-start: auto;
@@ -85,7 +87,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   cellBody: css`
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     margin-block: 34px 28px;
   `,
   cellMeta: css`
@@ -95,10 +97,10 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   channelRow: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 32px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
@@ -142,7 +144,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
     @media (width <= 860px) {
       padding-block: 20px 48px;
-      padding-inline: 16px;
+      padding-inline: ${densityVars.cardPadding};
     }
   `,
   ctaRow: css`
@@ -206,7 +208,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   headerTop: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
     margin-block-end: 28px;
   `,

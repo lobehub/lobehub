@@ -361,3 +361,20 @@ describe('resolveClientExecutors', () => {
     ).toEqual({});
   });
 });
+
+describe("a connector row's tool set", () => {
+  const mine = manifest('github-3f9a1c2e', { connector: { id: 'c-mine', identifier: 'github' } });
+
+  it("follows its connector's disabled and exclusive entries", () => {
+    const enabledManifests = new Map([['github-3f9a1c2e', mine]]);
+
+    expect(
+      resolveDiscoveryPool(request({ disabledPluginIds: ['github'], enabledManifests }))
+        .manifestMap['github-3f9a1c2e'],
+    ).toBeUndefined();
+    expect(
+      resolveDiscoveryPool(request({ enabledManifests, exclusivePluginIds: ['github'] }))
+        .manifestMap['github-3f9a1c2e'],
+    ).toBe(mine);
+  });
+});

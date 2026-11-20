@@ -93,26 +93,26 @@ describe('resolveWorkspaceCommunityProfileRedirect', () => {
     expect(
       resolveWorkspaceCommunityProfileRedirect({
         isWorkspaceScope: true,
-        pathname: '/hug/community/user/rdmclin2',
+        pathname: '/hug/marketplace/user/rdmclin2',
       }),
-    ).toBe('/community/workspace');
+    ).toBe('/marketplace/workspace');
   });
 
   it('redirects workspace org URLs to the workspace Community page', () => {
     expect(
       resolveWorkspaceCommunityProfileRedirect({
         isWorkspaceScope: true,
-        pathname: '/hug/community/org/other',
+        pathname: '/hug/marketplace/org/other',
         search: '?tab=skills',
       }),
-    ).toBe('/community/workspace?tab=skills');
+    ).toBe('/marketplace/workspace?tab=skills');
   });
 
   it('keeps the current URL outside workspace scope', () => {
     expect(
       resolveWorkspaceCommunityProfileRedirect({
         isWorkspaceScope: false,
-        pathname: '/community/user/rdmclin2',
+        pathname: '/marketplace/user/rdmclin2',
       }),
     ).toBeNull();
   });

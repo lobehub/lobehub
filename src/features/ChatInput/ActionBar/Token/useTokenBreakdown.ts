@@ -3,6 +3,7 @@ import {
   type TokenSourceType,
   ToolNameResolver,
 } from '@lobechat/context-engine';
+import { initialToolSelection } from '@lobechat/mecha';
 import { pluginPrompts } from '@lobechat/prompts';
 import type { UIChatMessage } from '@lobechat/types';
 import { debounce } from 'es-toolkit/compat';
@@ -198,6 +199,7 @@ export const useTokenBreakdown = (): TokenBreakdown => {
     activeAgentId,
     systemRole,
     enableAgentMode,
+    toolMode,
     searchMode,
     useModelBuiltinSearch,
     agentMemoryEnabled,
@@ -210,6 +212,7 @@ export const useTokenBreakdown = (): TokenBreakdown => {
       s.activeAgentId,
       agentByIdSelectors.getAgentSystemRoleById(agentId)(s),
       chatConfig.enableAgentMode,
+      chatConfig.toolMode,
       chatConfig.searchMode,
       chatConfig.useModelBuiltinSearch,
       chatConfig.memory?.enabled,
@@ -256,7 +259,7 @@ export const useTokenBreakdown = (): TokenBreakdown => {
     const { tools, enabledManifests } = toolsEngine.generateToolsDetailed({
       model,
       provider,
-      toolIds: pluginIds,
+      ...initialToolSelection(pluginIds, { enableAgentMode, toolMode }),
     });
 
     return {
@@ -281,7 +284,16 @@ export const useTokenBreakdown = (): TokenBreakdown => {
     // createAgentToolsEngine inputs read via getState() (tool manifests plus
     // agent/user/aiInfra config), so the engine only re-runs when they change
     // instead of on every render.
-  }, [hasRequest, installedPlugins, model, pluginIds, provider, toolContextRefreshKey]);
+  }, [
+    enableAgentMode,
+    hasRequest,
+    installedPlugins,
+    model,
+    pluginIds,
+    provider,
+    toolContextRefreshKey,
+    toolMode,
+  ]);
 
   const toolsSchemaToken = useTokenCount(canUseTool ? toolsSchema : '');
   const toolsSystemRoleToken = useTokenCount(canUseTool ? toolsSystemRole : '');

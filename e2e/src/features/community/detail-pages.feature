@@ -11,7 +11,7 @@ Feature: Discover Detail Pages
 
   @COMMUNITY-DETAIL-001 @P1
   Scenario: Load assistant detail page and verify content
-    Given I navigate to "/community/agent"
+    Given I navigate to "/marketplace/agent"
     And I wait for the page to fully load
     When I click on the first assistant card
     Then I should be on an assistant detail page
@@ -22,7 +22,7 @@ Feature: Discover Detail Pages
 
   @COMMUNITY-DETAIL-002 @P1
   Scenario: Navigate back from assistant detail page
-    Given I navigate to "/community/agent"
+    Given I navigate to "/marketplace/agent"
     And I wait for the page to fully load
     And I click on the first assistant card
     When I click the back button
@@ -34,7 +34,7 @@ Feature: Discover Detail Pages
 
   @COMMUNITY-DETAIL-003 @P1
   Scenario: Load model detail page and verify content
-    Given I navigate to "/community/model"
+    Given I navigate to "/marketplace/model"
     And I wait for the page to fully load
     When I click on the first model card
     Then I should be on a model detail page
@@ -44,7 +44,7 @@ Feature: Discover Detail Pages
 
   @COMMUNITY-DETAIL-004 @P1
   Scenario: Navigate back from model detail page
-    Given I navigate to "/community/model"
+    Given I navigate to "/marketplace/model"
     And I wait for the page to fully load
     And I click on the first model card
     When I click the back button
@@ -56,7 +56,7 @@ Feature: Discover Detail Pages
 
   @COMMUNITY-DETAIL-005 @P1
   Scenario: Load provider detail page and verify content
-    Given I navigate to "/community/provider"
+    Given I navigate to "/marketplace/provider"
     And I wait for the page to fully load
     When I click on the first provider card
     Then I should be on a provider detail page
@@ -66,7 +66,7 @@ Feature: Discover Detail Pages
 
   @COMMUNITY-DETAIL-006 @P1
   Scenario: Navigate back from provider detail page
-    Given I navigate to "/community/provider"
+    Given I navigate to "/marketplace/provider"
     And I wait for the page to fully load
     And I click on the first provider card
     When I click the back button
@@ -78,7 +78,7 @@ Feature: Discover Detail Pages
 
   @COMMUNITY-DETAIL-007 @P1
   Scenario: Load MCP detail page and verify content
-    Given I navigate to "/community/mcp"
+    Given I navigate to "/marketplace/connector"
     And I wait for the page to fully load
     When I click on the first MCP card
     Then I should be on an MCP detail page
@@ -88,8 +88,8 @@ Feature: Discover Detail Pages
 
   @COMMUNITY-DETAIL-008 @P1
   Scenario: Navigate back from MCP detail page
-    Given I navigate to "/community/mcp"
+    Given I navigate to "/marketplace/connector"
     And I wait for the page to fully load
     And I click on the first MCP card
     When I click the back button
-    Then I should be on the MCP list page
+    Then I should be navigated to "/marketplace/connector"

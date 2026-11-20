@@ -126,6 +126,16 @@ class ChannelActionImpl {
     if (channelId) await this.#refreshAfterWrite(this.refreshList);
     return channelId ?? undefined;
   };
+  /**
+   * The caller's direct Channel with a shared Agent, opened on first use from its share id or
+   * handle. The server resolves the share every time, so a paused or revoked share fails here
+   * even when a Channel already exists.
+   */
+  openShared = async (share: string) => {
+    const channelId = await channelService.openShared({ share });
+    if (channelId) await this.#refreshAfterWrite(this.refreshList);
+    return channelId ?? undefined;
+  };
   remove = async (channelId: string) => {
     const scope = cacheScope.get();
     // Optimistically hide the row; failure restores it. Keep the open conversation
@@ -323,7 +333,10 @@ class ChannelActionImpl {
   retrySend = (message: ChannelOutgoingMessage) => {
     if (findOutgoing(useChannelStore.getState().outbox, message)?.status !== 'failed')
       return Promise.resolve(undefined);
-    this.#setOutbox((outbox) => patchOutgoing(outbox, message, { status: 'sending' }), 'retry');
+    this.#setOutbox(
+      (outbox) => patchOutgoing(outbox, message, { errorType: undefined, status: 'sending' }),
+      'retry',
+    );
     return this.#deliver(message);
   };
   discardSend = (message: ChannelOutgoingMessage) => {
@@ -398,7 +411,12 @@ class ChannelActionImpl {
       return data;
     } catch (error) {
       console.error('Failed to send Channel message', error);
-      this.#setOutbox((outbox) => patchOutgoing(outbox, message, { status: 'failed' }), 'failed');
+      // A refusal names its category as the message (`ChannelError`); anything else stays generic.
+      const errorType = error instanceof Error ? error.message : undefined;
+      this.#setOutbox(
+        (outbox) => patchOutgoing(outbox, message, { errorType, status: 'failed' }),
+        'failed',
+      );
     }
   };
   #refreshAfterSend = (input: ChannelSendInput, threadId: string | null) =>

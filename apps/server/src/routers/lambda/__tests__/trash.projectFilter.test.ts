@@ -9,7 +9,15 @@ import { AgentModel } from '@/database/models/agent';
 import { ProjectModel } from '@/database/models/project';
 import { TopicModel } from '@/database/models/topic';
 import { ProjectRepository } from '@/database/repositories/project';
-import { agents, topics, trashItems, users, workspaces } from '@/database/schemas';
+import {
+  agents,
+  environments,
+  projectEnvironments,
+  topics,
+  trashItems,
+  users,
+  workspaces,
+} from '@/database/schemas';
 import { TrashService } from '@/server/services/trash';
 
 let testDB: LobeChatDatabase;
@@ -91,6 +99,8 @@ const caller = (ctx: any) => trashRouter.createCaller(ctx);
 
 beforeEach(async () => {
   testDB = await getTestDB();
+  await testDB.delete(projectEnvironments);
+  await testDB.delete(environments);
   await testDB.delete(users);
   await testDB.insert(users).values([{ id: ownerId }, { id: memberId }, { id: strangerId }]);
   await testDB.insert(workspaces).values([
@@ -101,6 +111,9 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.clearAllMocks();
+  // Every project made here has an environment, which holds its user back.
+  await testDB.delete(projectEnvironments);
+  await testDB.delete(environments);
   await testDB.delete(users);
 });
 

@@ -3,6 +3,7 @@ import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
+import { toolSetsFrom } from './helpers/connectorToolSets';
 
 // Agent preferences expose skill metadata; only a topic selection requests its body.
 const {
@@ -118,6 +119,7 @@ vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn().mockImplementation(function () {
     return {
       resolveByIdentifiers: mockConnectorResolveByIdentifiers,
+      resolveToolSets: toolSetsFrom(mockConnectorResolveByIdentifiers),
     };
   }),
 }));
@@ -370,6 +372,40 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
       expect(skillById('lobehub')).toBeUndefined();
     },
   );
+
+  it.each([
+    { createdAt: '2026-11-17T08:00:00Z', offered: true },
+    { createdAt: '2026-11-18T15:53:51Z', offered: false },
+    { createdAt: '2026-11-17T08:00:00Z', disabled: true, offered: false },
+    { createdAt: '2026-11-17T08:00:00Z', manual: true, offered: false },
+    { createdAt: '2026-11-17T08:00:00Z', exclusive: true, offered: false },
+    { createdAt: '2026-11-17T08:00:00Z', uninstalled: true, offered: false },
+  ])('resolves implicit builtin skills for the original profile: %o', async (scenario) => {
+    const settings = {
+      tool: { uninstalledBuiltinTools: scenario.uninstalled ? ['lobe-artifacts'] : [] },
+    };
+    service = new AiAgentService(
+      {
+        query: { userSettings: { findFirst: vi.fn().mockResolvedValue(settings) } },
+      } as any,
+      'test-user-id',
+    );
+    mockGetAgentConfig.mockResolvedValue({
+      ...createAgentConfig(
+        scenario.disabled ? [{ identifier: 'lobe-artifacts', mode: 'disabled' }] : ['docs-mcp'],
+      ),
+      chatConfig: { skillActivateMode: scenario.manual ? 'manual' : 'auto' },
+      createdAt: new Date(scenario.createdAt),
+    });
+    await service.execAgent({
+      agentId: 'agent-1',
+      exclusivePluginIds: scenario.exclusive ? [] : undefined,
+      prompt: 'Make a game',
+    });
+    expect(!!skillById('lobe-artifacts')).toBe(scenario.offered);
+    expect(skillById('lobe-artifacts')?.content).toBeUndefined();
+    expect(skillById('db-skill-auto')).toBeUndefined();
+  });
 
   it('does not attach content when no skill is pinned', async () => {
     mockGetAgentConfig.mockResolvedValue(createAgentConfig([]));

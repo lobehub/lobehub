@@ -18,6 +18,7 @@ import {
   agentProfileRouteMeta,
   agentSelfLearningRouteMeta,
   agentShareRouteMeta,
+  agentShareVisitorTopicRouteMeta,
   agentSkillsRouteMeta,
   agentStatisticsRouteMeta,
   agentTasksRouteMeta,
@@ -188,6 +189,14 @@ export const agentPageChildren: RouteObject[] = [
     handle: { meta: agentStatisticsRouteMeta },
     loader: agentUsageLoader,
     path: 'statistics',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/agent/visitor/[topicId]'),
+      'Desktop > Chat > Share Visitor Topic',
+    ),
+    handle: { meta: agentShareVisitorTopicRouteMeta },
+    path: 'visitor/:topicId',
   },
   {
     element: dynamicElement(() => import('@/routes/(main)/agent/share'), 'Desktop > Chat > Share'),

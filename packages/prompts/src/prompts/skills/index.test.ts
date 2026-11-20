@@ -44,12 +44,13 @@ describe('skillsPrompts', () => {
       },
     ];
 
-    const expected = `<available_skills>
+    const expected = `The following skills provide specialized instructions for specific tasks.
+Use the activateSkill tool to load a skill when the user's task matches its description.
+
+<available_skills>
   <skill name="PDF Processing" location="/path/to/skills/pdf-processing/SKILL.md">Extracts text and tables from PDF files</skill>
   <skill name="Data Analysis" location="/path/to/skills/data-analysis/SKILL.md">Analyzes datasets and generates charts</skill>
-</available_skills>
-
-Use the activateSkill tool to activate a skill when needed.`;
+</available_skills>`;
 
     expect(skillsPrompts(skills)).toBe(expected);
   });
@@ -69,14 +70,37 @@ Use the activateSkill tool to activate a skill when needed.`;
       },
     ];
 
-    const expected = `<available_skills>
+    const expected = `The following skills provide specialized instructions for specific tasks.
+Use the activateSkill tool to load a skill when the user's task matches its description.
+
+<available_skills>
   <skill name="Artifacts" location="/path/to/skills/artifacts/SKILL.md">Generate interactive UI components</skill>
   <skill name="My Skill">Custom skill description</skill>
-</available_skills>
-
-Use the activateSkill tool to activate a skill when needed.`;
+</available_skills>`;
 
     expect(skillsPrompts(skills)).toBe(expected);
+  });
+
+  it('should include filesystem skill loading and relative-path resolution instructions for project/device skills', () => {
+    const skills: SkillItem[] = [
+      {
+        description: 'Device writing guidance',
+        identifier: 'device:writing',
+        location: '/Users/dev/.agents/skills/writing/SKILL.md',
+        name: 'writing',
+        source: 'device',
+      },
+    ];
+
+    expect(skillsPrompts(skills)).toBe(
+      `The following skills provide specialized instructions for specific tasks.
+Use the activateSkill tool to load a skill when the user's task matches its description.
+For a skill with source="project" or source="device", load it by calling the readFile tool on its \`location\` path and resolve relative paths against its parent directory (parent of SKILL.md).
+
+<available_skills>
+  <skill name="writing" source="device" location="/Users/dev/.agents/skills/writing/SKILL.md">Device writing guidance</skill>
+</available_skills>`,
+    );
   });
 
   it('should return empty string for empty skills array', () => {

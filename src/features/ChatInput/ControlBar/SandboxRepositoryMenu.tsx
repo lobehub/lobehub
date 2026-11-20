@@ -4,14 +4,14 @@ import type { EnvironmentConfiguration } from '@lobechat/types';
 import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { CircleOffIcon, PlusIcon, SettingsIcon } from 'lucide-react';
+import { CircleOffIcon, ContainerIcon, PlusIcon, SettingsIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import RepositoryAvatar from '@/components/RepositoryAvatar';
 
 import OptionRow from './OptionRow';
-import { repositorySlug } from './sandboxEnvironmentOptions';
+import { repositoriesLabel, repositorySlug } from './sandboxEnvironmentOptions';
 import SubmenuHeader from './SubmenuHeader';
 
 const styles = stylex.create({
@@ -43,7 +43,8 @@ interface SandboxRepositoryMenuProps {
    * empty one — rather than one level under a list of places.
    */
   none?: { active: boolean; onPick: () => void };
-  onAdd: () => void;
+  /** Adds an environment and picks it. Absent where there is no other one to add — a project's. */
+  onAdd?: () => void;
   /** Closes the whole work-location menu; a final pick leaves it. */
   onClose: () => void;
   onManage: () => void;
@@ -101,10 +102,19 @@ const SandboxRepositoryMenu = memo<SandboxRepositoryMenuProps>(
               compact
               active={environment.id === selectedId}
               desc={environment.description || undefined}
-              hint={repositorySlug(environment)}
-              icon={<RepositoryAvatar size={16} url={repositorySlug(environment)} />}
+              // An environment, which checks out any number of repositories or
+              // none: its repositories as `owner/name +N`, said plainly when
+              // it has none.
+              hint={repositoriesLabel(environment) ?? t('sandboxEnvironment.noRepository')}
               key={environment.id}
               label={environment.name}
+              icon={
+                repositorySlug(environment) ? (
+                  <RepositoryAvatar size={16} url={repositorySlug(environment)} />
+                ) : (
+                  <Icon icon={ContainerIcon} size={16} />
+                )
+              }
               onClick={() => {
                 onClose();
                 void onPick(environment);
@@ -127,12 +137,14 @@ const SandboxRepositoryMenu = memo<SandboxRepositoryMenuProps>(
           </Flexbox>
         )}
 
-        <OptionRow
-          compact
-          icon={<Icon icon={PlusIcon} size={16} />}
-          label={t('sandboxEnvironment.add')}
-          onClick={onAdd}
-        />
+        {onAdd && (
+          <OptionRow
+            compact
+            icon={<Icon icon={PlusIcon} size={16} />}
+            label={t('sandboxEnvironment.add')}
+            onClick={onAdd}
+          />
+        )}
       </Flexbox>
     );
   },

@@ -1,5 +1,7 @@
 import { createStaticStyles } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     code: css`
@@ -33,7 +35,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => {
     `,
     name: css`
       font-family: ${cssVar.fontFamilyCode};
-      font-size: 14px;
+      font-size: ${densityVars.fontSize};
       font-weight: 500;
       line-height: 20px;
     `,
@@ -50,7 +52,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => {
     sectionTitle: css`
       margin: 0;
 
-      font-size: 16px;
+      font-size: ${densityVars.pageTitleFontSize};
       font-weight: 600;
       line-height: 1.5;
       white-space: nowrap;

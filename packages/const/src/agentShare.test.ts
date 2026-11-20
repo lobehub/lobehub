@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   hasShareToolGrant,
   isAgentShareModelRestrictionExempt,
+  isAgentShareVisitorHeteroType,
   isShareToolApiGranted,
   resolveShareAllowedSkillIds,
   resolveShareToolGrants,
@@ -112,6 +113,22 @@ describe('resolveShareAllowedSkillIds', () => {
   });
 });
 
+describe('isAgentShareVisitorHeteroType', () => {
+  it.each(['claude-code', 'codex', 'opencode', 'cursor', 'kimi-code', 'deepseek-harness'])(
+    'lets a visitor run the locally executed runtime %s',
+    (type) => {
+      expect(isAgentShareVisitorHeteroType(type)).toBe(true);
+    },
+  );
+
+  it.each(['openclaw', 'hermes', 'unknown-cli', '', null, undefined])(
+    'refuses %s, which has no visitor-scoped device dispatch',
+    (type) => {
+      expect(isAgentShareVisitorHeteroType(type)).toBe(false);
+    },
+  );
+});
+
 describe('isAgentShareModelRestrictionExempt', () => {
   const driver = (type: string) => ({ heterogeneousProvider: { type } });
 
@@ -126,6 +143,15 @@ describe('isAgentShareModelRestrictionExempt', () => {
       isAgentShareModelRestrictionExempt({ agencyConfig: driver('codex'), provider: 'codex' }),
     ).toBe(true);
   });
+
+  it.each(['opencode', 'kimi-code', 'deepseek-harness'])(
+    'exempts the other locally executed runtime %s',
+    (type) => {
+      expect(
+        isAgentShareModelRestrictionExempt({ agencyConfig: driver(type), provider: type }),
+      ).toBe(true);
+    },
+  );
 
   it('keeps LobeHub agents and runtimes a visitor cannot run restricted', () => {
     expect(isAgentShareModelRestrictionExempt(undefined)).toBe(false);

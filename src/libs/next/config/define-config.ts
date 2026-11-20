@@ -327,34 +327,46 @@ export function defineConfig(config: CustomNextConfig) {
         permanent: true,
         source: '/manifest.json',
       },
+      // The Community page became the Marketplace (`/community` → `/marketplace`).
+      // Old plural aliases point straight at the final page to avoid a second hop.
       {
-        destination: '/community/agent',
+        destination: '/marketplace/agent',
         permanent: true,
         source: '/community/assistants',
       },
       {
-        destination: '/community/plugin',
+        destination: '/marketplace/connector',
         permanent: true,
         source: '/community/plugins',
       },
       {
-        destination: '/community/model',
+        destination: '/marketplace/model',
         permanent: true,
         source: '/community/models',
       },
       {
-        destination: '/community/provider',
+        destination: '/marketplace/provider',
         permanent: true,
         source: '/community/providers',
       },
-      // Legacy redirects from /discover to /community
       {
-        destination: '/community',
+        destination: '/marketplace',
+        permanent: true,
+        source: '/community',
+      },
+      {
+        destination: '/marketplace/:path*',
+        permanent: true,
+        source: '/community/:path*',
+      },
+      // Legacy redirects from /discover
+      {
+        destination: '/marketplace',
         permanent: true,
         source: '/discover',
       },
       {
-        destination: '/community/:path*',
+        destination: '/marketplace/:path*',
         permanent: true,
         source: '/discover/:path*',
       },

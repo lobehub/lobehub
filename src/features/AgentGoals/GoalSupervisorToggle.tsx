@@ -3,8 +3,8 @@
 import { ActionIcon } from '@lobehub/ui';
 import { PanelRightOpenIcon } from 'lucide-react';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import { useHeaderActionSize } from '@/styles/density';
 
 interface GoalSupervisorToggleProps {
   /** The agent that supervises the goal; its name goes into the tooltip. */
@@ -35,6 +35,7 @@ const GoalSupervisorToggle = ({
   onToggle,
 }: GoalSupervisorToggleProps) => {
   const meta = useAgentDisplayMeta(agentId);
+  const headerActionSmallSize = useHeaderActionSize(true);
 
   if (hideWhenExpanded && expand) return null;
 
@@ -47,7 +48,7 @@ const GoalSupervisorToggle = ({
       aria-label={title}
       data-testid={'goal-supervisor-toggle'}
       icon={PanelRightOpenIcon}
-      size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+      size={headerActionSmallSize}
       title={title}
       onClick={onToggle}
     />

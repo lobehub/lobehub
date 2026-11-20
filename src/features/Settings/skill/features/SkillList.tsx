@@ -1,19 +1,25 @@
 'use client';
 
+import type { ConnectorVisibility } from '@lobechat/types';
 import { Button, Center, Empty } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { media } from '@lobehub/ui/stylex/media.stylex';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
-import { ChevronDownIcon, ChevronRightIcon, SearchX } from 'lucide-react';
+import { ChevronDownIcon, ChevronRightIcon, LockIcon, SearchX } from 'lucide-react';
 import type React from 'react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
-import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
+import {
+  featureFlagsSelectors,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
   agentSkillsSelectors,
@@ -23,8 +29,14 @@ import {
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
-import { connectorSelectors } from '@/store/tool/slices/connector';
+import {
+  connectorSelectors,
+  isInConnectorTab,
+  isIntegrationInConnectorTab,
+} from '@/store/tool/slices/connector';
+import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
+import { densityTokens } from '@/styles/density.stylex';
 import { type LobeToolType } from '@/types/tool/tool';
 
 import AgentConnectorItem from './AgentConnectorItem';
@@ -37,12 +49,15 @@ import {
   getVisibleSectionItems,
   type IntegrationItem,
   isIntegrationConnected,
+  isSectionExpandable,
   matchesConnectorKeyword,
   matchesIntegrationKeyword,
   partitionByInstalled,
 } from './connectorSections';
 import LobehubSkillItem from './LobehubSkillItem';
 import McpSkillItem from './McpSkillItem';
+import PageSectionHeading from './PageSectionHeading';
+import { privateTabState } from './privateTabState';
 import type { ToolDetailType } from './SkillDetail';
 import { useSkillListVariant } from './SkillListRow';
 
@@ -54,57 +69,74 @@ const styles = stylex.create({
     display: 'flex',
     gap: '4px',
     alignItems: 'center',
-    paddingBlockStart: '12px',
+    paddingBlockStart: densityTokens['--lobe-density-content-gap'],
     paddingBlockEnd: '4px',
     paddingInline: '4px',
     fontSize: '12px',
     fontWeight: 500,
     color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
   },
-  // Page groups: a heading with its count, then a two-column catalog of
-  // borderless rows; groups are separated by whitespace, not rules.
-  pageSection: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  // Page groups (the Codex Plugins catalog): a 16px heading, then a
+  // two-column catalog of borderless rows; groups are separated by 32px of
+  // whitespace, not rules. The rows' 12px inset plus the 16px column gap
+  // leave ~40px between the two columns' content.
+  // 12px + the row's 14px tile inset ≈ the Codex 24px from heading to icon tile.
+  pageSection: { display: 'flex', flexDirection: 'column', gap: '12px' },
   pageSections: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '40px',
+    gap: '32px',
     paddingBlockStart: '24px',
   },
   pageGrid: {
     display: 'grid',
     gridTemplateColumns: { default: 'repeat(2, minmax(0, 1fr))', [media.lg]: 'minmax(0, 1fr)' },
-    columnGap: '32px',
+    columnGap: '16px',
     rowGap: '4px',
   },
-  sectionHeaderPage: {
-    cursor: 'default',
-    gap: '8px',
-    paddingBlock: '0',
-    paddingInline: '12px',
-    fontSize: cssVar.fontSizeHeading5,
-    fontWeight: 600,
-    color: { 'default': cssVar.colorText, ':hover': cssVar.colorText },
-  },
-  sectionCount: { fontWeight: 400, color: cssVar.colorTextDescription },
-  showAll: { alignSelf: 'flex-start', marginInlineStart: '4px' },
 });
+
+/** What the page header can drive in the list: re-fetch every source it shows. */
+export interface SkillListHeaderContext {
+  onRefresh: () => void;
+  refreshing: boolean;
+}
 
 export type SkillViewMode = 'connector' | 'skill';
 
 interface SkillListProps {
+  /**
+   * Sidebar mode (the Marketplace `Installed` section): one flat list of what
+   * is already in the library, no group headers and nothing left to add.
+   */
+  installedOnly?: boolean;
   /** Page search: filters every group by name, identifier and description. */
   keyword?: string;
+  /**
+   * Page mode for the Connectors Discover page: only LobeHub's own OAuth
+   * connectors (LobeHub / Composio integrations), connected or not, as one
+   * group. The installed manager then leaves out the ones not connected yet.
+   */
+  lobehubConnectors?: boolean;
   onClearKeyword?: () => void;
   onDeleteSelected?: () => void;
   onSelect?: (identifier: string, type: ToolDetailType) => void;
   /** Page header above the groups. */
-  renderHeader?: () => React.ReactNode;
+  renderHeader?: (context: SkillListHeaderContext) => React.ReactNode;
   selectedIdentifier?: string;
   viewMode?: SkillViewMode;
+  /**
+   * Workspace connector tab: `public` lists the shared pool (every catalog
+   * section); `private` lists only the caller's private connectors. Unset
+   * outside a workspace.
+   */
+  visibility?: ConnectorVisibility;
 }
 
 const SkillList = memo<SkillListProps>(
   ({
+    installedOnly,
+    lobehubConnectors,
     keyword,
     onClearKeyword,
     onSelect,
@@ -112,13 +144,16 @@ const SkillList = memo<SkillListProps>(
     renderHeader,
     selectedIdentifier,
     viewMode = 'connector',
+    visibility,
   }) => {
     const { t } = useTranslation('setting');
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
+    const [refreshing, setRefreshing] = useState(false);
     const isPage = useSkillListVariant() === 'page';
 
     const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
+    const { showMarket } = useServerConfigStore(featureFlagsSelectors);
     const isComposioEnabled = useServerConfigStore(serverConfigSelectors.enableComposio);
     const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
     const allComposioServers = useToolStore(composioStoreSelectors.getServers, isEqual);
@@ -126,14 +161,27 @@ const SkillList = memo<SkillListProps>(
     const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
     const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
     const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
-    const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
-    const marketplaceConnectors = useToolStore(
+    const allCustomConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+    const allMarketplaceConnectors = useToolStore(
       connectorSelectors.marketplaceMcpConnectors,
       isEqual,
     );
     const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
-    const agentBoundConnectors = useToolStore(connectorSelectors.agentBoundConnectors, isEqual);
+    // The Private tab reads only this list: keep its load's failure for Retry
+    const connectorsSWR = useToolStore((s) => s.useFetchConnectors)(true);
+    const allAgentBoundConnectors = useToolStore(connectorSelectors.agentBoundConnectors, isEqual);
+    // What an OAuth integration's tab is decided by: its rows' visibility, and
+    // which of them holds the account its actions act on
+    const connectorTabRows = useToolStore(
+      (s) =>
+        connectorSelectors.connectorList(s).map(({ identifier, metadata, visibility }) => ({
+          identifier,
+          metadata: metadata?.composio ? { composio: metadata.composio } : null,
+          visibility,
+        })),
+      isEqual,
+    );
     const isAgentBoundInit = useToolStore((s) => s.isAgentBoundInit);
     const fetchAgentBoundConnectors = useToolStore((s) => s.fetchAgentBoundConnectors);
     const allBuiltinTools = useToolStore((s) => s.builtinTools, isEqual);
@@ -211,14 +259,41 @@ const SkillList = memo<SkillListProps>(
     // Integrations (built-in skills / tools and the OAuth catalog, connected
     // first), then installed plugins split into community and custom MCPs.
     // A few dozen entries: cheap enough to derive on each render.
-    const integrations = buildIntegrationItems({
+    const allIntegrations = buildIntegrationItems({
       ...connectionState,
       allBuiltinTools,
       builtinSkills,
       connectorAvailability: { composio: isComposioEnabled, lobehub: isLobehubSkillEnabled },
     });
-    const communityMCPs = installedPluginList.filter((plugin) => plugin.type === 'plugin');
-    const customMCPs = installedPluginList.filter((plugin) => plugin.type === 'customPlugin');
+
+    // Each workspace tab lists its own pool. Built-in tools, plugins and agent
+    // connectors carry no visibility and stay with the shared pool; a connector
+    // row lists under the tab of its visibility, and an OAuth integration
+    // (Composio, LobeHub) under the tabs of its connector rows.
+    const isPrivateTab = isConnectorView && visibility === 'private';
+    const inTab = (c: ConnectorWithTools) => isInConnectorTab(c, visibility);
+    const customConnectors = allCustomConnectors.filter(inTab);
+    const marketplaceConnectors = allMarketplaceConnectors.filter(inTab);
+    const tabVisibility = isConnectorView ? visibility : undefined;
+    const integrations = allIntegrations.filter((item) => {
+      if (item.type === 'composio')
+        return isIntegrationInConnectorTab(
+          item.serverType.identifier,
+          connectorTabRows,
+          tabVisibility,
+          getComposioServerByIdentifier(item.serverType.identifier)?.connectedAccountId,
+        );
+      if (item.type === 'lobehub')
+        return isIntegrationInConnectorTab(item.provider.id, connectorTabRows, tabVisibility);
+      return !isPrivateTab;
+    });
+    const communityMCPs = isPrivateTab
+      ? []
+      : installedPluginList.filter((plugin) => plugin.type === 'plugin');
+    const customMCPs = isPrivateTab
+      ? []
+      : installedPluginList.filter((plugin) => plugin.type === 'customPlugin');
+    const agentBoundConnectors = isPrivateTab ? [] : allAgentBoundConnectors;
 
     const hasAnySkills =
       viewMode === 'skill'
@@ -232,7 +307,64 @@ const SkillList = memo<SkillListProps>(
           customMCPs.length > 0 ||
           agentBoundConnectors.length > 0;
 
-    const header = isPage ? renderHeader?.() : undefined;
+    // The page header's refresh re-fetches every list this view shows, keeping
+    // the painted rows until the new data lands.
+    const refreshAll = () => {
+      if (refreshing) return;
+      setRefreshing(true);
+      void Promise.allSettled([
+        lobehubSkillsSWR.mutate(),
+        composioSWR.mutate(),
+        agentSkillsSWR.mutate(),
+        Promise.resolve(builtinToolsSWR.revalidate()),
+        connectorsSWR.mutate(),
+        ...(isConnectorView ? [fetchAgentBoundConnectors()] : []),
+      ]).finally(() => setRefreshing(false));
+    };
+    const header = isPage ? renderHeader?.({ onRefresh: refreshAll, refreshing }) : undefined;
+
+    const privateState = isPrivateTab
+      ? privateTabState({
+          count: customConnectors.length + marketplaceConnectors.length + integrations.length,
+          error: connectorsSWR.error,
+          isConnectorsInit,
+        })
+      : undefined;
+    if (privateState === 'loading')
+      return (
+        <>
+          {header}
+          <SkeletonList aria-busy paddingBlock={12} rows={4} />
+        </>
+      );
+    if (privateState === 'error') {
+      return (
+        <>
+          {header}
+          <Center className={stylex.props(styles.container).className} paddingBlock={48}>
+            <AsyncError
+              error={connectorsSWR.error}
+              variant={'block'}
+              onRetry={() => void connectorsSWR.mutate()}
+            />
+          </Center>
+        </>
+      );
+    }
+    if (privateState === 'empty') {
+      return (
+        <>
+          {header}
+          <Center className={stylex.props(styles.container).className} paddingBlock={48}>
+            <Empty
+              description={t('skillView.privateConnectorsEmpty.desc')}
+              icon={LockIcon}
+              title={t('skillView.privateConnectorsEmpty.title')}
+            />
+          </Center>
+        </>
+      );
+    }
 
     // A failed fetch must read as a failure with Retry, never as the "no skills"
     // empty (error gated ahead of empty).
@@ -248,6 +380,8 @@ const SkillList = memo<SkillListProps>(
     }
 
     if (!hasAnySkills) {
+      // The Discover group has nothing to lead with; the page's other groups carry on.
+      if (lobehubConnectors) return null;
       return (
         <>
           {header}
@@ -446,6 +580,38 @@ const SkillList = memo<SkillListProps>(
       const builtins = partitionByInstalled(builtinToolItems, isConnected);
       const oauth = partitionByInstalled(communitySkillItems, isConnected);
 
+      // Connectors Discover: LobeHub's OAuth connectors lead the page as one
+      // group, connected ones keeping their status and menu (Codex `⋯`).
+      if (lobehubConnectors) {
+        if (communitySkillItems.length === 0) return null;
+        const key = 'lobehubConnectors';
+        const isExpanded = expanded.has(key);
+        const { hiddenCount, visible } = getVisibleSectionItems(
+          communitySkillItems.map(renderIntegration),
+          isExpanded,
+        );
+        return (
+          <section {...stylex.props(styles.pageSection)}>
+            <PageSectionHeading
+              expanded={isExpanded}
+              label={t('connectorMarket.section.lobehub')}
+              expandable={isSectionExpandable({
+                expanded: isExpanded,
+                hiddenCount,
+                searching: false,
+              })}
+              toggleLabel={
+                isExpanded
+                  ? t('connectorMarket.section.showLess')
+                  : `${t('connectorMarket.section.showAll')} (${communitySkillItems.length})`
+              }
+              onToggle={() => toggleExpanded(key)}
+            />
+            <div {...stylex.props(styles.pageGrid)}>{visible}</div>
+          </section>
+        );
+      }
+
       const sections = (
         isConnectorView
           ? [
@@ -460,14 +626,16 @@ const SkillList = memo<SkillListProps>(
                 label: t('skillGroup.builtinTools', 'Built-in Tools'),
               },
               {
-                items: oauth.available.map(renderIntegration),
+                // With the market on, the ones left to connect lead the
+                // Connectors Discover page (`lobehubConnectors`) instead.
+                items: showMarket ? [] : oauth.available.map(renderIntegration),
                 key: 'communityConnectors',
                 label: t('skillGroup.communityConnectors', 'OAuth Connectors'),
               },
               {
                 items: renderCommunityMCPs(),
                 key: 'communityTools',
-                label: t('skillGroup.communityTools', 'Community Tools'),
+                label: t('skillGroup.communityTools', 'Marketplace Tools'),
               },
               {
                 items: renderCustomConnectors(),
@@ -550,29 +718,29 @@ const SkillList = memo<SkillListProps>(
               {sections.map(({ items, key, label }) => {
                 const isExpanded = expanded.has(key);
                 // A search shows every hit; otherwise long groups preview their first rows.
+                const searching = !!keyword?.trim();
                 const { hiddenCount, visible } = getVisibleSectionItems(
                   items,
-                  isExpanded || !!keyword?.trim(),
+                  isExpanded || searching,
                 );
+                const expandable = isSectionExpandable({
+                  expanded: isExpanded,
+                  hiddenCount,
+                  searching,
+                });
+                const toggleLabel = isExpanded
+                  ? t('connectorMarket.section.showLess')
+                  : `${t('connectorMarket.section.showAll')} (${items.length})`;
                 return (
                   <section key={key} {...stylex.props(styles.pageSection)}>
-                    <h3 {...stylex.props(styles.sectionHeader, styles.sectionHeaderPage)}>
-                      {label}
-                      <span {...stylex.props(styles.sectionCount)}>{items.length}</span>
-                    </h3>
+                    <PageSectionHeading
+                      expandable={expandable}
+                      expanded={isExpanded}
+                      label={label}
+                      toggleLabel={toggleLabel}
+                      onToggle={() => toggleExpanded(key)}
+                    />
                     <div {...stylex.props(styles.pageGrid)}>{visible}</div>
-                    {(hiddenCount > 0 || isExpanded) && (
-                      <Button
-                        className={stylex.props(styles.showAll).className}
-                        size={'small'}
-                        type={'text'}
-                        onClick={() => toggleExpanded(key)}
-                      >
-                        {isExpanded
-                          ? t('connectorMarket.section.showLess')
-                          : `${t('connectorMarket.section.showAll')} (${items.length})`}
-                      </Button>
-                    )}
                   </section>
                 );
               })}
@@ -583,6 +751,39 @@ const SkillList = memo<SkillListProps>(
     }
 
     // ── Sidebar list (skills page, mobile) ───────────────────────────────────
+    if (installedOnly) {
+      const isConnected = (item: IntegrationItem) => isIntegrationConnected(item, connectionState);
+      const items = isConnectorView
+        ? [
+            ...[
+              ...partitionByInstalled(builtinToolItems, isConnected).installed,
+              ...partitionByInstalled(communitySkillItems, isConnected).installed,
+            ].map(renderIntegration),
+            ...renderCommunityMCPs(),
+            ...renderCustomConnectors(),
+          ]
+        : [
+            ...renderAgentSkills(marketAgentSkills),
+            ...renderAgentSkills(userAgentSkills),
+            ...builtinSkillItems.map((item) =>
+              item.type === 'builtinAgent' ? (
+                <AgentSkillItem
+                  isSelected={selectedIdentifier === item.builtinAgentSkill.identifier}
+                  key={item.builtinAgentSkill.identifier}
+                  skill={item.builtinAgentSkill}
+                  onSelect={
+                    onSelect
+                      ? () => onSelect(item.builtinAgentSkill.identifier, 'builtin-skill')
+                      : undefined
+                  }
+                />
+              ) : null,
+            ),
+          ];
+
+      return <div {...stylex.props(styles.container)}>{items}</div>;
+    }
+
     const renderSection = (key: string, label: string, children: React.ReactNode) => {
       const isCollapsed = collapsed.has(key);
       return (
@@ -663,14 +864,14 @@ const SkillList = memo<SkillListProps>(
         {hasCommunitySkills &&
           renderSection(
             'communitySkills',
-            t('skillGroup.communitySkills', 'Community Skills'),
+            t('skillGroup.communitySkills', 'Marketplace Skills'),
             renderAgentSkills(marketAgentSkills),
           )}
 
         {hasCommunityTools &&
           renderSection(
             'communityTools',
-            t('skillGroup.communityTools', 'Community Tools'),
+            t('skillGroup.communityTools', 'Marketplace Tools'),
             renderCommunityMCPs(),
           )}
 

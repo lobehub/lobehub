@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import GeneratingBorder from '@/components/GeneratingBorder';
 import { expertiseService, type RuleGroup } from '@/services/expertise';
 import { shinyTextStyles } from '@/styles';
+import { densityVars } from '@/styles/densityVars';
 
 export const composeStyles = createStaticStyles(({ css }) => ({
   body: css`
@@ -41,11 +42,11 @@ export const composeStyles = createStaticStyles(({ css }) => ({
     width: 100%;
     min-height: 150px;
     padding-block: 14px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border: none;
 
     font: inherit;
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 1.7;
     color: inherit;
 
@@ -59,7 +60,7 @@ export const composeStyles = createStaticStyles(({ css }) => ({
   `,
   head: css`
     position: relative;
-    padding-block: 16px 8px;
+    padding-block: ${densityVars.cardPadding} 8px;
     padding-inline: 20px;
   `,
   inputShell: css`

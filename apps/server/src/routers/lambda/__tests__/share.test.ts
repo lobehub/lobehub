@@ -222,8 +222,7 @@ describe('shareRouter', () => {
       ownerFullName: 'Owner Person',
       ownerUsername: 'owner',
       shareConfig: {
-        maxTopicsPerVisitor: 5,
-        maxTurnsPerTopic: 20,
+        maxMessagesPerVisitor: 100,
         slug: 'shared-agent',
         toolGrants: [{ apis: ['search'], identifier: 'lobe-web-browsing' }],
       },
@@ -253,6 +252,18 @@ describe('shareRouter', () => {
       ]);
       findByIdAndProviderMock.mockResolvedValue(undefined);
       resolveModelSelectionMock.mockResolvedValue({ model: 'gpt-4o', provider: 'openai' });
+    });
+
+    it('advertises no LobeHub tool grants for a Claude Code / Codex Agent', async () => {
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
+        ...agentShare,
+        agentAgencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+      } as any);
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+
+      const result = await caller.getSharedAgent({ slugOrId: 'shared-agent' });
+
+      expect(result.toolGrants).toEqual([]);
     });
 
     it('returns independent demos and selected deliveries in the owner scope', async () => {
@@ -337,8 +348,7 @@ describe('shareRouter', () => {
         terms: {
           allowCreatorViewSessions: false,
           maxFileStorage: 512 * 1024 * 1024,
-          maxTopicsPerVisitor: 5,
-          maxTurnsPerTopic: 20,
+          maxMessagesPerVisitor: 100,
         },
         // Identifier only: the granted API list is owner-facing configuration.
         toolGrants: ['lobe-web-browsing'],

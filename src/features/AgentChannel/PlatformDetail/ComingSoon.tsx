@@ -4,6 +4,8 @@ import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import type { ChannelPlatformDefinition } from '../const';
 import { getPlatformIcon } from '../const';
 
@@ -11,7 +13,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   desc: css`
     max-width: 360px;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 1.6;
     color: ${cssVar.colorTextSecondary};
     text-align: center;
@@ -33,7 +35,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     align-items: center;
     justify-content: center;
 

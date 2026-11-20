@@ -1,7 +1,7 @@
 import { Then } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
-import { CustomWorld } from '../../support/world';
+import type { CustomWorld } from '../../support/world';
 
 // ============================================
 // Then Steps (Assertions)
@@ -100,8 +100,11 @@ Then('I should see MCP cards', async function (this: CustomWorld) {
   expect(count).toBeGreaterThan(0);
 });
 
-Then('I should see the category filter', async function (this: CustomWorld) {
-  // CategoryMenu component has data-testid="category-menu" (shared across list pages)
-  const categoryFilter = this.page.locator('[data-testid="category-menu"]').first();
-  await expect(categoryFilter).toBeVisible({ timeout: 30_000 });
-});
+Then(
+  'I should see the MCP category {string}',
+  async function (this: CustomWorld, category: string) {
+    await expect(
+      this.page.locator(`section a[href="/marketplace/connector?category=${category}"]`),
+    ).toBeVisible();
+  },
+);
