@@ -90,4 +90,19 @@ describe('TopicModel.listOpenedTopics — task runs follow task visibility', () 
 
     expect(rows.map((row) => row.id).sort()).toEqual(['run-private', 'run-public']);
   });
+
+  // Regression: `getTopics({ openedByTopicId })` (the CLI's child listing)
+  // filtered only by agent, so a member who can use the agent got another
+  // member's private task run — id, title and first prompt.
+  it("leaves another member's private task run out of the child listing too", async () => {
+    const member_ = new TopicModel(serverDB, member, workspaceId);
+    const owner_ = new TopicModel(serverDB, owner, workspaceId);
+
+    const asMember = await member_.query({ openedByTopicId: 'parent', withDetails: true });
+    expect(asMember.items.map((row: any) => row.id)).toEqual(['run-public']);
+    expect(asMember.total).toBe(1);
+
+    const asOwner = await owner_.query({ openedByTopicId: 'parent' });
+    expect(asOwner.items.map((row: any) => row.id).sort()).toEqual(['run-private', 'run-public']);
+  });
 });

@@ -28,7 +28,7 @@ import { buildWorkspaceWhere } from '../../utils/workspace';
 import { topicMetadataWithCreator } from '../topicCreator';
 import { topicHasGoal } from '../topicGoal';
 import type { TopicModelContext } from './context';
-import { openedFromLiveParentCondition } from './openedBy';
+import { openedFromLiveParentCondition, visibleTaskRunCondition } from './openedBy';
 import type { QueryTopicParams, TopicListItem } from './types';
 
 /**
@@ -231,6 +231,8 @@ export const query = async (
       ctx.notShareVisitor(),
       notChannelTopic(),
       childOfCondition(openedByTopicId),
+      // Another member's private task run is not the caller's to list.
+      visibleTaskRunCondition(ctx),
       agentId ? eq(topics.agentId, agentId) : undefined,
       openedByAgentIds
         ? or(
