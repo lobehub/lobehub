@@ -62,6 +62,7 @@ export class MessageModel {
   countApproximate: MessageAnalyticsQueries['countApproximate'];
   countGroupByTopic: MessageAnalyticsQueries['countGroupByTopic'];
   topicMessageStats: MessageAnalyticsQueries['topicMessageStats'];
+  topicStatsFromCounts: MessageAnalyticsQueries['topicStatsFromCounts'];
   hasTopicMessages: MessageAnalyticsQueries['hasTopicMessages'];
   findFirstAssistantInTopic: MessageAnalyticsQueries['findFirstAssistantInTopic'];
   countWords: MessageAnalyticsQueries['countWords'];
@@ -180,6 +181,7 @@ export class MessageModel {
     this.countApproximate = analytics.countApproximate;
     this.countGroupByTopic = analytics.countGroupByTopic;
     this.topicMessageStats = analytics.topicMessageStats;
+    this.topicStatsFromCounts = analytics.topicStatsFromCounts;
     this.hasTopicMessages = analytics.hasTopicMessages;
     this.findFirstAssistantInTopic = analytics.findFirstAssistantInTopic;
     this.countWords = analytics.countWords;

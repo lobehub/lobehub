@@ -1,11 +1,12 @@
 import { TOPIC_MESSAGE_SEARCH_LIMIT } from '@lobechat/const';
 import { omitServerOwnedMessageMetadata } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { MessageModel } from '@/database/models/message';
 import { messagePlugins, messages, topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import type { ConversationVisibilityRef } from '@/server/routers/lambda/_helpers/conversationResourceGuard';
 import {
   assertCanUseMessageTargets,
   assertCanViewTopicTargets,
@@ -24,6 +25,9 @@ import type {
   MessageStatsQuery,
   MessageUpdateRequest,
 } from '../types/message.type';
+
+/** Topic ids per read when resolving which conversations the caller may view. */
+const STATS_TOPIC_CHUNK = 500;
 
 /**
  * Message edits, attachments, search and statistics for the REST API.
@@ -291,9 +295,52 @@ export class MessageEditService extends BaseService {
         throw this.createAuthorizationError(permission.message || 'No permission to read messages');
       }
 
-      return new MessageModel(this.db, this.userId, this.workspaceId).topicMessageStats(query);
+      const model = new MessageModel(this.db, this.userId, this.workspaceId);
+
+      // Personal mode already scopes every row to the caller, so the plain
+      // aggregate is the authorization boundary.
+      if (!this.workspaceId) return model.topicMessageStats(query);
+
+      // In a workspace the per-topic counts carry the *workspace* ownership, so
+      // `MESSAGE_READ` alone would still count another member's private agent —
+      // including through a scoped `agentId`. Aggregate only the topics whose
+      // conversation the caller may `view`, the same check reading that topic
+      // would run; a scoped request collapses to a single verdict and simply
+      // reports empty statistics when it is refused.
+      const rows = await model.countGroupByTopic(query);
+      const refs = await this.statsConversationRefs(query.agentId, rows.map((row) => row.topicId));
+      const visible = await createConversationViewFilter(this.guardCtx, refs);
+
+      return model.topicStatsFromCounts(
+        rows.filter((_, index) => visible(refs[index])).map((row) => row.count),
+      );
     } catch (error) {
       this.fail(error, 'Message statistics');
     }
+  }
+
+  /**
+   * Conversation reference for every counted topic, so the visibility filter
+   * dedupes by conversation instead of by topic. A scoped request answers with
+   * the requested agent verbatim — no per-topic read at all.
+   */
+  private async statsConversationRefs(
+    agentId: string | undefined,
+    topicIds: string[],
+  ): Promise<ConversationVisibilityRef[]> {
+    if (agentId) return topicIds.map(() => ({ agentId }));
+    if (topicIds.length === 0) return [];
+
+    const byId = new Map<string, ConversationVisibilityRef>();
+    for (let start = 0; start < topicIds.length; start += STATS_TOPIC_CHUNK) {
+      const chunk = topicIds.slice(start, start + STATS_TOPIC_CHUNK);
+      const rows = await this.db
+        .select({ agentId: topics.agentId, groupId: topics.groupId, id: topics.id })
+        .from(topics)
+        .where(inArray(topics.id, chunk));
+      for (const row of rows) byId.set(row.id, { agentId: row.agentId, groupId: row.groupId });
+    }
+
+    return topicIds.map((id) => byId.get(id) ?? { topicId: id });
   }
 }
