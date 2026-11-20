@@ -215,6 +215,35 @@ export const KnowledgeBaseManifest: BuiltinToolManifest = {
     },
     {
       description:
+        'Edit an existing text/markdown document in a knowledge base in place: replace its content, rename it, or move it under another folder. The document keeps its ID, so existing references stay valid — use this instead of creating a new document to revise one; createDocument only creates new documents. Get the documentId from documents[].documentId in searchKnowledgeBase results or from the item list of viewKnowledgeBase. Provide at least one of title, content or parentId; omitted fields are left unchanged, so to only rename or move a document, do not send content. Only documents created as notes (custom/document) can be edited; uploaded files such as parsed PDFs cannot.',
+      name: KnowledgeBaseApiName.updateDocument,
+      parameters: {
+        properties: {
+          content: {
+            description:
+              'New full text or markdown content. It replaces the whole current body, so read the document first with readKnowledge and send the complete revised text. Omit to keep the current content.',
+            type: 'string',
+          },
+          documentId: {
+            description: 'The ID of the document to edit (docs_*).',
+            type: 'string',
+          },
+          parentId: {
+            description:
+              'Optional ID of a folder or document in the same knowledge base to move this document under. Omit to keep its current location.',
+            type: 'string',
+          },
+          title: {
+            description: 'New title of the document. Omit to keep the current title.',
+            type: 'string',
+          },
+        },
+        required: ['documentId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
         'Add existing files to a knowledge base by their file IDs. The files must already exist in the system.',
       name: KnowledgeBaseApiName.addFiles,
       parameters: {
