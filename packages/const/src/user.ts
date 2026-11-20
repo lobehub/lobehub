@@ -15,6 +15,7 @@ export const DEFAULT_PREFERENCE: UserPreference = {
   projectTopicGroupMode: 'byAgent',
   topicGroupMode: 'byTime',
   topicIncludeCompleted: false,
+  topicShowRunningTime: true,
   topicSortBy: 'updatedAt',
   useCmdEnterToSend: false,
 };

@@ -11,6 +11,7 @@ const groupModeMock = vi.hoisted(() => ({ mode: 'byTime' as string }));
 const preferenceMock = vi.hoisted(() => ({
   topicSortBy: 'updatedAt',
   topicIncludeCompleted: true,
+  topicShowRunningTime: true,
   updatePreference: vi.fn(),
 }));
 const updateAgentModeMock = vi.hoisted(() => vi.fn());
@@ -63,6 +64,7 @@ vi.mock('@/store/user/selectors', () => ({
   preferenceSelectors: {
     topicSortBy: () => preferenceMock.topicSortBy,
     topicIncludeCompleted: () => preferenceMock.topicIncludeCompleted,
+    topicShowRunningTime: () => preferenceMock.topicShowRunningTime,
   },
 }));
 
@@ -168,5 +170,38 @@ describe('useTopicFilterDropdownMenu only-mine filter', () => {
 
     const keys = filterGroup(result.current()).children.map((child: any) => child.key);
     expect(keys).toEqual(['showCompleted']);
+  });
+});
+
+describe('useTopicFilterDropdownMenu display group', () => {
+  const runningTimeItem = (items: any[]) =>
+    items
+      .find((item) => item.key === 'display')
+      .children.find((child: any) => child.key === 'showRunningTime');
+
+  beforeEach(() => {
+    scopeMock.scope = null;
+    vi.clearAllMocks();
+  });
+
+  /** @example A user who finds the timer crowding titles turns it off from the menu. */
+  it('turns the running time off when it is shown', () => {
+    preferenceMock.topicShowRunningTime = true;
+
+    const { result } = renderHook(() => useTopicFilterDropdownMenu());
+    const item = runningTimeItem(result.current());
+
+    expect(item.label).toBe('filter.showRunningTime');
+    item.onClick();
+    expect(preferenceMock.updatePreference).toHaveBeenCalledWith({ topicShowRunningTime: false });
+  });
+
+  it('turns the running time back on when it is hidden', () => {
+    preferenceMock.topicShowRunningTime = false;
+
+    const { result } = renderHook(() => useTopicFilterDropdownMenu());
+    runningTimeItem(result.current()).onClick();
+
+    expect(preferenceMock.updatePreference).toHaveBeenCalledWith({ topicShowRunningTime: true });
   });
 });

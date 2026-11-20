@@ -20,11 +20,14 @@ export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
   const projectFilterItems = useProjectTopicFilterItems();
   const onlyMineItem = useOnlyMineFilterItem();
 
-  const [topicSortBy, topicIncludeCompleted, updatePreference] = useUserStore((s) => [
-    preferenceSelectors.topicSortBy(s),
-    preferenceSelectors.topicIncludeCompleted(s),
-    s.updatePreference,
-  ]);
+  const [topicSortBy, topicIncludeCompleted, topicShowRunningTime, updatePreference] = useUserStore(
+    (s) => [
+      preferenceSelectors.topicSortBy(s),
+      preferenceSelectors.topicIncludeCompleted(s),
+      preferenceSelectors.topicShowRunningTime(s),
+      s.updatePreference,
+    ],
+  );
 
   return useCallback(() => {
     // "by agent" only exists where topics span multiple agents — the
@@ -83,11 +86,28 @@ export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
         label: t('filter.filter'),
         type: 'group' as const,
       },
+      { type: 'divider' as const },
+      {
+        children: [
+          {
+            icon: topicShowRunningTime ? <Icon icon={LucideCheck} /> : <div />,
+            key: 'showRunningTime',
+            label: t('filter.showRunningTime'),
+            onClick: () => {
+              updatePreference({ topicShowRunningTime: !topicShowRunningTime });
+            },
+          },
+        ],
+        key: 'display',
+        label: t('filter.display'),
+        type: 'group' as const,
+      },
     ];
   }, [
     topicGroupMode,
     topicSortBy,
     topicIncludeCompleted,
+    topicShowRunningTime,
     onlyMineItem,
     updatePreference,
     updateTopicGroupMode,

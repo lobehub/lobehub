@@ -48,7 +48,11 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
+import {
+  labPreferSelectors,
+  preferenceSelectors,
+  userProfileSelectors,
+} from '@/store/user/selectors';
 
 import { useTopicHoverPrefetch } from '../../hooks/topicHoverPrefetch/useTopicHoverPrefetch';
 import { markSidebarTopicActivation } from '../../hooks/useScrollActiveTopicIntoView';
@@ -275,6 +279,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
     const { t } = useTranslation('topic');
     const { isDarkMode } = useTheme();
     const goalsEnabled = useUserStore(labPreferSelectors.enableGoals);
+    const showRunningTime = useUserStore(preferenceSelectors.topicShowRunningTime);
     // Rows render by the dozen, so agent-level reads share ONE subscription.
     // Only workspace-shared (`public`) agents get the creator avatar — a
     // workspace-private agent's topics all belong to the viewer.
@@ -641,8 +646,10 @@ const TopicItemRow = memo<TopicItemRowProps>(
                   knows the persisted `running` status, which outlives the answer
                   — it stays set through the post-visible-output tail where the
                   ring is deliberately masked (#16518) and the terminal
-                  bookkeeping can run for tens of seconds. */}
-              {shouldShowRunningIcon && (
+                  bookkeeping can run for tens of seconds. Users who want the
+                  title width back can hide the timer from the filter menu
+                  (`topicShowRunningTime`); the ring stays. */}
+              {shouldShowRunningIcon && showRunningTime && (
                 <RunningElapsedTime
                   agentId={activeAgentId}
                   runStartedAt={runStartedAt}

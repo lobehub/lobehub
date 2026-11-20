@@ -11,6 +11,8 @@ const projectTopicGroupMode = (s: UserStore) =>
 const topicSortBy = (s: UserStore) => s.preference.topicSortBy || DEFAULT_PREFERENCE.topicSortBy!;
 const topicIncludeCompleted = (s: UserStore): boolean =>
   s.preference.topicIncludeCompleted ?? false;
+const topicShowRunningTime = (s: UserStore): boolean =>
+  s.preference.topicShowRunningTime ?? DEFAULT_PREFERENCE.topicShowRunningTime!;
 
 const hideSyncAlert = (s: UserStore) => s.preference.hideSyncAlert;
 
@@ -44,6 +46,7 @@ export const preferenceSelectors = {
   terminalFontFamily,
   topicGroupMode,
   topicIncludeCompleted,
+  topicShowRunningTime,
   topicSortBy,
   useCmdEnterToSend,
 };
