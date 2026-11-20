@@ -9,7 +9,11 @@ import {
   SELF_FEEDBACK_INTENT_IDENTIFIER,
   shouldExposeSelfFeedbackIntentTool,
 } from '@lobechat/builtin-tool-self-iteration';
-import { getUnavailableBuiltinToolIds, runtimeManagedToolIds } from '@lobechat/builtin-tools';
+import {
+  AGENT_SHARE_IMPLIED_BUILTIN_IDENTIFIERS,
+  getUnavailableBuiltinToolIds,
+  runtimeManagedToolIds,
+} from '@lobechat/builtin-tools';
 import { getFeatureDisabledToolIds } from '@lobechat/builtin-tools/featureGates';
 import type {
   AgentGroupConfig,
@@ -277,8 +281,12 @@ export const discoverTools = async (
     : startToolReads(deps, {
         agentConfig,
         attachedFileIds,
+        // The builtins a share run always gets are never connectors; leaving
+        // them out keeps an ungranted share from reading connector rows.
         candidateIds: injectedConnectorCandidateIds.filter(
-          (identifier) => !boundConnectorIds.has(identifier),
+          (identifier) =>
+            !boundConnectorIds.has(identifier) &&
+            !AGENT_SHARE_IMPLIED_BUILTIN_IDENTIFIERS.has(identifier),
         ),
         // Bound eval tools must not auto-discover unrelated credential-bearing
         // connectors. This limits reads only; progressive activation remains enabled.

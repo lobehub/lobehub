@@ -37,12 +37,9 @@ import {
   HeteroOperationPrincipalError,
   resolveActiveHeteroOperationPrincipal,
 } from '@/server/services/heterogeneousAgent/operationPrincipal';
+import { resolveHeteroRunShareVisitor } from '@/server/services/heterogeneousAgent/shareVisitor';
 
-import {
-  assertCanUseOperationAgent,
-  resolveHeteroRunShareVisitor,
-  resolveHeteroTopicWorkspace,
-} from './guards';
+import { assertCanUseOperationAgent, resolveHeteroTopicWorkspace } from './guards';
 import {
   publishClaimedHeteroIntervention,
   submitHeteroInterventionAs,

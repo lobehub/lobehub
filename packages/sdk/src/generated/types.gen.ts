@@ -288,6 +288,30 @@ export type ChatGroupMember = {
     role: 'supervisor' | 'participant' | 'assistant' | null;
 };
 
+export type DocumentSummary = {
+    createdAt: string;
+    fileType: string;
+    id: string;
+    parentId: string | null;
+    slug: string | null;
+    title: string | null;
+    updatedAt: string;
+};
+
+export type Document = {
+    createdAt: string;
+    fileType: string;
+    id: string;
+    parentId: string | null;
+    slug: string | null;
+    title: string | null;
+    updatedAt: string;
+    /**
+     * Markdown body.
+     */
+    content: string | null;
+};
+
 export type EvalRun = {
     config: {
         caseSelection?: {
@@ -1030,10 +1054,10 @@ export type GoalGraphWorkVersionLink = {
         identifier: string | null;
         mimeType?: string;
         resourceId: string | null;
-        resourceType?: 'canvas' | 'document' | 'github_issue' | 'github_pull_request' | 'linear_document' | 'linear_issue' | 'file' | 'goal_report' | 'task';
+        resourceType?: 'canvas' | 'document' | 'github_issue' | 'github_pull_request' | 'linear_document' | 'linear_issue' | 'link' | 'file' | 'collection' | 'goal_report' | 'task';
         status: string | null;
         title: string | null;
-        type: 'canvas' | 'document' | 'external' | 'file' | 'goal_report' | 'task';
+        type: 'canvas' | 'document' | 'external' | 'file' | 'collection' | 'goal_report' | 'task';
         url: string | null;
         workId: string;
     };
@@ -4814,6 +4838,250 @@ export type PostApiV1ChatGroupsByIdMembersResponses = {
 };
 
 export type PostApiV1ChatGroupsByIdMembersResponse = PostApiV1ChatGroupsByIdMembersResponses[keyof PostApiV1ChatGroupsByIdMembersResponses];
+
+export type GetApiV1DocumentsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Opaque cursor from the previous page's `nextCursor`. Omit for the first page.
+         */
+        cursor?: string;
+        /**
+         * Page size, 1–100. Defaults to 20.
+         */
+        limit?: number;
+        /**
+         * Only list the direct children of this folder (id or slug).
+         */
+        parentId?: string;
+    };
+    url: '/api/v1/documents';
+};
+
+export type GetApiV1DocumentsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1DocumentsError = GetApiV1DocumentsErrors[keyof GetApiV1DocumentsErrors];
+
+export type GetApiV1DocumentsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            items: Array<DocumentSummary>;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
+            total: PageTotal;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1DocumentsResponse = GetApiV1DocumentsResponses[keyof GetApiV1DocumentsResponses];
+
+export type PostApiV1DocumentsData = {
+    body: {
+        /**
+         * Markdown body. Omit for a folder.
+         */
+        content?: string;
+        /**
+         * `custom/folder` creates a folder; defaults to a page (`custom/document`).
+         */
+        fileType?: string;
+        /**
+         * Folder to create in (id or slug).
+         */
+        parentId?: string;
+        title: string;
+    };
+    headers?: {
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/documents';
+};
+
+export type PostApiV1DocumentsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1DocumentsError = PostApiV1DocumentsErrors[keyof PostApiV1DocumentsErrors];
+
+export type PostApiV1DocumentsResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: Document;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1DocumentsResponse = PostApiV1DocumentsResponses[keyof PostApiV1DocumentsResponses];
+
+export type GetApiV1DocumentsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/documents/{id}';
+};
+
+export type GetApiV1DocumentsByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1DocumentsByIdError = GetApiV1DocumentsByIdErrors[keyof GetApiV1DocumentsByIdErrors];
+
+export type GetApiV1DocumentsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Document;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1DocumentsByIdResponse = GetApiV1DocumentsByIdResponses[keyof GetApiV1DocumentsByIdResponses];
+
+export type PatchApiV1DocumentsByIdData = {
+    body: {
+        /**
+         * Markdown body; replaces the whole body.
+         */
+        content?: string;
+        title?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/documents/{id}';
+};
+
+export type PatchApiV1DocumentsByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1DocumentsByIdError = PatchApiV1DocumentsByIdErrors[keyof PatchApiV1DocumentsByIdErrors];
+
+export type PatchApiV1DocumentsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Document;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1DocumentsByIdResponse = PatchApiV1DocumentsByIdResponses[keyof PatchApiV1DocumentsByIdResponses];
 
 export type GetApiV1EvalRunsData = {
     body?: never;

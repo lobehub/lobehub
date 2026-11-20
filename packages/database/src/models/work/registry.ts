@@ -2,6 +2,7 @@ import type { WorkType } from '@lobechat/types';
 
 import { artboardWorkAdapter } from './artboard';
 import { canvasWorkAdapter } from './canvas';
+import { collectionWorkAdapter } from './collection';
 import { documentWorkAdapter } from './document';
 import { externalWorkAdapter } from './external';
 import { fileWorkAdapter } from './file';
@@ -21,6 +22,7 @@ export const WORK_TYPE_ADAPTERS = {
   document: documentWorkAdapter,
   external: externalWorkAdapter,
   file: fileWorkAdapter,
+  collection: collectionWorkAdapter,
   goal_report: goalReportWorkAdapter,
   task: taskWorkAdapter,
 } satisfies Record<WorkType, WorkTypeAdapter>;
@@ -45,7 +47,7 @@ export const workTypeAdapters = WORK_TYPES.map(
  * request that does not opt in therefore receives the pre-`file` set, keeping
  * every already-deployed client byte-identically safe; new clients opt in.
  */
-const OPT_IN_WORK_TYPES = new Set<WorkType>(['canvas', 'file']);
+const OPT_IN_WORK_TYPES = new Set<WorkType>(['canvas', 'file', 'collection']);
 
 /**
  * `artboard` shipped after clients already sent `includeFileWorks`, so it needs

@@ -238,6 +238,7 @@ const WorkTypeSchema = unionEnum<WorkType>()([
   'document',
   'external',
   'file',
+  'collection',
   'goal_report',
   'task',
 ]);
@@ -249,7 +250,9 @@ const WorkResourceTypeSchema = unionEnum<WorkResourceType>()([
   'github_pull_request',
   'linear_document',
   'linear_issue',
+  'link',
   'file',
+  'collection',
   'goal_report',
   'task',
 ]);

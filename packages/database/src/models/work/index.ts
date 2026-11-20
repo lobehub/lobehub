@@ -1,6 +1,8 @@
 import {
   type ArtboardWorkPublishMetadata,
+  type AgentWorkRunContext,
   type CanvasWorkPublishMetadata,
+  type CreateAgentWorkInput,
   type DeleteDocumentWorkParams,
   type DeleteTaskWorkParams,
   type DeleteWorkParams,
@@ -13,6 +15,7 @@ import {
   type RegisterSkillToolResultWorkParams,
   type RegisterTaskWorkParams,
   type SkillToolResultWorkInput,
+  type UpdateAgentWorkInput,
   type WorkAccessScope,
   type WorkItem,
   type WorkSkillProvider,
@@ -22,6 +25,7 @@ import debug from 'debug';
 
 import type { LobeChatDatabase } from '../../type';
 import { ScmChangeRequestModel } from '../scm';
+import { createAgentWork, deleteAgentWork, fillAgentWorkCost, updateAgentWork } from './agentWork';
 import {
   clearArtboardPublish,
   findArtboardIdsByDeploymentIds,
@@ -87,6 +91,7 @@ const log = debug('lobe-database:work-model');
  * module, keeping the polymorphic Work registry logic split by provider type
  * without changing the public API surface.
  */
+export { AgentWorkError, type AgentWorkErrorCode } from './agentWork';
 export type { GithubShellNormalizeOptions } from './githubToolResult';
 export { type GitPushResult, parseGithubRemoteUrl, parseGitPushResult } from './gitPushResult';
 
@@ -200,6 +205,22 @@ export class WorkModel {
     topicId: string;
     userId: string;
   }): Promise<{ id: string } | null> => findFileWorkVersionByToolCall(this.ctx, params);
+
+  /** `lh work create` / `lobe-work`: register a file, link or collection the agent produced. See {@link createAgentWork}. */
+  createAgentWork = (run: AgentWorkRunContext, input: CreateAgentWorkInput) =>
+    createAgentWork(this.ctx, run, input);
+
+  /** `lh work update`: add a version to an agent-created Work. See {@link updateAgentWork}. */
+  updateAgentWork = (run: AgentWorkRunContext, input: UpdateAgentWorkInput) =>
+    updateAgentWork(this.ctx, run, input);
+
+  /** `lh work delete`: remove a Work the agent created by mistake. See {@link deleteAgentWork}. */
+  deleteAgentWork = (run: AgentWorkRunContext, workId: string) =>
+    deleteAgentWork(this.ctx, run, workId);
+
+  /** Run completion: give the run's agent-written versions its spend. See {@link fillAgentWorkCost}. */
+  fillAgentWorkCost = (params: Parameters<typeof fillAgentWorkCost>[1]) =>
+    fillAgentWorkCost(this.ctx, params);
 
   handleSkillToolResult = async (
     params: RegisterSkillToolResultWorkParams,

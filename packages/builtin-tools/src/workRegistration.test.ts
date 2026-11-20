@@ -163,6 +163,55 @@ describe('resolveWorkRegistration', () => {
     });
   });
 
+  it('carries agentEditable only when the API work config declares it', () => {
+    const editable = [
+      {
+        identifier: 'lobe-task',
+        manifest: {
+          api: [
+            {
+              name: 'createTask',
+              work: { action: 'create', agentEditable: true, resourceType: 'task' },
+            },
+          ],
+        },
+      },
+      {
+        identifier: 'lobe-agent-documents',
+        manifest: {
+          api: [
+            {
+              name: 'createDocument',
+              work: { action: 'create', agentEditable: true, resourceType: 'document' },
+            },
+          ],
+        },
+      },
+    ] as unknown as LobeBuiltinTool[];
+    const taskCall = {
+      args: {},
+      result: { state: { taskId: 'task_1', success: true }, success: true },
+    };
+    const documentCall = {
+      args: {},
+      result: {
+        state: { agentId: 'agt_1', documentId: 'doc_1', success: true },
+        success: true,
+      },
+    };
+
+    expect(resolveWorkRegistration(editable, 'lobe-task', 'createTask', taskCall)).toMatchObject({
+      agentEditable: true,
+    });
+    expect(
+      resolveWorkRegistration(editable, 'lobe-agent-documents', 'createDocument', documentCall),
+    ).toMatchObject({ document: { agentEditable: true } });
+    // Undeclared stays off the intent, so Works default to system-owned.
+    expect(
+      resolveWorkRegistration(registry, 'lobe-task', 'createTask', taskCall),
+    ).not.toHaveProperty('agentEditable');
+  });
+
   it('resolves delete into a changeType-less plan keyed off state.taskId', () => {
     expect(
       resolveWorkRegistration(registry, 'lobe-task', 'deleteTask', {
@@ -380,6 +429,28 @@ describe('dispatchWorkRegistrationIntent', () => {
       expect(ports.registerTask).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({ taskId: 'task_2', taskIdentifier: 'T-2' }),
+      );
+      expect(ports.registerTask).not.toHaveBeenCalledWith(
+        expect.objectContaining({ agentEditable: expect.anything() }),
+      );
+    });
+
+    it('passes agentEditable through to every registered task', async () => {
+      const ports = buildPorts();
+      await dispatchWorkRegistrationIntent(
+        {
+          action: 'create',
+          agentEditable: true,
+          changeType: 'created',
+          targets: [{ taskId: 'task_1' }],
+          type: 'task',
+        },
+        ports,
+        provenance,
+      );
+
+      expect(ports.registerTask).toHaveBeenCalledWith(
+        expect.objectContaining({ agentEditable: true, taskId: 'task_1' }),
       );
     });
 
