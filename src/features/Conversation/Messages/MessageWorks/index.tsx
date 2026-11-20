@@ -17,16 +17,16 @@ const styles = stylex.create({ container: { width: '100%' } });
 interface MessageWorkListProps {
   items: WorkSummaryItem[];
   onOpen?: ComponentProps<typeof WorkSummaryCard>['onOpen'];
-  showMenu?: boolean;
+  showActions?: boolean;
 }
 
-export const MessageWorkList = memo<MessageWorkListProps>(({ items, onOpen, showMenu }) => {
+export const MessageWorkList = memo<MessageWorkListProps>(({ items, onOpen, showActions }) => {
   if (items.length === 0) return null;
 
   return (
     <Flexbox className={stylex.props(styles.container).className} gap={8}>
       {items.map((item) => (
-        <WorkSummaryCard item={item} key={item.id} showMenu={showMenu} onOpen={onOpen} />
+        <WorkSummaryCard item={item} key={item.id} showActions={showActions} onOpen={onOpen} />
       ))}
     </Flexbox>
   );
@@ -55,7 +55,7 @@ const MessageWorks = memo<MessageWorksProps>(({ rootOperationId }) => {
   return (
     <MessageWorkList
       items={data}
-      showMenu={!agentShareId}
+      showActions={!agentShareId}
       onOpen={agentShareId ? handleVisitorOpen : undefined}
     />
   );
