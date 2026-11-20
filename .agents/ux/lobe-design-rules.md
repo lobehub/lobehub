@@ -213,3 +213,11 @@ Enforcement: `useGithubSkillImport.test.ts` covers the single access message, re
 On result surfaces (acceptance checks, verify boards, run summaries), passing is the default state and carries no badge of its own: no per-item "Passed" tag, check stamp or green outline. Show the outcome once, in one plain sentence (for example "6 项已核对，等你确认"). Item identifiers stay neutral (`01`, `04B`), without a check mark. Color and badges are reserved for what needs a person: a failed check (error color with the reason) or a pending decision. Actions such as "Accept" may keep their icon; status may not.
 
 Source: lead review of the artboard acceptance redesign (2026-11-16): too many Pass tags read as AI-generated.
+
+## LOBE-UX-030 — Skill updates use visible status and action labels
+
+In installed skill navigation, show “Update available” as passive text. In the list and detail views, label the action “Update” or “Update skill”. Reserve the refresh icon for checking the source again. A standalone upward arrow in these rows reads as uploading a skill.
+
+In the skill detail header, put the repository, tracking ref, routine sync status and manual check in the GitHub source popover. Keep an available update actionable in the header.
+
+Verify the pending state with tooltips closed. The sidebar should communicate availability, and the list should identify the update action alongside the manage menu. Source: user feedback on the skill update preview.

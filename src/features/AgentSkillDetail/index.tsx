@@ -2,7 +2,7 @@
 
 import { type SkillResourceTreeNode } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { ActionIcon, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { DotIcon, ExternalLinkIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +16,7 @@ import { useToolStore } from '@/store/tool';
 import { densityVars } from '@/styles/densityVars';
 
 import ContentViewer from './ContentViewer';
-import { GitHubSkillUpdate, hasGitHubSource } from './GitHubSkillUpdate';
+import { GitHubSkillSource, GitHubSkillUpdate, hasGitHubSource } from './GitHubSkillUpdate';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   description: css`
@@ -136,64 +136,54 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
               <SkillAvatar size={40} />
             )}
             <Flexbox className={styles.headerText} flex={1} justify={'space-between'}>
-              <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-                <Flexbox horizontal align={'center'} className={styles.description} gap={4}>
-                  <span className={styles.name}>{skillDetail.name}</span>
-                  {version && (
-                    <>
-                      <Icon icon={DotIcon} />
-                      <span>v{version}</span>
-                    </>
-                  )}
-                  <Icon icon={DotIcon} />
-                  {t('agentSkillDetail.updatedAt')}{' '}
-                  <PublishedTime
-                    date={new Date(skillDetail.updatedAt).toISOString()}
-                    template={'MMM DD, YYYY'}
-                  />
-                </Flexbox>
-                {(repository || sourceUrl) && (
-                  <Flexbox horizontal align={'center'} gap={2} style={{ flexShrink: 0 }}>
-                    {repository && (
-                      <a href={repository} rel="noreferrer" target={'_blank'}>
-                        <ActionIcon
-                          fill={cssVar.colorTextDescription}
-                          icon={Github}
-                          size={'small'}
-                          title={t('agentSkillDetail.repository')}
-                        />
-                      </a>
-                    )}
-                    {sourceUrl && (
-                      <a href={sourceUrl} rel="noreferrer" target={'_blank'}>
-                        <ActionIcon
-                          icon={ExternalLinkIcon}
-                          size={'small'}
-                          title={t('agentSkillDetail.sourceUrl')}
-                        />
-                      </a>
-                    )}
-                  </Flexbox>
+              <Flexbox horizontal align={'center'} className={styles.description} gap={4}>
+                <span className={styles.name}>{skillDetail.name}</span>
+                {version && (
+                  <>
+                    <Icon icon={DotIcon} />
+                    <span>v{version}</span>
+                  </>
                 )}
+                <Icon icon={DotIcon} />
+                {t('agentSkillDetail.updatedAt')}{' '}
+                <PublishedTime
+                  date={new Date(skillDetail.updatedAt).toISOString()}
+                  template={'MMM DD, YYYY'}
+                />
               </Flexbox>
               {description && <p className={styles.description}>{description}</p>}
             </Flexbox>
+            {hasGitHubSource(skillDetail) ? (
+              <Flexbox horizontal align="center" flex="none" gap={4}>
+                <GitHubSkillUpdate skill={skillDetail} />
+                <GitHubSkillSource skill={skillDetail} />
+              </Flexbox>
+            ) : (
+              (repository || sourceUrl) && (
+                <Flexbox horizontal align={'center'} gap={2} style={{ flexShrink: 0 }}>
+                  {repository && (
+                    <a href={repository} rel="noreferrer" target={'_blank'}>
+                      <ActionIcon
+                        fill={cssVar.colorTextDescription}
+                        icon={Github}
+                        size={'small'}
+                        title={t('agentSkillDetail.repository')}
+                      />
+                    </a>
+                  )}
+                  {sourceUrl && (
+                    <a href={sourceUrl} rel="noreferrer" target={'_blank'}>
+                      <ActionIcon
+                        icon={ExternalLinkIcon}
+                        size={'small'}
+                        title={t('agentSkillDetail.sourceUrl')}
+                      />
+                    </a>
+                  )}
+                </Flexbox>
+              )
+            )}
           </Flexbox>
-          {hasGitHubSource(skillDetail) && (
-            <Flexbox horizontal align="center" gap={8} wrap="wrap">
-              {skillDetail.upstream && (
-                <Text ellipsis fontSize={12} type="secondary">
-                  {skillDetail.upstream.owner}/{skillDetail.upstream.repo}
-                  {skillDetail.upstream.path && '/' + skillDetail.upstream.path}
-                  {' @ '}
-                  {skillDetail.upstream.ref === skillDetail.upstream.installedCommit
-                    ? skillDetail.upstream.installedCommit.slice(0, 7)
-                    : skillDetail.upstream.ref}
-                </Text>
-              )}
-              <GitHubSkillUpdate skill={skillDetail} />
-            </Flexbox>
-          )}
         </div>
       )}
       <Flexbox horizontal style={{ flex: 1, overflow: 'hidden' }}>

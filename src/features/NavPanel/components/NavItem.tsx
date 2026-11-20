@@ -113,6 +113,8 @@ export interface NavItemSlots {
   iconBelow?: ReactNode;
   iconPostfix?: ReactNode;
   titlePrefix?: ReactNode;
+  /** Passive status after the title. Clicking it still selects the row. */
+  titleSuffix?: ReactNode;
 }
 
 export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
@@ -220,7 +222,7 @@ const NavItem = memo<NavItemProps>(
     const textColor = titleColor ?? (active ? cssVar.colorText : cssVar.colorTextSecondary);
     const variant = active ? 'filled' : 'borderless';
 
-    const { titlePrefix, iconBelow, iconPostfix } = slots || {};
+    const { titlePrefix, titleSuffix, iconBelow, iconPostfix } = slots || {};
     // Link props for cmd+click support
     const linkProps = href
       ? {
@@ -344,6 +346,7 @@ const NavItem = memo<NavItemProps>(
           ) : (
             titleNode
           )}
+          {titleSuffix}
           {extra && (
             <Flexbox
               horizontal
