@@ -118,6 +118,16 @@ describe('dropHiddenIncompleteRows', () => {
     ).toEqual({});
   });
 
+  it('keeps an incomplete device channel row while channels are granted', () => {
+    expect(
+      dropHiddenIncompleteRows({
+        deviceChannelAllowFrom: [{ id: '' }],
+        deviceChannelPolicy: 'any',
+        devicePolicy: 'channel',
+      }),
+    ).toEqual({});
+  });
+
   it('drops a half-added group row once groups are no longer limited to a list', () => {
     expect(
       dropHiddenIncompleteRows({

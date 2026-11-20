@@ -10,6 +10,11 @@ export interface BuildBotContextParams {
    */
   deviceAllowlist?: string[];
   /**
+   * Whether this conversation sits in a channel whose members may all use the
+   * owner's devices (`isDeviceChannelGranted`). Omitted: no channel grant.
+   */
+  deviceChannelGranted?: boolean;
+  /**
    * Whether this conversation is outside the channels the owner limited device
    * use to (`isDeviceChannelRestricted`). Omitted: no channel restriction.
    */
@@ -44,9 +49,12 @@ export const buildBotContext = (params: BuildBotContextParams): ChatTopicBotCont
   // Same fail-closed rule as `isOwner`: an unknown sender is never trusted.
   const isDeviceTrusted =
     !isOwner && !!senderExternalUserId && !!params.deviceAllowlist?.includes(senderExternalUserId);
+  const isDeviceChannelGranted =
+    !isOwner && !!senderExternalUserId && params.deviceChannelGranted === true;
   return {
     applicationId: params.applicationId,
     isOwner,
+    ...(isDeviceChannelGranted && { isDeviceChannelGranted }),
     ...(params.deviceChannelRestricted && { isDeviceChannelRestricted: true }),
     ...(isDeviceTrusted && { isDeviceTrusted }),
     platform: params.platform,

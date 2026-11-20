@@ -1,6 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
+import { confirmModal } from '@lobehub/ui';
 import { useForm } from '@lobehub/ui/form';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { useEffect } from 'react';
@@ -24,6 +25,11 @@ const state = vi.hoisted(() => ({
 vi.mock('react-i18next', () => ({
   Trans: ({ i18nKey }: { i18nKey: string }) => <span>{i18nKey}</span>,
   useTranslation: () => ({ t: (key: string) => state.copy[key] ?? key }),
+}));
+
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  confirmModal: vi.fn(),
 }));
 
 vi.mock('@/store/serverConfig', () => ({
@@ -209,6 +215,77 @@ describe('channel settings form: access tab', () => {
     expect(enabled).toHaveLength(1);
     fireEvent.click(enabled[0]);
     expect(onSave).toHaveBeenCalledWith('access-device');
+  });
+
+  it('grants everyone in the listed channels, with a risk warning and no channel limit choice', () => {
+    state.copy = zh;
+
+    render(
+      <Harness
+        settings={{
+          deviceChannelAllowFrom: [{ id: 'dev-channel', name: '#dev' }],
+          devicePolicy: 'channel',
+          userId: 'owner-1',
+        }}
+      />,
+    );
+
+    const who = screen.getByRole('radiogroup', { name: zh['channel.access.device.label'] });
+    expect(
+      within(who).getByRole('radio', {
+        name: new RegExp(zh['channel.access.device.channelMembers']),
+      }),
+    ).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText(zh['channel.access.device.channelMembersRisk'])).toBeVisible();
+    // The list grants here, so "where devices can be used" would contradict it.
+    expect(
+      screen.queryByRole('radiogroup', { name: zh['channel.access.device.channel.label'] }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(zh['channel.access.device.grant.listHint'])).toBeVisible();
+    expect(screen.getByDisplayValue('dev-channel')).toBeInTheDocument();
+  });
+
+  it('shows the channel list as soon as channels are granted', () => {
+    state.copy = en;
+
+    render(<Harness settings={{ userId: 'owner-1' }} />);
+
+    expect(screen.queryByText(en['channel.access.device.channelMembersRisk'])).toBeNull();
+    const who = screen.getByRole('radiogroup', { name: en['channel.access.device.label'] });
+    fireEvent.click(
+      within(who).getByRole('radio', {
+        name: new RegExp(en['channel.access.device.channelMembers']),
+      }),
+    );
+
+    expect(screen.getByText(en['channel.access.device.channelMembersRisk'])).toBeVisible();
+    expect(screen.getByText(en['channel.access.device.grant.listEmpty'])).toBeVisible();
+  });
+
+  it('asks before a channel list that limits devices starts granting them', () => {
+    state.copy = en;
+
+    render(
+      <Harness
+        settings={{
+          deviceChannelAllowFrom: [{ id: 'ops', name: '#ops' }],
+          deviceChannelPolicy: 'allowlist',
+          userId: 'owner-1',
+        }}
+      />,
+    );
+
+    const who = screen.getByRole('radiogroup', { name: en['channel.access.device.label'] });
+    fireEvent.click(
+      within(who).getByRole('radio', {
+        name: new RegExp(en['channel.access.device.channelMembers']),
+      }),
+    );
+
+    expect(confirmModal).toHaveBeenCalledTimes(1);
+    expect(
+      within(who).getByRole('radio', { name: new RegExp(en['channel.access.device.owner']) }),
+    ).toHaveAttribute('aria-checked', 'true');
   });
 
   it('warns that nobody can use the devices until the owner ID is filled', () => {

@@ -22,6 +22,12 @@ export type DeviceAccessReason =
    */
   | 'bot-trusted'
   /**
+   * Bot caller in a channel whose members may all use the owner's devices
+   * (`settings.devicePolicy = 'channel'`), carried as
+   * `botContext.isDeviceChannelGranted`.
+   */
+  | 'bot-channel-granted'
+  /**
    * Bot caller in a channel outside the owner's device channel list
    * (`settings.deviceChannelPolicy = 'allowlist'`), carried as
    * `botContext.isDeviceChannelRestricted` — DENY device tools, owner included.
@@ -138,6 +144,10 @@ export const resolveDeviceAccessPolicy = (
 
   if (botContext.isDeviceTrusted) {
     return { canUseDevice: true, reason: 'bot-trusted' };
+  }
+
+  if (botContext.isDeviceChannelGranted) {
+    return { canUseDevice: true, reason: 'bot-channel-granted' };
   }
 
   if (!botContext.senderExternalUserId) {
