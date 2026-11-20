@@ -1,0 +1,47 @@
+---
+title: Using deAPI in LobeHub
+description: >-
+  Learn how to configure a deAPI API key in LobeHub to generate images and videos with open-source models such as FLUX, Z-Image and LTX-Video.
+tags:
+  - deAPI
+  - Image Generation
+  - Video Generation
+  - API Key
+---
+
+# Using deAPI in LobeHub
+
+[deAPI](https://deapi.ai) runs open-source image and video models on a distributed GPU network at low per-generation prices. LobeHub connects to its [OpenAI-compatible API](https://docs.deapi.ai/openai-compatibility) for image generation, image editing and video generation. deAPI does not offer chat models.
+
+To configure this provider in LobeHub, open **App Settings → AI Providers**, select the provider, and turn on its switch.
+
+<Steps>
+  ### Step 1: Obtain your deAPI API key
+
+  - Sign up at [deAPI](https://app.deapi.ai);
+  - Open [Settings → API Keys](https://app.deapi.ai/settings/api-keys) and create a new key;
+  - Copy the key (it starts with `sk-dp-`) and store it securely.
+
+  <Callout type={'info'}>
+    Keys restricted by an IP allowlist do not work with the OpenAI-compatible endpoint. Use a key without an IP allowlist.
+  </Callout>
+
+  ### Step 2: Configure deAPI in LobeHub
+
+  - Go to **Settings → AI Providers** in LobeHub;
+  - Select `deAPI` and paste your API key;
+  - Open the image or video creation page and choose a deAPI model, for example `FLUX.1 [schnell]`, `Z-Image Turbo`, or `LTX-2.3`.
+
+  <Callout type={'warning'}>
+    Generating images and videos with deAPI incurs charges. Review the [deAPI pricing](https://deapi.ai/pricing) before generating at scale.
+  </Callout>
+</Steps>
+
+## Available models
+
+| Type  | Models                                                                                                  |
+| ----- | ------------------------------------------------------------------------------------------------------- |
+| Image | Z-Image Turbo, FLUX.2 \[klein] 4B (also edits up to three reference images), FLUX.1 \[schnell], Z-Anime |
+| Video | LTX-2.5, LTX-2.3, MiniMax H3 Turbo, LTX-Video 13B Distilled (all accept a first frame)                  |
+
+Each model accepts its own list of sizes and durations, which the image and video pages offer as options. The quality setting maps to a per-model step preset.

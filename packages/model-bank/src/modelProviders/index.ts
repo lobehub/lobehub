@@ -20,6 +20,7 @@ import CloudflareProvider from './cloudflare';
 import CohereProvider from './cohere';
 import CometAPIProvider from './cometapi';
 import ComfyUIProvider from './comfyui';
+import DeAPIProvider from './deapi';
 import DeepSeekProvider from './deepseek';
 import DoubaoSpeechProvider from './doubaospeech';
 import ElevenLabsProvider from './elevenlabs';
@@ -189,6 +190,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   GithubCopilotProvider,
   NewAPIProvider,
   BflProvider,
+  DeAPIProvider,
   NovitaProvider,
   PPIOProvider,
   Ai302Provider,
@@ -330,6 +332,7 @@ export { default as CloudflareProviderCard } from './cloudflare';
 export { default as CohereProviderCard } from './cohere';
 export { default as CometAPIProviderCard } from './cometapi';
 export { default as ComfyUIProviderCard } from './comfyui';
+export { default as DeAPIProviderCard } from './deapi';
 export { default as DeepSeekProviderCard } from './deepseek';
 export { default as DoubaoSpeechProviderCard } from './doubaospeech';
 export { default as ElevenLabsProviderCard } from './elevenlabs';

@@ -56,6 +56,7 @@ export { LobeCerebrasAI } from './providers/cerebras';
 export { LobeChatGPTAI } from './providers/chatGPT';
 export { LobeCometAPIAI } from './providers/cometapi';
 export { LobeComfyUI } from './providers/comfyui';
+export { LobeDeAPIAI } from './providers/deapi';
 export { LobeDeepSeekAI } from './providers/deepseek';
 export { LobeDoubaoSpeechAI } from './providers/doubaospeech';
 export { LobeElevenLabsAI } from './providers/elevenlabs';
