@@ -35,9 +35,11 @@ interface AgentSkillItemProps {
   isSelected?: boolean;
   onSelect?: () => void;
   skill: SkillListItem;
+  updateInActions?: boolean;
 }
 
-const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect }) => {
+const AgentSkillItem = memo<AgentSkillItemProps>((props) => {
+  const { isSelected, onSelect, skill, updateInActions } = props;
   const { t } = useTranslation('setting');
   const { t: tc } = useTranslation('common');
   const { t: tp } = useTranslation('plugin');
@@ -157,35 +159,38 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
     return (
       <SkillListRow
         active={isSelected}
-        description={updateAction}
+        description={updateInActions ? undefined : updateAction}
         icon={() => renderIcon(20, 40)}
         summary={skill.description}
         title={title}
         extra={
-          <RowMoreMenu
-            items={[
-              ...(skill.zipFileHash
-                ? [
-                    {
-                      disabled: loading,
-                      icon: <Icon icon={DownloadIcon} />,
-                      key: 'download',
-                      label: tc('download'),
-                      onClick: handleDownload,
-                    },
-                  ]
-                : []),
-              {
-                danger: true,
-                disabled: !canEdit || !canManage || loading,
-                icon: <Icon icon={Trash2} />,
-                key: 'uninstall',
-                label: tp('store.actions.uninstall'),
-                onClick: handleUninstall,
-              },
-            ]}
-            onOpenDetail={onSelect ?? handleOpenDetail}
-          />
+          <>
+            {updateInActions && updateAction}
+            <RowMoreMenu
+              items={[
+                ...(skill.zipFileHash
+                  ? [
+                      {
+                        disabled: loading,
+                        icon: <Icon icon={DownloadIcon} />,
+                        key: 'download',
+                        label: tc('download'),
+                        onClick: handleDownload,
+                      },
+                    ]
+                  : []),
+                {
+                  danger: true,
+                  disabled: !canEdit || !canManage || loading,
+                  icon: <Icon icon={Trash2} />,
+                  key: 'uninstall',
+                  label: tp('store.actions.uninstall'),
+                  onClick: handleUninstall,
+                },
+              ]}
+              onOpenDetail={onSelect ?? handleOpenDetail}
+            />
+          </>
         }
         onClick={onSelect ?? handleOpenDetail}
       />

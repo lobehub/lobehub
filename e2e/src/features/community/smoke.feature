@@ -16,9 +16,8 @@ Feature: Community Smoke Tests
     Then the page should load without errors
     And I should see the page body
     And I should see the search bar
-    And I should see the category menu
+    And I should see the assistant category "programming"
     And I should see assistant cards
-    And I should see pagination controls
 
   @COMMUNITY-SMOKE-003 @P0
   Scenario: Load Model List Page

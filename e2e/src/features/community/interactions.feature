@@ -14,21 +14,22 @@ Feature: Discover Interactions
     Given I navigate to "/marketplace/agent"
     When I type "developer" in the search bar
     And I wait for the search results to load
-    Then I should see filtered assistant cards
+    Then I should see only "Code Assistant" in the assistant catalog
 
   @COMMUNITY-INTERACT-002 @P1
   Scenario: Filter assistants by category
     Given I navigate to "/marketplace/agent"
-    When I click on a category in the category menu
+    When I open the assistant category "programming"
     And I wait for the filtered results to load
-    Then I should see assistant cards filtered by the selected category
+    Then I should see only "Code Assistant" in the assistant catalog
     And the URL should contain the category parameter
 
   @COMMUNITY-INTERACT-003 @P1
   Scenario: Navigate to next page of assistants
     Given I navigate to "/marketplace/agent"
-    When I click the next page button
-    Then I should be navigated to "/marketplace/agent?page=2"
+    When I open the recommended assistants
+    And I click the next page button
+    Then I should be navigated to "/marketplace/agent?sort=recommended&page=2"
     And I should see the assistant cards for page two
 
   @COMMUNITY-INTERACT-004 @P1
@@ -89,5 +90,5 @@ Feature: Discover Interactions
   @COMMUNITY-INTERACT-010 @P1
   Scenario: Open an old marketplace bookmark with a search
     Given I navigate to "/community?q=developer"
-    Then I should see filtered assistant cards
+    Then I should see only "Code Assistant" in the assistant catalog
     And I should be navigated to "/marketplace/agent?q=developer"

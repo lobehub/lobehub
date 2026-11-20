@@ -111,12 +111,6 @@ interface SkillListProps {
   installedOnly?: boolean;
   /** Page search: filters every group by name, identifier and description. */
   keyword?: string;
-  /**
-   * Page mode for the Connectors Discover page: only LobeHub's own OAuth
-   * connectors (LobeHub / Composio integrations), connected or not, as one
-   * group. The installed manager then leaves out the ones not connected yet.
-   */
-  lobehubConnectors?: boolean;
   onClearKeyword?: () => void;
   onDeleteSelected?: () => void;
   onSelect?: (identifier: string, type: ToolDetailType) => void;
@@ -135,7 +129,6 @@ interface SkillListProps {
 const SkillList = memo<SkillListProps>(
   ({
     installedOnly,
-    lobehubConnectors,
     keyword,
     onClearKeyword,
     onSelect,
@@ -362,8 +355,6 @@ const SkillList = memo<SkillListProps>(
     }
 
     if (!hasAnySkills) {
-      // The Discover group has nothing to lead with; the page's other groups carry on.
-      if (lobehubConnectors) return null;
       return (
         <>
           {header}
@@ -414,6 +405,7 @@ const SkillList = memo<SkillListProps>(
         case 'lobehub': {
           return (
             <LobehubSkillItem
+              hideConnectedStatus={installedOnly}
               isSelected={selectedIdentifier === item.provider.id}
               key={item.provider.id}
               provider={item.provider}
@@ -428,6 +420,7 @@ const SkillList = memo<SkillListProps>(
         case 'composio': {
           return (
             <ComposioSkillItem
+              hideConnectedStatus={installedOnly}
               isSelected={selectedIdentifier === item.serverType.identifier}
               key={item.serverType.identifier}
               server={getComposioServerByIdentifier(item.serverType.identifier)}
@@ -534,38 +527,6 @@ const SkillList = memo<SkillListProps>(
       const isConnected = (item: IntegrationItem) => isIntegrationConnected(item, connectionState);
       const oauth = partitionByInstalled(communitySkillItems, isConnected);
 
-      // Connectors Discover: LobeHub's OAuth connectors lead the page as one
-      // group, connected ones keeping their status and menu (Codex `⋯`).
-      if (lobehubConnectors) {
-        if (communitySkillItems.length === 0) return null;
-        const key = 'lobehubConnectors';
-        const isExpanded = expanded.has(key);
-        const { hiddenCount, visible } = getVisibleSectionItems(
-          communitySkillItems.map(renderIntegration),
-          isExpanded,
-        );
-        return (
-          <section {...stylex.props(styles.pageSection)}>
-            <PageSectionHeading
-              expanded={isExpanded}
-              label={t('connectorMarket.section.lobehub')}
-              expandable={isSectionExpandable({
-                expanded: isExpanded,
-                hiddenCount,
-                searching: false,
-              })}
-              toggleLabel={
-                isExpanded
-                  ? t('connectorMarket.section.showLess')
-                  : `${t('connectorMarket.section.showAll')} (${communitySkillItems.length})`
-              }
-              onToggle={() => toggleExpanded(key)}
-            />
-            <div {...stylex.props(styles.pageGrid)}>{visible}</div>
-          </section>
-        );
-      }
-
       const sections = (
         isConnectorView
           ? [
@@ -576,7 +537,7 @@ const SkillList = memo<SkillListProps>(
               },
               {
                 // With the market on, the ones left to connect lead the
-                // Connectors Discover page (`lobehubConnectors`) instead.
+                // Connectors Discover page instead.
                 items: showMarket ? [] : oauth.available.map(renderIntegration),
                 key: 'communityConnectors',
                 label: t('skillGroup.communityConnectors', 'OAuth Connectors'),

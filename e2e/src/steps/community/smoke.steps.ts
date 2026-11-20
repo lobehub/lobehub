@@ -14,11 +14,15 @@ Then('I should see the search bar', async function (this: CustomWorld) {
   await expect(searchBar).toBeVisible({ timeout: 30_000 });
 });
 
-Then('I should see the category menu', async function (this: CustomWorld) {
-  // CategoryMenu component has data-testid="category-menu"
-  const categoryMenu = this.page.locator('[data-testid="category-menu"]').first();
-  await expect(categoryMenu).toBeVisible({ timeout: 30_000 });
-});
+Then(
+  'I should see the assistant category {string}',
+  async function (this: CustomWorld, category: string) {
+    const groupLink = this.page.locator(
+      `section a[href="/marketplace/agent?category=${category}"]`,
+    );
+    await expect(groupLink).toBeVisible({ timeout: 30_000 });
+  },
+);
 
 Then('I should see assistant cards', async function (this: CustomWorld) {
   // Look for assistant items by data-testid
@@ -30,12 +34,6 @@ Then('I should see assistant cards', async function (this: CustomWorld) {
   // Check we have multiple items
   const count = await assistantItems.count();
   expect(count).toBeGreaterThan(0);
-});
-
-Then('I should see pagination controls', async function (this: CustomWorld) {
-  // Pagination component has data-testid="pagination"
-  const pagination = this.page.locator('[data-testid="pagination"]').first();
-  await expect(pagination).toBeVisible({ timeout: 30_000 });
 });
 
 // Model List Page Steps

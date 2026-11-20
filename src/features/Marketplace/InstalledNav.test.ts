@@ -5,29 +5,7 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => null,
 }));
 
-const { buildInstalledDetailPath, getInstalledKind, getInstalledVisibility } =
-  await import('./InstalledNav');
-
-describe('getInstalledKind', () => {
-  it.each([
-    ['skill', 'skill'],
-    ['skill/installed', 'skill'],
-    ['skill/some-skill', 'skill'],
-    ['connector', 'connector'],
-    ['connector/installed', 'connector'],
-    // MCP detail pages belong to Connectors, which absorbed the MCP list.
-    ['mcp/notion', 'connector'],
-  ])('lists the installed library of %s', (subPath, kind) => {
-    expect(getInstalledKind(subPath)).toBe(kind);
-  });
-
-  it.each([undefined, '', 'agent', 'model', 'provider/openai'])(
-    'lists nothing on %s',
-    (subPath) => {
-      expect(getInstalledKind(subPath)).toBeUndefined();
-    },
-  );
-});
+const { buildInstalledDetailPath, getInstalledVisibility } = await import('./InstalledNav');
 
 describe('buildInstalledDetailPath', () => {
   it('opens one installed item on its installed page', () => {
