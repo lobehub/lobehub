@@ -773,6 +773,8 @@
   "devices.status.online": "在线",
   "devices.status.onlineConnections_one": "在线 · {{count}} 个连接",
   "devices.status.onlineConnections_other": "在线 · {{count}} 个连接",
+  "devices.summary_one": "共 {{count}} 台设备",
+  "devices.summary_other": "共 {{count}} 台设备",
   "devices.thisComputer": "这台电脑",
   "devices.title": "我的设备",
   "devices.visibility.publish": "发布到工作区",

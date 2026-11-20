@@ -68,7 +68,8 @@ const SubscriptionAccounts = () => {
       matchesKeyword(a, keyword),
   );
   const openAccount = accounts.find((a) => a.id === openId);
-  const inRotation = accounts.filter((a) => a.enabled !== false).length;
+  // The summary counts what the filters leave, so it moves with them.
+  const inRotation = visible.filter((a) => a.enabled !== false).length;
 
   // The meters read each account's own readings, which the list sync does not
   // touch: refreshing re-reads them too, or a newer sample would never show.
@@ -137,7 +138,7 @@ const SubscriptionAccounts = () => {
   const summary = (
     <Text fontSize={13} type={'secondary'}>
       {accounts.length > 0 &&
-        t('subscriptionAccounts.summary', { count: accounts.length, inRotation })}
+        t('subscriptionAccounts.summary', { count: visible.length, inRotation })}
     </Text>
   );
 
@@ -161,15 +162,7 @@ const SubscriptionAccounts = () => {
                 onChange={(e) => setKeyword(e.target.value)}
               />
               {showVisibilityFilter && (
-                <VisibilityFilter
-                  value={visibilityFilter}
-                  counts={{
-                    all: accounts.length,
-                    private: accounts.filter(isPrivateAccount).length,
-                    workspace: accounts.filter((a) => !isPrivateAccount(a)).length,
-                  }}
-                  onChange={setVisibilityFilter}
-                />
+                <VisibilityFilter value={visibilityFilter} onChange={setVisibilityFilter} />
               )}
               <Select
                 style={{ minWidth: 168 }}
@@ -177,11 +170,11 @@ const SubscriptionAccounts = () => {
                 variant={'filled'}
                 options={[
                   {
-                    label: `${t('subscriptionAccounts.filter.allProviders')} · ${accounts.length}`,
+                    label: t('subscriptionAccounts.filter.allProviders'),
                     value: ALL,
                   },
                   ...present.map((p) => ({
-                    label: `${PROVIDER_NAME[p]} · ${accounts.filter((a) => a.provider === p).length}`,
+                    label: PROVIDER_NAME[p],
                     value: p,
                   })),
                 ]}

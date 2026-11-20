@@ -1073,6 +1073,8 @@ export default {
   'devices.status.onlineConnections_one': 'Online · {{count}} connection',
   'devices.status.onlineConnections_other': 'Online · {{count}} connections',
   'devices.title': 'My Devices',
+  'devices.summary_one': '{{count}} device',
+  'devices.summary_other': '{{count}} devices',
   'devices.visibility.publish': 'Publish to Workspace',
   'devices.visibility.publishConfirmTitle': 'Publish this device to the workspace?',
   'devices.visibilityTabs.private': 'Private',

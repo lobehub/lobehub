@@ -2,6 +2,7 @@
 
 import type { EnvironmentVisibility } from '@lobechat/types';
 import {
+  ActionIcon,
   Button,
   Center,
   createStaticStyles,
@@ -138,22 +139,8 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(
       // neighbour.
       <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
         {showVisibilityFilter && (
-          <VisibilityFilter
-            value={visibilityFilter}
-            counts={{
-              all: list.length,
-              private: list.filter(isPrivateEnvironment).length,
-              workspace: list.filter((e) => !isPrivateEnvironment(e)).length,
-            }}
-            onChange={setVisibilityFilter}
-          />
+          <VisibilityFilter value={visibilityFilter} onChange={setVisibilityFilter} />
         )}
-        <Button
-          icon={<Icon icon={RefreshCwIcon} />}
-          loading={refreshing}
-          title={t('environments.refresh')}
-          onClick={refresh}
-        />
         <Button
           icon={<Icon icon={PlusIcon} />}
           type={'primary'}
@@ -161,6 +148,13 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(
         >
           {t('environments.create')}
         </Button>
+        {/* Last and borderless, as on the subscription accounts page. */}
+        <ActionIcon
+          icon={RefreshCwIcon}
+          loading={refreshing}
+          title={t('environments.refresh')}
+          onClick={refresh}
+        />
       </Flexbox>
     );
 

@@ -773,6 +773,8 @@
   "devices.status.online": "Online",
   "devices.status.onlineConnections_one": "Online · {{count}} connection",
   "devices.status.onlineConnections_other": "Online · {{count}} connections",
+  "devices.summary_one": "{{count}} device",
+  "devices.summary_other": "{{count}} devices",
   "devices.thisComputer": "This Computer",
   "devices.title": "My Devices",
   "devices.visibility.publish": "Publish to Workspace",
