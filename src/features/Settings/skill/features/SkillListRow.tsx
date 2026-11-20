@@ -11,15 +11,15 @@ import { useInterfaceDensity } from '@/styles/density';
 
 /**
  * `nav` is the compact sidebar row beside a detail pane; `page` is the
- * full-width list a row opens a second-level page from.
+ * full-width management list, and `catalog` is the Marketplace discovery list.
  */
-export type SkillListVariant = 'nav' | 'page';
+type SkillListVariant = 'nav' | 'page' | 'catalog';
 
 const SkillListVariantContext = createContext<SkillListVariant>('nav');
 
 export const SkillListVariantProvider = SkillListVariantContext.Provider;
 
-export const useSkillListVariant = () => use(SkillListVariantContext);
+export const useSkillListVariant = () => (use(SkillListVariantContext) === 'nav' ? 'nav' : 'page');
 
 const styles = stylex.create({
   // A borderless row in a two-column catalog (the Codex Plugins row): a 36px
@@ -41,12 +41,19 @@ const styles = stylex.create({
     height: 32,
     width: 32,
   },
+  iconTileCatalog: {
+    height: 40,
+    width: 40,
+  },
   row: {
     minHeight: 64,
     minWidth: 0,
   },
   rowCompact: {
     minHeight: 48,
+  },
+  rowCatalog: {
+    minHeight: 60,
   },
   trailing: {
     alignItems: 'center',
@@ -58,6 +65,7 @@ const styles = stylex.create({
 
 interface SkillListRowProps {
   active?: boolean;
+  agentType?: 'agent' | 'agent-group';
   /** Feedback line (connect error, ask an admin); shown in both variants. */
   description?: ReactNode;
   extra?: ReactNode;
@@ -72,8 +80,20 @@ interface SkillListRowProps {
 }
 
 const SkillListRow = memo<SkillListRowProps>(
-  ({ active, description, extra, icon, onClick, summary, testId, title, titleColor }) => {
-    const variant = useSkillListVariant();
+  ({
+    active,
+    agentType,
+    description,
+    extra,
+    icon,
+    onClick,
+    summary,
+    testId,
+    title,
+    titleColor,
+  }) => {
+    const variant = use(SkillListVariantContext);
+    const isCatalog = variant === 'catalog';
     const compact = useInterfaceDensity() === 'compact';
 
     if (variant === 'nav')
@@ -95,18 +115,23 @@ const SkillListRow = memo<SkillListRowProps>(
       <Block
         horizontal
         align={'center'}
-        {...stylex.props(styles.row, compact && styles.rowCompact)}
+        {...stylex.props(styles.row, compact && styles.rowCompact, isCatalog && styles.rowCatalog)}
         clickable={!!onClick}
+        data-agent-type={agentType}
         data-testid={testId}
         gap={12}
-        // 8px around the 22 + 2 + 22px text stack sits inside the 64px floor,
-        // so rows repeat every 68px (64 + the grid's 4px gap) as in Codex.
-        paddingBlock={compact ? 6 : 8}
-        paddingInline={12}
+        paddingBlock={compact && !isCatalog ? 6 : 8}
+        paddingInline={isCatalog ? 8 : 12}
         variant={'borderless'}
         onClick={onClick}
       >
-        <Center {...stylex.props(styles.iconTile, compact && styles.iconTileCompact)}>
+        <Center
+          {...stylex.props(
+            styles.iconTile,
+            compact && styles.iconTileCompact,
+            isCatalog && styles.iconTileCatalog,
+          )}
+        >
           <IconNode />
         </Center>
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>

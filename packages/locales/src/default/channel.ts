@@ -11,10 +11,17 @@ export default {
     "This Agent can run for you only with its creator's permission. Ask its creator for access.",
   'receipt.errorShareMessageLimit':
     'You have sent all the messages its creator allows to this shared Agent.',
+  'receipt.errorSharePromptTooLong':
+    'This message is longer than a shared Agent accepts. Shorten it and send it again.',
   'receipt.errorShareSpendLimit':
     'This shared Agent reached the monthly usage limit its creator set. It will be available again next month.',
   'receipt.errorUnavailable':
     'No detailed reason was recorded. Check the Agent’s model and device settings before sending again.',
+  'shareRefusal.addOwner': 'Add contact',
+  'shareRefusal.added': 'Added as a contact',
+  'shareRefusal.alreadyContact': 'Already your contact',
+  'shareRefusal.ownerCaption': 'Creator of this Agent',
+  'shareRefusal.requestSent': 'Request sent',
   'sort.by': 'Sort by',
   'sort.by.createdAt': 'Date created',
   'sort.by.title': 'Name',
@@ -139,6 +146,8 @@ export default {
   'threadCard.messages_other': '{{count}} messages',
   'closeThread': 'Close thread',
   'thread': 'Thread',
+  /** Heads the Channel's own actions in a menu that also holds a thread's. */
+  'channel': 'Channel',
   'threadDivider': 'Replies in this thread',
   'followers': 'Replies from: {{names}}',
   'olderMessages': 'Older messages',

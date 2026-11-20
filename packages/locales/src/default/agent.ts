@@ -701,13 +701,48 @@ export default {
   'channel.access.device.listHint':
     'Listed people can read and write files and run commands on your devices through the bot. Add only people you trust.',
   'channel.access.device.listEmpty': 'No one is authorized yet, so only you can use your devices.',
+  'channel.access.device.channel.label': 'Where devices can be used',
+  'channel.access.device.channel.any': 'Any channel',
+  'channel.access.device.channel.anyDesc':
+    'Device access follows the choice above wherever the bot is used.',
+  'channel.access.device.channel.allowlist': 'Only listed channels',
+  'channel.access.device.channel.allowlistDesc':
+    'Outside the channels listed below, the bot runs in the sandbox for everyone, you included. Direct messages are not affected.',
+  'channel.access.device.channel.list': 'Channels for devices',
+  'channel.access.device.channel.listHint':
+    'Use the same channel / group / chat IDs as Allowed Channels for conversations.',
+  'channel.access.device.channel.listEmpty':
+    'No channels added yet, so devices cannot be used in any channel.',
+  'channel.access.device.channelMembers': 'Anyone in the listed channels',
+  'channel.access.device.channelMembersDesc':
+    'You anywhere, plus everyone in the channels listed below. In other channels and in direct messages, only you.',
+  'channel.access.device.channelMembersRisk':
+    'Anyone in these channels can have the bot read and write files and run commands on your devices. List only channels whose members you all trust.',
+  'channel.access.device.grant.listEmpty':
+    'No channels added yet, so only you can use your devices.',
+  'channel.access.device.grant.listHint':
+    'Everyone in these channels can use your devices. Use the same channel / group / chat IDs as Allowed Channels for conversations.',
+  'channel.access.device.grantConfirmTitle': 'Grant these channels?',
+  'channel.access.device.grantConfirmContent':
+    '{{count}} channel(s) are already on the device channel list. They will now grant access: everyone in them can have the bot operate your devices.',
+  'channel.access.device.grantConfirmOk': 'Grant access',
   'channel.access.device.ownerMissing':
     'Add your platform user ID under Owner identity first. Until then the bot cannot recognize you, and no one can use your devices.',
+  'channel.access.device.ownerMissingChannel':
+    'Add your platform user ID under Owner identity first. Until then the bot cannot recognize you, so only members of the listed channels can use your devices, and only in those channels.',
   'channel.devicePolicy': 'Device Access',
   'channel.devicePolicyHint': 'Who may operate your devices through the bot.',
   'channel.deviceAllowFrom': 'Authorized People',
   'channel.deviceAllowFromAdd': 'Add person',
   'channel.deviceAllowFromEmpty': 'No one is authorized yet, so only you can use your devices.',
+  'channel.deviceChannelPolicy': 'Device Channels',
+  'channel.deviceChannelPolicyHint': 'In which channels the bot may operate your devices.',
+  'channel.deviceChannelAllowFrom': 'Device Channels',
+  'channel.deviceChannelAllowFromAdd': 'Add channel',
+  'channel.deviceChannelAllowFromEmpty':
+    'No channels added yet, so devices cannot be used in any channel.',
+  'channel.deviceChannelAllowFromHint':
+    'Channel / group / chat IDs where the bot may operate your devices.',
   'channel.deviceAllowFromHint':
     'Listed people can read and write files and run commands on your devices through the bot.',
   'channel.hero.title': '{{name}} bot',
@@ -890,7 +925,7 @@ export default {
 
   'share.entry': 'Share this Agent',
   'share.settings.device.desc':
-    'Choose who may run this Agent on your execution environment, for example to read files or run commands. Claude Code and Codex Agents run only there, so other visitors can’t use them. Chatting with the Agent doesn’t include device access.',
+    'Choose who may run this Agent on your execution environment, for example to read files or run commands. Local CLI Agents such as Claude Code and Codex run only there, so other visitors can’t use them. Chatting with the Agent doesn’t include device access.',
   'share.settings.device.title': 'Device access',
   'share.settings.device.who': 'Who can use your device',
   'share.settings.limits.desc':
@@ -952,6 +987,12 @@ export default {
   'share.settings.notice.workspaceDesc':
     'Visitors don’t just read this Agent — they run it. Every reply is generated in the Workspace and charged to its shared budget, without consuming the creator’s or another member’s quota. The Agent only acts with the visitor access you grant below.',
   'share.settings.notice.workspaceTitle': 'Visitors run this Agent on the Workspace budget',
+  'share.settings.pendingGrants.decline': 'Don’t open',
+  'share.settings.pendingGrants.desc':
+    'Includes {{names}}. If you choose not to open them, you won’t be asked about them again.',
+  'share.settings.pendingGrants.grantAll': 'Open to visitors',
+  'share.settings.pendingGrants.title':
+    '{{count}} tools or skills turned on in this Agent aren’t open to visitors yet',
   'share.settings.permissions.allowCreatorViewSessions': 'Let me read visitor conversations',
   'share.settings.permissions.allowCreatorViewSessionsHint':
     "Off by default: visitor conversations stay private to the visitor. When on, they appear under Share on this agent's Topics page.",
@@ -972,14 +1013,14 @@ export default {
     'Only the people you pick below from this Agent’s contacts can use it.',
   'share.settings.limits.saved': 'Limits saved',
   'share.settings.permissions.deviceAccessConfirm.commands':
-    'They can run any command and read or write any file on the machine this Agent runs on, including through Claude Code or Codex.',
+    'They can run any command and read or write any file on the machine this Agent runs on, including through a local CLI Agent such as Claude Code or Codex.',
   'share.settings.permissions.deviceAccessConfirm.contactsScope':
     'Anyone added to this Agent’s contacts later gets this access too, not only the people there now.',
   'share.settings.permissions.deviceAccessConfirm.intro':
     'People you grant access will run this Agent on your execution environment:',
   'share.settings.permissions.deviceAccessConfirm.ok': 'Allow listed people',
   'share.settings.permissions.deviceAccessConfirm.subscription':
-    'Claude Code and Codex runs use the model subscription signed in on that machine.',
+    'Local CLI Agents such as Claude Code and Codex use the model subscription or key signed in on that machine.',
   'share.settings.permissions.deviceAccessConfirm.title':
     'Let people use your execution environment?',
   'share.settings.permissions.deviceAllowContactsUnavailable':
@@ -1246,10 +1287,15 @@ export default {
   'share.visitor.profile.works.desc': 'Selected by the creator. See what this agent can deliver.',
   'share.visitor.profile.works.untitled': 'Untitled work',
   'share.visitor.profile.works.open': 'Open work',
+  'share.visitor.profile.works.type.artboard': 'Artboard',
   'share.visitor.profile.works.type.canvas': 'Canvas',
   'share.visitor.profile.works.type.document': 'Document',
   'share.visitor.profile.works.type.task': 'Task',
   'share.visitor.profile.works.type.file': 'File',
+  'share.visitor.profile.works.images_one': '{{count}} image',
+  'share.visitor.profile.works.images_other': '{{count}} images',
+  'share.visitor.profile.works.type.collection': 'Gallery',
+  'share.visitor.profile.works.viewImages': 'View images',
   'share.visitor.profile.works.type.external': 'Linked work',
   'share.settings.profile.title': 'Public profile',
   'share.settings.profile.desc':

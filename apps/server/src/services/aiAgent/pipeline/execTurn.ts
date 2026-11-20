@@ -1,13 +1,9 @@
 import type { SandboxStorageClaim } from '@lobechat/builtin-tool-cloud-sandbox';
-import { isOnDemandBuiltinTool } from '@lobechat/builtin-tools';
+import { getLegacyDisabledBuiltinToolIds } from '@lobechat/builtin-tools';
 import type { LobeChatDatabase } from '@lobechat/database';
-import { getImplicitBuiltinSkillIds } from '@lobechat/mecha/builtinSkillGate';
+import { getLegacyDisabledBuiltinSkillIds } from '@lobechat/mecha/builtinSkillGate';
 import type { AgentSenderMetadata, ExecAgentResult, UserInterventionConfig } from '@lobechat/types';
-import {
-  agentShareFileAccessScope,
-  ordinaryFileAccessScope,
-  resolveToolMode,
-} from '@lobechat/types';
+import { agentShareFileAccessScope, ordinaryFileAccessScope } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
@@ -268,6 +264,7 @@ export const execAgentTurn = async (
     agentSlug,
     assistantAgentId,
     autoSkillIds,
+    builtinOverrides,
     canManageAgent,
     conversationAgentId,
     disabledPluginIds,
@@ -633,15 +630,12 @@ export const execAgentTurn = async (
     await traceSendStage('run_settings', () =>
       resolveRunSettings({ agentConfig, runFacts, shareGate, workspaceId: deps.workspaceId }),
     );
-  if (!shareGate && !exclusivePluginIds && resolveToolMode(agentConfig.chatConfig) === 'agent') {
-    const implicitSkills = getImplicitBuiltinSkillIds(
-      agentConfig.createdAt,
-      agentConfig.chatConfig,
+  if (!shareGate && !exclusivePluginIds) {
+    disabledPluginIds.push(
+      ...getLegacyDisabledBuiltinSkillIds(uninstalledBuiltinIds, builtinOverrides),
     );
     disabledPluginIds.push(
-      ...uninstalledBuiltinIds.filter(
-        (id) => isOnDemandBuiltinTool(id) || implicitSkills.includes(id),
-      ),
+      ...getLegacyDisabledBuiltinToolIds(uninstalledBuiltinIds, builtinOverrides),
     );
   }
   log(
@@ -832,6 +826,7 @@ export const execAgentTurn = async (
       },
       runContext,
       {
+        acceptsArtboardWorks: params.acceptsArtboardWorks,
         acceptsFileWorks: params.acceptsFileWorks,
         acceptsMemberRuntimeEnd: params.acceptsMemberRuntimeEnd,
         approvalClaim,

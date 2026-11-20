@@ -6,6 +6,7 @@ import {
   Background,
   Controls,
   type Edge,
+  type FitViewOptions,
   type Node,
   type NodeTypes,
   ReactFlow,
@@ -25,7 +26,7 @@ import { getSelectedFlowNodeId, panNodeIntoView, revealNode } from './flowViewpo
 
 const edgeTypes = { transition: FlowEdge };
 
-const fitOptions = { maxZoom: 1, minZoom: 0.65, padding: 0.08 };
+const defaultFitOptions = { maxZoom: 1, minZoom: 0.65, padding: 0.08 };
 const styles = stylex.create({
   canvas: {
     overflow: 'hidden',
@@ -54,6 +55,7 @@ const fallback = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 export function FlowCanvas({
+  fitOptions = defaultFitOptions,
   fullscreen = false,
   nodes,
   edges,
@@ -61,6 +63,7 @@ export function FlowCanvas({
   onSelect,
   viewKey,
 }: {
+  fitOptions?: FitViewOptions;
   fullscreen?: boolean;
   nodes: Node<FlowGraphData>[];
   edges: Edge[];
@@ -143,7 +146,7 @@ export function FlowCanvas({
         height: container?.clientHeight ?? 0,
       });
     };
-  }, [viewKey, fullscreen, fitView, getViewport, setViewport, viewports]);
+  }, [viewKey, fullscreen, fitOptions, fitView, getViewport, setViewport, viewports]);
   return (
     // Custom nodes render inside React Flow, not under its `children`, so the
     // anchor channel has to sit above the canvas to reach a group's toggle.

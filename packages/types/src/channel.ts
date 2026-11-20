@@ -3,7 +3,7 @@ import {
   LocalExecutionHeterogeneousAgentTypeSchema,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './agent/heterogeneousAgent';
-import type { ContactCard, ContactCardType } from './contact';
+import type { ContactCard, ContactCardType, ContactUserProfile } from './contact';
 import { getWorkingDirEffectivePath } from './device';
 import type { BotWakeKind } from './signal';
 import type { ExternalWorkSummaryItem } from './work';
@@ -903,6 +903,8 @@ export interface ChannelPublicJob {
    * `sourceTopicId` on replies), so they can follow a reply still at work.
    */
   topicId?: string;
+  /** That topic's title, under the same rule as `topicId`; null while the topic is unnamed. */
+  topicTitle?: string | null;
   /** Git branch of the worktree the run works in, instead of the member's own directory. */
   worktreeBranch?: string | null;
   writerHeld: boolean;
@@ -956,6 +958,11 @@ export interface ChannelDetail {
    */
   readOnly?: boolean;
   rootMessage: ChannelPublicMessage | null;
+  /**
+   * The person who owns the shared Agent of a `sharedAgent` conversation: the contact card a
+   * refused reply offers the visitor. Null or absent otherwise.
+   */
+  sharedAgentOwner?: ContactUserProfile | null;
   threads: ChannelPublicThread[];
 }
 

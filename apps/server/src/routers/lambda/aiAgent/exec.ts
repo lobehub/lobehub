@@ -51,7 +51,7 @@ import { assertCanUseAgentRunConversation } from './guards';
 import type { AgentInterventionDispatchContext } from './interventionDispatch';
 import { dispatchClaimedAgentIntervention } from './interventionDispatch';
 import { aiAgentWriteProcedure } from './procedures';
-import { acceptsFileWorksOf, acceptsMemberRuntimeEndOf } from './utils';
+import { acceptsArtboardWorksOf, acceptsFileWorksOf, acceptsMemberRuntimeEndOf } from './utils';
 
 const log = debug('lobe-server:ai-agent-router');
 
@@ -94,7 +94,11 @@ export const bridgeLegacyResumeToSourceIntervention = async (
   },
   ctx: AgentInterventionDispatchContext,
   /** Forwarded to {@link dispatchClaimedAgentIntervention}; see its `options`. */
-  options: { acceptsFileWorks?: boolean; acceptsMemberRuntimeEnd?: boolean } = {},
+  options: {
+    acceptsArtboardWorks?: boolean;
+    acceptsFileWorks?: boolean;
+    acceptsMemberRuntimeEnd?: boolean;
+  } = {},
 ): Promise<ExecAgentResult | undefined> => {
   const {
     messageModel,
@@ -295,6 +299,7 @@ export const execRouter = router({
         },
         ctx,
         {
+          acceptsArtboardWorks: acceptsArtboardWorksOf(input.streamFeatures),
           acceptsFileWorks: acceptsFileWorksOf(input.streamFeatures),
           acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
         },
@@ -314,6 +319,7 @@ export const execRouter = router({
         },
         {
           ...request,
+          acceptsArtboardWorks: acceptsArtboardWorksOf(input.streamFeatures),
           acceptsFileWorks: acceptsFileWorksOf(input.streamFeatures),
           acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
           // A non-superseding start waits on the surface like a server-started
@@ -556,6 +562,7 @@ export const execRouter = router({
           workspaceId: ctx.workspaceId,
         });
         const result = await ctx.aiAgentService.execAgent({
+          acceptsArtboardWorks: acceptsArtboardWorksOf(task.streamFeatures),
           acceptsFileWorks: acceptsFileWorksOf(task.streamFeatures),
           acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(task.streamFeatures),
           clientProtocol: task.clientProtocol,

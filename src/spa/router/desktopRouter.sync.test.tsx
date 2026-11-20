@@ -823,8 +823,10 @@ describe('desktop router shared definition', () => {
     (_, factory) => {
       const routes = createMainAreaRoutes(factory);
 
+      const entry = matchRoutes(routes, '/marketplace')?.at(-1)?.route.element;
+      expect(matchRoutes(routes, '/community')?.at(-1)?.route.element).toBe(entry);
+
       for (const url of [
-        '/community',
         '/community/mcp/notion',
         '/acme/community/skill',
         // Compete with `/:workspaceSlug/agent[/:aid]`; a lone `community/*`

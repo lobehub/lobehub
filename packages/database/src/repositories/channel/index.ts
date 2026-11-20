@@ -29,11 +29,11 @@ import { normalizeWorkspaceId } from '../../utils/workspace';
 import type { ChannelAddAgentInput } from './agent';
 import {
   addAgentMember,
-  isSharedAgentChannel,
   memberEnvironment,
   requireAgentMember,
   requireChannelAgent,
-  sharedAgentOwner,
+  sharedAgentFields,
+  sharedAgentView,
 } from './agent';
 import { openAgentPair } from './agentPair';
 import { channelAvatarMembers } from './avatars';
@@ -452,11 +452,11 @@ export class ChannelRepository {
         if (access.channel.isDeleted) throw new ChannelError('NOT_FOUND', 'Channel not found');
         const admin = hasRole(access.member.role, 'admin');
         const view = await readChannelView(tx, channelId, options, this.userId);
-        // Same test as `list`; the composer reads it from here to hide upload.
-        const sharedAgent = !!(await sharedAgentOwner(tx, access.channel, this.userId));
+        const shared = await sharedAgentView(tx, access.channel, this.userId);
         return {
-          channel: { ...access.channel, canDelete: admin, sharedAgent },
+          channel: { ...access.channel, canDelete: admin, ...shared.channel },
           joined: true,
+          sharedAgentOwner: shared.owner,
           ...view,
           // Mirrors `stop`: the requester or an admin.
           jobs: viewerJobs(view.jobs, this.userId, (id) => admin || id === access.member.id),
@@ -486,7 +486,7 @@ export class ChannelRepository {
       { allowArchived: true, allowTrashed: true },
     );
 
-  /** Pins the conversation atop the caller's own list, or unpins it; nobody else sees it. */
+  /** Pins the conversation atop the caller's own list (joining an open one), or unpins it. */
   setPinned = async (channelId: string, pinned: boolean) =>
     this.write(
       channelId,
@@ -495,12 +495,12 @@ export class ChannelRepository {
         await tx.update(channelMembers).set({ pinnedAt }).where(eq(channelMembers.id, member.id));
         return pinnedAt;
       },
-      { allowArchived: true, allowTrashed: true },
+      { allowArchived: true, allowTrashed: true, joinOpen: pinned },
     );
 
   /**
-   * Files the conversation under one of the caller's own sections, or back into its built-in
-   * section with `null`; nobody else sees it.
+   * Files the conversation under one of the caller's own sections (joining an open one), or back
+   * into its built-in section with `null`; nobody else sees it.
    */
   moveToSection = async (channelId: string, sectionId: string | null) =>
     this.write(
@@ -510,7 +510,7 @@ export class ChannelRepository {
         await tx.update(channelMembers).set({ sectionId }).where(eq(channelMembers.id, member.id));
         return sectionId;
       },
-      { allowArchived: true, allowTrashed: true },
+      { allowArchived: true, allowTrashed: true, joinOpen: sectionId !== null },
     );
 
   /**
@@ -688,13 +688,10 @@ export class ChannelRepository {
         shareSlug,
         ...agent
       }) => {
-        const sharedAgent = isSharedAgentChannel(channel, agent, this.userId);
         return {
           ...channel,
           agentIds: agentIdsOf.get(channel.id) ?? [],
-          sharedAgent,
-          // Its visitor page (`/a/<handle>`) is where the caller can see this Agent; it has no other.
-          sharedAgentHandle: sharedAgent ? (shareSlug ?? shareId) : null,
+          ...sharedAgentFields(channel, agent, this.userId, shareSlug ?? shareId),
           canDelete: hasRole(role, 'admin'),
           hidden,
           joined: true,

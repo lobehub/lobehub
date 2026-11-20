@@ -1,4 +1,5 @@
 import { ChannelIdentifier } from '@lobechat/builtin-tool-channel';
+import { SHARE_VISITOR_PROMPT_MAX_LENGTH } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { buildChannelPrompt, CHANNEL_INSTRUCTIONS } from '@lobechat/prompts';
 import type { ChannelExecutionConfig, ChannelSharedAgentAccess } from '@lobechat/types';
@@ -57,23 +58,31 @@ class ChannelDispatchError extends Error {
 }
 
 /**
- * Refusals of a shared Agent's run its visitor can act on, raised by the run's share guards before
- * the visitor's message is written: the share grants them no device for a Claude Code / Codex
- * Agent, the owner's device is offline, or the visitor has sent all the messages the share allows.
- * Kept as the job's failure type, as the share page shows them.
+ * Every refusal of a shared Agent's run its visitor can act on, with the readable text its failed
+ * job carries. Sending never refuses for these: the message is written, and its reply fails with
+ * one of these types, so every limit reads the same way and survives a reload. Raised by
+ * {@link ChannelCoordinator.shareGate}, or by the run's own share guards (the turn guard's atomic
+ * recount, the device checks of a local CLI Agent such as Claude Code or Codex), which name the
+ * type as their message. A client explains the type in the viewer's language; the text is for one that does not know it.
  */
-const SHARE_REFUSAL_TYPES = new Set<string>([
-  ChatErrorType.ShareHeterogeneousAgentUnsupported,
-  ChatErrorType.ShareHeteroDeviceUnavailable,
-  ChatErrorType.ShareMessageLimitExceeded,
-]);
+const SHARE_REFUSAL_MESSAGES: Record<string, string> = {
+  [ChatErrorType.ShareHeterogeneousAgentUnsupported]:
+    'This shared Agent cannot run for visitors in its current setup',
+  [ChatErrorType.ShareHeteroDeviceUnavailable]: 'The device this shared Agent runs on is offline',
+  [ChatErrorType.ShareMessageLimitExceeded]:
+    'You have sent all the messages this shared Agent allows',
+  [ChatErrorType.SharePromptTooLong]: `Messages to a shared Agent are limited to ${SHARE_VISITOR_PROMPT_MAX_LENGTH} characters`,
+  [ChatErrorType.ShareSpendLimitExceeded]: 'This shared Agent reached its monthly usage limit',
+};
 
-const dispatchFailureType = (error: unknown) =>
-  error instanceof ChannelDispatchError
-    ? error.type
-    : error instanceof Error && SHARE_REFUSAL_TYPES.has(error.message)
-      ? error.message
-      : undefined;
+const shareRefusal = (type: string) => new ChannelDispatchError(type, SHARE_REFUSAL_MESSAGES[type]);
+
+/** The failure a refused dispatch records: its type and text, when the requester can act on it. */
+const dispatchFailure = (error: unknown): { message: string; type: string } | undefined => {
+  if (error instanceof ChannelDispatchError) return { message: error.message, type: error.type };
+  if (error instanceof Error && Object.hasOwn(SHARE_REFUSAL_MESSAGES, error.message))
+    return { message: SHARE_REFUSAL_MESSAGES[error.message], type: error.message };
+};
 
 /** A co-addressed Agent as the run reads it: its name, and its title when that says more. */
 const describePeer = (agent: ChannelCoAddressedAgent) => {
@@ -100,13 +109,20 @@ export class ChannelCoordinator {
   }
 
   /**
-   * Recheck a shared Agent's live share and its owner's spend limit right before submission, as
-   * the share page does for every visitor turn, and build the gate the run executes under.
+   * Admit a visitor's message to a shared Agent right before submission, and build the gate the
+   * run executes under. The one place a visitor's limits refuse a Channel reply, in the order the
+   * share page checks them: the live share, the prompt length, the messages the visitor may send
+   * (`maxMessagesPerVisitor`, across all their conversations with the Agent) and the share's
+   * monthly spend. Like the spend limit, the message count is a guardrail rather than a
+   * reservation: concurrent replies can each pass here, and the run's turn guard
+   * (`reserveShareVisitorTurn`) refuses the one beyond the cap.
    */
   private async shareGate(
     access: ChannelSharedAgentAccess,
     agentId: string,
     requesterId: string,
+    /** The visitor's own message; a message it quotes is not part of its prompt. */
+    request: string,
   ): Promise<AgentShareGate> {
     const share = await AgentShareModel.findByShareId(this.db, access.shareId);
     if (
@@ -116,6 +132,17 @@ export class ChannelCoordinator {
       share.ownerId !== access.ownerId
     )
       throw new Error('This Agent is no longer shared');
+    if (request.length > SHARE_VISITOR_PROMPT_MAX_LENGTH)
+      throw shareRefusal(ChatErrorType.SharePromptTooLong);
+    const sent = await new TopicModel(
+      this.db,
+      share.ownerId,
+      share.workspaceId ?? undefined,
+      undefined,
+      { includeShareVisitor: true },
+    ).countMessagesBySender({ agentId, senderId: requesterId });
+    if (sent >= share.shareConfig.maxMessagesPerVisitor)
+      throw shareRefusal(ChatErrorType.ShareMessageLimitExceeded);
     const spend = await checkAgentShareSpendAllowance({
       agentId,
       monthlySpendLimit: share.shareConfig.monthlySpendLimit,
@@ -124,11 +151,7 @@ export class ChannelCoordinator {
       visitorUserId: requesterId,
       workspaceId: share.workspaceId ?? undefined,
     });
-    if (!spend.allowed)
-      throw new ChannelDispatchError(
-        ChatErrorType.ShareSpendLimitExceeded,
-        'This shared Agent reached its monthly usage limit',
-      );
+    if (!spend.allowed) throw shareRefusal(ChatErrorType.ShareSpendLimitExceeded);
     return {
       agentId,
       canUseDevice: await resolveShareVisitorDeviceAccess(this.db, share, requesterId),
@@ -207,8 +230,16 @@ export class ChannelCoordinator {
               await this.complete(channelId, job.id, job.operationId ?? undefined);
               continue;
             }
-            // Before the claim: a reply that moves into a Thread runs there from the start.
-            await openChannelReply(this.db, channelId, job.id);
+            // Before the claim: a reply that moves into a Thread runs there from the start. A
+            // shared Agent's reply opens only once its share admits the request.
+            await openChannelReply(this.db, channelId, job.id, {
+              admitShare: ({ agent, request, requesterUserId, share }) =>
+                // Only a refusal skips the opening; a failed check leaves it to dispatch.
+                this.shareGate(share, agent.id, requesterUserId, request.content).then(
+                  () => true,
+                  (error) => !dispatchFailure(error),
+                ),
+            });
             const claimNow = () =>
               this.executions.claim(channelId, job.id, {
                 leaseMs: LEASE_MS,
@@ -349,7 +380,12 @@ export class ChannelCoordinator {
       ]);
       const shareGate =
         share && topic.senderId
-          ? await this.shareGate(share, member.agentId, topic.senderId)
+          ? await this.shareGate(
+              share,
+              member.agentId,
+              topic.senderId,
+              input.find((message) => message.id === job.manifest!.requestMessageId)?.content ?? '',
+            )
           : undefined;
       if (share && !shareGate) throw new Error('A shared Agent run needs its requester');
       // Sending refuses attachments to a shared Agent: the owner's run cannot read them.
@@ -394,23 +430,20 @@ export class ChannelCoordinator {
       await this.executions.accepted(job.channelId, job.id);
     } catch (error) {
       console.error('[channel:dispatch]', error);
-      const type = dispatchFailureType(error);
+      const failure = dispatchFailure(error);
       const operation = await new AgentOperationModel(
         this.db,
         topic.userId,
         workspaceId ?? undefined,
       ).findById(job.operationId);
       if (operation?.status === 'idle') {
-        await this.executions.retireReservation(
+        await this.executions.retireReservation(job.channelId, job.id, failure);
+      } else
+        await this.executions.fail(
           job.channelId,
           job.id,
-          type && error instanceof Error ? { message: error.message, type } : undefined,
+          failure ?? { message: error instanceof Error ? error.message : 'Agent could not start' },
         );
-      } else
-        await this.executions.fail(job.channelId, job.id, {
-          message: error instanceof Error ? error.message : 'Agent could not start',
-          ...(type && { type }),
-        });
     } finally {
       clearInterval(renew);
       await this.executions.finishDispatch(job.channelId, job.id, lease.leaseOwner);

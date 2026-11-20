@@ -1054,10 +1054,10 @@ export type GoalGraphWorkVersionLink = {
         identifier: string | null;
         mimeType?: string;
         resourceId: string | null;
-        resourceType?: 'canvas' | 'document' | 'github_issue' | 'github_pull_request' | 'linear_document' | 'linear_issue' | 'file' | 'goal_report' | 'task';
+        resourceType?: 'artboard' | 'canvas' | 'document' | 'github_issue' | 'github_pull_request' | 'linear_document' | 'linear_issue' | 'link' | 'file' | 'collection' | 'goal_report' | 'task';
         status: string | null;
         title: string | null;
-        type: 'canvas' | 'document' | 'external' | 'file' | 'goal_report' | 'task';
+        type: 'artboard' | 'canvas' | 'document' | 'external' | 'file' | 'collection' | 'goal_report' | 'task';
         url: string | null;
         workId: string;
     };

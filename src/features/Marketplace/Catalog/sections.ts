@@ -40,16 +40,25 @@ export const orderCategoriesByCount = <K extends string>(
 /** The full list behind a group heading: the Discover path with its query. */
 export const buildCatalogListUrl = (
   path: string,
-  query: { category?: string; sort?: string },
+  query: { category?: string; group?: string; q?: string; sort?: string; source?: string },
 ): string => qs.stringifyUrl({ query, url: path }, { skipEmptyString: true, skipNull: true });
 
 /**
  * The Discover page shows groups until the user narrows it: a category, a sort,
- * a search or a page number turns it into one full list.
+ * or a page number turns it into one full list.
  */
 export const isCatalogListView = (query: {
   category?: string;
   page?: number | string;
-  q?: string;
   sort?: string;
-}): boolean => Boolean(query.category || query.q || query.sort || query.page);
+}): boolean => Boolean(query.category || query.sort || query.page);
+
+/** Editing a search keeps its current group and sort, but starts at page one. */
+export const catalogSearchParams = (params: URLSearchParams, keyword: string): URLSearchParams => {
+  const next = new URLSearchParams(params);
+  const query = keyword.trim();
+  next.delete('page');
+  if (query) next.set('q', query);
+  else next.delete('q');
+  return next;
+};

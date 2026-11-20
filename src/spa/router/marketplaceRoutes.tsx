@@ -3,10 +3,11 @@
 import { Blocks, ShapesIcon } from 'lucide-react';
 import type { RouteObject } from 'react-router';
 
-import CommunityHomeSkeleton from '@/components/Skeleton/CommunityHome';
 import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
+import { MarketplaceCatalogSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import {
+  getMarketplaceEntryPath,
   LEGACY_COMMUNITY_SEGMENT,
   MARKETPLACE_CONNECTOR_PATH,
   MARKETPLACE_INSTALLED_CONNECTORS_PATH,
@@ -20,6 +21,7 @@ import {
 import { communityDetailRouteMeta } from '@/features/RouteMeta/communityRouteMeta';
 import { LegacyCommunityRedirect, LegacyPathRedirect } from '@/spa/router/legacyPathRedirect';
 import { routeMeta } from '@/spa/router/routeMeta';
+import { useServerConfigStore } from '@/store/serverConfig';
 import { dynamicElement, ErrorBoundary } from '@/utils/router';
 
 /**
@@ -56,6 +58,20 @@ export const marketplaceManageRoutes: RouteObject[] = [
  */
 export const LEGACY_REDIRECT_HANDLE = { legacyRedirect: true } as const;
 
+const MarketplaceEntryRedirect = () => {
+  const destination = useServerConfigStore((s) =>
+    s.serverConfigInit ? getMarketplaceEntryPath(s.featureFlags.showMarket) : undefined,
+  );
+
+  return destination ? <LegacyPathRedirect to={destination} /> : null;
+};
+
+export const marketplaceIndexRoute: RouteObject = {
+  element: <MarketplaceEntryRedirect />,
+  handle: LEGACY_REDIRECT_HANDLE,
+  index: true,
+};
+
 /** `mcp` (the former MCP list) → the Connectors Discover page, query kept. */
 export const marketplaceMcpListRedirect: RouteObject = {
   element: <LegacyPathRedirect to={MARKETPLACE_CONNECTOR_PATH} />,
@@ -78,6 +94,7 @@ export const marketplaceRoute: RouteObject = {
       handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('form') }) },
       path: 'workspace/settings',
     },
+    marketplaceIndexRoute,
     ...marketplaceManageRoutes,
     // The MCP list merged into Connectors; its URL (with `?category=` / `?q=`)
     // forwards there. MCP detail pages stay at `mcp/:slug`.
@@ -86,25 +103,17 @@ export const marketplaceRoute: RouteObject = {
     {
       children: [
         {
-          children: [
-            {
-              element: dynamicElement(
-                () => import('@/routes/(main)/community/(list)/agent'),
-                'Desktop > Discover > List > Agent',
-              ),
-              handle: {
-                meta: routeMeta({
-                  icon: ShapesIcon,
-                  titleKey: 'navigation.marketplaceAgents',
-                }),
-              },
-              index: true,
-            },
-          ],
           element: dynamicElement(
-            () => import('@/routes/(main)/community/(list)/agent/_layout'),
-            'Desktop > Discover > List > Agent > Layout',
+            () => import('@/routes/(main)/community/(list)/agent'),
+            'Desktop > Discover > List > Agent',
           ),
+          handle: {
+            meta: routeMeta({
+              icon: ShapesIcon,
+              Skeleton: MarketplaceCatalogSkeleton,
+              titleKey: 'navigation.marketplaceAgents',
+            }),
+          },
           path: 'agent',
         },
         {
@@ -142,7 +151,11 @@ export const marketplaceRoute: RouteObject = {
             'Desktop > Discover > List > Skill',
           ),
           handle: {
-            meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceSkills' }),
+            meta: routeMeta({
+              icon: ShapesIcon,
+              Skeleton: MarketplaceCatalogSkeleton,
+              titleKey: 'navigation.marketplaceSkills',
+            }),
           },
           path: 'skill',
         },
@@ -152,7 +165,11 @@ export const marketplaceRoute: RouteObject = {
             'Desktop > Discover > List > Connector',
           ),
           handle: {
-            meta: routeMeta({ icon: Blocks, titleKey: 'navigation.marketplaceConnectors' }),
+            meta: routeMeta({
+              icon: Blocks,
+              Skeleton: MarketplaceCatalogSkeleton,
+              titleKey: 'navigation.marketplaceConnectors',
+            }),
           },
           path: 'connector',
         },
@@ -163,21 +180,6 @@ export const marketplaceRoute: RouteObject = {
           ),
           handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('detail') }) },
           path: 'workspace',
-        },
-        {
-          element: dynamicElement(
-            () => import('@/routes/(main)/community/(list)/(home)'),
-            'Desktop > Discover > List > Home',
-            { preloadId: 'community' },
-          ),
-          handle: {
-            meta: routeMeta({
-              icon: ShapesIcon,
-              Skeleton: CommunityHomeSkeleton,
-              titleKey: 'navigation.marketplace',
-            }),
-          },
-          index: true,
         },
       ],
       element: dynamicElement(
@@ -304,7 +306,11 @@ const legacyCommunityRedirect = (path: string): RouteObject => ({
 });
 
 export const legacyCommunityRoutes: RouteObject[] = [
-  legacyCommunityRedirect(LEGACY_COMMUNITY_SEGMENT),
+  {
+    element: marketplaceIndexRoute.element,
+    handle: LEGACY_REDIRECT_HANDLE,
+    path: LEGACY_COMMUNITY_SEGMENT,
+  },
   ...LEGACY_COMMUNITY_SECTIONS.flatMap((section) => [
     legacyCommunityRedirect(`${LEGACY_COMMUNITY_SEGMENT}/${section}`),
     legacyCommunityRedirect(`${LEGACY_COMMUNITY_SEGMENT}/${section}/:slug`),

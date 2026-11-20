@@ -340,14 +340,14 @@ export const channelRouter = router({
   setPinned: externalChannelProcedure
     .input(z.object({ channelId, pinned: z.boolean() }))
     .mutation(async ({ ctx, input }) => ({
-      data: await ctx.channelService.repository.setPinned(input.channelId, input.pinned),
+      data: await ctx.channelService.setPinned(input.channelId, input.pinned),
       success: true,
     })),
   /** Files the conversation under one of the caller's own sections; null returns it to the built-in one. */
   moveToSection: externalChannelProcedure
     .input(z.object({ channelId, sectionId: sectionId.nullable() }))
     .mutation(async ({ ctx, input }) => ({
-      data: await ctx.channelService.repository.moveToSection(input.channelId, input.sectionId),
+      data: await ctx.channelService.moveToSection(input.channelId, input.sectionId),
       success: true,
     })),
   /** Hides the conversation from the caller's own list until its next message, or shows it again. */

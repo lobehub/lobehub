@@ -126,7 +126,8 @@ export const ToolSettings = memo<ToolSettingsProps>(({ headerExtra, viewMode }) 
   const closeStackedDetail = () => {
     // Pop the entry this page pushed, so history keeps one list entry; a
     // deep-linked detail has none to pop and is replaced by the list instead.
-    if ((location.state as Record<string, unknown> | null)?.[PUSHED_DETAIL_STATE]) {
+    const state = location.state as Record<string, unknown> | null;
+    if (state?.[PUSHED_DETAIL_STATE] || typeof state?.marketplaceCatalog === 'string') {
       navigate(-1);
       return;
     }

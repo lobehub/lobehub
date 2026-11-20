@@ -95,8 +95,9 @@ describe('settings useCategory', () => {
     // environment definitions.
     const keys = groupKeys(SettingsGroupKey.Resource);
     expect(keys).toContain(SettingsTabs.Environments);
-    // Credentials sit right below Environments, the runs that read them.
-    expect(keys?.indexOf(SettingsTabs.Creds)).toBe(keys!.indexOf(SettingsTabs.Environments) + 1);
+    // Credentials share the Environments page: one entry for what a run starts
+    // from and the secrets it reads.
+    expect(keys).not.toContain(SettingsTabs.Creds);
     expect(keys).not.toContain('drive');
   });
 

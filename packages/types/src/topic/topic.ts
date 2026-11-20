@@ -71,6 +71,19 @@ export interface ChatTopicWebhookContext {
 export interface ChatTopicBotContext {
   applicationId: string;
   /**
+   * Whether the sender, not being the owner, sits in a channel whose members
+   * may all use the owner's devices (`settings.devicePolicy = 'channel'` +
+   * `settings.deviceChannelAllowFrom`). Absent means no channel grant.
+   */
+  isDeviceChannelGranted?: boolean;
+  /**
+   * Whether the conversation is outside the channels the owner limited device
+   * use to (`settings.deviceChannelPolicy = 'allowlist'` +
+   * `settings.deviceChannelAllowFrom`). Denies device access to everyone,
+   * the owner included. Absent means no channel restriction.
+   */
+  isDeviceChannelRestricted?: boolean;
+  /**
    * Whether the sender, not being the owner, is on the owner's device list
    * (`settings.devicePolicy = 'allowlist'` + `settings.deviceAllowFrom`).
    * Computed with `isOwner` in `buildBotContext`; absent means not trusted.

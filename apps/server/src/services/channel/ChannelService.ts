@@ -463,7 +463,32 @@ export class ChannelService {
     return access;
   };
 
+  /**
+   * Pins the conversation atop the caller's own list, or unpins it. Pinning an open project
+   * Channel joins it, so its members see the newcomer as with {@link join}.
+   */
+  setPinned = (channelId: string, pinned: boolean) =>
+    this.writeMayJoin(channelId, pinned, () => this.repository.setPinned(channelId, pinned));
+
+  /** Files the conversation under one of the caller's own sections, joining it like a pin. */
+  moveToSection = (channelId: string, sectionId: string | null) =>
+    this.writeMayJoin(channelId, sectionId !== null, () =>
+      this.repository.moveToSection(channelId, sectionId),
+    );
+
   changed = (channelId: string) => notifyChannel(this.db, channelId);
+
+  /** A personal list write that joins an open Channel first; members hear only about a join. */
+  private writeMayJoin = async <T>(
+    channelId: string,
+    mayJoin: boolean,
+    write: () => Promise<T>,
+  ) => {
+    const joining = mayJoin && !(await this.repository.findAccess(channelId));
+    const result = await write();
+    if (joining) await this.changed(channelId);
+    return result;
+  };
 
   /** Visitor conversations with the caller's shared Agent, when its share lets the caller read them. */
   shareVisitors = (agentId: string) => listShareVisitorConversations(this.db, this.userId, agentId);

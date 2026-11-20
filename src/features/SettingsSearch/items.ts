@@ -98,6 +98,9 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
   [SettingsTabs.Environments]: [
     'sandbox',
     'environments',
+    'credentials',
+    'secrets',
+    'vault',
     'instances',
     'setup script',
     'repository',

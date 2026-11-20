@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 
 import { useConnectorManageableChecker } from '@/hooks/useConnectorManagePolicy';
 
-import { openConnectorEditDrawer } from './imperative';
+import { openConnectorEditModal } from './imperative';
 
 interface ConfigurableConnector {
   agentId?: string | null;
@@ -25,7 +25,7 @@ export const useConnectorConfigure = () => {
     (connector: ConfigurableConnector) =>
       connector.mcpConnectionType === 'cloud' || !checkManageable(connector).canManageCredentials
         ? undefined
-        : { onConfigure: () => openConnectorEditDrawer(connector.id) },
+        : { onConfigure: () => openConnectorEditModal(connector.id) },
     [checkManageable],
   );
 };

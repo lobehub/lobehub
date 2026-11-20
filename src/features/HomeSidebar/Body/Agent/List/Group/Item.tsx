@@ -17,13 +17,13 @@ import { HashIcon } from 'lucide-react';
 import React, { memo, useCallback, useMemo, useState } from 'react';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import PrivateLockIcon from '@/components/PrivateLockIcon';
 import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import { useHomeStore } from '@/store/home';
 
 import { useCreateMenuItems } from '../../../../hooks';
 import { useAgentModal } from '../../ModalProvider';
 import SessionList from '../List';
-import PrivateLockIcon from '../PrivateLockIcon';
 import Actions from './Actions';
 import { useGroupDropdownMenu } from './useDropdownMenu';
 

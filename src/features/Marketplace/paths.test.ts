@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getManageLibraryPath, getMarketplaceSubPath } from './paths';
+import { getManageLibraryPath, getMarketplaceSubPath, hasCatalogPageHeader } from './paths';
 
 describe('getMarketplaceSubPath', () => {
   it.each([
@@ -26,5 +26,20 @@ describe('getManageLibraryPath', () => {
     expect(getManageLibraryPath('skills')).toBe('/marketplace/skill/installed');
     expect(getManageLibraryPath('tools')).toBe('/marketplace/connector/installed');
     expect(getManageLibraryPath()).toBe('/marketplace/connector/installed');
+  });
+});
+
+describe('hasCatalogPageHeader', () => {
+  it.each([
+    ['/marketplace/skill', true],
+    ['/workspace/marketplace/connector/', true],
+    ['/marketplace', false],
+    ['/marketplace/agent', true],
+    ['/workspace/marketplace/agent/example', false],
+    ['/marketplace/skill/installed', false],
+    ['/marketplace/skill/example', false],
+    ['/marketplace/mcp/example', false],
+  ])('selects the page toolbar for %s: %s', (path, expected) => {
+    expect(hasCatalogPageHeader(path)).toBe(expected);
   });
 });

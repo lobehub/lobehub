@@ -275,15 +275,9 @@ export const UserLabSchema = z.object({
    * (its ids and the client environment) to the support team
    */
   enableTopicBugReport: z.boolean().optional(),
-  /**
-   * enable Goals: hand the agent a goal it plans into tasks, tracks and delivers
-   */
+  /** @deprecated Legacy client preference. Goals are available to everyone. */
   enableGoals: z.boolean().optional(),
-  /**
-   * @deprecated Renamed to `enableGoals`. Written alongside it, and read first,
-   * while older clients that only know this key are still around: their writes
-   * touch only this key, so it carries the latest choice.
-   */
+  /** @deprecated Legacy alias for the Goals lab preference. */
   enableTopicAcceptance: z.boolean().optional(),
   /**
    * expose a port on the working device through a tunnel link, so a dev server

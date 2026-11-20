@@ -211,6 +211,29 @@ describe('openChannelReply', () => {
     });
   });
 
+  it('opens a shared Agent’s reply only once its share admits the request', async () => {
+    const share = { ownerId: 'owner', shareId: 'share', workspaceId: null };
+    executions.openingCandidate.mockResolvedValue({ ...candidate, share });
+    const opener = vi.fn().mockResolvedValue({ ack: 'On it', placement: 'channel' });
+    const admitShare = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+    await openChannelReply({} as never, 'channel', 'job', {
+      admitShare,
+      createOpener: () => opener,
+    });
+    expect(admitShare).toHaveBeenCalledWith(
+      expect.objectContaining({ request: candidate.request, share }),
+    );
+    expect(opener).not.toHaveBeenCalled();
+    expect(executions.open).not.toHaveBeenCalled();
+
+    await openChannelReply({} as never, 'channel', 'job', {
+      admitShare,
+      createOpener: () => opener,
+    });
+    expect(executions.open).toHaveBeenCalledWith('channel', 'job', { ack: 'On it' });
+  });
+
   it('skips a job with nothing to open and never throws', async () => {
     const opener = vi.fn();
     executions.openingCandidate.mockResolvedValueOnce(undefined);

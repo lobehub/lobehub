@@ -10,6 +10,7 @@ import {
 import AppsSkeleton from '@/components/Skeleton/Apps';
 import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
 import { delayed } from '@/components/Skeleton/Delayed';
+import { MarketplaceCatalogSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
 import { MARKETPLACE_SEGMENT } from '@/features/Marketplace/paths';
@@ -22,6 +23,7 @@ import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import {
   legacyCommunityRoutes,
   legacySettingsMarketplaceRedirects,
+  marketplaceIndexRoute,
   marketplaceManageRoutes,
   marketplaceMcpListRedirect,
 } from '@/spa/router/marketplaceRoutes';
@@ -49,9 +51,10 @@ const settingsTabSubElement = dynamicElement(
 );
 
 // Skills and connectors moved to the Marketplace; their old tabs are redirects.
+// Credentials keep their own mobile page: mobile has no environments page to
+// share, while desktop redirects `/settings/credential` to it.
 const TABS_WITHOUT_SETTINGS_PAGE = new Set<string>([
   SettingsTabs.Connector,
-  SettingsTabs.Creds,
   SettingsTabs.Provider,
   SettingsTabs.Skill,
 ]);
@@ -123,19 +126,11 @@ export const sharedMainAreaChildren: RouteObject[] = [
         'connector/installed': withHandle({ mobileShellHeader: true }),
         'skill/installed': withHandle({ mobileShellHeader: true }),
       }),
+      marketplaceIndexRoute,
       marketplaceMcpListRedirect,
       // List routes (with ListLayout)
       {
         children: [
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/(home)'),
-              'Mobile > Discover > List > Home',
-              { preloadId: 'mobile-community' },
-            ),
-            handle: { meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplace' }) },
-            index: true,
-          },
           {
             children: [
               {
@@ -144,7 +139,11 @@ export const sharedMainAreaChildren: RouteObject[] = [
                   'Mobile > Discover > List > Agent',
                 ),
                 handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceAgents' }),
+                  meta: routeMeta({
+                    icon: ShapesIcon,
+                    Skeleton: MarketplaceCatalogSkeleton,
+                    titleKey: 'navigation.marketplaceAgents',
+                  }),
                 },
                 path: 'agent',
               },
@@ -180,7 +179,11 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Mobile > Discover > List > Connector',
             ),
             handle: {
-              meta: routeMeta({ icon: Blocks, titleKey: 'navigation.marketplaceConnectors' }),
+              meta: routeMeta({
+                icon: Blocks,
+                Skeleton: MarketplaceCatalogSkeleton,
+                titleKey: 'navigation.marketplaceConnectors',
+              }),
             },
             path: 'connector',
           },
@@ -190,7 +193,11 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Mobile > Discover > List > Skill',
             ),
             handle: {
-              meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceSkills' }),
+              meta: routeMeta({
+                icon: ShapesIcon,
+                Skeleton: MarketplaceCatalogSkeleton,
+                titleKey: 'navigation.marketplaceSkills',
+              }),
             },
             path: 'skill',
           },

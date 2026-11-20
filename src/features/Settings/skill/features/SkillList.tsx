@@ -23,7 +23,6 @@ import {
 import { useToolStore } from '@/store/tool';
 import {
   agentSkillsSelectors,
-  builtinToolSelectors,
   composioStoreSelectors,
   lobehubSkillStoreSelectors,
   pluginSelectors,
@@ -41,11 +40,11 @@ import { type LobeToolType } from '@/types/tool/tool';
 
 import AgentConnectorItem from './AgentConnectorItem';
 import AgentSkillItem from './AgentSkillItem';
-import BuiltinSkillItem from './BuiltinSkillItem';
 import ComposioSkillItem from './ComposioSkillItem';
 import { AccountsNeedReauth, countAccountsNeedingReauth } from './ConnectorRowFeedback';
 import {
   buildIntegrationItems,
+  countConnectorTabItems,
   getVisibleSectionItems,
   type IntegrationItem,
   isIntegrationConnected,
@@ -112,12 +111,6 @@ interface SkillListProps {
   installedOnly?: boolean;
   /** Page search: filters every group by name, identifier and description. */
   keyword?: string;
-  /**
-   * Page mode for the Connectors Discover page: only LobeHub's own OAuth
-   * connectors (LobeHub / Composio integrations), connected or not, as one
-   * group. The installed manager then leaves out the ones not connected yet.
-   */
-  lobehubConnectors?: boolean;
   onClearKeyword?: () => void;
   onDeleteSelected?: () => void;
   onSelect?: (identifier: string, type: ToolDetailType) => void;
@@ -136,7 +129,6 @@ interface SkillListProps {
 const SkillList = memo<SkillListProps>(
   ({
     installedOnly,
-    lobehubConnectors,
     keyword,
     onClearKeyword,
     onSelect,
@@ -160,7 +152,6 @@ const SkillList = memo<SkillListProps>(
     const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
     const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
     const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
-    const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
     const allCustomConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
     const allMarketplaceConnectors = useToolStore(
       connectorSelectors.marketplaceMcpConnectors,
@@ -184,43 +175,33 @@ const SkillList = memo<SkillListProps>(
     );
     const isAgentBoundInit = useToolStore((s) => s.isAgentBoundInit);
     const fetchAgentBoundConnectors = useToolStore((s) => s.fetchAgentBoundConnectors);
-    const allBuiltinTools = useToolStore((s) => s.builtinTools, isEqual);
-    const uninstalledBuiltinTools = useToolStore(
-      builtinToolSelectors.uninstalledBuiltinTools,
-      isEqual,
-    );
-
-    const [
-      useFetchLobehubSkillConnections,
-      useFetchUserComposioConnections,
-      useFetchAgentSkills,
-      useFetchUninstalledBuiltinTools,
-    ] = useToolStore((s) => [
-      s.useFetchLobehubSkillConnections,
-      s.useFetchUserComposioConnections,
-      s.useFetchAgentSkills,
-      s.useFetchUninstalledBuiltinTools,
-    ]);
+    const [useFetchLobehubSkillConnections, useFetchUserComposioConnections, useFetchAgentSkills] =
+      useToolStore((s) => [
+        s.useFetchLobehubSkillConnections,
+        s.useFetchUserComposioConnections,
+        s.useFetchAgentSkills,
+      ]);
 
     useFetchInstalledPlugins();
     // Keep each SWR handle so a failed skill fetch surfaces error + Retry instead
     // of a fake-empty list (each hook syncs into the store only on success —
     //
+    const isConnectorView = viewMode === 'connector';
     const lobehubSkillsSWR = useFetchLobehubSkillConnections(isLobehubSkillEnabled);
     const composioSWR = useFetchUserComposioConnections(isComposioEnabled);
     const agentSkillsSWR = useFetchAgentSkills(true);
-    const builtinToolsSWR = useFetchUninstalledBuiltinTools(true);
     const skillsError =
       viewMode === 'skill'
-        ? (agentSkillsSWR.error ?? builtinToolsSWR.error)
-        : (lobehubSkillsSWR.error ?? composioSWR.error ?? builtinToolsSWR.error);
+        ? agentSkillsSWR.error
+        : (lobehubSkillsSWR.error ?? composioSWR.error ?? connectorsSWR.error);
     const reloadSkills = () => {
+      if (!isConnectorView) {
+        void agentSkillsSWR.mutate();
+        return;
+      }
       void lobehubSkillsSWR.mutate();
       void composioSWR.mutate();
-      void agentSkillsSWR.mutate();
-      // The uninstalled-builtin list is a replica now: revalidate re-runs its
-      // network sync without blanking the painted list.
-      void builtinToolsSWR.revalidate();
+      void connectorsSWR.mutate();
     };
 
     // Load custom connectors (new connector store) so user-added OAuth MCP
@@ -231,7 +212,6 @@ const SkillList = memo<SkillListProps>(
 
     // Load agent-owned connectors (across all agents) for the Agent Connectors
     // section — connector view only.
-    const isConnectorView = viewMode === 'connector';
     useEffect(() => {
       if (isConnectorView && !isAgentBoundInit) fetchAgentBoundConnectors();
     }, [isConnectorView, isAgentBoundInit, fetchAgentBoundConnectors]);
@@ -244,25 +224,17 @@ const SkillList = memo<SkillListProps>(
       return allComposioServers.find((server) => server.identifier === identifier);
     };
 
-    const isBuiltinToolInstalled = (identifier: string) => {
-      return !uninstalledBuiltinTools.includes(identifier);
-    };
-
     const connectionState = {
-      isBuiltinToolInstalled,
       isComposioActive: (identifier: string) =>
         getComposioServerByIdentifier(identifier)?.status === ComposioServerStatus.ACTIVE,
       isLobehubConnected: (providerId: string) =>
         getLobehubSkillServerByProvider(providerId)?.status === LobehubSkillStatus.CONNECTED,
     };
 
-    // Integrations (built-in skills / tools and the OAuth catalog, connected
-    // first), then installed plugins split into community and custom MCPs.
+    // The connector catalog contains OAuth integrations, connected first.
     // A few dozen entries: cheap enough to derive on each render.
     const allIntegrations = buildIntegrationItems({
       ...connectionState,
-      allBuiltinTools,
-      builtinSkills,
       connectorAvailability: { composio: isComposioEnabled, lobehub: isLobehubSkillEnabled },
     });
 
@@ -283,9 +255,7 @@ const SkillList = memo<SkillListProps>(
           tabVisibility,
           getComposioServerByIdentifier(item.serverType.identifier)?.connectedAccountId,
         );
-      if (item.type === 'lobehub')
-        return isIntegrationInConnectorTab(item.provider.id, connectorTabRows, tabVisibility);
-      return !isPrivateTab;
+      return isIntegrationInConnectorTab(item.provider.id, connectorTabRows, tabVisibility);
     });
     const communityMCPs = isPrivateTab
       ? []
@@ -295,15 +265,16 @@ const SkillList = memo<SkillListProps>(
       : installedPluginList.filter((plugin) => plugin.type === 'customPlugin');
     const agentBoundConnectors = isPrivateTab ? [] : allAgentBoundConnectors;
 
+    const connectorTabCount = countConnectorTabItems({
+      customConnectors,
+      integrations,
+      marketplaceConnectors,
+    });
     const hasAnySkills =
       viewMode === 'skill'
-        ? builtinSkills.length > 0 || marketAgentSkills.length > 0 || userAgentSkills.length > 0
-        : builtinSkills.length > 0 ||
-          integrations.length > 0 ||
-          marketAgentSkills.length > 0 ||
-          userAgentSkills.length > 0 ||
+        ? marketAgentSkills.length > 0 || userAgentSkills.length > 0
+        : connectorTabCount > 0 ||
           communityMCPs.length > 0 ||
-          marketplaceConnectors.length > 0 ||
           customMCPs.length > 0 ||
           agentBoundConnectors.length > 0;
 
@@ -312,25 +283,29 @@ const SkillList = memo<SkillListProps>(
     const refreshAll = () => {
       if (refreshing) return;
       setRefreshing(true);
-      void Promise.allSettled([
-        lobehubSkillsSWR.mutate(),
-        composioSWR.mutate(),
-        agentSkillsSWR.mutate(),
-        Promise.resolve(builtinToolsSWR.revalidate()),
-        connectorsSWR.mutate(),
-        ...(isConnectorView ? [fetchAgentBoundConnectors()] : []),
-      ]).finally(() => setRefreshing(false));
+      const requests = isConnectorView
+        ? [
+            lobehubSkillsSWR.mutate(),
+            composioSWR.mutate(),
+            connectorsSWR.mutate(),
+            fetchAgentBoundConnectors(),
+          ]
+        : [agentSkillsSWR.mutate()];
+      void Promise.allSettled(requests).finally(() => setRefreshing(false));
     };
     const header = isPage ? renderHeader?.({ onRefresh: refreshAll, refreshing }) : undefined;
 
     const privateState = isPrivateTab
       ? privateTabState({
-          count: customConnectors.length + marketplaceConnectors.length + integrations.length,
+          count: connectorTabCount,
           error: connectorsSWR.error,
           isConnectorsInit,
         })
       : undefined;
-    if (privateState === 'loading')
+    if (
+      privateState === 'loading' ||
+      (viewMode === 'skill' && !hasAnySkills && agentSkillsSWR.isLoading && !skillsError)
+    )
       return (
         <>
           {header}
@@ -380,8 +355,6 @@ const SkillList = memo<SkillListProps>(
     }
 
     if (!hasAnySkills) {
-      // The Discover group has nothing to lead with; the page's other groups carry on.
-      if (lobehubConnectors) return null;
       return (
         <>
           {header}
@@ -412,20 +385,8 @@ const SkillList = memo<SkillListProps>(
     const match = (...fields: Array<string | null | undefined>) =>
       matchesConnectorKeyword(keyword, fields);
 
-    const builtinTitle = (tool: { identifier: string; title?: string }) =>
-      t(`tools.builtins.${tool.identifier}.title`, {
-        defaultValue: tool.title || tool.identifier,
-      });
-
-    const integrationMatches = (item: IntegrationItem) =>
-      matchesIntegrationKeyword(item, keyword, t);
-
-    const builtinToolItems = integrations.filter(
-      (i) => i.type === 'builtin' && integrationMatches(i),
-    );
-    const builtinSkillItems = integrations.filter((i) => i.type === 'builtinAgent');
-    const communitySkillItems = integrations.filter(
-      (i) => (i.type === 'lobehub' || i.type === 'composio') && integrationMatches(i),
+    const communitySkillItems = integrations.filter((item) =>
+      matchesIntegrationKeyword(item, keyword, t),
     );
     const visibleCommunityMCPs = communityMCPs.filter((p) =>
       match(p.title, p.identifier, p.author),
@@ -441,24 +402,10 @@ const SkillList = memo<SkillListProps>(
 
     const renderIntegration = (item: IntegrationItem) => {
       switch (item.type) {
-        case 'builtin': {
-          return (
-            <BuiltinSkillItem
-              avatar={item.builtinTool.avatar}
-              description={item.builtinTool.description}
-              identifier={item.builtinTool.identifier}
-              isSelected={selectedIdentifier === item.builtinTool.identifier}
-              key={item.builtinTool.identifier}
-              title={builtinTitle(item.builtinTool)}
-              onSelect={
-                onSelect ? () => onSelect(item.builtinTool.identifier, 'builtin') : undefined
-              }
-            />
-          );
-        }
         case 'lobehub': {
           return (
             <LobehubSkillItem
+              hideConnectedStatus={installedOnly}
               isSelected={selectedIdentifier === item.provider.id}
               key={item.provider.id}
               provider={item.provider}
@@ -473,6 +420,7 @@ const SkillList = memo<SkillListProps>(
         case 'composio': {
           return (
             <ComposioSkillItem
+              hideConnectedStatus={installedOnly}
               isSelected={selectedIdentifier === item.serverType.identifier}
               key={item.serverType.identifier}
               server={getComposioServerByIdentifier(item.serverType.identifier)}
@@ -577,57 +525,19 @@ const SkillList = memo<SkillListProps>(
       // Installed groups what is already added (enabled built-ins, connected
       // OAuth apps), so the type groups below read as what is left to add.
       const isConnected = (item: IntegrationItem) => isIntegrationConnected(item, connectionState);
-      const builtins = partitionByInstalled(builtinToolItems, isConnected);
       const oauth = partitionByInstalled(communitySkillItems, isConnected);
-
-      // Connectors Discover: LobeHub's OAuth connectors lead the page as one
-      // group, connected ones keeping their status and menu (Codex `⋯`).
-      if (lobehubConnectors) {
-        if (communitySkillItems.length === 0) return null;
-        const key = 'lobehubConnectors';
-        const isExpanded = expanded.has(key);
-        const { hiddenCount, visible } = getVisibleSectionItems(
-          communitySkillItems.map(renderIntegration),
-          isExpanded,
-        );
-        return (
-          <section {...stylex.props(styles.pageSection)}>
-            <PageSectionHeading
-              expanded={isExpanded}
-              label={t('connectorMarket.section.lobehub')}
-              expandable={isSectionExpandable({
-                expanded: isExpanded,
-                hiddenCount,
-                searching: false,
-              })}
-              toggleLabel={
-                isExpanded
-                  ? t('connectorMarket.section.showLess')
-                  : `${t('connectorMarket.section.showAll')} (${communitySkillItems.length})`
-              }
-              onToggle={() => toggleExpanded(key)}
-            />
-            <div {...stylex.props(styles.pageGrid)}>{visible}</div>
-          </section>
-        );
-      }
 
       const sections = (
         isConnectorView
           ? [
               {
-                items: [...builtins.installed, ...oauth.installed].map(renderIntegration),
+                items: oauth.installed.map(renderIntegration),
                 key: 'installed',
                 label: t('connectorMarket.section.installed'),
               },
               {
-                items: builtins.available.map(renderIntegration),
-                key: 'builtinTools',
-                label: t('skillGroup.builtinTools', 'Built-in Tools'),
-              },
-              {
                 // With the market on, the ones left to connect lead the
-                // Connectors Discover page (`lobehubConnectors`) instead.
+                // Connectors Discover page instead.
                 items: showMarket ? [] : oauth.available.map(renderIntegration),
                 key: 'communityConnectors',
                 label: t('skillGroup.communityConnectors', 'OAuth Connectors'),
@@ -649,29 +559,6 @@ const SkillList = memo<SkillListProps>(
               },
             ]
           : [
-              {
-                items: builtinSkills
-                  .filter((skill) =>
-                    match(
-                      t(`tools.builtins.${skill.identifier}.title`, { defaultValue: skill.name }),
-                      skill.identifier,
-                      t(`tools.builtins.${skill.identifier}.description`, {
-                        defaultValue: skill.description,
-                      }),
-                    ),
-                  )
-                  .map((skill) => (
-                    <AgentSkillItem
-                      key={skill.identifier}
-                      skill={skill}
-                      onSelect={
-                        onSelect ? () => onSelect(skill.identifier, 'builtin-skill') : undefined
-                      }
-                    />
-                  )),
-                key: 'builtinSkills',
-                label: t('skillGroup.builtinSkills'),
-              },
               {
                 items: renderAgentSkills(
                   marketAgentSkills.filter((skill) =>
@@ -755,31 +642,13 @@ const SkillList = memo<SkillListProps>(
       const isConnected = (item: IntegrationItem) => isIntegrationConnected(item, connectionState);
       const items = isConnectorView
         ? [
-            ...[
-              ...partitionByInstalled(builtinToolItems, isConnected).installed,
-              ...partitionByInstalled(communitySkillItems, isConnected).installed,
-            ].map(renderIntegration),
+            ...partitionByInstalled(communitySkillItems, isConnected).installed.map(
+              renderIntegration,
+            ),
             ...renderCommunityMCPs(),
             ...renderCustomConnectors(),
           ]
-        : [
-            ...renderAgentSkills(marketAgentSkills),
-            ...renderAgentSkills(userAgentSkills),
-            ...builtinSkillItems.map((item) =>
-              item.type === 'builtinAgent' ? (
-                <AgentSkillItem
-                  isSelected={selectedIdentifier === item.builtinAgentSkill.identifier}
-                  key={item.builtinAgentSkill.identifier}
-                  skill={item.builtinAgentSkill}
-                  onSelect={
-                    onSelect
-                      ? () => onSelect(item.builtinAgentSkill.identifier, 'builtin-skill')
-                      : undefined
-                  }
-                />
-              ) : null,
-            ),
-          ];
+        : [...renderAgentSkills(marketAgentSkills), ...renderAgentSkills(userAgentSkills)];
 
       return <div {...stylex.props(styles.container)}>{items}</div>;
     }
@@ -810,8 +679,6 @@ const SkillList = memo<SkillListProps>(
 
     // Connectors view: tools / MCP items (API-level permissions).
     // Skills view: prompt / agent-based skills.
-    const hasBuiltinTools = builtinToolItems.length > 0 && isConnectorView;
-    const hasBuiltinSkills = builtinSkillItems.length > 0 && !isConnectorView;
     // Skills view only shows agent-based community skills; LobeHub / Composio
     // OAuth connectors live exclusively in the Connectors view.
     const hasCommunitySkills = !isConnectorView && marketAgentSkills.length > 0;
@@ -826,34 +693,6 @@ const SkillList = memo<SkillListProps>(
     return (
       <div {...stylex.props(styles.container)}>
         {header}
-        {hasBuiltinTools &&
-          renderSection(
-            'builtinTools',
-            t('skillGroup.builtinTools', 'Built-in Tools'),
-            builtinToolItems.map(renderIntegration),
-          )}
-
-        {hasBuiltinSkills &&
-          renderSection(
-            'builtinSkills',
-            t('skillGroup.builtinSkills', 'Built-in Skills'),
-            builtinSkillItems.map((item) => {
-              if (item.type !== 'builtinAgent') return null;
-              return (
-                <AgentSkillItem
-                  isSelected={selectedIdentifier === item.builtinAgentSkill.identifier}
-                  key={item.builtinAgentSkill.identifier}
-                  skill={item.builtinAgentSkill}
-                  onSelect={
-                    onSelect
-                      ? () => onSelect(item.builtinAgentSkill.identifier, 'builtin-skill')
-                      : undefined
-                  }
-                />
-              );
-            }),
-          )}
-
         {hasCommunityConnectors &&
           renderSection(
             'communityConnectors',

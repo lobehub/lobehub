@@ -43,6 +43,7 @@ Apply the same shape to the project layer's file. Never narrate the reading.
 - **M22** An error-state case needs the failed status AND the user-facing message in the same screenshot.
 - **M28** Non-visual behavioral claims carry two text artifacts in the same round: reasoning, then execution record.
 - **M30** Electron evidence is the visible viewport, never `screenshot --full`.
+- **M31** A visual case is shot with representative fixture data — several groups of several items, long titles, populated settings — stated in its plan `method` or the round's review notes; empty or single-item data only when that state is the criterion.
 
 ## Entries
 
@@ -180,3 +181,18 @@ the UI is a tiny corner.
 **Rule:** capture the visible viewport without `--full` (or the project's CDP
 window-capture helper). Open the image; reject it if the app occupies a small
 fraction or black margins dominate. Never crop evidence in post-processing.
+
+### M31 — Minimal fixture data in a layout screenshot
+
+`since 2026-11-20` · `holds-while: always`
+
+**Trap:** a layout case is shot with the least data that renders: a settings
+width change on the "no devices" page, or a sidebar group with one guest and
+one topic. The shot cannot show wrapping, truncation, row alignment or the
+populated width, so it proves nothing about the layout. Follow-up rounds skip
+the plan review and repeat it unseen.
+
+**Rule:** before capture, state each visual case's fixture data (counts, title
+lengths, state mix) as real users see it — in the plan `method`, or for a frozen
+plan or a follow-up recapture, in the round's review notes — and seed to it.
+Empty or single-item data only when that state is the criterion.
