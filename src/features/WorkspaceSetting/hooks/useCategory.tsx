@@ -288,7 +288,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.SubscriptionAccounts,
               label: t('tab.subscriptionAccounts'),
             },
-            // Environments & Credentials, always there: what a run starts from and
+            // Environments & Vault, always there: what a run starts from and
             // the secrets it reads, in one place. An environment is a definition,
             // written down before anything runs it, so it needs no drive.
             {

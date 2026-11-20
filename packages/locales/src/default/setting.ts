@@ -2311,7 +2311,7 @@ When I am ___, I need ___
   'tab.chatPreference': 'Chat Preferences',
   'tab.common': 'Appearance',
   'tab.connector': 'Connectors',
-  'tab.creds': 'Credentials',
+  'tab.creds': 'Vault',
   'tab.devices': 'Devices',
   'tab.experiment': 'Experiment',
   'tab.hotkey': 'Hotkeys',
@@ -4800,11 +4800,9 @@ When I am ___, I need ___
   'tools.tabs.installed': 'Enabled',
   'tools.title': 'Skills',
   'tab.environments': 'Environments',
-  'tab.environmentsAndCreds': 'Environments & Credentials',
-  'environmentsAndCreds.workspaceDesc':
-    'Environments and credentials shared with this workspace, plus your private ones (marked with a lock). New ones start private; publish one to share it with the workspace.',
-  'environmentsAndCreds.section.environments': 'Environments',
-  'environmentsAndCreds.section.creds': 'Credentials',
+  'tab.environmentsAndCreds': 'Environments & Vault',
+  'environmentsAndCreds.tabs.environments': 'Environments',
+  'environmentsAndCreds.tabs.vault': 'Vault',
   'creds.writeOnly.tag': 'Write-only',
   'creds.writeOnly.tooltip':
     'Shared with the workspace: its values are no longer shown in settings and can only be replaced.',

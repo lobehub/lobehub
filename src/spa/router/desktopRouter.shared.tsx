@@ -18,7 +18,7 @@ import ProviderSettingsSkeleton, {
   ProviderDetailSkeleton,
 } from '@/components/Skeleton/Settings/Provider';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
-import { CREDENTIALS_SECTION_HASH } from '@/features/EnvironmentsAndCreds/const';
+import { VAULT_TAB_SEARCH } from '@/features/EnvironmentsAndCreds/const';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import ResourceCategorySkeleton from '@/features/ResourceHome/Skeleton';
 import {
@@ -390,14 +390,14 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         handle: { meta: settingsRouteMeta, settingsTab: SettingsTabs.Memory },
         path: 'memory',
       },
-      // The personal vault shares the Environments & Credentials page; old
-      // links land on its credentials section.
+      // The personal vault is a tab of the Environments & Vault page; old
+      // links open that tab.
       {
-        element: redirectElement(`/settings/environments${CREDENTIALS_SECTION_HASH}`),
+        element: redirectElement(`/settings/environments${VAULT_TAB_SEARCH}`),
         path: 'credential',
       },
       {
-        element: redirectElement(`/settings/environments${CREDENTIALS_SECTION_HASH}`),
+        element: redirectElement(`/settings/environments${VAULT_TAB_SEARCH}`),
         path: 'creds',
       },
       // Skills and connectors moved to the Marketplace. Static routes keep the

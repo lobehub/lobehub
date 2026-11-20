@@ -2,7 +2,7 @@
 
 import { Button, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Plus } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createCreateCredModal } from '@/features/Settings/creds/features/CreateCredModal';
@@ -10,19 +10,19 @@ import CredsList from '@/features/Settings/creds/features/CredsList';
 import { personalCredsApi } from '@/features/Settings/creds/features/useCredsApi';
 import { usePermission } from '@/hooks/usePermission';
 
-import { CREDENTIALS_SECTION_ID } from './const';
-import SectionTitle from './SectionTitle';
-import { useScrollToSection } from './useScrollToSection';
+interface PersonalVaultProps {
+  /** The page tabs, at the left of the header row. */
+  headerLeading: ReactNode;
+}
 
 /**
- * The personal vault on the personal Environments & Credentials page: every
- * credential here is the caller's own, so there is nothing to filter.
+ * The vault tab of the personal Environments & Vault page: every credential
+ * here is the caller's own, so there is nothing to filter.
  */
-const PersonalCredsSection = memo(() => {
+const PersonalVault = memo<PersonalVaultProps>(({ headerLeading }) => {
   const { t } = useTranslation('setting');
   const { allowed: canManageCredentials, reason } = usePermission('manage_provider_key');
   const [refreshKey, setRefreshKey] = useState(0);
-  const ref = useScrollToSection<HTMLDivElement>(CREDENTIALS_SECTION_ID);
 
   const handleCreate = () => {
     if (!canManageCredentials) return;
@@ -33,9 +33,9 @@ const PersonalCredsSection = memo(() => {
   };
 
   return (
-    <Flexbox gap={16} id={CREDENTIALS_SECTION_ID} ref={ref}>
-      <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
-        <SectionTitle title={t('environmentsAndCreds.section.creds')} />
+    <Flexbox gap={16}>
+      <Flexbox horizontal align={'center'} gap={16} justify={'space-between'} wrap={'wrap'}>
+        {headerLeading}
         <Tooltip title={reason}>
           <Button
             disabled={!canManageCredentials}
@@ -53,6 +53,6 @@ const PersonalCredsSection = memo(() => {
   );
 });
 
-PersonalCredsSection.displayName = 'PersonalCredsSection';
+PersonalVault.displayName = 'PersonalVault';
 
-export default PersonalCredsSection;
+export default PersonalVault;

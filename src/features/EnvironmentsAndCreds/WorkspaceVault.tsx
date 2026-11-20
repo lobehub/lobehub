@@ -3,11 +3,11 @@
 import { Block, Button, Empty, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { Plus } from 'lucide-react';
-import { memo } from 'react';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsWorkspaceViewer } from '@/business/client/hooks/useIsWorkspaceViewer';
-import { type VisibilityFilterValue } from '@/components/VisibilityFilter';
+import VisibilityFilter, { type VisibilityFilterValue } from '@/components/VisibilityFilter';
 import { createCreateCredModal } from '@/features/Settings/creds/features/CreateCredModal';
 import MarketSignInGate from '@/features/Settings/creds/features/MarketSignInGate';
 import { type CredsApi } from '@/features/Settings/creds/features/useCredsApi';
@@ -15,10 +15,6 @@ import WorkspaceCredsList from '@/features/Settings/creds/features/WorkspaceCred
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
 import { densityTokens } from '@/styles/density.stylex';
-
-import { CREDENTIALS_SECTION_ID } from './const';
-import SectionTitle from './SectionTitle';
-import { useScrollToSection } from './useScrollToSection';
 
 const styles = stylex.create({
   container: {
@@ -57,14 +53,14 @@ const credsApi: CredsApi = {
   setVisibility: (id, visibility) => workspaceClient.setVisibility.mutate({ id, visibility }),
 };
 
-interface WorkspaceCredsSectionProps {
-  /** The page's one header filter, shared with the environments section. */
-  visibilityFilter: VisibilityFilterValue;
+interface WorkspaceVaultProps {
+  /** The page tabs, at the left of the header row. */
+  headerLeading: ReactNode;
 }
 
 /**
- * The credentials section of the workspace Environments & Credentials page:
- * every credential the caller can use here — the shared ones (the
+ * The vault tab of the workspace Environments & Vault page: every credential
+ * the caller can use here — the shared ones (the
  * workspace's own and members' personal credentials published here) and the
  * caller's private ones, marked with a lock. Personal credentials are shared
  * in from the personal settings page ("Share to Workspace…").
@@ -72,12 +68,15 @@ interface WorkspaceCredsSectionProps {
  * When the workspace has no Market organization yet (Community Profile not
  * completed), the backend returns NOT_FOUND and the section shows a setup
  * prompt.
+ *
+ * Like the other workspace resource lists it shows everything by default; the
+ * header filter narrows it to the shared or the caller's private credentials.
  */
-const WorkspaceCredsSection = memo<WorkspaceCredsSectionProps>(({ visibilityFilter }) => {
+const WorkspaceVault = memo<WorkspaceVaultProps>(({ headerLeading }) => {
   const { t } = useTranslation('setting');
   const { isAuthenticated } = useMarketAuth();
   const isViewer = useIsWorkspaceViewer();
-  const ref = useScrollToSection<HTMLDivElement>(CREDENTIALS_SECTION_ID);
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilterValue>('all');
 
   // Shares its query key with the list inside WorkspaceCredsList, so
   // `refetch` here refreshes the list.
@@ -114,11 +113,12 @@ const WorkspaceCredsSection = memo<WorkspaceCredsSectionProps>(({ visibilityFilt
   );
 
   return (
-    <Flexbox gap={16} id={CREDENTIALS_SECTION_ID} ref={ref}>
-      <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
-        <SectionTitle title={t('environmentsAndCreds.section.creds')} />
+    <Flexbox gap={16}>
+      <Flexbox horizontal align={'center'} gap={16} justify={'space-between'} wrap={'wrap'}>
+        {headerLeading}
         {isAuthenticated && !orgMissing && (
-          <Flexbox style={{ flex: 'none' }}>
+          <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
+            <VisibilityFilter value={visibilityFilter} onChange={setVisibilityFilter} />
             {
               // Disabled buttons swallow hover events, so the tooltip needs the
               // span wrapper to fire (see the usePermission docstring pattern).
@@ -148,6 +148,6 @@ const WorkspaceCredsSection = memo<WorkspaceCredsSectionProps>(({ visibilityFilt
   );
 });
 
-WorkspaceCredsSection.displayName = 'WorkspaceCredsSection';
+WorkspaceVault.displayName = 'WorkspaceVault';
 
-export default WorkspaceCredsSection;
+export default WorkspaceVault;
