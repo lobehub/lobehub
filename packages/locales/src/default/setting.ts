@@ -5274,7 +5274,7 @@ When I am ___, I need ___
   'subscriptionAccounts.empty.desc':
     'Sign in to Claude Code, Codex or Kimi Code on a connected device. The account appears here once it reports its quota.',
   'subscriptionAccounts.empty.title': 'No subscription accounts yet',
-  'subscriptionAccounts.filter.all': 'All',
+  'subscriptionAccounts.filter.allProviders': 'All providers',
   'subscriptionAccounts.loadFailed': "Couldn't load subscription accounts",
   'subscriptionAccounts.meter.session': '5-hour',
   'subscriptionAccounts.meter.weekly': 'Weekly',

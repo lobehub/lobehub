@@ -2325,7 +2325,7 @@
   "subscriptionAccounts.columns.status": "状态",
   "subscriptionAccounts.empty.desc": "在已连接的设备上登录 Claude Code、Codex 或 Kimi Code，账号上报额度后会出现在这里。",
   "subscriptionAccounts.empty.title": "还没有订阅账号",
-  "subscriptionAccounts.filter.all": "全部",
+  "subscriptionAccounts.filter.allProviders": "全部服务商",
   "subscriptionAccounts.filterEmpty": "没有符合筛选条件的账号",
   "subscriptionAccounts.loadFailed": "订阅账号加载失败",
   "subscriptionAccounts.meter.session": "5 小时",

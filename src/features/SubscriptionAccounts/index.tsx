@@ -177,7 +177,7 @@ const SubscriptionAccounts = () => {
                 variant={'filled'}
                 options={[
                   {
-                    label: `${t('subscriptionAccounts.filter.all')} · ${accounts.length}`,
+                    label: `${t('subscriptionAccounts.filter.allProviders')} · ${accounts.length}`,
                     value: ALL,
                   },
                   ...present.map((p) => ({
