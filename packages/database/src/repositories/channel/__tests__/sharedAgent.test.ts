@@ -15,6 +15,7 @@ import {
   userContacts,
   userSettings,
 } from '../../../schemas';
+import { trashStamp } from '../../../utils/softDelete';
 import { ChannelExecutionRepository, ChannelHistoryRepository, ChannelRepository } from '..';
 import { createChannelFixture, jobsOf, lease, operationById } from './testUtils';
 
@@ -642,5 +643,143 @@ describe('a shared Agent in the visitor’s workspace', () => {
     const candidate = await execution.openingCandidate(channel.id, job.id);
     expect(candidate).toBeDefined();
     expect(candidate?.share).toBeUndefined();
+  });
+});
+
+describe('one verdict on a shared Agent across list, view, reply opener and run', () => {
+  const inWorkspace = new ChannelRepository(db, visitorId, fixture.workspaceId);
+
+  /** Every surface's answer to "is this conversation with another person's shared Agent?". */
+  const verdicts = async (repo: ChannelRepository, channelId: string, requestKey: string) => {
+    const listed = (await repo.list()).find((item) => item.id === channelId)!;
+    const detail = await repo.detail(channelId);
+    const message = await repo.send(channelId, {
+      content: `Request ${requestKey}`,
+      requestKey,
+      routing: 'fallback',
+    });
+    const [job] = await jobsOf(db, message.id);
+    const opening = await execution.openingCandidate(channelId, job.id);
+    const claim = await execution.claim(channelId, job.id, lease);
+    const [file] = await db
+      .insert(files)
+      .values({
+        fileType: 'text/plain',
+        name: 'note.txt',
+        size: 1,
+        url: `files/${requestKey}.txt`,
+        userId: visitorId,
+        workspaceId: detail.channel.workspaceId,
+      })
+      .returning();
+    const attachments = await repo
+      .send(channelId, {
+        content: 'See file',
+        fileIds: [file.id],
+        requestKey: `${requestKey}-file`,
+        routing: 'fallback',
+      })
+      .then(
+        () => 'sent',
+        (error: Error) => error.message,
+      );
+    return {
+      attachments,
+      detail: !!detail.channel.sharedAgent,
+      handle: listed.sharedAgentHandle,
+      list: listed.sharedAgent,
+      opening: !!opening?.share,
+      owner: detail.sharedAgentOwner?.id ?? null,
+      run: claim ? (claim.job.executionConfig?.share ? 'shared' : 'own') : 'blocked',
+    };
+  };
+
+  const shared = {
+    attachments: 'Attachments cannot be sent to a shared Agent',
+    detail: true,
+    handle: 'shared-helper',
+    list: true,
+    opening: true,
+    owner: ownerId,
+    run: 'shared',
+  };
+  const notShared = {
+    attachments: 'sent',
+    detail: false,
+    handle: null,
+    list: false,
+    opening: false,
+    owner: null,
+  };
+
+  it('marks another person’s link-shared Agent everywhere', async () => {
+    const { channel } = await visitor.create({ agentId, sharedAgent: true, title: 'Shared' });
+    expect(await verdicts(visitor, channel.id, 'other')).toEqual(shared);
+  });
+
+  it('marks a colleague’s private workspace Agent reached through its share everywhere', async () => {
+    const privateId = 'agt_channel_shared_private';
+    await db.insert(agents).values({
+      id: privateId,
+      title: 'Private Helper',
+      userId: ownerId,
+      visibility: 'private',
+      workspaceId: fixture.workspaceId,
+    });
+    await db
+      .insert(agentShares)
+      .values({ agentId: privateId, shareConfig: { slug: 'private-helper' }, visibility: 'link' });
+    const { channel } = await inWorkspace.create({
+      agentId: privateId,
+      sharedAgent: true,
+      title: 'Private Helper',
+    });
+    expect(await verdicts(inWorkspace, channel.id, 'private')).toEqual({
+      ...shared,
+      handle: 'private-helper',
+    });
+  });
+
+  it('marks neither a colleague’s public workspace Agent nor the viewer’s own, even with a live share', async () => {
+    const teamId = 'agt_channel_shared_public';
+    const ownId = 'agt_channel_shared_own';
+    await db.insert(agents).values([
+      {
+        id: teamId,
+        title: 'Team Helper',
+        userId: ownerId,
+        visibility: 'public',
+        workspaceId: fixture.workspaceId,
+      },
+      { id: ownId, title: 'My Helper', userId: visitorId },
+    ]);
+    await db.insert(agentShares).values([
+      { agentId: teamId, visibility: 'link' },
+      { agentId: ownId, visibility: 'link' },
+    ]);
+
+    const { channel: team } = await inWorkspace.create({ agentId: teamId, title: 'Team' });
+    expect(await verdicts(inWorkspace, team.id, 'team')).toEqual({ ...notShared, run: 'own' });
+    const { channel: own } = await visitor.create({ agentId: ownId, title: 'Mine' });
+    expect(await verdicts(visitor, own.id, 'own')).toEqual({ ...notShared, run: 'own' });
+  });
+
+  // The conversation stays, but nothing is reached through a share any more: the view drops the
+  // contact card and upload guard together with the reply, which is blocked as unavailable.
+  it.each([
+    [
+      'paused the share',
+      () =>
+        db.update(agentShares).set({ visibility: 'private' }).where(eq(agentShares.id, shareId)),
+    ],
+    ['deleted the share', () => db.delete(agentShares).where(eq(agentShares.id, shareId))],
+    [
+      'trashed the Agent',
+      () => db.update(agents).set(trashStamp(new Date())).where(eq(agents.id, agentId)),
+    ],
+  ])('marks nothing once the owner has %s', async (_, end) => {
+    const { channel } = await visitor.create({ agentId, sharedAgent: true, title: 'Shared' });
+    await end();
+    expect(await verdicts(visitor, channel.id, 'ended')).toEqual({ ...notShared, run: 'blocked' });
   });
 });

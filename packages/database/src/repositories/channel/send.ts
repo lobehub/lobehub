@@ -8,7 +8,7 @@ import { channelMembers, channelMessages, channelThreads, files } from '../../sc
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { isUuid } from '../../utils/uuid';
 import { buildWorkspaceWhere } from '../../utils/workspace';
-import { sharedAgentOwner } from './agent';
+import { sharedChannelAgent } from './agent';
 import { attachFiles, fileIdsByMessage } from './attachments';
 import {
   activeMembers,
@@ -200,11 +200,11 @@ export const sendMessage = async (
     );
 
   // Another person's shared Agent runs as its owner, who cannot read the sender's files. The test
-  // is the one the Channel list uses, so a workspace conversation with a shared Agent is treated
+  // is the one the Channel list uses (`sharedChannelAgents`), so a workspace conversation with a shared Agent is treated
   // like a personal one, while a colleague's public workspace Agent (the workspace's own) is not.
   // The share's limits (prompt length, messages per visitor, monthly spend) never refuse the send:
   // the reply fails with the limit's type when dispatched (`ChannelCoordinator.shareGate`).
-  if (channel.agentId && fileIds.length && (await sharedAgentOwner(tx, channel, member.userId!)))
+  if (channel.agentId && fileIds.length && (await sharedChannelAgent(tx, channel, member.userId!)))
     throw new ChannelError('BAD_REQUEST', 'Attachments cannot be sent to a shared Agent');
 
   if (fileIds.length) {

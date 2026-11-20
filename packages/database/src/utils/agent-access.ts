@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server';
-import { and, eq, inArray, type SQL } from 'drizzle-orm';
+import { and, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { agents } from '../schemas';
@@ -14,6 +14,15 @@ interface AgentAccessCtx {
 /** The same use-time scope for validation and reads that also need current Agent settings. */
 export const agentUsableByWhere = (agentId: string, ctx: AgentAccessCtx) =>
   and(eq(agents.id, agentId), buildWorkspaceWhere(ctx, agents));
+
+/**
+ * The complement of {@link agentUsableByWhere} for several Agents at once, such as every row of a
+ * list: those of `agentIds` the caller cannot use as their own. The scope predicate is NULL, not
+ * false, for a row whose compared columns are NULL (another scope's `workspace_id`, a legacy
+ * `visibility`), and a bare `NOT` would keep it NULL and drop the row; `coalesce` keeps it.
+ */
+export const agentsNotUsableByWhere = (agentIds: string[], ctx: AgentAccessCtx) =>
+  and(inArray(agents.id, agentIds), sql`not coalesce(${buildWorkspaceWhere(ctx, agents)}, false)`);
 
 /**
  * The one predicate behind "may this caller use that agent": a public agent in
