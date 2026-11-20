@@ -7,11 +7,16 @@ import {
   pickLatestTopic,
 } from './openDirectorySelection';
 
+const LOCAL = 'device-local';
+const REMOTE = 'device-remote';
+
 const directory = (
   id: string,
   path: string,
   extra: Partial<BoundDirectoryLike> = {},
-): BoundDirectoryLike => ({ id, path, projectId: `prj_${id}`, ...extra });
+): BoundDirectoryLike => ({ deviceId: LOCAL, id, path, projectId: `prj_${id}`, ...extra });
+
+const local = { deviceId: LOCAL };
 
 describe('normalizeComparablePath', () => {
   it('should ignore trailing separators', () => {
@@ -30,12 +35,13 @@ describe('pickDirectoryForPath', () => {
       pickDirectoryForPath(
         [directory('root', '/repo'), directory('nested', '/repo/apps')],
         '/repo/apps',
+        local,
       ),
     ).toEqual({ directory: directory('nested', '/repo/apps'), matchedParent: false });
   });
 
   it('should match when only the trailing separator differs', () => {
-    expect(pickDirectoryForPath([directory('a', '/repo/')], '/repo')).toEqual({
+    expect(pickDirectoryForPath([directory('a', '/repo/')], '/repo', local)).toEqual({
       directory: directory('a', '/repo/'),
       matchedParent: false,
     });
@@ -50,13 +56,14 @@ describe('pickDirectoryForPath', () => {
           directory('other', '/elsewhere'),
         ],
         '/repo/apps/desktop/src',
+        local,
       ),
     ).toEqual({ directory: directory('nested', '/repo/apps/desktop'), matchedParent: true });
   });
 
   it('should not match a shared name prefix', () => {
     // `/repo` is not an ancestor of `/repository`.
-    expect(pickDirectoryForPath([directory('a', '/repo')], '/repository')).toBeUndefined();
+    expect(pickDirectoryForPath([directory('a', '/repo')], '/repository', local)).toBeUndefined();
   });
 
   it('should prefer a runnable binding of the same path', () => {
@@ -65,12 +72,43 @@ describe('pickDirectoryForPath', () => {
       pickDirectoryForPath(
         [directory('stale', '/repo'), directory('live', '/repo', { runnable: true })],
         '/repo',
+        local,
       ),
     ).toEqual({ directory: directory('live', '/repo', { runnable: true }), matchedParent: false });
   });
 
+  it('should ignore a directory bound on another device', () => {
+    // Two machines can expose the same path; only this one is being launched.
+    expect(
+      pickDirectoryForPath(
+        [directory('remote', '/repo', { deviceId: REMOTE, runnable: true })],
+        '/repo',
+        local,
+      ),
+    ).toBeUndefined();
+  });
+
+  it('should not let a remote exact match beat a local ancestor', () => {
+    expect(
+      pickDirectoryForPath(
+        [
+          directory('local-root', '/repo', { deviceId: LOCAL }),
+          directory('remote-exact', '/repo/apps', { deviceId: REMOTE }),
+        ],
+        '/repo/apps',
+        local,
+      ),
+    ).toEqual({ directory: directory('local-root', '/repo'), matchedParent: true });
+  });
+
+  it('should match nothing without a local device id', () => {
+    // Guessing here could open another machine's project, so the caller falls
+    // back to the project list instead.
+    expect(pickDirectoryForPath([directory('a', '/repo')], '/repo')).toBeUndefined();
+  });
+
   it('should return undefined for an empty binding list', () => {
-    expect(pickDirectoryForPath([], '/repo')).toBeUndefined();
+    expect(pickDirectoryForPath([], '/repo', local)).toBeUndefined();
   });
 });
 

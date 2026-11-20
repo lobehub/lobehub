@@ -9,6 +9,8 @@
 
 /** The fields of a bound project directory this module matches against. */
 export interface BoundDirectoryLike {
+  /** Desktop device that owns the directory; a path only exists on that machine. */
+  deviceId?: string;
   id: string;
   path: string;
   projectId: string;
@@ -43,6 +45,12 @@ const isAncestor = (parent: string, child: string): boolean => {
 /**
  * Pick the bound directory a launch should open.
  *
+ * Candidates are restricted to `deviceId` first: a workspace can hold several
+ * machines with the same path, and `runnable` only reflects enablement and
+ * write permission — not whose disk it is. Without that filter a launch on one
+ * machine can open another machine's project, and a remote exact match even
+ * beats a local ancestor match.
+ *
  * An exact match wins. Failing that the nearest ancestor does, because `lh app
  * .` inside `repo/apps/desktop` should land on the conversation bound to
  * `repo` — refusing it would make the command useless from anywhere but the
@@ -55,16 +63,23 @@ const isAncestor = (parent: string, child: string): boolean => {
 export const pickDirectoryForPath = <T extends BoundDirectoryLike>(
   directories: readonly T[],
   targetPath: string,
+  options: { deviceId?: string } = {},
 ): undefined | { directory: T; matchedParent: boolean } => {
+  const { deviceId } = options;
+  // Without a known local device there is no safe candidate: every match could
+  // belong to another machine, so the caller falls back to the project list.
+  if (!deviceId) return undefined;
+
   const target = normalizeComparablePath(targetPath);
   const byPreference = (a: T, b: T) => Number(b.runnable === true) - Number(a.runnable === true);
+  const localDirectories = directories.filter((directory) => directory.deviceId === deviceId);
 
-  const exact = [...directories]
+  const exact = [...localDirectories]
     .filter((directory) => normalizeComparablePath(directory.path) === target)
     .sort(byPreference)[0];
   if (exact) return { directory: exact, matchedParent: false };
 
-  const ancestors = directories
+  const ancestors = localDirectories
     .map((directory) => ({ directory, normalized: normalizeComparablePath(directory.path) }))
     .filter(({ normalized }) => isAncestor(normalized, target))
     .sort(

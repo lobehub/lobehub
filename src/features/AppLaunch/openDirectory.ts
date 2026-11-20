@@ -28,10 +28,13 @@ export interface OpenDirectoryResult {
  * sidebar "+" does, so a stray launch never leaves an empty topic behind.
  */
 export const openDirectoryInApp = async ({
+  deviceId,
   navigate,
   reuseExisting = true,
   targetPath,
 }: {
+  /** The desktop device this launch came from; matches are limited to it. */
+  deviceId?: string;
   navigate: (path: string) => void;
   /** `false` for `lh app --new-window`: stage a fresh conversation instead. */
   reuseExisting?: boolean;
@@ -39,7 +42,7 @@ export const openDirectoryInApp = async ({
 }): Promise<OpenDirectoryResult> => {
   const target = normalizeComparablePath(targetPath);
   const { data: directories } = await projectWorkingDirectoryService.list();
-  const match = pickDirectoryForPath(directories ?? [], target);
+  const match = pickDirectoryForPath(directories ?? [], target, { deviceId });
 
   if (!match) {
     console.warn(`[openDirectory] No project directory is bound to ${target}`);
