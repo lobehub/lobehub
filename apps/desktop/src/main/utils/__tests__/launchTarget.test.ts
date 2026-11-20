@@ -87,6 +87,31 @@ describe('parseLaunchArgs', () => {
   it('should stop flag parsing after --', () => {
     expect(parseLaunchArgs(['/x/LobeHub', '--', '/tmp'], options)).toMatchObject({ path: '/tmp' });
   });
+
+  it('should still open the directory when Electron reorders argv', () => {
+    // Observed on a real second-instance handoff: Electron moves switches ahead
+    // of positionals, which separates `--open-path` from its value and leaves
+    // the directory last. Failing on that must not drop the launch.
+    expect(
+      parseLaunchArgs(
+        [
+          '/Electron',
+          '--open-path',
+          '--allow-file-access-from-files',
+          '--secure-schemes=app,localfile',
+          'apps/desktop',
+          '/repo/apps',
+        ],
+        options,
+      ),
+    ).toEqual({ kind: 'path', newWindow: false, path: '/repo/apps' });
+  });
+
+  it('should prefer a resolvable --open-path over positionals', () => {
+    expect(parseLaunchArgs(['/x/LobeHub', '--open-path', '/tmp', '/repo'], options)).toMatchObject({
+      path: '/tmp',
+    });
+  });
 });
 
 describe('createPathTarget', () => {

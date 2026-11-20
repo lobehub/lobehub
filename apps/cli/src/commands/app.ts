@@ -141,7 +141,10 @@ export function registerAppCommand(program: Command) {
         return;
       }
 
-      const args = ['--open-path', directory];
+      // Positional, like `code .`: Electron reorders argv (switches first,
+      // positionals last), which detaches a flag from its value. A bare
+      // directory always survives that reordering.
+      const args = [directory];
       if (options.newWindow) args.push('--new-window');
 
       if (options.dryRun) {

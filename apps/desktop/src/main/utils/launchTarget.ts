@@ -139,11 +139,17 @@ const collectArguments = (
 /**
  * Read a launch target out of a command line.
  *
- * Order of preference: `--open-path`, then a deep link, then the last
- * positional that actually is a directory. Last-positional wins because
- * launchers append their own arguments (`LobeHub --new-window a b` should open
- * `b`), and every candidate is validated against the filesystem so a stray
- * argument can never become a working directory.
+ * Order of preference: an explicit `--open-path`, a deep link, then the last
+ * positional that actually is a directory. Every candidate is validated
+ * against the filesystem, so a stray argument can never become a working
+ * directory.
+ *
+ * Last-positional wins because launchers append their own arguments, and
+ * `--open-path` must not be fatal when it does not resolve: Electron REORDERS
+ * argv (switches first, positionals last), which separates `--open-path` from
+ * its value and leaves the real directory at the end of the line. Failing
+ * there instead of falling through silently dropped a launch — observed on a
+ * real second-instance handoff before this fallback existed.
  */
 export const parseLaunchArgs = (
   argv: readonly string[],
@@ -163,7 +169,7 @@ export const parseLaunchArgs = (
 
   if (openPath !== undefined) {
     const resolved = resolveDirectoryCandidate(openPath, resolveOptions);
-    return resolved ? { kind: 'path', newWindow, path: resolved } : null;
+    if (resolved) return { kind: 'path', newWindow, path: resolved };
   }
 
   const url = positional.find((arg) => isSchemeUrl(arg, options.schemes));
