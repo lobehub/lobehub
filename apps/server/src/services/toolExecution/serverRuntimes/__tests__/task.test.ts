@@ -13,6 +13,7 @@ const memberMocks = vi.hoisted(() => ({
   findLinksByUserIds: vi.fn(),
   getDisplayInfoByIds: vi.fn(),
   getEmailsByIds: vi.fn(),
+  getNicknames: vi.fn(async () => new Map<string, string>()),
   notifyTaskAssigned: vi.fn(),
   searchAssignableMembers: vi.fn(),
 }));
@@ -35,6 +36,7 @@ vi.mock('@/database/models/user', () => ({
 vi.mock('@/database/models/workspaceMember', () => ({
   WorkspaceMemberModel: vi.fn().mockImplementation(function () {
     return {
+      getNicknames: memberMocks.getNicknames,
       searchAssignableMembers: memberMocks.searchAssignableMembers,
     };
   }),
@@ -1328,6 +1330,19 @@ describe('createTaskRuntime — human assignee (assigneeUserId)', () => {
       expect(result.state).toEqual({ count: 2, success: true, total: 2 });
       expect(result.content).toContain('- Me  @me  role=owner  (you)  id=usr_1');
       expect(result.content).toContain('- Alice  @alice  role=member  id=usr_2');
+    });
+
+    it('names a member by their workspace nickname', async () => {
+      memberMocks.searchAssignableMembers.mockResolvedValue({
+        rows: [{ nickname: 'Aaron', role: 'member', userId: 'usr_2' }],
+        total: 1,
+      });
+      memberMocks.getDisplayInfoByIds.mockResolvedValue([alice]);
+      const runtime = createTaskRuntime({ ...baseDeps, db, userId: 'usr_1', workspaceId: 'ws_1' });
+
+      const result = await runtime.listWorkspaceMembers({ query: 'aaron' });
+
+      expect(result.content).toContain('- Aaron  @alice  role=member  id=usr_2');
     });
 
     it('surfaces email and linked IM identities so platform handles resolve exactly', async () => {

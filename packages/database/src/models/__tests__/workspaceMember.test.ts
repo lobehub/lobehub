@@ -277,6 +277,25 @@ describe('WorkspaceMemberModel', () => {
 
       const { rows } = await model.searchAssignableMembers(workspaceId, { limit: 50 });
       expect(rows.map((r) => r.userId)).toEqual([otherUserId, memberId, inviterId]);
+      expect(rows[0].nickname).toBe('Aaron');
+
+      // A blank nickname is unset: Bob sorts by his full name again.
+      await serverDB
+        .update(workspaceMembers)
+        .set({ nickname: '   ' })
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, workspaceId),
+            eq(workspaceMembers.userId, otherUserId),
+          ),
+        );
+      const reordered = await model.searchAssignableMembers(workspaceId, { limit: 50 });
+      expect(reordered.rows.map((r) => [r.userId, r.nickname])).toEqual([
+        [memberId, null],
+        [otherUserId, null],
+        [inviterId, null],
+      ]);
+      await model.updateMemberProfile(workspaceId, otherUserId, { nickname: 'Aaron' });
 
       const ids = async (query: string) =>
         (await model.searchAssignableMembers(workspaceId, { limit: 50, query })).rows.map(
@@ -292,7 +311,7 @@ describe('WorkspaceMemberModel', () => {
 
       const { rows, total } = await model.searchAssignableMembers(workspaceId, { limit: 1 });
 
-      expect(rows).toEqual([{ role: 'member', userId: memberId }]);
+      expect(rows).toEqual([{ nickname: null, role: 'member', userId: memberId }]);
       expect(total).toBe(3);
     });
 

@@ -184,7 +184,7 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
                 ? {
                     avatar: member.user?.avatar ?? null,
                     id: member.userId,
-                    name: member.user?.fullName ?? null,
+                    name: memberName(member),
                     type: 'user',
                   }
                 : undefined,

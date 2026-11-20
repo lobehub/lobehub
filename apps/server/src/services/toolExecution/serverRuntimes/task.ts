@@ -703,7 +703,8 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
             id: m.userId,
             imAccounts: imMap.get(m.userId),
             isSelf: m.userId === userId,
-            name: profile?.fullName,
+            // The name they go by in this workspace, as everywhere else it lists them.
+            name: m.nickname ?? profile?.fullName,
             role: m.role,
             username: profile?.username,
           };

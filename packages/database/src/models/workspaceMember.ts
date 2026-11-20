@@ -165,7 +165,10 @@ export class WorkspaceMemberModel {
   searchAssignableMembers = async (
     workspaceId: string,
     options: { limit: number; query?: string },
-  ): Promise<{ rows: Array<{ role: string; userId: string }>; total: number }> => {
+  ): Promise<{
+    rows: Array<{ nickname: string | null; role: string; userId: string }>;
+    total: number;
+  }> => {
     const { limit, query } = options;
     if (ASSIGNABLE_MEMBER_ROLES.length === 0 || limit <= 0) return { rows: [], total: 0 };
 
@@ -195,6 +198,8 @@ export class WorkspaceMemberModel {
           ),
         )
       : undefined;
+    // A blank nickname counts as unset everywhere a member is named or ordered.
+    const nickname = sql<string | null>`nullif(trim(${workspaceMembers.nickname}), '')`;
     const where = and(
       eq(workspaceMembers.workspaceId, workspaceId),
       isNull(workspaceMembers.deletedAt),
@@ -204,13 +209,13 @@ export class WorkspaceMemberModel {
 
     const [rows, [{ total }]] = await Promise.all([
       this.db
-        .select({ role: workspaceMembers.role, userId: workspaceMembers.userId })
+        .select({ nickname, role: workspaceMembers.role, userId: workspaceMembers.userId })
         .from(workspaceMembers)
         .innerJoin(users, eq(users.id, workspaceMembers.userId))
         .where(where)
         .orderBy(
           // Members are listed by the name they go by in this workspace.
-          asc(sql`coalesce(${workspaceMembers.nickname}, ${users.fullName})`),
+          asc(sql`coalesce(${nickname}, ${users.fullName})`),
           asc(users.username),
           asc(workspaceMembers.userId),
         )
