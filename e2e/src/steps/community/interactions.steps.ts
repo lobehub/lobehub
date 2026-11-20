@@ -1,7 +1,7 @@
 import { Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
-import type { CustomWorld } from '../../support/world';
+import { type CustomWorld, WAIT_TIMEOUT } from '../../support/world';
 
 // ============================================
 // When Steps (Actions)
@@ -380,5 +380,7 @@ Then('I should see the MCP detail content', async function (this: CustomWorld) {
 });
 
 Then('I should be navigated to {string}', async function (this: CustomWorld, expectedPath: string) {
-  await expect(this.page).toHaveURL((url) => url.pathname + url.search === expectedPath);
+  await expect(this.page).toHaveURL((url) => url.pathname + url.search === expectedPath, {
+    timeout: WAIT_TIMEOUT,
+  });
 });
