@@ -44,8 +44,8 @@ interface ChannelConversationProps {
   /** Mounted beside a thread panel that covers it, so keep it out of the tab order. */
   inert?: boolean;
   /**
-   * Opens the main conversation's history, like the profile header at the start of an IM direct
-   * message. Shown once the earliest page is loaded, so it also fills a conversation's blank start.
+   * Fills the main conversation's blank start in place of the empty state, and leaves with the
+   * first message (sent or received) so it never sits above the conversation itself.
    */
   intro?: ReactNode;
   /**
@@ -242,13 +242,13 @@ const Timeline = ({
                     {failureRows(detail.rootMessage.id)}
                   </>
                 )}
-                {!threadId && !detail.hasMore && intro}
-                {/* A new direct conversation starts blank, like an IM chat. */}
+                {/* A new direct conversation starts blank, like an IM chat, unless the host fills it. */}
                 {!timeline.length &&
                   (threadId ? (
                     <p {...stylex.props(styles.muted)}>{t('threadEmpty')}</p>
-                  ) : direct ? null : (
-                    <Empty icon={MessageSquare} title={t('conversationEmpty')} />
+                  ) : (
+                    (intro ??
+                    (direct ? null : <Empty icon={MessageSquare} title={t('conversationEmpty')} />))
                   ))}
                 {presentChannelTimeline(timeline, new Set(failures.afterMessage.keys())).map(
                   ({ item, date, startsDay, continuation }) => (
