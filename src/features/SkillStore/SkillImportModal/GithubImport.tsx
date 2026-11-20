@@ -3,7 +3,6 @@ import { GithubIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { CheckCircle2, CircleAlert } from 'lucide-react';
-import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
@@ -36,7 +35,6 @@ const styles = stylex.create({
 export const GithubImport = ({ state }: { state: ReturnType<typeof useGithubSkillImport> }) => {
   const { t } = useTranslation(['setting', 'common', 'error']);
   const { close } = useModalContext();
-  const inputId = useId();
   const {
     canCreate,
     candidates,
@@ -97,22 +95,15 @@ export const GithubImport = ({ state }: { state: ReturnType<typeof useGithubSkil
   if (!scan)
     return (
       <Flexbox gap={20}>
-        <Flexbox gap={8}>
-          <label htmlFor={inputId}>
-            <Text strong as="span">
-              {t('agentSkillModal.github.label')}
-            </Text>
-          </label>
-          <Input
-            disabled={loading || !canCreate}
-            id={inputId}
-            placeholder={t('agentSkillModal.github.example')}
-            prefix={<Icon icon={GithubIcon} />}
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-            onPressEnter={discover}
-          />
-        </Flexbox>
+        <Input
+          aria-label={t('agentSkillModal.github.label')}
+          disabled={loading || !canCreate}
+          placeholder={t('agentSkillModal.github.example')}
+          prefix={<Icon icon={GithubIcon} />}
+          value={url}
+          onChange={(event) => setUrl(event.target.value)}
+          onPressEnter={discover}
+        />
         {error}
         <Flexbox horizontal justify="flex-end">
           <Button
