@@ -66,7 +66,7 @@ export const createTaskAssigneeHelpers = (deps: TaskRuntimeDeps) => {
     try {
       const [[user], nicknames] = await Promise.all([
         UserModel.getDisplayInfoByIds(deps.db, [assigneeUserId]),
-        deps.workspaceId
+        deps.workspaceId && deps.userId
           ? new WorkspaceMemberModel(deps.db, deps.userId).getNicknames(deps.workspaceId, [
               assigneeUserId,
             ])

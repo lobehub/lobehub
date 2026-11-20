@@ -667,7 +667,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
           : (() => {
               const self = selectAssignableMembers([{ id: userId, isSelf: true }], args);
               return {
-                rows: self.members.map((m) => ({ role: null, userId: m.id })),
+                rows: self.members.map((m) => ({ nickname: null, role: null, userId: m.id })),
                 total: self.total,
               };
             })();
