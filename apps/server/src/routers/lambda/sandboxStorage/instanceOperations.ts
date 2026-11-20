@@ -1,3 +1,4 @@
+import type { EnvironmentSource } from '@lobechat/types';
 import {
   derivedInstanceDirectory,
   MAX_DERIVED_DIRECTORY_ATTEMPTS,
@@ -23,12 +24,9 @@ import { mapStorageError, type SandboxStorageClient } from './procedures';
  * A local-only repository never reaches a cloud build, so it is not work here.
  */
 export const isBuildable = (
-  specification: {
-    bootstrapCommand?: string | null;
-    sources?: { localOnly?: boolean }[] | null;
-  } | null,
+  specification: { bootstrapCommand?: string | null; sources?: EnvironmentSource[] | null } | null,
 ): boolean =>
-  (specification?.sources ?? []).some((source) => !source?.localOnly) ||
+  (specification?.sources ?? []).some((source) => !(source.kind === 'git' && source.localOnly)) ||
   Boolean(specification?.bootstrapCommand);
 
 /**
