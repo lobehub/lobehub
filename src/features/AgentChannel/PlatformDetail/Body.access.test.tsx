@@ -157,6 +157,60 @@ describe('channel settings form: access tab', () => {
     expect(onSave).toHaveBeenCalledWith('access-device');
   });
 
+  it('leaves devices usable in any channel by default and hides the channel list', () => {
+    state.copy = en;
+
+    render(<Harness />);
+
+    const scope = screen.getByRole('radiogroup', {
+      name: en['channel.access.device.channel.label'],
+    });
+    expect(
+      within(scope).getByRole('radio', {
+        name: new RegExp(en['channel.access.device.channel.any']),
+      }),
+    ).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByText(en['channel.access.device.channel.list'])).not.toBeVisible();
+  });
+
+  it('limits devices to listed channels and saves the choice with the device block', () => {
+    state.copy = zh;
+    const onSave = vi.fn();
+
+    render(
+      <Harness
+        moduleControls={controls({ dirty: ['access-device'], onSave })}
+        settings={{
+          deviceChannelAllowFrom: [{ id: 'dev-channel', name: '#dev' }],
+          deviceChannelPolicy: 'allowlist',
+          userId: 'owner-1',
+        }}
+      />,
+    );
+
+    const scope = screen.getByRole('radiogroup', {
+      name: zh['channel.access.device.channel.label'],
+    });
+    expect(
+      within(scope).getByRole('radio', {
+        name: new RegExp(zh['channel.access.device.channel.allowlist']),
+      }),
+    ).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText(zh['channel.access.device.channel.list'])).toBeVisible();
+    // The list's add button derives its copy from the field label: a missing key shows raw.
+    expect(
+      screen.getByRole('button', { name: zh['channel.deviceChannelAllowFromAdd'] }),
+    ).toBeVisible();
+    expect(screen.getByDisplayValue('dev-channel')).toBeInTheDocument();
+
+    const enabled = screen
+      .getAllByRole('button', { name: zh['channel.module.save'] })
+      .filter((button) => !(button as HTMLButtonElement).disabled);
+    expect(enabled).toHaveLength(1);
+    fireEvent.click(enabled[0]);
+    expect(onSave).toHaveBeenCalledWith('access-device');
+  });
+
   it('warns that nobody can use the devices until the owner ID is filled', () => {
     state.copy = en;
 

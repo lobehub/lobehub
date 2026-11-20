@@ -34,7 +34,11 @@ import {
   resolveReplyStyle,
   type UserAllowlist,
 } from '../platforms';
-import { extractDeviceAllowlist } from '../platforms/deviceAccess';
+import {
+  extractDeviceAllowlist,
+  extractDeviceChannelAllowlist,
+  isDeviceChannelRestricted,
+} from '../platforms/deviceAccess';
 import { renderThrownAgentError } from '../renderThrownError';
 import { createReplyOpener } from '../wake/opener';
 import { resolveWakeScheduler } from '../wake/scheduler';
@@ -168,6 +172,21 @@ export function registerHandlers(
       : undefined;
   /** Who besides the owner may use the owner's devices; read once per bot. */
   const deviceAllowlist = extractDeviceAllowlist(info.settings);
+  /** Channels the owner limited device use to; `undefined` when unrestricted. */
+  const deviceChannelAllowlist = extractDeviceChannelAllowlist(info.settings);
+  /**
+   * Whether a thread sits outside those channels. Matches the same raw IDs as
+   * the group policy (`passesGroupPolicy`), so pasted channel IDs line up.
+   */
+  const isDeviceChannelRestrictedFor = (thread: { id: string; isDM?: boolean }): boolean =>
+    isDeviceChannelRestricted({
+      candidateChannelIds: [
+        client.extractChatId(thread.id),
+        ...(client.extraGroupAllowlistChannels?.(thread.id) ?? []),
+      ],
+      channelAllowlist: deviceChannelAllowlist,
+      isDM: thread.isDM === true,
+    });
   const fallbackReplyLocale: BotReplyLocale = getBotReplyLocale(platform);
 
   /**
@@ -557,6 +576,7 @@ export function registerHandlers(
           applicationId,
           authorUserId: merged.author?.userId,
           deviceAllowlist,
+          deviceChannelRestricted: isDeviceChannelRestrictedFor(thread),
           operatorUserId,
           platform,
           platformThreadId: thread.id,
@@ -840,6 +860,7 @@ export function registerHandlers(
           applicationId,
           authorUserId: merged.author?.userId,
           deviceAllowlist,
+          deviceChannelRestricted: isDeviceChannelRestrictedFor(thread),
           operatorUserId,
           platform,
           platformThreadId: thread.id,
@@ -895,6 +916,7 @@ export function registerHandlers(
 
   registerCatchAllHandler(bot, {
     deviceAllowlist,
+    isDeviceChannelRestrictedFor,
     agentId,
     applicationId,
     replyVoiceFor,
