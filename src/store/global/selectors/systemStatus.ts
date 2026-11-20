@@ -199,6 +199,18 @@ export const WORKSPACE_DEFAULT_HIDDEN_SECTIONS: string[] = ['recents'];
 export const getDefaultHiddenSections = (isWorkspaceMode: boolean): string[] =>
   isWorkspaceMode ? [...WORKSPACE_DEFAULT_HIDDEN_SECTIONS] : DEFAULT_HIDDEN_SECTIONS;
 
+/** A personal sidebar has one control for the two previously independent entries. */
+export const setSidebarSectionHidden = (
+  hidden: string[],
+  key: string,
+  hide: boolean,
+  workspace: boolean,
+): string[] => {
+  const keys = !workspace && key === 'tasks' ? ['tasks', 'goals'] : [key];
+  const remaining = hidden.filter((item) => !keys.includes(item));
+  return hide ? [...remaining, ...keys] : remaining;
+};
+
 const hiddenSidebarSections =
   (workspaceId: string | null) =>
   (s: GlobalState): string[] => {
@@ -216,7 +228,13 @@ const hiddenSidebarSections =
       }
       return merged;
     }
-    return normalizeLegacyHiddenSections(s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS);
+    const hidden = normalizeLegacyHiddenSections(
+      s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS,
+    );
+    // Keep the combined entry reachable if either destination was visible before the merge.
+    return hidden.includes('tasks') && !hidden.includes('goals')
+      ? hidden.filter((key) => key !== 'tasks')
+      : hidden;
   };
 
 const sidebarExpandedKeys =
@@ -240,6 +258,7 @@ export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   'favorites',
   'recents',
   'agent',
+  'channels',
   SIDEBAR_SPACER_ID,
   'image',
   'community',
@@ -247,7 +266,7 @@ export const DEFAULT_SIDEBAR_ITEMS: string[] = [
 ];
 
 /** Items that must stay contiguous in the sidebar list (accordion block). */
-export const SIDEBAR_ACCORDION_KEYS = new Set(['favorites', 'recents', 'agent']);
+export const SIDEBAR_ACCORDION_KEYS = new Set(['favorites', 'recents', 'agent', 'channels']);
 
 /**
  * Section key of the former workspace "Private" accordion. It was merged into
@@ -363,8 +382,18 @@ const liftProjectOutOfAccordion = (order: string[]): string[] => {
 // bottom-group defaults go after the spacer. Without this split a new top-group
 // default added in a future version would silently appear in the bottom group
 // for existing users.
+// Channels used to render right below Agents outside the saved order; a saved
+// order without them keeps them in that spot instead of the top of the block.
+const CHANNELS_SECTION_KEY = 'channels';
+const withChannelsAfterAgent = (order: string[]): string[] => {
+  if (order.includes(CHANNELS_SECTION_KEY)) return order;
+  const agentIndex = order.indexOf(AGENT_SECTION_KEY);
+  if (agentIndex === -1) return order;
+  return [...order.slice(0, agentIndex + 1), CHANNELS_SECTION_KEY, ...order.slice(agentIndex + 1)];
+};
+
 const withAllKnownKeys = (order: string[]): string[] => {
-  const nextOrder = liftProjectOutOfAccordion(order);
+  const nextOrder = withChannelsAfterAgent(liftProjectOutOfAccordion(order));
   const present = new Set(nextOrder);
   const missingTop: string[] = [];
   const missingBottom: string[] = [];

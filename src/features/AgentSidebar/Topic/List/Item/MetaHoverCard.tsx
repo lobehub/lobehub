@@ -10,6 +10,7 @@ import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import {
   getCiVisual,
@@ -29,7 +30,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   header: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: baseline;
     justify-content: space-between;
   `,
@@ -41,7 +42,7 @@ const styles = createStaticStyles(({ css }) => ({
   headerTitle: css`
     overflow: hidden;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     line-height: 20px;
     color: ${cssVar.colorText};

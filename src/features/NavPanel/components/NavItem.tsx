@@ -113,6 +113,8 @@ export interface NavItemSlots {
   iconBelow?: ReactNode;
   iconPostfix?: ReactNode;
   titlePrefix?: ReactNode;
+  /** Passive status after the title. Clicking it still selects the row. */
+  titleSuffix?: ReactNode;
 }
 
 export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
@@ -220,7 +222,7 @@ const NavItem = memo<NavItemProps>(
     const textColor = titleColor ?? (active ? cssVar.colorText : cssVar.colorTextSecondary);
     const variant = active ? 'filled' : 'borderless';
 
-    const { titlePrefix, iconBelow, iconPostfix } = slots || {};
+    const { titlePrefix, titleSuffix, iconBelow, iconPostfix } = slots || {};
     // Link props for cmd+click support
     const linkProps = href
       ? {
@@ -268,7 +270,7 @@ const NavItem = memo<NavItemProps>(
         // With a description the row is two lines tall; align the leading icon
         // to the title's first line (match its line-height) instead of letting
         // it center across both lines, which drops it into the gap.
-        height={description ? 22 : metrics.iconBox}
+        height={description ? metrics.lineHeight : metrics.iconBox}
         style={description ? { alignSelf: 'flex-start' } : undefined}
         width={metrics.iconBox}
       >
@@ -289,7 +291,7 @@ const NavItem = memo<NavItemProps>(
         data-nav-item=""
         gap={metrics.gap}
         height={description ? undefined : metrics.rowHeight}
-        paddingBlock={description ? 8 : undefined}
+        paddingBlock={description ? metrics.twoLinePaddingBlock : undefined}
         paddingInline={metrics.paddingInline}
         style={mergedStyle}
         variant={variant}
@@ -337,13 +339,14 @@ const NavItem = memo<NavItemProps>(
         >
           {titlePrefix}
           {description ? (
-            <Flexbox flex={1} gap={3} style={{ overflow: 'hidden' }}>
+            <Flexbox flex={1} gap={metrics.twoLineGap} style={{ overflow: 'hidden' }}>
               {titleNode}
               {description}
             </Flexbox>
           ) : (
             titleNode
           )}
+          {titleSuffix}
           {extra && (
             <Flexbox
               horizontal

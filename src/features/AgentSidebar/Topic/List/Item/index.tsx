@@ -274,7 +274,6 @@ const TopicItemRow = memo<TopicItemRowProps>(
     const inboxId = useAgentStore(builtinAgentSelectors.inboxAgentId);
     const { t } = useTranslation('topic');
     const { isDarkMode } = useTheme();
-    const goalsEnabled = useUserStore(labPreferSelectors.enableGoals);
     // Rows render by the dozen, so agent-level reads share ONE subscription.
     // Only workspace-shared (`public`) agents get the creator avatar — a
     // workspace-private agent's topics all belong to the viewer.
@@ -526,7 +525,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
       // The conversation a goal was planned in says more about the row than
       // the PR it produced, so it outranks the PR marker (which stays in the
       // meta hover card).
-      if (hasGoal && goalsEnabled) {
+      if (hasGoal) {
         return (
           <Tooltip title={t('metaCard.goal')}>
             <span aria-label={t('metaCard.goal')} className={styles.markerIcon}>

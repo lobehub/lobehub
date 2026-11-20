@@ -8,6 +8,7 @@ import {
   buildHeteroExecStdinPayload,
   type HeteroExecImageRef,
 } from '@lobechat/heterogeneous-agents/protocol';
+import type { HeteroPermissionMode } from '@lobechat/types';
 import debug from 'debug';
 
 import { appEnv } from '@/envs/app';
@@ -42,6 +43,8 @@ export interface SandboxRunParams {
   jwt: string;
   marketService: MarketService;
   operationId: string;
+  /** Claude Code permission mode (Better Coding Experience lab). */
+  permissionMode?: HeteroPermissionMode;
   prompt: string;
   /** GitHub repos to clone before running the agent (e.g. ['owner/repo', ...]). */
   repos?: string[];
@@ -213,6 +216,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
   const stdinPayload = buildHeteroExecStdinPayload({
     imageList: params.imageList,
     isNewSession: !resumeSessionId,
+    permissionMode: params.permissionMode,
     prompt,
     resumeFallbackSystemContext: params.resumeFallbackSystemContext,
     systemContext: params.systemContext,

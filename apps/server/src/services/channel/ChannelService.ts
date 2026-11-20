@@ -7,6 +7,7 @@ import {
   CHANNEL_LIMITS,
   defaultChannelAgentDirectory,
   isChannelRuntime,
+  isRemoteChannelRuntime,
 } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -14,6 +15,7 @@ import pMap from 'p-map';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { ContactModel, parseContactHandle } from '@/database/models/contact';
 import { DeviceModel } from '@/database/models/device';
+import { MessageModel } from '@/database/models/message';
 import type { ProjectModelOptions } from '@/database/models/project';
 import { ProjectModel } from '@/database/models/project';
 import type {
@@ -23,6 +25,12 @@ import type {
 } from '@/database/repositories/channel';
 import { ChannelError, ChannelRepository } from '@/database/repositories/channel';
 import { findProjectMainChannelId } from '@/database/repositories/channel/projectMainChannel';
+import {
+  findShareVisitorTopic,
+  listShareVisitorConversations,
+  listShareVisitorTopics,
+  readShareVisitorChannel,
+} from '@/database/repositories/channel/shareVisitors';
 import { users } from '@/database/schemas';
 import { AgentService } from '@/server/services/agent';
 import { deviceGateway } from '@/server/services/deviceGateway';
@@ -50,6 +58,9 @@ type ChannelAgentConfig = NonNullable<Awaited<ReturnType<AgentService['getAgentC
 const agentRuntime = (agent: Pick<ChannelAgentConfig, 'agencyConfig' | 'model'>) =>
   agent.agencyConfig?.heterogeneousProvider?.type ??
   (isHeterogeneousAgentModelId(agent.model) ? agent.model : 'native');
+
+/** Scan guard for a visitor topic transcript, which is read whole (see `shareVisitorTopic`). */
+const SHARE_VISITOR_TRANSCRIPT_ROW_CEILING = 100_000;
 
 export class ChannelService {
   readonly repository: ChannelRepository;
@@ -81,6 +92,8 @@ export class ChannelService {
     if (!isChannelRuntime(runtime))
       throw new ChannelError('BAD_REQUEST', 'Unsupported Channel runtime');
     const config: NonNullable<ChannelAddAgentInput['config']> = {};
+    if (input.deviceId && isRemoteChannelRuntime(runtime))
+      throw new ChannelError('BAD_REQUEST', 'A remote Agent runs on its own host, not a device');
     if (input.deviceId) {
       const device = this.workspaceId
         ? await this.deviceModel.findWorkspaceDeviceById(input.deviceId)
@@ -164,7 +177,7 @@ export class ChannelService {
     }
   }
 
-  /** A group starts with Agents, workspace people, both, or only its creator. */
+  /** A group starts with Agents, people, both, or only its creator. */
   create = async (input: {
     agents: ChannelAgentSelection[];
     /** Seats Agents from outside the project in the project first. */
@@ -450,10 +463,89 @@ export class ChannelService {
     return access;
   };
 
+  /**
+   * Pins the conversation atop the caller's own list, or unpins it. Pinning an open project
+   * Channel joins it, so its members see the newcomer as with {@link join}.
+   */
+  setPinned = (channelId: string, pinned: boolean) =>
+    this.writeMayJoin(channelId, pinned, () => this.repository.setPinned(channelId, pinned));
+
+  /** Files the conversation under one of the caller's own sections, joining it like a pin. */
+  moveToSection = (channelId: string, sectionId: string | null) =>
+    this.writeMayJoin(channelId, sectionId !== null, () =>
+      this.repository.moveToSection(channelId, sectionId),
+    );
+
   changed = (channelId: string) => notifyChannel(this.db, channelId);
 
+  /** A personal list write that joins an open Channel first; members hear only about a join. */
+  private writeMayJoin = async <T>(
+    channelId: string,
+    mayJoin: boolean,
+    write: () => Promise<T>,
+  ) => {
+    const joining = mayJoin && !(await this.repository.findAccess(channelId));
+    const result = await write();
+    if (joining) await this.changed(channelId);
+    return result;
+  };
+
+  /** Visitor conversations with the caller's shared Agent, when its share lets the caller read them. */
+  shareVisitors = (agentId: string) => listShareVisitorConversations(this.db, this.userId, agentId);
+
+  /** The run topics of those conversations, grouped by visitor, for the Agent's sidebar. */
+  shareVisitorTopics = (agentId: string) => listShareVisitorTopics(this.db, this.userId, agentId);
+
+  /**
+   * A visitor's run topic with its full transcript, for the share's owner to read. The owner pays
+   * for and is accountable for these runs, so the transcript keeps model, usage and error details;
+   * only this read opts in to visitor rows, and every write path still refuses them.
+   */
+  shareVisitorTopic = async (topicId: string) => {
+    const topic = await findShareVisitorTopic(this.db, this.userId, topicId);
+    if (!topic) throw new ChannelError('NOT_FOUND', 'Topic not found');
+    const files = new FileService(this.db, this.userId, this.workspaceId);
+    const messages = await new MessageModel(this.db, this.userId, this.workspaceId).query(
+      // The page holds the transcript without paging, so read it whole rather than the default
+      // newest window: the share's per-visitor message cap already bounds a topic.
+      { agentId: topic.agentId, pageSize: SHARE_VISITOR_TRANSCRIPT_ROW_CEILING, topicId },
+      {
+        allowShareVisitor: true,
+        postProcessUrl: (path, file) => files.getFileAccessUrl({ id: file.id, url: path }),
+      },
+    );
+    // Visitor turns persist under the owner, so their joined sender is the owner; the visitor
+    // wrote them.
+    const { visitor } = topic;
+    const sender = { avatar: visitor.avatar, fullName: visitor.name, id: visitor.id };
+    return {
+      messages: messages.map((message) =>
+        message.role === 'user' ? { ...message, sender } : message,
+      ),
+      topic,
+    };
+  };
+
+  /**
+   * A Channel the caller is a member of or can read openly; failing that, a visitor's conversation
+   * with the caller's shared Agent, read-only.
+   */
+  private readView = async (
+    channelId: string,
+    options: Parameters<ChannelRepository['detail']>[1],
+  ) => {
+    try {
+      return await this.repository.detail(channelId, options);
+    } catch (error) {
+      if (!(error instanceof ChannelError) || error.code !== 'NOT_FOUND') throw error;
+      const visitorView = await readShareVisitorChannel(this.db, this.userId, channelId, options);
+      if (!visitorView) throw error;
+      return visitorView;
+    }
+  };
+
   detail = async (channelId: string, options: Parameters<ChannelRepository['detail']>[1]) => {
-    const view = await this.repository.detail(channelId, options);
+    const view = await this.readView(channelId, options);
     const files = new FileService(this.db, this.userId, this.workspaceId);
     // The public message's attachment relation grants this read after membership authorization.
     // Do not return private storage keys or route through an unrelated ordinary-chat ACL.

@@ -73,7 +73,6 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
     'background',
   ],
   [SettingsTabs.Billing]: ['billing', 'payment', 'invoice', 'card', 'transaction'],
-  [SettingsTabs.Connector]: ['connectors', 'integrations', 'mcp', 'oauth'],
   [SettingsTabs.Automations]: [
     'automations',
     'events',
@@ -99,6 +98,9 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
   [SettingsTabs.Environments]: [
     'sandbox',
     'environments',
+    'credentials',
+    'secrets',
+    'vault',
     'instances',
     'setup script',
     'repository',
@@ -165,7 +167,6 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
     'search',
     'search model',
   ],
-  [SettingsTabs.Skill]: ['skill', 'skills', 'plugins', 'tools'],
   [SettingsTabs.Stats]: ['analytics', 'statistics', 'stats'],
   [SettingsTabs.Storage]: [
     'storage',
@@ -216,7 +217,6 @@ export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<string, string>> = {
   [SettingsTabs.Automations]: 'settingsSearch.tabKeywords.automations',
   [SettingsTabs.Webhooks]: 'settingsSearch.tabKeywords.webhooks',
   [SettingsTabs.Billing]: 'settingsSearch.tabKeywords.billing',
-  [SettingsTabs.Connector]: 'settingsSearch.tabKeywords.connector',
   [SettingsTabs.Credits]: 'settingsSearch.tabKeywords.credits',
   [SettingsTabs.Creds]: 'settingsSearch.tabKeywords.creds',
   [SettingsTabs.Devices]: 'settingsSearch.tabKeywords.devices',
@@ -234,7 +234,6 @@ export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<string, string>> = {
   [SettingsTabs.Proxy]: 'settingsSearch.tabKeywords.proxy',
   [SettingsTabs.Referral]: 'settingsSearch.tabKeywords.referral',
   [SettingsTabs.ServiceModel]: 'settingsSearch.tabKeywords.serviceModel',
-  [SettingsTabs.Skill]: 'settingsSearch.tabKeywords.skill',
   [SettingsTabs.Stats]: 'settingsSearch.tabKeywords.stats',
   [SettingsTabs.Storage]: 'settingsSearch.tabKeywords.storage',
   [SettingsTabs.SystemTools]: 'settingsSearch.tabKeywords.systemTools',
@@ -348,13 +347,6 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     descKey: 'settingAppearance.density.desc',
     keywords: ['density', 'compact', 'loose', 'spacing', 'row height', 'sidebar'],
     labelKey: 'settingAppearance.density.title',
-    tab: SettingsTabs.Appearance,
-  },
-  {
-    anchor: 'appearance-context-menu',
-    descKey: 'settingAppearance.contextMenuMode.desc',
-    keywords: ['context menu', 'right click'],
-    labelKey: 'settingAppearance.contextMenuMode.title',
     tab: SettingsTabs.Appearance,
   },
   {
@@ -542,6 +534,13 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     descKey: 'serviceModel.tier.verify.desc',
     keywords: ['acceptance', 'verify', 'verifier', 'vision', 'multimodal'],
     labelKey: 'serviceModel.tier.verify.title',
+    tab: SettingsTabs.ServiceModel,
+  },
+  {
+    anchor: 'service-model-fileEmbedding',
+    descKey: 'systemAgent.fileEmbedding.modelDesc',
+    keywords: ['embedding', 'file', 'knowledge base', 'vector', 'DEFAULT_FILES_CONFIG'],
+    labelKey: 'systemAgent.fileEmbedding.title',
     tab: SettingsTabs.ServiceModel,
   },
   {

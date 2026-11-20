@@ -26,8 +26,8 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
+import { useDensityTokens } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
@@ -47,7 +47,7 @@ import { useSkillsMenuItem } from './useSkillsMenuItem';
 const styles = stylex.create({
   activeLabel: {
     display: 'flex',
-    gap: '16px',
+    gap: densityTokens['--lobe-density-section-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
@@ -184,9 +184,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const { t: tSetting } = useTranslation('setting');
   const agentId = useAgentId();
   const { canConfigureResource } = useChatInputResourceAccess();
-
-  // Goal creation is lab-gated while the product surface is being rolled out.
-  const enableGoals = useUserStore(labPreferSelectors.enableGoals);
 
   const upload = useChatInputUpload();
   const { enableKnowledgeBase } = useServerConfigStore(featureFlagsSelectors);
@@ -394,27 +391,25 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     // Goal creation has one canonical entry: drop the goal chip at the head of
     // the composer. The agent then plans and calls builtin-goal.createGoal,
     // regardless of whether this conversation already has a topic.
-    const acceptanceItems: ActionDropdownMenuItems = enableGoals
-      ? [
-          {
-            icon: TargetIcon,
-            key: 'set-topic-goal',
-            // Same string as the chip it inserts: one label for the affordance,
-            // so the menu row and the chip can never drift apart.
-            label: tEditor('slash.goal'),
-            onClick: () => {
-              insertGoalTag(editor, tEditor('slash.goal'));
-            },
-          },
-        ]
-      : [];
+    const goalItems: ActionDropdownMenuItems = [
+      {
+        icon: TargetIcon,
+        key: 'set-topic-goal',
+        // Same string as the chip it inserts: one label for the affordance,
+        // so the menu row and the chip can never drift apart.
+        label: tEditor('slash.goal'),
+        onClick: () => {
+          insertGoalTag(editor, tEditor('slash.goal'));
+        },
+      },
+    ];
 
     // Grouped with a single divider only between non-empty groups:
     // [attachments] | [tools · skills] | [set goal] | [formatting · params]
     const menuGroups: ActionDropdownMenuItems[] = [
       attachmentsItems,
       coreItems,
-      acceptanceItems,
+      goalItems,
       formatItems,
     ];
     return menuGroups
@@ -423,7 +418,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   }, [
     agentId,
     canConfigureResource,
-    enableGoals,
     canUploadImage,
     canUploadVideo,
     canUploadAudio,
@@ -461,11 +455,12 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
  */
 const PlusAction = memo(() => {
   const { t } = useTranslation('chat');
+  const { controlHeight, iconSize } = useDensityTokens();
 
   return (
     <ChatInputAction
       icon={PlusIcon}
-      size={{ blockSize: 32, borderRadius: 16, size: 18 }}
+      size={{ blockSize: controlHeight, borderRadius: controlHeight / 2, size: iconSize }}
       title={t('plus.contextTooltip')}
       tooltipProps={{ placement: 'top' }}
       dropdown={{
@@ -479,19 +474,23 @@ const PlusAction = memo(() => {
 
 PlusAction.displayName = 'PlusAction';
 
-const Plus = () => (
-  <Suspense
-    fallback={
-      <ChatInputAction
-        disabled
-        icon={PlusIcon}
-        size={{ blockSize: 32, borderRadius: 16, size: 18 }}
-        title=""
-      />
-    }
-  >
-    <PlusAction />
-  </Suspense>
-);
+const Plus = () => {
+  const { controlHeight, iconSize } = useDensityTokens();
+
+  return (
+    <Suspense
+      fallback={
+        <ChatInputAction
+          disabled
+          icon={PlusIcon}
+          size={{ blockSize: controlHeight, borderRadius: controlHeight / 2, size: iconSize }}
+          title=""
+        />
+      }
+    >
+      <PlusAction />
+    </Suspense>
+  );
+};
 
 export default Plus;

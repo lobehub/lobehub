@@ -370,7 +370,7 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Trigger an actual run of a task — this kicks off the assigned agent in a new (or continued) topic. Use this to START tasks; do NOT use updateTaskStatus(running) to start a task, that only flips the status flag without actually executing anything. The task must already have an assigneeAgentId; if not, edit the task to assign one first. Will fail with a CONFLICT-style error if the task already has a running topic (cancel it first or pass continueTopicId).',
+        'Trigger an actual run of a task — this kicks off the assigned agent in a new (or continued) topic. Use this to START tasks; do NOT use updateTaskStatus(running) to start a task, that only flips the status flag without actually executing anything. The task must already have an assigneeAgentId; if not, edit the task to assign one first. If the task already has a live run, this fails with a CONFLICT error naming the operation behind that run, its status and the next step; a run whose operation ended long ago is cleaned up and no longer blocks. Running a scheduled task by hand works as a test tick: it does not count toward maxExecutions, and the task returns to scheduled afterwards.',
       name: TaskApiName.runTask,
       parameters: {
         properties: {

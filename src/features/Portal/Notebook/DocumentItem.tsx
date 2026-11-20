@@ -7,11 +7,12 @@ import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 import { useNotebookStore } from '@/store/notebook';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     cursor: pointer;
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-radius: 8px;
     background: ${cssVar.colorFillTertiary};
 

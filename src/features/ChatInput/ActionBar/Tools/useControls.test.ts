@@ -1,3 +1,5 @@
+import { getUnavailableBuiltinToolIds } from '@lobechat/builtin-tools';
+import { getBuiltinOverrides } from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { createElement, Fragment } from 'react';
@@ -20,12 +22,20 @@ const mocks = vi.hoisted(() => ({
     { identifier: 'lobehub', name: 'LobeHub' },
   ],
   checked: [] as string[],
+  connectors: [] as Array<{
+    identifier: string;
+    isEnabled?: boolean;
+    metadata: { mountedByAgentId?: string };
+    status?: string;
+    sourceType: 'custom';
+  }>,
   composioEnabled: false,
   composioServers: [] as Pick<ComposioServer, 'identifier' | 'status'>[],
   lobehubEnabled: false,
   lobehubSkillServers: [] as LobehubSkillServer[],
   chatMode: false,
-  plugins: [] as { identifier: string; mode: string }[],
+  uninstalled: [] as string[],
+  plugins: [] as { builtinOverride?: true; identifier: string; mode: string }[],
   skills: [
     { id: 'market-row', identifier: 'excel-analysis', name: 'Excel Analysis', source: 'market' },
     { id: 'user-row', identifier: 'custom-writing', name: 'Custom Writing', source: 'user' },
@@ -82,7 +92,9 @@ vi.mock('@/store/tool', () => ({
   useToolStore: (selector: (state: unknown) => unknown) =>
     selector({
       composioServers: mocks.composioServers,
+      connectors: mocks.connectors,
       isConnectorsInit: true,
+      uninstalledBuiltinTools: mocks.uninstalled,
       lobehubSkillServers: mocks.lobehubSkillServers,
       useFetchAgentSkills: vi.fn(),
       useFetchLobehubSkillConnections: vi.fn(),
@@ -100,12 +112,12 @@ vi.mock('@/store/tool/selectors', () => ({
     installedBuiltinSkills: () => mocks.builtinSkills,
     // The real metadata inventory mixes tools and skill manifests.
     metaList: () => [
-      { identifier: 'builtin-tool', meta: { title: 'Builtin Tool' } },
+      { identifier: 'lobe-calculator', meta: { title: 'Builtin Tool' } },
       ...mocks.builtinSkills,
       ...mocks.skills,
     ],
     metaListIncludingHidden: () => [
-      { identifier: 'builtin-tool', meta: { title: 'Builtin Tool' } },
+      { identifier: 'lobe-calculator', meta: { title: 'Builtin Tool' } },
       ...mocks.builtinSkills,
       ...mocks.skills,
     ],
@@ -119,9 +131,10 @@ vi.mock('@/store/tool/selectors', () => ({
     ],
   },
 }));
-vi.mock('@/store/tool/slices/connector', () => ({
-  connectorSelectors: { userMcpConnectors: () => [] },
-}));
+vi.mock(
+  '@/store/tool/slices/connector',
+  async () => import('@/store/tool/slices/connector/selectors'),
+);
 
 const leafKeys = (items: ItemType[]): string[] =>
   items.flatMap((item) => {
@@ -130,7 +143,7 @@ const leafKeys = (items: ItemType[]): string[] =>
     return [String(item.key)];
   });
 
-const toolIds = ['builtin-tool', 'community-mcp', 'custom-mcp'];
+const toolIds = ['lobe-calculator', 'community-mcp', 'custom-mcp'];
 const libraryIds = [
   'excel-analysis',
   'custom-writing',
@@ -144,11 +157,13 @@ describe('chat input tool picker', () => {
     vi.clearAllMocks();
     mocks.agentId = 'agent-1';
     mocks.checked = [];
+    mocks.connectors = [];
     mocks.composioEnabled = false;
     mocks.composioServers = [];
     mocks.lobehubEnabled = false;
     mocks.lobehubSkillServers = [];
     mocks.plugins = [];
+    mocks.uninstalled = [];
     mocks.chatMode = false;
   });
 
@@ -156,7 +171,7 @@ describe('chat input tool picker', () => {
 
   it.each([
     { id: 'gmail', pin: false },
-    { id: 'builtin-tool', pin: false },
+    { id: 'lobe-calculator', pin: false },
   ])('offers the applicable activation actions on the $id row', async ({ id, pin }) => {
     mocks.composioEnabled = true;
     mocks.composioServers = [{ identifier: 'gmail', status: ComposioServerStatus.ACTIVE }];
@@ -183,6 +198,34 @@ describe('chat input tool picker', () => {
     expect(leafKeys(result.current.marketItems)).not.toContain('lobe-skills');
   });
 
+  it('keeps an uninstalled calculator selectable and re-enables it for just the edited agent', async () => {
+    const id = 'lobe-calculator';
+    const previous = [{ identifier: id, mode: 'auto' as const }];
+    mocks.plugins = previous;
+    mocks.uninstalled = [id];
+    const { result, rerender } = renderHook(() => useControls());
+    const option = () => result.current.toolOptions.find((row) => row.id === id);
+    expect(option()?.enabled).toBe(false);
+
+    await act(() => result.current.setPolicy(id, 'auto'));
+    const { plugins } = mocks.updateConfig.mock.lastCall![0];
+    mocks.plugins = plugins;
+    rerender();
+    expect(option()?.enabled).toBe(true);
+    for (const toolMode of ['agent', 'chat'] as const) {
+      expect(
+        getUnavailableBuiltinToolIds([id], { toolMode }, [id], getBuiltinOverrides(plugins)),
+      ).not.toContain(id);
+      expect(
+        getUnavailableBuiltinToolIds([id], { toolMode }, [id], getBuiltinOverrides(previous)),
+      ).toContain(id);
+    }
+    await act(() => result.current.setPolicy(id, 'disabled'));
+    mocks.plugins = mocks.updateConfig.mock.lastCall![0].plugins;
+    rerender();
+    expect(option()?.enabled).toBe(false);
+  });
+
   it.each(['lobe-image-generation', 'lobe-video-generation'])(
     're-enables %s as a pin in either mode, so a later switch to Chat keeps it callable',
     async (id) => {
@@ -193,13 +236,13 @@ describe('chat input tool picker', () => {
       mocks.chatMode = false;
       await act(() => result.current.setPolicy(id, 'auto'));
       expect(mocks.updateConfig).toHaveBeenLastCalledWith({
-        plugins: [{ identifier: id, mode: 'pinned' }],
+        plugins: [{ builtinOverride: true, identifier: id, mode: 'pinned' }],
       });
 
       mocks.chatMode = true;
       await act(() => result.current.setPolicy(id, 'auto'));
       expect(mocks.updateConfig).toHaveBeenLastCalledWith({
-        plugins: [{ identifier: id, mode: 'pinned' }],
+        plugins: [{ builtinOverride: true, identifier: id, mode: 'pinned' }],
       });
     },
   );
@@ -227,8 +270,7 @@ describe('chat input tool picker', () => {
       },
     ];
     mocks.plugins = [
-      { identifier: 'gmail', mode: 'auto' },
-      { identifier: 'vercel', mode: 'auto' },
+      { identifier: 'slack', mode: 'auto' },
       { identifier: 'google-drive', mode: 'disabled' },
     ];
     const { result } = renderHook(() => useControls());
@@ -244,8 +286,8 @@ describe('chat input tool picker', () => {
     for (const identifier of ['google-drive', 'notion', 'twitter'])
       expect(keys).not.toContain(identifier);
 
-    act(() => result.current.marketHeader.props.onSearchChange('builtin-tool'));
-    expect(leafKeys(result.current.marketItems)).toEqual(['builtin-tool']);
+    act(() => result.current.marketHeader.props.onSearchChange('lobe-calculator'));
+    expect(leafKeys(result.current.marketItems)).toEqual(['lobe-calculator']);
     act(() => result.current.marketHeader.props.onSearchChange(''));
     expect(leafKeys(result.current.marketItems)).toContain('slack');
     act(() => result.current.marketHeader.props.onSearchChange('Google Drive'));
@@ -263,6 +305,46 @@ describe('chat input tool picker', () => {
       chatConfig: { searchMode: 'auto' },
       plugins: [other],
     });
+  });
+
+  it('offers only free library MCP connections and those mounted to this agent', () => {
+    mocks.connectors = [
+      { identifier: 'free', metadata: {}, sourceType: 'custom' },
+      { identifier: 'lent-here', metadata: { mountedByAgentId: 'agent-1' }, sourceType: 'custom' },
+      {
+        identifier: 'lent-elsewhere',
+        metadata: { mountedByAgentId: 'agent-2' },
+        sourceType: 'custom',
+      },
+    ];
+    const { result } = renderHook(() => useControls());
+    const ids = result.current.toolOptions.map((option) => option.id);
+    expect(ids).toEqual(expect.arrayContaining(['free', 'lent-here']));
+    expect(ids).not.toContain('lent-elsewhere');
+  });
+
+  it('counts a newly connected library tool without a plugin entry and leaves the pending tool off', () => {
+    mocks.connectors = [
+      {
+        identifier: 'ready',
+        isEnabled: true,
+        metadata: {},
+        sourceType: 'custom',
+        status: 'connected',
+      },
+      {
+        identifier: 'pending',
+        isEnabled: true,
+        metadata: {},
+        sourceType: 'custom',
+        status: 'disconnected',
+      },
+    ];
+
+    const { result } = renderHook(() => useControls());
+    const activeIds = result.current.toolOptions.filter((row) => row.enabled).map((row) => row.id);
+    expect(activeIds).toContain('ready');
+    expect(activeIds).not.toContain('pending');
   });
 
   it('derives the profile summary from the same unfiltered options as chat', () => {

@@ -79,6 +79,7 @@ const PUBLIC_METHODS = [
   'getAgentVisibilityMeta',
   'getAssignableSessionGroupVisibility',
   'getBuiltinAgent',
+  'getDeleteImpact',
   'getGroupMembershipImpact',
   'getTopicShareSubject',
   'hasTrashedOwner',
@@ -170,6 +171,32 @@ afterEach(async () => {
 });
 
 describe('AgentModel - characterization', () => {
+  it('persists four on-demand tools for new agents and respects an explicit tool list', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const created = await model.create({ title: 'New assistant' });
+    const [ordinary, empty, configured, virtual, market] = await model.batchCreate([
+      { title: 'Second assistant' },
+      { plugins: [] },
+      { plugins: ['custom-tool'] },
+      { virtual: true },
+      { marketIdentifier: 'from-market' },
+    ]);
+
+    // Media opt-ins keep the same representation as the picker so they also work in Chat mode.
+    const expected = [
+      { identifier: 'lobe-image-generation', mode: 'pinned' },
+      { identifier: 'lobe-video-generation', mode: 'pinned' },
+      { identifier: 'lobe-agent-documents', mode: 'auto' },
+      { identifier: 'lobe-agent', mode: 'auto' },
+    ];
+    expect(created.plugins).toEqual(expected);
+    expect(ordinary.plugins).toEqual(expected);
+    expect(empty.plugins).toEqual([]);
+    expect(configured.plugins).toEqual(['custom-tool']);
+    expect(virtual.plugins).toBeNull();
+    expect(market.plugins).toBeNull();
+  });
+
   describe('public surface', () => {
     it('exposes the same instance methods', () => {
       const model = new AgentModel(serverDB, userId);

@@ -31,6 +31,7 @@ import {
 import { useMusicGenerationConfigParam } from '@/store/music/slices/generationConfig/hooks';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import MusicModelItem from '../ModelSelect/MusicModelItem';
 import AudioSettings, { useHasAudioSettings } from './AudioSettings';
@@ -41,7 +42,7 @@ const styles = stylex.create({
   // Same inset as the blocked-prompt notice so the hint does not touch the input border
   promptHint: {
     paddingBlockStart: '8px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
 });
 

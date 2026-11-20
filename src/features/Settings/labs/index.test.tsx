@@ -173,8 +173,8 @@ describe('Labs settings page', () => {
     const claudeCodeSdk = screen.getByText('features.claudeCodeSdk.title');
     expect(within(claudeCodeSdk).getByText('stage.alpha.label')).toBeDefined();
 
-    const goals = screen.getByText('features.goals.title');
-    expect(within(goals).getByText('stage.beta.label')).toBeDefined();
+    const oauthApps = screen.getByText('features.oauthApps.title');
+    expect(within(oauthApps).getByText('stage.beta.label')).toBeDefined();
   });
 
   it('explains what each stage means via the tag tooltip', () => {

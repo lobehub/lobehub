@@ -4,13 +4,22 @@ import {
   getLobehubSkillProviderById,
   isDesktop,
 } from '@lobechat/const';
-import { type RenderDisplayControl, type ToolManifest } from '@lobechat/types';
+import {
+  manifestBaseIdentifier,
+  type RenderDisplayControl,
+  type ToolManifest,
+} from '@lobechat/types';
 
 import {
   isInstalledPluginAvailableInCurrentEnv,
   isToolAvailableInCurrentEnv,
 } from '@/helpers/toolAvailability';
 import { buildClientConnectorManifests } from '@/helpers/toolEngineering/buildClientConnectorManifests';
+import {
+  getAllRunConnectors,
+  getRunConnectors,
+  type RunConnectorsTarget,
+} from '@/services/runConnectors';
 import { type MetaData } from '@/types/meta';
 import { type LobeToolMeta } from '@/types/tool/tool';
 
@@ -18,7 +27,7 @@ import { type ToolStoreState } from '../initialState';
 import { agentSkillsSelectors } from '../slices/agentSkills/selectors';
 import { builtinToolSelectors } from '../slices/builtin/selectors';
 import { ComposioServerStatus } from '../slices/composioStore';
-import { connectorSelectors } from '../slices/connector/selectors';
+import { composioIdsOutsideRun, connectorSelectors } from '../slices/connector/selectors';
 import { lobehubSkillStoreSelectors } from '../slices/lobehubSkillStore';
 import { LobehubSkillStatus } from '../slices/lobehubSkillStore/types';
 import { pluginSelectors } from '../slices/plugin/selectors';
@@ -62,10 +71,21 @@ const getMetaById =
 
 /**
  * The MCP connectors chat can run, as the tools engine offers them: custom
- * ones and finished marketplace installs (every MCP install lands here now).
+ * ones and finished marketplace installs (every MCP install lands here now),
+ * one manifest per row under its tool prefix. Rows the server listed for a
+ * conversation (`connector.listForRun`, a private agent's owner's personal
+ * connectors among them) join the local ones, so a call naming any row's
+ * prefix resolves.
  */
-const executableConnectorManifests = (s: ToolStoreState): ToolManifest[] =>
-  buildClientConnectorManifests(connectorSelectors.executableMcpConnectors(s));
+const executableConnectorManifests = (s: ToolStoreState): ToolManifest[] => {
+  const local = connectorSelectors.executableMcpConnectors(s);
+  const known = new Set(local.map((c) => c.id));
+  const listed = connectorSelectors.executableMcpConnectors({
+    connectors: getAllRunConnectors().filter((c) => !known.has(c.id) && !!known.add(c.id)),
+    installedPlugins: s.installedPlugins,
+  });
+  return buildClientConnectorManifests([...local, ...listed]);
+};
 
 /**
  * A connector-only identifier is read from its connector; one that still has
@@ -133,6 +153,11 @@ const getRenderDisplayControl =
   };
 
 export interface AvailableToolForDiscovery {
+  /**
+   * The connector a connector row's tool set serves, when it is named apart
+   * from it (a private or personal row): agent switches speak this identifier.
+   */
+  connectorIdentifier?: string;
   description: string;
   identifier: string;
   name: string;
@@ -150,7 +175,17 @@ export interface AvailableToolForDiscovery {
  * 5. MCP connectors chat can run (custom, finished marketplace installs) that no
  *    entry above already lists — stdio ones only on desktop
  */
-const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscovery[] => {
+const availableToolsForDiscovery = (
+  s: ToolStoreState,
+  /**
+   * The conversation the run belongs to: its connector rows are the ones the
+   * server listed for it (`connector.listForRun`). Without that listing only
+   * the caller's shared rows are discoverable — whether a conversation may run
+   * a private or personal row is the server's call, so none is offered on a
+   * guess.
+   */
+  run: RunConnectorsTarget = {},
+): AvailableToolForDiscovery[] => {
   // Build exclusion sets for deduplication
   const builtinSkillIds = new Set((s.builtinSkills || []).map((skill) => skill.identifier));
   const agentSkillIds = new Set(
@@ -189,9 +224,16 @@ const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscover
       };
     });
 
-  // 3. Composio MCP servers (connected only)
+  // 3. Composio MCP servers (connected only), but none whose only connections
+  //    the conversation may not use: without its listing, shared ones only
+  const composioOutsideRun = composioIdsOutsideRun(s.connectors ?? [], {
+    agentId: run.agentId,
+    includePrivate: false,
+    listed: run.agentId ? getRunConnectors(run) : undefined,
+  });
   const composioItems = (s.composioServers || [])
     .filter((server) => server.status === ComposioServerStatus.ACTIVE && server.tools?.length)
+    .filter((server) => !composioOutsideRun.has(server.identifier))
     // A connector identifier can have legacy Composio and current LobeHub
     // connections at the same time. Tool discovery is identifier-based, so the
     // canonical LobeHub connection must own the single visible entry.
@@ -223,21 +265,38 @@ const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscover
       };
     });
 
-  // 5. MCP connectors no plugin row serves (every MCP install now), as the
-  //    tools engine offers them. Stdio servers run only on a desktop.
-  const listed = new Set([...builtinItems, ...pluginItems].map((item) => item.identifier));
+  // 5. MCP connectors, as the tools engine offers them: a connector's tool sets
+  //    replace a same-identifier plugin row (`assembleManifestPool`), so the
+  //    plugin's bare entry gives way to them. Stdio servers run only on a desktop.
+  const builtinIds = new Set(builtinItems.map((item) => item.identifier));
+  //    Each row is its own tool set (a private or personal row under its own
+  //    prefix), so a manifest is runnable by the row it was built from, and
+  //    deduplicated against the other sources by the connector it serves.
+  const listedForRun = run.agentId ? getRunConnectors(run) : undefined;
+  const runRows = listedForRun
+    ? connectorSelectors.executableMcpConnectors({
+        connectors: listedForRun,
+        installedPlugins: s.installedPlugins,
+      })
+    : connectorSelectors
+        .executableMcpConnectors(s)
+        .filter((connector) => connector.visibility !== 'private');
   const runnableHere = new Set(
-    connectorSelectors
-      .executableMcpConnectors(s)
+    runRows
       .filter((connector) => isDesktop || connector.mcpConnectionType !== 'stdio')
-      .map((connector) => connector.identifier),
+      .map((connector) => connector.id),
   );
-  const connectorItems = executableConnectorManifests(s)
-    .filter((manifest) => runnableHere.has(manifest.identifier))
-    .filter((manifest) => !listed.has(manifest.identifier))
-    .filter((manifest) => !composioIds.has(manifest.identifier))
-    .filter((manifest) => !lobehubSkillIds.has(manifest.identifier))
+  const connectorManifests = executableConnectorManifests(s)
+    .filter((manifest) => !!manifest.connector && runnableHere.has(manifest.connector.id))
+    .filter((manifest) => !builtinIds.has(manifestBaseIdentifier(manifest)));
+  const connectorBaseIds = new Set(connectorManifests.map(manifestBaseIdentifier));
+  const connectorItems = connectorManifests
+    .filter((manifest) => !composioIds.has(manifestBaseIdentifier(manifest)))
+    .filter((manifest) => !lobehubSkillIds.has(manifestBaseIdentifier(manifest)))
     .map((manifest) => ({
+      ...(manifestBaseIdentifier(manifest) !== manifest.identifier && {
+        connectorIdentifier: manifestBaseIdentifier(manifest),
+      }),
       description: manifest.meta?.description || '',
       identifier: manifest.identifier,
       name: manifest.meta?.title || manifest.identifier,
@@ -245,7 +304,7 @@ const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscover
 
   return [
     ...builtinItems,
-    ...pluginItems,
+    ...pluginItems.filter((item) => !connectorBaseIds.has(item.identifier)),
     ...composioItems,
     ...lobehubSkillItems,
     ...connectorItems,

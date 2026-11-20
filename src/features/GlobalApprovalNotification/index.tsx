@@ -10,8 +10,6 @@ import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
 import { usePermission } from '@/hooks/usePermission';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import ApprovalCard from './ApprovalCard';
 import GoalClarificationCard from './GoalClarificationCard';
@@ -48,9 +46,8 @@ const GlobalApprovalNotification = memo(() => {
   // Goal asks the user waved off leave the island but stay in the Home inbox,
   // so they are never lost — a run approval has no such fallback and stays.
   // The server leaves dismissed asks out of both lists, on every client.
-  const enableGoals = useUserStore(labPreferSelectors.enableGoals);
   const { allowed: canAnswerGoals } = usePermission('create_content');
-  const dismissKey = useIslandDismissals(enableGoals && canAnswerGoals);
+  const dismissKey = useIslandDismissals(canAnswerGoals);
   // Confirm only once the server kept it; on failure the card comes back.
   const dismiss = async (key: string) => {
     try {

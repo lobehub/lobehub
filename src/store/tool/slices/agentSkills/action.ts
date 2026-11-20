@@ -27,6 +27,8 @@ import {
   agentSkillListEntity,
   type AgentSkillListItem,
   agentSkillListResource,
+  type GitHubUpdateChecks,
+  gitHubUpdateResource,
 } from './projection';
 import { agentSkillsSelectors } from './selectors';
 
@@ -57,6 +59,7 @@ export const createAgentSkillsSlice = (set: Setter, get: () => ToolStore, _api?:
   new AgentSkillsActionImpl(set, get, _api);
 
 export class AgentSkillsActionImpl {
+  readonly #updates;
   readonly #detail;
   readonly #get: () => ToolStore;
   readonly #list;
@@ -66,6 +69,14 @@ export class AgentSkillsActionImpl {
   constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
     void _api;
     this.#get = get;
+    this.#updates = createReplicaSlice(gitHubUpdateResource, {
+      actionPrefix: 'agentSkillGitHubUpdates',
+      fetcher: () => agentSkillService.checkGitHubUpdates(),
+      get,
+      set,
+      stateKey: 'gitHubUpdateReplica',
+      view: recordLens<ToolStore, GitHubUpdateChecks>('gitHubUpdateMap'),
+    });
     this.#list = createReplicaSlice(agentSkillListResource, {
       actionPrefix: 'agentSkillList',
       entity: agentSkillListEntity,
@@ -180,6 +191,25 @@ export class AgentSkillsActionImpl {
 
   refreshAgentSkills = async (): Promise<void> => {
     await this.#refreshList();
+  };
+
+  useCheckGitHubSkills = () =>
+    this.#updates.useSync(LIST_PARAMS, { dedupingInterval: 10 * 60_000 });
+
+  syncGitHubSkill = async (
+    input: { id: string; revision: string } & (
+      { commit: string; overwriteLocal?: boolean } | { ref: string }
+    ),
+  ) => {
+    const scope = this.#captureScope();
+    if ('commit' in input) await agentSkillService.applyGitHubUpdate(input);
+    else await agentSkillService.trackLegacyGitHubSkill(input);
+    if (this.#isCurrentScope(scope))
+      await Promise.all([
+        this.#detail.fetch(input.id, { fresh: true }),
+        this.#refreshList(),
+        this.#updates.fetch(LIST_PARAMS, { fresh: true }),
+      ]);
   };
 
   updateAgentSkill = async (

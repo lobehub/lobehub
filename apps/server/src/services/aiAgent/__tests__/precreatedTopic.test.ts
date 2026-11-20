@@ -52,7 +52,7 @@ describe('resolvePrecreatedTopicSnapshot', () => {
     vi.clearAllMocks();
     getPreference.mockResolvedValue({});
     isResourceAuthorOrAdmin.mockResolvedValue(false);
-    getInfoForAIGeneration.mockResolvedValue({ responseLanguage: 'en-US' });
+    getInfoForAIGeneration.mockResolvedValue({ preferredReplyLanguage: 'en-US' });
   });
 
   it('pins the agent model and provider for the pre-created topic', async () => {
@@ -67,7 +67,7 @@ describe('createGroupAgentTopic', () => {
     vi.clearAllMocks();
     getPreference.mockResolvedValue({});
     isResourceAuthorOrAdmin.mockResolvedValue(false);
-    getInfoForAIGeneration.mockResolvedValue({ responseLanguage: 'en-US' });
+    getInfoForAIGeneration.mockResolvedValue({ preferredReplyLanguage: 'en-US' });
   });
 
   // Re-parenting `topicMessageIds` is a cross-aggregate write: it must go

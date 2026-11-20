@@ -4,6 +4,7 @@ import { createSettingsSectionsSkeleton } from '@/components/Skeleton/Settings/S
 import { WORKSPACE_SETTINGS_SECTION_SHAPES } from '@/components/Skeleton/Settings/sectionShapes';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import DevicesPageSkeleton from '@/features/DeviceManager/Skeleton';
+import { VAULT_TAB_SEARCH } from '@/features/EnvironmentsAndCreds/const';
 import { createWorkspaceSettingsRouteMeta } from '@/features/WorkspaceSetting/routeMeta';
 import { LegacySandboxStorageRedirect } from '@/spa/router/sandboxStorageRedirect';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
@@ -205,22 +206,15 @@ export const workspaceSettingsContentRoute: RouteObject = {
       },
       path: 'service-model',
     },
+    // Credentials are the vault tab of the Environments & Vault page; old
+    // links open that tab.
     {
-      element: dynamicElement(
-        () => import('@/routes/(main)/[workspaceSlug]/settings/credential'),
-        'Desktop > Workspace > Settings > Credential',
-      ),
-      handle: {
-        meta: createWorkspaceSettingsRouteMeta(
-          WorkspaceSettingsTabs.Creds,
-          createSurfaceSkeleton('form'),
-        ),
-      },
+      element: redirectElement(`../environments${VAULT_TAB_SEARCH}`),
       path: 'credential',
     },
     // Legacy `/:slug/settings/creds` URLs — kept for deep-links.
     {
-      element: redirectElement('../credential'),
+      element: redirectElement(`../environments${VAULT_TAB_SEARCH}`),
       path: 'creds',
     },
     {

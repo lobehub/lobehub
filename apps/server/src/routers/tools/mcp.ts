@@ -164,13 +164,27 @@ export const mcpRouter = router({
       // this specific tool has been disabled by the user. Disabled tools are still
       // present in the AI manifest (so the AI knows they exist) but are hard-blocked
       // here at execution time so the MCP server is never actually called.
+      //
+      // The row is the one the conversation runs the identifier on, ranked as
+      // its runs rank them: a plugin call keeps the bare identifier, and the
+      // owner's private row shadows the shared one in their private agent's own
+      // topic. Only an agent the caller can see names the run.
       const connectorId = input.params.name;
       if (connectorId && ctx.userId) {
         const wsId = ctx.workspaceId ?? undefined;
         const connectorModel = new ConnectorModel(ctx.serverDB, ctx.userId, wsId);
-        const [connector] = await connectorModel.queryByIdentifiers([connectorId]);
+        const agentModel = new AgentModel(ctx.serverDB, ctx.userId, wsId);
+        const agentId =
+          input.agentId && (await agentModel.existsById(input.agentId)) ? input.agentId : undefined;
+        const [connector] = await connectorModel.resolveByIdentifiers([connectorId], {
+          agentId,
+          topicId: agentId ? input.meta?.sessionId : undefined,
+        });
         if (connector) {
-          const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId);
+          // A personal row's tools live in the personal scope
+          const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId, {
+            agentRun: true,
+          });
           const tools = await connectorToolModel.queryByConnector(connector.id);
           const tool = tools.find((t) => t.toolName === input.toolName);
           if (tool?.permission === ConnectorToolPermission.disabled) {

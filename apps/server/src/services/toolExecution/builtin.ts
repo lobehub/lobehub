@@ -367,6 +367,7 @@ export class BuiltinToolsExecutor implements IToolExecutor {
         args,
         identifier,
         toolSlug: apiName,
+        topicId: context.topicId,
       });
     }
 

@@ -45,6 +45,7 @@ import { verifyService } from '@/services/verify';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useVerifyStore } from '@/store/verify';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import { useAcceptanceList, useAcceptanceListInfinite } from '../hooks';
@@ -117,13 +118,13 @@ const styles = stylex.create({
     flex: 'none',
     paddingBlockStart: '14px',
     paddingBlockEnd: '6px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   headWithBrand: {
     flex: 'none',
     paddingBlockStart: 0,
     paddingBlockEnd: '6px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   titleRow: {
     display: 'flex',
@@ -203,7 +204,7 @@ const styles = stylex.create({
     gap: '10px',
     alignItems: 'flex-start',
     paddingBlock: '24px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   searchEmptyMsg: {
     fontSize: '12px',
@@ -216,7 +217,7 @@ const styles = stylex.create({
     flexDirection: 'column',
     gap: '2px',
     paddingBlockStart: '6px',
-    paddingBlockEnd: '16px',
+    paddingBlockEnd: densityTokens['--lobe-density-card-padding'],
     paddingInline: '8px',
   },
   groupList: { display: 'flex', flexDirection: 'column', gap: '2px' },
@@ -224,14 +225,14 @@ const styles = stylex.create({
     display: 'inline-flex',
     gap: '8px',
     alignItems: 'center',
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     color: cssVar.colorTextSecondary,
   },
   emptyState: {
     height: '100%',
     minHeight: '240px',
     paddingBlock: '24px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   retryBtn: {
     cursor: 'pointer',

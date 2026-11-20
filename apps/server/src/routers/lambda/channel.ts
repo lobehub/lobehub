@@ -69,7 +69,7 @@ const channelProcedure = channelBaseProcedure.use(denyExternalContact);
 
 export const channelRouter = router({
   ...channelHistoryProcedures,
-  /** Without a Channel, the people a new Channel in this workspace can start with. */
+  /** Without a Channel, the people a new Channel in this scope can start with. */
   userCandidates: channelProcedure
     .input(z.object({ channelId: channelId.optional(), search: z.string().max(100).optional() }))
     .query(async ({ ctx, input }) => ({
@@ -244,6 +244,30 @@ export const channelRouter = router({
       data: await ctx.channelService.detail(input.channelId, input),
       success: true,
     })),
+  /**
+   * Visitors' conversations with the caller's shared Agent, for its owner to read; empty unless
+   * the share lets the owner read visitor conversations.
+   */
+  shareVisitors: channelProcedure
+    .input(z.object({ agentId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.channelService.shareVisitors(input.agentId),
+      success: true,
+    })),
+  /** A visitor's run topic with its transcript, read-only for the shared Agent's owner. */
+  shareVisitorTopic: channelProcedure
+    .input(z.object({ topicId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.channelService.shareVisitorTopic(input.topicId),
+      success: true,
+    })),
+  /** The run topics of visitors' conversations with the caller's shared Agent, by visitor. */
+  shareVisitorTopics: channelProcedure
+    .input(z.object({ agentId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.channelService.shareVisitorTopics(input.agentId),
+      success: true,
+    })),
   /** Messages in a Channel and its Threads containing every word of `query`, newest first. */
   searchMessages: channelProcedure
     .input(
@@ -316,14 +340,14 @@ export const channelRouter = router({
   setPinned: externalChannelProcedure
     .input(z.object({ channelId, pinned: z.boolean() }))
     .mutation(async ({ ctx, input }) => ({
-      data: await ctx.channelService.repository.setPinned(input.channelId, input.pinned),
+      data: await ctx.channelService.setPinned(input.channelId, input.pinned),
       success: true,
     })),
   /** Files the conversation under one of the caller's own sections; null returns it to the built-in one. */
   moveToSection: externalChannelProcedure
     .input(z.object({ channelId, sectionId: sectionId.nullable() }))
     .mutation(async ({ ctx, input }) => ({
-      data: await ctx.channelService.repository.moveToSection(input.channelId, input.sectionId),
+      data: await ctx.channelService.moveToSection(input.channelId, input.sectionId),
       success: true,
     })),
   /** Hides the conversation from the caller's own list until its next message, or shows it again. */
@@ -436,6 +460,13 @@ export const channelRouter = router({
   send: externalChannelProcedure
     .input(
       z.object({
+        /** Share a contact as a card; the server writes the content and the card snapshot. */
+        card: z
+          .discriminatedUnion('type', [
+            z.object({ type: z.literal('user'), userId: z.string().min(1) }),
+            z.object({ agentId: z.string().min(1), type: z.literal('agent') }),
+          ])
+          .optional(),
         channelId,
         content: z.string().max(CHANNEL_LIMITS.contentLength),
         fileIds: z.array(z.string().min(1)).max(CHANNEL_LIMITS.attachments).optional(),

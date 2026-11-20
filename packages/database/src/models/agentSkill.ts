@@ -1,6 +1,6 @@
 import type { SkillItem, SkillListItem } from '@lobechat/types';
 import { merge } from '@lobechat/utils';
-import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, isNotNull, or, sql } from 'drizzle-orm';
 
 import type { NewAgentSkill } from '../schemas';
 import { agentSkills } from '../schemas';
@@ -19,6 +19,7 @@ const skillItemColumns = {
   resources: agentSkills.resources,
   source: agentSkills.source,
   updatedAt: agentSkills.updatedAt,
+  upstream: agentSkills.upstream,
   // Creator attribution — row-level ownership checks in workspace mode.
   userId: agentSkills.userId,
   zipFileHash: agentSkills.zipFileHash,
@@ -33,6 +34,7 @@ const skillListColumns = {
   name: agentSkills.name,
   source: agentSkills.source,
   updatedAt: agentSkills.updatedAt,
+  upstream: agentSkills.upstream,
   // Creator attribution — row-level ownership checks in workspace mode.
   userId: agentSkills.userId,
   zipFileHash: agentSkills.zipFileHash,
@@ -81,6 +83,23 @@ export class AgentSkillModel {
       .limit(1);
     return result;
   };
+
+  findGitHubInstalls = async (): Promise<SkillItem[]> =>
+    this.db
+      .select(skillItemColumns)
+      .from(agentSkills)
+      .where(
+        and(
+          this.scopeWhere(),
+          or(
+            isNotNull(agentSkills.upstream),
+            and(
+              eq(agentSkills.source, 'market'),
+              sql`COALESCE(${agentSkills.manifest}->>'sourceUrl', '') <> ''`,
+            ),
+          ),
+        ),
+      );
 
   findImportMatches = async (identifiers: string[], names: string[]): Promise<SkillItem[]> =>
     this.db
@@ -156,16 +175,23 @@ export class AgentSkillModel {
   // ========== Update ==========
 
   update = async (id: string, data: Partial<NewAgentSkill>): Promise<SkillItem> => {
-    const existing = await this.findById(id);
-
-    const updateData = merge(existing || {}, { ...data, updatedAt: new Date() });
-
-    const [result] = await this.db
-      .update(agentSkills)
-      .set(updateData)
-      .where(and(eq(agentSkills.id, id), this.scopeWhere()))
-      .returning(skillItemColumns);
-    return result;
+    // Editors merge partial manifest fields. Read under a row lock so this
+    // merge cannot restore a previous package after a concurrent GitHub update.
+    return this.db.transaction(async (tx) => {
+      const where = and(eq(agentSkills.id, id), this.scopeWhere());
+      const [existing] = await tx
+        .select(skillItemColumns)
+        .from(agentSkills)
+        .where(where)
+        .for('update');
+      const updateData = merge(existing || {}, { ...data, updatedAt: new Date() });
+      const [result] = await tx
+        .update(agentSkills)
+        .set(updateData)
+        .where(where)
+        .returning(skillItemColumns);
+      return result;
+    });
   };
 
   // Serialize GitHub create/name decisions within a library. Only final row

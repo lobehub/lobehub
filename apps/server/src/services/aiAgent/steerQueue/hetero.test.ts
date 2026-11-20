@@ -102,6 +102,7 @@ beforeEach(() => {
   mocks.boundOperations.mockResolvedValue({ operationIds: ['op-1'], total: 1 });
   mocks.drain.mockResolvedValue([]);
   mocks.findById.mockResolvedValue(undefined);
+  mocks.isRunAlive.mockResolvedValue(true);
   mocks.queryByIds.mockResolvedValue([]);
   mocks.settle.mockResolvedValue(undefined);
   mocks.renew.mockResolvedValue(true);
@@ -344,6 +345,38 @@ describe('takeHeteroSteer', () => {
 
     expect(mocks.settle).toHaveBeenLastCalledWith(scope, expect.any(String));
     expect(mocks.deliveries.size).toBe(0);
+  });
+  // A poll of a killed producer can outlive it (the host does not cancel the
+  // request), and take what the stop just returned. Nothing renews or returns
+  // that hold, so every later send would queue behind it until its lease lapsed.
+  describe('for a run that ended meanwhile', () => {
+    beforeEach(() => {
+      mocks.isRunAlive.mockResolvedValue(false);
+    });
+
+    it('gives the follow-up back instead of holding it', async () => {
+      mocks.drain.mockResolvedValue([followUp('a', 1)]);
+
+      await expect(take()).resolves.toBeUndefined();
+
+      expect(mocks.isRunAlive).toHaveBeenCalledWith(ctx, 'user-1', 'op-1');
+      const [, drainId] = mocks.settle.mock.calls[0];
+      expect(mocks.settle).toHaveBeenLastCalledWith(scope, drainId, ['a']);
+      expect(mocks.deliveries.size).toBe(0);
+    });
+
+    it('gives back a delivery that lapsed back instead of holding it again', async () => {
+      mocks.deliveries.set(
+        'msg-a',
+        JSON.stringify({ content: 'prompt a', drainId: 'old', entryId: 'a', scope }),
+      );
+      mocks.drain.mockResolvedValue([followUp('a', 1)]);
+
+      await expect(take()).resolves.toBeUndefined();
+
+      expect(mocks.settle).toHaveBeenLastCalledWith(scope, expect.any(String), ['a']);
+      expect(mocks.deliveries.size).toBe(0);
+    });
   });
 });
 

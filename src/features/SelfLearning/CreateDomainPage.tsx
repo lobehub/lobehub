@@ -40,6 +40,7 @@ import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
 import { expertiseActions } from '@/store/expertise';
 import { shinyTextStyles } from '@/styles';
+import { densityVars } from '@/styles/densityVars';
 
 import { type AdjustmentTarget, mergeAdjustedBlock } from './createDomainAdjustment';
 import { useCreateDomainDraft } from './useCreateDomainDraft';
@@ -62,14 +63,14 @@ const styles = createStaticStyles(({ css }) => ({
   content: css`
     width: 100%;
     max-width: 960px;
-    padding-block: 16px 96px;
+    padding-block: ${densityVars.cardPadding} 96px;
   `,
   footer: css`
     position: sticky;
     z-index: 2;
     inset-block-end: 0;
 
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     background: ${cssVar.colorBgContainer};
@@ -88,7 +89,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     height: 22px;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     line-height: 22px;
     white-space: nowrap;
@@ -154,13 +155,13 @@ const styles = createStaticStyles(({ css }) => ({
     margin: 0;
     padding-inline: 0;
 
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     line-height: 1.75;
     color: ${cssVar.colorText};
   `,
   seq: css`
     padding-block-start: 8px;
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     color: ${cssVar.colorTextTertiary};
   `,
   title: css`

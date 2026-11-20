@@ -16,6 +16,7 @@ import type {
 } from '@lobechat/heterogeneous-agents/quota';
 import type {
   HeterogeneousAgentModelCatalog,
+  HeteroPermissionMode,
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
@@ -55,6 +56,8 @@ class HeterogeneousAgentService {
     workspaceId?: string;
     imageList?: Array<{ id: string; url: string }>;
     operationId: string;
+    /** Claude Code permission mode (Better Coding Experience lab); absent allows everything. */
+    permissionMode?: HeteroPermissionMode;
     prompt: string;
     /**
      * Replay the session's on-disk transcript instead of spawning the CLI.
@@ -95,6 +98,11 @@ class HeterogeneousAgentService {
   /** Stop one background task of a local Claude Code SDK run. */
   async stopBackgroundTask(sessionId: string, taskId: string) {
     return this.ipc.heterogeneousAgent.stopBackgroundTask({ sessionId, taskId });
+  }
+
+  /** Switch a local Claude Code run's permission mode (Better Coding Experience mode chip). */
+  async setPermissionMode(sessionId: string, mode: HeteroPermissionMode) {
+    return this.ipc.heterogeneousAgent.setPermissionMode({ mode, sessionId });
   }
 
   async stopSession(sessionId: string) {

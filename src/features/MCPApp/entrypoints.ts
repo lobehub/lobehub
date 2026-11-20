@@ -1,5 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import type { McpAppThreadEntry } from '@lobechat/const/mcpApp';
+import { connectorToolIdentifier } from '@lobechat/types';
 import {
   connectorMcpEndpoint,
   type McpEndpointShape,
@@ -7,6 +8,7 @@ import {
 } from '@lobechat/utils/mcpEndpoint';
 
 import { isInstalledPluginAvailableInCurrentEnv } from '@/helpers/toolAvailability';
+import type { RunConnectorRow } from '@/services/runConnectors';
 import { getServerConfigStoreState } from '@/store/serverConfig/store';
 import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 import type { ToolStore } from '@/store/tool/store';
@@ -14,6 +16,9 @@ import type { ToolStore } from '@/store/tool/store';
 export interface AppEntrypoint extends McpAppThreadEntry {
   /** Name of the account it opens as, on a connector holding several. */
   accountName?: string;
+  /** The connector it belongs to, as the agent's configuration names it. */
+  connectorIdentifier?: string;
+  /** Its tool's identifier: the connector row's tool prefix. */
   identifier: string;
   /**
    * The account it opens as, on a connector holding several: an entrypoint's
@@ -66,17 +71,46 @@ export const selectMcpAppEntrypoints = (
   state: ToolStore,
   enabled: boolean,
   agentId?: string,
+  /**
+   * The rows the server listed for the conversation (`connector.listForRun`),
+   * each under its authoritative tool prefix. They are the conversation's
+   * connectors when present: only they hold the owner's personal rows a
+   * private agent's own topic runs.
+   */
+  runRows?: RunConnectorRow[],
 ): AppEntrypoint[] => {
   if (!enabled) return [];
+  // Each row under its tool prefix, as the server names it: a private row is
+  // its own app beside the shared one of its connector, and a row mounted on
+  // the agent keeps its own prefix (only an agent-owned row is bare)
+  const reserved = new Set(state.connectors.map((c) => c.identifier));
+  const prefixOf = (connector: (typeof state.connectors)[number]) =>
+    connectorToolIdentifier(connector, undefined, reserved);
   const identifiers = new Set([
     ...state.installedPlugins.map((plugin) => plugin.identifier),
-    ...state.connectors.map((connector) => connector.identifier),
-    ...(agentId ? (state.agentConnectors[agentId] ?? []) : []).map(
-      (connector) => connector.identifier,
-    ),
+    ...(runRows
+      ? runRows.map((row) => row.toolIdentifier)
+      : [
+          ...state.connectors.map(prefixOf),
+          ...(agentId ? (state.agentConnectors[agentId] ?? []) : []).map(prefixOf),
+        ]),
   ]);
+  // A listed row the local lists also hold reads their copy's tools: a
+  // discovery sync updates those after the listing, so its entries show
+  const localRows = new Map(
+    [...state.connectors, ...(agentId ? (state.agentConnectors[agentId] ?? []) : [])].map(
+      (row) => [row.id, row] as const,
+    ),
+  );
+  const connectorOf = (identifier: string) => {
+    if (!runRows)
+      return connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(state);
+    const row = runRows.find((listed) => listed.toolIdentifier === identifier);
+    const local = row && localRows.get(row.id);
+    return row && local ? { ...row, isEnabled: local.isEnabled, tools: local.tools } : row;
+  };
   return [...identifiers].flatMap((identifier) => {
-    const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(state);
+    const connector = connectorOf(identifier);
     if (connector && !connector.isEnabled) return [];
     const isMcp = connector && (connector.mcpServerUrl || connector.mcpConnectionType === 'stdio');
     const plugin = state.installedPlugins.find((item) => item.identifier === identifier);
@@ -108,10 +142,11 @@ export const selectMcpAppEntrypoints = (
           ? accounts.map((account) => ({
               ...entry,
               accountName: account.name,
+              connectorIdentifier: connector?.identifier ?? identifier,
               identifier,
               linkId: account.id,
             }))
-          : [{ ...entry, identifier }],
+          : [{ ...entry, connectorIdentifier: connector?.identifier ?? identifier, identifier }],
       );
   });
 };

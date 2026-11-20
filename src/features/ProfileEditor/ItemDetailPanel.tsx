@@ -7,8 +7,19 @@ import { useTranslation } from 'react-i18next';
 
 import { useItemDetailStore } from './itemDetailStore';
 
+/** Which connection a tool runs on for this agent. */
+export interface ItemConnection {
+  /** One sentence on what that means for the agent. */
+  desc: string;
+  /** Shown beside the name in the list; left out when the connection is the usual one. */
+  label?: string;
+  title: string;
+}
+
 /** What the side panel shows about one tool, connector or skill. */
 export interface ItemDetail {
+  /** Which connection it runs on, for an item that signs in somewhere. */
+  connection?: ItemConnection;
   description?: string;
   icon: ReactNode;
   identifier: string;
@@ -75,6 +86,15 @@ const ItemDetailDock = memo(() => {
           </Flexbox>
 
           {detail.description ? <Text type={'secondary'}>{detail.description}</Text> : null}
+
+          {detail.connection ? (
+            <Flexbox gap={4}>
+              <Text style={{ fontWeight: 500 }}>{detail.connection.title}</Text>
+              <Text fontSize={12} type={'secondary'}>
+                {detail.connection.desc}
+              </Text>
+            </Flexbox>
+          ) : null}
 
           {detail.tools.length > 0 ? (
             <Flexbox gap={10}>

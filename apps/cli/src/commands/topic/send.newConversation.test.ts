@@ -76,6 +76,8 @@ describe('sending into a new conversation', () => {
 
     expect(client.aiAgent.execAgent.mutate).toHaveBeenCalledWith({
       agentId: 'agt-self',
+      // Opened from inside a conversation: it becomes the new topic's parent.
+      openedByTopicId: 'tpc-here',
       prompt: 'Draft the release notes',
       sourceOperationId: 'op-sender',
       trigger: 'cli',
@@ -89,6 +91,39 @@ describe('sending into a new conversation', () => {
       delivery: 'created',
       operationId: 'op-new',
       topicId: 'tpc-new',
+    });
+  });
+
+  describe('the parent topic', () => {
+    const request = () => client.aiAgent.execAgent.mutate.mock.calls[0][0];
+
+    it('takes --parent-topic-id over the conversation running the command', async () => {
+      await run('topic', 'send', '--new', '-c', 'x', '--parent-topic-id', 'tpc-other');
+
+      expect(request().openedByTopicId).toBe('tpc-other');
+    });
+
+    it('links none with --detach', async () => {
+      await run('topic', 'send', '--new', '-c', 'x', '--detach');
+
+      expect(request()).not.toHaveProperty('openedByTopicId');
+    });
+
+    it('links none outside a conversation', async () => {
+      vi.stubEnv('LOBEHUB_TOPIC_ID', '');
+
+      await run('topic', 'send', '--new', '-c', 'x');
+
+      expect(request()).not.toHaveProperty('openedByTopicId');
+    });
+
+    it('refuses --parent-topic-id with --detach, and both on an existing topic', async () => {
+      await run('topic', 'send', '--new', '-c', 'x', '--detach', '--parent-topic-id', 'tpc-p');
+      expect(errorLogged()).toMatch(/either --parent-topic-id or --detach/);
+
+      await run('topic', 'send', 'tpc-target', '-c', 'x', '--detach');
+      expect(errorLogged()).toMatch(/only apply with --new/);
+      expect(client.aiAgent.execAgent.mutate).not.toHaveBeenCalled();
     });
   });
 

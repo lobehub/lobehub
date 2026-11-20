@@ -171,13 +171,9 @@ vi.mock('@/store/global', () => ({
     }),
 }));
 
-const userStateMock = vi.hoisted(() => ({
-  lab: {} as Record<string, boolean>,
-}));
-
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ preference: { lab: userStateMock.lab }, user: { id: 'self-user' } }),
+    selector({ preference: { lab: {} }, user: { id: 'self-user' } }),
 }));
 
 // The label picker reads the label registry; its own behavior is covered by
@@ -296,11 +292,6 @@ vi.mock('../shared/useAgentVisibility', () => ({
   useAgentVisibility: (agentId?: string) => (agentId === 'agent-private' ? 'private' : undefined),
 }));
 
-/** Flips the Labs toggles the composer still reads. */
-const setLabs = (lab: { enableGoals?: boolean }) => {
-  userStateMock.lab = lab as Record<string, boolean>;
-};
-
 const clearReading = {
   clarifications: [],
   confidence: 'high' as const,
@@ -313,7 +304,6 @@ const clearReading = {
 describe('CreateTaskInlineEntry', () => {
   beforeEach(() => {
     permissionMock.allowed = true;
-    setLabs({});
     analyzeIntentMock.mockReset();
     synthesizeInstructionMock.mockReset();
     // The second reading is the normal path: it rewrites the brief with the
@@ -741,7 +731,6 @@ describe('CreateTaskInlineEntry', () => {
 
   describe('intent recognition', () => {
     beforeEach(() => {
-      setLabs({ enableGoals: true });
       editorMarkdownMock.value = 'Write a project plan';
     });
 

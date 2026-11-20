@@ -90,6 +90,7 @@ const installFromServer = (
   );
 
 interface NextRunOptions {
+  disabledPluginIds?: string[];
   /** Manual skill-activate mode: the run has no activator. */
   manual?: boolean;
   /** The agent's `plugins`; the install pins the MCP on the agent by default. */
@@ -129,7 +130,7 @@ const nextRun = (options: NextRunOptions = {}) =>
       },
     } as never,
     {
-      disabledPluginIds: [],
+      disabledPluginIds: options.disabledPluginIds ?? [],
       globalMemoryEnabled: false,
       hasMentionedAgents: false,
       isFixedDeviceTarget: false,
@@ -248,14 +249,20 @@ describe('resolveOrInstallMarketPlugin — server-side marketplace install', () 
     },
   );
 
-  it('keeps the install out of the run of an agent that has not turned it on', async () => {
+  it('offers an inherited install on demand and honors an explicit opt-out', async () => {
     await installFromServer();
 
     const run = await nextRun({ plugins: [] });
 
-    expect(run.toolManifestMap[IDENTIFIER]).toBeUndefined();
+    expect(run.toolManifestMap[IDENTIFIER]?.api).toEqual([
+      expect.objectContaining({ name: 'fetch' }),
+    ]);
     expect(run.toolsResult.enabledToolIds).not.toContain(IDENTIFIER);
     expect(offeredToolNames(run.tools)).not.toContain(TOOL_NAME);
+
+    const off = await nextRun({ disabledPluginIds: [IDENTIFIER], plugins: [] });
+    expect(off.toolManifestMap[IDENTIFIER]).toBeUndefined();
+    expect(offeredToolNames(off.tools)).not.toContain(TOOL_NAME);
   });
 
   it('refuses a stdio MCP the market does not host, writing nothing', async () => {

@@ -3,6 +3,9 @@ import { createContext, useContext } from 'react';
 
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { isMobileSurface } from '@/utils/mobileSurface';
+
+import { DENSITY_SCALE, type DensityScale } from './densityScale';
 
 export interface ActionSize {
   blockSize: number;
@@ -10,6 +13,10 @@ export interface ActionSize {
 }
 
 export interface DensityTokens {
+  badgeHeight: number;
+  badgeMinWidth: number;
+  cardPadding: number;
+  contentGap: number;
   controlHeight: number;
   fontSize: number;
   gap: number;
@@ -20,9 +27,14 @@ export interface DensityTokens {
   headerHeight: number;
   iconBox: number;
   iconSize: number;
+  largeIconSize: number;
   lineHeight: number;
   listRowHeight: number;
+  modalPadding: number;
   paddingInline: number;
+  pagePaddingBlockEnd: number;
+  pagePaddingBlockStart: number;
+  pagePaddingInline: number;
   pageTitleFontSize: number;
   panelPaddingInline: number;
   radius: number;
@@ -33,18 +45,10 @@ export interface DensityTokens {
   treeItemHeight: number;
 }
 
-type DensityScale = Omit<
-  DensityTokens,
-  | 'headerActionSize'
-  | 'headerActionSmallSize'
-  | 'headerChevronSize'
-  | 'sectionHeaderHeight'
-  | 'treeItemHeight'
-> & {
-  headerIconSize: number;
-  headerSmallIconSize: number;
-};
-
+/**
+ * Adds the sizes the app composes from the raw scale (action hit areas, section
+ * headers, tree rows) so components never re-derive them by hand.
+ */
 const withDerivedTokens = ({
   headerIconSize,
   headerSmallIconSize,
@@ -58,57 +62,41 @@ const withDerivedTokens = ({
   treeItemHeight: scale.controlHeight,
 });
 
-// The px values also live in density.stylex.ts and densityTheme.ts as --lobe-density-* CSS
-// variables, because StyleX only compiles literals; densityParity.test.ts keeps them in step.
+// The px values live in densityScale.ts. The matching --lobe-density-* CSS variables are
+// generated from that file into density.stylex.ts / densityTheme.ts (scripts/densityTokens.mts).
 export const DENSITY_TOKENS: Record<InterfaceDensity, DensityTokens> = {
-  compact: withDerivedTokens({
-    controlHeight: 28,
-    fontSize: 13,
-    gap: 8,
-    headerAvatarSize: 24,
-    headerHeight: 40,
-    headerIconSize: 16,
-    headerSmallIconSize: 14,
-    iconBox: 24,
-    iconSize: 16,
-    lineHeight: 20,
-    listRowHeight: 40,
-    pageTitleFontSize: 14,
-    paddingInline: 4,
-    panelPaddingInline: 6,
-    radius: 6,
-    rowHeight: 32,
-    sectionGap: 12,
-    toolbarHeight: 36,
-  }),
-  loose: withDerivedTokens({
-    controlHeight: 32,
-    fontSize: 14,
-    gap: 8,
-    headerAvatarSize: 28,
-    headerHeight: 44,
-    headerIconSize: 20,
-    headerSmallIconSize: 16,
-    iconBox: 28,
-    iconSize: 18,
-    lineHeight: 22,
-    listRowHeight: 48,
-    pageTitleFontSize: 16,
-    paddingInline: 4,
-    panelPaddingInline: 4,
-    radius: 8,
-    rowHeight: 36,
-    sectionGap: 16,
-    toolbarHeight: 40,
-  }),
+  compact: withDerivedTokens(DENSITY_SCALE.compact),
+  loose: withDerivedTokens(DENSITY_SCALE.loose),
 };
 
-export const useInterfaceDensity = () =>
-  useUserStore(userGeneralSettingsSelectors.interfaceDensity);
+/**
+ * Mobile surfaces always render loose, whatever the stored preference says. Both the
+ * stylesheet attribute and the hooks resolve density through here so they cannot drift.
+ */
+export const resolveEffectiveDensity = (density: InterfaceDensity): InterfaceDensity =>
+  isMobileSurface() ? 'loose' : density;
+
+export const useInterfaceDensity = (): InterfaceDensity => {
+  const density = useUserStore(userGeneralSettingsSelectors.interfaceDensity);
+  return resolveEffectiveDensity(density);
+};
 
 export const useDensityTokens = () => DENSITY_TOKENS[useInterfaceDensity()];
 
-export const PanelDensityContext = createContext<InterfaceDensity | null>(null);
+/**
+ * One density read per component: the numeric scale for props, plus the boolean that
+ * picks between structural style variants.
+ */
+export const useDensity = (): {
+  compact: boolean;
+  density: InterfaceDensity;
+  tokens: DensityTokens;
+} => {
+  const density = useInterfaceDensity();
+  return { compact: density === 'compact', density, tokens: DENSITY_TOKENS[density] };
+};
+
+export const PanelDensityContext = createContext<InterfaceDensity | null | undefined>(undefined);
 
 export const usePanelDensityTokens = (): DensityTokens | null => {
   const density = useContext(PanelDensityContext);

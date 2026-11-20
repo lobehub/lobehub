@@ -43,6 +43,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: transparent;
     box-shadow: none !important;
 
+    html[data-density='compact'] & {
+      font-size: 12px;
+    }
+
     &:hover {
       color: ${cssVar.colorText} !important;
       background: ${cssVar.colorFillTertiary} !important;

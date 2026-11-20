@@ -4,6 +4,12 @@ import { TaskModel } from '@/database/models/task';
 import { TopicModel } from '@/database/models/topic';
 import type { TrashRegisterEntry } from '@/database/models/trash';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
+import { createFileServiceArtboardBlobStore } from '@/server/services/artboard/files';
+import {
+  collectTaskArtboards,
+  deleteTaskArtboardRecords,
+  releaseTaskArtboards,
+} from '@/server/services/artboard/taskCleanup';
 
 import { hasWaitingWorktreeCleanup, topicEntry, WORKTREE_CLEANUP_WAITING_MESSAGE } from './topic';
 import {
@@ -90,12 +96,20 @@ export const taskHandler: TrashHandler = {
     if (hasWaitingWorktreeCleanup(childTopics))
       throw new TrashPurgeBlockedError(WORKTREE_CLEANUP_WAITING_MESSAGE);
 
+    // Read before the purge: the task delete sets `artboards.task_id` to NULL.
+    const artboards = await collectTaskArtboards(ctx, [root.resourceId]);
+    let taskPurged = false;
     await ctx.db.transaction(async (tx) => {
       const db = tx as unknown as typeof ctx.db;
       // FK cascades take dependencies, comments, documents and `task_topics`;
       // subtasks get `parent_task_id = NULL`, as the hard delete always did.
       const purged = await new TaskModel(db, ctx.userId, ctx.workspaceId).purge([root.resourceId]);
       if (purged.length === 0) return;
+      taskPurged = true;
+      await deleteTaskArtboardRecords(
+        { db, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        artboards,
+      );
 
       const topicIds = children
         .filter((child) => child.resourceType === 'topic')
@@ -104,6 +118,12 @@ export const taskHandler: TrashHandler = {
         await new TopicModel(db, ctx.userId, ctx.workspaceId).batchDeleteIncludingTrashed(topicIds);
       }
     });
+    if (taskPurged)
+      await releaseTaskArtboards(
+        ctx,
+        artboards,
+        createFileServiceArtboardBlobStore(() => ctx.fileService),
+      );
   },
   restore: async (ctx, root, children) => {
     const taskModel = new TaskModel(ctx.db, ctx.userId, ctx.workspaceId);

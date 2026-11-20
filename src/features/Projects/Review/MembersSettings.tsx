@@ -10,7 +10,7 @@ import { projectReviewService } from '@/services/projectReview';
 import type { ProjectDetail } from '@/store/project';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import { useDensityTokens } from '@/styles/density';
+import { useDensityTokens, useInterfaceDensity } from '@/styles/density';
 
 import ProjectCreator from '../ProjectCreator';
 import { openAddMemberModal } from './AddMemberModal';
@@ -25,6 +25,7 @@ interface MembersSettingsProps {
 export function MembersSettings({ project }: MembersSettingsProps) {
   const { t } = useTranslation('project');
   const { pageTitleFontSize } = useDensityTokens();
+  const compact = useInterfaceDensity() === 'compact';
   const projectId = project.id;
   const { data, error, mutate } = useProjectMembers(projectId);
   const actorId = useUserStore(userProfileSelectors.userId);
@@ -99,7 +100,7 @@ export function MembersSettings({ project }: MembersSettingsProps) {
       <Block variant="outlined">
         {!creatorHasRole && creatorRow}
         {!members.length && (
-          <Text style={{ padding: '12px 16px' }} type="secondary">
+          <Text style={{ padding: compact ? '8px 16px' : '12px 16px' }} type="secondary">
             {t('review.members.empty')}
           </Text>
         )}

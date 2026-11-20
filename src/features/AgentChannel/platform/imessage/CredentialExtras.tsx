@@ -14,6 +14,7 @@ import { useClientDataSWR } from '@/libs/swr';
 import { imessageKeys } from '@/libs/swr/keys';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { imessageBridgeService } from '@/services/electron/imessageBridge';
+import { densityVars } from '@/styles/densityVars';
 
 import { ChannelPostSaveContext } from '../../PlatformDetail/postSaveContext';
 
@@ -42,7 +43,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   statusCard: css`
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
   `,

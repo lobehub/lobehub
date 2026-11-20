@@ -13,7 +13,7 @@ import AcceptanceCheckInventory from './Checks/AcceptanceCheckInventory';
 import AcceptanceCheckOwnerToolbar from './Checks/AcceptanceCheckOwnerToolbar';
 import { columnStyles } from './columnStyles';
 import AcceptanceDiscussion from './Comments/AcceptanceDiscussion';
-import { commentIdFromHash } from './Comments/anchor';
+import { tabFromHash } from './Comments/anchor';
 import CollaborationRequestBanner from './Comments/CollaborationRequestBanner';
 import { countDiscussionMessages } from './Comments/discussionTimeline';
 import { useAcceptanceComments } from './Comments/hooks';
@@ -75,7 +75,7 @@ export const AcceptanceOverview = ({
   const rounds = data?.rounds ?? [];
   const flowCount = getFlowNodeCount(data?.flows);
   const tab = resolveAcceptanceTab(
-    requestedTab ?? (!embedded && commentIdFromHash(hash) ? 'discussion' : undefined),
+    requestedTab ?? (embedded ? undefined : tabFromHash(hash)),
     flowCount,
     Boolean(flowPlanPhase(rounds.at(-1))),
     md,

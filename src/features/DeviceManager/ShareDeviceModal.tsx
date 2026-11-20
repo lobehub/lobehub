@@ -24,13 +24,14 @@ import { useWorkspaceOptionLabel } from '@/business/client/hooks/useWorkspaceOpt
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
+import { densityVars } from '@/styles/densityVars';
 
 import { refreshDeviceList } from './const';
 import { getDeviceActionErrorMessage } from './deviceActionError';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
-    padding-block: 16px;
+    padding-block: ${densityVars.cardPadding};
     padding-inline: 24px;
   `,
   optionHint: css`

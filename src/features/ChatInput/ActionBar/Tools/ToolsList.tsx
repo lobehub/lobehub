@@ -5,19 +5,24 @@ import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { Fragment, isValidElement, memo } from 'react';
 
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
+
 import { useDetailPopoverState } from '../components/useDetailPopoverState';
 import { useScrollSignal } from './ScrollSignalContext';
 
 const styles = stylex.create({
-  groupLabel: { paddingBlockStart: '12px', paddingBlockEnd: '4px', paddingInline: '12px' },
+  groupLabel: { paddingBlockStart: '10px', paddingBlockEnd: '4px', paddingInline: '10px' },
   item: {
     cursor: 'pointer',
     display: 'flex',
-    gap: '12px',
+    gap: '10px',
     alignItems: 'center',
-    paddingBlock: '8px',
-    paddingInline: '12px',
-    borderRadius: '6px',
+    minHeight: sidebarRow.controlHeight,
+    paddingBlock: '4px',
+    paddingInline: '10px',
+    borderRadius: sidebarRow.radius,
+    fontSize: sidebarRow.textFontSize,
     transition: 'background-color 0.2s',
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
@@ -28,8 +33,8 @@ const styles = stylex.create({
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    width: '24px',
-    height: '24px',
+    width: sidebarRow.iconBox,
+    height: sidebarRow.iconBox,
   },
 });
 
@@ -73,6 +78,7 @@ const RegularItem = memo<{
   item: ToolItemData;
 }>(({ detailPopoverDisabled, item, index }) => {
   const { close, onOpenChange, open } = useDetailPopoverState(detailPopoverDisabled);
+  const { iconSize } = useDensityTokens();
 
   // Close hover popover whenever the surrounding list scrolls — avoids the
   // detail panel hovering in mid-air after its anchor row has moved away.
@@ -82,7 +88,7 @@ const RegularItem = memo<{
     isValidElement(item.icon) ? (
       item.icon
     ) : (
-      <Icon icon={item.icon as any} size={20} />
+      <Icon icon={item.icon as any} size={iconSize} />
     )
   ) : null;
 

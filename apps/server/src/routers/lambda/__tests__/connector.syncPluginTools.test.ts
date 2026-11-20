@@ -70,7 +70,11 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
     vi.clearAllMocks();
 
     connectorModelMock = {
+      create: vi.fn().mockResolvedValue({ id: 'conn-new' }),
       createUnlessIdentifierHeld: vi.fn().mockResolvedValue({ created: { id: 'conn-new' } }),
+      findManageableByIdentifier: vi.fn().mockResolvedValue(null),
+      findScopedByIdentifier: vi.fn().mockResolvedValue(null),
+      isComposioAccountPrivateToTeammate: vi.fn().mockResolvedValue(false),
       queryByIdentifiers: vi.fn().mockResolvedValue([]),
       update: vi.fn(),
     };
@@ -93,6 +97,7 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
       serverDB: {},
       userId: 'user_test',
       workspaceId: workspaceId ?? null,
+      ...(workspaceId && { workspaceRole: 'member' }),
     } as any);
 
   it('returns { connectorId: null } early for customPlugin rows that own an MCP endpoint', async () => {
@@ -198,16 +203,14 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
     // Opening connector details automatically calls syncPluginTools. The old
     // update replaced metadata with display fields only, erasing the account id
     // needed for execution and remote revocation.
-    connectorModelMock.queryByIdentifiers.mockResolvedValue([
-      {
-        id: 'conn-existing',
-        metadata: {
-          composio: activeGmailAuthConfig(),
-          mountedByAgentId: 'agent-1',
-        },
-        userId: 'user_test',
+    connectorModelMock.findManageableByIdentifier.mockResolvedValueOnce({
+      id: 'conn-existing',
+      metadata: {
+        composio: activeGmailAuthConfig(),
+        mountedByAgentId: 'agent-1',
       },
-    ]);
+      userId: 'user_test',
+    });
     pluginModelMock.findById.mockResolvedValueOnce({
       type: 'plugin',
       customParams: {
@@ -258,6 +261,106 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
     expect(connectorModelMock.update).not.toHaveBeenCalled();
     expect(connectorModelMock.createUnlessIdentifierHeld).not.toHaveBeenCalled();
     expect(connectorToolModelMock.upsertMany).not.toHaveBeenCalled();
+  });
+
+  it("leaves the caller's private installed connector as it is", async () => {
+    // The shared-only lookup misses a private row, which upsertConnectorEntry
+    // then refreshes in place: the plugin row's old manifest would go back
+    // over the tools the install synced from the server.
+    connectorModelMock.findScopedByIdentifier.mockResolvedValue({
+      id: 'conn-private-installed',
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://mcp.example.com',
+      sourceType: 'marketplace',
+      userId: 'user_test',
+      visibility: 'private',
+    });
+    pluginModelMock.findById.mockResolvedValueOnce({
+      type: 'plugin',
+      manifest: {
+        api: [{ description: 'Old search', name: 'search', parameters: {} }],
+        meta: { description: 'Old manifest', title: 'Search MCP' },
+      },
+    });
+
+    const result = await callerFor('ws-1').syncPluginTools({ identifier: 'search-mcp' });
+
+    expect(connectorModelMock.findScopedByIdentifier).toHaveBeenCalledWith(
+      'search-mcp',
+      undefined,
+      undefined,
+      'private',
+    );
+    expect(result).toEqual({ connectorId: 'conn-private-installed', toolCount: 0 });
+    expect(connectorModelMock.update).not.toHaveBeenCalled();
+    expect(connectorToolModelMock.upsertMany).not.toHaveBeenCalled();
+  });
+
+  it('refreshes a connector switched to private in place, not through a new shared twin', async () => {
+    // Regression: the lookup saw shared rows only, so refreshing a private
+    // Composio connector created an enabled shared row carrying the same
+    // account from the plugin projection, offering it to every workspace agent.
+    connectorModelMock.findManageableByIdentifier.mockResolvedValueOnce({
+      agentId: null,
+      id: 'conn-private',
+      metadata: { composio: activeGmailAuthConfig() },
+      userId: 'user_test',
+      visibility: 'private',
+    });
+    pluginModelMock.findById.mockResolvedValueOnce({
+      type: 'plugin',
+      customParams: { composio: activeGmailAuthConfig() },
+      manifest: { api: [{ name: 'send' }], meta: { title: 'Gmail' } },
+    });
+
+    const result = await callerFor('ws-1').syncPluginTools({ identifier: 'gmail' });
+
+    expect(connectorModelMock.findManageableByIdentifier).toHaveBeenCalledWith(
+      'gmail',
+      undefined,
+      'ca-gmail',
+    );
+    expect(result).toEqual({ connectorId: 'conn-private', toolCount: 1 });
+    expect(connectorModelMock.create).not.toHaveBeenCalled();
+    expect(connectorModelMock.update).toHaveBeenCalledWith('conn-private', {
+      metadata: expect.objectContaining({ composio: activeGmailAuthConfig() }),
+    });
+  });
+
+  it("never projects a teammate's private Composio account onto a shared row", async () => {
+    // The plugin projection is workspace-wide, so a teammate still reads the
+    // account of a connector its owner made private.
+    connectorModelMock.isComposioAccountPrivateToTeammate.mockResolvedValue(true);
+    pluginModelMock.findById.mockResolvedValue({
+      type: 'plugin',
+      customParams: { composio: activeGmailAuthConfig() },
+      manifest: { api: [{ name: 'send' }], meta: { description: 'Gmail tools', title: 'Gmail' } },
+    });
+
+    // No row of theirs: nothing is created
+    expect(await callerFor('ws-1').syncPluginTools({ identifier: 'gmail' })).toEqual({
+      connectorId: null,
+      toolCount: 0,
+    });
+    expect(connectorModelMock.create).not.toHaveBeenCalled();
+    expect(connectorToolModelMock.upsertMany).not.toHaveBeenCalled();
+
+    // Their own shared row keeps its account; only the display fields refresh
+    connectorModelMock.findManageableByIdentifier.mockResolvedValueOnce({
+      agentId: null,
+      id: 'conn-shared',
+      metadata: { composio: { ...activeGmailAuthConfig(), connectedAccountId: 'ca-shared' } },
+      userId: 'user_test',
+      visibility: 'public',
+    });
+    await callerFor('ws-1').syncPluginTools({ identifier: 'gmail' });
+
+    expect(connectorModelMock.update).toHaveBeenCalledWith('conn-shared', {
+      metadata: {
+        composio: expect.objectContaining({ connectedAccountId: 'ca-shared' }),
+        description: 'Gmail tools',
+      },
+    });
   });
 
   it('also defers when plugin has type=customPlugin AND has a manifest (no half-baked row written)', async () => {
@@ -513,12 +616,21 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
     connectorModelMock = {
       delete: vi.fn().mockResolvedValue(undefined),
       findById: vi.fn(),
+      // The Composio rows below run their own account and no other row does.
+      queryComposioAccountHolders: vi
+        .fn()
+        .mockResolvedValue([
+          { agentId: null, id: 'c-composio', userId: 'user_test', visibility: 'public' },
+        ]),
     };
     agentModelMock = {
       getAgentConfigById: vi.fn(),
       update: vi.fn().mockResolvedValue(undefined),
     };
-    pluginModelMock = { delete: vi.fn().mockResolvedValue(undefined) };
+    pluginModelMock = {
+      deleteComposioMirrors: vi.fn().mockResolvedValue(undefined),
+      deleteComposioProjectionKeepingPrivate: vi.fn().mockResolvedValue(undefined),
+    };
     mocks.connectedAccountsDelete.mockResolvedValue(undefined);
     mocks.removeSubscriptions.mockResolvedValue(undefined);
     vi.mocked(ConnectorModel).mockImplementation(function () {
@@ -623,7 +735,7 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
     await caller().delete({ id: DELETE_ID });
 
     expect(mocks.connectedAccountsDelete).toHaveBeenCalledWith('ca-github');
-    expect(pluginModelMock.delete).toHaveBeenCalledWith('github');
+    expect(pluginModelMock.deleteComposioProjectionKeepingPrivate).toHaveBeenCalledWith('github');
     expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
   });
 
@@ -646,9 +758,42 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
       '[Composio] Failed to delete remote connection:',
       expect.any(Error),
     );
-    expect(pluginModelMock.delete).toHaveBeenCalledWith('gmail');
+    expect(pluginModelMock.deleteComposioProjectionKeepingPrivate).toHaveBeenCalledWith('gmail');
     expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
     warn.mockRestore();
+  });
+
+  it('keeps a teammate’s private account when a row of the caller’s merely names it', async () => {
+    // A connector's metadata is client-written, so a member's own row can name
+    // the account of a teammate's private connector. Deleting the row must not
+    // delete that remote account or the projection rows mirroring it.
+    connectorModelMock.findById.mockResolvedValueOnce({
+      agentId: null,
+      id: 'c-forged',
+      identifier: 'gmail',
+      metadata: { composio: { connectedAccountId: 'ca-mate' } },
+      userId: 'user_test',
+      visibility: 'private',
+    });
+    connectorModelMock.queryComposioAccountHolders.mockResolvedValueOnce([
+      { agentId: null, id: 'c-forged', userId: 'user_test', visibility: 'private' },
+      { agentId: null, id: 'c-mate', userId: 'another-user', visibility: 'private' },
+    ]);
+
+    await connectorRouter
+      .createCaller({
+        serverDB: {},
+        userId: 'user_test',
+        workspaceId: 'ws-1',
+        workspaceRole: 'member',
+      } as any)
+      .delete({ id: DELETE_ID });
+
+    expect(connectorModelMock.queryComposioAccountHolders).toHaveBeenCalledWith('ca-mate');
+    expect(mocks.connectedAccountsDelete).not.toHaveBeenCalled();
+    expect(pluginModelMock.deleteComposioProjectionKeepingPrivate).not.toHaveBeenCalled();
+    expect(pluginModelMock.deleteComposioMirrors).not.toHaveBeenCalled();
+    expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
   });
 
   it('does not call Composio or delete a plugin for an ordinary connector', async () => {
@@ -663,7 +808,7 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
     await caller().delete({ id: DELETE_ID });
 
     expect(mocks.connectedAccountsDelete).not.toHaveBeenCalled();
-    expect(pluginModelMock.delete).not.toHaveBeenCalled();
+    expect(pluginModelMock.deleteComposioProjectionKeepingPrivate).not.toHaveBeenCalled();
     expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
   });
 

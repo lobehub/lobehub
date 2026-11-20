@@ -35,7 +35,8 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import type { ProjectDetail } from '@/store/project';
 import { useProjectStore } from '@/store/project';
-import { useDensityTokens } from '@/styles/density';
+import { useDensityTokens, useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { directoryAgentName } from '../WorkingDirectories/useDirectoryAgent';
 import { openEditMemberModal } from './EditMemberModal';
@@ -46,7 +47,7 @@ const styles = stylex.create({
   agentLink: {
     display: 'flex',
     flex: '1',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
     minWidth: 0,
     color: 'inherit',
@@ -63,6 +64,8 @@ const rowStyle = (index: number) =>
 export function ProjectMemberSettings({ detail }: { detail: ProjectDetail }) {
   const { t } = useTranslation('project');
   const { pageTitleFontSize } = useDensityTokens();
+  const compact = useInterfaceDensity() === 'compact';
+  const rowPaddingBlock = compact ? 8 : 16;
   const [inviteOpen, setInviteOpen] = useState(false);
   const addProjectAgents = useProjectStore((s) => s.addProjectAgents);
   const updateProjectAgent = useProjectStore((s) => s.updateProjectAgent);
@@ -205,7 +208,8 @@ export function ProjectMemberSettings({ detail }: { detail: ProjectDetail }) {
               align="center"
               gap={12}
               key={member.agent.id}
-              padding={16}
+              paddingBlock={rowPaddingBlock}
+              paddingInline={16}
               style={rowStyle(index)}
             >
               <WorkspaceLink
@@ -217,7 +221,7 @@ export function ProjectMemberSettings({ detail }: { detail: ProjectDetail }) {
                   avatar={member.agent.avatar}
                   background={member.agent.backgroundColor ?? undefined}
                   shape={'circle'}
-                  size={36}
+                  size={compact ? 28 : 36}
                   title={name}
                 />
                 <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
@@ -279,7 +283,12 @@ export function ProjectMemberSettings({ detail }: { detail: ProjectDetail }) {
           );
         })}
         {members.length <= 1 && (
-          <Flexbox gap={4} padding={16} style={rowStyle(members.length)}>
+          <Flexbox
+            gap={4}
+            paddingBlock={rowPaddingBlock}
+            paddingInline={16}
+            style={rowStyle(members.length)}
+          >
             <Text type="secondary">{t('members.empty')}</Text>
           </Flexbox>
         )}

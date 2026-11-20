@@ -49,6 +49,8 @@ function store(kind: 'link' | 'legacy' = 'legacy') {
   let queue = Promise.resolve();
   const instance = () => {
     const model = {
+      // Every row here is in the model's own scope
+      forRow: () => model,
       getLinkModel: () => ({
         listByConnectorIds: async () => [
           kind === 'legacy' ? { ...link, credentials: row.credentials, status: row.status } : link,
@@ -98,6 +100,21 @@ afterEach(() => {
 });
 
 describe('OAuth refresh coordination', () => {
+  it("refreshes a row outside the run's scope through the row's own model", async () => {
+    // Regression: a private agent's workspace run resolved its owner's personal
+    // connector; the workspace-scoped model could not write the rotated token.
+    const db = store();
+    const personal = db.instance();
+    const runModel = { forRow: vi.fn(() => personal), update: vi.fn() };
+
+    const fresh = await ensureFreshConnectorToken(db.read(), runModel as unknown as ConnectorModel);
+
+    expect(runModel.forRow).toHaveBeenCalledWith(expect.objectContaining({ id: 'connector' }));
+    expect(runModel.update).not.toHaveBeenCalled();
+    expect(fresh.credentials).toMatchObject({ accessToken: 'fresh' });
+    expect(db.read().credentials).toMatchObject({ accessToken: 'fresh' });
+  });
+
   it('makes one request across two instances and both ways of reading a legacy account', async () => {
     const db = store();
     const stale = db.read();

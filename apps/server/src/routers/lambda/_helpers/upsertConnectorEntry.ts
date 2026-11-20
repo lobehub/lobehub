@@ -15,6 +15,14 @@ import { isWorkspaceNonOwner } from './assertWorkspaceRowManageable';
  * panel, so an existing row created by someone else must not be rewritten by a
  * non-owner caller — the row is returned read-only (`writable: false`) and the
  * caller skips the tool upsert instead of throwing, keeping browsing intact.
+ *
+ * The row is the caller's own in any visibility, so a connector switched to
+ * private is refreshed in place rather than shadowed by a new shared row that
+ * republishes its account to the workspace. The workspace-wide plugin
+ * projection can still carry the Composio account of a teammate's private
+ * connector: that account is never copied onto a row the caller sees, and no
+ * row is created for it (`connectorId: null`). Nor is the projection's account
+ * copied onto a private row: only display fields are refreshed there.
  */
 export async function upsertConnectorEntry(
   ctx: {
@@ -32,11 +40,10 @@ export async function upsertConnectorEntry(
     name: string;
     sourceType: string;
   },
-): Promise<{ connectorId: string; writable: boolean }> {
+): Promise<{ connectorId: string; writable: boolean } | { connectorId: null; writable: false }> {
   const metadata: ConnectorMetadata = {};
   if (params.description) metadata.description = params.description;
   if (params.avatar) metadata.avatar = params.avatar;
-  if (params.composio) metadata.composio = params.composio;
 
   // Viewers keep browse access: they resolve existing rows read-only below,
   // but must never create or rewrite connector state. These bootstrap
@@ -54,18 +61,41 @@ export async function upsertConnectorEntry(
           workspaceId: ctx.workspaceId,
         });
 
-  const refresh = async (row: Pick<DecryptedConnector, 'id' | 'metadata' | 'userId'>) => {
-    const writable = canWrite && (!isWorkspaceNonOwner(ctx) || row.userId === ctx.userId);
+  const accountId = params.composio?.connectedAccountId;
+  const row = await ctx.connectorModel.findManageableByIdentifier(
+    params.identifier,
+    undefined,
+    accountId,
+  );
+  const accountIsTeammatePrivate =
+    !!accountId &&
+    row?.metadata?.composio?.connectedAccountId !== accountId &&
+    (await ctx.connectorModel.isComposioAccountPrivateToTeammate(accountId));
+  // The projection is workspace-wide, so it is no source of truth for a
+  // private row's account: copying its block (with the linker it attributes
+  // the account to) onto a private row whose metadata merely names the same
+  // account id would make the row pass for that member's connection, hiding
+  // the legacy connection from everyone else. A private row's account is
+  // written by its own OAuth connect path only.
+  if (params.composio && !accountIsTeammatePrivate && row?.visibility !== 'private') {
+    metadata.composio = params.composio;
+  }
+
+  const refresh = async (target: Pick<DecryptedConnector, 'id' | 'metadata' | 'userId'>) => {
+    const writable = canWrite && (!isWorkspaceNonOwner(ctx) || target.userId === ctx.userId);
     if (writable) {
       // Preserve runtime-owned metadata (especially Composio account identity)
       // while refreshing display fields from the latest plugin manifest.
-      await ctx.connectorModel.update(row.id, { metadata: { ...row.metadata, ...metadata } });
+      await ctx.connectorModel.update(target.id, {
+        metadata: { ...target.metadata, ...metadata },
+      });
     }
-    return { connectorId: row.id, writable };
+    return { connectorId: target.id, writable };
   };
 
-  const [existing] = await ctx.connectorModel.queryByIdentifiers([params.identifier]);
-  if (existing) return refresh(existing);
+  if (row) return refresh(row);
+
+  if (accountIsTeammatePrivate) return { connectorId: null, writable: false };
 
   if (!canWrite) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'Viewers cannot install connectors' });

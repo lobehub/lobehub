@@ -23,6 +23,7 @@ import {
   AgentManagementRenders,
   AgentManagementStreamings,
 } from '@lobechat/builtin-tool-agent-management/client';
+import { ArtboardInspectors, ArtboardManifest } from '@lobechat/builtin-tool-artboard/client';
 import { AuvIdentifier, AuvInspectors } from '@lobechat/builtin-tool-auv/client';
 import {
   BrowserInspectors,
@@ -192,6 +193,7 @@ import {
   WebhookInterventions,
   WebhookRenders,
 } from '@lobechat/builtin-tool-webhook/client';
+import { WorkIdentifier, WorkInspectors } from '@lobechat/builtin-tool-work/client';
 import {
   createEditLocalFileInspector,
   createReadLocalFileInspector,
@@ -403,6 +405,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [LocalSystemManifest.identifier]: LocalSystemInspectors as Record<string, BuiltinInspector>,
     [McpEventsIdentifier]: McpEventsInspectors,
     [WebhookIdentifier]: WebhookInspectors,
+    [WorkIdentifier]: WorkInspectors,
     [MemoryManifest.identifier]: MemoryInspectors as Record<string, BuiltinInspector>,
     [MessageManifest.identifier]: MessageInspectors as Record<string, BuiltinInspector>,
     [PageAgentManifest.identifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
@@ -414,6 +417,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     >,
     [SkillStoreManifest.identifier]: SkillStoreInspectors as Record<string, BuiltinInspector>,
     [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
+    [ArtboardManifest.identifier]: ArtboardInspectors,
     [CanvasManifest.identifier]: CanvasInspectors,
     [DashboardManifest.identifier]: DashboardInspectors as Record<string, BuiltinInspector>,
     // Dashboard tool calls persisted before the rename to `builtin-dashboard`.

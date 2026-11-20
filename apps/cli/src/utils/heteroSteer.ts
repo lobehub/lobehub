@@ -1,4 +1,5 @@
 // Built-in control commands register themselves when the steer loop loads.
+import './heteroPermissionMode';
 import './heteroStopTask';
 
 import type {

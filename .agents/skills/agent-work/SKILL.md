@@ -15,9 +15,9 @@ Two tables (`packages/database/src/schemas/work.ts`):
 
 ## Type registry
 
-`packages/database/src/models/work/registry.ts` is the single registry of Work types (`document` / `external` / `file` / `task`): `WORK_TYPE_ADAPTERS` is `satisfies Record<WorkType, WorkTypeAdapter>`, so a type added to `@lobechat/types` without an adapter is a compile error.
+`packages/database/src/models/work/registry.ts` is the single registry of Work types (`canvas` / `document` / `external` / `file` / `collection` / `goal_report` / `task`): `WORK_TYPE_ADAPTERS` is `satisfies Record<WorkType, WorkTypeAdapter>`, so a type added to `@lobechat/types` without an adapter is a compile error.
 
-**Read-path compatibility gate**: `OPT_IN_WORK_TYPES` (currently `{'file'}`) hides newer types from clients that did not opt in (`includeFileWorks`). Released Electron clients lag by weeks and crash on unknown type descriptors (`descriptor.getIcon` on `undefined`), so a request without the opt-in receives exactly the pre-`file` set. Any NEW Work type must ship behind the same kind of opt-in.
+**Read-path compatibility gate**: `OPT_IN_WORK_TYPES` (currently `{'canvas', 'file', 'collection'}`) hides newer types from clients that did not opt in (`includeFileWorks`). Released Electron clients lag by weeks and crash on unknown type descriptors (`descriptor.getIcon` on `undefined`), so a request without the opt-in receives exactly the pre-`file` set. Any NEW Work type must ship behind the same kind of opt-in.
 
 The gate has two kinds of emission points, and both must honor the client's declaration:
 
@@ -31,7 +31,7 @@ A share visitor's run executes as the creator, so owner scope alone cannot separ
 - `workOwnership` applies the scope on every path, so a new query built on it inherits the fence. Do not query `works` without it.
 - Any registration path reachable from a visitor run (skill results, completion scans, anchor stamping) must build its `WorkModel` with the run's scope via `resolveRunWorkAccessScope`. A visitor run without a topic yields `null`: skip registration (fail closed) rather than registering unscoped into the creator's lists.
 - The resource unique indexes include the visitor topic id, so the creator and each visitor topic keep separate rows for the same external resource.
-- Visitor read payloads drop the creator's `userId` / `workspaceId` and gate spend on `showModelInfo` (`toVisitorMessage`).
+- Visitor read payloads always drop the creator's `userId` / `workspaceId` and the spend snapshot (`toVisitorMessage`, `sanitizeVisitorWorks`).
 
 ## Orphaned Works (backing resource deleted)
 
@@ -42,7 +42,7 @@ A share visitor's run executes as the creator, so owner scope alone cannot separ
 
 ## Registration write paths
 
-Four write paths, two timing classes:
+Five write paths, two timing classes:
 
 | Path                                                                    | When                                | Where                                                                                                                                                               |
 | ----------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -50,6 +50,19 @@ Four write paths, two timing classes:
 | Shell Work scan (hetero codex/claude-code + device `lobe-local-system`) | at operation completion             | `apps/server/src/services/workRegistration/shellWorkRegistration.ts` via `registerWorksForOperation`                                                                |
 | File Work scan (sandbox entity files)                                   | at operation completion             | `apps/server/src/services/workRegistration/registerWorksForOperation.ts`                                                                                            |
 | Task / document works                                                   | at creation by their owning feature | `WorkModel.registerTask` / `registerDocument`                                                                                                                       |
+| Agent-created files and links (`lh work create\|update\|delete`)        | at the CLI call, during the run     | `work.createAgentWork` / `updateAgentWork` / `deleteAgentWork` → the same-named `WorkModel` methods (`packages/database/src/models/work/agentWork.ts`)              |
+| Agent-created collections and links (`lobe-work` tool)                  | at the tool call, during the run    | `apps/server/src/services/toolExecution/serverRuntimes/work.ts` → the same `WorkModel` methods                                                                      |
+
+### Agent-created Works and `agentEditable`
+
+`works.metadata.agentEditable` is stamped once, when the identity is first registered, and decides whether the agent may change the Work later. `lh work` and the `lobe-work` tool stamp it on everything they create; every other path leaves it unset unless the tool API's manifest `work` config declares `agentEditable: true` (`PluginApiWorkConfig`). Update and delete refuse a Work without the flag, a Work of another user, and a Work no version of which came from the run's conversation; delete also refuses a Work a goal node, delivery or project references (those links cascade from the Work, so deleting it would silently drop them). They handle only file, link and collection Works: a task or document card mirrors its own resource, so rewriting the card title would leave the two disagreeing. `lh work create` also refuses to add a version to an auto-collected Work with the same identity (for example a file path the completion scan already registered). Declare future agent-facing field policy (such as a system-owned price) on the same manifest config instead of special-casing write paths.
+
+- The run is resolved server-side from `operationId` (`resolveAgentWorkRun`): topic, agent and share scope come from the operation row, and versions are stamped with the root of its `parentOperationId` chain so run completion fills their cost; and an operation token needs the `work:write` capability. A desktop-local run has no operation row and cannot use it.
+- The CLI sends only the uploaded file id; size, type and URL come from the file row (`resolveAgentWorkFile`).
+- Links register as external `resourceType: 'link'` with `<userId>:<topicId>:<canonical URL>` as identity (`linkWorkResourceId`), like file Works: the same link again in the same conversation adds a version, while another conversation or workspace member gets a Work of its own. `works.url` holds the URL; `lh work update` never changes it (the identity would then name the old URL), so a new URL is a new Work. GitHub and Linear links are refused because their own paths register them.
+- A `collection` Work (`resourceType: 'collection'`, `col_` resource id) holds an ordered image list in `work_versions.metadata.collection`; every create is a new collection and every update stores the complete list. `works.url` holds the cover URL for list rows. Images must be image files of the run's user (`resolveAgentWorkCollectionItems`), named by the `generationId` image generation lists (resolved through `generations.fileId`), a file id or a `/f/<id>` link. Generated images and run outputs qualify as they are, and in a share visitor run their id must also appear in a tool result (`role = 'tool'`) of the visitor topic; a visitor's own message, an assistant echo or a `lobe-work` refusal does not count. Any other image (the cloud sandbox stores `exportFile` results without a source) qualifies only through the `fileId` in the state of a `lobe-cloud-sandbox` or `lobe-skills` `exportFile` call of the run's topic, never through message text. The item count is checked before any image is resolved.
+- Delete removes the Work row and, through the FK cascade, its versions; the files stay.
+- `rootOperationId` is the run's operation, so the completion lifecycle stamps the display anchor; the card appears after the run completes.
 
 ### Execution-time: skill providers
 

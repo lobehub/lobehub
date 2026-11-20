@@ -10,13 +10,13 @@ import { pluginSelectors } from '@/store/tool/selectors';
 
 import DevModal from '.';
 
-interface PluginEditDrawerProps {
+interface PluginEditModalProps {
   identifier: string;
   onClose: () => void;
   open: boolean;
 }
 
-const PluginEditDrawer = memo<PluginEditDrawerProps>(({ identifier, onClose, open }) => {
+const PluginEditModal = memo<PluginEditModalProps>(({ identifier, onClose, open }) => {
   const { allowed: canEdit } = usePermission('edit_own_content');
   const value = useToolStore(pluginSelectors.getCustomPluginById(identifier), isEqual);
   const [uninstallPlugin, updateCustomPlugin, updateNewCustomPlugin] = useToolStore((s) => [
@@ -49,9 +49,9 @@ const PluginEditDrawer = memo<PluginEditDrawerProps>(({ identifier, onClose, ope
   );
 });
 
-PluginEditDrawer.displayName = 'PluginEditDrawer';
+PluginEditModal.displayName = 'PluginEditModal';
 
-export const openPluginEditDrawer = (identifier: string) =>
+export const openPluginEditModal = (identifier: string) =>
   mountImperative(({ close, open }) => (
-    <PluginEditDrawer identifier={identifier} open={open} onClose={close} />
+    <PluginEditModal identifier={identifier} open={open} onClose={close} />
   ));

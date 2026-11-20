@@ -47,6 +47,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { goalService } from '@/services/goal';
 import { useGoalStore } from '@/store/goal';
 import { shinyTextStyles } from '@/styles';
+import { densityVars } from '@/styles/densityVars';
 
 import GoalAgentPill from '../GoalAgentPill';
 import { buildGoalAgents, buildGoalCreateInput, buildReviewedGoalContent } from './goalConfig';
@@ -64,7 +65,7 @@ const styles = createStaticStyles(({ css }) => ({
   budgetField: css`
     display: grid;
     grid-template-columns: 96px 144px minmax(0, 1fr);
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     min-width: 0;
@@ -80,7 +81,7 @@ const styles = createStaticStyles(({ css }) => ({
     min-height: 0;
     max-height: min(70vh, 680px);
     padding-block: 8px 24px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
   `,
   close: css`
     position: absolute;
@@ -94,7 +95,7 @@ const styles = createStaticStyles(({ css }) => ({
   footer: css`
     flex-shrink: 0;
     padding-block: 8px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   generatingStatus: css`
@@ -108,7 +109,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     height: 22px;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     line-height: 22px;
     white-space: nowrap;
@@ -153,8 +154,8 @@ const styles = createStaticStyles(({ css }) => ({
   head: css`
     position: relative;
     min-height: 0;
-    padding-block: 16px 8px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.cardPadding} 8px;
+    padding-inline: ${densityVars.cardPadding};
   `,
   inputShell: css`
     overflow: hidden;
@@ -171,7 +172,7 @@ const styles = createStaticStyles(({ css }) => ({
   instructionEditor: css`
     min-height: 36px;
     padding-block: 0 4px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     /* EditorCanvas reserves space for its document footer by default. The
        compact review summary has no footer, so keeping that space turns a
@@ -181,7 +182,7 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   reviewSection: css`
-    padding-block: 16px;
+    padding-block: ${densityVars.cardPadding};
 
     &:first-child {
       padding-block: 0 4px;

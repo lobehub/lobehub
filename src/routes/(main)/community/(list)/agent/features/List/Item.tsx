@@ -13,6 +13,7 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useQuery } from '@/hooks/useQuery';
 import { resolveCommunityProfileLink } from '@/routes/(main)/community/(detail)/utils/profileLink';
 import { discoverService } from '@/services/discover';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 import { type AssistantMarketSource, type DiscoverAssistantItem } from '@/types/discover';
 
@@ -35,7 +36,7 @@ const styles = stylex.create({
   secondaryDesc: { fontSize: '12px', color: cssVar.colorTextDescription },
   title: {
     margin: '0',
-    fontSize: '16px',
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
     fontWeight: 500,
     color: { 'default': null, ':hover': cssVar.colorLink },
   },
@@ -63,7 +64,7 @@ const AssistantItem = memo<DiscoverAssistantItem>(
     const navigate = useWorkspaceAwareNavigate();
     const { source } = useQuery() as { source?: AssistantMarketSource };
     const isGroupAgent = type === 'agent-group';
-    const basePath = isGroupAgent ? '/community/group_agent' : '/community/agent';
+    const basePath = isGroupAgent ? '/marketplace/group_agent' : '/marketplace/agent';
     const link = qs.stringifyUrl(
       {
         query: { source },

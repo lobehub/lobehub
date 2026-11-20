@@ -149,6 +149,11 @@ describe('Channel concurrent startup', () => {
     await coordinator(1).advance('channel');
 
     const [params] = execAgent.mock.calls[0];
+    // An ordinary Channel run keeps its own label and runs unattended.
+    expect(params).toMatchObject({
+      trigger: 'channel',
+      userInterventionConfig: { approvalMode: 'headless' },
+    });
     if ('deviceId' in environment) {
       expect(params).toMatchObject({ deviceId: 'dev-2', snapshotFollowsCallerDevice: false });
       expect(params.agentConfigSnapshot.agencyConfig).toEqual({
@@ -271,7 +276,7 @@ describe('Channel concurrent startup', () => {
     await new ChannelCoordinator({ select } as never).advance('channel');
 
     // Outside the channel lock, before the claim resolves the routed device.
-    expect(routedPresence.prefetch).toHaveBeenCalledWith('requester');
+    expect(routedPresence.prefetch).toHaveBeenCalledWith('requester', 'workspace');
     expect(routedPresence.prefetch.mock.invocationCallOrder[0]).toBeLessThan(
       executions.claim.mock.invocationCallOrder[0],
     );
@@ -326,7 +331,9 @@ describe('Channel concurrent startup', () => {
     executions.openingReply.mockResolvedValue('收到，我先翻一下昨天的报错日志。');
     await coordinator(1).advance('channel');
 
-    expect(openChannelReply).toHaveBeenCalledWith(expect.anything(), 'channel', 'job-0');
+    expect(openChannelReply).toHaveBeenCalledWith(expect.anything(), 'channel', 'job-0', {
+      admitShare: expect.any(Function),
+    });
     expect(order).toEqual(['open', 'claim']);
     const [{ prompt }] = execAgent.mock.calls[0];
     expect(prompt).toContain('<channel_opening');
