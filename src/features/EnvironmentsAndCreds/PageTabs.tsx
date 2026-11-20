@@ -14,7 +14,9 @@ interface PageTabsProps {
 /**
  * The two tabs of the Environments & Vault page. They sit at the left of the
  * open tab's header row, beside that tab's own filter and create button, so
- * the page has one header row.
+ * the page has one header row. The tabs fill their parent by default, which
+ * would push those actions onto a second line, so they take only their own
+ * width.
  */
 const PageTabs = memo<PageTabsProps>(({ onChange, value }) => {
   const { t } = useTranslation('setting');
@@ -22,6 +24,7 @@ const PageTabs = memo<PageTabsProps>(({ onChange, value }) => {
   return (
     <Tabs
       activeKey={value}
+      style={{ flex: 'none', width: 'fit-content' }}
       variant={'rounded'}
       items={[
         { key: 'environments', label: t('environmentsAndCreds.tabs.environments') },
