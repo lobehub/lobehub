@@ -207,3 +207,11 @@ Enforcement: both surfaces use the same tool controls; regression tests cover th
 Show GitHub authorization guidance when an import encounters an access error. Keep the source URL in the dialog while the user connects. Offer technical details only when they add diagnostic information beyond the recovery message.
 
 Enforcement: `useGithubSkillImport.test.ts` covers the single access message, retrying discovery after authorization, and retaining the user's selection when an import needs reconnection.
+
+## LOBE-UX-029 — Skill updates use visible status and action labels
+
+In installed skill navigation, show “Update available” as passive text. In the list and detail views, label the action “Update” or “Update skill”. Reserve the refresh icon for checking the source again. A standalone upward arrow in these rows reads as uploading a skill.
+
+In the skill detail header, put the repository, tracking ref, routine sync status and manual check in the GitHub source popover. Keep an available update actionable in the header.
+
+Verify the pending state with tooltips closed. The sidebar should communicate availability, and the list should identify the update action alongside the manage menu. Source: user feedback on the skill update preview.
