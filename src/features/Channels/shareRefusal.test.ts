@@ -2,7 +2,7 @@ import { ChatErrorType } from '@lobechat/types';
 import { TRPCClientError } from '@trpc/client';
 import { describe, expect, it } from 'vitest';
 
-import { contactRequestOutcome, shareRefusalOf } from './shareRefusal';
+import { contactRequestOutcome, shareRefusalOf, withoutShareRefusals } from './shareRefusal';
 
 const owner = { avatar: null, fullName: 'Ada', id: 'owner', username: 'ada' };
 
@@ -75,5 +75,28 @@ describe('contactRequestOutcome', () => {
       }),
     ).toBe('alreadyContact');
     expect(contactRequestOutcome({ error: new Error('network') })).toBeUndefined();
+  });
+});
+
+describe('withoutShareRefusals', () => {
+  const refused = {
+    errorType: ChatErrorType.ShareMessageLimitExceeded,
+    id: 'refused',
+    status: 'failed',
+  };
+  const crashed = { errorType: 'AgentRuntimeError', id: 'crashed', status: 'failed' };
+
+  // A refused reply read both below the visitor's message and again as a failure card.
+  it("leaves a shared Agent's refusals to the notice below the request", () => {
+    expect(withoutShareRefusals({ sharedAgentOwner: owner }, [refused, crashed])).toEqual([
+      crashed,
+    ]);
+  });
+
+  it('keeps every failure card in other conversations', () => {
+    expect(withoutShareRefusals({ sharedAgentOwner: null }, [refused, crashed])).toEqual([
+      refused,
+      crashed,
+    ]);
   });
 });

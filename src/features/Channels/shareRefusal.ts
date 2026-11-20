@@ -18,6 +18,15 @@ export const isShareRefusal = (job: Pick<ChannelPublicJob, 'errorType' | 'status
   job.status === 'failed' && !!job.errorType && Object.hasOwn(SHARE_REFUSALS, job.errorType);
 
 /**
+ * Replies a conversation shows as cards, without the share refusals its request explains below
+ * itself (`ShareRefusalNotice`), so one refusal never reads twice.
+ */
+export const withoutShareRefusals = <Job extends Pick<ChannelPublicJob, 'errorType' | 'status'>>(
+  detail: Pick<ChannelDetail, 'sharedAgentOwner'>,
+  jobs: Job[],
+) => (detail.sharedAgentOwner ? jobs.filter((job) => !isShareRefusal(job)) : jobs);
+
+/**
  * The refusal of a message's reply in a conversation with another person's shared Agent, and
  * the owner whose contact card it offers. Undefined in any other conversation or when the reply
  * did not fail for a share limit.
