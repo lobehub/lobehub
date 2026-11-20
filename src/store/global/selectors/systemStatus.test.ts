@@ -283,6 +283,7 @@ describe('systemStatusSelectors', () => {
         'dashboard',
         'favorites',
         'agent',
+        'channels',
         'recents',
         SIDEBAR_SPACER_ID,
         'pages',
@@ -314,9 +315,12 @@ describe('systemStatusSelectors', () => {
       const s: GlobalState = merge(initialState, {
         status: { sidebarItems: stored },
       });
-      // The former Private section is merged into Agents.
+      // The former Private section is merged into Agents; Channels, saved
+      // before they joined the layout, keep their spot right below Agents.
       expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual(
-        stored.filter((key) => key !== 'private'),
+        stored
+          .filter((key) => key !== 'private')
+          .flatMap((key) => (key === 'agent' ? ['agent', 'channels'] : [key])),
       );
     });
 
@@ -347,6 +351,7 @@ describe('systemStatusSelectors', () => {
         'favorites',
         'recents',
         'agent',
+        'channels',
         SIDEBAR_SPACER_ID,
         'image',
         'community',
@@ -383,6 +388,7 @@ describe('systemStatusSelectors', () => {
         'favorites',
         'recents',
         'agent',
+        'channels',
         SIDEBAR_SPACER_ID,
         'image',
         'community',
@@ -427,9 +433,12 @@ describe('systemStatusSelectors', () => {
       const s: GlobalState = merge(initialState, {
         status: { sidebarItems: stored },
       });
-      // The former Private section is merged into Agents.
+      // The former Private section is merged into Agents; Channels, saved
+      // before they joined the layout, keep their spot right below Agents.
       expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual(
-        stored.filter((key) => key !== 'private'),
+        stored
+          .filter((key) => key !== 'private')
+          .flatMap((key) => (key === 'agent' ? ['agent', 'channels'] : [key])),
       );
     });
 
@@ -444,17 +453,32 @@ describe('systemStatusSelectors', () => {
       expect(items).toContain('community');
       expect(items).toContain('resource');
       expect(items).toContain('memory');
-      // accordion block is flush against the spacer, in stored order
-      expect(items[spacerIdx - 2]).toBe('agent');
-      expect(items[spacerIdx - 1]).toBe('recents');
+      // accordion block is flush against the spacer, in stored order, with
+      // Channels kept right below Agents
+      expect(items.slice(spacerIdx - 3, spacerIdx)).toEqual(['agent', 'channels', 'recents']);
       // missing top-group defaults slot in just before the accordion
-      expect(items.indexOf('tasks')).toBeLessThan(spacerIdx - 2);
+      expect(items.indexOf('tasks')).toBeLessThan(spacerIdx - 3);
       expect(items.indexOf('project')).toBe(items.indexOf('goals') + 1);
-      expect(items.indexOf('resource')).toBeLessThan(spacerIdx - 2);
+      expect(items.indexOf('resource')).toBeLessThan(spacerIdx - 3);
       // missing bottom-group defaults sit after the spacer
       expect(items.indexOf('image')).toBeGreaterThan(spacerIdx);
       // Pages live in Docs now; the retired entry is not backfilled
       expect(items).not.toContain('pages');
+    });
+
+    it('should keep Channels where the user moved them in the accordion block', () => {
+      const s: GlobalState = merge(initialState, {
+        status: { sidebarItems: ['channels', 'favorites', 'recents', 'agent', SIDEBAR_SPACER_ID] },
+      });
+      const items = systemStatusSelectors.sidebarItems(null)(s);
+      const spacerIdx = items.indexOf(SIDEBAR_SPACER_ID);
+      expect(items.slice(spacerIdx - 4, spacerIdx)).toEqual([
+        'channels',
+        'favorites',
+        'recents',
+        'agent',
+      ]);
+      expect(items.filter((key) => key === 'channels')).toHaveLength(1);
     });
 
     it('should migrate legacy `sidebarSectionOrder` accordion order into the default layout', () => {
@@ -472,6 +496,7 @@ describe('systemStatusSelectors', () => {
         'resource',
         'favorites',
         'agent',
+        'channels',
         'recents',
         SIDEBAR_SPACER_ID,
         'image',
@@ -495,6 +520,7 @@ describe('systemStatusSelectors', () => {
         'favorites',
         'recents',
         'agent',
+        'channels',
         SIDEBAR_SPACER_ID,
         'image',
         'community',
