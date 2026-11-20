@@ -7,6 +7,7 @@ import {
   type WorkVersionCumulativeUsage,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import debug from 'debug';
 import pMap from 'p-map';
 import { z } from 'zod';
 
@@ -23,12 +24,15 @@ import { createCanvasStorageService, isOwnCanvasManifestKey } from '@/server/ser
 import { deleteCanvas } from '@/server/services/canvas/delete';
 import {
   AgentWorkRunError,
+  bindTopicPullRequestWake,
   isBetterCodingExperienceEnabled,
+  isTopicPullRequestListed,
   linkPushedPullRequests,
   linkTopicPullRequest,
   listTopicPullRequestsWithStatus,
   parsePullRequestUrl,
   registerShellWorksForLocalRun,
+  releaseTopicPullRequestWake,
   resolveAgentWorkFile,
   resolveAgentWorkRun,
   resolveShellPullRequestLinking,
@@ -40,6 +44,8 @@ import {
   assertCanViewTopicTargets,
 } from './_helpers/conversationResourceGuard';
 import { batchResolveAgentIdFromSessions } from './_helpers/resolveContext';
+
+const log = debug('lobe-lambda-router:work');
 
 const topicGuardCtx = (ctx: {
   serverDB: LobeChatDatabase;
@@ -578,9 +584,19 @@ export const workRouter = router({
 
   // Better Coding Experience: keep a PR on the topic itself — found on the
   // topic's own branch at run end (`branch`), or pasted by the person
-  // (`manual`). A topic link only drives the topic's PR lists: unlike a Work
-  // row it is never read by the SCM links, so a client-named PR cannot make a
-  // merge accept a delivery or a CI failure wake the agent.
+  // (`manual`). Both are real links, so once the topic lists the PR it also
+  // becomes the conversation the PR's CI failures and reviews wake, through
+  // the same fill-only backfill a Work registration does. The client named
+  // the PR, so the server decides on its own facts (see
+  // `bindTopicPullRequestWake`):
+  // - only a row an installation tracks; no row means no Auto-fix (`noApp`);
+  // - only the linking person's own row, in the scope they link from: a
+  //   pasted URL of someone else's PR cannot point its wakes, run as that
+  //   PR's owner, at the paster's conversation;
+  // - only an empty slot: an acceptance's or a Work's conversation stays,
+  //   and the next provider event that resolves one replaces the link's.
+  // A topic link is still never read by the SCM links themselves, so it
+  // cannot make a merge accept a delivery.
   linkTopicPullRequest: workProcedure
     .use(withScopedPermission('topic:update'))
     .input(
@@ -604,20 +620,47 @@ export const workRouter = router({
       if (!(await isBetterCodingExperienceEnabled(ctx.serverDB, ctx.userId))) {
         return { identifier: parsed.identifier, linked: false };
       }
-      const linked = await linkTopicPullRequest(ctx.topicModel, input.topicId, {
+      const links = await linkTopicPullRequest(ctx.topicModel, input.topicId, {
         ...(input.headRefName ? { headRefName: input.headRefName } : {}),
         identifier: parsed.identifier,
         source: input.source,
         ...(input.title ? { title: input.title } : {}),
         url: parsed.url,
-        // The person vouches for what they link by hand.
+        // The person vouches for what they link by hand. This only lets the
+        // list offer merge / close; Auto-fix is fenced on its own below.
         vouched: input.source === 'manual' ? true : !!input.vouched,
       });
-      return { identifier: parsed.identifier, linked };
+      // A branch match on a PR removed by hand keeps it removed: no wake either.
+      if (isTopicPullRequestListed(links, parsed.identifier)) {
+        // The link is what the person asked for; Auto-fix is a side effect
+        // that must not fail it.
+        try {
+          const wake = await bindTopicPullRequestWake({
+            db: ctx.serverDB,
+            pr: parsed,
+            scope: { userId: ctx.userId, workspaceId: ctx.workspaceId ?? null },
+            topicId: input.topicId,
+            topicModel: ctx.topicModel,
+          });
+          log(
+            'topic %s linked %s (%s): wake %s',
+            input.topicId,
+            parsed.identifier,
+            input.source,
+            wake,
+          );
+        } catch (error) {
+          log('binding %s to topic %s failed: %O', parsed.identifier, input.topicId, error);
+        }
+      }
+      return { identifier: parsed.identifier, linked: links !== null };
     }),
 
   // Better Coding Experience: remove a PR from the topic's lists (or bring it
-  // back). Its Work rows stay; only the topic's view of them changes.
+  // back). Its Work rows stay. Removing it also releases the Auto-fix
+  // conversation this topic's own link set; one an acceptance or a Work set
+  // stays, since the next provider event would only resolve it again.
+  // Bringing a PR back is a list change only: Link a PR again to re-bind.
   setTopicPullRequestDismissed: workProcedure
     .use(withScopedPermission('topic:update'))
     .input(
@@ -629,13 +672,24 @@ export const workRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await assertCanUseTopicTargets(topicGuardCtx(ctx), [input.topicId]);
-      return {
-        updated: await setTopicPullRequestDismissed(
-          ctx.topicModel,
-          input.topicId,
-          input.identifier,
-          input.dismissed,
-        ),
-      };
+      const updated = await setTopicPullRequestDismissed(
+        ctx.topicModel,
+        input.topicId,
+        input.identifier,
+        input.dismissed,
+      );
+      if (updated && input.dismissed) {
+        const [repoFullName, number] = input.identifier.split('#');
+        try {
+          await releaseTopicPullRequestWake({
+            db: ctx.serverDB,
+            pr: { number: Number(number), repoFullName },
+            topicId: input.topicId,
+          });
+        } catch (error) {
+          log('releasing %s from topic %s failed: %O', input.identifier, input.topicId, error);
+        }
+      }
+      return { updated };
     }),
 });

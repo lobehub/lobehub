@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  isTopicPullRequestListed,
   linkTopicPullRequest,
   parsePullRequestUrl,
   setTopicPullRequestDismissed,
@@ -47,8 +48,11 @@ describe('linkTopicPullRequest', () => {
   it('adds a link and brings a removed PR back', async () => {
     const topicModel = createTopicModel({ dismissed: ['a/b#1'] });
 
-    expect(await linkTopicPullRequest(topicModel as any, 't1', link(1))).toBe(true);
+    const links = await linkTopicPullRequest(topicModel as any, 't1', link(1));
 
+    // Resolves to what is now stored, so the caller can tell the PR is listed.
+    expect(links).toEqual(topicModel.row.metadata.pullRequests);
+    expect(isTopicPullRequestListed(links, 'A/B#1')).toBe(true);
     expect(topicModel.row.metadata.pullRequests.dismissed).toBeUndefined();
     expect(topicModel.row.metadata.pullRequests.links).toEqual([
       expect.objectContaining({ identifier: 'a/b#1', source: 'manual', vouched: true }),
@@ -62,8 +66,11 @@ describe('linkTopicPullRequest', () => {
     expect(manual.updateMetadata).not.toHaveBeenCalled();
 
     const removed = createTopicModel({ dismissed: ['A/B#2'] });
-    await linkTopicPullRequest(removed as any, 't1', link(2, 'branch'));
+    const after = await linkTopicPullRequest(removed as any, 't1', link(2, 'branch'));
     expect(removed.updateMetadata).not.toHaveBeenCalled();
+    // Saved (nothing to change), but not on the list: nothing may bind Auto-fix to it.
+    expect(after).toEqual({ dismissed: ['A/B#2'] });
+    expect(isTopicPullRequestListed(after, 'a/b#2')).toBe(false);
   });
 
   it('retries against a write that landed in between', async () => {
@@ -76,7 +83,7 @@ describe('linkTopicPullRequest', () => {
       };
     });
 
-    expect(await linkTopicPullRequest(topicModel as any, 't1', link(1))).toBe(true);
+    expect(await linkTopicPullRequest(topicModel as any, 't1', link(1))).not.toBeNull();
     expect(topicModel.row.metadata.pullRequests.links.map((l: any) => l.identifier)).toEqual([
       'a/b#9',
       'a/b#1',
@@ -85,7 +92,7 @@ describe('linkTopicPullRequest', () => {
 
   it('writes nothing for a topic the caller cannot read', async () => {
     const topicModel = { findById: vi.fn(async () => undefined), updateMetadata: vi.fn() };
-    expect(await linkTopicPullRequest(topicModel as any, 't1', link(1))).toBe(false);
+    expect(await linkTopicPullRequest(topicModel as any, 't1', link(1))).toBeNull();
     expect(topicModel.updateMetadata).not.toHaveBeenCalled();
   });
 });
@@ -100,5 +107,23 @@ describe('setTopicPullRequestDismissed', () => {
     await setTopicPullRequestDismissed(topicModel as any, 't1', 'A/B#1', false);
     expect(topicModel.row.metadata.pullRequests.dismissed).toBeUndefined();
     expect(topicModel.row.metadata.pullRequests.links).toHaveLength(1);
+  });
+});
+
+describe('isTopicPullRequestListed', () => {
+  it('needs a link of the topic and no removal, compared case-insensitively', () => {
+    const linked = {
+      identifier: 'a/b#1',
+      linkedAt: 'x',
+      source: 'manual' as const,
+      url: 'u',
+      vouched: true,
+    };
+    expect(isTopicPullRequestListed({ links: [linked] }, 'A/B#1')).toBe(true);
+    expect(isTopicPullRequestListed({ dismissed: ['a/B#1'], links: [linked] }, 'a/b#1')).toBe(
+      false,
+    );
+    expect(isTopicPullRequestListed({ links: [linked] }, 'a/b#2')).toBe(false);
+    expect(isTopicPullRequestListed(null, 'a/b#1')).toBe(false);
   });
 });

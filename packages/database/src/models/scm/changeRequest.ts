@@ -520,6 +520,15 @@ export class ScmChangeRequestModel {
         workId: pick(links.workId, inherited?.workId),
       };
 
+      // A topic link holds the conversation only until something better
+      // names one. Once this event resolved a conversation itself, or the
+      // conversation changed under the marker, the binding is no longer the
+      // link's: removing the PR from that topic must not clear it.
+      const heldByLink = existing?.metadata?.topicLink;
+      if (heldByLink && (links.topicId || linkValues.topicId !== heldByLink.topicId)) {
+        snapshot.metadata.topicLink = undefined;
+      }
+
       // Both link sources below are resolved before this transaction opens, so
       // an unlink may have committed in between. Writing the acceptance anyway
       // would put back a binding the user removed, and a later merge would
@@ -706,6 +715,75 @@ export class ScmChangeRequestModel {
           : eq(scmChangeRequests.workspaceId, params.scope.workspaceId),
       ),
     );
+  };
+
+  /**
+   * Make `topicId` the conversation a topic link wakes: the topic kept this
+   * pull request on its own list (branch match or Link a PR), and the row is
+   * the linking person's own in the scope they linked from. Fill-only — a
+   * conversation already set (by an acceptance, a Work, or another topic's
+   * link) is never replaced — and both conditions ride inside the UPDATE, so
+   * a concurrent ingest that fills or re-routes the row wins. Records which
+   * topic's link wrote it, so {@link releaseTopicFromLink} undoes exactly
+   * that. Returns the row when this call took the slot.
+   */
+  static claimTopicFromLink = async (
+    db: LobeChatDatabase,
+    id: string,
+    scope: { userId: string; workspaceId?: string | null },
+    topicId: string,
+  ): Promise<ScmChangeRequestItem | null> => {
+    const marker = sql`${JSON.stringify({
+      topicLink: { at: new Date().toISOString(), topicId },
+    })}::jsonb`;
+    const [row] = await db
+      .update(scmChangeRequests)
+      .set({
+        metadata: sql`${scmChangeRequests.metadata} || ${marker}`,
+        topicId,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(scmChangeRequests.id, id),
+          isNull(scmChangeRequests.topicId),
+          eq(scmChangeRequests.userId, scope.userId),
+          scope.workspaceId
+            ? eq(scmChangeRequests.workspaceId, scope.workspaceId)
+            : isNull(scmChangeRequests.workspaceId),
+        ),
+      )
+      .returning();
+    return row ?? null;
+  };
+
+  /**
+   * Undo {@link claimTopicFromLink}: clear the conversation, but only while
+   * it is still the one `topicId`'s link wrote. A conversation an event
+   * resolved since (the marker is dropped then) is left alone. `true` when
+   * the row was released.
+   */
+  static releaseTopicFromLink = async (
+    db: LobeChatDatabase,
+    id: string,
+    topicId: string,
+  ): Promise<boolean> => {
+    const rows = await db
+      .update(scmChangeRequests)
+      .set({
+        metadata: sql`${scmChangeRequests.metadata} - 'topicLink'`,
+        topicId: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(scmChangeRequests.id, id),
+          eq(scmChangeRequests.topicId, topicId),
+          sql`${scmChangeRequests.metadata} -> 'topicLink' ->> 'topicId' = ${topicId}`,
+        ),
+      )
+      .returning({ id: scmChangeRequests.id });
+    return rows.length > 0;
   };
 
   /**
