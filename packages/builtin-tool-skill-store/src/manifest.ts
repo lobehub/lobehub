@@ -54,6 +54,22 @@ export const SkillStoreManifest: BuiltinToolManifest = {
     },
     {
       description:
+        "Check what a LobeHub Market skill needs before installing it, read from the skill's own files instead of its author-written description: the credential environment variables (API keys, tokens) it reads or tells the user to set, other environment variables its scripts read, and the network hosts its scripts contact. Read-only; installs nothing. Call it before recommending a skill from search results and before importFromMarket.",
+      name: SkillStoreApiName.inspectSkill,
+      parameters: {
+        properties: {
+          identifier: {
+            description:
+              'The unique identifier of the skill in the market, from searchSkill results or a `lobehub.com/skills/{identifier}` URL.',
+            type: 'string',
+          },
+        },
+        required: ['identifier'],
+        type: 'object',
+      },
+    },
+    {
+      description:
         'Import/install a skill directly from the LobeHub Market using its identifier. This is the recommended way to install skills from the market after searching with searchSkill. The skill will be downloaded and installed automatically. Requires user confirmation before installation.',
       humanIntervention: 'required',
       name: SkillStoreApiName.importFromMarket,

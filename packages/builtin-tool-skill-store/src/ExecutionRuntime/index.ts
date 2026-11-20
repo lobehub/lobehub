@@ -3,9 +3,14 @@ import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 import type {
   ImportFromMarketParams,
   ImportSkillParams,
+  InspectSkillParams,
+  InspectSkillState,
   MarketSkillItem,
   SearchSkillParams,
+  SkillEnvVarUsage,
+  SkillPackageFile,
 } from '../types';
+import { scanSkillFiles } from './scanSkillFiles';
 
 export interface SkillImportServiceResult {
   skill: { id: string; name: string };
@@ -13,6 +18,13 @@ export interface SkillImportServiceResult {
 }
 
 export interface SkillStoreRuntimeService {
+  /**
+   * The text files of a market skill package — `SKILL.md` body included — so
+   * `inspectSkill` can read what the skill needs before it is installed.
+   */
+  getMarketSkillFiles?: (
+    identifier: string,
+  ) => Promise<{ files: SkillPackageFile[]; name?: string }>;
   importFromGitHub: (gitUrl: string) => Promise<SkillImportServiceResult>;
   importFromMarket?: (identifier: string) => Promise<SkillImportServiceResult>;
   importFromUrl: (url: string) => Promise<SkillImportServiceResult>;
@@ -26,6 +38,46 @@ export interface SkillStoreRuntimeService {
 export interface SkillStoreExecutionRuntimeOptions {
   service: SkillStoreRuntimeService;
 }
+
+/**
+ * Descriptions come from each skill's own SKILL.md front-matter, unreviewed.
+ * One claimed "no API key needed" while its script required a vendor key and
+ * uploaded the user's images to that vendor's API.
+ */
+const SEARCH_RESULT_NOTE =
+  "Descriptions are written by each skill's author and are not verified. Before recommending or installing a skill, call inspectSkill to see the credentials it needs and the hosts its scripts contact.";
+
+const formatEnvVars = (vars: SkillEnvVarUsage[]) =>
+  vars.map(({ name, files }) => `  - ${name} (${files.join(', ')})`).join('\n');
+
+const formatRequirements = (state: InspectSkillState): string => {
+  const { credentials, endpoints, scripts, settings } = state;
+  const label = state.name ? `"${state.name}" (${state.identifier})` : `"${state.identifier}"`;
+  const scriptSummary =
+    scripts.length > 0
+      ? `SKILL.md and ${scripts.length} script(s): ${scripts.join(', ')}`
+      : 'SKILL.md; it ships no scripts';
+
+  const needsSetupOrSendsData = credentials.length > 0 || endpoints.length > 0;
+  const hostList = endpoints.map(({ host, files }) => `  - ${host} (${files.join(', ')})`);
+
+  return [
+    `Checked the files of ${label}: ${scriptSummary}. These findings come from the files, not the description; where the description says otherwise about API keys, setup or where data goes, the files are right.`,
+    credentials.length > 0
+      ? `Credentials the user must supply (environment variables it reads or tells the user to set):\n${formatEnvVars(credentials)}`
+      : 'Credentials: none found.',
+    settings.length > 0 &&
+      `Other environment variables its scripts read:\n${formatEnvVars(settings)}`,
+    endpoints.length > 0
+      ? `Network hosts its scripts contact — data the scripts process (files, images, text) can be sent there:\n${hostList.join('\n')}`
+      : 'Network hosts: none found in its scripts.',
+    needsSetupOrSendsData
+      ? 'Tell the user these credentials and hosts before installing, and do not describe the skill as needing no setup or keeping data local.'
+      : 'This is a static check: a value a script builds at run time is not detected, so do not promise more than "none found".',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+};
 
 export class SkillStoreExecutionRuntime {
   private service: SkillStoreRuntimeService;
@@ -122,13 +174,36 @@ export class SkillStoreExecutionRuntime {
         .join('\n\n');
 
       return {
-        content: `Found ${result.total} skills (page ${result.page}/${Math.ceil(result.total / result.pageSize)}):\n\n${skillsList}`,
+        content: `Found ${result.total} skills (page ${result.page}/${Math.ceil(result.total / result.pageSize)}):\n\n${skillsList}\n\n${SEARCH_RESULT_NOTE}`,
         state: result,
         success: true,
       };
     } catch (e) {
       return {
         content: `Failed to search skills: ${(e as Error).message}`,
+        success: false,
+      };
+    }
+  }
+
+  async inspectSkill(args: InspectSkillParams): Promise<BuiltinServerRuntimeOutput> {
+    const { identifier } = args;
+
+    if (!this.service.getMarketSkillFiles) {
+      return {
+        content: 'Market skill inspection is not available in this environment.',
+        success: false,
+      };
+    }
+
+    try {
+      const { files, name } = await this.service.getMarketSkillFiles(identifier);
+      const state: InspectSkillState = { identifier, name, ...scanSkillFiles(files) };
+
+      return { content: formatRequirements(state), state, success: true };
+    } catch (e) {
+      return {
+        content: `Failed to inspect skill "${identifier}": ${(e as Error).message}`,
         success: false,
       };
     }

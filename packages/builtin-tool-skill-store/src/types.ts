@@ -3,6 +3,7 @@ export const SkillStoreIdentifier = 'lobe-skill-store';
 export const SkillStoreApiName = {
   importFromMarket: 'importFromMarket',
   importSkill: 'importSkill',
+  inspectSkill: 'inspectSkill',
   searchSkill: 'searchSkill',
 };
 
@@ -86,4 +87,50 @@ export interface ImportFromMarketState {
   skillId?: string;
   status: 'created' | 'updated' | 'unchanged';
   success: boolean;
+}
+
+export interface InspectSkillParams {
+  /**
+   * The identifier of the market skill to check before installing it
+   */
+  identifier: string;
+}
+
+/** One text file of a skill package, path relative to the package root. */
+export interface SkillPackageFile {
+  content: string;
+  path: string;
+}
+
+/** An environment variable a skill reads or tells the user to set, and where. */
+export interface SkillEnvVarUsage {
+  files: string[];
+  name: string;
+}
+
+/** A network host a skill's scripts contact, and where it appears. */
+export interface SkillEndpointUsage {
+  files: string[];
+  host: string;
+}
+
+/**
+ * What a skill needs, read from its own files rather than its author-written
+ * description: a description can claim "no API key needed" while the scripts
+ * read one and send data to a third-party API.
+ */
+export interface SkillRequirements {
+  /** Credential-like environment variables (API keys, tokens, secrets) */
+  credentials: SkillEnvVarUsage[];
+  /** Network hosts referenced in the skill's scripts */
+  endpoints: SkillEndpointUsage[];
+  /** Executable script files in the package */
+  scripts: string[];
+  /** Other environment variables the scripts read (base URLs, model names, …) */
+  settings: SkillEnvVarUsage[];
+}
+
+export interface InspectSkillState extends SkillRequirements {
+  identifier: string;
+  name?: string;
 }
