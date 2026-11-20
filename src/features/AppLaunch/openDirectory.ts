@@ -5,8 +5,8 @@ import { projectWorkingDirectoryService } from '@/services/projectWorkingDirecto
 import {
   type BoundDirectoryLike,
   normalizeComparablePath,
-  pickDirectoryForPath,
   pickLatestTopic,
+  resolveDirectoryMatch,
 } from './openDirectorySelection';
 
 export interface OpenDirectoryResult {
@@ -28,21 +28,24 @@ export interface OpenDirectoryResult {
  * sidebar "+" does, so a stray launch never leaves an empty topic behind.
  */
 export const openDirectoryInApp = async ({
-  deviceId,
+  getDeviceId,
   navigate,
   reuseExisting = true,
   targetPath,
 }: {
-  /** The desktop device this launch came from; matches are limited to it. */
-  deviceId?: string;
+  /** Polled until known: device identity arrives after the renderer boots. */
+  getDeviceId: () => string | undefined;
   navigate: (path: string) => void;
   /** `false` for `lh app --new-window`: stage a fresh conversation instead. */
   reuseExisting?: boolean;
   targetPath: string;
 }): Promise<OpenDirectoryResult> => {
   const target = normalizeComparablePath(targetPath);
-  const { data: directories } = await projectWorkingDirectoryService.list();
-  const match = pickDirectoryForPath(directories ?? [], target, { deviceId });
+  const match = await resolveDirectoryMatch({
+    getDeviceId,
+    list: async () => (await projectWorkingDirectoryService.list()).data,
+    targetPath: target,
+  });
 
   if (!match) {
     console.warn(`[openDirectory] No project directory is bound to ${target}`);

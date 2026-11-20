@@ -31,8 +31,10 @@ vi.mock('@/features/AppLaunch/openDirectory', () => ({
   openDirectoryInApp: openDirectoryInAppMock,
 }));
 
+const getStateMock = vi.hoisted(() => vi.fn(() => ({ gatewayDeviceInfo: { deviceId: 'device-local' } })));
+
 vi.mock('@/store/electron', () => ({
-  useElectronStore: (selector: any) => selector({ gatewayDeviceInfo: { deviceId: 'device-local' } }),
+  useElectronStore: Object.assign(() => undefined, { getState: getStateMock }),
 }));
 
 vi.mock('@/utils/electron/ipc', () => ({
@@ -106,7 +108,7 @@ describe('DesktopNavigationBridge', () => {
     emitOpenDirectory({ newWindow: false, path: '/repo' });
 
     expect(openDirectoryInAppMock).toHaveBeenCalledWith({
-      deviceId: DEVICE_ID,
+      getDeviceId: expect.any(Function),
       navigate: navigateMock,
       reuseExisting: true,
       targetPath: '/repo',
@@ -120,7 +122,7 @@ describe('DesktopNavigationBridge', () => {
 
     // `--new-window` means "do not take over the conversation I already have".
     expect(openDirectoryInAppMock).toHaveBeenCalledWith({
-      deviceId: DEVICE_ID,
+      getDeviceId: expect.any(Function),
       navigate: navigateMock,
       reuseExisting: false,
       targetPath: '/repo',
@@ -133,5 +135,18 @@ describe('DesktopNavigationBridge', () => {
     render(<DesktopNavigationBridge />);
 
     expect(clientReadyMock).toHaveBeenCalled();
+  });
+
+  it('reads the device id lazily instead of snapshotting it at mount', () => {
+    // On a cold start the launch replays before the identity resolves.
+    render(<DesktopNavigationBridge />);
+
+    emitOpenDirectory({ newWindow: false, path: '/repo' });
+
+    const { getDeviceId } = openDirectoryInAppMock.mock.calls[0][0];
+    // Nothing is read at mount; the getter answers when the resolver asks.
+    expect(getStateMock).not.toHaveBeenCalled();
+    expect(getDeviceId()).toBe(DEVICE_ID);
+    expect(getStateMock).toHaveBeenCalled();
   });
 });
