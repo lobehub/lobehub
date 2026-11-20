@@ -2,8 +2,14 @@ import { ImageGenerationIdentifier } from '@lobechat/builtin-tool-image-generati
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { VideoGenerationIdentifier } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
+import { isOnDemandBuiltinTool } from '@lobechat/builtin-tools';
 import { getConnectorCatalog } from '@lobechat/const';
-import { parsePluginEntry, resolveToolMode, upsertPluginMode } from '@lobechat/types';
+import {
+  parsePluginEntry,
+  resolveToolMode,
+  setBuiltinPluginMode,
+  upsertPluginMode,
+} from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
 import { Avatar, confirmModal, Icon, Popover, Tag, Tooltip } from '@lobehub/ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
@@ -26,7 +32,7 @@ import { useTranslation } from 'react-i18next';
 
 import { buildAgentProfileTabPath } from '@/features/AgentProfileTabs/tabOptions';
 import { useConnectorConfigure } from '@/features/Connectors/CustomConnectorModal/useConnectorConfigure';
-import { openPluginEditDrawer } from '@/features/PluginDevModal/imperative';
+import { openPluginEditModal } from '@/features/PluginDevModal/imperative';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { usePermission } from '@/hooks/usePermission';
@@ -145,9 +151,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const { allowed: canEdit } = usePermission('edit_own_content');
   const list = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
   const uninstallPluginRow = usePluginRowUninstall();
-  const [removeComposioConnection, uninstallBuiltinTool, deleteConnector] = useToolStore((s) => [
+  const [removeComposioConnection, deleteConnector] = useToolStore((s) => [
     s.removeComposioConnection,
-    s.uninstallBuiltinTool,
     s.deleteConnector,
   ]);
   const checked = useAgentStore(agentByIdSelectors.getAgentPluginsById(agentId), isEqual);
@@ -210,12 +215,16 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         const pinMediaTool =
           mode === 'auto' && (id === ImageGenerationIdentifier || id === VideoGenerationIdentifier);
         await updateAgentConfig({
-          plugins: upsertPluginMode(
-            plugins,
-            id,
-            pinMediaTool ? 'pinned' : mode,
-            mode === 'auto' && !discoverBuiltins ? 'disabled' : resolveImplicitMode(id, optInIds),
-          ),
+          plugins: isOnDemandBuiltinTool(id)
+            ? setBuiltinPluginMode(plugins, id, pinMediaTool ? 'pinned' : mode)
+            : upsertPluginMode(
+                plugins,
+                id,
+                pinMediaTool ? 'pinned' : mode,
+                mode === 'auto' && !discoverBuiltins
+                  ? 'disabled'
+                  : resolveImplicitMode(id, optInIds),
+              ),
         });
       }
     },
@@ -790,10 +799,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
 
         return createManagedSkillItem({
           badge: <Icon icon={Wrench} size={12} />,
-          deleteConfig: {
-            displayName: title,
-            onDelete: () => uninstallBuiltinTool(item.identifier),
-          },
           extraTag: officialTag,
           icon,
           id: item.identifier,
@@ -802,7 +807,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           title,
         });
       }),
-    [filteredBuiltinList, t, createManagedSkillItem, uninstallBuiltinTool],
+    [filteredBuiltinList, t, createManagedSkillItem],
   );
 
   // Search and memory expose their own settings alongside the on/off choice.
@@ -906,7 +911,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   );
 
   // Distinguish community plugins and custom plugins.
-  // Whitelist `type === 'plugin'` (matching /settings/skill) so connected
+  // Whitelist `type === 'plugin'` (matching /marketplace/skill/installed) so connected
   // integrations (Composio/LobeHub Skill gateway plugins with other sources like
   // 'self'/'builtin') don't leak in here and duplicate the brand-icon items
   // already rendered under the LobeHub group.
@@ -951,7 +956,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     return createManagedSkillItem({
       badge: isMcp ? <Icon icon={McpIcon} size={12} /> : undefined,
       configureConfig: isCustom
-        ? { onConfigure: () => openPluginEditDrawer(item.identifier) }
+        ? { onConfigure: () => openPluginEditModal(item.identifier) }
         : undefined,
       deleteConfig: {
         displayName: title,

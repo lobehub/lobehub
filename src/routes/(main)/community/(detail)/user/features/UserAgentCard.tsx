@@ -131,7 +131,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
     const link = qs.stringifyUrl(
       {
         query: { source: 'new' },
-        url: urlJoin('/community/agent', identifier),
+        url: urlJoin('/marketplace/agent', identifier),
       },
       { skipNull: true },
     );
@@ -140,7 +140,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
     const isUnderReview = isValidated === false;
 
     const handleViewDetail = useCallback(() => {
-      window.open(urlJoin('/community/agent', identifier), '_blank');
+      window.open(urlJoin('/marketplace/agent', identifier), '_blank');
     }, [identifier]);
 
     const handleEdit = useCallback(async () => {

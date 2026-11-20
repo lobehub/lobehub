@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { createAgentSkillStoreModal } from '@/features/AgentSkillStore';
+import { MARKETPLACE_INSTALLED_CONNECTORS_PATH } from '@/features/Marketplace/paths';
 import { useItemDetailStore } from '@/features/ProfileEditor/itemDetailStore';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
@@ -15,7 +16,7 @@ import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 
 /** Where the library lists the agent's own connections, opened on one of them. */
 export const ownConnectionSettingsPath = (connectorId: string) =>
-  `/settings/connector?open=${encodeURIComponent(`agent-connector:${connectorId}`)}`;
+  `${MARKETPLACE_INSTALLED_CONNECTORS_PATH}?open=${encodeURIComponent(`agent-connector:${connectorId}`)}`;
 
 /**
  * A Composio connection is an account held by Composio; a copy would point two connections at

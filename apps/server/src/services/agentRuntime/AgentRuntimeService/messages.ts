@@ -72,6 +72,7 @@ export async function queryUiMessages(
   const isShareVisitorRun = !!workAccessScope;
   // `file` Works stay out of the push unless the receiving client declared
   // it renders them: released desktop builds crash on the unknown type.
+  const includeArtboardWorks = agentState?.host?.acceptsArtboardWorks === true;
   const includeFileWorks = isShareVisitorRun || agentState?.host?.acceptsFileWorks === true;
 
   try {
@@ -79,6 +80,7 @@ export async function queryUiMessages(
       {
         agentId,
         groupId,
+        ...(includeArtboardWorks && { includeArtboardWorks: true }),
         ...(includeFileWorks && { includeFileWorks: true }),
         ...(options?.skipCompressedMembers && { skipCompressedMembers: true }),
         skipWorks: options?.skipWorks,

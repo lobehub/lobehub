@@ -1,7 +1,5 @@
-import { isDesktop } from '@lobechat/const';
-import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type LobeToolCustomPlugin } from '@lobechat/types';
-import { Button, confirmModal, Drawer, Flexbox, toast, useResponsive } from '@lobehub/ui';
+import { Button, confirmModal, Flexbox, Modal, toast } from '@lobehub/ui';
 import { useForm, useWatch } from '@lobehub/ui/form';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +13,6 @@ import {
   type DevModalOAuthPlan,
   planOAuthSave,
 } from './oauthSavePlan';
-import PluginPreview from './PluginPreview';
 import { pruneHiddenFields } from './pruneHiddenFields';
 import { getSaveErrorToast } from './saveErrorToast';
 
@@ -69,7 +66,6 @@ const DevModal = memo<DevModalProps>(
 
     const [submitting, setSubmitting] = useState(false);
 
-    const { mobile } = useResponsive();
     const form = useForm<LobeToolCustomPlugin>({
       initialValues: INITIAL_VALUES,
       onSubmit: async (values) => {
@@ -158,14 +154,11 @@ const DevModal = memo<DevModalProps>(
       if (mode === 'create' && !open) form.reset(INITIAL_VALUES);
     }, [open]);
 
-    const buttonStyle = mobile ? { flex: 1 } : { margin: 0 };
-
     const footer = (
       <Flexbox horizontal flex={1} gap={12} justify={'space-between'}>
         {isEditMode ? (
           <Button
             danger
-            style={buttonStyle}
             onClick={() =>
               confirmModal({
                 cancelText: t('cancel', { ns: 'common' }),
@@ -187,67 +180,56 @@ const DevModal = memo<DevModalProps>(
         )}
         <Flexbox horizontal gap={12}>
           <Button
-            style={buttonStyle}
             onClick={() => {
               onOpenChange(false);
             }}
           >
             {t('cancel', { ns: 'common' })}
           </Button>
-          <Button
-            loading={submitting}
-            style={buttonStyle}
-            type={'primary'}
-            onClick={handlePrimaryClick}
-          >
-            {t(isEditMode ? 'dev.update' : 'dev.save')}
+          <Button loading={submitting} type={'primary'} onClick={handlePrimaryClick}>
+            {t(isEditMode ? 'dev.update' : 'dev.addConnector')}
           </Button>
         </Flexbox>
       </Flexbox>
     );
 
+    // A centered dialog, not a full-height sheet: the form is a handful of
+    // fields with the advanced ones folded, so it keeps the page it was opened
+    // from in view. The body scrolls; the footer stays put.
     return (
-      <Drawer
-        containerMaxWidth={'auto'}
+      <Modal
         footer={footer}
-        height={isDesktop ? `calc(100vh - ${TITLE_BAR_HEIGHT}px)` : '100vh'}
+        keyboard={!submitting}
+        maskClosable={!submitting}
         open={open}
-        placement={'bottom'}
-        push={false}
-        title={t(isEditMode ? 'dev.title.skillSettings' : 'dev.title.create')}
-        width={mobile ? '100%' : 800}
+        title={t(isEditMode ? 'dev.title.connectorSettings' : 'dev.title.createConnector')}
+        width={640}
         styles={{
-          bodyContent: {
-            height: '100%',
-            padding: 0,
-          },
+          body: { maxHeight: 'calc(100dvh - 200px)', overflowY: 'auto' },
         }}
-        onClose={() => {
+        onCancel={() => {
           onOpenChange(false);
         }}
       >
+        {/* React events bubble through the portal: keep form clicks away from
+            the row or menu that opened the dialog. */}
         <Flexbox
-          horizontal
-          gap={0}
-          height={'100%'}
+          gap={16}
           onClick={(e) => {
             e.stopPropagation();
           }}
         >
-          <Flexbox flex={3} gap={16} padding={24} style={{ overflowY: 'auto' }}>
-            <MCPManifestForm
-              enableDeviceBinding={enableDeviceBinding}
-              enableOAuth={enableOAuth}
-              form={form}
-              isEditMode={isEditMode}
-              oauthNotice={oauthPlan.notice}
-              privateConnector={privateConnector}
-              onAuthorizeOAuth={oauthPlan.authorize ? runOAuthFlow : undefined}
-            />
-          </Flexbox>
-          <PluginPreview form={form} />
+          <MCPManifestForm
+            enableDeviceBinding={enableDeviceBinding}
+            enableOAuth={enableOAuth}
+            form={form}
+            isEditMode={isEditMode}
+            oauthNotice={oauthPlan.notice}
+            privateConnector={privateConnector}
+            onAuthorizeOAuth={oauthPlan.authorize ? runOAuthFlow : undefined}
+          />
         </Flexbox>
-      </Drawer>
+      </Modal>
     );
   },
 );

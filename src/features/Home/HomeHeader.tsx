@@ -1,9 +1,10 @@
-import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { createStaticStyles, cx, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import AgentSelect from './AgentSelect';
 import { getGreetingKey } from './greeting';
@@ -24,11 +25,17 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 22px;
     line-height: 1.4;
     letter-spacing: -0.01em;
+
+    html[data-density='compact'] & {
+      font-size: 20px;
+    }
   `,
-  toolbar: css`
-    width: 100%;
-    min-width: 0;
-    min-height: 48px;
+  /* The nav header floats over the scroll area, so the page padding alone would
+     tuck the switcher right under it; clear the header by one section gap. */
+  dashboard: css`
+    padding-block-start: calc(
+      ${densityVars.headerHeight} + ${densityVars.sectionGap} - ${densityVars.pagePaddingBlockStart}
+    );
   `,
 }));
 
@@ -47,18 +54,11 @@ const HomeHeader = memo<HomeHeaderProps>(({ centered }) => {
     : t(`dashboard.greeting.${greetingKey}Guest`);
 
   return (
-    // Minimal mode keeps the full layout's stacking order — the switcher names
-    // who speaks, the greeting answers below — but drops the toolbar chrome and
-    // its 48px lane, so the pair reads as one compact block flush with the
-    // composer. The layout's lift math (MINIMAL_LIFT) counts on these heights.
-    <Flexbox className={styles.root} gap={centered ? 8 : 16} justify={'center'}>
-      {centered ? (
-        <AgentSelect />
-      ) : (
-        <Flexbox horizontal align={'center'} className={styles.toolbar}>
-          <AgentSelect />
-        </Flexbox>
-      )}
+    // The switcher names who speaks and the greeting answers right below it, so
+    // the pair reads as one block. The minimal layout's lift math (MINIMAL_LIFT)
+    // counts on these heights.
+    <Flexbox className={cx(styles.root, !centered && styles.dashboard)} gap={8} justify={'center'}>
+      <AgentSelect />
       <Text as={'h1'} className={styles.greeting} weight={600}>
         {greeting}
       </Text>

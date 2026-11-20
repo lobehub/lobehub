@@ -7,8 +7,6 @@ import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useGoalStore } from '@/store/goal';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import { goalIdFromPath } from './usePendingGoalClarifications';
 
@@ -75,10 +73,9 @@ export const selectIslandGoalItems = (
 
 /** Goal gates and sign-offs the island should ask, oldest first. */
 export const usePendingGoalDecisions = (): IslandGoalItem[] => {
-  const enabled = useUserStore(labPreferSelectors.enableGoals);
   const { allowed: canAnswer } = usePermission('create_content');
   const useFetchPendingForIsland = useGoalStore((s) => s.useFetchPendingForIsland);
-  const { data } = useFetchPendingForIsland(enabled && canAnswer);
+  const { data } = useFetchPendingForIsland(canAnswer);
   const { pathname } = useLocation();
   const portalGoalId = useChatStore(chatPortalSelectors.goalPortalId);
 

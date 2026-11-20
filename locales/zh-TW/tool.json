@@ -115,7 +115,7 @@
   "connector.error.stdioDesktopOnly": "Stdio 連接器只能在桌面應用程式中同步。請打開 LobeHub 桌面版以同步此連接器。",
   "connector.kind.agent": "Agent 連接器",
   "connector.kind.builtin": "內建工具",
-  "connector.kind.community": "社群工具",
+  "connector.kind.community": "市場工具",
   "connector.kind.custom": "自訂連接器",
   "connector.kind.oauth": "OAuth 連接器",
   "connector.manageOnlyCreator": "只有創建者或工作區擁有者可以管理此連接器",

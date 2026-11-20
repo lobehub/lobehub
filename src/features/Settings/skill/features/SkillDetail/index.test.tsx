@@ -228,6 +228,17 @@ describe('SkillDetail', () => {
     mocks.toolState.lobehubSkillServers = [];
   });
 
+  it.each([true, false])(
+    'shows no library install action on a bundled skill detail (previously installed: %s)',
+    (installed) => {
+      const identifier = 'lobe-artifacts';
+      mocks.toolState.installedBuiltinIds = installed ? [identifier] : [];
+      render(<SkillDetail identifier={identifier} type="builtin-skill" />);
+      expect(screen.getByText(identifier)).toBeInTheDocument();
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    },
+  );
+
   it('offers a Configure migration action for an un-migrated legacy custom MCP', async () => {
     // Legacy `user_installed_plugins` custom MCP with an mcp config but no
     // matching `user_connectors` row → the panel should surface the migration

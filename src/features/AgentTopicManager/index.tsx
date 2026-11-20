@@ -8,6 +8,7 @@ import {
 import { Flexbox } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import TopicsSkeleton from '@/components/Skeleton/Topics';
@@ -29,6 +30,7 @@ import Toolbar from './Toolbar';
 import TopicGrid from './TopicGrid';
 import TopicListView from './TopicListView';
 import type { StatusFilter } from './types';
+import { parseTriggerParam, TOPICS_TRIGGER_PARAM } from './urlState';
 import { useShareVisitors } from './useShareVisitors';
 import {
   agentGroupChannels,
@@ -98,6 +100,24 @@ const AgentTopicManager = memo(() => {
   useEffect(() => {
     reset();
   }, [activeAgentId, reset]);
+
+  // A link that names a source (`?trigger=share` from the sidebar's Visitors section) picks only
+  // that source. Declared after the reset so it lands on top of it, then dropped from the URL so a
+  // later agent switch or reload keeps the page's own filters.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedTrigger = parseTriggerParam(searchParams.get(TOPICS_TRIGGER_PARAM));
+  useEffect(() => {
+    if (!searchParams.has(TOPICS_TRIGGER_PARAM)) return;
+    if (linkedTrigger) setTriggers([linkedTrigger]);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete(TOPICS_TRIGGER_PARAM);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [linkedTrigger, searchParams, setSearchParams, setTriggers]);
 
   const { error, isHydrated, isValidating, revalidate } = useFetchAgentTopicsView(true, {
     agentId: activeAgentId,
@@ -359,7 +379,7 @@ const AgentTopicManager = memo(() => {
                   onRetry={shareVisitors.retry}
                 />
               ) : (
-                <ShareVisitorSection conversations={visibleShareVisitors} />
+                <ShareVisitorSection agentId={activeAgentId} conversations={visibleShareVisitors} />
               )}
               {totalAfterFilter === 0 ? null : viewMode === 'card' ? (
                 <TopicGrid

@@ -10,7 +10,6 @@ import Advanced from '../advanced';
 import APIKey from '../apikey';
 import Appearance from '../appearance';
 import Automations from '../automations';
-import Connector from '../connector';
 import Creds from '../creds';
 import Devices from '../devices';
 import Environments from '../environments';
@@ -27,7 +26,6 @@ import Provider from '../provider';
 import Proxy from '../proxy';
 import Security from '../security';
 import ServiceModel from '../service-model';
-import Skill from '../skill';
 import Stats from '../stats';
 import Storage from '../storage';
 import SubscriptionAccounts from '../subscription-accounts';
@@ -64,8 +62,6 @@ export const componentMap = {
   [SettingsTabs.OAuthApps]: OAuthApps,
   [SettingsTabs.Creds]: Creds,
   [SettingsTabs.Security]: Security,
-  [SettingsTabs.Skill]: Skill,
-  [SettingsTabs.Connector]: Connector,
   [SettingsTabs.Automations]: Automations,
   [SettingsTabs.Webhooks]: Webhooks,
   [SettingsTabs.Tools]: Tools,

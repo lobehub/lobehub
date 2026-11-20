@@ -6,10 +6,13 @@ import { knowledgeBaseRuntime } from '../knowledgeBase';
 
 const mocks = vi.hoisted(() => ({
   createDocument: vi.fn(),
+  findKnowledgeBase: vi.fn(),
   getAgentAssignedKnowledge: vi.fn(),
   getEnabledKnowledgeBaseIds: vi.fn(),
   getEnabledKnowledgeBaseIdsForTask: vi.fn(),
+  getDocumentById: vi.fn(),
   semanticSearchForChat: vi.fn(),
+  updateDocumentFromInput: vi.fn(),
 }));
 
 vi.mock('@/database/models/agent', () => ({
@@ -28,14 +31,22 @@ vi.mock('@/database/models/project', () => ({
 }));
 
 vi.mock('@/database/models/file', () => ({ FileModel: vi.fn() }));
-vi.mock('@/database/models/knowledgeBase', () => ({ KnowledgeBaseModel: vi.fn() }));
+vi.mock('@/database/models/knowledgeBase', () => ({
+  KnowledgeBaseModel: vi.fn().mockImplementation(function () {
+    return { findById: mocks.findKnowledgeBase };
+  }),
+}));
+vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn() }));
 vi.mock('@/database/repositories/knowledge', () => ({ KnowledgeRepo: vi.fn() }));
 vi.mock('@/server/services/document', () => ({
   DocumentService: vi.fn().mockImplementation(function () {
-    return { createDocument: mocks.createDocument };
+    return { createDocument: mocks.createDocument, getDocumentById: mocks.getDocumentById };
   }),
 }));
 vi.mock('@/server/services/file', () => ({ FileService: vi.fn() }));
+vi.mock('@/server/services/document/writeFlow', () => ({
+  updateDocumentFromInput: mocks.updateDocumentFromInput,
+}));
 
 vi.mock('@/server/services/knowledgeBase', () => ({
   KnowledgeBaseSearchService: vi.fn().mockImplementation(function () {
@@ -146,5 +157,50 @@ describe('knowledgeBaseRuntime createDocument', () => {
         title: 'Launch checklist',
       }),
     );
+  });
+});
+
+describe('knowledgeBaseRuntime updateDocument', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getDocumentById.mockResolvedValue({
+      fileType: 'custom/document',
+      id: 'docs_1',
+      knowledgeBaseId: 'kb_product',
+      title: 'Launch checklist',
+    });
+    mocks.findKnowledgeBase.mockResolvedValue({ id: 'kb_product', name: 'Product' });
+    mocks.updateDocumentFromInput.mockResolvedValue({ historyAppended: true, id: 'docs_1' });
+  });
+
+  it('writes through the shared document write flow as an agent edit', async () => {
+    const result = await createRuntime({
+      operationId: 'op_step',
+      rootOperationId: 'op_root',
+    }).updateDocument({ content: '- ship it\n- announce\n', documentId: 'docs_1' });
+
+    expect(result.success).toBe(true);
+    expect(result.state).toEqual({ id: 'docs_1' });
+    expect(mocks.updateDocumentFromInput).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user_alice' }),
+      {
+        content: '- ship it\n- announce\n',
+        history: { agentId: 'agt_research', operationId: 'op_root' },
+        id: 'docs_1',
+        parentId: undefined,
+        saveSource: 'llm_call',
+        title: undefined,
+        writeSource: 'agent',
+      },
+    );
+  });
+
+  it('does not write when the document belongs to an inaccessible knowledge base', async () => {
+    mocks.findKnowledgeBase.mockResolvedValue(undefined);
+
+    const result = await createRuntime().updateDocument({ documentId: 'docs_1', title: 'x' });
+
+    expect(result.success).toBe(false);
+    expect(mocks.updateDocumentFromInput).not.toHaveBeenCalled();
   });
 });

@@ -476,6 +476,7 @@ const normalizeQueuedEditorData = (message: QueuedMessage): Record<string, any> 
 };
 
 const mergeQueuedEditorData = (messages: QueuedMessage[]): Record<string, any> | undefined => {
+  if (!messages.some((message) => message.editorData?.root)) return undefined;
   const mergedChildren: any[] = [];
   let baseRoot: Record<string, any> | undefined;
 

@@ -46,8 +46,6 @@ const wrapper = ({ children }: PropsWithChildren) =>
   );
 
 const skill = (name: string): ProjectSkillItem => ({
-  fileCount: 1,
-  files: ['SKILL.md'],
   name,
   path: `/repo/.agents/skills/${name}/SKILL.md`,
   previewRoot: '/repo',

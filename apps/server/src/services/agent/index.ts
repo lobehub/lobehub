@@ -128,7 +128,7 @@ export class AgentService {
    * Validate the effective selection at configuration boundaries, including inherited defaults.
    *
    * Returns the resolved selection to pin, or `undefined` when there is nothing to check.
-   * A Claude Code / Codex agent is exempt (`isAgentShareModelRestrictionExempt`): it runs on the
+   * A locally executed CLI agent (Claude Code, Codex, …) is exempt (`isAgentShareModelRestrictionExempt`): it runs on the
    * creator's device and calls none of `provider`'s models. The decision reads the effective
    * driver, the stored one merged with the patch, so switching back to LobeHub
    * (`heterogeneousProvider: null`) is checked as usual, and a real provider saved next to the

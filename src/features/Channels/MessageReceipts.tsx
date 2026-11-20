@@ -21,6 +21,7 @@ const RECEIPT_ERROR_KEYS = {
   [ChatErrorType.ShareHeteroDeviceUnavailable]: 'receipt.errorShareHeteroDevice',
   [ChatErrorType.ShareHeterogeneousAgentUnsupported]: 'receipt.errorShareHeteroUnsupported',
   [ChatErrorType.ShareMessageLimitExceeded]: 'receipt.errorShareMessageLimit',
+  [ChatErrorType.SharePromptTooLong]: 'receipt.errorSharePromptTooLong',
   [ChatErrorType.ShareSpendLimitExceeded]: 'receipt.errorShareSpendLimit',
 } as const;
 

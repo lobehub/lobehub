@@ -37,6 +37,7 @@ import task from './references/task.md';
 import topic from './references/topic';
 import trace from './references/trace';
 import webhook from './references/webhook';
+import work from './references/work';
 import workspace from './references/workspace';
 
 export { LobeHubIdentifier };
@@ -79,6 +80,7 @@ export const LobeHubSkill: BuiltinSkill = {
     'references/topic': topic,
     'references/trace': trace,
     'references/webhook': webhook,
+    'references/work': work,
     'references/workspace': workspace,
   }),
 };

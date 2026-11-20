@@ -105,6 +105,7 @@ import {
   shouldHydrateResumeReplay,
 } from './resumeReplay';
 import { buildLobeHubSessionEnv } from './sessionEnv';
+import { createShellWorkScan } from './shellWorkScan';
 import {
   createSubagentStoreDispatcher,
   type SubagentStoreDispatcher,
@@ -813,6 +814,12 @@ export const executeHeterogeneousAgent = async (
     createMessage: messageService.createMessage,
     flush: messageWriteBatcher.flush,
   });
+  const shellWorkScan = createShellWorkScan({
+    persist: pendingCreateLedger.ensureParentPersisted,
+    refresh: workService.refreshConversation,
+    register: workService.registerShellWorksForRun,
+    topicId: context.topicId,
+  });
 
   /**
    * Retry each failed row create, then each stashed main-assistant patch, once.
@@ -1500,6 +1507,7 @@ export const executeHeterogeneousAgent = async (
           });
           toolMsgIdByCallId.set(x.payload.id, x.toolMessageId);
           mainToolCallIds.add(x.payload.id);
+          shellWorkScan.track(x.payload.id, intent.assistantMessageId, x.payload.arguments);
           createClientRow(x.toolMessageId, toolMsg, { operationId });
         }
 
@@ -1532,6 +1540,7 @@ export const executeHeterogeneousAgent = async (
           intent.pluginState,
         );
         const toolMsgId = toolMsgIdByCallId.get(intent.toolCallId);
+        shellWorkScan.resolve(intent.toolCallId, toolMsgId, intent.isError);
         if (toolMsgId && mainToolCallIds.has(intent.toolCallId)) {
           const update: Partial<UIChatMessage> = { content: intent.content };
           if (intent.pluginState) (update as any).pluginState = intent.pluginState;
@@ -2238,36 +2247,11 @@ export const executeHeterogeneousAgent = async (
               status: 'completed',
             });
 
-            // Shell Work scan for this LOCAL run: no server operation exists, so
-            // the completion-time scan (`registerWorksForOperation`) can never
-            // fire — report the run's persisted tool message ids to the server,
-            // which replays the same scan (gh CLI → github Work cards) under a
-            // synthetic anchor-derived rootOperationId. Best-effort and
-            // idempotent server-side; a failure only costs the card, never the
-            // run. Mirrors the gateway path's error-skip: only clean completions
-            // scan. Capped to the server's input limit — a >500-tool run keeps
-            // its most recent calls, which are the ones that own trailing
-            // create/edit output.
-            const toolMessageIds = [...new Set(toolMsgIdByCallId.values())].slice(-500);
-            // Topicless runs can't scan: the server validates the anchor against
-            // the claimed topic, and a card has no conversation to render in.
-            if (toolMessageIds.length > 0 && mainState.currentAssistantId && context.topicId) {
-              try {
-                const scan = await workService.registerShellWorksForRun({
-                  anchorMessageId: mainState.currentAssistantId,
-                  messageIds: toolMessageIds,
-                  topicId: context.topicId,
-                });
-                if (scan.registered > 0) {
-                  // Re-pull the message list so the anchor's fresh
-                  // `metadata.work.rootOperationId` (and its works payload)
-                  // renders without a manual refresh.
-                  await workService.refreshConversation(context.topicId);
-                }
-              } catch (err) {
-                console.error('[HeterogeneousAgent] Failed to register shell works:', err);
-              }
-            }
+            // Shell Work scan for this LOCAL run (no server operation exists to
+            // run it); see `createShellWorkScan`. Only clean completions scan.
+            await shellWorkScan.complete(mainState.currentAssistantId, [
+              ...new Set(toolMsgIdByCallId.values()),
+            ]);
           }
         });
       },

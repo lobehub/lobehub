@@ -12,7 +12,7 @@ import type {
   ContactUserProfile,
   ContactWorkspace,
 } from '@lobechat/types';
-import { channelMessageDeletedAt, contactCardOf } from '@lobechat/types';
+import { agentDisplayName, channelMessageDeletedAt, contactCardOf } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import type { SQLWrapper } from 'drizzle-orm';
 import { and, desc, eq, exists, inArray, isNotNull, isNull, not, or, sql } from 'drizzle-orm';
@@ -64,6 +64,7 @@ const agentProfileColumns = {
   agentBackgroundColor: agents.backgroundColor,
   agentDescription: agents.description,
   agentId: agents.id,
+  agentName: agents.name,
   agentSlug: agents.slug,
   agentTitle: agents.title,
   isDeleted: agents.isDeleted,
@@ -81,6 +82,7 @@ type AgentProfileRow = {
   agentBackgroundColor: string | null;
   agentDescription: string | null;
   agentId: string;
+  agentName: string | null;
   agentSlug: string | null;
   agentTitle: string | null;
   ownerAvatar: string | null;
@@ -96,6 +98,7 @@ const toAgentProfile = (row: AgentProfileRow): ContactAgentProfile => ({
   avatar: normalizeInboxAgentAvatar(row.agentAvatar, { slug: row.agentSlug }) ?? null,
   backgroundColor: row.agentBackgroundColor,
   description: row.agentDescription,
+  name: row.agentName?.trim() || null,
   owner: {
     avatar: row.ownerAvatar,
     fullName: row.ownerFullName,
@@ -896,7 +899,8 @@ export class ContactModel {
       agentId: profile.agentId,
       avatar: profile.avatar,
       backgroundColor: profile.backgroundColor,
-      name: profile.title,
+      // The name every list shows: the personal name, else the role title.
+      name: agentDisplayName(profile) ?? null,
       ownerName: profile.owner.fullName || profile.owner.username,
       shareId: profile.shareId,
       type: 'agent',

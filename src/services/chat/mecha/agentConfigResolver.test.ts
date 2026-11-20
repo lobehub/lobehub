@@ -143,8 +143,7 @@ describe('resolveAgentConfig', () => {
     it('should return agent config and chat config correctly', () => {
       const result = resolveAgentConfig({ agentId: 'test-agent' });
 
-      // systemRole should have locale appended (currentResponseLanguage falls back to browser locale)
-      expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
+      expect(result.agentConfig.systemRole).toBe('You are a helpful assistant');
       expect(result.agentConfig.model).toBe(mockAgentConfig.model);
       expect(result.agentConfig.plugins).toEqual(mockAgentConfig.plugins);
       expect(result.chatConfig).toEqual(mockChatConfig);
@@ -553,7 +552,7 @@ describe('resolveAgentConfig', () => {
           model: 'gpt-4-turbo',
           plugins: ['input-plugin'],
           targetAgentConfig,
-          userLocale: expect.any(String),
+          userLocale: undefined,
         }),
       );
     });
@@ -764,9 +763,7 @@ describe('resolveAgentConfig', () => {
         scope: 'page',
       });
 
-      expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
       expect(result.agentConfig.systemRole).toContain('Page agent system prompt');
-      // Locale instruction is injected between custom role and page-agent role
       expect(result.agentConfig.systemRole).toMatch(
         /You are a helpful assistant[\s\S]*Page agent system prompt/,
       );
@@ -895,7 +892,7 @@ describe('resolveAgentConfig', () => {
 
       // Should still inject PageAgentIdentifier but with no page-agent systemRole
       expect(result.plugins).toContain(PageAgentIdentifier);
-      expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
+      expect(result.agentConfig.systemRole).toBe('You are a helpful assistant');
       expect(result.chatConfig.enableHistoryCount).toBe(false);
     });
 
@@ -911,7 +908,7 @@ describe('resolveAgentConfig', () => {
       });
 
       expect(result.plugins).toContain(PageAgentIdentifier);
-      expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
+      expect(result.agentConfig.systemRole).toBe('You are a helpful assistant');
       expect(result.chatConfig.enableHistoryCount).toBe(false);
     });
 
@@ -1402,7 +1399,7 @@ describe('resolveAgentConfig', () => {
 
       // Only plugins should be empty, other config should be preserved
       expect(result.plugins).toEqual([]);
-      expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
+      expect(result.agentConfig.systemRole).toBe('You are a helpful assistant');
       expect(result.agentConfig.model).toBe(mockAgentConfig.model);
       expect(result.agentConfig.plugins).toEqual(mockAgentConfig.plugins);
       expect(result.chatConfig).toEqual(mockChatConfig);
@@ -1416,10 +1413,9 @@ describe('resolveAgentConfig', () => {
     });
 
     it('should append response language to systemRole when userLocale is set', () => {
-      vi.spyOn(
-        userSelectors.userGeneralSettingsSelectors,
-        'currentResponseLanguage',
-      ).mockReturnValue('zh-CN');
+      vi.spyOn(userSelectors.userGeneralSettingsSelectors, 'responseLanguage').mockReturnValue(
+        'zh-CN',
+      );
 
       const result = resolveAgentConfig({ agentId: 'test-agent' });
 
@@ -1429,10 +1425,9 @@ describe('resolveAgentConfig', () => {
     });
 
     it('should use locale instruction as systemRole when agent has no systemRole', () => {
-      vi.spyOn(
-        userSelectors.userGeneralSettingsSelectors,
-        'currentResponseLanguage',
-      ).mockReturnValue('ja-JP');
+      vi.spyOn(userSelectors.userGeneralSettingsSelectors, 'responseLanguage').mockReturnValue(
+        'ja-JP',
+      );
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
         () =>
           ({
@@ -1448,11 +1443,8 @@ describe('resolveAgentConfig', () => {
       );
     });
 
-    it('should not modify systemRole when userLocale is falsy', () => {
-      vi.spyOn(
-        userSelectors.userGeneralSettingsSelectors,
-        'currentResponseLanguage',
-      ).mockReturnValue(undefined as any);
+    it('should preserve systemRole after switching back to Automatic', () => {
+      vi.spyOn(userSelectors.userGeneralSettingsSelectors, 'responseLanguage').mockReturnValue('');
 
       const result = resolveAgentConfig({ agentId: 'test-agent' });
 

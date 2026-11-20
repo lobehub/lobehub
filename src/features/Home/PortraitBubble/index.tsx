@@ -27,6 +27,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextSecondary};
 
     background: ${cssVar.colorBgContainer};
+
+    html[data-density='compact'] & {
+      padding-block: 4px;
+      border-radius: 12px;
+    }
   `,
   /**
    * Match the 24px action row when a brief replaces an announcement. Limit

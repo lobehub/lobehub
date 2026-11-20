@@ -4,6 +4,7 @@ import { createStaticStyles, Flexbox, Tag } from '@lobehub/ui';
 import qs from 'query-string';
 import { memo } from 'react';
 
+import { MARKETPLACE_CONNECTOR_PATH } from '@/features/Marketplace/paths';
 import { Link } from '@/libs/router';
 import { densityVars } from '@/styles/densityVars';
 
@@ -32,7 +33,7 @@ const TagList = memo<{ tags: string[] }>(({ tags }) => {
               query: {
                 q: tag,
               },
-              url: '/community/mcp',
+              url: MARKETPLACE_CONNECTOR_PATH,
             })}
           >
             <Tag className={styles.tag}>{tag}</Tag>

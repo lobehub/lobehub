@@ -26,24 +26,24 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
     overflow-y: auto;
     max-block-size: min(70vh, 560px);
-    padding-block: ${densityVars.contentGap} 20px;
-    padding-inline: 20px;
+    padding-block: ${densityVars.contentGap} ${densityVars.modalPadding};
+    padding-inline: ${densityVars.modalPadding};
   `,
   footer: css`
     padding-block: ${densityVars.contentGap};
-    padding-inline: ${densityVars.contentGap} 20px;
+    padding-inline: ${densityVars.contentGap} ${densityVars.modalPadding};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   header: css`
     padding-block: ${densityVars.cardPadding} 4px;
-    padding-inline: 20px;
+    padding-inline: ${densityVars.modalPadding};
   `,
 }));
 
 const CustomizeModalContent = memo(() => {
   const { t } = useTranslation('home');
   const { close } = useModalContext();
-  const { pageTitleFontSize, sectionGap } = useDensityTokens();
+  const { modalPadding, pageTitleFontSize, sectionGap } = useDensityTokens();
   const {
     applyPreset,
     isWidgetHidden,
@@ -79,7 +79,7 @@ const CustomizeModalContent = memo(() => {
         />
       </Flexbox>
 
-      <Flexbox className={styles.body} gap={20}>
+      <Flexbox className={styles.body} gap={modalPadding}>
         <SettingRow title={t('dashboard.customize.preset.label')}>
           <PresetBar value={preset} onChange={applyPreset} />
         </SettingRow>

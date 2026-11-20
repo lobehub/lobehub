@@ -36,15 +36,17 @@ const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
 
 interface ComposioSkillItemProps {
+  hideConnectedStatus?: boolean;
   isSelected?: boolean;
   onDelete?: () => void;
   onSelect?: () => void;
   server?: ComposioServer;
   serverType: ComposioAppType;
+  showConnectLabel?: boolean;
 }
 
 const ComposioSkillItem = memo<ComposioSkillItemProps>(
-  ({ serverType, server, isSelected, onSelect }) => {
+  ({ hideConnectedStatus, serverType, server, isSelected, onSelect, showConnectLabel }) => {
     const { t } = useTranslation('setting');
     const isPage = useSkillListVariant() === 'page';
     const { allowed: canCreate, reason: createReason } = usePermission('create_content');
@@ -387,6 +389,8 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     // A restricted or stale (pending / errored) connection keeps its explicit
     // control, since a bare `+` would not say why the first try did not stick.
     const renderPageExtra = () => {
+      if (isConnected && showConnectLabel)
+        return <ConnectedStatus label={t('tools.composio.connected')} />;
       if (isConnected)
         return (
           <RowMoreMenu
@@ -409,6 +413,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
           disabledReason={!canCreate ? createReason : editReason}
           label={t('connectorMarket.action.connect')}
           loading={isConnecting || isWaitingAuth}
+          showLabel={showConnectLabel}
           onClick={handleConnect}
         />
       );
@@ -421,6 +426,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
         return <Button disabled loading size="small" type="text" />;
       }
       if (isConnected) {
+        if (hideConnectedStatus) return null;
         return <ConnectedStatus label={t('tools.composio.connected')} />;
       }
       if (isRestricted) {

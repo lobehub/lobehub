@@ -76,7 +76,7 @@ const McpItem = memo<DiscoverMcpItem>(
   }) => {
     const { t } = useTranslation('discover');
     const navigate = useWorkspaceAwareNavigate();
-    const link = urlJoin('/community/mcp', identifier);
+    const link = urlJoin('/marketplace/mcp', identifier);
 
     const handleClick = useCallback(() => {
       discoverService

@@ -42,6 +42,13 @@ const emptyDeliveryStats = {
   workCount: 0,
 };
 
+const listShareGrantableSkills = vi.hoisted(() => vi.fn());
+vi.mock('@/server/services/agentShare/grantableSkills', () => ({ listShareGrantableSkills }));
+const listShareActivatableExtensionIds = vi.hoisted(() => vi.fn(async () => [] as string[]));
+vi.mock('@/server/services/agentShare/activatableExtensions', () => ({
+  listShareActivatableExtensionIds,
+}));
+
 vi.mock('@/database/models/agentShareProfile', () => ({
   AgentShareProfileModel: class {
     constructor(...args: unknown[]) {
@@ -252,6 +259,60 @@ describe('shareRouter', () => {
       ]);
       findByIdAndProviderMock.mockResolvedValue(undefined);
       resolveModelSelectionMock.mockResolvedValue({ model: 'gpt-4o', provider: 'openai' });
+    });
+
+    it('advertises no LobeHub tool grants for a Claude Code / Codex Agent', async () => {
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
+        ...agentShare,
+        agentAgencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+      } as any);
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+
+      const result = await caller.getSharedAgent({ slugOrId: 'shared-agent' });
+
+      expect(result.toolGrants).toEqual([]);
+    });
+
+    it('advertises the tools autoGrantAgentTools opens, minus skills and declined ones', async () => {
+      listShareGrantableSkills.mockResolvedValue([
+        { description: '', identifier: 'skill-pinned', name: 'Skill' },
+      ]);
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
+        ...agentShare,
+        agentChatConfig: { memory: { enabled: true }, toolMode: 'chat' },
+        agentPlugins: ['mcp-pinned', 'skill-pinned', 'mcp-declined'],
+        shareConfig: {
+          ...agentShare.shareConfig,
+          autoGrantAgentTools: true,
+          declinedGrantIds: ['mcp-declined'],
+        },
+      } as any);
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+
+      const result = await caller.getSharedAgent({ slugOrId: 'shared-agent' });
+
+      expect(result.toolGrants).toEqual(
+        expect.arrayContaining(['lobe-web-browsing', 'mcp-pinned']),
+      );
+      expect(result.toolGrants).not.toContain('skill-pinned');
+      expect(result.toolGrants).not.toContain('mcp-declined');
+      expect(result.toolGrants).not.toContain('lobe-user-memory');
+    });
+
+    it('advertises a connected connector the Agent has no entry for', async () => {
+      listShareGrantableSkills.mockResolvedValue([]);
+      listShareActivatableExtensionIds.mockResolvedValueOnce(['mcp-connected']);
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
+        ...agentShare,
+        agentChatConfig: { toolMode: 'agent' },
+        agentPlugins: [],
+        shareConfig: { ...agentShare.shareConfig, autoGrantAgentTools: true },
+      } as any);
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+
+      const result = await caller.getSharedAgent({ slugOrId: 'shared-agent' });
+
+      expect(result.toolGrants).toContain('mcp-connected');
     });
 
     it('returns independent demos and selected deliveries in the owner scope', async () => {

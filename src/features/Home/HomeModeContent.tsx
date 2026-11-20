@@ -36,7 +36,7 @@ import { taskListSelectors } from '@/store/task/selectors';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
-import { useDensityTokens } from '@/styles/density';
+import { useDensity, useDensityTokens } from '@/styles/density';
 import { densityVars } from '@/styles/densityVars';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
@@ -48,6 +48,7 @@ import Time from './components/Time';
 import { isHomeWidgetHidden } from './CustomizeModal/config';
 import EmptySuggestions from './EmptySuggestions';
 import { isRecentsSnapshotSettled, resolveHomeChatContentState } from './homeChatContentState';
+import { useHomeSpacing } from './homeDensity';
 import type { HomeMode } from './types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -92,6 +93,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     margin-inline: -10px;
     padding-block: 9px;
     padding-inline: 10px;
+
+    html[data-density='compact'] & {
+      padding-block: 6px;
+    }
   `,
   rowText: css`
     flex: 1;
@@ -284,23 +289,43 @@ const SKELETON_ROWS = [
  * skeleton: a concrete leading icon would read as already-loaded content and
  * then be swapped for an avatar, which is precisely the wrong promise to make.
  */
+const SKELETON_LINES = {
+  compact: { meta: 16, supporting: 18, title: 20 },
+  loose: { meta: 18, supporting: 20, title: 22 },
+} as const;
+
 const LoadingRows = memo<{ avatarSize?: number; withTime?: boolean }>(
-  ({ avatarSize = 22, withTime }) => (
-    <Flexbox aria-hidden gap={4}>
-      {SKELETON_ROWS.map(({ description, title }, index) => (
-        <Flexbox horizontal align={'flex-start'} className={styles.rowBox} gap={12} key={index}>
-          <Flexbox flex={'none'} paddingBlock={3}>
-            <Skeleton.Avatar className={styles.topicAvatar} shape={'circle'} size={avatarSize} />
+  ({ avatarSize, withTime }) => {
+    const { density, tokens } = useDensity();
+    const lines = SKELETON_LINES[density];
+
+    return (
+      <Flexbox aria-hidden gap={4}>
+        {SKELETON_ROWS.map(({ description, title }, index) => (
+          <Flexbox
+            horizontal
+            align={'flex-start'}
+            className={styles.rowBox}
+            gap={tokens.contentGap}
+            key={index}
+          >
+            <Flexbox flex={'none'} paddingBlock={3}>
+              <Skeleton.Avatar
+                className={styles.topicAvatar}
+                shape={'circle'}
+                size={avatarSize ?? tokens.largeIconSize}
+              />
+            </Flexbox>
+            <Flexbox className={styles.rowText} gap={3}>
+              <SkeletonLine bar={14} line={lines.title} width={title} />
+              <SkeletonLine bar={12} line={lines.supporting} width={description} />
+            </Flexbox>
+            {withTime && <SkeletonLine bar={10} flex={'none'} line={lines.meta} width={52} />}
           </Flexbox>
-          <Flexbox className={styles.rowText} gap={3}>
-            <SkeletonLine bar={14} line={22} width={title} />
-            <SkeletonLine bar={12} line={20} width={description} />
-          </Flexbox>
-          {withTime && <SkeletonLine bar={10} flex={'none'} line={18} width={52} />}
-        </Flexbox>
-      ))}
-    </Flexbox>
-  ),
+        ))}
+      </Flexbox>
+    );
+  },
 );
 
 /**
@@ -473,6 +498,7 @@ const ScheduledTaskContent = memo(() => {
 
 const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSuggestionSelect }) => {
   const { t } = useTranslation('home');
+  const { blockGap } = useHomeSpacing();
   const isLogin = useUserStore(authSelectors.isLogin);
   const authLoaded = useUserStore(authSelectors.isLoaded);
   const myId = useUserStore(userProfileSelectors.userId);
@@ -538,7 +564,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
       if (!inlineRail) return starters;
 
       return (
-        <Flexbox gap={32}>
+        <Flexbox gap={blockGap}>
           {starters}
           <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
             <HomeInbox inlineRail variant={'main'} />
@@ -549,7 +575,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     }
 
     return (
-      <Flexbox gap={32}>
+      <Flexbox gap={blockGap}>
         <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
           <HomeInbox inlineRail={inlineRail} variant={'main'} />
         </EntityLinkHostProvider>
@@ -591,7 +617,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     // folded-in inbox sections above, exactly like chat mode — row hover pills
     // overhang by design (see `rowBox`).
     const taskBlocks = (
-      <Flexbox gap={32}>
+      <Flexbox gap={blockGap}>
         {!tasksHidden && <TaskContent />}
         {!scheduledTasksHidden && <ScheduledTaskContent />}
       </Flexbox>
@@ -604,7 +630,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     // task list, suggestions after it. Unread and needs-you stay
     // hidden — task mode never surfaces them, folded or not.
     return (
-      <Flexbox gap={32}>
+      <Flexbox gap={blockGap}>
         <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
           <HomeInbox hideNeedsYou hideUnread inlineRail variant={'main'} />
         </EntityLinkHostProvider>

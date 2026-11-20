@@ -91,53 +91,54 @@ apps/cli/src/
 
 ## Command Groups
 
-| Command            | Alias | Description                                                                        |
-| ------------------ | ----- | ---------------------------------------------------------------------------------- |
-| `lh login`         | -     | Authenticate via OIDC Device Code Flow or API key                                  |
-| `lh logout`        | -     | Clear stored credentials                                                           |
-| `lh connect`       | -     | Device gateway connection & daemon management                                      |
-| `lh device`        | -     | Manage connected devices                                                           |
-| `lh status`        | -     | Quick gateway connectivity check                                                   |
-| `lh doctor`        | -     | Diagnose machine readiness (runtime, endpoints, credentials, scope, device, agent) |
-| `lh agent`         | -     | Agent CRUD, run, status                                                            |
-| `lh agent-group`   | -     | Agent group CRUD                                                                   |
-| `lh agent-signal`  | -     | Inspect and trigger Agent Signal source events                                     |
-| `lh hetero`        | -     | Run heterogeneous agent CLIs (Claude Code, Codex, etc.), stream their output       |
-| `lh goal`          | -     | Run long-horizon Goal Graphs                                                       |
-| `lh project`       | -     | Manage goal-oriented projects                                                      |
-| `lh task`          | -     | Manage agent tasks (assignees, checkpoints, deps, review)                          |
-| `lh thread`        | -     | Manage message threads                                                             |
-| `lh trace`         | -     | Inspect and replay recorded agent execution traces                                 |
-| `lh acceptance`    | -     | Delivery acceptances: review loop, rounds, per-run check plans, criteria, rubrics  |
-| `lh verify`        | -     | Deprecated alias of `lh acceptance` commands                                       |
-| `lh eval`          | -     | Manage evaluation workflows and benchmarks                                         |
-| `lh generate`      | `gen` | Content generation (text, image, video, tts, asr, download)                        |
-| `lh doc`           | -     | Document CRUD, batch-create, parse, topic linking                                  |
-| `lh file`          | -     | File list, view, delete, recent                                                    |
-| `lh artifact`      | -     | Publish local HTML pages as artifacts                                              |
-| `lh automation`    | -     | Automations (alias `automations`): list, view, rename, check, delete               |
-| `lh kb`            | -     | Knowledge base CRUD, folders, docs, upload, tree view                              |
-| `lh memory`        | -     | User memory CRUD + extraction                                                      |
-| `lh message`       | -     | Message list, search, delete, count, heatmap                                       |
-| `lh topic`         | -     | Topic CRUD + search + recent                                                       |
-| `lh notify`        | -     | Send a callback message to a topic and trigger the agent to process it             |
-| `lh notification`  | -     | Notification settings: show, enable/disable channels, IM platforms and types       |
-| `lh migrate`       | -     | Import data from external tools (OpenClaw, ChatGPT, Claude, etc.)                  |
-| `lh bot`           | -     | Manage bot integrations (channels, access policies, messengers)                    |
-| `lh skill`         | -     | Skill CRUD + import (GitHub/URL/market)                                            |
-| `lh model`         | -     | Model CRUD, toggle, batch-toggle, clear                                            |
-| `lh provider`      | -     | Provider CRUD, config, test, toggle                                                |
-| `lh legacy-plugin` | -     | Legacy 1.0 plugins: list, search, uninstall, update                                |
-| `lh search`        | -     | Global search across all types                                                     |
-| `lh session-group` | -     | Manage agent session groups                                                        |
-| `lh workspace`     | `ws`  | Workspace list, scope switch, members, invites, usage                              |
-| `lh user`          | -     | Manage user account and settings                                                   |
-| `lh webhook`       | -     | Custom webhooks (alias `webhooks`): create, edit, pause, test, rotate-key, calls   |
-| `lh whoami`        | -     | Current user info (including the resolved workspace scope)                         |
-| `lh usage`         | -     | Monthly/daily usage statistics                                                     |
-| `lh man`           | -     | Show a manual page for the CLI or a subcommand                                     |
-| `lh completion`    | -     | Output shell completion script                                                     |
-| `lh update`        | -     | Update the CLI to the latest published version                                     |
+| Command            | Alias | Description                                                                         |
+| ------------------ | ----- | ----------------------------------------------------------------------------------- |
+| `lh login`         | -     | Authenticate via OIDC Device Code Flow or API key                                   |
+| `lh logout`        | -     | Clear stored credentials                                                            |
+| `lh connect`       | -     | Device gateway connection & daemon management                                       |
+| `lh device`        | -     | Manage connected devices                                                            |
+| `lh status`        | -     | Quick gateway connectivity check                                                    |
+| `lh doctor`        | -     | Diagnose machine readiness (runtime, endpoints, credentials, scope, device, agent)  |
+| `lh agent`         | -     | Agent CRUD, run, status                                                             |
+| `lh agent-group`   | -     | Agent group CRUD                                                                    |
+| `lh agent-signal`  | -     | Inspect and trigger Agent Signal source events                                      |
+| `lh hetero`        | -     | Run heterogeneous agent CLIs (Claude Code, Codex, etc.), stream their output        |
+| `lh goal`          | -     | Run long-horizon Goal Graphs                                                        |
+| `lh project`       | -     | Manage goal-oriented projects                                                       |
+| `lh task`          | -     | Manage agent tasks (assignees, checkpoints, deps, review)                           |
+| `lh thread`        | -     | Manage message threads                                                              |
+| `lh trace`         | -     | Inspect and replay recorded agent execution traces                                  |
+| `lh acceptance`    | -     | Delivery acceptances: review loop, rounds, per-run check plans, criteria, rubrics   |
+| `lh verify`        | -     | Deprecated alias of `lh acceptance` commands                                        |
+| `lh eval`          | -     | Manage evaluation workflows and benchmarks                                          |
+| `lh generate`      | `gen` | Content generation (text, image, video, tts, asr, download)                         |
+| `lh doc`           | -     | Document CRUD, batch-create, parse, topic linking                                   |
+| `lh file`          | -     | File list, view, delete, recent                                                     |
+| `lh artifact`      | -     | Publish local HTML pages as artifacts                                               |
+| `lh automation`    | -     | Automations (alias `automations`): list, view, rename, check, delete                |
+| `lh kb`            | -     | Knowledge base CRUD, folders, docs, upload, tree view                               |
+| `lh memory`        | -     | User memory CRUD + extraction                                                       |
+| `lh message`       | -     | Message list, search, delete, count, heatmap                                        |
+| `lh topic`         | -     | Topic CRUD + search + recent                                                        |
+| `lh notify`        | -     | Send a callback message to a topic and trigger the agent to process it              |
+| `lh notification`  | -     | Notification settings: show, enable/disable channels, IM platforms and types        |
+| `lh migrate`       | -     | Import data from external tools (OpenClaw, ChatGPT, Claude, etc.)                   |
+| `lh bot`           | -     | Manage bot integrations (channels, access policies, messengers)                     |
+| `lh skill`         | -     | Skill CRUD + import (GitHub/URL/market)                                             |
+| `lh model`         | -     | Model CRUD, toggle, batch-toggle, clear                                             |
+| `lh provider`      | -     | Provider CRUD, config, test, toggle                                                 |
+| `lh legacy-plugin` | -     | Legacy 1.0 plugins: list, search, uninstall, update                                 |
+| `lh search`        | -     | Global search across all types                                                      |
+| `lh work`          | -     | Register the files and links an agent run produced as Works, update, delete, lookup |
+| `lh session-group` | -     | Manage agent session groups                                                         |
+| `lh workspace`     | `ws`  | Workspace list, scope switch, members, invites, usage                               |
+| `lh user`          | -     | Manage user account and settings                                                    |
+| `lh webhook`       | -     | Custom webhooks (alias `webhooks`): create, edit, pause, test, rotate-key, calls    |
+| `lh whoami`        | -     | Current user info (including the resolved workspace scope)                          |
+| `lh usage`         | -     | Monthly/daily usage statistics                                                      |
+| `lh man`           | -     | Show a manual page for the CLI or a subcommand                                      |
+| `lh completion`    | -     | Output shell completion script                                                      |
+| `lh update`        | -     | Update the CLI to the latest published version                                      |
 
 ### Workspace Scope
 

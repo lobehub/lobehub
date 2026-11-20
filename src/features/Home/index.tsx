@@ -25,6 +25,7 @@ import { densityVars } from '@/styles/densityVars';
 
 import { HOME_ENTITY_PORTAL_SCOPE, isAcceptancePortalView } from './acceptancePortalView';
 import { isHomeMinimalLayout } from './CustomizeModal/config';
+import { useHomeSpacing } from './homeDensity';
 import HomeHeader from './HomeHeader';
 import HomeModeContent from './HomeModeContent';
 import HomePortrait from './HomePortrait';
@@ -92,6 +93,13 @@ const COMPACT_PORTRAIT_HEIGHT = 150;
 const COMPACT_PORTRAIT_WIDTH =
   HOME_PORTRAIT_WIDTH * (COMPACT_PORTRAIT_HEIGHT / HOME_PORTRAIT_HEIGHT);
 const COMPACT_PORTRAIT_OVERLAP = getHomePortraitOverlap(COMPACT_PORTRAIT_HEIGHT);
+/**
+ * Compact density tightens the hero-to-composer gap and always shows the small
+ * portrait; the overlap is recomputed so the card still cuts the artwork at the
+ * studio's visible ratio.
+ */
+const DENSE_ROW_GAP = 16;
+const DENSE_PORTRAIT_OVERLAP = getHomePortraitOverlap(COMPACT_PORTRAIT_HEIGHT, DENSE_ROW_GAP);
 const MINIMAL_STACK_GAP = 24;
 /**
  * The minimal header stacks the agent switcher (24px avatar + 2px paddings,
@@ -105,6 +113,8 @@ const MINIMAL_SWITCHER_ROW = 28;
 const MINIMAL_HEADER_GAP = 8;
 const MINIMAL_HEADER_HEIGHT = MINIMAL_SWITCHER_ROW + MINIMAL_HEADER_GAP + MINIMAL_GREETING_LINE;
 const MINIMAL_LIFT = MINIMAL_HEADER_HEIGHT + MINIMAL_STACK_GAP;
+/** The same stack in compact density: 20px greeting, 20px avatar switcher, 16px gap. */
+const DENSE_MINIMAL_LIFT = Math.round(20 * 1.4) + MINIMAL_HEADER_GAP + 24 + 16;
 
 const styles = createStaticStyles(({ css }) => ({
   // Both rows size to their content and the page scrolls around the whole grid
@@ -121,6 +131,10 @@ const styles = createStaticStyles(({ css }) => ({
     gap: ${HOME_PORTRAIT_CARD_GAP}px ${RAIL_COLUMN_GAP}px;
 
     width: 100%;
+
+    html[data-density='compact'] & {
+      row-gap: ${DENSE_ROW_GAP}px;
+    }
 
     @media (width <= 1100px) {
       grid-template-columns: 1fr;
@@ -242,6 +256,20 @@ const styles = createStaticStyles(({ css }) => ({
       );
       min-height: 0;
     }
+
+    html[data-density='compact'] & {
+      --home-portrait-overlap: -${DENSE_PORTRAIT_OVERLAP}px;
+
+      min-height: ${COMPACT_PORTRAIT_HEIGHT - DENSE_PORTRAIT_OVERLAP}px;
+
+      @container home (width >= ${SPEECH_INLINE_MIN}px) {
+        --home-portrait-width: ${COMPACT_PORTRAIT_WIDTH}px;
+        --home-portrait-height: ${COMPACT_PORTRAIT_HEIGHT}px;
+        --home-portrait-overlap: -${DENSE_PORTRAIT_OVERLAP}px;
+
+        min-height: 0;
+      }
+    }
   `,
   bubbleSlot: css`
     width: max-content;
@@ -277,6 +305,10 @@ const styles = createStaticStyles(({ css }) => ({
     max-inline-size: 760px;
     margin-inline: auto;
     padding-block-end: ${MINIMAL_LIFT}px;
+
+    html[data-density='compact'] & {
+      padding-block-end: ${DENSE_MINIMAL_LIFT}px;
+    }
   `,
   railSurface: css`
     transform: translateX(0);
@@ -336,6 +368,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const Home = memo(() => {
   const isLogin = useUserStore(authSelectors.isLogin);
+  const { mainGap, minimalStackGap } = useHomeSpacing();
   const showHomeRail = useGlobalStore(systemStatusSelectors.showHomeRail);
   const showHomePortrait = useGlobalStore(systemStatusSelectors.showHomePortrait);
   const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
@@ -412,7 +445,7 @@ const Home = memo(() => {
 
   if (minimal)
     return (
-      <Flexbox className={styles.minimal} gap={MINIMAL_STACK_GAP}>
+      <Flexbox className={styles.minimal} gap={minimalStackGap}>
         <HomeHeader centered />
         <div className={styles.inputArea}>
           <InputArea
@@ -452,7 +485,7 @@ const Home = memo(() => {
         className={cx(styles.main, styles.content, styles.contentCollapsed)}
         data-rail-collapsed={contentCollapsed}
         data-testid={'home-main'}
-        gap={24}
+        gap={mainGap}
       >
         <Flexbox className={styles.inputArea} gap={12}>
           <InputArea

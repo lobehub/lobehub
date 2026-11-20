@@ -152,15 +152,3 @@ export const matchesKeyword = (
     field?.toLowerCase().includes(needle),
   );
 };
-
-/** The two pools of a workspace, as tabs: shared with every member, or the caller's own. */
-export type AccountVisibilityTab = 'private' | 'public';
-
-/**
- * Which workspace tab an account lists under. A teammate's private account is
- * never returned to the caller, so the Private tab holds only the caller's own.
- * A personal-space account has no team and no visibility: it is not split.
- */
-export const accountVisibilityTab = (account: {
-  visibility?: string | null;
-}): AccountVisibilityTab => (account.visibility === 'private' ? 'private' : 'public');

@@ -2,7 +2,7 @@ import type { ChannelPublicMessage } from '@lobechat/types';
 import { Button, Empty, Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { MessageSquare } from 'lucide-react';
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
@@ -31,6 +31,7 @@ import { ReadOnlyNotice } from './ReadOnlyNotice';
 import { ReplyActivity } from './ReplyActivity';
 import { ReplyFailureRow } from './ReplyFailure';
 import type { ReplyTopic } from './ReplyTopicPanel';
+import { withoutShareRefusals } from './shareRefusal';
 import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
 import { useChannelEvents } from './useChannelEvents';
@@ -42,6 +43,16 @@ interface ChannelConversationProps {
   channelId: string;
   /** Mounted beside a thread panel that covers it, so keep it out of the tab order. */
   inert?: boolean;
+  /**
+   * Fills the main conversation's blank start in place of the empty state, and leaves with the
+   * first message (sent or received) so it never sits above the conversation itself.
+   */
+  intro?: ReactNode;
+  /**
+   * Caps the feed and composer column width, centered. A Channel spans the full width by default;
+   * a standalone chat page (an Agent share) caps it like a regular Agent conversation.
+   */
+  maxWidth?: number;
   onOpenThread?: (threadId: string, toggle?: boolean) => void;
   onOpenTopic?: (topic: ReplyTopic) => void;
   onStartThread?: (draft: ChannelThreadDraft) => void;
@@ -53,6 +64,8 @@ interface ChannelConversationProps {
 const Timeline = ({
   channelId,
   inert,
+  intro,
+  maxWidth,
   starter,
   threadId = null,
   onOpenThread,
@@ -141,7 +154,7 @@ const Timeline = ({
       )
     : [];
   const failures = replyFailurePlacement(
-    detail?.jobs ?? [],
+    detail ? withoutShareRefusals(detail, detail.jobs ?? []) : [],
     new Set([
       ...timeline.flatMap((item) => (item.kind === 'message' ? [item.message.id] : [])),
       ...(detail?.rootMessage ? [detail.rootMessage.id] : []),
@@ -189,7 +202,7 @@ const Timeline = ({
               }}
               {...stylex.props(styles.feed)}
             >
-              <WideScreenContainer fullWidth paddingInline={16}>
+              <WideScreenContainer fullWidth paddingInline={16} style={{ maxWidth }}>
                 {(detail.hasMore || before !== undefined) && (
                   <Flexbox horizontal align="center" gap={8} justify="center" paddingBlock={8}>
                     <Button
@@ -221,18 +234,21 @@ const Timeline = ({
                       highlighted={highlighted === detail.rootMessage.id}
                       root={detail.rootMessage}
                       onReply={
-                        channelArchived || readOnly || thread?.status === 'archived' ? undefined : selectReply
+                        channelArchived || readOnly || thread?.status === 'archived'
+                          ? undefined
+                          : selectReply
                       }
                     />
                     {failureRows(detail.rootMessage.id)}
                   </>
                 )}
-                {/* A new direct conversation starts blank, like an IM chat. */}
+                {/* A new direct conversation starts blank, like an IM chat, unless the host fills it. */}
                 {!timeline.length &&
                   (threadId ? (
                     <p {...stylex.props(styles.muted)}>{t('threadEmpty')}</p>
-                  ) : direct ? null : (
-                    <Empty icon={MessageSquare} title={t('conversationEmpty')} />
+                  ) : (
+                    (intro ??
+                    (direct ? null : <Empty icon={MessageSquare} title={t('conversationEmpty')} />))
                   ))}
                 {presentChannelTimeline(timeline, new Set(failures.afterMessage.keys())).map(
                   ({ item, date, startsDay, continuation }) => (
@@ -302,6 +318,7 @@ const Timeline = ({
                 channel={detail.channel}
                 draftKey={channelDraftKey(channelId, threadId)}
                 key={channelDraftKey(channelId, threadId)}
+                maxWidth={maxWidth}
                 members={activeMembers}
                 replyTarget={reply.target}
                 starter={threadId ? undefined : starter}
