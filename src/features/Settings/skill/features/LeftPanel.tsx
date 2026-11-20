@@ -11,6 +11,7 @@ import { createSkillStoreModal } from '@/features/SkillStore';
 import { openImportFromGithubModal } from '@/features/SkillStore/SkillList/ImportFromGithubModal';
 import { openImportFromUrlModal } from '@/features/SkillStore/SkillList/ImportFromUrlModal';
 import { openUploadSkillModal } from '@/features/SkillStore/SkillList/UploadSkillModal';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import { type ToolDetailType } from './SkillDetail';
 import SkillList, { type SkillViewMode } from './SkillList';
@@ -57,6 +58,10 @@ const LeftPanel = memo<LeftPanelProps>(
   ({ fullWidth, onDeleteSelected, onSelect, selectedIdentifier, viewMode }) => {
     const { t } = useTranslation('setting');
     const [showAddConnector, setShowAddConnector] = useState(false);
+    // The tenant's connector policy can turn custom connectors off (the server rejects them too).
+    const customConnectorsDisabled = useServerConfigStore(
+      serverConfigSelectors.disableCustomConnectors,
+    );
 
     const handleOpenStore = useCallback(() => {
       createSkillStoreModal();
@@ -80,15 +85,17 @@ const LeftPanel = memo<LeftPanelProps>(
             <div style={{ display: 'flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
               {isConnectorView ? (
                 // Connector view: single action to add a custom OAuth connector.
-                <Button
-                  icon={Grid2x2Plus}
-                  size="small"
-                  title={t('connector.add.title', {
-                    defaultValue: 'Add Custom Connector',
-                    ns: 'tool',
-                  })}
-                  onClick={() => setShowAddConnector(true)}
-                />
+                !customConnectorsDisabled && (
+                  <Button
+                    icon={Grid2x2Plus}
+                    size="small"
+                    title={t('connector.add.title', {
+                      defaultValue: 'Add Custom Connector',
+                      ns: 'tool',
+                    })}
+                    onClick={() => setShowAddConnector(true)}
+                  />
+                )
               ) : (
                 // Skill view: import a skill from a URL, GitHub, or a zip upload.
                 <DropdownMenu
@@ -152,7 +159,12 @@ const LeftPanel = memo<LeftPanelProps>(
             />
           </div>
         </div>
-        <CustomConnectorModal open={showAddConnector} onClose={() => setShowAddConnector(false)} />
+        {!customConnectorsDisabled && (
+          <CustomConnectorModal
+            open={showAddConnector}
+            onClose={() => setShowAddConnector(false)}
+          />
+        )}
       </>
     );
   },

@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
       }
     | undefined,
   systemModels: { filesConfig: {}, systemAgent: {} } as Record<string, unknown>,
+  connectorPolicy: undefined as
+    { allowCustomConnectors: boolean; allowlist: string[]; blocklist: string[] } | undefined,
   genServerAiProvidersConfig: vi.fn(
     async (_specificConfig: Record<string, CapturedProviderConfig>) => ({}),
   ),
@@ -131,6 +133,10 @@ const mockGlobalConfigDependencies = (
   vi.doMock('@/server/services/memory/userMemory/systemAgent', () => ({
     resolveMemoryServiceModelConfig: vi.fn(async () => undefined),
   }));
+
+  vi.doMock('@/server/services/connector/policy', () => ({
+    getConnectorPolicy: vi.fn(async () => mocks.connectorPolicy),
+  }));
 };
 
 const loadCapturedProviderConfig = async (enableBusinessFeatures: boolean) => {
@@ -162,6 +168,7 @@ const loadServerConfig = async (
 describe('getServerGlobalConfig', () => {
   afterEach(() => {
     mocks.tenant = undefined;
+    mocks.connectorPolicy = undefined;
     mocks.systemModels = { filesConfig: {}, systemAgent: {} };
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
@@ -187,6 +194,18 @@ describe('getServerGlobalConfig', () => {
     expect(providerConfig[ModelProvider.LobeHub]).toBeUndefined();
     expect(providerConfig[ModelProvider.OpenAI]).toBeUndefined();
     expect(providerConfig[ModelProvider.DeepSeek].enabled).toBe(true);
+  });
+
+  it('tells the client to hide custom connector entries only when the tenant policy disables them', async () => {
+    await expect(loadServerConfig(true)).resolves.not.toHaveProperty('disableCustomConnectors');
+
+    mocks.connectorPolicy = { allowCustomConnectors: true, allowlist: [], blocklist: ['x'] };
+    await expect(loadServerConfig(true)).resolves.not.toHaveProperty('disableCustomConnectors');
+
+    mocks.connectorPolicy = { allowCustomConnectors: false, allowlist: [], blocklist: [] };
+    await expect(loadServerConfig(true)).resolves.toMatchObject({
+      disableCustomConnectors: true,
+    });
   });
 
   it('should enable gateway mode for business builds', async () => {

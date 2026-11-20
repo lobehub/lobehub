@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { CustomConnectorModal } from '@/features/Connectors';
 import { usePermission } from '@/hooks/usePermission';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import { openImportFromGithubModal } from './ImportFromGithubModal';
 import { openImportFromUrlModal } from './ImportFromUrlModal';
@@ -25,6 +26,10 @@ const AddSkillButton = () => {
   const [showMcpModal, setMcpModal] = useState(false);
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
+  // The tenant's connector policy can turn custom connectors off (the server rejects them too).
+  const customConnectorsDisabled = useServerConfigStore(
+    serverConfigSelectors.disableCustomConnectors,
+  );
 
   return (
     <div
@@ -32,7 +37,9 @@ const AddSkillButton = () => {
         e.stopPropagation();
       }}
     >
-      <CustomConnectorModal open={showMcpModal} onClose={() => setMcpModal(false)} />
+      {!customConnectorsDisabled && (
+        <CustomConnectorModal open={showMcpModal} onClose={() => setMcpModal(false)} />
+      )}
       <DropdownMenu
         nativeButton={false}
         placement="bottomRight"
@@ -69,17 +76,23 @@ const AddSkillButton = () => {
               openUploadSkillModal();
             },
           },
-          { type: 'divider' as const },
-          {
-            disabled: !canCreate || !canEdit,
-            icon: <Icon icon={PenLine} />,
-            key: 'customMcp',
-            label: <MenuLabel desc={t('tab.addCustomMcp.desc')} title={t('tab.addCustomMcp')} />,
-            onClick: () => {
-              if (!canCreate || !canEdit) return;
-              setMcpModal(true);
-            },
-          },
+          ...(customConnectorsDisabled
+            ? []
+            : [
+                { type: 'divider' as const },
+                {
+                  disabled: !canCreate || !canEdit,
+                  icon: <Icon icon={PenLine} />,
+                  key: 'customMcp',
+                  label: (
+                    <MenuLabel desc={t('tab.addCustomMcp.desc')} title={t('tab.addCustomMcp')} />
+                  ),
+                  onClick: () => {
+                    if (!canCreate || !canEdit) return;
+                    setMcpModal(true);
+                  },
+                },
+              ]),
         ]}
       >
         <Button disabled={!canCreate} icon={Grid2x2Plus}>

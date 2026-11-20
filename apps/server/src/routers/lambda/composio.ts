@@ -25,6 +25,7 @@ import { inferCrudType } from '@/libs/mcp/utils';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { buildTenantPublicUrl } from '@/server/modules/Tenant/callbackUrl';
+import { assertConnectorAllowed } from '@/server/services/connector/policy';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
@@ -239,6 +240,7 @@ export const composioRouter = router({
       const { userId } = ctx;
 
       assertSupportedComposioApp(identifier, appSlug);
+      await assertConnectorAllowed({ identifier, sourceType: ConnectorSourceType.marketplace });
 
       if (agentId)
         await assertCanEditAgent(ctx.serverDB, userId, agentId, ctx.workspaceId ?? undefined);
@@ -503,6 +505,7 @@ export const composioRouter = router({
       } = input;
 
       assertSupportedComposioApp(identifier, appSlug);
+      await assertConnectorAllowed({ identifier, sourceType: ConnectorSourceType.marketplace });
 
       if (agentId)
         await assertCanEditAgent(ctx.serverDB, ctx.userId, agentId, ctx.workspaceId ?? undefined);

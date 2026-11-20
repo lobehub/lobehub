@@ -21,7 +21,24 @@ export interface TenantLoginMethods {
   requireEmailVerification: boolean;
 }
 
+/**
+ * Which connectors members may add; written by Admin. Built-in tools are never
+ * restricted. The lists hold connector identifiers and apply to connectors from
+ * the marketplace (Market MCPs, Composio apps); custom connectors are governed
+ * by `allowCustomConnectors` alone, since their identifiers are generated.
+ */
+export interface TenantConnectorPolicy {
+  /** Members may add, edit and authorize their own (custom) connectors. */
+  allowCustomConnectors: boolean;
+  /** Non-empty: only these marketplace connectors may be added. */
+  allowlist: string[];
+  /** Marketplace connectors that may never be added; wins over the allowlist. */
+  blocklist: string[];
+}
+
 export interface TenantSettings {
+  /** Absent: no restriction. */
+  connectorPolicy?: TenantConnectorPolicy;
   featureFlags: TenantFeatureFlagValues;
   loginMethods: TenantLoginMethods;
   systemModels: TenantSystemModels;

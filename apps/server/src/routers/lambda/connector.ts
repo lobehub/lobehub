@@ -33,6 +33,7 @@ import {
   registeredAuthMethod,
   toClientInformation,
 } from '@/server/services/connector/oauth';
+import { assertConnectorAllowed } from '@/server/services/connector/policy';
 import {
   generateConnectorOAuthState,
   saveConnectorOAuthState,
@@ -292,6 +293,9 @@ export const connectorRouter = router({
 
   create: connectorWriteProcedure.input(createConnectorSchema).mutation(async ({ input, ctx }) => {
     const { agentId } = input;
+    // The tenant's connector policy: custom connectors may be disabled and
+    // marketplace identifiers allow- or blocklisted (enforced here, not only in the UI).
+    await assertConnectorAllowed({ identifier: input.identifier, sourceType: input.sourceType });
 
     // Agent-scoped connector: the caller must be able to edit the target agent
     // before a credential is bound to it — otherwise a user could attach their
@@ -560,6 +564,7 @@ export const connectorRouter = router({
       if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
       // Re-authorizing overwrites the stored OAuth credentials.
       assertWorkspaceRowManageable(ctx, connector.userId, 'connector');
+      await assertConnectorAllowed(connector);
       if (!connector.mcpServerUrl) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Connector has no MCP server URL' });
       }
@@ -676,6 +681,9 @@ export const connectorRouter = router({
       const target = await ctx.connectorModel.findById(input.id);
       if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
       assertWorkspaceRowManageable(ctx, target.userId, 'connector');
+      // Turning a connector off is always allowed; any other edit must fit the policy.
+      const disableOnly = Object.keys(input.patch).length === 1 && input.patch.isEnabled === false;
+      if (!disableOnly) await assertConnectorAllowed(target);
 
       const { credentials, ...patch } = input.patch;
       // Preserve the server-owned `composio.linkedByUserId` from the stored row
@@ -898,6 +906,7 @@ export const connectorRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertConnectorAllowed({ identifier: input.identifier, sourceType: input.sourceType });
       const { connectorId, writable } = await upsertConnectorEntry(ctx, {
         identifier: input.identifier,
         name: input.name,

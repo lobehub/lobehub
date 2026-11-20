@@ -162,6 +162,11 @@ export interface GlobalServerConfig {
    * configured; clients then keep the address they manage themselves.
    */
   deviceGatewayUrl?: string;
+  /**
+   * The tenant's connector policy does not let members add custom connectors.
+   * Only hides the entry points; the server rejects such writes on its own.
+   */
+  disableCustomConnectors?: boolean;
   disableEmailPassword?: boolean;
   enableBusinessFeatures?: boolean;
   enableComposio?: boolean;

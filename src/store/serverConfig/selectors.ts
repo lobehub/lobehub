@@ -4,6 +4,9 @@ export const featureFlagsSelectors = (s: ServerConfigStore) => s.featureFlags;
 
 export const serverConfigSelectors = {
   desktopDownloads: (s: ServerConfigStore) => s.serverConfig.desktopDownloads,
+  /** The tenant's connector policy hides the entries for adding custom connectors. */
+  disableCustomConnectors: (s: ServerConfigStore) =>
+    s.serverConfig.disableCustomConnectors || false,
   disableEmailPassword: (s: ServerConfigStore) => s.serverConfig.disableEmailPassword || false,
   enableBusinessFeatures: (s: ServerConfigStore) => s.serverConfig.enableBusinessFeatures || false,
   enableEmailVerification: (s: ServerConfigStore) =>

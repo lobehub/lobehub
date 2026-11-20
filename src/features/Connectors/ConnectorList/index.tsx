@@ -3,6 +3,7 @@ import { PlusIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
@@ -17,6 +18,10 @@ interface ConnectorListProps {
 const ConnectorList = memo<ConnectorListProps>(({ onSelect, selectedId }) => {
   const { t } = useTranslation('tool');
   const [showAdd, setShowAdd] = useState(false);
+  // The tenant's connector policy can turn custom connectors off (the server rejects them too).
+  const customConnectorsDisabled = useServerConfigStore(
+    serverConfigSelectors.disableCustomConnectors,
+  );
 
   const connected = useToolStore(connectorSelectors.connectedConnectors);
   const notConnected = useToolStore(connectorSelectors.notConnectedConnectors);
@@ -32,7 +37,9 @@ const ConnectorList = memo<ConnectorListProps>(({ onSelect, selectedId }) => {
         }}
       >
         <span style={{ fontWeight: 600 }}>{t('connector.title', 'Connectors')}</span>
-        <ActionIcon icon={PlusIcon} size="small" onClick={() => setShowAdd(true)} />
+        {!customConnectorsDisabled && (
+          <ActionIcon icon={PlusIcon} size="small" onClick={() => setShowAdd(true)} />
+        )}
       </div>
 
       {connected.length > 0 && (
@@ -71,7 +78,9 @@ const ConnectorList = memo<ConnectorListProps>(({ onSelect, selectedId }) => {
         </div>
       )}
 
-      <AddConnectorModal open={showAdd} onClose={() => setShowAdd(false)} />
+      {!customConnectorsDisabled && (
+        <AddConnectorModal open={showAdd} onClose={() => setShowAdd(false)} />
+      )}
     </div>
   );
 });

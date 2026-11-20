@@ -8,8 +8,16 @@ import { ConnectorModel } from '@/database/models/connector';
 import { PluginModel } from '@/database/models/plugin';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { assertConnectorAllowed } from '@/server/services/connector/policy';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
+/** A `customPlugin` is a member-defined tool; a `plugin` row is a marketplace install. */
+const assertPluginAllowed = (identifier: string, type: 'customPlugin' | 'plugin' | string) =>
+  assertConnectorAllowed({
+    identifier,
+    sourceType: type === 'customPlugin' ? 'custom' : 'marketplace',
+  });
 
 const pluginProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -33,6 +41,7 @@ export const pluginRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertPluginAllowed(input.identifier, input.type);
       const result = await ctx.pluginModel.findById(input.identifier);
 
       // if not exist, we should create the plugin
@@ -68,6 +77,7 @@ export const pluginRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertPluginAllowed(input.identifier, input.type);
       const data = await ctx.pluginModel.create({
         customParams: input.customParams,
         identifier: input.identifier,
@@ -127,6 +137,7 @@ export const pluginRouter = router({
       const target = await ctx.pluginModel.findById(input.id);
       if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Plugin not found' });
       assertWorkspaceRowManageable(ctx, target.userId, 'plugin');
+      await assertPluginAllowed(input.id, target.type);
 
       return ctx.pluginModel.update(input.id, {
         customParams: input.customParams,

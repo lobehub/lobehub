@@ -14,6 +14,7 @@ import { langfuseEnv } from '@/envs/langfuse';
 import { sandboxEnv } from '@/envs/sandbox';
 import { toolsEnv } from '@/envs/tools';
 import { OIDC_ISSUER_PATH } from '@/libs/oidc-provider/routes';
+import { getConnectorPolicy } from '@/server/services/connector/policy';
 import { resolveMemoryServiceModelConfig } from '@/server/services/memory/userMemory/systemAgent';
 import { type GlobalServerConfig } from '@/types/serverConfig';
 import { cleanObject } from '@/utils/object';
@@ -137,6 +138,7 @@ export const getServerGlobalConfig = async () => {
   const tenant = currentTenantScope();
   const systemModels = await getServerSystemModels();
   const loginMethods = await getLoginMethods();
+  const connectorPolicy = await getConnectorPolicy();
   const config: GlobalServerConfig = {
     aiProvider: await genServerAiProvidersConfig(getAiProviderSpecificConfig()),
     ...(appEnv.APP_URL ? { appUrl: appEnv.APP_URL.replace(/\/+$/, '') } : undefined),
@@ -147,6 +149,9 @@ export const getServerGlobalConfig = async () => {
     // Never fall back to the server-internal DEVICE_GATEWAY_URL.
     ...(gatewayEnv.DEVICE_GATEWAY_PUBLIC_URL
       ? { deviceGatewayUrl: gatewayEnv.DEVICE_GATEWAY_PUBLIC_URL }
+      : undefined),
+    ...(connectorPolicy && !connectorPolicy.allowCustomConnectors
+      ? { disableCustomConnectors: true }
       : undefined),
     disableEmailPassword: !loginMethods.emailPassword,
     enableBusinessFeatures: ENABLE_BUSINESS_FEATURES,
