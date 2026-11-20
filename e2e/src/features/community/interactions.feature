@@ -97,5 +97,5 @@ Feature: Discover Interactions
   @COMMUNITY-INTERACT-010 @P1
   Scenario: Open an old marketplace bookmark with a search
     Given I navigate to "/community?q=developer"
-    Then I should see only "Code Assistant" in the assistant catalog
-    And I should be navigated to "/marketplace/agent?q=developer"
+    Then I should be navigated to "/marketplace/agent?q=developer"
+    And I should see only "Code Assistant" in the assistant catalog

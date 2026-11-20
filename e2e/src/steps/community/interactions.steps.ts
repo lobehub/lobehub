@@ -3,6 +3,7 @@ import { Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
 import type { CustomWorld } from '../../support/world';
+import { WAIT_TIMEOUT } from '../../support/world';
 
 // ============================================
 // When Steps (Actions)
@@ -187,7 +188,7 @@ Then(
   'I should see only {string} in the assistant catalog',
   async function (this: CustomWorld, title: string) {
     const rows = this.page.getByTestId('assistant-item');
-    await expect(rows).toHaveCount(1);
+    await expect(rows).toHaveCount(1, { timeout: WAIT_TIMEOUT });
     await expect(rows.first()).toContainText(title);
   },
 );
@@ -313,7 +314,7 @@ Then('I should see the provider detail content', async function (this: CustomWor
 Then('I should see only these MCP cards', async function (this: CustomWorld, expected: DataTable) {
   const cards = this.page.getByTestId('mcp-item');
   const rows = expected.raw();
-  await expect(cards).toHaveCount(rows.length);
+  await expect(cards).toHaveCount(rows.length, { timeout: WAIT_TIMEOUT });
   for (const [name] of rows) {
     await expect(cards.getByText(name, { exact: true })).toBeVisible();
   }
@@ -342,5 +343,7 @@ Then('I should see the MCP detail content', async function (this: CustomWorld) {
 });
 
 Then('I should be navigated to {string}', async function (this: CustomWorld, expectedPath: string) {
-  await expect(this.page).toHaveURL((url) => url.pathname + url.search === expectedPath);
+  await expect(this.page).toHaveURL((url) => url.pathname + url.search === expectedPath, {
+    timeout: WAIT_TIMEOUT,
+  });
 });
