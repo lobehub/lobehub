@@ -126,3 +126,13 @@ describe('buildNewTopicMetadata — cloud sandbox placement', () => {
     ).toMatchObject({ sandboxEnvironmentId: 'env-1', sandboxSeeded: true });
   });
 });
+
+describe('buildNewTopicMetadata — device denial', () => {
+  // A topic a device-denied run creates keeps the mark for its automatic continuations.
+  it('marks a topic created by a device-denied run, and only then', () => {
+    expect(buildNewTopicMetadata({ deviceAccessDenied: true })).toMatchObject({
+      deviceAccessDenied: true,
+    });
+    expect(buildNewTopicMetadata({ deviceAccessDenied: false })).toBeUndefined();
+  });
+});

@@ -652,6 +652,7 @@ export const setupTurn = async (
         appContext,
         botContext,
         cronJobId,
+        deviceAccessDenied: delegatedDeviceAccessDenied,
         deviceBindingPinned: Boolean(effectiveRequestedDeviceId),
         editingAgentId,
         openedBy,
@@ -739,6 +740,11 @@ export const setupTurn = async (
       // The pinned model lives in the top-level `topics.model`/`provider` columns
       // (config source of truth), NOT in metadata.
       const existingTopic = await deps.topicModel.findById(topicId);
+      // A device-denied run continuing this conversation marks it, so its
+      // automatic continuations keep the denial too (see the metadata field).
+      if (delegatedDeviceAccessDenied && !existingTopic?.metadata?.deviceAccessDenied) {
+        await deps.topicModel.updateMetadata(topicId, { deviceAccessDenied: true });
+      }
       const pendingRun = existingTopic?.metadata?.scheduledRun;
       if (
         existingTopic?.status === 'scheduled' &&
