@@ -1,6 +1,6 @@
 import {
-  type ArtboardWorkPublishMetadata,
   type AgentWorkRunContext,
+  type ArtboardWorkPublishMetadata,
   type CanvasWorkPublishMetadata,
   type CreateAgentWorkInput,
   type DeleteDocumentWorkParams,
@@ -28,9 +28,12 @@ import { ScmChangeRequestModel } from '../scm';
 import { createAgentWork, deleteAgentWork, fillAgentWorkCost, updateAgentWork } from './agentWork';
 import {
   clearArtboardPublish,
+  clearArtboardPublishForTrash,
+  deleteArtboardWorksForTrash,
   findArtboardIdsByDeploymentIds,
   findArtboardWork,
   findArtboardWorkByWorkId,
+  findArtboardWorksForTrash,
   recordArtboardPublish,
   registerArtboardWork,
 } from './artboard';
@@ -155,6 +158,15 @@ export class WorkModel {
 
   findArtboardIdsByDeploymentIds = (deploymentIds: string[]) =>
     findArtboardIdsByDeploymentIds(this.ctx, deploymentIds);
+
+  findArtboardWorksForTrash = (artboardIds: string[]) =>
+    findArtboardWorksForTrash(this.ctx, artboardIds);
+
+  clearArtboardPublishForTrash = (artboardIds: string[]) =>
+    clearArtboardPublishForTrash(this.ctx, artboardIds);
+
+  deleteArtboardWorksForTrash = (artboardIds: string[]) =>
+    deleteArtboardWorksForTrash(this.ctx, artboardIds);
 
   registerCanvas = (params: RegisterCanvasWorkParams): Promise<WorkItem> =>
     registerCanvasWork(this.ctx, params);
