@@ -28,6 +28,7 @@ import {
 } from './descriptors';
 import { openExternalWork } from './openExternalWork';
 import { useResourceDeletedPrompt } from './useResourceDeletedPrompt';
+import WorkCardMenu from './WorkCardMenu';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
@@ -303,6 +304,12 @@ interface WorkSummaryCardProps {
    */
   onOpen?: (item: WorkSummaryItem) => void;
   /**
+   * Show the "more" menu on the `card` variant. Only the conversation's own
+   * message cards pass it; other surfaces (galleries, sidebars, share visitors)
+   * keep the card action-free.
+   */
+  showMenu?: boolean;
+  /**
    * `card` (default) renders the elevated 36×36 icon-box layout used across the
    * chat portal and the works gallery. `inline` renders a flat row (17px icon,
    * 6px hover fill) for the WorkingSidebar Overview, so a shared card doesn't
@@ -313,7 +320,7 @@ interface WorkSummaryCardProps {
 }
 
 const WorkSummaryCard = memo<WorkSummaryCardProps>(
-  ({ className, item, onOpen, variant = 'card' }) => {
+  ({ className, item, onOpen, showMenu, variant = 'card' }) => {
     const { t } = useTranslation('chat');
     const { t: tTopic } = useTranslation('topic');
     const density = useDensityTokens();
@@ -530,6 +537,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
                 {usage.value}
               </Center>
             )}
+            {showMenu && <WorkCardMenu item={item} />}
           </Flexbox>
           <WorkMetaLine
             branch={branch}
