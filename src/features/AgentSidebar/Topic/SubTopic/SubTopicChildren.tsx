@@ -4,7 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { useSubTopicTree } from './context';
-import SubTopicItem from './SubTopicItem';
+import SubTopicRows from './SubTopicRows';
 
 /** Indent of nested sub-topic rows: one level, under the opener's title. */
 const SUB_TOPIC_INDENT = 20;
@@ -23,9 +23,7 @@ const SubTopicChildren = memo<{ openerAgentId?: string; topicId: string }>(
         gap={1}
         style={{ paddingInlineStart: SUB_TOPIC_INDENT }}
       >
-        {nodes.map((node) => (
-          <SubTopicItem key={node.id} node={node} openerAgentId={openerAgentId} />
-        ))}
+        <SubTopicRows nodes={nodes} openerAgentId={openerAgentId} />
       </Flexbox>
     );
   },

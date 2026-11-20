@@ -16,6 +16,7 @@ import type { LobeChatDatabase } from '@/database/type';
 // Direct file import (not the barrel) to avoid pulling in RuntimeExecutors and
 // its workspace-package transitive deps in the unit-test environment.
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
+import { onAbandonedSubTopicRun } from '@/server/services/subTopic/settle';
 
 import { CompletionLifecycle } from './CompletionLifecycle';
 import { getServerHooks } from './hooks/serverHooks';
@@ -389,6 +390,17 @@ export class AbandonOperationService {
         );
       }
     }
+    // A sub-topic's parent hears that the run ended (top-level runs only).
+    if (!origin.lineage?.isSubAgent && origin.userId && origin.topicId) {
+      await onAbandonedSubTopicRun({
+        db: this.db,
+        operationId,
+        reason,
+        topicId: origin.topicId,
+        userId: origin.userId,
+        workspaceId: origin.workspaceId,
+      });
+    }
 
     // Safety net for the durable row. `dispatchHooks` owns the rich terminal
     // write (step count, usage, cost, traceS3Key) via `persistCompletion`, but
@@ -682,6 +694,17 @@ export class AbandonOperationService {
     // A newer operation owning the topic means this callback cannot prove which
     // run the hooks belong to, the same rule `heteroFinish` applies.
     if (settled.ownershipUnproven) return;
+    // A sub-topic's parent hears that the run ended, hooks or not.
+    if (op.topicId && op.userId && !op.parentOperationId) {
+      await onAbandonedSubTopicRun({
+        db: this.db,
+        operationId,
+        reason,
+        topicId: op.topicId,
+        userId: op.userId,
+        workspaceId: op.workspaceId ?? undefined,
+      });
+    }
     const serializedHooks = settled.hooks ?? readDurableHooks(op.metadata);
     if (
       !serializedHooks?.length &&

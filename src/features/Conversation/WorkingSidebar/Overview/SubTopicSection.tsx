@@ -10,7 +10,7 @@ import {
   isInFlight,
   type SubTopicNode,
 } from '@/features/AgentSidebar/Topic/SubTopic/buildSubTopicTree';
-import SubTopicItem from '@/features/AgentSidebar/Topic/SubTopic/SubTopicItem';
+import SubTopicRows from '@/features/AgentSidebar/Topic/SubTopic/SubTopicRows';
 import { useChatStore } from '@/store/chat';
 import { subTopicSelectors } from '@/store/chat/selectors';
 import { useUserStore } from '@/store/user';
@@ -47,9 +47,7 @@ const SubTopicSection = memo<SubTopicSectionProps>(({ afterBreak, agentId, topic
         </span>
       </Flexbox>
       <Flexbox gap={1}>
-        {nodes.map((node) => (
-          <SubTopicItem key={node.id} node={node} openerAgentId={agentId} />
-        ))}
+        <SubTopicRows nodes={nodes} openerAgentId={agentId} />
       </Flexbox>
     </Flexbox>
   );

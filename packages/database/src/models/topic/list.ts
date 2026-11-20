@@ -195,7 +195,14 @@ export const query = async (
       : undefined;
   // A topic opened from a live parent lists under that parent instead.
   const excludeOpenedCondition = excludeOpenedTopics
-    ? not(openedFromLiveParentCondition(ctx) as SQL)
+    ? not(
+        openedFromLiveParentCondition(ctx, {
+          excludeStatuses: excludeStatuses as ChatTopicStatus[] | undefined,
+          excludeTriggers: includeTriggerCondition ? undefined : excludeTriggers,
+          includeTriggers: [includeTriggers, triggers],
+          onlyMine,
+        }) as SQL,
+      )
     : undefined;
   const triggerCondition =
     triggers && triggers.length > 0 ? inArray(topics.trigger, triggers) : undefined;

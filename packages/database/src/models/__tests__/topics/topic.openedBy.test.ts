@@ -115,7 +115,7 @@ describe('TopicModel - sub-topics (metadata.openedBy)', () => {
     ]);
   });
 
-  it('walks a deep chain to its end for a cascade, unlike a sidebar listing', async () => {
+  it('walks a deep chain to its end, for a sidebar listing and a cascade alike', async () => {
     // parent → child-same → d1 → … → d6: seven generations below the parent.
     const chain = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6'];
     let previous = 'child-same';
@@ -133,7 +133,9 @@ describe('TopicModel - sub-topics (metadata.openedBy)', () => {
       includeDescendants: true,
       openerTopicIds: ['parent'],
     });
-    expect(listing.map((row) => row.id)).not.toContain('d6');
+    // The agent list hides every one of them (their parents are live), so the
+    // sidebar tree must reach the deepest or it would show nowhere.
+    expect(listing.map((row) => row.id)).toEqual(expect.arrayContaining(chain));
 
     const descendants = await topicModel.listOpenedDescendants('parent', {
       excludeStatuses: ['completed', 'archived'],
@@ -197,6 +199,28 @@ describe('TopicModel - sub-topics (metadata.openedBy)', () => {
     const after = await topicModel.query({ agentId: 'agent-b', ...filter });
     // The cross-agent child lost its opener; the grandchild's opener still exists.
     expect(after.items.map((row: any) => row.id)).toEqual(['child-cross']);
+  });
+
+  it('keeps a sub-topic at the top level when its parent is a topic the same list hides', async () => {
+    const list = (params: Record<string, unknown> = {}) =>
+      topicModel
+        .query({ agentId: 'agent-b', excludeOpenedTopics: true, ...params })
+        .then((result) => result.items.map((row: any) => row.id).sort());
+
+    // A cron parent never lists in the sidebar, so it draws no tree for its sub-topics.
+    await serverDB.update(topics).set({ trigger: 'cron' }).where(eq(topics.id, 'parent'));
+    expect(await list({ excludeTriggers: ['cron', 'task'] })).toEqual(['child-cross']);
+    // Without that filter the parent lists, and they nest under it again.
+    expect(await list({ excludeTriggers: ['task'] })).toEqual([]);
+    // A list of only some triggers hides a parent of another trigger.
+    expect(await list({ includeTriggers: ['task'] })).toEqual(['child-task']);
+
+    // "Only mine" hides another member's parent.
+    await serverDB
+      .update(topics)
+      .set({ trigger: null, userId: otherUserId })
+      .where(eq(topics.id, 'parent'));
+    expect(await list({ excludeTriggers: ['task'], onlyMine: true })).toEqual(['child-cross']);
   });
 
   it('treats an opener in the recycle bin as gone', async () => {

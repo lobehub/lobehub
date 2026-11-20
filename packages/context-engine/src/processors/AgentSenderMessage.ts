@@ -70,7 +70,10 @@ export const formatAgentSenderHeader = (
  * finished a turn. The model continues it by sending to the sub-topic, not
  * by replying to a message.
  */
-export const formatSubTopicResultHeader = (callback: MessageSubTopicCallback) => {
+export const formatSubTopicResultHeader = (
+  callback: MessageSubTopicCallback,
+  { canRunLhCommand = false }: AgentSenderMessageConfig = {},
+) => {
   const attributes = [
     ['topic_id', callback.topicId],
     ['agent_id', callback.agentId],
@@ -81,7 +84,11 @@ export const formatSubTopicResultHeader = (callback: MessageSubTopicCallback) =>
     .map(([key, value]) => `${key}="${escapeAttribute(value)}"`)
     .join(' ');
 
-  return `<sub_topic_result ${attributes}>A sub-topic you opened finished a turn; its reply follows. To continue it, send to that sub-topic (lobe-topic sendToTopic, or \`lh topic send ${callback.topicId}\`); your response here is not delivered to it.</sub_topic_result>`;
+  const instruction = canRunLhCommand
+    ? `A sub-topic you opened finished a turn; its reply follows. To continue it, run \`lh topic send ${callback.topicId} -c "<message>"\`; your response here is not delivered to it.`
+    : 'A sub-topic you opened finished a turn; its reply follows. You cannot run commands here, so you cannot continue it directly and your response stays in this conversation: if it needs more, tell the user so they can continue it.';
+
+  return `<sub_topic_result ${attributes}>${instruction}</sub_topic_result>`;
 };
 
 /**
@@ -117,7 +124,7 @@ export class AgentSenderMessageProcessor extends BaseProcessor {
 
       const subTopic = message.metadata?.subTopicCallback as MessageSubTopicCallback | undefined;
       const header = subTopic?.topicId
-        ? formatSubTopicResultHeader(subTopic)
+        ? formatSubTopicResultHeader(subTopic, this.config)
         : formatAgentSenderHeader(message.id, sender, this.config);
       clonedContext.messages[i] = { ...message, content: `${header}\n\n${message.content}` };
       processedCount++;

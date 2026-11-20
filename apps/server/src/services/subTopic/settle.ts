@@ -3,6 +3,7 @@ import debug from 'debug';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
+import { TaskResultCallbackRedisStore } from '@/server/services/taskResultBridge/redisStore';
 import {
   ResultWakeChannel,
   type WakeChannelExecAgent,
@@ -73,5 +74,50 @@ export const onSubTopicTurnSettled = async (
     await bridge.wakeDirect({ agentId: topic.agentId, originTopicId: topicId, receiptIds });
   } catch (error) {
     log('waking %s for sub-topic receipts that arrived while it ran failed: %O', topicId, error);
+  }
+};
+
+/**
+ * A sub-topic run the watchdog finalized as abandoned (its device or process
+ * went away): the parent still has to hear that it ended. The error receipt
+ * is written here; its wake is queued for the task-result watchdog, which
+ * drains every recoverable receipt scope with an agent runner of its own — so
+ * this path needs none. Without Redis there is no queue, and the receipt waits
+ * on the parent's main line for its next turn. Never throws.
+ */
+export const onAbandonedSubTopicRun = async (params: {
+  db: LobeChatDatabase;
+  operationId: string;
+  reason: string;
+  topicId: string;
+  userId: string;
+  workspaceId?: string;
+}) => {
+  const { db, operationId, topicId, userId, workspaceId } = params;
+  try {
+    await deliverSubTopicReceipt(
+      {
+        canQueue: () => ResultWakeChannel.canQueue(),
+        queueWakeup: async ({ agentId, callbackMessageId, originTopicId, receiptId }) => {
+          if (!ResultWakeChannel.canQueue()) return;
+          await new TaskResultCallbackRedisStore(userId, originTopicId, workspaceId).createPending({
+            agentId,
+            callbackMessageId,
+            operationId: receiptId,
+          });
+        },
+      },
+      {
+        db,
+        errorMessage: `The run ended without finishing (${params.reason}).`,
+        operationId,
+        reason: 'error',
+        topicId,
+        userId,
+        workspaceId,
+      },
+    );
+  } catch (error) {
+    log('reporting abandoned sub-topic run %s failed: %O', operationId, error);
   }
 };

@@ -331,6 +331,7 @@
   "subTopic.retire.trash.self": "只删除这一个",
   "subTopic.retire.trash.title": "删除带子话题的话题",
   "subTopic.sectionTitle": "子话题",
+  "subTopic.showMore": "再显示 {{count}} 个",
   "subTopic.untitled": "子话题",
   "subTopic.untitledConversation": "未命名话题",
   "taskManager.agent": "任务助手",

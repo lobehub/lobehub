@@ -131,6 +131,16 @@ export const topicListViewFields = ({
   withDetails,
 });
 
+/** The list view a loaded bucket was fetched with, for its next page or a refresh to keep. */
+export const topicListViewOf = (data: TopicData | undefined) => ({
+  excludeOpenedTopics: data?.excludeOpenedTopics,
+  excludeStatuses: data?.excludeStatuses,
+  excludeTriggers: data?.excludeTriggers,
+  isInbox: data?.isInbox,
+  onlyMine: data?.onlyMine,
+  sortBy: data?.sortBy,
+});
+
 /**
  * The filter a loaded bucket was fetched with, for `sendMessageInServer` to
  * apply to the topic list it returns. Without it the server echoes an
