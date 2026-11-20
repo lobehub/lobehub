@@ -1582,6 +1582,13 @@
       "when": 1795165712823,
       "tag": "0225_artboard_boards_drop_old_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 226,
+      "version": "7",
+      "when": 1795169170985,
+      "tag": "0226_workspace_member_nickname",
+      "breakpoints": true
     }
   ],
   "version": "6"

@@ -6143,6 +6143,7 @@ table workspace_members {
   workspace_id text [not null]
   user_id text [not null]
   role text [not null, default: 'member']
+  nickname text
   title text
   responsibilities text
   config jsonb [not null, default: `{}`]
