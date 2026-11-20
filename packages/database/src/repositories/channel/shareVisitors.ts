@@ -253,7 +253,9 @@ export const readShareVisitorChannel = (
       joined: false,
       readOnly: true as const,
       ...view,
-      jobs: viewerJobs(view.jobs, viewerId, () => false).map(({ topicId: _, ...job }) => job),
+      jobs: viewerJobs(view.jobs, viewerId, () => false).map(
+        ({ topicId: _, topicTitle: __, ...job }) => job,
+      ),
       messages: view.messages.map(withoutTopic),
       rootMessage: view.rootMessage && withoutTopic(view.rootMessage),
     };
