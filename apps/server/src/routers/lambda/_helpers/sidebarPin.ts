@@ -1,11 +1,15 @@
 import { TRPCError } from '@trpc/server';
 
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
+import { MAX_PINNED_ORDER_ITEMS } from '@/database/repositories/home/pinnedOrder';
 import type { LobeChatDatabase } from '@/database/type';
 import { getWorkspaceScopedPermissionMatches } from '@/server/services/workspacePermission';
 
-/** Upper bound for one member's personal pin list in a workspace. */
-export const MAX_SIDEBAR_PINNED_ITEMS = 200;
+/**
+ * Upper bound for one member's pin lists in a workspace. They can hold every
+ * team pin, so this matches the team order cap.
+ */
+export const MAX_SIDEBAR_PINNED_ITEMS = MAX_PINNED_ORDER_ITEMS;
 
 export const TEAM_PIN_FORBIDDEN_MESSAGE = 'Only workspace owners and admins can change team pins';
 

@@ -17,8 +17,12 @@ import { setNamespace } from '@/utils/storeDebug';
 
 const n = setNamespace('sidebarUI');
 
-/** Upper bound for one member's personal pin list (mirrors the server cap). */
-export const MAX_SIDEBAR_PINNED_ITEMS = 200;
+/**
+ * Upper bound for one member's pin lists (mirrors the server cap). The pinned
+ * order and the unpinned-team list can hold every team pin, so this matches
+ * the team order cap (`MAX_PINNED_ORDER_ITEMS`).
+ */
+export const MAX_SIDEBAR_PINNED_ITEMS = 2000;
 
 export interface PersonalPinTarget {
   id: string;

@@ -72,6 +72,18 @@ describe('reorderMyPinned', () => {
     });
   });
 
+  it('keeps a pinned order longer than 200 rows, since it can hold every team pin', async () => {
+    const many = Array.from({ length: 250 }, (_, i) => `team-${i}`);
+    setPinned([]);
+
+    await reorder(many);
+
+    expect(updatePreference).toHaveBeenCalledWith({
+      sidebarPinnedItemIds: many,
+      sidebarPinnedOrderCustomized: true,
+    });
+  });
+
   it('skips the write when nothing moved', async () => {
     setPinned(['a', 'b']);
 
