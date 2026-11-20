@@ -4,12 +4,13 @@ import type {
   OpenedTopicItem,
   TopicOpenedBy,
 } from '@lobechat/types';
-import { and, desc, eq, exists, inArray, isNull, not, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNotNull, isNull, not, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
-import { agentOperations, taskTopics, topics } from '../../schemas';
+import { agentOperations, agents, chatGroups, taskTopics, topics } from '../../schemas';
 import { notTrashed } from '../../utils/softDelete';
 import { topicRunStartedAtColumn } from '../../utils/topicRunStartedAt';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 import { topicsOwnership } from '../task/context';
 import type { TopicModelContext } from './context';
 
@@ -218,6 +219,10 @@ export interface OpenedParentListFilters {
  * (`QueryTopicParams.excludeOpenedTopics`). Once its parent is gone, or is a
  * topic the list hides (a cron or task run, another member's topic under
  * "only mine"), it shows at the top level: a hidden parent draws no tree.
+ * The same holds for a parent the caller cannot see at all — another user's,
+ * or in a workspace one whose agent or group is another member's private
+ * one: its list and tree are closed to the caller, so the child must not
+ * depend on them.
  *
  * The outer columns go through `sql.identifier`: inside a correlated subquery
  * a bare `${topics.metadata}` renders unqualified and would resolve against
@@ -229,6 +234,33 @@ export const openedFromLiveParentCondition = (
 ) => {
   const { excludeStatuses, excludeTriggers, includeTriggers = [], onlyMine } = filters;
   const opener = alias(topics, 'opened_by_opener');
+  const openerAgent = alias(agents, 'opened_by_opener_agent');
+  const openerGroup = alias(chatGroups, 'opened_by_opener_group');
+  const scope = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  // The parent's own list is visible to the caller: the parent topic, and the
+  // agent or group it belongs to (same rule as the Recent feed's parent gate).
+  const visibleOpenerOwner = or(
+    and(isNull(opener.agentId), isNull(opener.groupId)),
+    and(
+      isNotNull(opener.groupId),
+      exists(
+        ctx.db
+          .select({ one: sql`1` })
+          .from(openerGroup)
+          .where(and(eq(openerGroup.id, opener.groupId), buildWorkspaceWhere(scope, openerGroup))),
+      ),
+    ),
+    and(
+      isNull(opener.groupId),
+      isNotNull(opener.agentId),
+      exists(
+        ctx.db
+          .select({ one: sql`1` })
+          .from(openerAgent)
+          .where(and(eq(openerAgent.id, opener.agentId), buildWorkspaceWhere(scope, openerAgent))),
+      ),
+    ),
+  );
   const outerOpenedBy = sql`${sql.identifier('topics')}.${sql.identifier('metadata')} -> 'openedBy' ->> 'topicId'`;
   const liveOpener = ctx.db
     .select({ one: sql`1` })
@@ -237,6 +269,8 @@ export const openedFromLiveParentCondition = (
       and(
         eq(opener.id, outerOpenedBy),
         notTrashed(opener.isDeleted),
+        buildWorkspaceWhere(scope, opener),
+        visibleOpenerOwner,
         or(
           isNull(opener.status),
           not(inArray(opener.status, ['completed', 'archived', ...(excludeStatuses ?? [])])),

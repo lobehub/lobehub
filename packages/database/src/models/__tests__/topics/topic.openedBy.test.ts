@@ -223,6 +223,22 @@ describe('TopicModel - sub-topics (metadata.openedBy)', () => {
     expect(await list({ excludeTriggers: ['task'], onlyMine: true })).toEqual(['child-cross']);
   });
 
+  it('keeps a sub-topic at the top level when its parent is a topic the caller cannot see', async () => {
+    // Another user's topic (and agent) opened it: that list and its tree are
+    // closed to this caller, so hiding the child would lose it everywhere.
+    await serverDB.insert(topics).values({
+      agentId: 'agent-a',
+      id: 'mine-under-foreign',
+      metadata: openedBy('foreign', { agentId: 'agent-other' }),
+      userId,
+    });
+
+    const result = await topicModel.query({ agentId: 'agent-a', excludeOpenedTopics: true });
+    expect(result.items.map((row: any) => row.id)).toContain('mine-under-foreign');
+    // A parent the caller can see still nests it.
+    expect(result.items.map((row: any) => row.id)).not.toContain('child-same');
+  });
+
   it('treats an opener in the recycle bin as gone', async () => {
     await topicModel.softDelete(['parent'], { deletedAt: new Date() });
 

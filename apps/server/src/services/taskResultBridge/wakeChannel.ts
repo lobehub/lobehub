@@ -144,9 +144,14 @@ export class ResultWakeChannel {
     const topicModel = new TopicModel(this.db, this.userId, this.workspaceId);
     const topic = await topicModel.findById(originTopicId);
     const botContext = topic?.metadata?.bot as ChatTopicBotContext | undefined;
+    // With the queue, the completion hook delivers a bot reply and settles /
+    // re-drains it. Without one there is nothing to settle, but a bot
+    // conversation still has to receive the reply the woken run writes.
     const hooks: AgentHook[] = callbackStore
       ? [this.createCreatorCompletionHook(receiptIds, agentId, originTopicId, botContext)]
-      : [];
+      : botContext?.platformThreadId
+        ? [this.createDirectBotDeliveryHook(botContext)]
+        : [];
     const reservationId = `task-result-wakeup-${receiptIds[0]}`;
 
     try {
@@ -203,6 +208,29 @@ export class ResultWakeChannel {
     );
     await callbackStore.settle(params.receiptIds);
     await this.drain(params.agentId, params.originTopicId);
+  }
+
+  /**
+   * The direct (no-Redis) wake's bot delivery: the reply goes to the messaging
+   * platform in-process. Nothing records delivered chunks, so a retry could
+   * repeat a chunk — the queue's retryable webhook route needs Redis anyway.
+   */
+  private createDirectBotDeliveryHook(botContext: ChatTopicBotContext): AgentHook {
+    return {
+      handler: async (event) => {
+        await new BotCallbackService(this.db).handleCallback({
+          ...event,
+          applicationId: botContext.applicationId,
+          messengerInstallationKey: botContext.messengerInstallationKey,
+          platformThreadId: botContext.platformThreadId,
+          type: 'completion',
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        } as BotCallbackBody);
+      },
+      id: 'result-wake-bot-delivery',
+      type: 'onComplete',
+    };
   }
 
   private createCreatorCompletionHook(
