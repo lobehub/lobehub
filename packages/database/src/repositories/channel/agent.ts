@@ -197,19 +197,39 @@ export const requireChannelAgent = async (
   options: { allowShared?: boolean } = {},
 ) => {
   const [agent] = await tx
-    .select({ name: agents.name, slug: agents.slug, title: agents.title })
+    .select({
+      name: agents.name,
+      slug: agents.slug,
+      title: agents.title,
+      visibility: agents.visibility,
+    })
     .from(agents)
     .where(agentUsableByWhere(agentId, { userId, workspaceId: workspaceId ?? undefined }))
     .for('share');
   if (agent)
     // LobeAI rows are stored without a title; label it the way the rest of the product does.
-    return { name: agent.name, title: normalizeInboxAgentTitle(agent.title, agent) };
+    return {
+      name: agent.name,
+      title: normalizeInboxAgentTitle(agent.title, agent),
+      visibility: agent.visibility,
+    };
   const shared = options.allowShared
     ? await findSharedChannelAgent(tx, userId, agentId)
     : undefined;
   if (!shared) throw new ChannelError('NOT_FOUND', 'Agent not found');
-  return { name: shared.name, title: shared.title };
+  return { name: shared.name, title: shared.title, visibility: null };
 };
+
+/**
+ * Whether a workspace Channel may hold its owner's private Agent. Only the owner can use one, so
+ * only conversations no one else can join take it: the direct conversation with it, and the
+ * conversation between two of the owner's Agents. A group would show it, and its replies, to
+ * every member. The personal space has no private Agents.
+ */
+const acceptsPrivateAgent = (
+  channel: Pick<ChannelItem, 'agentId' | 'agentPairKey' | 'workspaceId'>,
+  agentId: string,
+) => !channel.workspaceId || channel.agentId === agentId || !!channel.agentPairKey;
 
 /**
  * Called under the Channel lock after the caller's admin role has been checked. `inviter` is the
@@ -240,6 +260,11 @@ export const addAgentMember = async (
   const agent = await requireChannelAgent(tx, channel.workspaceId, userId, input.agentId, {
     allowShared: acceptsSharedAgent(channel, input.agentId),
   });
+  if (agent.visibility === 'private' && !acceptsPrivateAgent(channel, input.agentId))
+    throw new ChannelError(
+      'FORBIDDEN',
+      'A private Agent cannot join a workspace Channel; make it visible to the workspace first',
+    );
   // Idempotent per Agent: retrying a partly applied batch must not add a second member that
   // answers the same requests again.
   const [joined] = await tx
