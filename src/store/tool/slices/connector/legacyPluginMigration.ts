@@ -133,43 +133,12 @@ export const buildConnectorPayloadFromLegacy = (legacy: LobeToolCustomPlugin): M
   };
 };
 
-/**
- * Orchestrate the legacy → connector save flow. Sequence matters:
- *
- *   1. Build payload from legacy shape; reject early on broken data.
- *   2. `createConnector` — server is idempotent on `(user_id, identifier)` so
- *      a half-baked marketplace connector from the old `syncPluginTools` path
- *      becomes an UPDATE, no client-side collision branch needed.
- *   3. `syncConnectorTools` — fail-loud. On failure (the MCP endpoint is
- *      unreachable / 500s), ROLL BACK the connector — but only when step 2
- *      actually CREATED it (see `hasExistingConnector`), never when it merely
- *      updated a pre-existing row. Leaving a freshly-created one behind would
- *      strand the user: the tool-less
- *      connector now shadows the legacy row, so it renders as a duplicate in
- *      the connector list AND `connectorByIdentifier` starts resolving it,
- *      which removes the "Configure to migrate" entry point (that only shows
- *      when no connector exists). Rolling back returns us atomically to the
- *      pre-migration state — legacy row only — so the user can retry once the
- *      endpoint is healthy (create is rebuilt from the untouched legacy shape).
- *   4. `uninstallCustomPlugin` — best-effort. A throw is logged but swallowed;
- *      the runtime's `connectorIdentifierSet` filter in
- *      `aiAgent/index.ts:1717` dedupes by identifier (connector wins), so a
- *      lingering legacy row is harmless and the next save retries cleanup.
- *
- * Returning the validation failure inline (vs throwing) lets the modal show a
- * friendly toast distinct from a network error.
- */
 export interface MigrationSaveDeps {
-  createConnector: (payload: MigrationCreatePayload) => Promise<string>;
+  createConnector: (payload: MigrationCreatePayload) => Promise<{ id: string; isNew: boolean }>;
   deleteConnector: (id: string) => Promise<void>;
-  /**
-   * Whether a `user_connectors` row already exists for this identifier BEFORE
-   * the create call. `createConnector` is an idempotent upsert, so on the sync
-   * failure path we must NOT delete a row we merely updated — only one we created.
-   */
-  hasExistingConnector: (identifier: string) => boolean;
-  syncConnectorTools: (id: string) => Promise<void>;
-  uninstallCustomPlugin: (id: string) => Promise<void>;
+  refreshLists: () => Promise<void>;
+  syncConnectorTools: (id: string, payload: MigrationCreatePayload) => Promise<void>;
+  uninstallCustomPlugin: (identifier: string) => Promise<void>;
 }
 
 export type MigrationSaveResult =
@@ -196,39 +165,33 @@ export const executeLegacyMigrationSave = async (
     identifier: legacyPlugin.identifier,
   };
 
-  // Capture pre-existence BEFORE the upsert so the rollback below only ever
-  // deletes a connector THIS migration created (see MigrationSaveDeps).
-  const connectorAlreadyExisted = deps.hasExistingConnector(payload.identifier);
-
-  const newConnectorId = await deps.createConnector(payload);
+  const { id, isNew } = await deps.createConnector(payload);
 
   try {
-    await deps.syncConnectorTools(newConnectorId);
-  } catch (syncError) {
-    // Endpoint unreachable / manifest fetch failed. Roll the just-created
-    // connector back so we don't leave a tool-less duplicate alongside the
-    // surviving legacy plugin (see step 3 above), then rethrow so the modal
-    // surfaces the failure and the legacy row stays as the single source.
-    //
-    // Skip rollback when a connector already existed for this identifier: the
-    // upsert UPDATED that row (it did not create one), so deleting it would
-    // destroy a working connector's synced tools/credentials — e.g. a prior
-    // successful migration whose best-effort legacy uninstall had failed.
-    if (!connectorAlreadyExisted) {
-      try {
-        await deps.deleteConnector(newConnectorId);
-      } catch (rollbackError) {
-        console.error('[connector-migration] rollback after failed sync failed', rollbackError);
+    try {
+      await deps.syncConnectorTools(id, payload);
+    } catch (error) {
+      // The server owns the upsert decision. A cached list may omit a connector
+      // that was already installed before this attempt.
+      if (isNew) {
+        await deps.deleteConnector(id).catch((rollbackError) => {
+          console.error('[connector-migration] rollback after failed sync failed', rollbackError);
+        });
       }
+      throw error;
     }
-    throw syncError;
-  }
 
-  try {
-    await deps.uninstallCustomPlugin(legacyPlugin.identifier);
-  } catch (e) {
-    console.error('[connector-migration] uninstall legacy plugin failed', e);
-  }
+    // Keep the synced connector if legacy cleanup fails (connector-first runtime).
+    await deps.uninstallCustomPlugin(legacyPlugin.identifier).catch((error) => {
+      console.error('[connector-migration] uninstall legacy plugin failed', error);
+    });
 
-  return { connectorId: newConnectorId, ok: true };
+    return { connectorId: id, ok: true };
+  } finally {
+    // Refresh only after the writes finish. A stalled list must neither hold
+    // the save open nor turn a successful tool sync into a rollback.
+    void deps.refreshLists().catch((error) => {
+      console.error('[connector-migration] refreshing lists failed', error);
+    });
+  }
 };
