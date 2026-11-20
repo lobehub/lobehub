@@ -8,6 +8,11 @@ import { topicService } from '@/services/topic';
 import { type ChatStore } from '@/store/chat/store';
 import { type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import {
+  notifyRunStopFailed,
+  readRunStopFailureReason,
+  type RunStopFailureReason,
+} from '@/store/chat/utils/runStop';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { getHomeStoreState } from '@/store/home';
 import { type StoreSetter } from '@/store/types';
@@ -500,6 +505,7 @@ export class OperationActionsImpl {
     // remains synchronous, while callers such as Send now can await the returned
     // promise before starting a replacement native writer.
     let cancelHandler = Promise.resolve(true);
+    let stopFailureReason: RunStopFailureReason | undefined;
     if (operation.onCancelHandler) {
       log('[cancelOperation] calling cancel handler for %s (type=%s)', operationId, operation.type);
 
@@ -518,6 +524,7 @@ export class OperationActionsImpl {
           () => true,
           (err) => {
             log('[cancelOperation] cancel handler error for %s: %O', operationId, err);
+            stopFailureReason = readRunStopFailureReason(err);
             return false;
           },
         );
@@ -570,6 +577,10 @@ export class OperationActionsImpl {
         delete op.metadata.cancelReason;
         delete op.metadata.duration;
         delete op.metadata.endTime;
+        delete op.metadata.forceStop;
+        // Lets the caller say why, and offer to force the stop.
+        if (stopFailureReason) op.metadata.stopFailureReason = stopFailureReason;
+        else delete op.metadata.stopFailureReason;
       }),
       false,
       n(`cancelOperationFailed/${operationId}`),
@@ -666,9 +677,8 @@ export class OperationActionsImpl {
     // Cancel all matched operations
     void Promise.all(matchedIds.map((id) => this.#get().cancelOperation(id, reason)))
       .then((confirmations) => {
-        if (confirmations.some((confirmed) => !confirmed)) {
-          toast.error(t('backgroundActivity.stopFailed', { ns: 'chat' }));
-        }
+        const unconfirmed = matchedIds.filter((_, index) => !confirmations[index]);
+        if (unconfirmed.length > 0) this.#notifyStopFailed(unconfirmed, reason);
       })
       .catch((error: unknown) => {
         log('[cancelOperations] cancellation error: %O', error);
@@ -676,6 +686,37 @@ export class OperationActionsImpl {
       });
 
     return matchedIds;
+  };
+
+  /**
+   * Say why a stop failed. When the server named a reason (a device-hosted run
+   * whose runner could not confirm the exit), offer to force the stop: it
+   * re-runs the same cancel with `forceStop`, which the gateway cancel handler
+   * forwards as `force`.
+   */
+  #notifyStopFailed = (operationIds: string[], reason: string): void => {
+    const operations = this.#get().operations;
+    const forceable = operationIds.filter((id) => operations[id]?.metadata.stopFailureReason);
+    const failureReason = forceable.length
+      ? operations[forceable[0]].metadata.stopFailureReason
+      : undefined;
+
+    notifyRunStopFailed(
+      failureReason,
+      forceable.length
+        ? () => {
+            for (const id of forceable) {
+              this.#get().updateOperationMetadata(id, { forceStop: true });
+            }
+            void Promise.all(forceable.map((id) => this.#get().cancelOperation(id, reason))).then(
+              (confirmations) => {
+                // Forced stops that still fail have nothing left to offer.
+                if (confirmations.some((confirmed) => !confirmed)) notifyRunStopFailed(undefined);
+              },
+            );
+          }
+        : undefined,
+    );
   };
 
   cancelAllOperations = (reason: string = 'Cancel all operations'): void => {

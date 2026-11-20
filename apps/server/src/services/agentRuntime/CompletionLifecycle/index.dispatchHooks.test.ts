@@ -169,8 +169,11 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
 
       expect(model.recordCompletion).toHaveBeenCalledWith(
         'op-stale',
-        expect.objectContaining({ completionReason: 'lease_expired', status: 'abandoned' }),
+        expect.objectContaining({ status: 'abandoned' }),
       );
+      // The claim already wrote why the run was retired (`lease_expired` or
+      // `runner_disconnected`); the hook write must not overwrite it.
+      expect(model.recordCompletion.mock.calls[0][1]).toHaveProperty('completionReason', undefined);
       expect(dispatch).toHaveBeenCalled();
     });
 

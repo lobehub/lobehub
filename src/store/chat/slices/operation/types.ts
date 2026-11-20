@@ -7,6 +7,7 @@ import type {
 import { mergeMcpAppSource } from '@lobechat/types';
 
 import type { QueuedFollowUpRequest } from '@/services/aiAgent';
+import type { RunStopFailureReason } from '@/store/chat/utils/runStop';
 
 /**
  * Operation Type Definitions
@@ -140,9 +141,7 @@ export interface OperationMetadata {
    * API — though it settles as `completed` here. Nothing drains its queue next.
    */
   endedWithoutCompletion?: boolean;
-
   endTime?: number;
-
   // Error information
   error?: {
     type: string;
@@ -150,6 +149,12 @@ export interface OperationMetadata {
     code?: string;
     details?: any;
   };
+
+  /**
+   * Set before re-cancelling a run whose stop the device could not confirm:
+   * its cancel handler asks the server to end the run anyway (`force`).
+   */
+  forceStop?: boolean;
 
   /**
    * One-use automatic retry grant for a run explicitly dispatched by this client.
@@ -169,6 +174,7 @@ export interface OperationMetadata {
 
   // UI state (for sendMessage operation)
   inputEditorTempState?: any | null; // Editor state snapshot for cancel restoration
+
   inputSendErrorMsg?: string; // Error message to display in UI
   /**
    * A heterogeneous CLI run (Claude Code) whose producer types queued follow-ups
@@ -189,7 +195,6 @@ export interface OperationMetadata {
     total: number;
     percentage?: number;
   };
-
   // Runtime hooks (collected during execution, executed after completion)
   runtimeHooks?: RuntimeHooks;
 
@@ -209,6 +214,9 @@ export interface OperationMetadata {
    * tray says so.
    */
   steerUnsupported?: boolean;
+
+  /** Why the server could not confirm the last stop; kept while the run stays live. */
+  stopFailureReason?: RunStopFailureReason;
 
   /**
    * Upstream stream retry state surfaced by heterogeneous agents while no

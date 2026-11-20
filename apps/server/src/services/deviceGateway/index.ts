@@ -148,6 +148,34 @@ export class DeviceGateway {
   }
 
   /**
+   * The ids of the devices connected to one pool, or `undefined` when the
+   * gateway could not answer.
+   *
+   * Unlike {@link queryDeviceList}, a failed read is not reported as an empty
+   * pool: callers use this to retire runs whose device went away, and a gateway
+   * blip must not read as every device being offline.
+   */
+  async queryConnectedDeviceIds(
+    userId: string,
+    workspaceId?: string,
+  ): Promise<Set<string> | undefined> {
+    const client = this.getClient();
+    if (!client) return undefined;
+
+    try {
+      const devices = await client.queryDeviceList(userId, workspaceId);
+      return new Set(devices.map((device) => device.deviceId));
+    } catch (error) {
+      console.warn('[DeviceGateway] queryConnectedDeviceIds failed; presence unknown', {
+        error: error instanceof Error ? error.message : String(error),
+        userId,
+        workspaceId,
+      });
+      return undefined;
+    }
+  }
+
+  /**
    * The device's system info, preferring the desktop app's answer: its
    * `supportedTools` gate desktop-only tools, and when `lh connect` is up on the
    * same device an unconstrained read is answered by the CLI, which reports

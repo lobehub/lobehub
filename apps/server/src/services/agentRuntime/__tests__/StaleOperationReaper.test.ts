@@ -7,15 +7,24 @@ import { StaleOperationReaper } from '../StaleOperationReaper';
 
 const claimStaleRedriveMock = vi.fn();
 const settleStaleRunningMock = vi.fn();
+const settleDisconnectedRunnerMock = vi.fn();
 const releaseStaleRedriveMock = vi.fn();
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn().mockImplementation(function () {
     return {
       claimStaleRedrive: claimStaleRedriveMock,
       releaseStaleRedrive: releaseStaleRedriveMock,
+      settleDisconnectedRunner: settleDisconnectedRunnerMock,
       settleStaleRunning: settleStaleRunningMock,
     };
   }),
+}));
+
+const queryConnectedDeviceIdsMock = vi.fn();
+vi.mock('@/server/services/deviceGateway', () => ({
+  deviceGateway: {
+    queryConnectedDeviceIds: (...args: unknown[]) => queryConnectedDeviceIdsMock(...args),
+  },
 }));
 
 const finalizeAbandonedMock = vi.fn().mockResolvedValue({});
@@ -31,6 +40,8 @@ vi.mock('../AbandonOperationService', () => ({
  * Every WHERE condition is kept so a test can read the SQL it compiles to.
  */
 const whereConditions: SQL[] = [];
+/** The topic rows the runner check reads (`select … from topics … limit 1`). */
+let topicRows: any[] = [];
 const buildDb = (rows: any[], overlapRows: any[] = []) =>
   ({
     select: () => ({
@@ -41,12 +52,27 @@ const buildDb = (rows: any[], overlapRows: any[] = []) =>
             groupBy: () => ({
               having: () => ({ limit: vi.fn().mockResolvedValue(overlapRows) }),
             }),
+            limit: vi.fn().mockResolvedValue(topicRows),
             orderBy: () => ({ limit: vi.fn().mockResolvedValue(rows) }),
           };
         },
       }),
     }),
   }) as any;
+
+/** A topic whose `runningOperation` marker routes `op_x` to a device. */
+const deviceTopic = (marker: Record<string, any> = {}) => [
+  {
+    metadata: {
+      runningOperation: {
+        deviceId: 'dev_1',
+        heteroType: 'devin',
+        operationId: 'op_x',
+        ...marker,
+      },
+    },
+  },
+];
 
 const candidate = (id = 'op_x', overrides: Record<string, any> = {}) => ({
   id,
@@ -98,6 +124,9 @@ describe('StaleOperationReaper', () => {
   beforeEach(() => {
     claimStaleRedriveMock.mockReset().mockResolvedValue(1);
     settleStaleRunningMock.mockReset().mockResolvedValue(true);
+    settleDisconnectedRunnerMock.mockReset().mockResolvedValue(true);
+    queryConnectedDeviceIdsMock.mockReset().mockResolvedValue(new Set());
+    topicRows = [];
     releaseStaleRedriveMock.mockReset().mockResolvedValue(true);
     finalizeAbandonedMock.mockClear();
     whereConditions.length = 0;
@@ -279,6 +308,134 @@ describe('StaleOperationReaper', () => {
 
     expect(finalizeAbandonedMock).not.toHaveBeenCalled();
     expect(result).toMatchObject({ abandoned: 0, alive: 1 });
+  });
+
+  describe('device-hosted runs whose runner went away', () => {
+    const quietDeviceRun = (minutes: number, overrides: Record<string, any> = {}) =>
+      candidate('op_x', {
+        provider: 'devin',
+        updatedAt: new Date(Date.now() - minutes * 60_000),
+        ...overrides,
+      });
+
+    it('retires a run silent past the runner window whose device is offline', async () => {
+      // T-14643: a devin run on a desktop that was closed. Its device left the
+      // gateway, nothing reported for it, and the topic stayed `running` with
+      // no way to stop it until the hour-long hetero window ran out.
+      topicRows = deviceTopic();
+      const before = Date.now();
+
+      const result = await buildReaper([quietDeviceRun(12)], null).sweep();
+
+      expect(queryConnectedDeviceIdsMock).toHaveBeenCalledWith('user_x', undefined);
+      const [id, staleBefore] = settleDisconnectedRunnerMock.mock.calls[0];
+      expect(id).toBe('op_x');
+      // The CAS re-checks the lease against the 10-min runner window, so a
+      // batch landing meanwhile keeps the run alive.
+      expect(staleBefore.getTime()).toBeLessThanOrEqual(before - 10 * 60_000 + 5);
+      expect(staleBefore.getTime()).toBeGreaterThan(before - 11 * 60_000);
+      expect(settleStaleRunningMock).not.toHaveBeenCalled();
+      expect(finalizeAbandonedMock).toHaveBeenCalledWith('op_x', 'runner_disconnected', {
+        settledAsAbandoned: true,
+      });
+      expect(result).toMatchObject({ abandoned: 1, skipped: 0 });
+    });
+
+    it('keeps a quiet run whose device is still connected', async () => {
+      // A long silent tool call on a connected device is a healthy run.
+      topicRows = deviceTopic();
+      queryConnectedDeviceIdsMock.mockResolvedValue(new Set(['dev_1']));
+
+      const result = await buildReaper([quietDeviceRun(30)], null).sweep();
+
+      expect(settleDisconnectedRunnerMock).not.toHaveBeenCalled();
+      expect(finalizeAbandonedMock).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ abandoned: 0, skipped: 1 });
+    });
+
+    it('never reads a gateway that cannot answer as an offline device', async () => {
+      topicRows = deviceTopic();
+      queryConnectedDeviceIdsMock.mockResolvedValue(undefined);
+
+      const result = await buildReaper([quietDeviceRun(30)], null).sweep();
+
+      expect(settleDisconnectedRunnerMock).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ skipped: 1 });
+    });
+
+    it('does not ask about a run that went quiet only recently', async () => {
+      topicRows = deviceTopic();
+
+      const result = await buildReaper([quietDeviceRun(7)], null).sweep();
+
+      expect(queryConnectedDeviceIdsMock).not.toHaveBeenCalled();
+      expect(settleDisconnectedRunnerMock).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ skipped: 1 });
+    });
+
+    it('leaves a run the topic marker does not route to a device', async () => {
+      // A newer run took the topic, or the run is not device-hosted.
+      topicRows = deviceTopic({ operationId: 'op_newer' });
+
+      const result = await buildReaper([quietDeviceRun(30)], null).sweep();
+
+      expect(queryConnectedDeviceIdsMock).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ skipped: 1 });
+    });
+
+    it('asks the pool the route names, and both pools when it names none', async () => {
+      topicRows = deviceTopic({ deviceWorkspaceId: 'ws_1' });
+      queryConnectedDeviceIdsMock.mockResolvedValue(new Set(['dev_1']));
+      await buildReaper([quietDeviceRun(30, { workspaceId: 'ws_1' })], null).sweep();
+      expect(queryConnectedDeviceIdsMock.mock.calls).toEqual([['user_x', 'ws_1']]);
+
+      // A route without a workspace may predate `deviceWorkspaceId`: the
+      // device is offline only if neither pool has it.
+      queryConnectedDeviceIdsMock.mockReset();
+      queryConnectedDeviceIdsMock
+        .mockResolvedValueOnce(new Set())
+        .mockResolvedValueOnce(new Set(['dev_1']));
+      topicRows = deviceTopic();
+      const result = await buildReaper([quietDeviceRun(30, { workspaceId: 'ws_1' })], null).sweep();
+      expect(queryConnectedDeviceIdsMock.mock.calls).toEqual([
+        ['user_x', undefined],
+        ['user_x', 'ws_1'],
+      ]);
+      expect(settleDisconnectedRunnerMock).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ skipped: 1 });
+    });
+
+    it('reads each pool once per sweep', async () => {
+      topicRows = deviceTopic({ childOperations: [{ deviceId: 'dev_1', operationId: 'op_y' }] });
+
+      await buildReaper([quietDeviceRun(30), quietDeviceRun(30, { id: 'op_y' })], null).sweep();
+
+      expect(queryConnectedDeviceIdsMock).toHaveBeenCalledTimes(1);
+      expect(settleDisconnectedRunnerMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('leaves the run alone when an ingest batch wins the CAS', async () => {
+      topicRows = deviceTopic();
+      settleDisconnectedRunnerMock.mockResolvedValue(false);
+
+      const result = await buildReaper([quietDeviceRun(30)], null).sweep();
+
+      expect(finalizeAbandonedMock).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ abandoned: 0, alive: 1 });
+    });
+
+    it('still retires it as lease_expired once the hetero window is out', async () => {
+      topicRows = deviceTopic();
+      queryConnectedDeviceIdsMock.mockResolvedValue(new Set(['dev_1']));
+
+      await buildReaper([quietDeviceRun(61)], null).sweep();
+
+      expect(settleStaleRunningMock).toHaveBeenCalled();
+      expect(settleDisconnectedRunnerMock).not.toHaveBeenCalled();
+      expect(finalizeAbandonedMock).toHaveBeenCalledWith('op_x', 'stale_lease_hetero_silent', {
+        settledAsAbandoned: true,
+      });
+    });
   });
 
   it('still skips a stateless non-heterogeneous run however long it has been quiet', async () => {

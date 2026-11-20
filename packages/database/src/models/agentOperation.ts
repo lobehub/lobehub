@@ -687,6 +687,36 @@ export class AgentOperationModel {
     staleBefore: Date,
     latestTotalCost?: number,
   ): Promise<boolean> {
+    return this.settleRunnerless(operationId, {
+      latestTotalCost,
+      reason: 'lease_expired',
+      staleBefore,
+    });
+  }
+
+  /**
+   * Like {@link settleStaleRunning}, for a run whose device runner is known to
+   * be gone (offline, or no longer holding the process): retires it as
+   * `abandoned` with `completionReason: 'runner_disconnected'`. The same lease
+   * CAS applies, so a batch that lands meanwhile keeps the run alive. Without
+   * `staleBefore` (an explicit force stop) only `status = 'running'` is checked.
+   */
+  async settleDisconnectedRunner(operationId: string, staleBefore?: Date): Promise<boolean> {
+    return this.settleRunnerless(operationId, { reason: 'runner_disconnected', staleBefore });
+  }
+
+  private async settleRunnerless(
+    operationId: string,
+    {
+      latestTotalCost,
+      reason,
+      staleBefore,
+    }: {
+      latestTotalCost?: number;
+      reason: 'lease_expired' | 'runner_disconnected';
+      staleBefore?: Date;
+    },
+  ): Promise<boolean> {
     const totalCost =
       latestTotalCost !== undefined && Number.isFinite(latestTotalCost)
         ? Math.max(0, latestTotalCost)
@@ -695,7 +725,7 @@ export class AgentOperationModel {
       .update(agentOperations)
       .set({
         completedAt: new Date(),
-        completionReason: 'lease_expired',
+        completionReason: reason,
         status: 'abandoned',
         ...(totalCost === undefined
           ? {}
@@ -707,7 +737,7 @@ export class AgentOperationModel {
         and(
           eq(agentOperations.id, operationId),
           eq(agentOperations.status, 'running'),
-          sql`${agentOperations.updatedAt} < ${staleBefore}`,
+          staleBefore ? sql`${agentOperations.updatedAt} < ${staleBefore}` : undefined,
           this.ownership(),
         ),
       )

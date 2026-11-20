@@ -74,7 +74,10 @@ import {
 } from './backgroundSubAgentDelivery';
 import { resolveForegroundInterventionConfig } from './foregroundIntervention';
 import { createGraphAwareAgentFactory } from './helpers/agentFactory';
-import { InterventionController } from './intervention/InterventionController';
+import {
+  type InterruptTaskResult,
+  InterventionController,
+} from './intervention/InterventionController';
 import type { ApprovalClaimState } from './pipeline/approvalResume';
 import { runDeferredOperationInit } from './pipeline/deferredInit';
 import { execAgentTurn, type ExecAgentTurnDeps } from './pipeline/execTurn';
@@ -971,15 +974,11 @@ export class AiAgentService {
    * Delegates to {@link InterventionController}.
    */
   async interruptTask(params: {
+    force?: boolean;
     operationId?: string;
     threadId?: string;
     topicId?: string;
-  }): Promise<{
-    deviceCancellationConfirmed?: boolean;
-    operationId?: string;
-    success: boolean;
-    threadId?: string;
-  }> {
+  }): Promise<InterruptTaskResult> {
     return this.interventionController.interruptTask(params);
   }
 
