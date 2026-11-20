@@ -17,7 +17,11 @@ import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import MarketSkillIcon from '@/components/MarketSkillIcon';
-import { GitHubSkillUpdate, hasGitHubSource } from '@/features/AgentSkillDetail/GitHubSkillUpdate';
+import {
+  GitHubSkillUpdate,
+  GitHubSkillUpdateIndicator,
+  hasGitHubSource,
+} from '@/features/AgentSkillDetail/GitHubSkillUpdate';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
@@ -35,11 +39,9 @@ interface AgentSkillItemProps {
   isSelected?: boolean;
   onSelect?: () => void;
   skill: SkillListItem;
-  updateInActions?: boolean;
 }
 
-const AgentSkillItem = memo<AgentSkillItemProps>((props) => {
-  const { isSelected, onSelect, skill, updateInActions } = props;
+const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect }) => {
   const { t } = useTranslation('setting');
   const { t: tc } = useTranslation('common');
   const { t: tp } = useTranslation('plugin');
@@ -101,7 +103,8 @@ const AgentSkillItem = memo<AgentSkillItemProps>((props) => {
 
   // ===== Status & Actions =====
 
-  const updateAction = hasGitHubSource(skill) ? <GitHubSkillUpdate compact skill={skill} /> : null;
+  const tracked = hasGitHubSource(skill);
+  const updateAction = tracked ? <GitHubSkillUpdate compact skill={skill} /> : null;
 
   const renderActions = () => {
     return (
@@ -159,13 +162,12 @@ const AgentSkillItem = memo<AgentSkillItemProps>((props) => {
     return (
       <SkillListRow
         active={isSelected}
-        description={updateInActions ? undefined : updateAction}
         icon={() => renderIcon(20, 40)}
         summary={skill.description}
         title={title}
         extra={
           <>
-            {updateInActions && updateAction}
+            {updateAction}
             <RowMoreMenu
               items={[
                 ...(skill.zipFileHash
@@ -201,10 +203,18 @@ const AgentSkillItem = memo<AgentSkillItemProps>((props) => {
     return (
       <NavItem
         active={isSelected}
-        extra={updateAction}
         icon={() => renderIcon(18)}
+        role="button"
+        slots={{ titleSuffix: tracked && <GitHubSkillUpdateIndicator id={skill.id} /> }}
+        tabIndex={0}
         title={title}
         onClick={onSelect}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onSelect();
+          }
+        }}
       />
     );
   }

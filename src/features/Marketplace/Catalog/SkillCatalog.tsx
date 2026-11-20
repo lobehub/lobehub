@@ -231,7 +231,6 @@ const SkillCatalog = () => {
   const renderLocalSkills = (skills: typeof localSkills) =>
     skills.map((skill) => (
       <AgentSkillItem
-        updateInActions
         key={skill.id}
         skill={skill}
         onSelect={() => openDetail(buildInstalledDetailPath('skill', skill.id, 'agent-skill'))}

@@ -214,7 +214,15 @@ On result surfaces (acceptance checks, verify boards, run summaries), passing is
 
 Source: lead review of the artboard acceptance redesign (2026-11-16): too many Pass tags read as AI-generated.
 
-## LOBE-UX-030 — Share the Marketplace catalog spacing
+## LOBE-UX-030 — Skill updates use visible status and action labels
+
+In installed skill navigation, show “Update available” as passive text. In the list and detail views, label the action “Update” or “Update skill”. Reserve the refresh icon for checking the source again. A standalone upward arrow in these rows reads as uploading a skill.
+
+In the skill detail header, put the repository, tracking ref, routine sync status and manual check in the GitHub source popover. Keep an available update actionable in the header.
+
+Verify the pending state with tooltips closed. The sidebar should communicate availability, and the list should identify the update action alongside the manage menu. Source: user feedback on the skill update preview.
+
+## LOBE-UX-031 — Share the Marketplace catalog spacing
 
 Use the same centered content column, toolbar spacing, and grid for Agents, Skills, and Connectors. When changing the catalog density, measure the rendered column width, the gap from the toolbar to the first section, and the column gutter in the desktop window at the reference scale. Keep the loading layouts aligned with the catalog.
 
@@ -222,7 +230,7 @@ Enforcement: both catalogs and their loading skeleton use the shared frame and g
 
 Source: user correction comparing the Marketplace desktop layout with Open Bot (2026-11-20).
 
-## LOBE-UX-031 — Show installed skill rows in the main pane
+## LOBE-UX-032 — Show installed skill rows in the main pane
 
 Display installed skill rows in the Skills catalog's main pane and in its installed manager. Use the row menus for skill management and the “View all” link for the full list. Keep the installed connector list and its manager entry visible in the sidebar across Marketplace sections. The section label already identifies installed connectors, so omit the connected check mark from those rows.
 
