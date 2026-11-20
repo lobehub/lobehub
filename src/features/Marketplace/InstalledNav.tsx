@@ -1,11 +1,13 @@
 'use client';
 
+import type { ConnectorVisibility } from '@lobechat/types';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { SlidersHorizontalIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import type { ToolDetailType } from '@/features/Settings/skill/features/SkillDetail';
 import SkillList from '@/features/Settings/skill/features/SkillList';
@@ -49,15 +51,38 @@ export const getInstalledKind = (subPath?: string): InstalledKind | undefined =>
   return undefined;
 };
 
-/** The installed page that opens one item's detail (`?open=<type>:<identifier>`). */
+/**
+ * The workspace connector tab the sidebar lists, mirroring the installed page
+ * (`ToolSettings`): the shared pool unless that page is on its Private tab.
+ * A private and a shared connector may share an identifier, so the list and
+ * the detail it opens must name the same tab. Outside a workspace (and for
+ * skills) there are no tabs.
+ */
+export const getInstalledVisibility = (
+  kind: InstalledKind | undefined,
+  workspaceId: string | null | undefined,
+  visibilityParam: string | null,
+): ConnectorVisibility | undefined => {
+  if (kind !== 'connector' || !workspaceId) return undefined;
+  return visibilityParam === 'private' ? 'private' : 'public';
+};
+
+/**
+ * The installed page that opens one item's detail (`?open=<type>:<identifier>`),
+ * on the tab the row was listed under so the detail resolves that row.
+ */
 export const buildInstalledDetailPath = (
   kind: InstalledKind,
   identifier: string,
   type: ToolDetailType,
-): string =>
-  `${INSTALLED_PATHS[kind]}?${MOBILE_SELECTION_PARAM}=${encodeURIComponent(
-    encodeMobileSelection({ identifier, type }),
-  )}`;
+  visibility?: ConnectorVisibility,
+): string => {
+  const params = new URLSearchParams({
+    [MOBILE_SELECTION_PARAM]: encodeMobileSelection({ identifier, type }),
+  });
+  if (visibility === 'private') params.set('visibility', visibility);
+  return `${INSTALLED_PATHS[kind]}?${params.toString()}`;
+};
 
 /**
  * The sidebar's `Installed` section, as in Codex Customize: under the
@@ -78,13 +103,19 @@ const InstalledNav = memo(() => {
   const selectedIdentifier = onInstalledPage
     ? parseMobileSelection(searchParams.get(MOBILE_SELECTION_PARAM))?.identifier
     : undefined;
+  const workspaceId = useActiveWorkspaceId();
+  const visibility = getInstalledVisibility(
+    kind,
+    workspaceId,
+    onInstalledPage ? searchParams.get('visibility') : null,
+  );
 
   const handleSelect = useCallback(
     (identifier: string, type: ToolDetailType) => {
       if (!kind) return;
-      navigate(buildInstalledDetailPath(kind, identifier, type));
+      navigate(buildInstalledDetailPath(kind, identifier, type, visibility));
     },
-    [kind, navigate],
+    [kind, navigate, visibility],
   );
 
   if (!kind) return null;
@@ -102,7 +133,13 @@ const InstalledNav = memo(() => {
           icon={SlidersHorizontalIcon}
           size={'small'}
           title={manageLabel}
-          onClick={() => navigate(INSTALLED_PATHS[kind])}
+          onClick={() =>
+            navigate(
+              visibility === 'private'
+                ? `${INSTALLED_PATHS[kind]}?visibility=private`
+                : INSTALLED_PATHS[kind],
+            )
+          }
         />
       </Flexbox>
       <SkillListVariantProvider value={'nav'}>
@@ -112,6 +149,7 @@ const InstalledNav = memo(() => {
           key={kind}
           selectedIdentifier={selectedIdentifier}
           viewMode={kind}
+          visibility={visibility}
           onSelect={handleSelect}
         />
       </SkillListVariantProvider>
