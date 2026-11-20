@@ -67,6 +67,7 @@ export const truncateSummaryText = (value: string | null | undefined): string | 
 /** Provenance fields shared by all four Register*WorkParams shapes. */
 export type WorkVersionEventParams = Pick<
   RegisterTaskWorkParams,
+  | 'agentEditable'
   | 'agentId'
   | 'cumulativeCost'
   | 'cumulativeUsage'
@@ -187,7 +188,7 @@ export interface TaskWorkSummaryQueryRow {
  * Work types whose list rows are fully described by the `works` display columns
  * (unlike `task`, which additionally joins the live tasks table).
  */
-export type DisplayWorkType = 'artboard' | 'canvas' | 'document' | 'external' | 'file';
+export type DisplayWorkType = 'artboard' | 'canvas' | 'document' | 'external' | 'file' | 'collection';
 
 /** Version-event row for display-backed types (each mutation event). */
 export interface DisplayVersionEventRow {

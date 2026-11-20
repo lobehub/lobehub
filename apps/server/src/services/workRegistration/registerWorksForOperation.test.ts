@@ -15,11 +15,13 @@ const {
   mockFindFileVersionByToolCall,
   mockExportAndUploadFile,
   mockCreateSandboxService,
+  mockFillAgentWorkCost,
   mockUpdateMessage,
   mockFindMessageById,
 } = vi.hoisted(() => ({
   mockCreateSandboxService: vi.fn(),
   mockExportAndUploadFile: vi.fn(),
+  mockFillAgentWorkCost: vi.fn(),
   mockFindById: vi.fn(),
   mockFindFileVersionByToolCall: vi.fn(),
   mockFindMessageById: vi.fn(),
@@ -53,6 +55,7 @@ vi.mock('@/database/models/message', () => ({
 vi.mock('@/database/models/work', () => ({
   WorkModel: vi.fn(function () {
     return {
+      fillAgentWorkCost: mockFillAgentWorkCost,
       findFileVersionByToolCall: mockFindFileVersionByToolCall,
       registerFile: mockRegisterFile,
       registerShellArtboardResult: mockRegisterShellArtboardResult,
@@ -184,6 +187,16 @@ beforeEach(() => {
 });
 
 describe('registerWorksForOperation', () => {
+  it('fills the cost of agent-written Works even when the run left no plugin records', async () => {
+    mockListPlugins.mockResolvedValue([]);
+
+    await registerWorksForOperation(baseParams);
+
+    expect(mockFillAgentWorkCost).toHaveBeenCalledWith(
+      expect.objectContaining({ cumulativeCost: 0.5, rootOperationId: 'op-1' }),
+    );
+  });
+
   it('registers a share visitor run under the share scope with file provenance', async () => {
     mockListPlugins.mockResolvedValue([writeRow('a', '/mnt/data/deck.pptx')]);
     const agentShareVisitor = { shareId: 'share-1', visitorUserId: 'visitor-1' };

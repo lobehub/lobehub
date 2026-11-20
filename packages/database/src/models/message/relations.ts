@@ -237,11 +237,13 @@ export class MessageRelationQueries extends MessageScope {
 
     const worksByMessageId: Record<string, WorkSummaryItem[]> = {};
     for (const [rootOperationId, messageId] of anchorByRootId) {
-      const works = summaryMap[rootOperationId];
-      if (works && works.length > 0) worksByMessageId[messageId] = works;
+      // An anchor whose Works are all gone gets an explicit empty list: clients
+      // keep the previous `works` only when a payload omits it (a skipWorks
+      // read), so omitting it here would revive a deleted Work card.
+      worksByMessageId[messageId] = summaryMap[rootOperationId] ?? [];
     }
     logTiming(timing, 'db.message.queryWithWhere.workSummaries:rows', {
-      messageCount: Object.keys(worksByMessageId).length,
+      messageCount: Object.values(worksByMessageId).filter((works) => works.length > 0).length,
     });
     return worksByMessageId;
   };
