@@ -1,3 +1,4 @@
+import type { DataTable } from '@cucumber/cucumber';
 import { Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
@@ -309,14 +310,14 @@ Then('I should see the provider detail content', async function (this: CustomWor
   expect(titleText?.trim().length).toBeGreaterThan(0);
 });
 
-Then(
-  'I should see only {string} in the MCP catalog',
-  async function (this: CustomWorld, name: string) {
-    const cards = this.page.getByTestId('mcp-item');
-    await expect(cards).toHaveCount(1);
+Then('I should see only these MCP cards', async function (this: CustomWorld, expected: DataTable) {
+  const cards = this.page.getByTestId('mcp-item');
+  const rows = expected.raw();
+  await expect(cards).toHaveCount(rows.length);
+  for (const [name] of rows) {
     await expect(cards.getByText(name, { exact: true })).toBeVisible();
-  },
-);
+  }
+});
 
 Then('I should be navigated to the MCP detail page', async function (this: CustomWorld) {
   await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });

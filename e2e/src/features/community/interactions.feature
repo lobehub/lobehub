@@ -78,7 +78,14 @@ Feature: Discover Interactions
     Given I navigate to "/marketplace/connector"
     When I open the MCP category "developer"
     Then I should be navigated to "/marketplace/connector?category=developer"
-    And I should see only "File Manager" in the MCP catalog
+    And I should see only these MCP cards
+      | File Manager      |
+      | Build Runner      |
+      | Code Search       |
+      | Container Manager |
+      | Database Browser  |
+      | Git Client        |
+      | Log Viewer        |
 
   @COMMUNITY-INTERACT-009 @P1
   Scenario: Navigate to MCP detail page

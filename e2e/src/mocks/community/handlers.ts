@@ -10,7 +10,6 @@ import {
   mockAssistantDetails,
   mockAssistantItems,
   mockAssistantList,
-  mockMcpCategories,
   mockMcpDetails,
   mockMcpItems,
   mockMcpList,
@@ -263,9 +262,9 @@ const getMockResponse = (procedure: string, input: unknown): unknown => {
 
     case 'market.getMcpCategories': {
       const items = searchMcpItems(input);
-      return mockMcpCategories.map((group) => ({
-        ...group,
-        count: items.filter((item) => item.category === group.category).length,
+      return mockMcpList.categories.map((category) => ({
+        category,
+        count: items.filter((item) => item.category === category).length,
       }));
     }
 
