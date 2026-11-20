@@ -32,7 +32,7 @@ import { useTranslation } from 'react-i18next';
 
 import { buildAgentProfileTabPath } from '@/features/AgentProfileTabs/tabOptions';
 import { useConnectorConfigure } from '@/features/Connectors/CustomConnectorModal/useConnectorConfigure';
-import { openPluginEditDrawer } from '@/features/PluginDevModal/imperative';
+import { openPluginEditModal } from '@/features/PluginDevModal/imperative';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { usePermission } from '@/hooks/usePermission';
@@ -956,7 +956,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     return createManagedSkillItem({
       badge: isMcp ? <Icon icon={McpIcon} size={12} /> : undefined,
       configureConfig: isCustom
-        ? { onConfigure: () => openPluginEditDrawer(item.identifier) }
+        ? { onConfigure: () => openPluginEditModal(item.identifier) }
         : undefined,
       deleteConfig: {
         displayName: title,

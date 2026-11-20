@@ -3,7 +3,6 @@
 import { memo, useState } from 'react';
 
 import CatalogPageHeader from '@/features/Settings/skill/features/CatalogPageHeader';
-import { createMarketSkillStoreModal, createSkillStoreModal } from '@/features/SkillStore';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { revalidateReplica } from '@/libs/replica';
 import { mcpCategoriesResource, mcpListResource } from '@/store/discover/slices/mcp/projection';
@@ -71,7 +70,6 @@ const DiscoverCatalogHeader = memo<DiscoverCatalogHeaderProps>(({ kind, query = 
       keyword={keyword}
       refreshing={refreshing}
       viewMode={kind}
-      onBrowseStore={kind === 'skill' ? createMarketSkillStoreModal : createSkillStoreModal}
       onRefresh={refresh}
       onSearch={search}
       onKeywordChange={(value) => {

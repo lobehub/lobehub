@@ -26,6 +26,7 @@ import { type McpConnectionParams, type MCPErrorInfoMetadata } from '@/types/plu
 import ArgsInput from './ArgsInput';
 import BoundDeviceSelect from './BoundDeviceSelect';
 import CollapsibleSection from './CollapsibleSection';
+import { getMcpManifestSummary } from './mcpManifestSummary';
 import MCPTypeSelect from './MCPTypeSelect';
 import QuickImportSection from './QuickImportSection';
 import { hasAdvancedValue, useAdvancedSectionExpanded } from './useAdvancedSection';
@@ -111,7 +112,7 @@ const MCPManifestForm = ({
   oauthNotice,
   privateConnector,
 }: MCPManifestFormProps) => {
-  const { t } = useTranslation('plugin');
+  const { t, i18n } = useTranslation('plugin');
   const mcpType = useWatch(form, MCP_TYPE);
   const authType = useWatch(form, AUTH_TYPE);
   const connectVia = useWatch(form, CONNECT_VIA);
@@ -158,11 +159,18 @@ const MCPManifestForm = ({
 
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [errorMetadata, setErrorMetadata] = useState<MCPErrorInfoMetadata | null>(null);
+  // What the last successful test found ("12 tools"), kept with the
+  // connection it tested: once that changes it no longer vouches for it.
+  const stdioCommand = useWatch(form, STDIO_COMMAND);
+  const connectionKey = JSON.stringify([mcpType, httpUrl, stdioCommand, authType]);
+  const [testResult, setTestResult] = useState<{ key: string; summary: string } | null>(null);
+  const testSummary = testResult?.key === connectionKey ? testResult.summary : null;
 
   const handleTestConnection = async () => {
     setIsTesting(true);
     setConnectionError(null);
     setErrorMetadata(null);
+    setTestResult(null);
 
     // Manually trigger validation for fields needed for the test
     const fieldsToValidate: FieldPath<LobeToolCustomPlugin>[] =
@@ -202,6 +210,10 @@ const MCPManifestForm = ({
         // Optionally update form if manifest ID differs or to store the fetched manifest
         // Be careful about overwriting user input if not desired
         form.setValues({ manifest: result.manifest });
+        setTestResult({
+          key: connectionKey,
+          summary: getMcpManifestSummary(result.manifest, t, i18n.resolvedLanguage),
+        });
         setConnectionError(null); // Clear local error state
         setErrorMetadata(null);
       } else if (result.error) {
@@ -460,6 +472,13 @@ const MCPManifestForm = ({
                 </Button>
               </Flexbox>
             </Form.Field>
+          )}
+          {testSummary && !connectionError && !testState.error && (
+            <Alert
+              showIcon
+              title={t('dev.mcp.testSuccess', { summary: testSummary })}
+              type="success"
+            />
           )}
           {(connectionError || testState.error) && (
             <Alert
