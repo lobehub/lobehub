@@ -295,8 +295,12 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
    */
   const pinnableIds = useMemo((): ReadonlySet<string> | null | undefined => {
     if (managesLocalLogins && localAccounts) {
-      const local = new Set(localAccounts.map((l) => l.identity.externalAccountId));
-      return new Set(accounts.filter((a) => local.has(a.externalAccountId)).map((a) => a.id));
+      const local = new Set(localAccounts.flatMap((l) => l.identity.externalAccountId ?? []));
+      return new Set(
+        accounts
+          .filter((a) => a.externalAccountId && local.has(a.externalAccountId))
+          .map((a) => a.id),
+      );
     }
     if (targetDeviceId) return deviceAccount ? new Set(deviceAccount.signedInAccountIds) : null;
     return managesLocalLogins ? null : undefined;
