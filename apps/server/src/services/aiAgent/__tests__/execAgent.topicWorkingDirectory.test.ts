@@ -665,8 +665,8 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
         {
           description: '   ',
           name: 'undescribed',
-          path: '/home/user/.agents/skills/undescribed/SKILL.md',
-          scope: 'device',
+          path: '/project/.agents/skills/undescribed/SKILL.md',
+          scope: 'project',
         },
       ],
     });
@@ -687,13 +687,16 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     mockCreateOperation.mockClear();
     await service.execAgent({
       ...topicRunInput(),
-      selectedSkillIds: ['deploy'],
+      selectedSkillIds: ['projectSkill:deploy', 'projectSkill:undescribed'],
     });
 
     const selectedOperation = mockCreateOperation.mock.calls[0][0];
     expect(
       selectedOperation.operationSkillSet?.skills.map((s: { name: string }) => s.name),
-    ).toEqual(['visible', 'deploy']);
+    ).toEqual(['visible', 'deploy', 'undescribed']);
+    expect(selectedOperation.operationSkillSet?.enabledPluginIds).toEqual(
+      expect.arrayContaining(['device:deploy', 'project:undescribed']),
+    );
   });
 
   it('continues without device skills when a directory-less device scan is unavailable', async () => {

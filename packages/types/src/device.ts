@@ -25,6 +25,9 @@ export interface DeviceUnavailableErrorData {
 export type ProjectSkillScope = 'device' | 'project';
 export type ProjectSkillSource = '.agents/skills' | '.claude/skills' | '.codex/skills';
 
+/** A composer selection by filesystem skill name, before the execution scope is known. */
+export const FILESYSTEM_SKILL_SELECTION_PREFIX = 'projectSkill:';
+
 /**
  * A filesystem skill discovered on the execution device by the client at
  * request time. Project skills live under the current working directory;
