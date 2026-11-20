@@ -38,8 +38,12 @@ const styles = stylex.create({
 /**
  * On an opener row: how many sub-topics it has, folded or unfolded, and —
  * while folded — whether any of them is running or needs the user.
+ *
+ * The row's hover actions ("⋯") overlay its trailing end, so the row also
+ * renders this toggle among those actions (`inActions`, without the roll-up)
+ * to keep it clickable while hovered.
  */
-const SubTopicToggle = memo<{ topicId: string }>(({ topicId }) => {
+const SubTopicToggle = memo<{ inActions?: boolean; topicId: string }>(({ inActions, topicId }) => {
   const { t } = useTranslation('topic');
   const tree = useSubTopicTree();
   const nodes = tree?.childrenOf(topicId);
@@ -63,7 +67,7 @@ const SubTopicToggle = memo<{ topicId: string }>(({ topicId }) => {
 
   return (
     <Flexbox horizontal align={'center'} gap={4}>
-      {indicators}
+      {!inActions && indicators}
       <Tooltip
         title={t(expanded ? 'subTopic.collapse' : 'subTopic.expand', { count: nodes.length })}
       >

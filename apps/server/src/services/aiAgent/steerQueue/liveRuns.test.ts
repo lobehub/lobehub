@@ -49,7 +49,7 @@ describe('live runs across a whole topic', () => {
     await db.delete(users).where(inArray(users.id, [me, other]));
   });
 
-  it("lists the caller's live runs on the main line and in threads, not their children", async () => {
+  it("lists the caller's live runs on the main line, in threads, and their sub-agents", async () => {
     await run('op_main', me);
     await run('op_thread', me, { threadId });
     await run('op_child', me, { parentOperationId: 'op_main' });
@@ -57,12 +57,22 @@ describe('live runs across a whole topic', () => {
     await run('op_theirs', other);
 
     const runs = await findOwnLiveRunsInTopic({ db }, { topicId, userId: me });
-    expect(runs.map((item) => item.id).sort()).toEqual(['op_main', 'op_thread']);
+    // A background sub-agent keeps running after its parent's turn: it must stop too.
+    expect(runs.map((item) => item.id).sort()).toEqual(['op_child', 'op_main', 'op_thread']);
     expect(runs.find((item) => item.id === 'op_thread')?.threadId).toBe(threadId);
   });
 
   it("sees another member's run inside a thread", async () => {
     await run('op_theirs_in_thread', other, { threadId });
+
+    expect(await findTopicsRunByOthers({ db }, { topicIds: [topicId], userId: me })).toEqual([
+      topicId,
+    ]);
+  });
+
+  it("sees another member's background sub-agent", async () => {
+    await run('op_their_parent', other, { status: 'done' });
+    await run('op_their_sub_agent', other, { parentOperationId: 'op_their_parent' });
 
     expect(await findTopicsRunByOthers({ db }, { topicIds: [topicId], userId: me })).toEqual([
       topicId,
