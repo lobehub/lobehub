@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { AgentSenderMessageProcessor } from '../AgentSenderMessage';
+import { AgentSenderMessageProcessor, formatSubTopicResultHeader } from '../AgentSenderMessage';
 
 const createContext = (messages: any[]) => ({
   initialState: {
@@ -158,5 +158,24 @@ describe('AgentSenderMessageProcessor — sub-topic reports', () => {
     expect(content).not.toContain('lh topic send');
     expect(content).not.toContain('lobe-topic');
     expect(content).toContain('tell the user');
+  });
+});
+
+describe('formatSubTopicResultHeader', () => {
+  const callback = { agentId: 'agt_a', operationId: 'op', reason: 'done', topicId: 'tpc_c' } as any;
+
+  it('offers the sub-topic tool when the agent has it', () => {
+    const header = formatSubTopicResultHeader(callback, { canUseSubTopicTool: true });
+    expect(header).toContain('lobe-topic sendToTopic with topicId "tpc_c"');
+    expect(header).not.toContain('lh topic send');
+  });
+
+  it('offers both ways when the agent has both', () => {
+    const header = formatSubTopicResultHeader(callback, {
+      canRunLhCommand: true,
+      canUseSubTopicTool: true,
+    });
+    expect(header).toContain('lobe-topic sendToTopic');
+    expect(header).toContain('`lh topic send tpc_c -c "<message>"`');
   });
 });

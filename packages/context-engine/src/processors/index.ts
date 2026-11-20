@@ -9,6 +9,7 @@ export {
   AgentSenderMessageProcessor,
   formatAgentSenderHeader,
   LH_COMMAND_TOOL_IDENTIFIERS,
+  SUB_TOPIC_TOOL_IDENTIFIER,
 } from './AgentSenderMessage';
 export { CompressedGroupRoleTransformProcessor } from './CompressedGroupRoleTransform';
 export { DisabledToolCallFilter } from './DisabledToolCallFilter';

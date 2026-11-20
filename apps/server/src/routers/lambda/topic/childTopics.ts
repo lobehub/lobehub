@@ -127,13 +127,16 @@ interface ChildTopicsCtx {
 }
 
 /** Drop children whose agent the caller may not view, and everything below them. */
-const onlyViewable = async (ctx: ChildTopicsCtx, rows: OpenedTopicItem[]) => {
-  if (!ctx.workspaceId) return rows;
+export const onlyViewableChildTopics = async (
+  guard: ReturnType<typeof guardCtx>,
+  rows: OpenedTopicItem[],
+) => {
+  if (!guard.workspaceId) return rows;
   const agentIds = [...new Set(rows.map((row) => row.agentId).filter(Boolean))] as string[];
   const viewable = new Set<string>();
   for (const agentId of agentIds) {
     try {
-      await assertCanViewConversationTargets(guardCtx(ctx), [{ agentId }]);
+      await assertCanViewConversationTargets(guard, [{ agentId }]);
       viewable.add(agentId);
     } catch {
       // Another member's private agent: left out.
@@ -279,8 +282,8 @@ export const childTopicsRouter = router({
       }),
     )
     .query(async ({ ctx, input }): Promise<OpenedSubTopic[]> => {
-      const rows = await onlyViewable(
-        ctx,
+      const rows = await onlyViewableChildTopics(
+        guardCtx(ctx),
         await ctx.topicModel.listOpenedTopics({
           excludeStatuses: RETIRED_TOPIC_STATUSES,
           includeDescendants: input.includeDescendants ?? true,

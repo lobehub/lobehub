@@ -15,12 +15,20 @@ const mocks = vi.hoisted(() => ({
   interruptTask: vi.fn(),
   isOpenedBy: vi.fn(),
   labOn: vi.fn(async () => true),
+  listOpenedTopics: vi.fn(),
+  onlyViewable: vi.fn(),
+  queueAppend: vi.fn(),
   retireChildTopics: vi.fn(),
+  startComposerRun: vi.fn(),
 }));
 
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn(function () {
-    return { findById: mocks.findById, isOpenedBy: mocks.isOpenedBy };
+    return {
+      findById: mocks.findById,
+      isOpenedBy: mocks.isOpenedBy,
+      listOpenedTopics: mocks.listOpenedTopics,
+    };
   }),
 }));
 vi.mock('@/database/models/message', () => ({ MessageModel: vi.fn() }));
@@ -34,8 +42,11 @@ vi.mock('@/server/routers/lambda/_helpers/workspaceAgentGuard', () => ({
 vi.mock('@/server/routers/lambda/aiAgent/guards', () => ({
   assertCanUseAgentRunConversation: mocks.assertParent,
 }));
-vi.mock('@/server/routers/lambda/agentSteerQueue', () => ({ agentSteerQueueRouter: {} }));
+vi.mock('@/server/routers/lambda/agentSteerQueue', () => ({
+  agentSteerQueueRouter: { createCaller: () => ({ append: mocks.queueAppend }) },
+}));
 vi.mock('@/server/routers/lambda/topic/childTopics', () => ({
+  onlyViewableChildTopics: mocks.onlyViewable,
   RETIRED_TOPIC_STATUSES: ['completed', 'archived'],
   retireChildTopics: mocks.retireChildTopics,
   toSubTopicState: () => 'idle',
@@ -46,7 +57,9 @@ vi.mock('@/server/services/aiAgent', () => ({
     return { execAgent: mocks.execAgent, interruptTask: mocks.interruptTask };
   }),
 }));
-vi.mock('@/server/services/aiAgent/composerRun', () => ({ startComposerRun: vi.fn() }));
+vi.mock('@/server/services/aiAgent/composerRun', () => ({
+  startComposerRun: mocks.startComposerRun,
+}));
 vi.mock('@/server/services/aiAgent/foregroundIntervention', () => ({
   resolveForegroundInterventionConfig: vi.fn(async () => ({ approvalMode: 'auto-run' })),
 }));
@@ -206,5 +219,79 @@ describe('lobe-topic server runtime', () => {
 
     expect(result.success).toBe(false);
     expect(mocks.execAgent).not.toHaveBeenCalled();
+  });
+});
+
+describe('lobe-topic server runtime — scoping and delivery', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.findById.mockImplementation(async (id: string) => ({
+      agentId: 'agt_lobe',
+      id,
+      metadata: {},
+    }));
+    mocks.isOpenedBy.mockResolvedValue(true);
+    mocks.execAgent.mockResolvedValue({ operationId: 'op_c', success: true, topicId: 'tpc_new' });
+  });
+
+  it('lists only the sub-topics whose agent the caller may view', async () => {
+    const rows = [
+      { agentId: 'agt_lobe', id: 'tpc_a', title: 'A' },
+      { agentId: 'agt_private', id: 'tpc_b', title: 'B' },
+    ];
+    mocks.listOpenedTopics.mockResolvedValue(rows);
+    mocks.onlyViewable.mockResolvedValue([rows[0]]);
+
+    const result = await runtime().listTopics({});
+
+    expect(mocks.onlyViewable).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1' }),
+      rows,
+    );
+    expect(result.content).toContain('tpc_a');
+    expect(result.content).not.toContain('tpc_b');
+  });
+
+  it('opens one with the agent running the call when none is named', async () => {
+    // Under `callAgent` the running agent is not the topic's own agent.
+    await runtime({ agentId: 'agt_delegate' }).openTopic({ prompt: 'x' });
+
+    expect(mocks.execAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'agt_delegate' }),
+    );
+  });
+
+  it('refuses a linked sub-topic of a group conversation, which would never report back', async () => {
+    mocks.findById.mockResolvedValue({ agentId: 'agt_lobe', groupId: 'grp_1', id: 'tpc_parent' });
+
+    const linked = await runtime().openTopic({ agentId: 'agt_lobe', prompt: 'x' });
+    expect(linked.success).toBe(false);
+    expect(mocks.execAgent).not.toHaveBeenCalled();
+
+    const detached = await runtime().openTopic({ agentId: 'agt_lobe', detach: true, prompt: 'x' });
+    expect(detached.success).toBe(true);
+  });
+
+  it('starts an idle sub-topic without reading the queue first, so it works without Redis', async () => {
+    mocks.queueAppend.mockResolvedValue({ queued: false, reason: 'idle' });
+    mocks.startComposerRun.mockResolvedValue({ success: true });
+
+    const result = await runtime().sendToTopic({ message: 'next', topicId: 'tpc_child' });
+
+    expect(result.success).toBe(true);
+    expect(mocks.queueAppend.mock.calls[0][0]).not.toHaveProperty('id');
+    expect(mocks.startComposerRun).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so when a running sub-topic cannot take a queued message', async () => {
+    mocks.queueAppend.mockRejectedValue(
+      Object.assign(new Error('Queue unavailable'), { code: 'SERVICE_UNAVAILABLE' }),
+    );
+
+    const result = await runtime().sendToTopic({ message: 'next', topicId: 'tpc_child' });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('running a turn');
+    expect(mocks.startComposerRun).not.toHaveBeenCalled();
   });
 });

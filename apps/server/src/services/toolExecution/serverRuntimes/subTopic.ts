@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 import { TopicToolIdentifier } from '@lobechat/builtin-tool-topic';
 import {
   type SubTopicToolService,
@@ -17,6 +15,7 @@ import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/wor
 import { agentSteerQueueRouter } from '@/server/routers/lambda/agentSteerQueue';
 import { assertCanUseAgentRunConversation } from '@/server/routers/lambda/aiAgent/guards';
 import {
+  onlyViewableChildTopics,
   retireChildTopics,
   RETIRED_TOPIC_STATUSES,
   toSubTopicState,
@@ -153,10 +152,14 @@ export const subTopicRuntime: ServerRuntimeRegistration = {
       isOpenedBy: (topicId, openerTopicId) => topicModel.isOpenedBy(topicId, openerTopicId),
       list: async (openerTopicId) => {
         await assertCanViewTopicTargets(guard, [openerTopicId]);
-        const rows = await topicModel.listOpenedTopics({
-          excludeStatuses: RETIRED_TOPIC_STATUSES,
-          openerTopicIds: [openerTopicId],
-        });
+        // Another member's private agent's sub-topics stay out, as in the sidebar.
+        const rows = await onlyViewableChildTopics(
+          guard,
+          await topicModel.listOpenedTopics({
+            excludeStatuses: RETIRED_TOPIC_STATUSES,
+            openerTopicIds: [openerTopicId],
+          }),
+        );
         return rows.map((row) => ({
           agentId: row.agentId,
           state: toSubTopicState(row.status, row.latestRunStatus),
@@ -170,7 +173,16 @@ export const subTopicRuntime: ServerRuntimeRegistration = {
         }
         assertMayStartRuns();
         const parent = await requireTopic(params.openerTopicId);
-        const agentId = params.agentId || parent.agentId;
+        // A group conversation keeps its own collaboration: a sub-topic linked
+        // to it would never report back (see `deliverSubTopicReceipt`).
+        if (parent.groupId && !params.detach) {
+          throw new Error(
+            'A group conversation cannot open linked sub-topics: their replies are not reported back here. Use the group tools, or detach: true for an independent topic.',
+          );
+        }
+        // "Yourself" is the agent running this call — under `callAgent` that is
+        // not the topic's own agent.
+        const agentId = params.agentId || context.agentId || parent.agentId;
         if (!agentId) throw new Error('Name the agent to open the sub-topic with.');
         // What `aiAgent.execAgent` checks: the agent, and the parent the new topic hangs off.
         await assertCanUseWorkspaceAgent({ agentId, db, userId, workspaceId });
@@ -239,7 +251,6 @@ export const subTopicRuntime: ServerRuntimeRegistration = {
           ...(params.sourceOperationId && { sourceOperationId: params.sourceOperationId }),
           userInterventionConfig: await resolveForegroundInterventionConfig(db, userId),
         };
-        const entryId = randomUUID();
         const queue = agentSteerQueueRouter.createCaller({
           serverDB: db,
           userId,
@@ -248,10 +259,18 @@ export const subTopicRuntime: ServerRuntimeRegistration = {
 
         for (let attempt = 0; attempt < 3; attempt += 1) {
           // The append authorizes the agent and the conversation, like execAgent.
-          const queued = (await queue.append({ id: entryId, request } as any)) as {
-            queued: boolean;
-            reason?: string;
-          };
+          // No entry id: one would make it read Redis before liveness, so an
+          // idle sub-topic could not start on a deployment without Redis.
+          let queued: { queued: boolean; reason?: string };
+          try {
+            queued = (await queue.append({ request } as any)) as typeof queued;
+          } catch (error) {
+            if ((error as { code?: string })?.code !== 'SERVICE_UNAVAILABLE') throw error;
+            throw new Error(
+              `Topic ${topic.id} is running a turn and the message could not be queued behind it; try again after that turn ends.`,
+              { cause: error },
+            );
+          }
           if (queued.queued) return { delivery: 'queued' as const };
           if (queued.reason !== 'idle') {
             throw new Error(
