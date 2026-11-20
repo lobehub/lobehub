@@ -70,6 +70,12 @@ export const agentShareConfigSchema = z
       )
       .max(20)
       .optional(),
+    /** Presentation-only review state; see `AgentShareConfig.declinedGrantIds`. */
+    declinedGrantIds: z
+      .array(z.string().trim().min(1))
+      .max(500)
+      .refine((ids) => new Set(ids).size === ids.length, 'Duplicate declined identifier')
+      .optional(),
     deviceAccess: z.enum(['none', 'contacts', 'allowlist']).optional(),
     /** Each id must also be in the scope's address book; `updateShareConfig` checks that. */
     deviceAllowUserIds: z
@@ -86,6 +92,8 @@ export const agentShareConfigSchema = z
     maxFileStorage: z.number().int().nonnegative().optional(),
     maxMessagesPerVisitor: z.number().int().positive().optional(),
     monthlySpendLimit: z.number().nonnegative().optional(),
+    /** Only clearable: the marker is set by `AgentShareModel.create` alone. */
+    seedDefaultGrants: z.literal(false).optional(),
     /**
      * Skill identifiers the creator opened to visitors. An empty array is
      * accepted rather than rejected: unticking the last skill is a normal

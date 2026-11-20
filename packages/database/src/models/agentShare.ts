@@ -40,6 +40,8 @@ const normalizeAgentShareConfig = (
   allowCreatorViewSessions:
     config?.allowCreatorViewSessions ?? DEFAULT_AGENT_SHARE_CONFIG.allowCreatorViewSessions,
   allowReadMemory: config?.allowReadMemory ?? DEFAULT_AGENT_SHARE_CONFIG.allowReadMemory,
+  /** Left absent like `skillGrants`: absent marks a share whose Agent tools were never reviewed. */
+  declinedGrantIds: config?.declinedGrantIds,
   demoCases: config?.demoCases ?? [],
   deviceAccess: config?.deviceAccess ?? 'none',
   deviceAllowUserIds: config?.deviceAllowUserIds ?? [],
@@ -53,6 +55,7 @@ const normalizeAgentShareConfig = (
    * granted", so a default would only write a value the creator never picked.
    */
   skillGrants: config?.skillGrants,
+  seedDefaultGrants: config?.seedDefaultGrants,
   slug: config?.slug,
   toolGrants: config?.toolGrants ?? DEFAULT_AGENT_SHARE_CONFIG.toolGrants,
 });
@@ -260,7 +263,9 @@ export class AgentShareModel {
         .insert(agentShares)
         .values({
           agentId,
-          shareConfig: DEFAULT_AGENT_SHARE_CONFIG,
+          // Only an inserted row carries the marker; the conflict path below
+          // returns an existing share untouched.
+          shareConfig: { ...DEFAULT_AGENT_SHARE_CONFIG, seedDefaultGrants: true },
           visibility,
         })
         .onConflictDoNothing({ target: agentShares.agentId })
