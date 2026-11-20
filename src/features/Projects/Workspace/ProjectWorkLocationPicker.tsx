@@ -17,10 +17,11 @@ import {
 import { workingDirectoryChipStyles } from '@/features/ChatInput/ControlBar/workingDirectoryChipStyles';
 import { ExecutionTargetDeviceStatus, ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
 
 import { environmentRepositoryUrl } from '../environmentSource';
 import { openAddDirectoryModal } from '../WorkingDirectories/AddDirectoryModal';
-import { addedFolderTarget, type useProjectDirectory } from './useProjectDirectory';
+import { addedFolderTarget } from './useProjectDirectory';
 import { NO_ENVIRONMENT, type useProjectRepository } from './useProjectRepository';
 import type { useProjectWorkLocation } from './useProjectWorkLocation';
 
@@ -74,14 +75,26 @@ interface ProjectWorkLocationPickerProps {
   /** Icon only, the place in the tooltip — for a narrow composer. */
   compact?: boolean;
   /** The project folder a run on a device starts in. */
-  directoryState: ReturnType<typeof useProjectDirectory>;
+  directoryState: {
+    directory?: ProjectDirectory;
+    directoriesOn: (deviceId: string) => ProjectDirectory[];
+    setPickedId: (directoryId: string) => void;
+  };
   disabled?: boolean;
   /** Where the agent runs and where it can be moved to. */
   location: ReturnType<typeof useProjectWorkLocation>;
+  /**
+   * Picking a folder, when it means more than staging it: an existing
+   * conversation moves there, which also moves it to that folder's machine.
+   */
+  onPickDirectory?: (directoryId: string) => void;
   projectId: string;
   /** A task starts no conversation, so it has no code environment or folder to pick. */
   showRepositories?: boolean;
-  state: ReturnType<typeof useProjectRepository>;
+  state: Pick<
+    ReturnType<typeof useProjectRepository>,
+    'repositories' | 'repository' | 'withoutEnvironment'
+  > & { setPickedId: (environmentId: string) => void };
 }
 
 /**
@@ -96,6 +109,7 @@ const ProjectWorkLocationPicker = ({
   directoryState,
   disabled,
   location,
+  onPickDirectory,
   projectId,
   showRepositories = true,
   state,
@@ -136,6 +150,11 @@ const ProjectWorkLocationPicker = ({
 
   /** A folder belongs to one machine; picking it moves the run there too. */
   const pickDirectory = (directoryId: string, next: 'device' | 'local', deviceId?: string) => {
+    if (onPickDirectory) {
+      setOpen(false);
+      onPickDirectory(directoryId);
+      return;
+    }
     setDirectoryId(directoryId);
     void select(next, deviceId);
   };

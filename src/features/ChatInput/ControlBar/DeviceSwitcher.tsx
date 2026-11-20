@@ -3,10 +3,14 @@
 import { confirmModal, toast } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
+import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
 import { useChatStore } from '@/store/chat';
 import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import HeteroDeviceSwitcher from './HeteroDeviceSwitcher';
+import ProjectConversationLocation, {
+  useConversationProjectId,
+} from './ProjectConversationLocation';
 import ProjectDeviceSwitcher from './ProjectDeviceSwitcher';
 import { type ProjectDeviceTarget } from './projectDeviceTargets';
 import {
@@ -86,11 +90,21 @@ const StagedProjectDeviceSwitcher = ({ agentId }: { agentId: string }) => {
  * chooses among the project's devices; everything else gets the general
  * execution-target picker. Every bar that shows a device control mounts this,
  * so no surface can fall back to the general picker for a project topic.
+ *
+ * Any project conversation — in a folder or in the cloud sandbox, started or
+ * not — gets the project home's work-location picker instead, which also
+ * holds the code environment the sandbox chip used to.
  */
 const DeviceSwitcher = ({ agentId }: DeviceSwitcherProps) => {
   const projectTopicId = useActiveProjectDirectoryTopicId();
   const stagedDirectoryId = useStagedProjectDirectoryId(agentId);
+  const projectId = useConversationProjectId(agentId);
+  const { canUseResource } = useChatInputResourceAccess();
 
+  if (projectId)
+    return canUseResource ? (
+      <ProjectConversationLocation agentId={agentId} projectId={projectId} />
+    ) : null;
   if (projectTopicId)
     return <ProjectTopicDeviceSwitcher agentId={agentId} topicId={projectTopicId} />;
   if (stagedDirectoryId) return <StagedProjectDeviceSwitcher agentId={agentId} />;

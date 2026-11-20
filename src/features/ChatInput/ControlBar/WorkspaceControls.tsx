@@ -8,6 +8,7 @@ import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatIn
 
 import CloudRepoSwitcher from './CloudRepoSwitcher';
 import DeviceSwitcher from './DeviceSwitcher';
+import { useConversationProjectId } from './ProjectConversationLocation';
 import SandboxStorageSection from './SandboxStorageSection';
 import { useWorkspaceSurface, type WorkspaceSurface } from './useWorkspaceSurface';
 import WorkingDirectorySection from './WorkingDirectorySection';
@@ -39,6 +40,9 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
     // Resolved from the effective (override-merged) execution target so the
     // surfaces follow the device THIS member's run actually targets.
     const surfaces = useWorkspaceSurface(agentId, alwaysShowWorkspace);
+    // A project conversation picks its code environment in the work-location
+    // picker the device switcher shows for it, so the sandbox chip stays out.
+    const inProject = !!useConversationProjectId(agentId);
 
     const renderSurface = (surface: WorkspaceSurface) => {
       switch (surface) {
@@ -95,9 +99,11 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
     return (
       <>
         <DeviceSwitcher agentId={agentId} />
-        {surfaces.map((surface) => (
-          <Fragment key={surface}>{withAccessGate(surface)}</Fragment>
-        ))}
+        {surfaces
+          .filter((surface) => !(inProject && surface === 'sandbox'))
+          .map((surface) => (
+            <Fragment key={surface}>{withAccessGate(surface)}</Fragment>
+          ))}
       </>
     );
   },
