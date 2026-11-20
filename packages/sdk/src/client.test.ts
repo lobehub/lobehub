@@ -283,6 +283,18 @@ describe('paginate', () => {
     expect(items).toEqual([{ id: 'g1' }]);
   });
 
+  it('paginates when the client is configured for data-only results', async () => {
+    const { fetch } = mockFetch(() =>
+      json(envelope({ agents: [{ id: 'a1' }], hasMore: false, nextCursor: null, total: 1 })),
+    );
+    const lobehub = createLobeHub({ apiKey: 'sk-lh-test', fetch, responseStyle: 'data' });
+
+    const ids: string[] = [];
+    for await (const agent of lobehub.paginate(lobehub.agents.list)) ids.push(agent.id);
+
+    expect(ids).toEqual(['a1']);
+  });
+
   it('stops when hasMore is true but no cursor comes back', async () => {
     const { fetch, requests } = mockFetch(() =>
       json(envelope({ hasMore: true, nextCursor: null, topics: [{ id: 't1' }], total: 9 })),
@@ -375,6 +387,18 @@ describe('responses.stream', () => {
       'response.completed',
     ]);
     expect(await requests[0].json()).toEqual({ input: 'hi', model: 'agt_1', stream: true });
+  });
+
+  it('streams when the client is configured for data-only results', async () => {
+    const { fetch } = streamFetch();
+    const lobehub = createLobeHub({ apiKey: 'sk-lh-test', fetch, responseStyle: 'data' });
+
+    let text = '';
+    for await (const event of lobehub.responses.stream({ input: 'hi', model: 'agt_1' })) {
+      if (event.type === 'response.output_text.delta') text += event.delta;
+    }
+
+    expect(text).toBe('Hello');
   });
 
   it('resolves finalResponse() with the terminal event response', async () => {
