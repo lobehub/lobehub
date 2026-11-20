@@ -18,6 +18,7 @@ export default {
   'connectorMarket.refresh': 'Refresh',
   'connectorMarket.search.placeholder': 'Search connectors',
   'connectorMarket.section.installed': 'Installed',
+  'connectorMarket.section.lobehub': 'LobeHub',
   'connectorMarket.section.showAll': 'Show all',
   'connectorMarket.section.showLess': 'Show less',
   'connectorMarket.source': 'Source',

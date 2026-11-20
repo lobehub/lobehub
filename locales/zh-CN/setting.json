@@ -457,6 +457,7 @@
   "connectorMarket.refresh": "刷新",
   "connectorMarket.search.placeholder": "搜索连接器",
   "connectorMarket.section.installed": "已安装",
+  "connectorMarket.section.lobehub": "LobeHub",
   "connectorMarket.section.showAll": "查看全部",
   "connectorMarket.section.showLess": "收起",
   "connectorMarket.source": "来源",

@@ -7,7 +7,11 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
-import SkillListRow from '@/features/Settings/skill/features/SkillListRow';
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import SkillList from '@/features/Settings/skill/features/SkillList';
+import SkillListRow, {
+  SkillListVariantProvider,
+} from '@/features/Settings/skill/features/SkillListRow';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useCategory as useMcpCategory } from '@/hooks/useMCPCategory';
 import { useQuery } from '@/hooks/useQuery';
@@ -21,6 +25,7 @@ import { pluginSelectors } from '@/store/tool/selectors';
 import { type DiscoverMcpItem, McpCategory, type McpQueryParams, McpSorts } from '@/types/discover';
 
 import CatalogViewTabs from '../CatalogViewTabs';
+import { buildInstalledDetailPath, getInstalledVisibility } from '../InstalledNav';
 import { MARKETPLACE_CONNECTOR_PATH, MARKETPLACE_MCP_PATH } from '../paths';
 import CatalogListView from './CatalogListView';
 import CatalogSection, { useSeenOnce } from './CatalogSection';
@@ -116,6 +121,33 @@ const McpCatalogGroup = memo<McpGroup>(({ eager, label, params, to }) => {
 
 McpCatalogGroup.displayName = 'MarketplaceMcpCatalogGroup';
 
+/**
+ * LobeHub's own OAuth connectors (Gmail, GitHub, Linear …) lead the Discover
+ * page, before the MCP catalog. The rows are the installed manager's: `+`
+ * starts the OAuth connection in place, a connected one keeps its status and
+ * menu; opening a row shows its detail on the installed page. In a workspace
+ * the group lists the shared pool, the tab the detail link opens.
+ */
+const LobehubConnectorsGroup = memo(() => {
+  const navigate = useWorkspaceAwareNavigate();
+  const visibility = getInstalledVisibility('connector', useActiveWorkspaceId(), null);
+
+  return (
+    <SkillListVariantProvider value={'page'}>
+      <SkillList
+        lobehubConnectors
+        viewMode={'connector'}
+        visibility={visibility}
+        onSelect={(identifier, type) =>
+          navigate(buildInstalledDetailPath('connector', identifier, type, visibility))
+        }
+      />
+    </SkillListVariantProvider>
+  );
+});
+
+LobehubConnectorsGroup.displayName = 'MarketplaceLobehubConnectorsGroup';
+
 /** The sorts that open the page as their own groups, before the categories. */
 const useFeaturedMcpGroups = () => {
   const { t } = useTranslation('discover');
@@ -161,6 +193,7 @@ const McpCatalogGroups = memo(() => {
 
   return (
     <div {...stylex.props(catalogStyles.sections)}>
+      <LobehubConnectorsGroup />
       {groups.map(({ key, ...group }, index) => (
         <McpCatalogGroup eager={index < 2} key={key} {...group} />
       ))}
