@@ -68,7 +68,7 @@ import {
   useHeaderActionSize,
   useInterfaceDensity,
 } from '@/styles/density';
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { type ComposerTarget, createComposerTarget, resolveThreadComposerTarget } from '../types';
@@ -79,9 +79,9 @@ import {
   BROWSER_TAB_PREFIX,
   type BrowserTabMetadata,
   isBrowserTab,
-  isCanvasTab,
   isDynamicTab,
   isMcpAppTab,
+  isWorkTab,
   type SidebarTabDescriptor,
 } from './dynamicTabs';
 import FilesPane from './Files/FilesPane';
@@ -113,7 +113,7 @@ const styles = stylex.create({
   header: { flexShrink: 0, minWidth: '0' },
   pane: { overflowY: 'auto', flex: '1', minHeight: '0' },
   paneHidden: { display: 'none' },
-  paramsLoading: { width: '100%', padding: '16px' },
+  paramsLoading: { width: '100%', padding: densityTokens['--lobe-density-card-padding'] },
   add: { flexShrink: 0 },
   overviewBody: { overflowY: 'auto', minHeight: '0' },
   overviewPanel: {
@@ -497,7 +497,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     (tab: string) =>
       availableTabs.has(tab) ||
       (browserAvailable && isBrowserTab(tab)) ||
-      isCanvasTab(tab) ||
+      isWorkTab(tab) ||
       (mcpAppsEnabled && isMcpAppTab(tab)),
     [availableTabs, browserAvailable, mcpAppsEnabled],
   );
@@ -811,7 +811,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const reviewTwoPane = activeTab === 'review' && reviewAvailable && showReviewTree;
   const preferredMinWidth = reviewTwoPane
     ? TWO_PANE_MIN_WIDTH
-    : isCanvasTab(activeTab)
+    : isWorkTab(activeTab)
       ? CANVAS_MIN_WIDTH
       : 0;
   const displayWidth = Math.max(storedWidth, preferredMinWidth);

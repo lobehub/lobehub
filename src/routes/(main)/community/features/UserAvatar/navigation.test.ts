@@ -9,7 +9,7 @@ describe('resolveCommunityUserAvatarTarget', () => {
         isWorkspaceScope: true,
         profileUsername: 'personal-user',
       }),
-    ).toBe('/community/workspace');
+    ).toBe('/marketplace/workspace');
   });
 
   it('routes personal scope to the user profile when available', () => {
@@ -18,6 +18,6 @@ describe('resolveCommunityUserAvatarTarget', () => {
         isWorkspaceScope: false,
         profileUsername: 'personal-user',
       }),
-    ).toBe('/community/user/personal-user');
+    ).toBe('/marketplace/user/personal-user');
   });
 });

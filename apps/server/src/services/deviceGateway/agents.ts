@@ -22,6 +22,7 @@ import type {
   DeviceClient,
   DeviceUnavailableErrorData,
   HeterogeneousAgentModelCatalog,
+  HeteroPermissionMode,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
 import debug from 'debug';
@@ -185,6 +186,7 @@ export async function dispatchAgentRun(
     imageList?: Array<{ id?: string; url: string }>;
     jwt: string;
     operationId: string;
+    permissionMode?: HeteroPermissionMode;
     prompt: string;
     resumeFallbackSystemContext?: string;
     resumeSessionId?: string;

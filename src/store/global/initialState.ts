@@ -57,6 +57,11 @@ export const canvasTabKey = (canvasId: string) => `${CANVAS_TAB_PREFIX}${canvasI
 export const canvasIdOfTab = (tab: string) =>
   tab.startsWith(CANVAS_TAB_PREFIX) ? tab.slice(CANVAS_TAB_PREFIX.length) : undefined;
 
+export const ARTBOARD_TAB_PREFIX = 'artboard:';
+export const artboardTabKey = (artboardId: string) => `${ARTBOARD_TAB_PREFIX}${artboardId}`;
+export const artboardIdOfTab = (tab: string) =>
+  tab.startsWith(ARTBOARD_TAB_PREFIX) ? tab.slice(ARTBOARD_TAB_PREFIX.length) : undefined;
+
 export const DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS = {
   date: 160,
   name: 574,

@@ -92,6 +92,7 @@ describe('open project Channels', () => {
 
     expect(jobs).toEqual([expect.objectContaining({ canStop: false, id: job.id })]);
     expect(jobs[0]).not.toHaveProperty('topicId');
+    expect(jobs[0]).not.toHaveProperty('topicTitle');
     expect(jobs[0]).not.toHaveProperty('topicOwnerId');
   });
 
@@ -122,6 +123,51 @@ describe('open project Channels', () => {
 
     expect(again.member.id).toBe(first.member.id);
     expect(await membershipOf(channel.id)).toHaveLength(1);
+  });
+
+  it('joins a teammate who pins it or files it under a section, keeping it on their own list', async () => {
+    const { channel, owner, teammate } = await projectChannel();
+
+    const pinnedAt = await teammate.setPinned(channel.id, true);
+
+    expect(pinnedAt).toBeInstanceOf(Date);
+    expect(await membershipOf(channel.id)).toEqual([
+      expect.objectContaining({ pinnedAt, role: 'member', status: 'active' }),
+    ]);
+
+    const section = await teammate.sections.create('Following');
+    await teammate.moveToSection(channel.id, section.id);
+
+    expect(await teammate.list()).toEqual([
+      expect.objectContaining({ id: channel.id, joined: true, pinnedAt, sectionId: section.id }),
+    ]);
+    // Their pin and section stay theirs.
+    expect(await owner.list()).toEqual([
+      expect.objectContaining({ id: channel.id, pinnedAt: null, sectionId: null }),
+    ]);
+  });
+
+  it('joins a teammate who files it under a section before anything else', async () => {
+    const { channel, teammate } = await projectChannel();
+    const section = await teammate.sections.create('Following');
+
+    await teammate.moveToSection(channel.id, section.id);
+
+    expect(await membershipOf(channel.id)).toEqual([
+      expect.objectContaining({ sectionId: section.id, status: 'active' }),
+    ]);
+  });
+
+  it('does not join a teammate who only unpins or unfiles a Channel they never joined', async () => {
+    const { channel, teammate } = await projectChannel();
+
+    await expect(teammate.setPinned(channel.id, false)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    await expect(teammate.moveToSection(channel.id, null)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(await membershipOf(channel.id)).toEqual([]);
   });
 
   it("keeps a private project's Channels with their members", async () => {

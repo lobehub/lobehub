@@ -40,6 +40,7 @@ import {
   StaleHeteroOperationError,
 } from './HeterogeneousPersistenceHandler';
 import { HeteroTraceRecorder } from './HeteroTraceRecorder';
+import { settlePermissionModeReport } from './permissionModeReport';
 
 const log = debug('lobe-server:hetero-agent-service');
 
@@ -483,6 +484,14 @@ export class HeterogeneousAgentService {
       result,
       topicId,
     });
+    // `cancelled` is followed by the terminal callback, which settles this.
+    if (result !== 'cancelled') {
+      await settlePermissionModeReport(this.topicModel, {
+        operationId,
+        succeeded: result === 'success',
+        topicId,
+      }).catch((err) => log('heteroFinish: permission mode report (non-fatal): %O', err));
+    }
 
     let serializedHooks: SerializedHook[] | undefined;
     let assistantMessageId = seedAssistantMessageId;

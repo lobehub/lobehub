@@ -3,6 +3,7 @@ import type {
   RuntimeSelectedSkill,
   RuntimeSelectedTool,
 } from '@lobechat/types';
+import { FILESYSTEM_SKILL_SELECTION_PREFIX } from '@lobechat/types';
 
 import type {
   ActionTagCategory,
@@ -78,6 +79,18 @@ export const parseSelectedSkillsFromEditorData = (
 
     return acc;
   }, []);
+};
+
+export const parseGatewaySkillIdsFromEditorData = (
+  editorData: Record<string, any> | undefined,
+): string[] => {
+  const ids = new Set<string>();
+  for (const { category, type } of parseActionTagsFromEditorData(editorData)) {
+    if (!type) continue;
+    if (category === 'skill') ids.add(String(type));
+    if (category === 'projectSkill') ids.add(FILESYSTEM_SKILL_SELECTION_PREFIX + type);
+  }
+  return [...ids];
 };
 
 export const parseSelectedToolsFromEditorData = (

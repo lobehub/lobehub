@@ -64,21 +64,21 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   chatContainer: css`
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 16px;
+    gap: ${densityVars.contentGap};
+    padding: ${densityVars.cardPadding};
   `,
   chatMessage: css`
     display: flex;
     flex-direction: column;
     gap: 4px;
 
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadius};
 
     background: ${cssVar.colorBgContainer};
   `,
   chatMessageContent: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 1.6;
     color: ${cssVar.colorText};
   `,
@@ -93,12 +93,12 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   commandFooter: css`
     display: flex;
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     align-items: center;
     justify-content: center;
 
     padding-block: calc(${densityVars.sectionGap} - 4px);
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   commandRoot: css`
@@ -146,7 +146,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
     [cmdk-empty] {
       padding-block: 32px;
-      padding-inline: 16px;
+      padding-inline: ${densityVars.cardPadding};
 
       font-size: ${densityVars.fontSize};
       color: ${cssVar.colorTextTertiary};
@@ -324,10 +324,10 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   skeletonItem: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
   `,
 }));

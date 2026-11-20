@@ -11,6 +11,7 @@ import AuthorChip from '@/features/HomeInbox/AuthorChip';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import { formatDuration } from './layout';
@@ -31,8 +32,8 @@ const styles = stylex.create({
     borderRadius: 12,
     borderStyle: 'solid',
     borderWidth: 1,
-    paddingBlock: 16,
-    paddingInline: 16,
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   cardCompact: { paddingBlock: 12, paddingInline: 12 },
   count: { color: cssVar.colorTextTertiary, fontSize: 12 },
@@ -51,8 +52,8 @@ const styles = stylex.create({
     // folding saves no width there: the full card shows instead.
     display: { 'default': 'flex', '@media (max-width: 1100px)': 'none' },
     flexDirection: 'column',
-    gap: 12,
-    paddingBlock: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     paddingInline: 0,
     width: '100%',
   },

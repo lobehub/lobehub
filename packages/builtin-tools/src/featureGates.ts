@@ -1,3 +1,4 @@
+import { ArtboardIdentifier } from '@lobechat/builtin-tool-artboard';
 import { DashboardIdentifier, LegacyDashboardIdentifier } from '@lobechat/builtin-tool-dashboard';
 import { TopicToolIdentifier } from '@lobechat/builtin-tool-topic';
 import { WebhookIdentifier } from '@lobechat/builtin-tool-webhook';
@@ -5,6 +6,7 @@ import type { IFeatureFlagsState, UserLab } from '@lobechat/types';
 
 /** Builtin tools that exist only while a runtime feature flag is on for the user. */
 export const FEATURE_GATED_TOOLS: Record<string, keyof IFeatureFlagsState> = {
+  [ArtboardIdentifier]: 'enableArtboard',
   [DashboardIdentifier]: 'enableDashboard',
   // A legacy pinned or replayed id must stay behind the same flag.
   [LegacyDashboardIdentifier]: 'enableDashboard',

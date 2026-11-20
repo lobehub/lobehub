@@ -3,13 +3,13 @@ import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import { type ChangeEventHandler, type CompositionEventHandler, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import type { HomeMode } from '../types';
-import {
-  HOME_INPUT_ACTION_BAR_HEIGHT,
-  HOME_INPUT_BOTTOM_PADDING,
-  HOME_INPUT_FRAME_HEIGHT,
-} from './constants';
+import { HOME_INPUT_BOTTOM_PADDING, HOME_INPUT_METRICS } from './constants';
 import ModeSelect from './ModeSelect';
+
+const { compact, loose } = HOME_INPUT_METRICS;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actionBar: css`
@@ -17,9 +17,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     box-sizing: border-box;
     width: 100%;
-    height: ${HOME_INPUT_ACTION_BAR_HEIGHT}px;
+    height: ${loose.actionBarHeight}px;
     padding-block: 4px;
     padding-inline: 8px;
+
+    html[data-density='compact'] & {
+      height: ${compact.actionBarHeight}px;
+    }
   `,
   frame: css`
     overflow: hidden;
@@ -28,18 +32,27 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     box-sizing: border-box;
     width: 100%;
-    height: ${HOME_INPUT_FRAME_HEIGHT}px;
+    height: ${loose.frameHeight}px;
     border: 1px solid ${cssVar.colorFill};
-    border-radius: 20px;
+    border-radius: ${loose.radius}px;
 
     background: ${cssVar.colorBgElevated};
     box-shadow: 0 12px 32px rgb(0 0 0 / 4%);
+
+    html[data-density='compact'] & {
+      height: ${compact.frameHeight}px;
+      border-radius: ${compact.radius}px;
+    }
   `,
   root: css`
     box-sizing: border-box;
     width: 100%;
-    height: ${HOME_INPUT_FRAME_HEIGHT + HOME_INPUT_BOTTOM_PADDING}px;
+    height: ${loose.reservedHeight}px;
     padding-block-end: ${HOME_INPUT_BOTTOM_PADDING}px;
+
+    html[data-density='compact'] & {
+      height: ${compact.reservedHeight}px;
+    }
   `,
   textarea: css`
     resize: none;
@@ -51,11 +64,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     width: 100%;
     min-height: 0;
     padding-block: 8px 0;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 0;
 
     font-family: inherit;
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 1.4;
     color: ${cssVar.colorText};
 

@@ -12,6 +12,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useUserStore } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 import { type ApprovalMode } from '@/store/user/slices/settings/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   desc: { fontSize: '12px', lineHeight: 1.4, color: cssVar.colorTextDescription },
@@ -25,7 +26,12 @@ const styles = stylex.create({
   },
   modeButton: { fontSize: cssVar.fontSizeSM, color: cssVar.colorTextSecondary },
   modeButtonDisabled: { cursor: 'not-allowed', opacity: 0.5 },
-  title: { fontSize: '14px', fontWeight: 500, lineHeight: 1.4, color: cssVar.colorText },
+  title: {
+    fontSize: densityTokens['--lobe-density-font-size'],
+    fontWeight: 500,
+    lineHeight: 1.4,
+    color: cssVar.colorText,
+  },
   trigger: { overflow: 'hidden', borderRadius: cssVar.borderRadius },
 });
 

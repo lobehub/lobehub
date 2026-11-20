@@ -8,7 +8,7 @@ import {
   TabsRoot,
   TabsTab,
 } from '@lobehub/ui';
-import { Plus } from 'lucide-react';
+import { ClockIcon, Plus } from 'lucide-react';
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useSearchParams } from 'react-router';
@@ -29,6 +29,7 @@ import { TASK_COLLECTION_PAGE_SIZE } from '@/store/task/slices/list/action';
 import { useHeaderActionSize } from '@/styles/density';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
+import { AgentGoalsAndTasksTabs } from '../AgentGoalsAndTasksTabs';
 import { createTaskModal } from '../CreateTaskModal';
 import { useTaskProjectList } from '../features/useTaskProjectList';
 import Breadcrumb from '../shared/Breadcrumb';
@@ -143,16 +144,33 @@ export type TaskCollection = 'mine' | 'scheduled' | 'tasks';
 export type MyTaskScope = 'assigned' | 'created';
 const COLLECTION_PAGE_SIZE = TASK_COLLECTION_PAGE_SIZE;
 
+/**
+ * Where "My tasks" is offered it is the landing tab, so the bare URL opens it and
+ * the ordinary list is addressed as `collection=all` (`collection=tasks` keeps
+ * resolving for older links). Scopes without the tab keep the ordinary list as
+ * their bare URL.
+ */
 export const resolveTaskCollection = (
   searchParams: URLSearchParams,
   options: { allowMine?: boolean } = {},
 ): TaskCollection => {
   const value = searchParams.get('collection');
   if (value === 'scheduled') return 'scheduled';
+  if (value === 'all' || value === 'tasks') return 'tasks';
   // The "My tasks" tab is only offered where member assignment exists; a deep
   // link into it from a scope without the tab falls back to ordinary tasks.
-  if (value === 'mine' && options.allowMine) return 'mine';
-  return 'tasks';
+  if (!options.allowMine) return 'tasks';
+  return value === 'mine' || !value ? 'mine' : 'tasks';
+};
+
+/** The `collection` search param that addresses a tab; `undefined` is the bare URL. */
+export const taskCollectionParam = (
+  collection: TaskCollection,
+  options: { allowMine?: boolean } = {},
+): string | undefined => {
+  if (collection === 'scheduled') return 'scheduled';
+  if (!options.allowMine) return undefined;
+  return collection === 'mine' ? undefined : 'all';
 };
 
 export const resolveMyTaskScope = (searchParams: URLSearchParams): MyTaskScope =>
@@ -446,7 +464,8 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   );
 
   const handleCreateTask = useCallback(() => {
-    if (createActionBehavior.mode === 'inline') {
+    // "My tasks" renders no inline entry to expand, so it always opens the modal.
+    if (createActionBehavior.mode === 'inline' && !isMineCollection) {
       updateSystemStatus({ taskCreateInlineCollapsed: false }, 'expandTaskCreateInline');
       return;
     }
@@ -456,6 +475,8 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
       agentId,
       lockAssignee: !!agentId,
       projectId,
+      // Docking would close the modal into an inline entry "My tasks" never renders.
+      showInlineToggle: !isMineCollection,
       onCreated: (task) => {
         navigate(taskDetailPath(task.identifier, agentId ? task.agentId : undefined, task.name), {
           state: { taskListOrigin },
@@ -466,6 +487,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
     agentId,
     canCreateTask,
     createActionBehavior.mode,
+    isMineCollection,
     navigate,
     projectId,
     taskListOrigin,
@@ -506,8 +528,11 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   const handleCollectionChange = useCallback(
     (value: string) => {
       const next = new URLSearchParams(searchParams);
-      if (value === 'scheduled' || value === 'mine') {
-        next.set('collection', value);
+      const param = taskCollectionParam(value as TaskCollection, {
+        allowMine: showMineCollection,
+      });
+      if (param) {
+        next.set('collection', param);
       } else {
         next.delete('collection');
       }
@@ -516,7 +541,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
       setCollectionPage(1);
       setSearchParams(next, { replace: true });
     },
-    [searchParams, setSearchParams],
+    [searchParams, setSearchParams, showMineCollection],
   );
 
   const handleMyTaskScopeChange = useCallback(
@@ -548,15 +573,22 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   // "Content contains" for the same condition.
   const showFind = !isMobile && (headerVisibility.showViewOptions || hasFilter);
 
-  const headerLeft = (
+  const showGoalsAndTasksTabs = !!agentId || (!projectId && !activeWorkspaceId);
+  const headerLeft = showGoalsAndTasksTabs ? (
+    <AgentGoalsAndTasksTabs agentId={agentId} view={'tasks'} />
+  ) : (
     <Flexbox horizontal align={'center'} gap={8}>
       {headerVisibility.showBreadcrumb && <Breadcrumb />}
       <TabsRoot size={'small'} value={collection} onValueChange={handleCollectionChange}>
         <TabsList>
           <TabsIndicator />
-          <TabsTab value={'tasks'}>{t('taskList.title')}</TabsTab>
-          <TabsTab value={'scheduled'}>{t('taskList.scheduled.title')}</TabsTab>
+          {/* The landing tab leads; beside "My tasks" the ordinary list needs a
+              scope in its name, or it reads as the page title. */}
           {showMineCollection && <TabsTab value={'mine'}>{t('taskList.mine.title')}</TabsTab>}
+          <TabsTab value={'tasks'}>
+            {showMineCollection ? t('taskList.all') : t('taskList.title')}
+          </TabsTab>
+          <TabsTab value={'scheduled'}>{t('taskList.scheduled.title')}</TabsTab>
         </TabsList>
       </TabsRoot>
       {isMineCollection && (
@@ -576,8 +608,24 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
       <Flexbox flex={1} height={'100%'}>
         <NavHeader
           left={headerLeft}
+          styles={showGoalsAndTasksTabs ? undefined : { left: { gap: 8, paddingLeft: 4 } }}
           right={
             <Flexbox horizontal align={'center'} gap={4}>
+              {showGoalsAndTasksTabs && (
+                <Button
+                  aria-label={t('taskList.scheduled.title')}
+                  aria-pressed={isScheduledCollection}
+                  icon={ClockIcon}
+                  size={'small'}
+                  title={t('taskList.scheduled.title')}
+                  type={isScheduledCollection ? 'fill' : 'text'}
+                  onClick={() =>
+                    handleCollectionChange(isScheduledCollection ? 'tasks' : 'scheduled')
+                  }
+                >
+                  {isMobile ? undefined : t('taskList.scheduled.title')}
+                </Button>
+              )}
               {showFind && <TaskListFind content={filter?.content} onChange={handleFindChange} />}
               {(headerVisibility.showViewOptions || hasFilter) && (
                 <TaskFilterButton fields={filterFields} filter={filter} setFilter={setFilter} />
@@ -590,6 +638,16 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
                   icon={Plus}
                   size={headerActionSmallSize}
                   title={createActionBehavior.disabled ? reason : undefined}
+                  onClick={handleCreateTask}
+                />
+              )}
+              {isMineCollection && (
+                <ActionIcon
+                  aria-label={t('createTask.submit')}
+                  disabled={!canCreateTask}
+                  icon={Plus}
+                  size={headerActionSmallSize}
+                  title={canCreateTask ? t('createTask.submit') : reason}
                   onClick={handleCreateTask}
                 />
               )}
@@ -619,12 +677,6 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
               )}
             </Flexbox>
           }
-          styles={{
-            left: {
-              paddingLeft: 4,
-              gap: 8,
-            },
-          }}
         />
         <TaskFilterBar
           fields={filterFields}

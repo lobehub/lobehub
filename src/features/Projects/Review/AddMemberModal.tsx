@@ -18,6 +18,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import UserAvatar from '@/components/UserAvatar';
+import { densityTokens } from '@/styles/density.stylex';
 
 import type { MemberCandidate } from './memberSearch';
 import { filterMemberCandidates } from './memberSearch';
@@ -25,27 +26,31 @@ import { useMemberBatch } from './useMemberBatch';
 
 const styles = stylex.create({
   footer: {
-    paddingBlock: 12,
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     paddingInline: 20,
     borderBlockStartWidth: 1,
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,
   },
-  header: { paddingBlockStart: '4px', paddingBlockEnd: '12px', paddingInline: 20 },
+  header: {
+    paddingBlockStart: '4px',
+    paddingBlockEnd: densityTokens['--lobe-density-content-gap'],
+    paddingInline: 20,
+  },
   indicator: { display: 'inline-flex', color: cssVar.colorPrimary },
   list: {
     overflowY: 'auto',
     height: 'clamp(240px, calc(100dvh - 320px), 360px)',
     paddingBlockStart: '0',
     paddingBlockEnd: '8px',
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     userSelect: 'none',
   },
   row: {
     cursor: 'pointer',
     marginBlock: 2,
     paddingBlock: 10,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadius,
     backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
   },

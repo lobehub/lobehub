@@ -94,7 +94,7 @@ beforeEach(() => {
   queryAgentsMock.mockResolvedValue([{ id: 'other-agent', name: 'Coder', title: 'Coding helper' }]);
 
   getInfoForAIGenerationMock.mockResolvedValue({
-    responseLanguage: 'en-US',
+    preferredReplyLanguage: 'en-US',
     userName: 'Some Name',
   });
   getUserSettingsMock.mockResolvedValue({});

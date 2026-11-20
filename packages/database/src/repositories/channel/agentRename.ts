@@ -1,11 +1,11 @@
-import { agentDisplayName, CHANNEL_LIMITS } from '@lobechat/types';
+import { CHANNEL_LIMITS } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, asc, eq, inArray, or } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 
 import { agents, channelMembers, channels } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
-import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
+import { resolveAgentLabel } from '../../utils/inboxAgent';
 
 /** PostgreSQL `deadlock_detected`: the victim's transaction was rolled back. */
 const DEADLOCK_DETECTED = '40P01';
@@ -28,11 +28,7 @@ interface AgentLabelFields {
 }
 
 /** The label a Channel stores for an Agent when it opens a direct conversation or adds it. */
-const channelAgentLabel = (agent: AgentLabelFields) =>
-  agentDisplayName(
-    { name: agent.name, title: normalizeInboxAgentTitle(agent.title, agent) },
-    'Agent',
-  );
+const channelAgentLabel = (agent: AgentLabelFields) => resolveAgentLabel(agent, 'Agent');
 
 /**
  * Carries an Agent's rename into the Channels that still show its old name. A direct

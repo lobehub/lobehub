@@ -82,9 +82,10 @@ const Preview = memo<PreviewProps>(
     });
 
     const displayTitle =
-      (isHeaderInbox ?? isInbox)
-        ? DEFAULT_INBOX_TITLE
-        : agentDisplayName(headerMeta) || title || currentTitle;
+      agentDisplayName(headerMeta) ||
+      title ||
+      currentTitle ||
+      ((isHeaderInbox ?? isInbox) ? DEFAULT_INBOX_TITLE : undefined);
     const resolvedAgentId = (headerMeta && headerAgentId) || activeAgentId;
     const displayAvatar = resolveHeaderAvatar(headerMeta, currentAvatar);
     const displayBackgroundColor = headerMeta?.backgroundColor || currentBackgroundColor;

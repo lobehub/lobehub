@@ -24,6 +24,7 @@ import {
   type BuiltinToolResolveContext,
   type ChatCompletionTool,
   getActivePluginIds,
+  getBuiltinOverrides,
   getOptedInPluginIds,
   type LobeAgentChatConfig,
   resolveToolMode,
@@ -296,6 +297,7 @@ export const createAgentToolsEngine = (
         ],
         chatConfig,
         options.uninstalledBuiltinTools ?? runtimeUninstalledBuiltinTools(getToolStoreState()),
+        getBuiltinOverrides(agent.plugins),
       ),
       ...getFeatureDisabledToolIds(getServerConfigStoreState()?.featureFlags),
       // Lab-gated tools (e.g. lobe-topic) leave the pool while their Labs switch is off.

@@ -78,12 +78,7 @@ const dispatchHeteroAgentImpl = async (
   // visitor: the gateway registers the op under this id, the token it returns
   // is the visitor's, and `streamOwnerUserId` on the op metadata is what tells
   // the ingest/finish requests (other processes) to redact for a visitor.
-  const shareStream = shareGate
-    ? {
-        streamOwnerUserId: shareGate.visitorUserId,
-        visitorRedaction: { showErrorDetails: shareGate.shareConfig.showErrorDetails },
-      }
-    : undefined;
+  const shareStream = shareGate ? { streamOwnerUserId: shareGate.visitorUserId } : undefined;
   // Same structured shape as the built-in path (`op_{ts}_{agentId}_{topicId}_{rand}`)
   // so hetero ops aren't visually distinct bare nanoids in the trace/op tables.
   const operationId =

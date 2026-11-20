@@ -44,6 +44,7 @@ vi.mock('@/server/services/market', () => ({
 // below can exercise the per-API data-tool rules.
 vi.mock('@lobechat/builtin-tools', () => ({
   AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS: new Set(['lobe-user-memory']),
+  AGENT_SHARE_IMPLIED_BUILTIN_IDENTIFIERS: new Set<string>(),
   isBuiltinToolIdentifier: (id: string) =>
     ['lobe-notebook', 'lobe-task', 'lobe-user-memory'].includes(id),
   builtinTools: [

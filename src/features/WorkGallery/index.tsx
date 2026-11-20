@@ -15,6 +15,7 @@ import {
 } from '@/features/CanvasStorage/useCanvasStorage';
 import NavHeader from '@/features/NavHeader';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import { densityVars } from '@/styles/densityVars';
 import { isMobileSurface } from '@/utils/mobileSurface';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
@@ -47,7 +48,7 @@ const styles = createStaticStyles(({ css }) => ({
   cardList: css`
     display: grid;
     grid-template-columns: repeat(3, minmax(280px, 1fr));
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     width: 100%;
 
     @media (width >= 1600px) {
@@ -75,7 +76,7 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: auto hidden;
     flex: none;
 
-    padding-block: 12px 10px;
+    padding-block: ${densityVars.contentGap} 10px;
     padding-inline: 24px;
 
     &::-webkit-scrollbar {
@@ -94,7 +95,7 @@ const styles = createStaticStyles(({ css }) => ({
     margin-block-end: 12px;
   `,
   groupTitle: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 600;
     color: ${cssVar.colorText};
   `,
@@ -105,7 +106,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: center;
 
-    padding-block: 16px;
+    padding-block: ${densityVars.cardPadding};
 
     font-size: 13px;
     color: ${cssVar.colorTextTertiary};
@@ -114,7 +115,7 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     padding-block: 4px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorder};
     border-radius: 6px;
 
@@ -130,7 +131,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   typeBar: css`
     flex: none;
-    padding-block: 12px 0;
+    padding-block: ${densityVars.contentGap} 0;
     padding-inline: 24px;
   `,
   scroll: css`

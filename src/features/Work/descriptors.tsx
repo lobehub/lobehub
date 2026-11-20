@@ -1,5 +1,6 @@
 import { classifyEditedFile, getBasename } from '@lobechat/builtin-tools/fileEditScan';
 import {
+  type CollectionWorkItem,
   type ExternalWorkResourceType,
   type ListedWorkType,
   type WorkListItem,
@@ -16,11 +17,13 @@ import {
   CircleCheckIcon,
   CircleDotIcon,
   ClipboardListIcon,
+  DraftingCompassIcon,
   FileBoxIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
   FileTypeIcon,
   GitPullRequestDraftIcon,
+  ImagesIcon,
   LinkIcon,
   PanelsTopLeftIcon,
   PresentationIcon,
@@ -121,6 +124,7 @@ export interface WorkBranch {
  * only names the destination, it never reaches into a store or the DOM itself.
  */
 export type WorkOpenTarget =
+  | { artboardId: string; kind: 'artboard' }
   | { agentDocumentId?: string; documentId: string; kind: 'document' }
   | { taskId: string; identifier?: string; kind: 'task'; name?: string | null }
   | { kind: 'external'; url: string }
@@ -130,7 +134,13 @@ export type WorkOpenTarget =
    * chat portal (WorkGallery), so they don't recompute the file-metadata lookup.
    */
   | { fileId: string; kind: 'filePreview'; url?: string }
-  | { canvasId: string; kind: 'canvas'; version?: number };
+  | { canvasId: string; kind: 'canvas'; version?: number }
+  /**
+   * Grid viewer of a collection Work. Summary rows carry the version's images;
+   * list rows only know the cover, so the viewer loads the images itself when
+   * `items` is missing.
+   */
+  | { items?: CollectionWorkItem[]; kind: 'collection'; title?: string | null; workId: string };
 
 /**
  * Client-side allowlist for external Work URLs (defense in depth over the
@@ -250,9 +260,52 @@ const getFileWorkMetadata = (item: WorkItemOfType<'file'>): WorkVersionMetadata 
 const getFileWorkPath = (item: WorkItemOfType<'file'>): string | null =>
   getFileWorkMetadata(item)?.filePath ?? item.description?.trim() ?? null;
 
+/** The images of a collection summary row; list rows carry no version metadata. */
+const getCollectionItems = (
+  item: WorkItemOfType<'collection'>,
+): CollectionWorkItem[] | undefined =>
+  'event' in item ? (item.event?.metadata?.collection?.items ?? undefined) : undefined;
+
+/**
+ * The cover a collection card shows: the version's named cover, else its first
+ * image, else the denormalized `works.url` list rows carry. Only http(s) URLs.
+ */
+export const getCollectionCoverUrl = (item: WorkItemOfType<'collection'>): string | null => {
+  const collection = 'event' in item ? item.event?.metadata?.collection : undefined;
+  const cover = collection?.coverFileId
+    ? collection.items.find((image) => image.fileId === collection.coverFileId)
+    : undefined;
+  const url = (cover ?? collection?.items[0])?.url ?? item.url;
+  return isSafeExternalUrl(url) ? url : null;
+};
+
+/**
+ * Up to three images a collection card fans out, cover first. Fewer than two means
+ * there is nothing to fan: list rows know only the cover.
+ */
+export const getCollectionFanUrls = (item: WorkItemOfType<'collection'>): string[] => {
+  const cover = getCollectionCoverUrl(item);
+  const others = (getCollectionItems(item) ?? [])
+    .map((image) => image.url)
+    .filter((url) => url !== cover && isSafeExternalUrl(url));
+  return [...(cover ? [cover] : []), ...others].slice(0, 3);
+};
+
+/** Image count of a collection summary row, `null` for list rows that do not know it. */
+export const getCollectionImageCount = (item: WorkItemOfType<'collection'>): number | null =>
+  getCollectionItems(item)?.length ?? null;
+
 export const WORK_TYPE_DESCRIPTORS: {
   [T in ListedWorkType]: WorkTypeDescriptor<WorkItemOfType<T>>;
 } = {
+  artboard: {
+    getDescription: (item) => item.description?.trim() ?? null,
+    getIcon: () => DraftingCompassIcon,
+    getIdentifier: () => null,
+    getOpenTarget: (item) =>
+      item.resourceId ? { artboardId: item.resourceId, kind: 'artboard' } : null,
+    getTitle: (item) => item.title,
+  },
   canvas: {
     getDescription: (item) => item.description?.trim() ?? null,
     getIcon: () => PanelsTopLeftIcon,
@@ -294,9 +347,9 @@ export const WORK_TYPE_DESCRIPTORS: {
   // aggregate card instead. The version metadata carries the file identity
   // (path / url); plain list rows fall back to the denormalized `works` columns.
   file: {
-    // Subtitle is the file path (metadata), falling back to the denormalized
-    // description column for list rows without version metadata.
-    getDescription: (item) => getFileWorkPath(item),
+    // Subtitle is the description an agent gave the file; otherwise the
+    // denormalized description column holds the file path.
+    getDescription: (item) => item.description?.trim() || getFileWorkPath(item),
     // Pick the branded file-type badge from the file's extension; unclassifiable
     // paths (or a path-less list row) fall back to the generic file-text glyph.
     getIcon: (item) => {
@@ -319,13 +372,13 @@ export const WORK_TYPE_DESCRIPTORS: {
       if (metadata?.fileId) return { fileId: metadata.fileId, kind: 'filePreview', url: safeUrl };
       return safeUrl ? { kind: 'external', url: safeUrl } : null;
     },
-    // Title is the file name (basename of the path), falling back to the
-    // denormalized title column.
+    // The stored title wins: scanned Works store the basename there on every
+    // version, and an agent-created Work (`lh work create --title`) stores the
+    // title the agent chose. The path basename covers rows without a title.
     getTitle: (item) => {
+      if (item.title?.trim()) return item.title;
       const path = getFileWorkPath(item);
-      // `getBasename` returns '' for a segment-less path; fall through to the
-      // denormalized title in that case (matching the previous null-coalescing).
-      return (path ? getBasename(path) : '') || item.title;
+      return path ? getBasename(path) : item.title;
     },
   },
   external: {
@@ -361,6 +414,18 @@ export const WORK_TYPE_DESCRIPTORS: {
     getOpenTarget: (item) =>
       isSafeExternalUrl(item.url) ? { kind: 'external', url: item.url } : null,
     getStateLabelKey: (item) => getGithubState(item)?.labelKey ?? null,
+    getTitle: (item) => item.title,
+  },
+  collection: {
+    getDescription: (item) => item.description?.trim() ?? null,
+    getIcon: () => ImagesIcon,
+    getIdentifier: () => null,
+    getOpenTarget: (item) => ({
+      items: getCollectionItems(item),
+      kind: 'collection',
+      title: item.title,
+      workId: item.id,
+    }),
     getTitle: (item) => item.title,
   },
   task: {

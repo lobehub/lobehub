@@ -9,6 +9,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useOAuthAppStore } from '@/store/oauthApp';
+import { densityTokens } from '@/styles/density.stylex';
 import { type OAuthAppItem } from '@/types/oauthApp';
 
 import { appTypeLabelKey } from '../../appList';
@@ -19,8 +20,8 @@ const styles = stylex.create({
   meta: { flex: 'none', fontSize: cssVar.fontSizeSM, color: cssVar.colorTextTertiary },
   row: {
     cursor: 'pointer',
-    paddingBlock: '12px',
-    paddingInline: '12px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadius,
     transition: 'background 0.15s ease',
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },

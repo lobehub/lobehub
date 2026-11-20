@@ -5,6 +5,8 @@ import { registerVerifyCommand } from './commands/acceptance/deprecatedVerify';
 import { registerAgentCommand } from './commands/agent';
 import { registerAgentGroupCommand } from './commands/agent-group';
 import { registerAgentSignalCommand } from './commands/agent-signal';
+import { registerAppCommand } from './commands/app';
+import { registerArtboardCommand } from './commands/artboard';
 import { registerArtifactCommand } from './commands/artifact';
 import { registerAutomationCommand } from './commands/automation';
 import { registerBotCommand } from './commands/bot';
@@ -105,7 +107,9 @@ export function createProgram() {
   registerAgentCommand(program);
   registerAgentGroupCommand(program);
   registerAgentSignalCommand(program);
+  registerAppCommand(program);
   registerBotCommand(program);
+  registerArtboardCommand(program);
   registerChannelCommand(program);
   registerGenerateCommand(program);
   registerGoalCommand(program);

@@ -7,6 +7,8 @@ import * as stylex from '@stylexjs/stylex';
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import type { ToolDetailType } from './SkillDetail';
 import { useToolDisplayName } from './useToolDisplayName';
 
@@ -20,7 +22,10 @@ const styles = stylex.create({
     color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
     backgroundColor: 'transparent',
   },
-  root: { paddingBlock: '16px', paddingInline: '16px' },
+  root: {
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
+  },
 });
 
 interface DetailBreadcrumbProps {

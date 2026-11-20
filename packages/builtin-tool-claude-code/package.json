@@ -10,6 +10,7 @@
   },
   "main": "./src/index.ts",
   "dependencies": {
+    "@lobechat/heterogeneous-agents": "workspace:*",
     "@lobechat/shared-tool-ui": "workspace:*"
   },
   "devDependencies": {

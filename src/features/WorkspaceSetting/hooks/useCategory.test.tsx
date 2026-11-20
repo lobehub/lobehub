@@ -111,7 +111,7 @@ describe('workspace settings useCategory', () => {
     expect(result.current.at(-1)?.key).toBe(WorkspaceSettingsGroupKey.System);
   });
 
-  it('groups devices, subscription accounts, environments and credentials under Runtime', () => {
+  it('groups devices, subscription accounts and environments & credentials under Runtime', () => {
     const { result } = renderHook(() => useWorkspaceSettingCategory(), { wrapper });
     const keys = result.current.map((group) => group.key);
     const resourceGroup = result.current.find(
@@ -130,8 +130,8 @@ describe('workspace settings useCategory', () => {
     expect(resourceGroup?.items.map((item) => item.key)).toEqual([
       WorkspaceSettingsTabs.Devices,
       WorkspaceSettingsTabs.SubscriptionAccounts,
+      // Credentials share the Environments page rather than an entry of their own.
       WorkspaceSettingsTabs.Environments,
-      WorkspaceSettingsTabs.Creds,
     ]);
     expect(generalGroup?.items.map((item) => item.key)).not.toContain(
       WorkspaceSettingsTabs.Devices,
@@ -283,14 +283,16 @@ describe('workspace settings useCategory automations', () => {
   });
 
   // Every role sees it: the list is how members learn what fires shared agents.
-  it('lists Automations after the connectors for every role', () => {
+  it('lists Automations after Integrations for every role', () => {
     mocks.canCreateContent = false;
     mocks.canManageWorkspace = false;
     mocks.canViewBilling = false;
     const keys = connectionKeys(true) ?? [];
 
+    // Connectors moved to the Marketplace (`/:slug/marketplace/connector`).
+    expect(keys).not.toContain(WorkspaceSettingsTabs.Connector);
     expect(keys.indexOf(WorkspaceSettingsTabs.Automations)).toBe(
-      keys.indexOf(WorkspaceSettingsTabs.Connector) + 1,
+      keys.indexOf(WorkspaceSettingsTabs.Integrations) + 1,
     );
   });
 });

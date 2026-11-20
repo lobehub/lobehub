@@ -16,7 +16,7 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
   const { t } = useTranslation('discover');
 
   const handleBackToMarket = () => {
-    navigate('/community');
+    navigate('/marketplace');
   };
 
   // Unpublished status
@@ -36,7 +36,7 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
           icon={<FluentEmoji emoji={'⌛'} size={96} type={'anim'} />}
           extra={
             <Button size={'large'} type="primary" onClick={handleBackToMarket}>
-              {t('groupAgents.status.backToMarket', { defaultValue: 'Back to Market' })}
+              {t('assistants.status.backToMarket')}
             </Button>
           }
           subTitle={
@@ -81,7 +81,7 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
         icon={statusIcon}
         extra={
           <Button type="primary" onClick={handleBackToMarket}>
-            {t('groupAgents.status.backToMarket', { defaultValue: 'Back to Market' })}
+            {t('assistants.status.backToMarket')}
           </Button>
         }
         subTitle={

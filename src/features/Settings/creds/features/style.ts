@@ -1,9 +1,11 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 export const styles = stylex.create({
   container: {
-    paddingBlock: '12px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     paddingInline: 0,
   },
   // Compact density: 6px block padding, 36px tile, 14px title → ~55px two-line rows.

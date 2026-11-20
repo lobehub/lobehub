@@ -55,6 +55,7 @@ run commands.
 | \`lh kb\` | Knowledge base management (create, upload, organize) | \`references/kb\` |
 | \`lh file\` | File management | \`references/file\` |
 | \`lh artifact\` | Publish local HTML or Canvas, with persistent bindings and retry recovery | \`references/artifact\` |
+| \`lh work\` | Show files and links you produced as Work cards under your reply (create, update) | \`references/work\` |
 | \`lh memory\` | User memory management (identity, activity, preference) | \`references/memory\` |
 | \`lh search\` / \`lh recall\` | Search local resources or the web / recall past work in a time window | \`references/search\` |
 | \`lh gen\` | Content generation (text, image, video, TTS, ASR) | \`references/generate\` |

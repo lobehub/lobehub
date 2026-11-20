@@ -47,7 +47,6 @@ import type {
 import {
   buildHeteroExecStdinPayload,
   buildHeterogeneousPrompt,
-  stripInheritedRunIdentity,
 } from '@lobechat/heterogeneous-agents/protocol';
 import {
   CLAUDE_CODE_QUOTA_FRESH_MS,
@@ -85,7 +84,6 @@ import {
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
   spawnDshAcpSession,
-  stopClaudeCodeTask,
 } from '@lobechat/heterogeneous-agents/spawn';
 import {
   buildClaudeCodeReplayTurn,
@@ -98,6 +96,7 @@ import {
 } from '@lobechat/heterogeneous-agents/workingDirectory';
 import type {
   HeterogeneousAgentModelCatalog,
+  HeteroPermissionMode,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
 import {
@@ -163,12 +162,18 @@ import { createLogger } from '@/utils/logger';
 import BrowserControlCtr from './BrowserControlCtr';
 import { sendPromptWithCodexAppServer } from './codexAppServer';
 import { createLiveCliAdapter, endLiveCliRun, writeCliPrompt } from './heterogeneousAgentLiveInput';
+import {
+  attachCliPermissionPrompts,
+  setSessionPermissionMode,
+  stopSessionBackgroundTask,
+} from './heterogeneousAgentPermission';
 import type {
   AgentSession,
   CancelSessionParams,
   CliTraceSession,
   GetSessionInfoParams,
   SendPromptParams,
+  SetPermissionModeParams,
   StopBackgroundTaskParams,
   StopSessionParams,
   SubmitInterventionParams,
@@ -180,6 +185,7 @@ import {
   interruptActiveAcpSession,
   sendPromptWithAcpSession,
 } from './heterogeneousAgentSession';
+import { appendLoopbackNoProxy, buildInheritedSpawnEnv } from './heterogeneousAgentSpawnEnv';
 import {
   steerAgentSession,
   type SteerSessionParams,
@@ -190,47 +196,8 @@ import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
 const logger = createLogger('controllers:HeterogeneousAgentCtr');
 
-// Anthropic auth env vars that must NOT be inherited from the desktop process
-// when spawning a local CLI agent. A developer with `ANTHROPIC_API_KEY` (or an
-// auth token / base url) exported in their shell would otherwise have it
-// forwarded to `claude`, which then switches from its own subscription login to
-// that key — an expired / wrong key surfaces as a baffling "Invalid API key"
-// and the run exits non-zero. Agents that genuinely want an API key still set
-// it through `session.env`, which is spread AFTER the inherited env below and
-// therefore wins.
-const STRIPPED_INHERITED_ENV_KEYS = [
-  'ANTHROPIC_API_KEY',
-  'ANTHROPIC_AUTH_TOKEN',
-  'ANTHROPIC_BASE_URL',
-] as const;
+export { buildInheritedSpawnEnv } from './heterogeneousAgentSpawnEnv';
 
-/**
- * Inherited `process.env` without the Anthropic auth vars or an ancestor agent run's
- * identity (a Desktop launched from an agent shell carries its JWT file, which the CLI
- * prefers over any token). Pure and exported so the invariant is unit-tested directly.
- */
-export const buildInheritedSpawnEnv = (
-  sourceEnv: NodeJS.ProcessEnv = process.env,
-): NodeJS.ProcessEnv => {
-  const env = stripInheritedRunIdentity(sourceEnv);
-  for (const key of STRIPPED_INHERITED_ENV_KEYS) delete env[key];
-  return env;
-};
-
-const appendLoopbackNoProxy = (env: NodeJS.ProcessEnv): void => {
-  const entries = new Set([
-    ...[env.NO_PROXY, env.no_proxy]
-      .filter((value): value is string => !!value)
-      .flatMap((value) => value.split(','))
-      .map((value) => value.trim())
-      .filter(Boolean),
-    '127.0.0.1',
-    'localhost',
-  ]);
-  const noProxy = [...entries].join(',');
-  env.NO_PROXY = noProxy;
-  env.no_proxy = noProxy;
-};
 const CODEX_RESUME_THREAD_NOT_FOUND_PATTERNS = [
   /no conversation found/i,
   /thread .*not found/i,
@@ -1659,6 +1626,8 @@ export default class HeterogeneousAgentCtr {
           },
         },
         mcpConfigPath: intervention?.tmpConfigPath,
+        permissionMode: params.permissionMode,
+        permissionPrompts: !!intervention,
         promptInput,
         resumeSessionId: session.agentSessionId,
       });
@@ -1919,8 +1888,13 @@ export default class HeterogeneousAgentCtr {
     // Same floor as the spawned-CLI path: taken before the transport (and the
     // executable it launches) exists.
     const startedAt = new Date().toISOString();
+    // Lab permission prompts raise cards on their own bridge (no MCP server).
+    const prompts =
+      params.permissionMode &&
+      this.setupAcpInterventionForOp(params.operationId, session.sessionId, 'claude-code');
     const sdkSession = new ClaudeAgentSdkSession({
       args: [...session.args, ...input.args],
+      askUserBridge: prompts ? prompts.bridge : undefined,
       commandPath,
       configDir: spawnEnv.CLAUDE_CONFIG_DIR ?? session.hostedProviderBinding?.profileDir,
       cwd,
@@ -1954,6 +1928,7 @@ export default class HeterogeneousAgentCtr {
       },
       onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
       operationId: params.operationId,
+      permissionMode: params.permissionMode,
       // Like the CLI, in every Follow-up mode: a steer is confirmed by its replay.
       replayUserMessages: true,
       resumeSessionId: session.agentSessionId,
@@ -2014,6 +1989,8 @@ export default class HeterogeneousAgentCtr {
         cause: error,
       });
     } finally {
+      // Cancels a card still waiting: the run that asked is gone.
+      if (prompts) await prompts.cleanup();
       await session.hostedProviderBinding?.cleanup();
     }
   }
@@ -2463,6 +2440,15 @@ export default class HeterogeneousAgentCtr {
       });
       const slot = this.opIdToIntervention.get(params.operationId);
       if (slot) slot.pumpDone = pumpDone;
+      if (session.liveInput && params.permissionMode && session.agentType === 'claude-code') {
+        attachCliPermissionPrompts({
+          bridge: intervention.bridge,
+          emit: broadcastBridgeEvent,
+          live: session.liveInput,
+          operationId: params.operationId,
+          permissionMode: params.permissionMode,
+        });
+      }
     }
 
     // Stream stdout events through the producer pipeline.
@@ -3176,11 +3162,7 @@ export default class HeterogeneousAgentCtr {
    * reaches the renderer through the run's own stream.
    */
   async stopBackgroundTask({ sessionId, taskId }: StopBackgroundTaskParams): Promise<void> {
-    const session = this.sessions.get(sessionId);
-    if (session?.sdkSession) return session.sdkSession.stopTask(taskId);
-    const live = session?.liveInput;
-    if (!live) throw new Error('This run cannot stop a single background task');
-    await stopClaudeCodeTask((request) => live.sendControlRequest(request), taskId);
+    await stopSessionBackgroundTask(this.sessions.get(sessionId), taskId);
   }
 
   /**
@@ -3240,8 +3222,9 @@ export default class HeterogeneousAgentCtr {
     this.sessions.delete(params.sessionId);
   }
 
-  async respondPermission(): Promise<void> {
-    // No-op for CLI mode (permissions handled by --permission-mode flag)
+  /** Switch a running Claude Code's permission mode (the mode chip); see the helper. */
+  async setPermissionMode({ mode, sessionId }: SetPermissionModeParams) {
+    return setSessionPermissionMode(this.sessions.get(sessionId), mode);
   }
 
   /**
@@ -3389,6 +3372,7 @@ export default class HeterogeneousAgentCtr {
     imageList?: HeteroExecImageRef[];
     jwt: string;
     operationId: string;
+    permissionMode?: HeteroPermissionMode;
     prompt: string;
     resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
@@ -3458,6 +3442,7 @@ export default class HeterogeneousAgentCtr {
     const stdinPayload = buildHeteroExecStdinPayload({
       imageList,
       isNewSession: !resumeSessionId,
+      permissionMode: params.permissionMode,
       prompt,
       resumeFallbackSystemContext,
       systemContext,

@@ -48,7 +48,7 @@ export const styles = createStaticStyles(({ css }) => ({
 
     min-width: 1040px;
     padding-block: 8px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 12px;

@@ -141,17 +141,23 @@ const buildVersionMetadata = (
  * `buildInput` receives.
  */
 /** Server-owned `works.metadata` for a fresh identity row under `ctx`'s scope. */
-const buildWorkMetadata = (ctx: WorkContext): WorkMetadata | null => {
+const buildWorkMetadata = (
+  ctx: WorkContext,
+  params: Pick<WorkVersionEventParams, 'agentEditable'>,
+): WorkMetadata | null => {
   const scope = resolveWorkAccessScope(ctx);
-  if (scope.type !== 'agentShare') return null;
-
-  return {
-    agentShare: {
-      shareId: scope.shareId,
-      topicId: scope.topicId,
-      visitorUserId: scope.visitorUserId,
-    },
+  const metadata: WorkMetadata = {
+    ...(params.agentEditable && { agentEditable: true }),
+    ...(scope.type === 'agentShare' && {
+      agentShare: {
+        shareId: scope.shareId,
+        topicId: scope.topicId,
+        visitorUserId: scope.visitorUserId,
+      },
+    }),
   };
+
+  return Object.keys(metadata).length > 0 ? metadata : null;
 };
 
 export const registerWorkVersion = async (
@@ -176,7 +182,9 @@ export const registerWorkVersion = async (
             // from a visitor's share topic carries that topic's scope for its
             // whole life, so the creator's ordinary reads (and any other
             // visitor topic) never resolve it — see `workMatchesAccessScope`.
-            metadata: buildWorkMetadata(ctx),
+            // `agentEditable` follows the same rule: a Work's editability by
+            // the agent is fixed by whoever registered it first.
+            metadata: buildWorkMetadata(ctx, params),
             // Origin provenance is stamped ONLY here: it records where the Work
             // identity was first registered and stays immutable through every
             // later version (the current-projection UPDATE below never touches it).

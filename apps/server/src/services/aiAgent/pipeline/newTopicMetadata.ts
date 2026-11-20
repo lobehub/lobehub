@@ -110,6 +110,10 @@ export const buildNewTopicMetadata = ({
     ...(openedBy && { openedBy }),
     taskId,
     ...(webhookThread && { webhook: webhookThread }),
+    // Claude Code permission mode the composer chip showed (Better Coding Experience).
+    ...(initialTopicMeta?.heteroPermissionMode && {
+      heteroPermissionMode: initialTopicMeta.heteroPermissionMode,
+    }),
     ...(initialTopicMeta?.repos && { repos: initialTopicMeta.repos }),
     ...pickSandboxPlacement(initialTopicMeta),
     ...(initialTopicMeta?.workingDirectory && {

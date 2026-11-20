@@ -235,6 +235,18 @@ describe('useTopicNavigation', () => {
     expect(pushMock).toHaveBeenCalledWith('/agent/agent-1/topics');
   });
 
+  it('opens the agent topics page on one source when given a trigger', () => {
+    const { result } = renderHook(() => useNavigateToAgentTopics());
+
+    act(() => {
+      result.current('agent-1', 'share');
+    });
+
+    expect(pushMock).toHaveBeenCalledWith('/agent/agent-1/topics', {
+      query: { trigger: 'share' },
+    });
+  });
+
   it('leaves the current topic and opens the active agent topics page', () => {
     const { result } = renderHook(() => useOpenActiveAgentTopics());
 

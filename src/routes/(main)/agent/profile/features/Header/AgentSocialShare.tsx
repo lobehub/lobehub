@@ -28,7 +28,7 @@ export const getAgentPublicUrl = (
     ? urlJoin(AGENTS_OFFICIAL_URL, marketIdentifier)
     : undefined;
 
-/** Header entry that posts the current agent's Community page to social media. */
+/** Header entry that posts the current agent's public Marketplace page to social media. */
 const AgentSocialShare = memo(() => {
   const { t } = useTranslation('chat');
   const isMobile = useIsMobile();

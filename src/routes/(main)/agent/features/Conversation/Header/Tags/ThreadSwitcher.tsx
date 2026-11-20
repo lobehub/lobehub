@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 import { threadSelectors } from '@/store/chat/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   item: css`
@@ -48,7 +49,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border: none;
     border-radius: 6px;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 600;
     line-height: 1.5;
     color: ${cssVar.colorText};

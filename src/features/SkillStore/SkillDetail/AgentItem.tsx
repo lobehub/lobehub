@@ -21,7 +21,7 @@ const AgentItem = memo<AgentItemProps>(
 
     return (
       <a
-        href={`/community/agent/${identifier}`}
+        href={`/marketplace/agent/${identifier}`}
         rel="noopener noreferrer"
         style={{ display: 'block', height: '100%' }}
         target="_blank"

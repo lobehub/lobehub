@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { ScrollSignalProvider } from '@/features/ChatInput/ActionBar/Tools/ScrollSignalContext';
 import ToolsList, { toolsListStyles } from '@/features/ChatInput/ActionBar/Tools/ToolsList';
+import { MARKETPLACE_INSTALLED_CONNECTORS_PATH } from '@/features/Marketplace/paths';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import Empty from './Empty';
@@ -128,7 +129,7 @@ const PopoverContent = memo<PopoverContentProps>((props) => {
           tabIndex={0}
           onClick={() => {
             onClose?.();
-            navigate('/settings/connector');
+            navigate(MARKETPLACE_INSTALLED_CONNECTORS_PATH);
           }}
         >
           <div className={toolsListStyles.itemIcon}>

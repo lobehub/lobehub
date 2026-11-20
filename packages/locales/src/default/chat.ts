@@ -682,6 +682,30 @@ export default {
   'groupWizard.searchTemplates': 'Search templates...',
   'groupWizard.title': 'Create Group',
   'groupWizard.useTemplate': 'Use Template',
+  'heteroAgent.permissionMode.label': 'Permission mode',
+  'heteroAgent.permissionMode.tooltip':
+    'How Claude Code asks before acting. Applies to this topic; a new topic in this directory starts with your last pick.',
+  'heteroAgent.permissionMode.default.title': 'Ask every time',
+  'heteroAgent.permissionMode.default.desc': 'Asks before every edit and command',
+  'heteroAgent.permissionMode.acceptEdits.title': 'Accept edits',
+  'heteroAgent.permissionMode.acceptEdits.desc': 'Edits go ahead; commands still ask',
+  'heteroAgent.permissionMode.auto.title': 'Auto',
+  'heteroAgent.permissionMode.auto.desc': 'Claude Code decides what needs asking',
+  'heteroAgent.permissionMode.plan.title': 'Plan',
+  'heteroAgent.permissionMode.plan.desc': 'Reads and plans only; acts once you approve the plan',
+  'heteroAgent.permissionMode.bypassPermissions.title': 'Allow everything',
+  'heteroAgent.permissionMode.bypassPermissions.desc': 'Never asks; runs every action',
+  'heteroAgent.permissionMode.fallback.root':
+    'Running as root can’t allow everything, so this run accepts edits and asks before other commands.',
+  'heteroAgent.permissionMode.fallback.outdatedCli':
+    'The last run allowed every action: lh on this device is too old for permission modes. Update lh to apply “{{mode}}”.',
+  'heteroAgent.permissionMode.switchFailed':
+    'Couldn’t switch the running session. The new mode applies from the next message.',
+  'heteroAgent.permissionMode.switchPendingNotice':
+    'This run is still in “{{running}}”: the session couldn’t switch. “{{next}}” applies from the next message.',
+  'heteroAgent.permissionMode.switchUnsupported':
+    'lh on this device can’t switch a running session. The new mode applies from the next message; update lh to switch mid-run.',
+  'heteroAgent.permissionMode.saveFailed': 'Couldn’t save the permission mode. Try again.',
   'heteroAgent.fullAccess.label': 'Full access',
   'heteroAgent.fullAccess.tooltip':
     'The local coding agent runs with full read/write access to the working directory. Switching permission modes is not available yet.',
@@ -2022,7 +2046,7 @@ export default {
   'shareModal.popover.visibility': 'Visibility',
   'shareModal.social.agent.description': 'An AI agent worth a try',
   'shareModal.social.agent.disabledHint':
-    'Publish this agent to the Community to share it on social media',
+    'Publish this agent to the Marketplace to share it on social media',
   'shareModal.social.agent.entry': 'Share to social media',
   'shareModal.social.agent.untitled': 'Untitled agent',
   'shareModal.social.copyText': 'Copy caption',
@@ -2130,6 +2154,7 @@ export default {
   'tab.profileBasic': 'Profile',
   'tab.skills': 'Skills',
   'tab.search': 'Search',
+  'tab.goalsAndTasks': 'Tasks and goals',
   'tab.tasks': 'Tasks',
   'task.activity.calling': 'Calling Skill...',
   'task.activity.clientExecuting': 'Executing locally...',
@@ -2527,6 +2552,7 @@ export default {
   'createTask.expandToInline': 'Dock to page',
   'createTask.instructionPlaceholder': 'Add task instruction...',
   'createTask.submit': 'Create task',
+  'createTask.removeSchedule': 'Remove schedule',
   'createTask.submitScheduled': 'Create scheduled task',
   'createTask.titlePlaceholder': 'Task title',
   'createTask.visibility.changeFailed': 'Failed to change task visibility',
@@ -4144,6 +4170,10 @@ export default {
   'workingPanel.works.documentLoadError': 'Failed to load document',
   'workingPanel.works.canvasShared': 'Shared',
   'workingPanel.works.canvasUntitled': 'Untitled canvas',
+  'workingPanel.works.collectionCount_one': '{{count}} image',
+  'workingPanel.works.collectionCount_other': '{{count}} images',
+  'workingPanel.works.collectionEmpty': 'This gallery has no images',
+  'workingPanel.works.collectionUntitled': 'Untitled gallery',
   'workingPanel.works.changeType.created': 'Created',
   'workingPanel.works.changeType.updated': 'Updated',
   'workingPanel.works.documentDeleted': 'This document has been deleted',

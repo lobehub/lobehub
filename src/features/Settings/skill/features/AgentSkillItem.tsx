@@ -1,12 +1,10 @@
 'use client';
 
-import { type BuiltinSkillManifest, type SkillListItem } from '@lobechat/types';
+import { type SkillListItem } from '@lobechat/types';
 import {
-  Avatar,
   Button,
   confirmModal,
   createModal,
-  cssVar,
   DropdownMenu,
   Flexbox,
   Icon,
@@ -14,35 +12,33 @@ import {
 } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import * as stylex from '@stylexjs/stylex';
-import { DownloadIcon, MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
+import { DownloadIcon, MoreHorizontalIcon, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import MarketSkillIcon from '@/components/MarketSkillIcon';
-import { GitHubSkillUpdate, hasGitHubSource } from '@/features/AgentSkillDetail/GitHubSkillUpdate';
+import {
+  GitHubSkillUpdate,
+  GitHubSkillUpdateIndicator,
+  hasGitHubSource,
+} from '@/features/AgentSkillDetail/GitHubSkillUpdate';
 import NavItem from '@/features/NavPanel/components/NavItem';
-import { createBuiltinAgentSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
-import { builtinToolSelectors } from '@/store/tool/selectors';
 import { downloadFile } from '@/utils/client/downloadFile';
 
-import { RowAddAction, RowMoreMenu } from './RowActions';
+import { RowMoreMenu } from './RowActions';
 import SkillListRow, { useSkillListVariant } from './SkillListRow';
 import { styles } from './style';
 
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
 
-const isBuiltinSkill = (
-  skill: BuiltinSkillManifest | SkillListItem,
-): skill is BuiltinSkillManifest => !('id' in skill);
-
 interface AgentSkillItemProps {
   isSelected?: boolean;
   onSelect?: () => void;
-  skill: BuiltinSkillManifest | SkillListItem;
+  skill: SkillListItem;
 }
 
 const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect }) => {
@@ -50,27 +46,15 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
   const { t: tc } = useTranslation('common');
   const { t: tp } = useTranslation('plugin');
   const [loading, setLoading] = useState(false);
-  const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
 
-  const isBuiltin = isBuiltinSkill(skill);
   const isPage = useSkillListVariant() === 'page';
-  const canManage = useResourceManageable(isBuiltin ? undefined : skill.userId);
+  const canManage = useResourceManageable(skill.userId);
 
   const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
-  const [installBuiltinTool, uninstallBuiltinTool, isBuiltinInstalled] = useToolStore((s) => [
-    s.installBuiltinTool,
-    s.uninstallBuiltinTool,
-    isBuiltin ? builtinToolSelectors.isBuiltinToolInstalled(skill.identifier)(s) : true,
-  ]);
-
-  const title = isBuiltin
-    ? t(`tools.builtins.${skill.identifier}.title`, { defaultValue: skill.name })
-    : skill.name;
+  const title = skill.name;
 
   const renderIcon = (size: number, marketSize = size) => {
-    if (isBuiltin && skill.avatar) return <Avatar avatar={skill.avatar} size={size} />;
-
     const fallback = <Icon icon={SkillsIcon} size={size} />;
     if (skill.source !== 'market') return fallback;
 
@@ -87,7 +71,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
   // ===== Handlers =====
 
   const handleDownload = async () => {
-    if (isBuiltin || !skill.zipFileHash) return;
+    if (!skill.zipFileHash) return;
     setLoading(true);
     try {
       const result = await agentSkillService.getZipUrl(skill.id);
@@ -104,15 +88,11 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
     confirmModal({
       okButtonProps: { danger: true },
       onOk: async () => {
-        if (isBuiltin) {
-          await uninstallBuiltinTool(skill.identifier);
-        } else {
-          setLoading(true);
-          try {
-            await deleteAgentSkill(skill.id);
-          } finally {
-            setLoading(false);
-          }
+        setLoading(true);
+        try {
+          await deleteAgentSkill(skill.id);
+        } finally {
+          setLoading(false);
         }
       },
       content: tp('store.actions.confirmUninstall'),
@@ -123,56 +103,10 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
 
   // ===== Status & Actions =====
 
-  const updateAction =
-    !isBuiltin && hasGitHubSource(skill) ? <GitHubSkillUpdate compact skill={skill} /> : null;
-
-  const renderStatus = () => {
-    if (!isBuiltin) return null;
-    if (isBuiltinInstalled) {
-      return <span {...stylex.props(styles.connected)}>{t('tools.builtins.installed')}</span>;
-    }
-    return <span {...stylex.props(styles.disconnected)}>{t('tools.builtins.uninstalled')}</span>;
-  };
+  const tracked = hasGitHubSource(skill);
+  const updateAction = tracked ? <GitHubSkillUpdate compact skill={skill} /> : null;
 
   const renderActions = () => {
-    if (isBuiltin) {
-      if (isBuiltinInstalled) {
-        return (
-          <DropdownMenu
-            placement="bottomRight"
-            items={[
-              {
-                danger: true,
-                disabled: !canEdit,
-                icon: <Icon icon={Trash2} />,
-                key: 'uninstall',
-                label: tp('store.actions.uninstall'),
-                onClick: handleUninstall,
-              },
-            ]}
-          >
-            <Button
-              aria-label={t('connectorMarket.action.manage')}
-              disabled={!canEdit}
-              icon={<Icon icon={MoreHorizontalIcon} />}
-            />
-          </DropdownMenu>
-        );
-      }
-      return (
-        <Button
-          disabled={!canCreate}
-          icon={<Icon icon={Plus} />}
-          onClick={() => {
-            if (!canCreate) return;
-            installBuiltinTool(skill.identifier);
-          }}
-        >
-          {tp('store.actions.install')}
-        </Button>
-      );
-    }
-
     return (
       <DropdownMenu
         placement="bottomRight"
@@ -211,52 +145,32 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
   // ===== Detail Modal =====
 
   const handleOpenDetail = () => {
-    if (isBuiltin) {
-      createBuiltinAgentSkillDetailModal({ identifier: skill.identifier });
-    } else {
-      createModal({
-        content: (
-          <Suspense fallback={<div style={{ height: '100%' }} />}>
-            <AgentSkillDetail skillId={skill.id} />
-          </Suspense>
-        ),
-        footer: null,
-        styles: { content: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } },
-        title: tp('dev.title.skillDetails'),
-        width: 960,
-      });
-    }
+    createModal({
+      content: (
+        <Suspense fallback={<div style={{ height: '100%' }} />}>
+          <AgentSkillDetail skillId={skill.id} />
+        </Suspense>
+      ),
+      footer: null,
+      styles: { content: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } },
+      title: tp('dev.title.skillDetails'),
+      width: 960,
+    });
   };
-
-  const showDisconnected = isBuiltin && !isBuiltinInstalled;
 
   if (isPage) {
     return (
       <SkillListRow
         active={isSelected}
-        description={updateAction}
         icon={() => renderIcon(20, 40)}
+        summary={skill.description}
         title={title}
         extra={
-          showDisconnected ? (
-            <RowAddAction
-              disabled={!canCreate}
-              label={tp('store.actions.install')}
-              loading={loading}
-              onClick={async () => {
-                if (!canCreate || loading) return;
-                setLoading(true);
-                try {
-                  await installBuiltinTool(skill.identifier);
-                } finally {
-                  setLoading(false);
-                }
-              }}
-            />
-          ) : (
+          <>
+            {updateAction}
             <RowMoreMenu
               items={[
-                ...(!isBuiltin && skill.zipFileHash
+                ...(skill.zipFileHash
                   ? [
                       {
                         disabled: loading,
@@ -278,14 +192,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
               ]}
               onOpenDetail={onSelect ?? handleOpenDetail}
             />
-          )
-        }
-        summary={
-          isBuiltin
-            ? t(`tools.builtins.${skill.identifier}.description`, {
-                defaultValue: skill.description,
-              })
-            : skill.description
+          </>
         }
         onClick={onSelect ?? handleOpenDetail}
       />
@@ -296,11 +203,18 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
     return (
       <NavItem
         active={isSelected}
-        extra={updateAction}
         icon={() => renderIcon(18)}
+        role="button"
+        slots={{ titleSuffix: tracked && <GitHubSkillUpdateIndicator id={skill.id} /> }}
+        tabIndex={0}
         title={title}
-        titleColor={showDisconnected ? cssVar.colorTextDescription : undefined}
         onClick={onSelect}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onSelect();
+          }
+        }}
       />
     );
   }
@@ -326,18 +240,12 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
           style={{ cursor: onSelect ? undefined : 'pointer' }}
           onClick={onSelect ? undefined : handleOpenDetail}
         >
-          <div {...stylex.props(styles.icon, showDisconnected && styles.disconnectedIcon)}>
-            {renderIcon(16)}
-          </div>
-          <span {...stylex.props(styles.title, showDisconnected && styles.disconnectedTitle)}>
-            {title}
-          </span>
+          <div {...stylex.props(styles.icon)}>{renderIcon(16)}</div>
+          <span {...stylex.props(styles.title)}>{title}</span>
         </Flexbox>
-        {showDisconnected && renderStatus()}
       </Flexbox>
       {!onSelect && (
         <Flexbox horizontal align="center" gap={8} onClick={stopPropagation}>
-          {isBuiltin && isBuiltinInstalled && renderStatus()}
           {updateAction}
           {renderActions()}
         </Flexbox>

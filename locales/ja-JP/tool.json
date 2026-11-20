@@ -115,7 +115,7 @@
   "connector.error.stdioDesktopOnly": "Stdioコネクタはデスクトップアプリでのみ同期できます。LobeHubデスクトップを開いてこのコネクタを同期してください。",
   "connector.kind.agent": "エージェントコネクタ",
   "connector.kind.builtin": "組み込みツール",
-  "connector.kind.community": "コミュニティツール",
+  "connector.kind.community": "マーケットプレイスのツール",
   "connector.kind.custom": "カスタムコネクタ",
   "connector.kind.oauth": "OAuthコネクタ",
   "connector.manageOnlyCreator": "このコネクタを管理できるのは、作成者またはワークスペースの所有者のみです。",

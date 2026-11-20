@@ -6,6 +6,7 @@ import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   container: {
@@ -13,7 +14,7 @@ const styles = stylex.create({
     gap: '24px',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '12px',
+    padding: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadiusLG,
   },
   // Mirrors the compact ModelItem row: 4px block padding, 40px floor, 24px icon.

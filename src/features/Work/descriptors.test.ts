@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { getWorkTypeDescriptor } from './descriptors';
+import {
+  getCollectionCoverUrl,
+  getCollectionFanUrls,
+  getCollectionImageCount,
+  getWorkTypeDescriptor,
+} from './descriptors';
 
 describe('getWorkTypeDescriptor', () => {
   it('returns a usable fallback descriptor for an unknown work type', () => {
@@ -74,6 +79,30 @@ describe('getWorkTypeDescriptor', () => {
       });
     });
 
+    it('shows the description an agent gave the file over its path', () => {
+      const item = {
+        ...baseFileItem,
+        description: 'Quarterly numbers for the board',
+        event: { metadata: { filePath: '/tmp/deck/slides.pptx' } },
+      } as any;
+
+      expect(getWorkTypeDescriptor(item).getDescription(item)).toBe(
+        'Quarterly numbers for the board',
+      );
+    });
+
+    it('shows the title an agent gave the file over the file name', () => {
+      const item = { ...baseFileItem, title: 'Q3 report' } as any;
+
+      expect(getWorkTypeDescriptor(item).getTitle(item)).toBe('Q3 report');
+    });
+
+    it('falls back to the file name when the row has no title', () => {
+      const item = { ...baseFileItem, title: '' } as any;
+
+      expect(getWorkTypeDescriptor(item).getTitle(item)).toBe('slides.pptx');
+    });
+
     it('yields no target when neither fileId nor a safe url exists', () => {
       const item = { ...baseFileItem, url: null } as any;
 
@@ -96,6 +125,80 @@ describe('getWorkTypeDescriptor', () => {
       agentDocumentId: undefined,
       documentId: 'doc-1',
       kind: 'document',
+    });
+  });
+
+  describe('collection', () => {
+    const image = (n: number) => ({
+      fileId: `file-${n}`,
+      mimeType: 'image/png',
+      url: `https://app.example.com/f/file-${n}`,
+    });
+    const listRow = {
+      description: null,
+      id: 'work-collection-1',
+      identifier: null,
+      resourceId: 'col_1',
+      resourceType: 'collection',
+      title: 'Top ten CD shelf',
+      type: 'collection',
+      url: 'https://app.example.com/f/file-2',
+    };
+    const summaryRow = {
+      ...listRow,
+      event: { metadata: { collection: { coverFileId: 'file-2', items: [image(1), image(2)] } } },
+    };
+
+    it('opens the viewer with the images a summary row carries', () => {
+      const item = summaryRow as any;
+
+      expect(getWorkTypeDescriptor(item).getOpenTarget(item)).toEqual({
+        items: [image(1), image(2)],
+        kind: 'collection',
+        title: 'Top ten CD shelf',
+        workId: 'work-collection-1',
+      });
+      expect(getCollectionImageCount(item)).toBe(2);
+      expect(getCollectionCoverUrl(item)).toBe(image(2).url);
+    });
+
+    it('leaves loading the images to the viewer for a list row', () => {
+      const item = listRow as any;
+
+      expect(getWorkTypeDescriptor(item).getOpenTarget(item)).toEqual({
+        items: undefined,
+        kind: 'collection',
+        title: 'Top ten CD shelf',
+        workId: 'work-collection-1',
+      });
+      expect(getCollectionImageCount(item)).toBeNull();
+      // List rows show the cover denormalized into works.url.
+      expect(getCollectionCoverUrl(item)).toBe('https://app.example.com/f/file-2');
+    });
+
+    it('falls back to the first image without a named cover, and drops non-http(s) covers', () => {
+      const firstImage = {
+        ...summaryRow,
+        event: { metadata: { collection: { items: [image(3), image(1)] } } },
+      } as any;
+      expect(getCollectionCoverUrl(firstImage)).toBe(image(3).url);
+
+      const unsafe = { ...listRow, url: 'javascript:alert(1)' } as any;
+      expect(getCollectionCoverUrl(unsafe)).toBeNull();
+    });
+
+    it('fans out up to three images with the cover in front', () => {
+      const four = {
+        ...summaryRow,
+        event: {
+          metadata: {
+            collection: { coverFileId: 'file-3', items: [image(1), image(2), image(3), image(4)] },
+          },
+        },
+      } as any;
+      expect(getCollectionFanUrls(four)).toEqual([image(3).url, image(1).url, image(2).url]);
+      // A list row knows only the cover, so there is nothing to fan.
+      expect(getCollectionFanUrls(listRow as any)).toEqual(['https://app.example.com/f/file-2']);
     });
   });
 
@@ -221,6 +324,21 @@ describe('getWorkTypeDescriptor', () => {
         type: 'external',
       } as any;
       expect(getWorkTypeDescriptor(linear).getDescription(linear)).toBe('In Progress');
+    });
+  });
+
+  describe('artboard open target', () => {
+    it('opens the board it records', () => {
+      const item = { resourceId: 'art_1', title: '首次进入', type: 'artboard' } as any;
+      expect(getWorkTypeDescriptor(item).getOpenTarget(item)).toEqual({
+        artboardId: 'art_1',
+        kind: 'artboard',
+      });
+    });
+
+    it('has nothing to open without a board id', () => {
+      const item = { resourceId: null, title: 'x', type: 'artboard' } as any;
+      expect(getWorkTypeDescriptor(item).getOpenTarget(item)).toBeNull();
     });
   });
 });

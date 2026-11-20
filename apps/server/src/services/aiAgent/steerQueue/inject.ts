@@ -54,6 +54,7 @@ const matchesRunningTurnSettings = (
   if (request.clientProtocol && request.clientProtocol !== (state.host?.clientProtocol ?? 1)) {
     return false;
   }
+  if (!!request.acceptsArtboardWorks !== !!state.host?.acceptsArtboardWorks) return false;
   if (!!request.acceptsFileWorks !== !!state.host?.acceptsFileWorks) return false;
 
   if (request.llmExecutor) {

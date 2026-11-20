@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { ModelIcon } from '@/components/LobeIcons';
 import { ModelItemRender, ProviderItemRender, TAG_CLASSNAME } from '@/components/ModelSelect';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { densityVars } from '@/styles/densityVars';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 import { resolveEnableTargetProviderId, resolveStaleModelState } from './resolveStaleModelState';
@@ -54,7 +55,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     width: max(360px, var(--anchor-width));
 
     &.${prefixCls}-select-dropdown .${prefixCls}-select-item-option-grouped {
-      padding-inline-start: 12px;
+      padding-inline-start: ${densityVars.contentGap};
     }
 
     /* !important: the Tag's own class rule wins the cascade over this
