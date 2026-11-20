@@ -297,8 +297,10 @@ export const refineReplyError = async (
 
 /**
  * Publishes a reply over the card in its slot, if there is one: the same message takes the reply's
- * text, loses `replyError` and moves to the end like a new reply. Undefined when the slot holds
- * no card, so the caller appends the reply instead.
+ * text, loses `replyError` and moves to the end like a new reply. A card that had adopted the
+ * job's acknowledgement also takes the reply's own request key, so the published answer is news
+ * again instead of still reading as an acknowledgement. Undefined when the slot holds no card, so
+ * the caller appends the reply instead.
  */
 export const replaceReplyError = async (
   tx: Transaction,
@@ -314,6 +316,10 @@ export const replaceReplyError = async (
       content,
       mentions: [],
       metadata: baseMetadata(slot.metadata),
+      // Cleared as an acknowledgement: `lastNewsAt` counts the published reply, not the opening.
+      ...(slot.requestKey === openingRequestKey(job.id) && {
+        requestKey: replyRequestKey(job.id),
+      }),
       ...(await moveToEnd(tx, slot)),
     })
     .where(eq(channelMessages.id, slot.id))

@@ -187,6 +187,46 @@ describe('A failed reply leaves a card in its reply slot', () => {
     expect((await asMember.detail(channel.id)).messages.at(-1)?.replyError).toBeNull();
   });
 
+  it('gives a reply published over an adopted acknowledgement the reply’s own request key', async () => {
+    const { asMember, channel, job } = await askCoder({ ack: 'On it, checking the logs.' });
+    await execution.openingReply(channel.id, job.id);
+    await runAndAbandon(channel.id, job.id);
+    const posted = await execution.postReplyError(channel.id, job.id, draft);
+    expect(posted?.messageId).toBeDefined();
+
+    await asMember.retryJob(channel.id, job.id, 'resume');
+    await execution.claim(channel.id, job.id, lease);
+    await execution.accepted(channel.id, job.id);
+    await execution.saveDraft(channel.id, job.id, 'The migration timed out.');
+    await execution.publish(channel.id, job.id);
+
+    const [reply] = (await messagesOf(channel.id)).filter((row) => row.routingStatus === 'reply');
+    // The slot was the acknowledgement: publishing over it must not leave it reading as one,
+    // or `threadSummaries.lastNewsAt` keeps the earlier timestamp.
+    expect(reply).toMatchObject({ id: posted!.messageId, requestKey: `job:${job.id}` });
+  });
+
+  it('reads a shared run’s card without the owner’s failure text', async () => {
+    const { asMember, channel, job } = await askCoder();
+    await runAndAbandon(channel.id, job.id);
+    await db
+      .update(channelJobs)
+      .set({
+        executionConfig: {
+          share: { ownerId: 'usr_owner', shareId: 'shr_shared', workspaceId: null },
+        },
+      })
+      .where(eq(channelJobs.id, job.id));
+    await execution.postReplyError(channel.id, job.id, draft);
+
+    const detail = await asMember.detail(channel.id);
+    const card = detail.messages.find((row) => row.replyError?.jobId === job.id)?.replyError;
+    // Written while the share showed details; the read applies the visitor projection anyway.
+    expect(card?.errorMessage).toBeNull();
+    expect(card?.errorType).toBeNull();
+    expect(card?.summary).toBe(draft.summary);
+  });
+
   it('starts a fresh conversation on retry, and resumes only a reply that had one', async () => {
     const { asMember, channel, job } = await askCoder();
     await runAndAbandon(channel.id, job.id);
