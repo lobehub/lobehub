@@ -23,7 +23,9 @@ import { useSidebarPinState } from '../../useSidebarPinState';
 import Actions from '../Item/Actions';
 import PrivateLockIcon from '../PrivateLockIcon';
 import { usePreservedAgentUrl } from '../usePreservedAgentUrl';
+import { useAgentVisibilityMenu } from './useAgentVisibilityMenu';
 import { useAgentDropdownMenu } from './useDropdownMenu';
+import VisibilityLockAction from './VisibilityLockAction';
 
 const styles = stylex.create({
   badge: {
@@ -227,6 +229,11 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
     visibility,
   });
 
+  // The lock is the same door as the menu's Visibility row: whoever may change
+  // the scope can open it from the lock on hover.
+  const visibilityMenu = useAgentVisibilityMenu({ id, slug, userId, visibility });
+  const showVisibilityLock = isPrivate && visibilityMenu.canChange;
+
   return (
     <WorkspaceLink
       aria-label={displayTitle}
@@ -235,7 +242,6 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
       onMouseEnter={handleMouseEnter}
     >
       <NavItem
-        actions={<Actions dropdownMenu={dropdownMenu} />}
         className={className}
         contextMenuItems={dropdownMenu}
         disabled={isUpdating}
@@ -244,6 +250,18 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
         icon={avatarIcon}
         key={id}
         style={style}
+        actions={
+          // Two direct children widen the hover overlay (NavItem counts them),
+          // so the resting lock fades under the clickable one.
+          showVisibilityLock ? (
+            <>
+              <VisibilityLockAction options={visibilityMenu.options} />
+              <Actions dropdownMenu={dropdownMenu} />
+            </>
+          ) : (
+            <Actions dropdownMenu={dropdownMenu} />
+          )
+        }
         title={
           roleTag ? (
             <>
