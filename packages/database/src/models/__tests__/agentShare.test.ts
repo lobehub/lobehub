@@ -49,6 +49,7 @@ describe('AgentShareModel', () => {
           description: 'Shareable agent',
           id: agentId,
           name: 'Shareable Agent',
+          plugins: ['mcp-pinned', { identifier: 'lobe-calculator', mode: 'disabled' }],
           // Explicit (the column defaults to random words): `create` seeds the
           // share slug from it, so tests below can assert the exact value.
           slug: 'shareable-agent',
@@ -432,6 +433,7 @@ describe('AgentShareModel', () => {
       const config: AgentShareConfig = {
         allowCreatorViewSessions: true,
         allowReadMemory: true,
+        autoGrantAgentTools: true,
         deviceAccess: 'allowlist',
         deviceAllowUserIds: ['user_alice'],
         maxFileStorage: 256 * 1024 * 1024,
@@ -696,6 +698,7 @@ describe('AgentShareModel', () => {
         agentDescription: 'Shareable agent',
         agentId,
         agentName: 'Shareable Agent',
+        agentPlugins: ['mcp-pinned', { identifier: 'lobe-calculator', mode: 'disabled' }],
         agentTitle: 'Shareable Agent Title',
         ownerId: userId,
         shareConfig: expect.objectContaining({ maxMessagesPerVisitor: 100 }),

@@ -924,6 +924,9 @@ export default {
   'channel.statusStarting': 'Starting',
 
   'share.entry': 'Share this Agent',
+  'share.settings.autoGrant.desc':
+    'Visitors get every tool and skill turned on in this Agent, including ones you turn on later. Anything you untick below stays closed.',
+  'share.settings.autoGrant.title': 'Open new Agent tools and skills automatically',
   'share.settings.device.desc':
     'Choose who may run this Agent on your execution environment, for example to read files or run commands. Local CLI Agents such as Claude Code and Codex run only there, so other visitors can’t use them. Chatting with the Agent doesn’t include device access.',
   'share.settings.device.title': 'Device access',
@@ -1038,10 +1041,12 @@ export default {
   'share.settings.permissions.desc':
     'What a visitor’s run may read, and whether you can read visitor conversations.',
   'share.settings.permissions.title': 'Permissions',
+  'share.settings.skills.autoGranted': 'Open automatically because this Agent can use it',
   'share.settings.tabs.access': 'Access',
   'share.settings.tabs.profile': 'Public profile',
   'share.settings.tabs.stats': 'Stats',
   'share.settings.title': 'Share Agent',
+  'share.settings.tools.autoGranted': 'Open automatically because it’s turned on in this Agent',
   'share.settings.usage.conversations': 'Topics',
   'share.settings.usage.conversationsHint': 'Topics created by visitors through this share.',
   'share.settings.usage.desc': 'What this share has attracted, and what it has cost you.',
