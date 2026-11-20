@@ -52,8 +52,8 @@ Environment
 Execution plan
 
 1. <Surface and entry point>
-2. <Case 1: behavior → fixture data → expected result → evidence>
-3. <Case 2: behavior → fixture data → expected result → evidence>
+2. <Case 1: behavior → expected result → evidence>
+3. <Case 2: behavior → expected result → evidence>
 4. <Report and publication deliverable>
 
 Scope and assumptions
@@ -86,12 +86,6 @@ ids, and carry every `supersedes` chain forward unchanged. For every user-visibl
 UI case, plan the screenshot or recording that proves that exact claim — program
 output may supplement visual evidence but never replaces it.
 
-Every visual case names its fixture data: the counts, title lengths and state mix
-the captured surface shows (L-E4). Seed what a real user sees: several visitors
-with several topics each beside the owner's own topics for a sidebar group, a
-device settings page with devices listed for a width fix. One item or an empty
-state is valid only when that state is the claim.
-
 ## Gate behavior
 
 The acceptance-checker is the gate, in the first round only. Plan/case feedback
@@ -117,8 +111,7 @@ For a follow-up triggered by user feedback or an iteration request:
 
 - read `lh acceptance view <subject> --json`;
 - silently re-check environment and auth;
-- repair and re-run the affected stable check ids, writing each recaptured visual
-  case's fixture data into the round's review notes before capturing it;
+- repair and re-run the affected stable check ids;
 - publish a new immutable round to the same Acceptance automatically (no
   acceptance-checker re-review — the acceptance-checker takes part in the first round only);
 - do not ask the user to approve the follow-up plan.
