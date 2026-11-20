@@ -200,8 +200,9 @@ export const sendMessage = async (
     );
 
   // Another person's shared Agent runs as its owner, who cannot read the sender's files. The test
-  // is the one the Channel list uses (`sharedChannelAgents`), so a workspace conversation with a shared Agent is treated
-  // like a personal one, while a colleague's public workspace Agent (the workspace's own) is not.
+  // is the one the Channel list uses (`sharedChannelAgents`), so a workspace conversation with a
+  // shared Agent is treated like a personal one, while a colleague's public workspace Agent (the
+  // workspace's own) is not.
   // The share's limits (prompt length, messages per visitor, monthly spend) never refuse the send:
   // the reply fails with the limit's type when dispatched (`ChannelCoordinator.shareGate`).
   if (channel.agentId && fileIds.length && (await sharedChannelAgent(tx, channel, member.userId!)))

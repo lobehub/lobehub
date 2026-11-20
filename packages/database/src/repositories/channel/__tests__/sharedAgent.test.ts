@@ -762,24 +762,37 @@ describe('one verdict on a shared Agent across list, view, reply opener and run'
     expect(await verdicts(inWorkspace, team.id, 'team')).toEqual({ ...notShared, run: 'own' });
     const { channel: own } = await visitor.create({ agentId: ownId, title: 'Mine' });
     expect(await verdicts(visitor, own.id, 'own')).toEqual({ ...notShared, run: 'own' });
+
+    // Trashed, the viewer's own Agent is no longer usable, but it is still not someone else's.
+    await db.update(agents).set(trashStamp(new Date())).where(eq(agents.id, ownId));
+    expect((await visitor.list()).find((item) => item.id === own.id)?.sharedAgent).toBe(false);
+    expect((await visitor.detail(own.id)).sharedAgentOwner).toBeNull();
   });
 
-  // The conversation stays, but nothing is reached through a share any more: the view drops the
-  // contact card and upload guard together with the reply, which is blocked as unavailable.
+  // The Agent is still another person's, so the conversation keeps its mark, owner contact card and
+  // upload guard (clients keep listing it as a shared Agent); only the reply, which needs a live
+  // share, is blocked as unavailable. A deleted share leaves no visitor page to link.
   it.each([
     [
       'paused the share',
       () =>
         db.update(agentShares).set({ visibility: 'private' }).where(eq(agentShares.id, shareId)),
+      'shared-helper',
     ],
-    ['deleted the share', () => db.delete(agentShares).where(eq(agentShares.id, shareId))],
+    ['deleted the share', () => db.delete(agentShares).where(eq(agentShares.id, shareId)), null],
     [
       'trashed the Agent',
       () => db.update(agents).set(trashStamp(new Date())).where(eq(agents.id, agentId)),
+      'shared-helper',
     ],
-  ])('marks nothing once the owner has %s', async (_, end) => {
+  ])('keeps the mark but blocks the reply once the owner has %s', async (_, end, handle) => {
     const { channel } = await visitor.create({ agentId, sharedAgent: true, title: 'Shared' });
     await end();
-    expect(await verdicts(visitor, channel.id, 'ended')).toEqual({ ...notShared, run: 'blocked' });
+    expect(await verdicts(visitor, channel.id, 'ended')).toEqual({
+      ...shared,
+      handle,
+      opening: false,
+      run: 'blocked',
+    });
   });
 });
