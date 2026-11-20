@@ -219,4 +219,28 @@ describe('listProjectSkills', () => {
     ]);
     expect(approveProjectRoot).toHaveBeenCalledWith(path.join(repo, '.agents', 'skills'));
   });
+
+  it('stops at SKILL.md without traversing subdirectories inside a skill directory', async () => {
+    const repo = path.join(base, 'repo');
+    const skillDir = path.join(repo, '.agents', 'skills', 'lobe-design');
+    await mkdir(path.join(repo, '.git'), { recursive: true });
+    await writeSkill(path.join(repo, '.agents', 'skills'), 'lobe-design');
+    await write(path.join(skillDir, 'references', 'rules.md'), '# rules');
+    await write(path.join(skillDir, 'scripts', 'route.mjs'), 'export default {}');
+
+    const result = await listProjectSkills({ scope: repo });
+
+    expect(result.skills).toEqual([
+      {
+        description: 'lobe-design skill',
+        disableModelInvocation: false,
+        name: 'lobe-design',
+        path: path.join(skillDir, 'SKILL.md'),
+        previewRoot: repo,
+        scope: 'project',
+        skillDir,
+        source: '.agents/skills',
+      },
+    ]);
+  });
 });
