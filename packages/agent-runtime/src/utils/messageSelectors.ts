@@ -1,4 +1,5 @@
 import type { StepActivatedSkill, StepContextTodos, UIChatMessage } from '@lobechat/types';
+
 import { isNonEmptyString, isPlainRecord } from './object';
 
 /**
@@ -102,6 +103,7 @@ interface ToolInvocation {
   apiName?: string;
   identifier?: string;
   state?: any;
+  toolCallId?: string;
 }
 
 /**
@@ -124,7 +126,12 @@ interface ToolInvocation {
 const collectToolInvocations = (msg: UIChatMessage): ToolInvocation[] => {
   if (msg.role === 'tool') {
     return [
-      { apiName: msg.plugin?.apiName, identifier: msg.plugin?.identifier, state: msg.pluginState },
+      {
+        apiName: msg.plugin?.apiName,
+        identifier: msg.plugin?.identifier,
+        state: msg.pluginState,
+        toolCallId: msg.tool_call_id,
+      },
     ];
   }
 
@@ -139,6 +146,7 @@ const collectToolInvocations = (msg: UIChatMessage): ToolInvocation[] => {
           apiName: tool?.apiName,
           identifier: tool?.identifier,
           state: tool?.result?.state,
+          toolCallId: tool?.id,
         });
       }
     }
@@ -173,9 +181,7 @@ export const normalizeTodosState = (
   if (!items || !items.every(isTodoItem)) return undefined;
 
   const updatedAt =
-    isPlainRecord(value) && isNonEmptyString(value.updatedAt)
-      ? value.updatedAt
-      : fallbackUpdatedAt;
+    isPlainRecord(value) && isNonEmptyString(value.updatedAt) ? value.updatedAt : fallbackUpdatedAt;
 
   return { items, updatedAt };
 };
@@ -280,10 +286,10 @@ export const extractActivatedSkillsFromMessages = (
  * turns. A new operation uses these identifiers to restore its step-level tool
  * state, keeping discovered tools callable after the operation boundary.
  */
-export const extractActivatedToolIdsFromMessages = (
+export const extractToolActivationsFromMessages = (
   messages: UIChatMessage[],
-): string[] | undefined => {
-  const toolIds = new Set<string>();
+): { id: string; afterToolCallId?: string }[] | undefined => {
+  const activations = new Map<string, { id: string; afterToolCallId?: string }>();
 
   for (const msg of messages) {
     for (const invocation of collectToolInvocations(msg)) {
@@ -295,10 +301,19 @@ export const extractActivatedToolIdsFromMessages = (
         continue;
 
       for (const tool of invocation.state.activatedTools as Array<{ identifier?: string }>) {
-        if (tool.identifier) toolIds.add(tool.identifier);
+        if (tool.identifier && !activations.has(tool.identifier)) {
+          activations.set(tool.identifier, {
+            id: tool.identifier,
+            ...(invocation.toolCallId && { afterToolCallId: invocation.toolCallId }),
+          });
+        }
       }
     }
   }
 
-  return toolIds.size > 0 ? [...toolIds] : undefined;
+  return activations.size > 0 ? [...activations.values()] : undefined;
 };
+
+export const extractActivatedToolIdsFromMessages = (
+  messages: UIChatMessage[],
+): string[] | undefined => extractToolActivationsFromMessages(messages)?.map(({ id }) => id);

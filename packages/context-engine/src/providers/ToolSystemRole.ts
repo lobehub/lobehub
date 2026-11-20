@@ -46,6 +46,23 @@ export interface ToolSystemRoleConfig {
 export const selectToolPromptManifests = (manifests?: LobeToolManifest[]): LobeToolManifest[] =>
   (manifests ?? []).filter((manifest) => manifest.api.length > 0 || manifest.systemRole);
 
+/** Tool guidance shared by the leading system prompt and mid-conversation discovery. */
+export const renderToolInstructions = (manifests: LobeToolManifest[]): string => {
+  const resolver = new ToolNameResolver();
+  const tools: Tool[] = selectToolPromptManifests(manifests).map((manifest) => ({
+    apis: manifest.api.map((api): API => ({
+      desc: api.description,
+      name: resolver.generate(manifest.identifier, api.name, manifest.type),
+    })),
+    description: manifest.meta?.description,
+    identifier: manifest.identifier,
+    name: manifest.meta?.title || manifest.identifier,
+    systemRole: manifest.systemRole,
+  }));
+
+  return pluginPrompts({ tools });
+};
+
 /**
  * Tool System Role Provider
  * Responsible for injecting tool-related system roles for models that support tool calling
@@ -53,14 +70,11 @@ export const selectToolPromptManifests = (manifests?: LobeToolManifest[]): LobeT
 export class ToolSystemRoleProvider extends BaseSystemRoleProvider {
   readonly name = 'ToolSystemRoleProvider';
 
-  private toolNameResolver: ToolNameResolver;
-
   constructor(
     private config: ToolSystemRoleConfig,
     options: ProcessorOptions = {},
   ) {
     super(options);
-    this.toolNameResolver = new ToolNameResolver();
   }
 
   protected buildSystemRoleContent(_context: PipelineContext): string | null {
@@ -103,30 +117,6 @@ export class ToolSystemRoleProvider extends BaseSystemRoleProvider {
       return undefined;
     }
 
-    const tools: Tool[] = selectToolPromptManifests(manifests).map((manifest) => ({
-      apis: manifest.api.map((api): API => ({
-        desc: api.description,
-        name: this.toolNameResolver.generate(manifest.identifier, api.name, manifest.type),
-      })),
-      description: manifest.meta?.description,
-      identifier: manifest.identifier,
-      name: manifest.meta?.title || manifest.identifier,
-      systemRole: manifest.systemRole,
-    }));
-
-    if (tools.length === 0) {
-      log('No meaningful tools to inject (all manifests have empty APIs and no systemRole)');
-      return undefined;
-    }
-
-    const toolSystemRole = pluginPrompts({ tools });
-
-    if (!toolSystemRole) {
-      log('Failed to generate tool system role content');
-      return undefined;
-    }
-
-    log(`Generated tool system role for ${manifests.length} tools`);
-    return toolSystemRole;
+    return renderToolInstructions(manifests);
   }
 }

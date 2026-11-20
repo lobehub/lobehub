@@ -2,6 +2,15 @@ import type { LLMRoleType } from '../llm';
 import type { MessageToolCall, ModelReasoning } from '../message';
 import type { OpenAIFunctionCall } from './functionCall';
 
+/** A request-local projection of tool discoveries onto their original conversation positions. */
+export interface ToolActivationContext {
+  additions: { afterToolCallId: string; instructions: string; names: string[] }[];
+  /** Leading system prompt before mid-operation tool instructions were added. */
+  system?: { current: string; initial: string };
+}
+
+export type ResolveToolActivationContext = () => Promise<ToolActivationContext | undefined>;
+
 export type ChatResponseFormat =
   | { type: 'json_object' }
   | {
