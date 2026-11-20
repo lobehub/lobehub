@@ -786,9 +786,6 @@ export default {
     'Community Profile not set up yet. Please complete the workspace Community Profile setup to manage credentials.',
   'creds.owner.fromPersonal': 'From your personal account',
   'creds.owner.sharedBy': 'Shared by {{name}}',
-  'creds.privateSection.desc':
-    'Only you can see and use these credentials in this workspace. Publish one to let every member use it.',
-  'creds.privateSection.empty': 'No private credentials yet',
   'creds.share.alreadyShared': 'Shared',
   'creds.share.badge': 'Shared to {{count}} workspaces',
   'creds.share.confirm': 'Share',
@@ -812,13 +809,9 @@ export default {
   'creds.share.viewerHint': "Viewers can't share credentials",
   'creds.signIn': 'Sign In to Market',
   'creds.signInRequired': 'Please sign in to the Market to manage your credentials',
-  'creds.tabs.private': 'Private',
-  'creds.tabs.workspace': 'Workspace',
   'creds.viewerHint': "Viewers can't create credentials",
   'creds.visibility.publish': 'Publish to Workspace',
   'creds.visibility.publishConfirmTitle': 'Publish this credential to the workspace?',
-  'creds.workspaceSection.desc':
-    'Credentials available to everyone in this workspace, including credentials shared by members.',
   'creds.form.addPair': 'Add Key-Value Pair',
   'creds.form.back': 'Back',
   'creds.form.cancel': 'Cancel',
@@ -1083,7 +1076,6 @@ export default {
   'devices.visibility.publish': 'Publish to Workspace',
   'devices.visibility.publishConfirmTitle': 'Publish this device to the workspace?',
   'devices.visibilityTabs.private': 'Private',
-  'devices.visibilityTabs.workspace': 'Workspace',
   'devices.workingDirectory': 'Working dir: {{path}}',
   'apps.cli.copied': 'Copied',
   'apps.cli.copy': 'Copy',
@@ -5007,9 +4999,6 @@ When I am ___, I need ___
   'environments.form.appliesOnInit':
     'Takes effect the next time the environment is applied to a working directory. Folders it was already applied to keep what they have.',
   'environments.refresh': 'Refresh',
-  'environments.emptyPublished': 'Nothing published to this workspace yet',
-  'environments.visibility.tabs.workspace': 'Workspace',
-  'environments.visibility.tabs.private': 'Private',
   'environments.visibility.publish': 'Publish to Workspace',
   'environments.visibility.createPublishedConfirmTitle':
     'Create this environment in the workspace?',
@@ -5280,12 +5269,8 @@ When I am ___, I need ___
   'subscriptionAccounts.columns.status': 'Status',
   'subscriptionAccounts.empty.desc':
     'Sign in to Claude Code, Codex or Kimi Code on a connected device. The account appears here once it reports its quota.',
-  'subscriptionAccounts.empty.privateDesc':
-    'No private accounts here. Accounts you sign in to on your devices start here, visible only to you.',
   'subscriptionAccounts.empty.title': 'No subscription accounts yet',
-  'subscriptionAccounts.empty.workspaceDesc':
-    "No accounts are shared with this workspace yet. Share one from the Private tab so teammates' agents can use it.",
-  'subscriptionAccounts.filter.all': 'All',
+  'subscriptionAccounts.filter.allProviders': 'All providers',
   'subscriptionAccounts.loadFailed': "Couldn't load subscription accounts",
   'subscriptionAccounts.meter.session': '5-hour',
   'subscriptionAccounts.meter.weekly': 'Weekly',
@@ -5326,20 +5311,20 @@ When I am ___, I need ___
   'subscriptionAccounts.calendar.todayDay': 'Today',
   'subscriptionAccounts.calendar.tomorrow': 'Tomorrow {{time}}',
   'subscriptionAccounts.calendar.tomorrowDay': 'Tomorrow',
-  'subscriptionAccounts.tabs.private': 'Private',
-  'subscriptionAccounts.tabs.workspace': 'Workspace',
   'subscriptionAccounts.summary': '{{inRotation}} of {{count}} in rotation',
   'subscriptionAccounts.updateFailed': "Couldn't update the account. Try again.",
   'subscriptionAccounts.visibility.privateAction': 'Make private',
   'subscriptionAccounts.visibility.privateConfirm.desc':
     "Only you will see it. Other members' agents stop drawing on its quota.",
   'subscriptionAccounts.visibility.privateConfirm.title': 'Make this account private?',
-  'subscriptionAccounts.visibility.privateDone': 'Made private. It now lists under Private.',
+  'subscriptionAccounts.visibility.privateDone':
+    'Made private. Only you can see it now; it shows a lock in the list.',
   'subscriptionAccounts.visibility.publicAction': 'Share with workspace',
   'subscriptionAccounts.visibility.publicConfirm.desc':
     'Every member will see it, and their agents can draw on its quota. You can make it private again from the same menu.',
   'subscriptionAccounts.visibility.publicConfirm.title': 'Share this account with the workspace?',
-  'subscriptionAccounts.visibility.publicDone': 'Shared. It now lists under Workspace.',
+  'subscriptionAccounts.visibility.publicDone':
+    'Shared. Everyone in this workspace can use it now.',
   'tab.subscriptionAccounts': 'Subscription Accounts',
   'taskLabels.actions.addToGroup': 'Add label to group',
   'taskLabels.actions.create': 'New label',
@@ -5480,4 +5465,10 @@ When I am ___, I need ___
   'environments.form.bootstrapAfterRepositories':
     "Runs at the top of the working directory, after each repository's own setup. Setup for a single repository goes on that repository.",
   'environments.form.duplicateFolder': 'Another repository already uses this folder.',
+  'creds.listDesc':
+    'Shared credentials everyone in this workspace can use, plus your private ones (marked with a lock). New credentials start private; publish one to share it with the workspace.',
+  'environments.workspaceListDesc':
+    'Environments published to this workspace, plus your private ones (marked with a lock). New environments start private; publish one to share it with the workspace.',
+  'workspaceSetting.devices.enrollPrivateDesc':
+    'Run this on the machine you want to connect. It starts private to you; publish it to the workspace from its card menu.',
 };

@@ -45,6 +45,8 @@ interface CredItemProps {
   onView?: (cred: UserCredSummary) => void;
   /** Tags shown after the type tag (owner, sharing state). */
   tags?: React.ReactNode;
+  /** Inline marker right after the name, e.g. the private lock in the workspace list. */
+  titleSuffix?: React.ReactNode;
 }
 
 const typeIcons: Record<string, React.ReactNode> = {
@@ -62,7 +64,7 @@ const typeColors: Record<string, string> = {
 };
 
 const CredItem: FC<CredItemProps> = memo(
-  ({ canManage, cred, extraMenuItems = [], onEdit, onDelete, onView, tags }) => {
+  ({ canManage, cred, extraMenuItems = [], onEdit, onDelete, onView, tags, titleSuffix }) => {
     const { t } = useTranslation('setting');
     const { compact, tokens } = useDensity();
 
@@ -150,6 +152,7 @@ const CredItem: FC<CredItemProps> = memo(
               <span {...stylex.props(styles.title, compact && styles.titleCompact)}>
                 {cred.name}
               </span>
+              {titleSuffix}
               <Tag color={typeColors[cred.type]}>{t(`creds.types.${cred.type}`)}</Tag>
               {tags}
             </Flexbox>

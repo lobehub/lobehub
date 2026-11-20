@@ -7,8 +7,9 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 /**
- * Marks a private Agent / chat group / folder in the merged workspace Agents
- * section, where private and shared rows are listed together.
+ * Marks a private row in a workspace list that shows private and shared rows
+ * together: the sidebar's Agents section, and the device, subscription
+ * account, environment and credential settings lists.
  */
 const PrivateLockIcon = memo(() => {
   const { t } = useTranslation('common');
@@ -18,7 +19,7 @@ const PrivateLockIcon = memo(() => {
     <Tooltip title={label}>
       <span
         aria-label={label}
-        data-testid="sidebar-private-lock"
+        data-testid="private-lock"
         role="img"
         style={{
           color: cssVar.colorTextTertiary,

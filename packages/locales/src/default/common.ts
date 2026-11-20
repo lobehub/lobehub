@@ -702,5 +702,10 @@ export default {
   'userPanel.workspaceSetting': 'Workspace Settings',
   'userPanel.workspaceUsage': 'Workspace Usage',
   'version': 'Version',
+  'visibilityFilter.all': 'All',
+  'visibilityFilter.empty': 'Nothing matches this filter',
+  'visibilityFilter.label': 'Filter by visibility',
+  'visibilityFilter.private': 'Private',
+  'visibilityFilter.workspace': 'Workspace',
   'zoom': 'Zoom',
 };
