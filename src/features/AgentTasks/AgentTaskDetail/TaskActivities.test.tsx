@@ -38,8 +38,16 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('./CommentCard', () => ({
-  default: ({ activity }: { activity: TaskDetailActivity }) => (
-    <div data-testid={'comment'}>{activity.content}</div>
+  default: ({
+    activity,
+    replies,
+  }: {
+    activity: TaskDetailActivity;
+    replies?: TaskDetailActivity[];
+  }) => (
+    <div data-replies={replies?.map((r) => r.content).join(',') ?? ''} data-testid={'comment'}>
+      {activity.content}
+    </div>
   ),
 }));
 vi.mock('./TopicCard', () => ({
@@ -116,6 +124,20 @@ describe('TaskActivities paging', () => {
 
     expect(screen.getAllByTestId('comment')).toHaveLength(ACTIVITY_PAGE_SIZE * 2);
     expect(screen.getByText('taskDetail.activitiesLoadMore:460')).toBeTruthy();
+  });
+
+  it('shows a reply inside its thread, not as a row of its own', () => {
+    setActivities('T-1', [
+      comment(1),
+      { ...comment(2), parentCommentId: 'c-1' },
+      comment(3),
+      { ...comment(4), parentCommentId: 'c-1' },
+    ]);
+    render(<TaskActivities />);
+
+    const rows = screen.getAllByTestId('comment');
+    expect(rows.map((row) => row.textContent)).toEqual(['comment-3', 'comment-1']);
+    expect(rows[1].dataset.replies).toBe('comment-2,comment-4');
   });
 
   it('hides the load-more control when the feed fits one page', () => {

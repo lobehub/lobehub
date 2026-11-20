@@ -6,9 +6,11 @@ import { notifyTaskCommentActivity } from '@/business/server/task/notifyTaskComm
 import type { TaskModel } from '@/database/models/task';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
+import { wakeMentionedAgents } from '@/server/services/task/commentMentionWake';
 import { assertAssigneeAgentBelongsToUser } from '@/server/services/task/patchValidation';
 import { resolveTaskOrThrow } from '@/server/services/task/utils';
 import {
+  extractCommentMentionedAgentIds,
   extractCommentMentionedUserIds,
   filterActiveWorkspaceMemberIds,
   validateTaskCommentMentionedUserIds,
@@ -18,8 +20,9 @@ import { after } from '@/server/utils/scheduleAfterResponse';
 import { taskProcedureWrite } from './procedures';
 
 /**
- * Recipients of a new comment on a task. A member comment pings the creator
- * and the member assignee as ambient `commented` activity, upgraded to
+ * Recipients of a new comment on a task. A member comment pings the creator,
+ * the member assignee and — for a reply — the members already in its thread
+ * as ambient `commented` activity, upgraded to
  * `mentioned` when the comment @mentions them, and never the member who wrote
  * it. An agent-authored progress note only pings the members it explicitly
  * @mentions — including the member the agent runs for, since the agent, not
@@ -30,11 +33,17 @@ function collectTaskCommentRecipients(params: {
   isAgentAuthored: boolean;
   mentionedUserIds: string[];
   task: { assigneeUserId: string | null; createdByUserId: string };
+  /** Members who already wrote in the thread a reply lands in. */
+  threadParticipantIds?: string[];
 }): TaskCommentActivityRecipient[] {
-  const { actorUserId, isAgentAuthored, mentionedUserIds, task } = params;
+  const { actorUserId, isAgentAuthored, mentionedUserIds, task, threadParticipantIds } = params;
   const byUserId = new Map<string, TaskCommentActivityRecipient['kind']>();
   if (!isAgentAuthored) {
-    for (const userId of [task.createdByUserId, task.assigneeUserId]) {
+    for (const userId of [
+      task.createdByUserId,
+      task.assigneeUserId,
+      ...(threadParticipantIds ?? []),
+    ]) {
       if (userId) byUserId.set(userId, 'commented');
     }
   }
@@ -109,6 +118,25 @@ function notifyCommentActivityBestEffort(
   });
 }
 
+/**
+ * The thread a reply joins: the root it hangs under (a reply to a reply goes
+ * to that reply's root) and the members who already wrote in it.
+ */
+async function resolveCommentThread(model: TaskModel, taskId: string, parentCommentId: string) {
+  const parent = await model.findCommentById(parentCommentId);
+  if (!parent || parent.taskId !== taskId) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Parent comment not found' });
+  }
+  const rootId = parent.parentCommentId ?? parent.id;
+  const comments = await model.getCommentThread(rootId);
+  const participantUserIds = [
+    ...new Set(
+      comments.flatMap((c) => (c.authorUserId && !c.authorAgentId ? [c.authorUserId] : [])),
+    ),
+  ];
+  return { participantUserIds, rootId };
+}
+
 export const commentsRouter = router({
   addComment: taskProcedureWrite
     .input(
@@ -118,6 +146,11 @@ export const commentsRouter = router({
         content: z.string().min(1),
         editorData: z.unknown().optional(),
         id: z.string(),
+        /**
+         * Reply in this comment's thread. Threads are one level deep, so a
+         * reply to a reply lands in the same thread, under its root.
+         */
+        parentCommentId: z.string().optional(),
         topicId: z.string().optional(),
       }),
     )
@@ -125,6 +158,9 @@ export const commentsRouter = router({
       try {
         const model = ctx.taskModel;
         const task = await resolveTaskOrThrow(model, input.id);
+        const thread = input.parentCommentId
+          ? await resolveCommentThread(model, task.id, input.parentCommentId)
+          : undefined;
         await assertAssigneeAgentBelongsToUser(
           ctx.serverDB,
           { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
@@ -149,6 +185,7 @@ export const commentsRouter = router({
           briefId: input.briefId,
           content: input.content,
           editorData: input.editorData as never,
+          parentCommentId: thread?.rootId,
           taskId: task.id,
           topicId: input.topicId,
           userId: ctx.userId,
@@ -163,6 +200,7 @@ export const commentsRouter = router({
             isAgentAuthored: Boolean(input.authorAgentId),
             mentionedUserIds,
             task,
+            threadParticipantIds: thread?.participantUserIds,
           });
           if (recipients.length > 0) {
             notifyCommentActivityBestEffort(
@@ -178,7 +216,21 @@ export const commentsRouter = router({
             );
           }
         }
-        return { data: comment, message: 'Comment added', success: true };
+        // A member @mentioning agents asks them to act. Agent-authored
+        // comments never wake anyone, so agents cannot set each other off.
+        const mentionedAgentIds = input.authorAgentId ? [] : extractCommentMentionedAgentIds(input);
+        const wakes =
+          mentionedAgentIds.length > 0
+            ? await wakeMentionedAgents({
+                agentIds: mentionedAgentIds,
+                comment,
+                db: ctx.serverDB,
+                task,
+                userId: ctx.userId,
+                workspaceId: ctx.workspaceId ?? undefined,
+              })
+            : [];
+        return { data: comment, message: 'Comment added', success: true, wakes };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         console.error('[task:addComment]', error);

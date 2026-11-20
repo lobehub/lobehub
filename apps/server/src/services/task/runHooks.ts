@@ -1,10 +1,12 @@
-import type { TaskRunTrigger } from '@lobechat/types';
+import type { TaskRunCommentReply, TaskRunTrigger } from '@lobechat/types';
 
 import type { LobeChatDatabase } from '@/database/type';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 
 export interface TaskRunHookParams {
+  /** The comment thread this run answers; its output becomes the agent's reply there. */
+  commentReply?: TaskRunCommentReply;
   db: LobeChatDatabase;
   taskId: string;
   taskIdentifier: string;
@@ -31,12 +33,13 @@ export interface TaskRunHookParams {
  * handoff/result is written for the answer, and the Task never transitions.
  */
 export const createTaskRunHooks = (params: TaskRunHookParams): AgentHook[] => {
-  const { db, taskId, taskIdentifier, trigger, userId, workspaceId } = params;
+  const { commentReply, db, taskId, taskIdentifier, trigger, userId, workspaceId } = params;
 
   return [
     {
       handler: async (event) => {
         await new TaskLifecycleService(db, userId, workspaceId).onTopicComplete({
+          commentReply,
           errorCode: event.errorType,
           errorMessage: event.errorMessage,
           lastAssistantContent: event.lastAssistantContent,
@@ -57,8 +60,16 @@ export const createTaskRunHooks = (params: TaskRunHookParams): AgentHook[] => {
         // `workspaceId` rides along for the same reason: the runner is not
         // always the Task's creator (a teammate or a bot running someone
         // else's Task), so the callback cannot rebuild the scope from the
-        // Task's creator alone.
-        body: { runTrigger: trigger, taskId, taskIdentifier, userId, workspaceId },
+        // Task's creator alone. `commentReply` (a run answering a comment
+        // thread) is likewise only known at dispatch.
+        body: {
+          ...(commentReply && { commentReply }),
+          runTrigger: trigger,
+          taskId,
+          taskIdentifier,
+          userId,
+          workspaceId,
+        },
         delivery: 'qstash' as const,
         fallback: 'none' as const,
         url: '/api/workflows/task/on-topic-complete',

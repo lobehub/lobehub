@@ -13,15 +13,12 @@ import {
   writeTopicCommentMentionMarkdown,
 } from './editorUtils';
 
-/**
- * Shared comment mention source. Mention metadata carries a stable `type`, so
- * Agent candidates can be merged here later without changing the editor JSON.
- */
-export const useWorkspaceCommentMentionOption = (): EditorProps['mentionOption'] => {
+/** The workspace's members as `@` candidates. */
+export const useWorkspaceMemberMentionItems = (): ISlashMenuOption[] => {
   useFetchWorkspaceMembers();
   const workspaceMembers = useWorkspaceMembers() as MentionableWorkspaceMember[];
 
-  const mentionItems = useMemo<ISlashMenuOption[]>(
+  return useMemo<ISlashMenuOption[]>(
     () =>
       createTopicCommentMentionItems(workspaceMembers).map(({ avatar, ...item }) => ({
         ...item,
@@ -29,7 +26,16 @@ export const useWorkspaceCommentMentionOption = (): EditorProps['mentionOption']
       })),
     [workspaceMembers],
   );
+};
 
+/**
+ * The editor's `@` option over a candidate list. Every candidate writes the
+ * same mention node; its `metadata.type` (`member` / `agent`) tells the server
+ * what the mention asks for.
+ */
+export const useCommentMentionOption = (
+  items: ISlashMenuOption[],
+): EditorProps['mentionOption'] => {
   const handleMentionSelect = useCallback((editor: IEditor, option: ISlashMenuOption) => {
     insertTopicCommentMention(editor, option);
   }, []);
@@ -37,11 +43,15 @@ export const useWorkspaceCommentMentionOption = (): EditorProps['mentionOption']
   return useMemo(
     () => ({
       fuseOptions: { keys: ['label', 'metadata.description'], threshold: 0.35 },
-      items: mentionItems,
+      items,
       markdownWriter: writeTopicCommentMentionMarkdown,
       maxLength: 50,
       onSelect: handleMentionSelect,
     }),
-    [handleMentionSelect, mentionItems],
+    [handleMentionSelect, items],
   );
 };
+
+/** Shared comment mention source: workspace members. */
+export const useWorkspaceCommentMentionOption = (): EditorProps['mentionOption'] =>
+  useCommentMentionOption(useWorkspaceMemberMentionItems());

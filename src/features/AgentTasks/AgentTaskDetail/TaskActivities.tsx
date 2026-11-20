@@ -44,6 +44,7 @@ import ActivityAuthorProfile from './ActivityAuthorProfile';
 import { resolveAssignmentActivityCopy } from './assignmentActivityCopy';
 import CommentCard from './CommentCard';
 import CommentInput from './CommentInput';
+import { groupCommentThreads } from './commentThreads';
 import TaskBriefCard from './TaskBriefCard';
 import TaskRunReport from './TaskRunReport';
 import TopicCard from './TopicCard';
@@ -414,16 +415,22 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
     if (activeTaskId) await refreshTaskDetail(activeTaskId);
   }, [activeTaskId, refreshTaskDetail]);
 
+  // Replies live inside their thread's card, not as rows of their own.
+  const { repliesByRootId, topLevel } = useMemo(
+    () => groupCommentThreads(activities),
+    [activities],
+  );
+
   const items = useMemo(
     () =>
-      activities
+      topLevel
         .map((act, i) => ({
           activity: act,
           brief: act.type === 'brief' ? toBriefItem(act) : null,
           key: act.id ?? `activity-${i}`,
         }))
         .reverse(),
-    [activities],
+    [topLevel],
   );
 
   // A goal loop can produce many rounds; only the newest run opens by default so
@@ -522,7 +529,14 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
             return <TopicCard activity={activity} defaultExpanded={false} key={key} />;
           }
           if (activity.type === 'comment') {
-            return <CommentCard activity={activity} key={key} />;
+            return (
+              <CommentCard
+                activity={activity}
+                key={key}
+                replies={activity.id ? repliesByRootId.get(activity.id) : undefined}
+                taskId={activeTaskId}
+              />
+            );
           }
           // Lifecycle bookkeeping ("created the task", reassignments). It belongs
           // to the activity timeline; in a result panel it is a row between the

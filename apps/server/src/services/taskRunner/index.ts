@@ -46,6 +46,13 @@ interface TopicRetarget {
 export interface RunTaskParams {
   /** Extra builtin tools this run mounts for the task, e.g. the Goal report tool. */
   additionalPluginIds?: string[];
+  /**
+   * Run as this agent instead of the assignee — an agent @mentioned in a task
+   * comment. The assignment does not change, and neither does the Task's model
+   * pin: it was taken from the assignee, so this run keeps the agent's own
+   * model unless `model` names one for this run only.
+   */
+  agentId?: string;
   continueTopicId?: string;
   /** Explicit device target for this run only. The Task itself does not retain the binding. */
   deviceId?: string;
@@ -61,7 +68,14 @@ export interface RunTaskParams {
   onOperationCreated?: (operationId: string) => Promise<void>;
   /** Provider for `model`. Omitted means it resolves like a model-only Task override. */
   provider?: string;
+  /**
+   * The comment thread this run answers. When the run finishes, its output is
+   * posted as the agent's reply in that thread (see `TaskLifecycleService`).
+   */
+  replyToCommentId?: string;
   taskId: string;
+  /** Topic title of a fresh run. Defaults to the extra prompt's start, else the Task's name. */
+  title?: string;
   /**
    * What triggered this run. Defaults to `'manual'` — the ad-hoc "run now"
    * path (TRPC `task.run`, agent `runTask` tool). The scheduler ticks pass
@@ -165,7 +179,10 @@ export class TaskRunnerService {
   async runTask(params: RunTaskParams): Promise<RunTaskResult> {
     const {
       additionalPluginIds,
+      agentId: requestedAgentId,
+      replyToCommentId,
       taskId,
+      title,
       continueTopicId,
       deviceId,
       extraPrompt,
@@ -200,7 +217,7 @@ export class TaskRunnerService {
     let runAccepted = false;
 
     try {
-      if (!task.assigneeAgentId) {
+      if (!task.assigneeAgentId && !requestedAgentId) {
         const inboxAgent = await this.agentModel.getBuiltinAgent(INBOX_SESSION_ID);
         if (!inboxAgent) {
           throw new TRPCError({
@@ -220,6 +237,11 @@ export class TaskRunnerService {
         }
         task.assigneeAgentId = inboxAgent.id;
       }
+
+      const agentRef = requestedAgentId ?? task.assigneeAgentId!;
+      // Another agent than the assignee. The Task's model pin belongs to the
+      // assignee, so this run neither sends it nor rewrites it.
+      const isGuestRun = !!requestedAgentId && requestedAgentId !== task.assigneeAgentId;
 
       const existingTopics = await this.taskTopicModel.findByTaskId(task.id);
 
@@ -248,7 +270,7 @@ export class TaskRunnerService {
       // report success on the Agent's own model. Refuse it before the Task moves.
       if (model) {
         const { heterogeneousProvider } =
-          (await this.agentModel.getAgentAgencyConfig(task.assigneeAgentId!)) ?? {};
+          (await this.agentModel.getAgentAgencyConfig(agentRef)) ?? {};
         if (
           heterogeneousProvider &&
           !resolveHeterogeneousModelOverride(heterogeneousProvider, {
@@ -313,7 +335,6 @@ export class TaskRunnerService {
         await this.taskModel.update(task.id, { error: null });
       }
 
-      const agentRef = task.assigneeAgentId!;
       const isSlug = !agentRef.startsWith('agt_');
 
       const aiAgentService = new AiAgentService(this.db, this.userId, {
@@ -362,7 +383,10 @@ export class TaskRunnerService {
       // landed, or whose assignee was set after creation. Once written, the
       // task is pinned to this model regardless of later agent default changes.
       // Only missing fields are filled: a legacy model-only override keeps its model.
-      if (typeof taskConfig.model !== 'string' || typeof taskConfig.provider !== 'string') {
+      if (
+        !isGuestRun &&
+        (typeof taskConfig.model !== 'string' || typeof taskConfig.provider !== 'string')
+      ) {
         const snapshot = await this.agentModel.getAgentModelConfig(agentRef);
         if (snapshot) {
           const agencyConfig = await this.agentModel.getAgentAgencyConfig(agentRef);
@@ -418,9 +442,17 @@ export class TaskRunnerService {
         ...(onOperationCreated ? { onOperationCreated } : {}),
         ...(isSlug ? { slug: agentRef } : { agentId: agentRef }),
         additionalPluginIds: pluginIds,
-        ...(typeof taskConfig.model === 'string' && { model: taskConfig.model }),
-        ...(typeof taskConfig.provider === 'string' && { provider: taskConfig.provider }),
+        ...(isGuestRun
+          ? { ...(model && { model }), ...(provider && { provider }) }
+          : {
+              ...(typeof taskConfig.model === 'string' && { model: taskConfig.model }),
+              ...(typeof taskConfig.provider === 'string' && { provider: taskConfig.provider }),
+            }),
         hooks: createTaskRunHooks({
+          // Only a real agent id can author a comment; a slug-addressed
+          // builtin has none to put on the reply.
+          ...(replyToCommentId &&
+            !isSlug && { commentReply: { agentId: agentRef, parentCommentId: replyToCommentId } }),
           db: this.db,
           taskId: task.id,
           taskIdentifier: task.identifier,
@@ -432,7 +464,7 @@ export class TaskRunnerService {
         ...(maxSteps ? { maxSteps } : {}),
         prompt,
         taskId: task.id,
-        title: extraPrompt ? extraPrompt.slice(0, 100) : task.name || task.identifier,
+        title: title || (extraPrompt ? extraPrompt.slice(0, 100) : task.name || task.identifier),
         trigger: TopicTrigger.RunTask,
         userInterventionConfig: { approvalMode: 'headless' },
         // The caller's device for this run, else the task's own pin. `deviceId`
@@ -489,9 +521,13 @@ export class TaskRunnerService {
       // Written only with the recorded run, so a replacement that cannot start never
       // costs the Task its previous pin, and a failed write cannot strand a live run.
       // `null` clears the stale provider when none was resolved.
-      const replacedPin = model
-        ? { model, provider: typeof taskConfig.provider === 'string' ? taskConfig.provider : null }
-        : undefined;
+      const replacedPin =
+        model && !isGuestRun
+          ? {
+              model,
+              provider: typeof taskConfig.provider === 'string' ? taskConfig.provider : null,
+            }
+          : undefined;
 
       if (result.topicId) {
         const topicId = result.topicId;

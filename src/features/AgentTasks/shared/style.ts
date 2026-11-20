@@ -139,8 +139,14 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
   commentActions: css`
     position: absolute;
-    inset-block-start: 8px;
-    inset-inline-end: 8px;
+    inset-block-start: -2px;
+    inset-inline-end: 0;
+  `,
+
+  /** A thread's replies, set apart from its top-level comment by a hairline. */
+  commentReplies: css`
+    padding-block-start: 12px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
 
   profileAuthorName: css`

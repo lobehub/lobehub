@@ -567,6 +567,29 @@ describe('buildTaskRunPrompt', () => {
     expect(taskSection).not.toContain(longContent);
   });
 
+  it('marks a reply in user_feedback with the comment it replies to', () => {
+    const result = buildTaskRunPrompt(
+      {
+        activities: {
+          comments: [
+            { content: 'Root', createdAt: '2026-03-22T11:00:00Z', id: 'cmt_root' },
+            {
+              content: 'Reply',
+              createdAt: '2026-03-22T11:30:00Z',
+              id: 'cmt_reply',
+              parentId: 'cmt_root',
+            },
+          ],
+        },
+        task: { ...baseTask, identifier: 'TASK-1', instruction: 'x', name: 'x' },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('<comment id="cmt_root" time=');
+    expect(result).toContain('<comment id="cmt_reply" reply_to="cmt_root" time=');
+  });
+
   it('should include subtasks in task tag when provided', () => {
     const result = buildTaskRunPrompt(
       {

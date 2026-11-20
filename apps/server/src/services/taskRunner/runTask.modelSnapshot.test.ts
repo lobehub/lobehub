@@ -287,4 +287,26 @@ describe('TaskRunnerService.runTask model snapshot backfill', () => {
       expect.objectContaining({ model: 'pinned-model', provider: 'pinned-provider' }),
     );
   });
+
+  /** @example An @mentioned agent runs on its own model and leaves the Task's pin alone. */
+  it('runs another agent than the assignee without the pin, and answers its thread', async () => {
+    setupTask({ model: 'pinned-model', provider: 'pinned-provider' });
+
+    await new TaskRunnerService(db, 'user-1').runTask({
+      agentId: 'agt_helper',
+      extraPrompt: 'answer the thread',
+      replyToCommentId: 'cmt_root',
+      taskId: 'T-1',
+      title: 'Can you check this?',
+    });
+
+    expect(taskModel.updateTaskConfig).not.toHaveBeenCalled();
+    const [params] = mocks.execAgent.mock.calls[0];
+    expect(params).toMatchObject({ agentId: 'agt_helper', title: 'Can you check this?' });
+    expect(params).not.toHaveProperty('model');
+    expect(params).not.toHaveProperty('provider');
+    expect(params.hooks[0].webhook.body).toMatchObject({
+      commentReply: { agentId: 'agt_helper', parentCommentId: 'cmt_root' },
+    });
+  });
 });

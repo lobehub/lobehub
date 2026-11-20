@@ -652,6 +652,10 @@ export class TaskModel {
     return comments.getComments(this.ctx, taskId);
   }
 
+  async getCommentThread(rootId: string): Promise<TaskCommentItem[]> {
+    return comments.getCommentThread(this.ctx, rootId);
+  }
+
   async deleteComment(id: string): Promise<boolean> {
     return comments.deleteComment(this.ctx, id);
   }

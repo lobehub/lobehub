@@ -270,9 +270,13 @@ export function registerLifecycleCommands(task: Command) {
     .description('Add a comment to a task')
     .requiredOption(
       '-m, --message <text>',
-      'Comment content (markdown). Mention a member with <mention name="Name" id="user_xxx" /> to notify them (ids from `lh workspace members`); a plain "@Name" is only text',
+      'Comment content (markdown). Mention a member with <mention name="Name" id="user_xxx" /> to notify them (ids from `lh workspace members`); mention an agent with <mention name="Name" id="agt_xxx" /> to have it answer in the thread; a plain "@Name" is only text',
     )
-    .action(async (id: string, options: { message: string }) => {
+    .option(
+      '--reply-to <commentId>',
+      "Reply in this comment's thread instead of starting a new one (a reply to a reply joins its thread)",
+    )
+    .action(async (id: string, options: { message: string; replyTo?: string }) => {
       const client = await getTrpcClient();
       const topicId = process.env.LOBEHUB_TOPIC_ID?.trim() || undefined;
       const authorAgentId = process.env.LOBEHUB_AGENT_ID?.trim() || undefined;
@@ -285,13 +289,19 @@ export function registerLifecycleCommands(task: Command) {
         );
       }
 
-      await client.task.addComment.mutate({
+      const result = await client.task.addComment.mutate({
         authorAgentId,
         content: options.message,
         id,
+        ...(options.replyTo ? { parentCommentId: options.replyTo } : {}),
         topicId,
       });
-      log.info('Comment added.');
+      log.info(options.replyTo ? 'Reply added.' : 'Comment added.');
+      for (const wake of result?.wakes ?? []) {
+        if (wake.status === 'started')
+          log.info(`Agent ${wake.agentId} is answering in the thread.`);
+        else log.warn(`Agent ${wake.agentId} was not woken (${wake.status}).`);
+      }
     });
 
   // ── pause ──────────────────────────────────────────────

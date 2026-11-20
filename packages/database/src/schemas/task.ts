@@ -5,6 +5,7 @@ import type {
   TaskActivityLogType,
 } from '@lobechat/types';
 import { isNotNull, isNull } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
   foreignKey,
   index,
@@ -369,6 +370,16 @@ export const taskComments = pgTable(
     content: text('content').notNull(),
     editorData: jsonb('editor_data'),
 
+    /**
+     * Threading (single level, like an issue tracker's comment threads): a
+     * reply points at a top-level comment of the same task. Replies to replies
+     * are rejected before the insert, so a thread is one root and its replies.
+     * Deleting the root deletes the whole thread.
+     */
+    parentCommentId: text('parent_comment_id').references((): AnyPgColumn => taskComments.id, {
+      onDelete: 'cascade',
+    }),
+
     // Optional references
     briefId: text('brief_id').references(() => briefs.id, { onDelete: 'set null' }),
     topicId: text('topic_id').references(() => topics.id, { onDelete: 'set null' }),
@@ -391,6 +402,7 @@ export const taskComments = pgTable(
     index('task_comments_agent_id_idx').on(t.authorAgentId),
     index('task_comments_brief_id_idx').on(t.briefId),
     index('task_comments_topic_id_idx').on(t.topicId),
+    index('task_comments_parent_comment_id_idx').on(t.parentCommentId),
     index('task_comments_workspace_id_idx').on(t.workspaceId),
     index('task_comments_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
   ],

@@ -2333,8 +2333,22 @@ export default {
   'taskDetail.comment.deleteConfirm.title': 'Delete this comment?',
   'taskDetail.comment.edit': 'Edit',
   'taskDetail.comment.save': 'Save',
+  'taskDetail.comment.deleteConfirm.threadContent_one':
+    'This comment and its reply will be permanently removed.',
+  'taskDetail.comment.deleteConfirm.threadContent_other':
+    'This comment and its {{count}} replies will be permanently removed.',
+  'taskDetail.comment.mention.agent': 'Agent · answers in the thread',
+  'taskDetail.comment.mention.unnamedAgent': 'Untitled agent',
+  'taskDetail.comment.reply': 'Reply',
+  'taskDetail.comment.replyPlaceholder': 'Leave a reply, or @ an agent to have it answer...',
+  'taskDetail.comment.wake.busy':
+    'This task is already running, so {{name}} was not started. Mention it again once the run ends.',
+  'taskDetail.comment.wake.failed': '{{name}} could not start. Try mentioning it again.',
+  'taskDetail.comment.wake.skipped': 'One agent runs at a time, so {{name}} was not started.',
+  'taskDetail.comment.wake.started': '{{name}} is on it — the answer will appear in this thread.',
+  'taskDetail.comment.wake.unavailable': "{{name}} can't run on this task.",
   'taskDetail.commentPlaceholder':
-    'Leave a comment, or @ a teammate — comments also guide the next run...',
+    'Leave a comment, or @ a teammate or an agent — comments also guide the next run...',
   'taskDetail.runCollapse': 'Collapse run',
   'taskDetail.runVerify.checklist': 'Acceptance checks',
   'taskDetail.runVerify.errored': 'Verification errored',

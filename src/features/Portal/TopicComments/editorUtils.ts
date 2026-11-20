@@ -1,4 +1,5 @@
 import type { TopicCommentJson } from '@lobechat/types';
+import { agentDisplayName } from '@lobechat/types';
 import type { IEditor, ISlashMenuOption } from '@lobehub/editor';
 import { INSERT_MENTION_COMMAND } from '@lobehub/editor';
 import { $getSelection, $isRangeSelection } from 'lexical';
@@ -39,6 +40,46 @@ export const createTopicCommentMentionItems = (members: MentionableWorkspaceMemb
           id: member.userId,
           timestamp: 0,
           type: 'member',
+        },
+      },
+    ];
+  });
+};
+
+export interface MentionableAgent {
+  avatar?: unknown;
+  id: string;
+  name?: string | null;
+  title?: string | null;
+  type?: string;
+}
+
+/**
+ * Agent mention options. Same node shape as a member mention, with
+ * `metadata.type = 'agent'` — that type is what the server reads to wake the
+ * agent. Chat groups share the sidebar list but are not agents, so they drop.
+ */
+export const createAgentMentionItems = (
+  agents: MentionableAgent[],
+  options: { description?: string; fallbackLabel: string },
+) => {
+  const seen = new Set<string>();
+
+  return agents.flatMap((agent) => {
+    if (!agent.id || (agent.type && agent.type !== 'agent') || seen.has(agent.id)) return [];
+    seen.add(agent.id);
+
+    const label = agentDisplayName(agent, options.fallbackLabel);
+    return [
+      {
+        avatar: typeof agent.avatar === 'string' && agent.avatar ? agent.avatar : label,
+        key: `agent-${agent.id}`,
+        label,
+        metadata: {
+          description: options.description,
+          id: agent.id,
+          timestamp: 0,
+          type: 'agent',
         },
       },
     ];

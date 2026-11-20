@@ -1,4 +1,4 @@
-import type { TaskRunTrigger } from '@lobechat/types';
+import type { TaskRunCommentReply, TaskRunTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { eq } from 'drizzle-orm';
 import type { Context } from 'hono';
@@ -12,6 +12,8 @@ import { isRunAlreadySettled } from '@/server/services/taskLifecycle/reconcile';
 const log = debug('lobe-server:workflows:task:on-topic-complete');
 
 export interface OnTopicCompletePayload {
+  /** Static body field set by TaskRunnerService — the comment thread this run answers. */
+  commentReply?: TaskRunCommentReply;
   errorMessage?: string;
   /** Structured terminal error type (e.g. `InsufficientBudgetForModel`). Spread
    *  onto the webhook body from the completion lifecycle event (no eventFields
@@ -37,6 +39,7 @@ export async function onTopicComplete(c: Context) {
   try {
     const body = (await c.req.json()) as OnTopicCompletePayload;
     const {
+      commentReply,
       errorMessage,
       errorType,
       lastAssistantContent,
@@ -120,6 +123,7 @@ export async function onTopicComplete(c: Context) {
 
     try {
       await taskLifecycle.onTopicComplete({
+        commentReply,
         errorCode: errorType,
         errorMessage,
         lastAssistantContent,

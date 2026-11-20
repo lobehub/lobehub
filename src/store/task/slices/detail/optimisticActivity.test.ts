@@ -101,6 +101,19 @@ describe('buildOptimisticCommentActivity', () => {
     expect(isOptimisticActivityId(row?.id)).toBe(true);
   });
 
+  it('files a synthesized reply under its thread', () => {
+    const row = buildOptimisticCommentActivity({
+      actor,
+      content: 'reply',
+      now,
+      parentCommentId: 'cmt_root',
+    });
+    expect(row).toMatchObject({ parentCommentId: 'cmt_root', type: 'comment' });
+    expect(buildOptimisticCommentActivity({ actor, content: 'top', now })?.parentCommentId).toBe(
+      null,
+    );
+  });
+
   it('does not invent an author when the viewer identity is unknown', () => {
     expect(buildOptimisticCommentActivity({ content: 'x', now })).toBeUndefined();
   });

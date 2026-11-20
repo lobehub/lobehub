@@ -400,6 +400,8 @@ const TaskDetailActivitySchema = z
     files: z.array(ChatFileItemSchema).optional(),
     id: z.string().optional(),
     operationId: z.string().nullable().optional(),
+    /** Comment-only: the top-level comment this one replies to. */
+    parentCommentId: z.string().nullable().optional(),
     priority: z.string().nullable().optional(),
     propertyChange: z
       .union([

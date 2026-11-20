@@ -832,6 +832,52 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     });
   });
 
+  describe('comment thread reply', () => {
+    const replyParams = {
+      commentReply: { agentId: 'agt_helper', parentCommentId: 'cmt_reply' },
+      lastAssistantContent: 'Here is the answer',
+      operationId: 'op-1',
+      reason: 'done',
+      taskId: 'task-1',
+      taskIdentifier: 'TASK-1',
+      topicId: 'topic-1',
+    };
+
+    it("posts the run's output as the agent's reply, under the thread's root", async () => {
+      findById.mockResolvedValue(baseTask({ automationMode: null } as Partial<TaskItem>));
+      vi.spyOn(service as any, 'generateHandoff').mockResolvedValue(undefined);
+      const taskModel = (service as any).taskModel;
+      taskModel.findCommentById = vi
+        .fn()
+        .mockResolvedValue({ id: 'cmt_reply', parentCommentId: 'cmt_root', taskId: 'task-1' });
+      taskModel.addComment = vi.fn().mockResolvedValue({ id: 'cmt_answer' });
+
+      await service.onTopicComplete(replyParams);
+
+      expect(taskModel.addComment).toHaveBeenCalledWith({
+        authorAgentId: 'agt_helper',
+        content: 'Here is the answer',
+        parentCommentId: 'cmt_root',
+        taskId: 'task-1',
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+    });
+
+    it('posts nothing when the run failed or the thread is gone', async () => {
+      findById.mockResolvedValue(baseTask({ automationMode: null } as Partial<TaskItem>));
+      vi.spyOn(service as any, 'generateHandoff').mockResolvedValue(undefined);
+      const taskModel = (service as any).taskModel;
+      taskModel.findCommentById = vi.fn().mockResolvedValue(undefined);
+      taskModel.addComment = vi.fn();
+
+      await service.onTopicComplete(replyParams);
+      await service.onTopicComplete({ ...replyParams, errorMessage: 'boom', reason: 'error' });
+
+      expect(taskModel.addComment).not.toHaveBeenCalled();
+    });
+  });
+
   describe('scheduled-task result notifications', () => {
     it('successful scheduled tick → completed notification with task identity', async () => {
       const task = baseTask({ automationMode: 'schedule', name: 'Daily digest' });

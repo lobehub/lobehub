@@ -168,6 +168,8 @@ export class TaskDetailSliceActionImpl {
       authorAgentId?: string;
       briefId?: string;
       editorData?: unknown;
+      /** Reply in this comment's thread. */
+      parentCommentId?: string;
       topicId?: string;
     },
   ): Promise<Awaited<ReturnType<typeof taskService.addComment>>> => {
@@ -192,6 +194,7 @@ export class TaskDetailSliceActionImpl {
             content,
             editorData: opts?.editorData,
             now: new Date().toISOString(),
+            parentCommentId: opts?.parentCommentId,
             topicId: opts?.topicId,
           })
         : undefined;

@@ -528,6 +528,7 @@ export async function buildTaskPrompt(
           createdAt: c.createdAt,
           ...(files.length > 0 ? { files } : {}),
           id: c.id,
+          parentId: c.parentCommentId ?? null,
         };
       }),
       subtasks: subtasks.map((s: any) => ({

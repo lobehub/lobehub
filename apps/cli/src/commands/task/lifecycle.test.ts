@@ -63,6 +63,28 @@ describe('task comment attribution', () => {
     expect(client.topic.getTopicDetail.query).not.toHaveBeenCalled();
   });
 
+  it('replies in a thread with --reply-to', async () => {
+    client.task.addComment.mutate.mockResolvedValueOnce({ wakes: [] });
+
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'task',
+      'comment',
+      'T-1',
+      '-m',
+      'Looks good',
+      '--reply-to',
+      'cmt_root',
+    ]);
+
+    expect(client.task.addComment.mutate).toHaveBeenCalledWith({
+      content: 'Looks good',
+      id: 'T-1',
+      parentCommentId: 'cmt_root',
+    });
+  });
+
   it('uses the executing agent, not the task assignee', async () => {
     vi.stubEnv('LOBEHUB_AGENT_ID', 'agt_writer');
     vi.stubEnv('LOBEHUB_TOPIC_ID', 'tpc_current');

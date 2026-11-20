@@ -82,6 +82,34 @@ export type TaskAutomationMode = 'heartbeat' | 'schedule';
 export type TaskRunTrigger = 'manual' | 'schedule' | 'heartbeat' | 'goal';
 
 /**
+ * What became of one agent a task comment @mentioned:
+ * - `started`: it is running the task to answer the comment;
+ * - `busy`: the task already has a run in flight, so nothing started;
+ * - `skipped`: another agent in the same comment was woken (one run at a time);
+ * - `unavailable`: the author may not run this agent on this task;
+ * - `failed`: the run could not start.
+ */
+export type TaskCommentWakeStatus = 'busy' | 'failed' | 'skipped' | 'started' | 'unavailable';
+
+export interface TaskCommentWake {
+  agentId: string;
+  status: TaskCommentWakeStatus;
+  /** The run's topic, when it started. */
+  topicId?: string;
+}
+
+/**
+ * A run that answers a task comment thread — an agent @mentioned in it. When
+ * the run finishes, its output is posted in that thread as the agent's reply.
+ */
+export interface TaskRunCommentReply {
+  /** The agent the run executed as; it authors the reply. */
+  agentId: string;
+  /** The thread's top-level comment. */
+  parentCommentId: string;
+}
+
+/**
  * A clarifying question the intent reader wants answered before an agent
  * starts. Only raised when different answers change what gets delivered.
  */
@@ -570,6 +598,12 @@ export interface TaskDetailActivity {
    * unlike `runningOperation`, which is cleared when the run terminates.
    */
   operationId?: string | null;
+  /**
+   * Comment-only: the top-level comment this one replies to. `null` / absent
+   * for a top-level comment. Threads are one level deep, so a reply never has
+   * replies of its own.
+   */
+  parentCommentId?: string | null;
   priority?: string | null;
   /**
    * Property-only: a field a person (or an agent acting for them) changed.

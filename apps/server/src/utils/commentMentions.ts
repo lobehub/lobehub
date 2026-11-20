@@ -7,32 +7,42 @@ import { visit } from 'unist-util-visit';
 import { workspaceMembers } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
+type MentionType = 'agent' | 'member';
+
 /**
- * Collect the Workspace member ids referenced by `mention` nodes inside a
- * Lexical comment snapshot (`editorData`). Only `member`-typed mentions count;
- * Agent mentions and malformed nodes are ignored. Shared by every comment
- * surface (document / task) so mention semantics stay identical.
+ * Ids of the `mention` nodes of one type inside a Lexical snapshot,
+ * deduplicated, in document order (who was mentioned first can matter).
  */
-export const extractMentionedUserIds = (editorData: unknown): string[] => {
+const extractEditorMentionIds = (editorData: unknown, type: MentionType): string[] => {
   const root = toRecord(editorData)?.root;
   const pending: unknown[] = root === undefined ? [] : [root];
-  const userIds = new Set<string>();
+  const ids = new Set<string>();
 
   while (pending.length > 0) {
     const node = toRecord(pending.pop());
     if (!node) continue;
 
     const metadata = toRecord(node.metadata);
-    if (node.type === 'mention' && metadata?.type === 'member') {
-      const userId = pickNonEmptyString(metadata.id);
-      if (userId) userIds.add(userId);
+    if (node.type === 'mention' && metadata?.type === type) {
+      const id = pickNonEmptyString(metadata.id);
+      if (id) ids.add(id);
     }
 
-    if (Array.isArray(node.children)) pending.push(...node.children);
+    // Children go on the stack last-first, so they come off it in order.
+    if (Array.isArray(node.children)) pending.push(...[...node.children].reverse());
   }
 
-  return [...userIds];
+  return [...ids];
 };
+
+/**
+ * Collect the Workspace member ids referenced by `mention` nodes inside a
+ * Lexical comment snapshot (`editorData`). Only `member`-typed mentions count;
+ * Agent mentions and malformed nodes are ignored. Shared by every comment
+ * surface (document / task) so mention semantics stay identical.
+ */
+export const extractMentionedUserIds = (editorData: unknown): string[] =>
+  extractEditorMentionIds(editorData, 'member');
 
 // Self-closing only, like the renderer: `<mention id="…">` never renders as one.
 const MARKDOWN_MENTION_TAG = /<mention(\s[^>]*)\/>/gi;
@@ -81,6 +91,25 @@ export const extractCommentMentionedUserIds = (comment: {
   comment.editorData
     ? extractMentionedUserIds(comment.editorData)
     : extractMarkdownMentionedUserIds(comment.content);
+
+/** Agent ids carry this prefix; a markdown tag has no `type`, so the id says it. */
+const AGENT_ID_PREFIX = 'agt_';
+
+/**
+ * Agent ids a comment revision @mentions — the agents asked to act on it.
+ * Same source rule as `extractCommentMentionedUserIds`: the rich-text snapshot
+ * when present (its `agent`-typed mention nodes), otherwise the serialized
+ * `<mention id="agt_…" />` tags a markdown-only author (CLI, tools) writes.
+ */
+export const extractCommentMentionedAgentIds = (comment: {
+  content?: unknown;
+  editorData?: unknown;
+}): string[] =>
+  comment.editorData
+    ? extractEditorMentionIds(comment.editorData, 'agent')
+    : extractMarkdownMentionedUserIds(comment.content).filter((id) =>
+        id.startsWith(AGENT_ID_PREFIX),
+      );
 
 /**
  * Keep only the ids that are active members of the Workspace, preserving

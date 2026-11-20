@@ -514,6 +514,8 @@ export interface TaskRunPromptComment {
    * and which comment they were attached to. */
   files?: TaskRunPromptAttachment[];
   id?: string;
+  /** The comment this one replies to, when it sits in a thread. */
+  parentId?: string | null;
 }
 
 export interface TaskRunPromptTopic {
@@ -731,11 +733,12 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
       const ago = c.createdAt ? timeAgo(c.createdAt, now) : '';
       const timeAttr = ago ? ` time="${ago}"` : '';
       const idAttr = c.id ? ` id="${c.id}"` : '';
+      const replyAttr = c.parentId ? ` reply_to="${c.parentId}"` : '';
       const attachments =
         c.files && c.files.length > 0
           ? `\n<attachments>\n${c.files.map((f) => `  - ${f.name}${f.fileType ? ` (${f.fileType})` : ''}`).join('\n')}\n</attachments>`
           : '';
-      return `<comment${idAttr}${timeAttr}>${c.content}${attachments}</comment>`;
+      return `<comment${idAttr}${replyAttr}${timeAttr}>${c.content}${attachments}</comment>`;
     });
     sections.push(`<user_feedback>\n${lines.join('\n')}\n</user_feedback>`);
   }

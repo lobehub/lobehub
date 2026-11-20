@@ -1,5 +1,7 @@
 import type { IEditor } from '@lobehub/editor';
+import { toast } from '@lobehub/ui';
 import { useCallback, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   getAttachmentFileIdsFromEditor,
@@ -8,11 +10,17 @@ import {
 } from '@/features/EditorCanvas/editorAttachments';
 import { useTaskStore } from '@/store/task';
 
+import { collectMentionLabels } from './commentMentionLabels';
+
 interface UseCommentSubmitOptions {
   canComment: boolean;
   editor: IEditor | undefined;
   /** Called after the input is cleared or restored, so the caller can resync its flags. */
   onContentReset: (state: { hasAttachments: boolean; hasContent: boolean }) => void;
+  /** Called once the comment is saved. */
+  onSubmitted?: () => void;
+  /** Reply in this comment's thread instead of starting a new one. */
+  parentCommentId?: string;
   taskId: string;
 }
 
@@ -20,8 +28,11 @@ export const useCommentSubmit = ({
   canComment,
   editor,
   onContentReset,
+  onSubmitted,
+  parentCommentId,
   taskId,
 }: UseCommentSubmitOptions) => {
+  const { t } = useTranslation('chat');
   const addComment = useTaskStore((s) => s.addComment);
   const [submitting, setSubmitting] = useState(false);
   // `submitting` only updates after a render, so a second Enter in the same
@@ -46,8 +57,9 @@ export const useCommentSubmit = ({
     setSubmitting(true);
     editor?.cleanDocument?.();
     onContentReset({ hasAttachments: false, hasContent: false });
+    let result: Awaited<ReturnType<typeof addComment>>;
     try {
-      await addComment(taskId, markdown, { editorData: json });
+      result = await addComment(taskId, markdown, { editorData: json, parentCommentId });
     } catch {
       // The tRPC error link already reports the failure; keep the text —
       // unless the user has started a new comment or moved to another task
@@ -62,11 +74,26 @@ export const useCommentSubmit = ({
       if (json) editor?.setDocument?.('json', json);
       else editor?.setDocument?.('markdown', markdown);
       onContentReset({ hasAttachments: hasFiles, hasContent: !!markdown });
+      return;
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
     }
-  }, [canComment, editor, onContentReset, addComment, taskId]);
+    onSubmitted?.();
+
+    // Say what became of each @mentioned agent: the comment is saved either
+    // way, but whether the agent is now working on it is not visible yet.
+    const wakes = result?.wakes ?? [];
+    if (wakes.length === 0) return;
+    const labels = collectMentionLabels(json);
+    for (const { agentId, status } of wakes) {
+      const name = labels.get(agentId) ?? t('taskDetail.comment.mention.unnamedAgent');
+      const message = t(`taskDetail.comment.wake.${status}`, { name });
+      if (status === 'started') toast.success(message);
+      else if (status === 'failed') toast.error(message);
+      else toast.info(message);
+    }
+  }, [canComment, editor, onContentReset, onSubmitted, addComment, parentCommentId, t, taskId]);
 
   return { submit, submitting };
 };

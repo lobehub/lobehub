@@ -4757,6 +4757,7 @@ table task_comments {
   author_agent_id text
   content text [not null]
   editor_data jsonb
+  parent_comment_id text
   brief_id text
   topic_id text
   visibility text [not null, default: 'public']
@@ -4771,6 +4772,7 @@ table task_comments {
     author_agent_id [name: 'task_comments_agent_id_idx']
     brief_id [name: 'task_comments_brief_id_idx']
     topic_id [name: 'task_comments_topic_id_idx']
+    parent_comment_id [name: 'task_comments_parent_comment_id_idx']
     workspace_id [name: 'task_comments_workspace_id_idx']
     (workspace_id, visibility, user_id) [name: 'task_comments_workspace_visibility_idx']
   }

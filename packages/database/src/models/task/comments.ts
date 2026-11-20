@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 
 import type { NewTaskComment, TaskCommentItem } from '../../schemas/task';
 import { taskComments } from '../../schemas/task';
@@ -72,6 +72,27 @@ export const getComments = async (
     .orderBy(taskComments.createdAt);
 };
 
+/**
+ * One comment thread: its root and the root's replies, oldest first. Threads
+ * are a single level deep, so the root's direct children are the whole thread.
+ */
+export const getCommentThread = async (
+  ctx: TaskModelContext,
+  rootId: string,
+): Promise<TaskCommentItem[]> => {
+  return ctx.db
+    .select()
+    .from(taskComments)
+    .where(
+      and(
+        or(eq(taskComments.id, rootId), eq(taskComments.parentCommentId, rootId)),
+        commentsOwnership(ctx),
+      ),
+    )
+    .orderBy(taskComments.createdAt);
+};
+
+/** Deleting a thread's root takes its replies with it (`ON DELETE CASCADE`). */
 export const deleteComment = async (ctx: TaskModelContext, id: string): Promise<boolean> => {
   const result = await ctx.db
     .delete(taskComments)

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  extractCommentMentionedAgentIds,
   extractCommentMentionedUserIds,
   extractMarkdownMentionedUserIds,
   extractMentionedUserIds,
@@ -88,5 +89,34 @@ describe('extractCommentMentionedUserIds', () => {
 
     expect(extractCommentMentionedUserIds({ content, editorData })).toEqual(['user-1']);
     expect(extractCommentMentionedUserIds({ content, editorData: null })).toEqual(['user-2']);
+  });
+});
+
+describe('extractCommentMentionedAgentIds', () => {
+  it('reads agent-typed mention nodes from the rich-text snapshot, deduplicated', () => {
+    const editorData = {
+      root: {
+        children: [
+          {
+            children: [mention('agt_1', 'agent'), mention('user-1'), mention('agt_2', 'agent')],
+            type: 'paragraph',
+          },
+          { children: [mention('agt_1', 'agent'), mention('', 'agent')], type: 'paragraph' },
+        ],
+      },
+    };
+
+    expect(extractCommentMentionedAgentIds({ content: 'ignored', editorData })).toEqual([
+      'agt_1',
+      'agt_2',
+    ]);
+  });
+
+  it('falls back to markdown tags and keeps only agent ids', () => {
+    const content =
+      'Hi <mention name="Coder" id="agt_9" /> and <mention name="Arvin" id="user-1" />';
+
+    expect(extractCommentMentionedAgentIds({ content })).toEqual(['agt_9']);
+    expect(extractCommentMentionedAgentIds({ content: 'no mentions' })).toEqual([]);
   });
 });

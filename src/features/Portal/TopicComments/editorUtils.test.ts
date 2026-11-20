@@ -10,6 +10,7 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  createAgentMentionItems,
   createTopicCommentMentionItems,
   createTopicCommentMentionPayload,
   insertTopicCommentMention,
@@ -17,6 +18,26 @@ import {
   resolveTopicCommentEditorContent,
   writeTopicCommentMentionMarkdown,
 } from './editorUtils';
+
+describe('createAgentMentionItems', () => {
+  it('offers agents as agent-typed mentions, without chat groups or duplicates', () => {
+    const items = createAgentMentionItems(
+      [
+        { avatar: '🤖', id: 'agt_1', name: 'Coder', title: 'Code helper', type: 'agent' },
+        { id: 'agt_2', name: null, title: null, type: 'agent' },
+        { id: 'grp_1', title: 'Team', type: 'group' },
+        { id: 'agt_1', title: 'Again', type: 'agent' },
+      ],
+      { description: 'Agent', fallbackLabel: 'Untitled agent' },
+    );
+
+    expect(items.map((item) => [item.label, item.metadata])).toEqual([
+      ['Coder', { description: 'Agent', id: 'agt_1', timestamp: 0, type: 'agent' }],
+      ['Untitled agent', { description: 'Agent', id: 'agt_2', timestamp: 0, type: 'agent' }],
+    ]);
+    expect(items[0].avatar).toBe('🤖');
+  });
+});
 
 describe('topic comment editor utilities', () => {
   it('builds deduplicated mention options from active workspace members', () => {

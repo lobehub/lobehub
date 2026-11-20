@@ -21,6 +21,7 @@ import type {
   BriefDecision,
   TaskItem,
   TaskLifecycleAudit,
+  TaskRunCommentReply,
   TaskRunTrigger,
   TaskSchedulerContext,
   TaskTopicHandoff,
@@ -32,6 +33,7 @@ import {
   notifyScheduledTaskCompleted,
   notifyScheduledTaskFailed,
 } from '@/business/server/task/notifyScheduledTaskResult';
+import { notifyTaskCommentActivity } from '@/business/server/task/notifyTaskCommentActivity';
 import { notifyTaskRunFailed } from '@/business/server/task/notifyTaskRunFailed';
 import { onTaskRunCompleted } from '@/business/server/task/onTaskRunCompleted';
 import { BriefModel } from '@/database/models/brief';
@@ -82,6 +84,8 @@ const isTerminal = (status: string) => TERMINAL_STATUSES.has(status);
 const AUTOMATION_FAILURE_FUSE = 3;
 
 export interface TopicCompleteParams {
+  /** The comment thread this run answers: its output is posted there as the agent's reply. */
+  commentReply?: TaskRunCommentReply;
   /** Structured terminal error type (e.g. `InsufficientBudgetForModel`) from the
    *  completion lifecycle event, forwarded to the failure notification. */
   errorCode?: string;
@@ -124,6 +128,48 @@ export class TaskLifecycleService {
     this.messageModel = new MessageModel(db, userId, workspaceId);
     this.topicModel = new TopicModel(db, userId, workspaceId);
     this.systemAgentService = new SystemAgentService(db, userId, workspaceId);
+  }
+
+  /**
+   * Post a finished run's output as the agent's reply in the comment thread
+   * that asked for it. Best-effort: the run itself has already settled, and a
+   * thread deleted in the meantime simply gets no reply.
+   */
+  private async replyInCommentThread(
+    taskId: string,
+    topicId: string | undefined,
+    { agentId, parentCommentId }: TaskRunCommentReply,
+    content: string,
+  ): Promise<void> {
+    try {
+      const parent = await this.taskModel.findCommentById(parentCommentId);
+      if (!parent || parent.taskId !== taskId) return;
+      const reply = await this.taskModel.addComment({
+        authorAgentId: agentId,
+        content,
+        // Threads are one level deep: a reply to a reply lands in its thread.
+        parentCommentId: parent.parentCommentId ?? parent.id,
+        taskId,
+        topicId: topicId ?? null,
+        userId: this.userId,
+      });
+      // The member who @mentioned the agent learns the answer is in. The run
+      // is theirs, so they can open the task.
+      if (this.workspaceId) {
+        await notifyTaskCommentActivity({
+          actorAgentId: agentId,
+          actorUserId: this.userId,
+          commentId: reply.id,
+          recipients: [{ kind: 'commented', userId: this.userId }],
+          taskId,
+          workspaceId: this.workspaceId,
+        }).catch((error) =>
+          console.warn('[TaskLifecycle] thread reply notification failed:', error),
+        );
+      }
+    } catch (error) {
+      console.warn('[TaskLifecycle] posting the thread reply failed:', error);
+    }
   }
 
   /**
@@ -200,6 +246,11 @@ export class TaskLifecycleService {
         } catch (e) {
           console.warn('[TaskLifecycle] persisting run last message failed:', e);
         }
+      }
+
+      // 2c. A run an @mention started answers in the thread it was asked in.
+      if (params.commentReply && runOutput) {
+        await this.replyInCommentThread(taskId, topicId, params.commentReply, runOutput);
       }
 
       // 3. Delivery acceptance now runs through Verify: the verify
