@@ -1,3 +1,4 @@
+import { layoutRepositorySources } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,10 +10,16 @@ import EnvironmentForm, {
 import EnvironmentSummary from '@/features/EnvironmentManager/EnvironmentSummary';
 import { EnvironmentListSkeleton } from '@/features/EnvironmentManager/Skeleton';
 import type { SandboxEnvironmentSpecification } from '@/services/environment';
-import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projectWorkingDirectory';
+import { deviceSelectors, useDeviceStore } from '@/store/device';
+import {
+  useProjectDirectories,
+  useProjectDirectoryStore,
+  useProjectEnvironments,
+} from '@/store/projectWorkingDirectory';
 import { useDensityTokens } from '@/styles/density';
 
 import { LocalDirectories } from './LocalDirectories';
+import { RepositoryLocations } from './RepositoryLocations';
 
 interface ProjectWorkingDirectoriesProps {
   /** Whether the caller may change the project, and so its environment. */
@@ -40,6 +47,10 @@ export function ProjectWorkingDirectories({
   const request = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
   const updateEnvironment = useProjectDirectoryStore((s) => s.updateProjectEnvironment);
   const [environment] = useProjectEnvironments(projectId);
+  const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
+  const directories = useProjectDirectories(projectId);
+  useDeviceStore((s) => s.useFetchDevices)(true);
+  const devices = useDeviceStore(deviceSelectors.deviceList);
 
   const save = async (changes: {
     configuration?: SandboxEnvironmentSpecification;
@@ -59,6 +70,31 @@ export function ProjectWorkingDirectories({
     content = <EnvironmentListSkeleton />;
   } else {
     const value: EnvironmentFormValue = environment;
+    // Each repository's folder inside a project folder, laid out as a checkout lays it out.
+    const folders = new Map(
+      layoutRepositorySources(environment.configuration?.sources ?? []).flatMap((source) =>
+        source.kind === 'git'
+          ? [
+              [
+                source.url,
+                source.path
+                  ?.trim()
+                  .replace(/^\.?\/+/, '')
+                  .replace(/\/+$/, ''),
+              ],
+            ]
+          : [],
+      ),
+    );
+    const renderRepositoryLocations = (source: { localOnly?: boolean; url: string }) =>
+      directoriesRequest.hasData ? (
+        <RepositoryLocations
+          devices={devices}
+          directories={directories}
+          folder={folders.get(source.url) || undefined}
+          localOnly={source.localOnly}
+        />
+      ) : null;
     const localDirectories = (
       <LocalDirectories
         canManage={!!canManage}
@@ -72,10 +108,15 @@ export function ProjectWorkingDirectories({
         hideBasics
         environment={value}
         localDirectories={localDirectories}
+        renderRepositoryLocations={renderRepositoryLocations}
         onSave={save}
       />
     ) : (
-      <EnvironmentSummary environment={value} localDirectories={localDirectories} />
+      <EnvironmentSummary
+        environment={value}
+        localDirectories={localDirectories}
+        renderRepositoryLocations={renderRepositoryLocations}
+      />
     );
   }
 

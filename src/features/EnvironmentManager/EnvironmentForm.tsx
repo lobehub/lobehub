@@ -80,6 +80,8 @@ interface EnvironmentFormProps {
     description?: string;
     name?: string;
   }) => Promise<void>;
+  /** A project's: under each repository, where it is checked out on the project's devices. */
+  renderRepositoryLocations?: (source: { localOnly?: boolean; url: string }) => ReactNode;
 }
 
 type GitSource = {
@@ -107,10 +109,12 @@ const RepositoryRow = memo<{
   /** Offer the local-only switch: only a project has local folders to run in. */
   allowLocalOnly?: boolean;
   busy: boolean;
+  /** Where the repository is checked out on the project's devices. */
+  locations?: ReactNode;
   onChange: (next: Partial<Omit<GitSource, 'kind' | 'url'>>) => Promise<void>;
   onRemove: () => void;
   source: GitSource;
-}>(({ allowLocalOnly, busy, onChange, onRemove, source }) => {
+}>(({ allowLocalOnly, busy, locations, onChange, onRemove, source }) => {
   const { t } = useTranslation('setting');
   const [editing, setEditing] = useState(false);
   const github = repositoryPathOf(source.url);
@@ -185,6 +189,7 @@ const RepositoryRow = memo<{
           onClick={onRemove}
         />
       </Flexbox>
+      {locations && <div style={{ marginTop: 8, paddingInlineStart: 28 }}>{locations}</div>}
       {editing && (
         <Flexbox gap={12} style={{ marginTop: 12 }}>
           <Flexbox horizontal align={'flex-start'} gap={12}>
@@ -326,7 +331,14 @@ BranchField.displayName = 'EnvironmentBranchField';
  * tab switch before anyone scrolled down to it.
  */
 const EnvironmentForm = memo<EnvironmentFormProps>(
-  ({ allowLocalOnly, environment, hideBasics, localDirectories, onSave }) => {
+  ({
+    allowLocalOnly,
+    environment,
+    hideBasics,
+    localDirectories,
+    onSave,
+    renderRepositoryLocations,
+  }) => {
     const { t } = useTranslation('setting');
     const configuration = (environment.configuration ?? {}) as SandboxEnvironmentSpecification;
     const [pickingRepository, setPickingRepository] = useState(false);
@@ -534,6 +546,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(
                   allowLocalOnly={allowLocalOnly}
                   busy={busy}
                   key={source.url}
+                  locations={renderRepositoryLocations?.(source)}
                   source={source}
                   onChange={(changes) => updateRepository(source.url, changes)}
                   onRemove={() => removeRepository(source.url)}
@@ -587,9 +600,8 @@ const EnvironmentForm = memo<EnvironmentFormProps>(
               </Button>
             </Flexbox>
           )}
+          {localDirectories}
         </PanelSection>
-
-        {localDirectories}
 
         <PanelSection
           title={t('environments.form.setup')}

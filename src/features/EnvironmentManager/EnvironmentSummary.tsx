@@ -16,7 +16,9 @@ const EnvironmentSummary = memo<{
   environment: EnvironmentFormValue;
   /** A project's local folders, under its repositories as in the form. */
   localDirectories?: ReactNode;
-}>(({ environment, localDirectories }) => {
+  /** As in the form: where each repository is checked out on the project's devices. */
+  renderRepositoryLocations?: (source: { localOnly?: boolean; url: string }) => ReactNode;
+}>(({ environment, localDirectories, renderRepositoryLocations }) => {
   const { t } = useTranslation('setting');
   const configuration = environment.configuration ?? {};
   const repositories = (configuration.sources ?? []).flatMap((source) =>
@@ -24,6 +26,7 @@ const EnvironmentSummary = memo<{
       ? [
           {
             localOnly: !!source.localOnly,
+            locations: renderRepositoryLocations?.(source),
             name: source.url.replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, ''),
             setupCommand: (source as { setupCommand?: string }).setupCommand,
           },
@@ -48,6 +51,7 @@ const EnvironmentSummary = memo<{
                   </Text>
                 )}
               </Flexbox>
+              {repository.locations}
               {repository.setupCommand && (
                 <Text code fontSize={12}>
                   {repository.setupCommand}
@@ -60,8 +64,8 @@ const EnvironmentSummary = memo<{
             {t('environments.detail.noRepository')}
           </Text>
         )}
+        {localDirectories}
       </PanelSection>
-      {localDirectories}
       <PanelSection title={t('environments.form.setup')}>
         <Text code={!!configuration.bootstrapCommand} fontSize={13}>
           {configuration.bootstrapCommand || t('environments.detail.noSetup')}

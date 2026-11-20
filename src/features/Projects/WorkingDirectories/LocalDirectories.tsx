@@ -14,7 +14,6 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
-import PanelSection from '@/features/EnvironmentManager/PanelSection';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
 import { useProjectDirectories, useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
@@ -197,7 +196,13 @@ export function LocalDirectories({ canManage, environmentId, projectId }: LocalD
   }
 
   return (
-    <PanelSection desc={t('settings.localDirectoriesHint')} title={t('settings.localDirectories')}>
+    <Flexbox gap={12} style={{ marginTop: 8 }}>
+      <Flexbox gap={4}>
+        <Text weight={500}>{t('settings.localDirectories')}</Text>
+        <Text fontSize={12} type="secondary">
+          {t('settings.localDirectoriesHint')}
+        </Text>
+      </Flexbox>
       {content}
       {canManage && (
         <Flexbox horizontal>
@@ -210,6 +215,6 @@ export function LocalDirectories({ canManage, environmentId, projectId }: LocalD
           </Button>
         </Flexbox>
       )}
-    </PanelSection>
+    </Flexbox>
   );
 }

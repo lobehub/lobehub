@@ -89,9 +89,11 @@ export default {
   'settings.noRepository': 'No GitHub repository linked',
   'settings.noDirectories':
     'No local folders yet. Add a folder on a connected device to run this project there.',
-  'settings.localDirectories': 'Local folders',
+  'settings.localDirectories': 'Local folders and device priority',
   'settings.localDirectoriesHint':
-    'Where this project is checked out on your devices. Agents read and change files there. Drag to set device priority: a new topic starts in the first folder whose device is online.',
+    "Each folder holds this project's repositories, side by side when there are several; agents read and change files there. Drag to set device priority: a new topic starts in the first folder whose device is online.",
+  'settings.repositoryLocalOnlyWithoutFolder':
+    'Runs only on local devices, but this project has no local folder yet.',
   'settings.preferredDevice': 'Preferred',
   'settings.reorderDirectoriesFailed': 'Could not save the device order. Try again.',
   'settings.title': 'Project settings',
