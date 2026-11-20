@@ -27,6 +27,8 @@ describe('AgentSidebarContent', () => {
     ['/agent/agt_1/channel/slack', 'channel'],
     ['/agent/agt_1/statistics', 'statistics'],
     ['/agent/agt_1/share', 'share'],
+    ['/agent/agt_1/self-evolving', 'self-evolving'],
+    ['/agent/agt_1/self-evolving/dom_1/experience', 'self-evolving'],
   ])('replaces the topic sidebar on %s', (pathname, tab) => {
     mocks.pathname = pathname;
     render(<AgentSidebarContent />);

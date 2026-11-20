@@ -1,6 +1,5 @@
-import type { ScmRepositoryListItem } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import pMap from 'p-map';
+import debug from 'debug';
 import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
@@ -12,13 +11,17 @@ import {
 import { scmEnv } from '@/envs/scm';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import {
-  fetchGitHubInstallation,
-  listGitHubInstallationRepositoryDetails,
-} from '@/server/services/scm/github/app';
+import { fetchGitHubInstallation } from '@/server/services/scm/github/app';
 import { SCM_MAX_WAKES } from '@/server/services/scm/limits';
 import { consumeScmInstallClaim } from '@/server/services/scm/oauth/stateStore';
+import {
+  listScopeGitHubRepositories,
+  ScmRepositoriesUnavailableError,
+} from '@/server/services/scm/repositories';
+import { ScmControlService } from '@/server/services/scm/ScmControlService';
 import { canWriteScmScope } from '@/server/services/scm/scope';
+
+const log = debug('lobe-server:router:scm');
 
 /** Path the "Connect GitHub" button navigates to; the server route owns the redirect. */
 export const GITHUB_INSTALL_PATH = '/api/webhooks/github/install';
@@ -32,10 +35,10 @@ const scmProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
 
 /**
  * The SCM integration for the settings page and acceptance views. Reads,
- * plus the one write a signed-in user confirms in the app: connecting an
+ * plus the writes a signed-in user makes in the app: connecting an
  * installation that reached the callback without our state (started on
- * github.com). Everything else is written by provider webhooks and the
- * install callback.
+ * github.com), and a pull request's Auto-fix switch. Everything else is
+ * written by provider webhooks and the install callback.
  */
 export const scmRouter = router({
   /**
@@ -143,6 +146,41 @@ export const scmRouter = router({
       ScmChangeRequestModel.listByScope(ctx.serverDB, ctx.scope, { limit: input?.limit }),
     ),
 
+  /**
+   * Turn Auto-fix on or off for one tracked pull request: whether its failing
+   * CI and review feedback wake the agent of the linked conversation. Only
+   * the tenant that owns the row — whose conversation gets woken — may switch
+   * it, with the same member role as every other SCM write. Turning it back
+   * on starts the wake count over.
+   */
+  setChangeRequestAutoFix: scmProcedure
+    .input(z.object({ changeRequestId: z.string().min(1), enabled: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!(await canWriteScmScope(ctx.serverDB, ctx.userId, ctx.scope.workspaceId))) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'workspace member role required' });
+      }
+
+      const updated = await ScmChangeRequestModel.setAutoFix(
+        ctx.serverDB,
+        ctx.scope,
+        input.changeRequestId,
+        input.enabled,
+      );
+      if (!updated) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'pull request not found' });
+      }
+
+      // The switch is saved; a comment that fails to update catches up on
+      // the next event that rewrites it.
+      try {
+        await new ScmControlService(ctx.serverDB).onAutoFixChanged(input.changeRequestId);
+      } catch (error) {
+        log('refresh comment after Auto-fix change on %s failed: %O', input.changeRequestId, error);
+      }
+
+      return { ...updated, maxWakes: SCM_MAX_WAKES };
+    }),
+
   listInstallations: scmProcedure.query(async ({ ctx }) =>
     ScmInstallationModel.listByScope(ctx.serverDB, ctx.scope),
   ),
@@ -156,56 +194,13 @@ export const scmRouter = router({
    * others listed; only when every one fails is that an error.
    */
   listRepositories: scmProcedure.query(async ({ ctx }) => {
-    if (!scmEnv.ENABLED_GITHUB_APP) {
-      return { configured: false, installations: 0, repositories: [], truncated: false };
-    }
+    try {
+      return await listScopeGitHubRepositories(ctx.serverDB, ctx.scope);
+    } catch (error) {
+      if (!(error instanceof ScmRepositoriesUnavailableError)) throw error;
 
-    const installations = (await ScmInstallationModel.listByScope(ctx.serverDB, ctx.scope)).filter(
-      (item) => item.provider === 'github' && !item.suspendedAt,
-    );
-    // Bounded fan-out: one GitHub request per installation, capped so a scope with
-    // many installations cannot open an unbounded number of connections at once.
-    const outcomes = await pMap(
-      installations,
-      async (item) => {
-        try {
-          const value = await listGitHubInstallationRepositoryDetails(item.installationId);
-          return { installationId: item.installationId, ok: true as const, value };
-        } catch (error) {
-          return { error, installationId: item.installationId, ok: false as const };
-        }
-      },
-      { concurrency: 5 },
-    );
-
-    const byName = new Map<string, ScmRepositoryListItem>();
-    const failures: unknown[] = [];
-    let truncated = false;
-    for (const outcome of outcomes) {
-      if (!outcome.ok) {
-        failures.push(outcome.error);
-        console.error(
-          '[scm:listRepositories] installation %s: %s',
-          outcome.installationId,
-          (outcome.error as Error)?.message,
-        );
-        continue;
-      }
-      truncated ||= outcome.value.truncated;
-      for (const repo of outcome.value.repositories) byName.set(repo.fullName.toLowerCase(), repo);
+      throw new TRPCError({ cause: error.cause, code: 'BAD_GATEWAY', message: error.message });
     }
-    if (installations.length > 0 && failures.length === installations.length) {
-      throw new TRPCError({
-        cause: failures[0],
-        code: 'BAD_GATEWAY',
-        message: 'Could not list repositories from GitHub',
-      });
-    }
-
-    const repositories = [...byName.values()].sort((a, b) =>
-      (b.pushedAt ?? '').localeCompare(a.pushedAt ?? ''),
-    );
-    return { configured: true, installations: installations.length, repositories, truncated };
   }),
 });
 

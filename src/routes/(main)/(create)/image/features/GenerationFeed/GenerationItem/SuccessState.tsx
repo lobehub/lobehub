@@ -20,6 +20,7 @@ export const SuccessState = memo<SuccessStateProps>(
     onDelete,
     onDownload,
     onCopySeed,
+    onShare,
     seedTooltip,
   }) => {
     return (
@@ -49,6 +50,7 @@ export const SuccessState = memo<SuccessStateProps>(
           onCopySeed={onCopySeed}
           onDelete={onDelete}
           onDownload={onDownload}
+          onShare={onShare}
         />
       </Block>
     );

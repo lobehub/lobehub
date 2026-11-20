@@ -15,9 +15,11 @@ import {
   workspaceMembers,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { agentTitleSql } from '../../utils/inboxAgent';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { fileIdsByMessage } from './attachments';
-import { findThread } from './delivery';
+import { isAgentAuthored } from './author';
+import { findThread, memberNotMuted } from './delivery';
 import { resolveRouting } from './routing';
 import { audit, withChannelLock } from './transaction';
 
@@ -139,7 +141,7 @@ export class ChannelRoutingRepository {
       const candidateQuery = tx
         .select({
           agentId: agents.id,
-          agentTitle: agents.title,
+          agentTitle: agentTitleSql(),
           model: agents.model,
           ownerId: agents.userId,
           provider: agents.provider,
@@ -156,6 +158,7 @@ export class ChannelRoutingRepository {
             eq(channelMembers.channelId, channelId),
             eq(channelMembers.actorType, 'agent'),
             eq(channelMembers.status, 'active'),
+            memberNotMuted(),
             thread ? inArray(channelMembers.id, thread.followerMemberIds) : undefined,
             buildWorkspaceWhere(
               { userId: message.userId, workspaceId: channel.workspaceId ?? undefined },
@@ -184,7 +187,7 @@ export class ChannelRoutingRepository {
         .select({
           agentId: channelMessages.agentId,
           agentName: agents.name,
-          agentTitle: agents.title,
+          agentTitle: agentTitleSql(),
           content: channelMessages.content,
           createdAt: channelMessages.createdAt,
           fullName: users.fullName,
@@ -286,7 +289,7 @@ export class ChannelRoutingRepository {
         channelWake: channel.config?.wake,
         hasAttachments: attachments.has(messageId),
         history: history.reverse().map((line) => {
-          const isAgent = line.routingStatus === 'reply';
+          const isAgent = isAgentAuthored(line);
           return {
             at: line.createdAt.getTime(),
             author: isAgent

@@ -8,13 +8,14 @@ import { memo } from 'react';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useQuery } from '@/hooks/useQuery';
+import { densityTokens } from '@/styles/density.stylex';
 import { type AssistantMarketSource } from '@/types/discover';
 
 const styles = stylex.create({
   tag: {
     margin: '0',
     paddingBlock: '4px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: '16px',
     color: cssVar.colorTextSecondary,
   },

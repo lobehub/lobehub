@@ -41,13 +41,19 @@ import { useTranslation } from 'react-i18next';
 import SkeletonBar from '@/components/Skeleton/Bar';
 import UserAvatar from '@/components/UserAvatar';
 import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
+import { densityVars } from '@/styles/densityVars';
 import { formatSize } from '@/utils/format';
 
 import Connections from './Connections';
 import { refreshDeviceList } from './const';
 import { BoundAgentList, RunningTopicList } from './DeviceActivity';
 import DeviceHealth, { HealthLegend } from './DeviceHealth';
-import { formatPercent, usageLevel } from './DeviceHealth/format';
+import {
+  formatPercent,
+  LOAD_THRESHOLDS,
+  usageLevel,
+  type UsageThresholds,
+} from './DeviceHealth/format';
 import { usageTextColor, useDeviceMetricSeries } from './DeviceHealth/shared';
 import { UsageBar } from './DeviceHealth/UsageMeter';
 import { latestUsageView } from './DeviceHealth/viewState';
@@ -73,11 +79,11 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   cardBody: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
   `,
   cardHeader: css`
     padding-block: 10px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -97,12 +103,12 @@ const styles = createStaticStyles(({ css }) => ({
   infoGrid: css`
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
   `,
   row: css`
     min-height: 48px;
     padding-block: 10px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
 
     & + & {
       border-block-start: 1px solid ${cssVar.colorBorderSecondary};
@@ -111,7 +117,7 @@ const styles = createStaticStyles(({ css }) => ({
   statGrid: css`
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
   `,
   statusPill: css`
     display: inline-flex;
@@ -198,12 +204,13 @@ interface StatCardProps {
   icon: LucideIcon;
   /** First read still in flight: placeholders in the reading's own line boxes. */
   loading?: boolean;
+  thresholds?: UsageThresholds;
   title: string;
   value: number | null | undefined;
 }
 
 /** One reading at a glance: the big share, its absolute size, and the segmented bar. */
-const StatCard = ({ detail, icon, loading, title, value }: StatCardProps) => (
+const StatCard = ({ detail, icon, loading, thresholds, title, value }: StatCardProps) => (
   <DetailCard icon={icon} title={title}>
     {loading ? (
       <Flexbox aria-busy gap={14}>
@@ -217,7 +224,7 @@ const StatCard = ({ detail, icon, loading, title, value }: StatCardProps) => (
         <Flexbox horizontal align={'baseline'} distribution={'space-between'} gap={8}>
           <Text
             fontSize={28}
-            style={{ color: usageTextColor(usageLevel(value)), lineHeight: 1.2 }}
+            style={{ color: usageTextColor(usageLevel(value, thresholds)), lineHeight: 1.2 }}
             weight={600}
           >
             {formatPercent(value)}
@@ -228,7 +235,7 @@ const StatCard = ({ detail, icon, loading, title, value }: StatCardProps) => (
             </Text>
           )}
         </Flexbox>
-        <UsageBar height={8} value={value} />
+        <UsageBar height={8} thresholds={thresholds} value={value} />
       </Flexbox>
     )}
   </DetailCard>
@@ -431,6 +438,7 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
         <StatCard
           icon={GaugeIcon}
           loading={usage.loading}
+          thresholds={LOAD_THRESHOLDS}
           title={t('devices.detail.loadUsage')}
           value={latest?.loadPercent}
           detail={

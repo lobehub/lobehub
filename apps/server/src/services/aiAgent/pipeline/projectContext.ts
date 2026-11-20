@@ -27,7 +27,7 @@ export const buildRunProjectContextPrompt = async (
   deps: ProjectContextDeps,
   projectId: string | undefined,
   agentId: string,
-  options: { coordinationRules?: boolean } = {},
+  options: { channelMessaging?: boolean; coordinationRules?: boolean } = {},
 ): Promise<string | undefined> => {
   if (!projectId) return;
 
@@ -44,6 +44,7 @@ export const buildRunProjectContextPrompt = async (
 
     const openTasks = (tasks ?? []).filter((task) => !CLOSED_TASK_STATUSES.has(task.status));
     return buildProjectContextPrompt({
+      channelMessaging: options.channelMessaging,
       coordinationRules: options.coordinationRules,
       currentAgentId: agentId,
       knowledgeBases: (knowledgeBases ?? [])
@@ -57,6 +58,7 @@ export const buildRunProjectContextPrompt = async (
         .filter(({ binding }) => binding.enabled)
         .map(({ agent, binding }) => ({
           agentId: agent.id,
+          name: agent.name,
           responsibility: binding.responsibility,
           role: binding.role,
           title: agent.title,

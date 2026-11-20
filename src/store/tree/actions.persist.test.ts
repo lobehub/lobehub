@@ -5,6 +5,7 @@ import type * as ReplicaModule from '@/libs/replica';
 import { createReplicaState } from '@/libs/replica';
 import { broadcastCacheScope, resetCacheScopeBroadcast } from '@/libs/replica/cacheScopeEvents';
 import type * as CacheScopeModule from '@/libs/swr/useCacheScope';
+import { SortType } from '@/types/files';
 
 import { TreeActionImpl } from './actions';
 import {
@@ -34,6 +35,8 @@ vi.mock('@/features/ResourceManager/store', () => ({
   useResourceManagerStore: { getState: () => ({ collapseHierarchySearch: vi.fn() }) },
 }));
 
+vi.mock('@/services/knowledgeBase', () => ({ knowledgeBaseService: {} }));
+
 vi.mock('@/services/file', () => ({
   fileService: { getKnowledgeItems: mockGetKnowledgeItems },
 }));
@@ -62,6 +65,8 @@ const file = (id: string, extra: Partial<TreeItem> = {}): TreeItem => ({
 
 const createState = (): TreeState =>
   ({
+    sorter: 'custom',
+    sortType: SortType.Asc,
     children: {},
     epoch: 0,
     errors: {},
@@ -538,4 +543,22 @@ describe('TreeActionImpl.revalidateLoaded — a delete only the server can enume
     await actions.revalidate('folder-b');
     expect(JSON.stringify(state.snapshotMap['kb-1'] ?? {})).toContain('doc-c');
   });
+});
+
+it('keeps finite custom order alongside emoji in compact persisted snapshots', () => {
+  const snapshot = buildLibraryTreeSnapshot(
+    {
+      '': [
+        file('ordered', { metadata: { emoji: '📚', sortOrder: 2000, secret: 'omit' } }),
+        file('zero', { metadata: { sortOrder: 0 } }),
+        file('invalid', { metadata: { sortOrder: Infinity } }),
+      ],
+    },
+    {},
+  );
+  expect(snapshot?.children[''].map((item) => item.metadata)).toEqual([
+    { emoji: '📚', sortOrder: 2000 },
+    { sortOrder: 0 },
+    undefined,
+  ]);
 });

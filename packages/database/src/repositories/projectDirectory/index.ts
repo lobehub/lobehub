@@ -1,8 +1,9 @@
+import type { ChatTopicMetadata } from '@lobechat/types';
 import { getWorkingDirSourcePath } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 
-import { EnvironmentModel, normalizeProjectRepository } from '../../models/environment';
+import { normalizeProjectRepository } from '../../models/environment';
 import { EnvironmentInstanceModel } from '../../models/environmentInstance';
 import { ProjectModel } from '../../models/project';
 import {
@@ -10,10 +11,11 @@ import {
   ProjectWorkingDirectoryModel,
 } from '../../models/projectWorkingDirectory';
 import { hasLiveTaskCallbackReservation } from '../../models/topic';
-import { agents, devices, projectEnvironments, topics } from '../../schemas';
+import { agents, devices, environments, projectWorkingDirectories, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+import { mergeRepositories, ProjectEnvironmentRepository } from '../projectEnvironment';
 
 /**
  * A refused directory write. It carries its tRPC code, so a permission or
@@ -35,9 +37,52 @@ export interface SkippedProjectTopic {
   reason: SkippedProjectTopicReason;
 }
 
+/**
+ * Point a conversation at another device directory. The cwd and CLI session
+ * only hold on the old machine, so they are dropped rather than carried over.
+ */
+const pinTopicToDirectory = (
+  metadata: ChatTopicMetadata | null | undefined,
+  deviceId: string,
+  path: string,
+): ChatTopicMetadata => {
+  const {
+    heteroSessionBindingKey: _bindingKey,
+    heteroSessionBindingKeyByWorkingDirectory: _bindingKeys,
+    heteroSessionId: _sessionId,
+    heteroSessionIdByWorkingDirectory: _sessionIds,
+    ...rest
+  } = metadata ?? {};
+  return {
+    ...rest,
+    boundDeviceId: deviceId,
+    workingDirectory: path,
+    workingDirectoryConfig: { path },
+  };
+};
+
+const isTopicInFlight = (topic: { metadata?: ChatTopicMetadata | null; status?: string | null }) =>
+  topic.status === 'running' ||
+  !!topic.metadata?.runningOperation ||
+  hasLiveTaskCallbackReservation(topic.metadata);
+
+export interface RelocateProjectDirectoryInput {
+  /**
+   * The topics the caller was authorized to move. A topic bound to the
+   * directory after that check fails the relocation instead of moving
+   * unchecked.
+   */
+  authorizedTopicIds?: string[];
+  deviceId: string;
+  id: string;
+  path: string;
+  projectId: string;
+}
+
 export interface BindProjectDirectoryInput {
   agentId?: string;
   deviceId: string;
+  /** Ignored: a folder always works in the project's own environment. Kept for older clients. */
   environmentId?: string;
   name: string;
   path: string;
@@ -76,12 +121,10 @@ export class ProjectDirectoryRepository {
   }
 
   async bind(input: BindProjectDirectoryInput) {
-    await this.assertManageableProject(input.projectId);
+    const project = await this.assertManageableProject(input.projectId);
     return this.db.transaction(async (tx) => {
       const db = tx as LobeChatDatabase;
-      const environmentModel = new EnvironmentModel(db, this.userId, this.workspaceId);
       const instanceModel = new EnvironmentInstanceModel(db, this.userId, this.workspaceId);
-      const projectModel = new ProjectModel(db, this.userId, this.workspaceId);
       const directoryModel = new ProjectWorkingDirectoryModel(db, this.userId, this.workspaceId);
       // Serialize bindings of the same device, including bindings from different projects.
       const [device] = await db
@@ -98,45 +141,29 @@ export class ProjectDirectoryRepository {
         ? normalizeProjectRepository(input.repositoryUrl)
         : undefined;
       const existing = await instanceModel.findByDeviceAndDirectory(device.id, path);
-      let instance = existing;
-      let environment;
-      // An environment is the definition; an instance is one materialization of
-      // it. So the same project bound on a second device reuses the definition
-      // the first binding made and adds its own instance, rather than minting a
-      // second environment under the same name — which is both what the
-      // (user, scope, name) unique indexes require and what the two concepts
-      // already meant.
-      const knownId = existing?.environmentId ?? input.environmentId;
-      const named = knownId ? undefined : await environmentModel.findByName(input.name);
-      const environmentId = knownId ?? named?.id;
-      if (environmentId) {
-        environment = await environmentModel.findEnabledById(environmentId);
-        // The name lookup deliberately sees disabled rows, because the unique
-        // indexes do: a disabled environment of this name still owns the name,
-        // so minting a replacement would only hit the constraint.
-        if (!environment && named)
-          throw new ProjectDirectoryError('BAD_REQUEST', 'Environment is disabled');
-        if (!environment || (input.environmentId && input.environmentId !== environment.id))
-          throw new ProjectDirectoryError(
-            'CONFLICT',
-            'This directory belongs to another environment',
-          );
-        if (
-          repositoryUrl &&
-          !environment.configuration.sources?.some(
-            (source) => source.kind === 'git' && source.url === repositoryUrl,
-          )
-        )
-          throw new ProjectDirectoryError(
-            'CONFLICT',
-            'Repository differs from the existing environment',
-          );
-      } else {
-        environment = await environmentModel.save({
-          name: input.name,
-          repositoryUrl: input.repositoryUrl,
-        });
+      // A folder works in the project's own environment — the only one it has.
+      // A folder some other environment already built is that one's.
+      let environment = await ProjectEnvironmentRepository.ensure(db, project);
+      if (existing && existing.environmentId !== environment.id)
+        throw new ProjectDirectoryError(
+          'CONFLICT',
+          'This directory belongs to another environment',
+        );
+      // A folder that is a checkout of a repository the environment does not
+      // list yet adds it, the same as adding it on the project's settings.
+      if (repositoryUrl) {
+        const configuration = mergeRepositories(environment.configuration, [
+          { sources: [{ kind: 'git', url: repositoryUrl }] },
+        ]);
+        if (configuration !== environment.configuration) {
+          [environment] = await db
+            .update(environments)
+            .set({ configuration, updatedAt: new Date() })
+            .where(eq(environments.id, environment.id))
+            .returning();
+        }
       }
+      let instance = existing;
       if (!instance) {
         instance = await instanceModel.createForDeviceBinding({
           configurationSnapshot: environment.configuration,
@@ -148,18 +175,6 @@ export class ProjectDirectoryRepository {
       }
       if (!instance.enabled)
         throw new ProjectDirectoryError('BAD_REQUEST', 'Environment instance is disabled');
-      await projectModel.attachEnvironment(input.projectId, environment.id);
-      const [link] = await db
-        .select()
-        .from(projectEnvironments)
-        .where(
-          and(
-            eq(projectEnvironments.projectId, input.projectId),
-            eq(projectEnvironments.environmentId, environment.id),
-          ),
-        );
-      if (!link.enabled)
-        throw new ProjectDirectoryError('BAD_REQUEST', 'Environment is disabled in this project');
       const prior = await directoryModel.findByLocation(input.projectId, device.id, path);
       const directory =
         prior ??
@@ -334,6 +349,127 @@ export class ProjectDirectoryRepository {
       return updated;
     });
   }
+
+  /**
+   * Remove a directory from its project. Only the project's link goes: the
+   * environment instance is keyed by (device, path) and may serve other
+   * projects, and the conversations stay in the project with the foreign key
+   * clearing their directory binding.
+   */
+  async remove(projectId: string, directoryId: string) {
+    await this.assertManageableProject(projectId);
+    return this.db.transaction(async (tx) => {
+      const db = tx as LobeChatDatabase;
+      const bound = await db
+        .select()
+        .from(topics)
+        .where(
+          and(
+            eq(topics.projectId, projectId),
+            eq(topics.projectWorkingDirectoryId, directoryId),
+            isNull(topics.deletedAt),
+          ),
+        )
+        .for('update');
+      // A run that already resolved this directory would finish against a
+      // binding that no longer exists. The row locks serialize with its
+      // reservation write, as in `moveTopic`.
+      if (bound.some(isTopicInFlight))
+        throw new ProjectDirectoryError(
+          'CONFLICT',
+          'Wait for the running topics to finish before removing this directory',
+        );
+      const [removed] = await db
+        .delete(projectWorkingDirectories)
+        .where(
+          and(
+            eq(projectWorkingDirectories.id, directoryId),
+            eq(projectWorkingDirectories.projectId, projectId),
+          ),
+        )
+        .returning();
+      if (!removed) throw new ProjectDirectoryError('NOT_FOUND', 'Project directory not found');
+      return removed;
+    });
+  }
+
+  /**
+   * Point a directory at another device location, for a binding made with the
+   * wrong path. The new location is bound like any other (same environment),
+   * the directory's conversations follow it as in `moveTopic`, and the old row
+   * goes — so no conversation is left pinned to a path its directory no longer
+   * names. The caller has already confirmed the new path exists on the device.
+   */
+  async relocate(input: RelocateProjectDirectoryInput) {
+    await this.assertManageableProject(input.projectId);
+    return this.db.transaction(async (tx) => {
+      const db = tx as LobeChatDatabase;
+      const current = (
+        await new ProjectWorkingDirectoryModel(db, this.userId, this.workspaceId).list(
+          input.projectId,
+        )
+      ).find((row) => row.id === input.id);
+      if (!current) throw new ProjectDirectoryError('NOT_FOUND', 'Project directory not found');
+      const bound = await db
+        .select()
+        .from(topics)
+        .where(
+          and(
+            eq(topics.projectId, input.projectId),
+            eq(topics.projectWorkingDirectoryId, input.id),
+            isNull(topics.deletedAt),
+          ),
+        )
+        .for('update');
+      if (bound.some(isTopicInFlight))
+        throw new ProjectDirectoryError(
+          'CONFLICT',
+          'Wait for the running topics to finish before changing this directory',
+        );
+      const authorized = input.authorizedTopicIds && new Set(input.authorizedTopicIds);
+      if (authorized && bound.some((topic) => !authorized.has(topic.id)))
+        throw new ProjectDirectoryError(
+          'CONFLICT',
+          'The topics in this directory changed; try again',
+        );
+      const next = await new ProjectDirectoryRepository(db, this.userId, this.workspaceId).bind({
+        deviceId: input.deviceId,
+        environmentId: current.environmentId ?? undefined,
+        name: input.path.split(/[\\/]/).findLast(Boolean) || input.path,
+        path: input.path,
+        projectId: input.projectId,
+      });
+      if (next.id === input.id) return next;
+      const agentIds = [
+        ...new Set(bound.flatMap((topic) => (topic.agentId ? [topic.agentId] : []))),
+      ];
+      const boundAgents = agentIds.length
+        ? await db
+            .select()
+            .from(agents)
+            .where(and(inArray(agents.id, agentIds), buildWorkspaceWhere(this.scope(), agents)))
+        : [];
+      if (
+        boundAgents.some(
+          (agent) =>
+            agent.agencyConfig?.executionTargetSelectionPolicy === 'fixed' &&
+            agent.agencyConfig.boundDeviceId !== input.deviceId,
+        )
+      )
+        throw new ProjectDirectoryError('FORBIDDEN', 'Agent cannot use this execution target');
+      for (const topic of bound)
+        await db
+          .update(topics)
+          .set({
+            metadata: pinTopicToDirectory(topic.metadata, input.deviceId, next.path),
+            projectWorkingDirectoryId: next.id,
+          })
+          .where(eq(topics.id, topic.id));
+      await db.delete(projectWorkingDirectories).where(eq(projectWorkingDirectories.id, input.id));
+      return next;
+    });
+  }
+
   /**
    * Move a project-directory conversation to its project's directory on another
    * device. The directory belongs to the project, so switching devices means
@@ -393,22 +529,10 @@ export class ProjectDirectoryRepository {
         )
           throw new ProjectDirectoryError('FORBIDDEN', 'Agent cannot use this execution target');
       }
-      const {
-        heteroSessionBindingKey: _bindingKey,
-        heteroSessionBindingKeyByWorkingDirectory: _bindingKeys,
-        heteroSessionId: _sessionId,
-        heteroSessionIdByWorkingDirectory: _sessionIds,
-        ...metadata
-      } = topic.metadata ?? {};
       const [updated] = await db
         .update(topics)
         .set({
-          metadata: {
-            ...metadata,
-            boundDeviceId: directory.deviceId,
-            workingDirectory: directory.path,
-            workingDirectoryConfig: { path: directory.path },
-          },
+          metadata: pinTopicToDirectory(topic.metadata, directory.deviceId, directory.path),
           projectWorkingDirectoryId: directory.id,
         })
         .where(eq(topics.id, topicId))

@@ -5,9 +5,8 @@ import { Plus, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { mutate as globalMutate } from '@/libs/swr';
-import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
+import { useVerifyStore } from '@/store/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { hasVisualEvidence } from '../Evidence/evidence';
@@ -44,7 +43,7 @@ const AcceptanceCheckOwnerToolbar = () => {
   const saveStanding = async (checklist: typeof standing) => {
     await verifyService.saveAcceptanceChecklist(subjectType, data.subject.id, checklist);
     await mutate();
-    void globalMutate(isAcceptanceListKey);
+    void useVerifyStore.getState().refreshAcceptanceLists();
     toast.success(t('acceptance.checkCreate.saved'));
   };
 

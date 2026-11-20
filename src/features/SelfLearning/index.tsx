@@ -29,6 +29,8 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import type { ExpertiseDomainItem } from '@/services/expertise';
 import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
+import { expertiseActions, useExpertiseStore } from '@/store/expertise';
+import { useHeaderActionSize } from '@/styles/density';
 
 import { countTiers, habitTier } from './helpers';
 import { useExpertiseOverview, useHistoryCount } from './hooks';
@@ -59,24 +61,31 @@ const styles = createStaticStyles(({ css }) => ({
  */
 const SelfLearning = memo(() => {
   const { t } = useTranslation('selfLearning');
+  const headerActionSize = useHeaderActionSize(true);
   const navigate = useWorkspaceAwareNavigate();
   const { domainId } = useParams();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const [teachOpen, setTeachOpen] = useState(false);
   const [teachDomainId, setTeachDomainId] = useState<string>();
 
-  // Two-phase: read once to know how many lessons exist, then let the warm-up hook decide the poll.
-  const first = useExpertiseOverview(activeAgentId ?? undefined);
-  const learnedTotal = useMemo(
-    () => first.data?.domains.reduce((a, d) => a + d.lessons.length, 0) ?? 0,
-    [first.data],
+  // The portrait store tells how many lessons exist, and the warm-up hook decides the poll from
+  // that; both read the same replica entry, so this is one request.
+  const learnedTotal = useExpertiseStore(
+    (s) =>
+      (activeAgentId ? s.overviewMap[activeAgentId] : undefined)?.domains.reduce(
+        (a, d) => a + d.lessons.length,
+        0,
+      ) ?? 0,
   );
   const warmup = useHistoryWarmup(activeAgentId ?? undefined, learnedTotal);
-  const { data, error, mutate } = useExpertiseOverview(
+  const { data, error, isConfirmed, revalidate } = useExpertiseOverview(
     activeAgentId ?? undefined,
     warmup.refreshInterval,
   );
   const allDomains = useMemo(() => data?.domains ?? [], [data]);
+  // A restored portrait may be last session's empty one: it is not "no directions yet" until the
+  // server says so, so an empty local copy still reads as loading.
+  const settled = allDomains.length > 0 || isConfirmed ? data : undefined;
   const scoped = useMemo(
     () => (domainId ? allDomains.filter((d) => d.id === domainId) : allDomains),
     [allDomains, domainId],
@@ -156,8 +165,7 @@ const SelfLearning = memo(() => {
       ? freshDomains.map((d) => d.title)
       : [current?.title ?? scoped[0]?.title ?? ''];
   // Only the warm-up card needs the candidate count, so it is not requested at all once every
-  // direction has been practiced; when it is needed it batches with the portrait only on a
-  // warm SWR cache (cold loads resolve the portrait first).
+  // direction has been practiced; a reload paints the last count from the local replica.
   const { data: history } = useHistoryCount(showWarmup ? (activeAgentId ?? undefined) : undefined);
 
   const teach = async (text: string) => {
@@ -167,7 +175,7 @@ const SelfLearning = memo(() => {
       await expertiseService.teachLesson({ domainId: target, text });
       toast.success(t('habit.teach.done'));
       setTeachOpen(false);
-      void mutate();
+      if (activeAgentId) void expertiseActions.afterLessonWrite(activeAgentId);
     } catch {
       toast.error(t('habit.teach.failed'));
     }
@@ -190,9 +198,9 @@ const SelfLearning = memo(() => {
       okText: t('domain.deleteConfirm.ok'),
       onOk: async () => {
         try {
-          await expertiseService.deleteDomain(domain.id);
+          if (!activeAgentId) return;
+          await expertiseActions.deleteDomain(activeAgentId, domain.id);
           toast.success(t('domain.deleted'));
-          await mutate();
           if (domainId && activeAgentId)
             navigate(urlJoin('/agent', activeAgentId, 'self-evolving'));
         } catch {
@@ -268,6 +276,7 @@ const SelfLearning = memo(() => {
                   <ActionIcon
                     icon={MoreHorizontalIcon}
                     loading={warmup.starting}
+                    size={headerActionSize}
                     title={t('domain.more')}
                   />
                 </DropdownMenu>
@@ -279,10 +288,11 @@ const SelfLearning = memo(() => {
       <Flexbox className={styles.body} flex={1} width={'100%'}>
         <WideScreenContainer>
           <AsyncBoundary
-            data={data}
+            data={settled}
             error={error}
             errorVariant={'page'}
-            isEmpty={!error && allDomains.length === 0}
+            isEmpty={isConfirmed && !error && allDomains.length === 0}
+            isLoading={!settled && !error}
             empty={
               <Center height={'100%'} style={{ minHeight: '50vh' }} width={'100%'}>
                 <Empty
@@ -299,7 +309,7 @@ const SelfLearning = memo(() => {
                 />
               </Center>
             }
-            onRetry={() => mutate()}
+            onRetry={() => void revalidate()}
           >
             <Flexbox gap={20} paddingBlock={'22px 64px'}>
               <Flexbox gap={4}>
@@ -363,7 +373,6 @@ const SelfLearning = memo(() => {
                       ? urlJoin('/agent', activeAgentId, 'self-evolving', current.id, 'experience')
                       : undefined
                   }
-                  onChanged={() => void mutate()}
                 />
               )}
 

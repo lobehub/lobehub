@@ -31,7 +31,7 @@ A share visitor's run executes as the creator, so owner scope alone cannot separ
 - `workOwnership` applies the scope on every path, so a new query built on it inherits the fence. Do not query `works` without it.
 - Any registration path reachable from a visitor run (skill results, completion scans, anchor stamping) must build its `WorkModel` with the run's scope via `resolveRunWorkAccessScope`. A visitor run without a topic yields `null`: skip registration (fail closed) rather than registering unscoped into the creator's lists.
 - The resource unique indexes include the visitor topic id, so the creator and each visitor topic keep separate rows for the same external resource.
-- Visitor read payloads drop the creator's `userId` / `workspaceId` and gate spend on `showModelInfo` (`toVisitorMessage`).
+- Visitor read payloads always drop the creator's `userId` / `workspaceId` and the spend snapshot (`toVisitorMessage`, `sanitizeVisitorWorks`).
 
 ## Orphaned Works (backing resource deleted)
 

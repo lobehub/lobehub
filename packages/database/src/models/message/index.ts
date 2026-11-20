@@ -53,7 +53,6 @@ export class MessageModel {
   queryLastUserMessageByTopics: MessageConversationQueries['queryLastUserMessageByTopics'];
   query: MessageConversationQueries['query'];
   queryForVisitor: MessageConversationQueries['queryForVisitor'];
-  countByTopic: MessageConversationQueries['countByTopic'];
   queryTopicTranscript: MessageConversationQueries['queryTopicTranscript'];
   queryTopicMessageTree: MessageConversationQueries['queryTopicMessageTree'];
   queryTopicMessagesByCursor: MessageConversationQueries['queryTopicMessagesByCursor'];
@@ -85,6 +84,7 @@ export class MessageModel {
   restoreHumanApproval: MessageApprovalRepo['restore'];
   findMessagePlugin: MessagePluginStore['findMessagePlugin'];
   listMessagePluginsByTopic: MessagePluginStore['listMessagePluginsByTopic'];
+  listToolCallIndexByTopic: MessagePluginStore['listToolCallIndexByTopic'];
   findLatestPluginStateInTopic: MessagePluginStore['findLatestPluginStateInTopic'];
   listToolCallsInTopics: MessagePluginStore['listToolCallsInTopics'];
   listMessagePluginsForOperation: MessagePluginStore['listMessagePluginsForOperation'];
@@ -121,6 +121,7 @@ export class MessageModel {
   listBackgroundSubAgentCalls: MessageBackgroundSubAgentQueries['listBackgroundSubAgentCalls'];
   claimBackgroundSubAgentDelivery: MessageBackgroundSubAgentQueries['claimBackgroundSubAgentDelivery'];
   releaseBackgroundSubAgentDelivery: MessageBackgroundSubAgentQueries['releaseBackgroundSubAgentDelivery'];
+  releaseCancelSuppressedDelivery: MessageBackgroundSubAgentQueries['releaseCancelSuppressedDelivery'];
 
   private readonly annotations: MessageAnnotationMutations;
 
@@ -171,7 +172,6 @@ export class MessageModel {
     this.queryLastUserMessageByTopics = conversation.queryLastUserMessageByTopics;
     this.query = conversation.query;
     this.queryForVisitor = conversation.queryForVisitor;
-    this.countByTopic = conversation.countByTopic;
     this.queryTopicTranscript = conversation.queryTopicTranscript;
     this.queryTopicMessageTree = conversation.queryTopicMessageTree;
     this.queryTopicMessagesByCursor = conversation.queryTopicMessagesByCursor;
@@ -203,6 +203,7 @@ export class MessageModel {
     this.restoreHumanApproval = approvals.restore;
     this.findMessagePlugin = plugins.findMessagePlugin;
     this.listMessagePluginsByTopic = plugins.listMessagePluginsByTopic;
+    this.listToolCallIndexByTopic = plugins.listToolCallIndexByTopic;
     this.findLatestPluginStateInTopic = plugins.findLatestPluginStateInTopic;
     this.listToolCallsInTopics = plugins.listToolCallsInTopics;
     this.listMessagePluginsForOperation = plugins.listMessagePluginsForOperation;
@@ -213,6 +214,7 @@ export class MessageModel {
     this.listBackgroundSubAgentCalls = backgroundSubAgents.listBackgroundSubAgentCalls;
     this.claimBackgroundSubAgentDelivery = backgroundSubAgents.claimBackgroundSubAgentDelivery;
     this.releaseBackgroundSubAgentDelivery = backgroundSubAgents.releaseBackgroundSubAgentDelivery;
+    this.releaseCancelSuppressedDelivery = backgroundSubAgents.releaseCancelSuppressedDelivery;
     this.getLastMainThreadSpineMessageId = spine.getLastMainThreadSpineMessageId;
     this.isMessageDescendantOf = spine.isMessageDescendantOf;
     this.getLatestSpineMessageId = spine.getLatestSpineMessageId;

@@ -89,7 +89,7 @@ export const FocusCheckHeading = memo<FocusCheckHeadingProps>(
           </Text>
         </Flexbox>
         {showVerdictDescription && (
-          <Text fontSize={13} type={'secondary'}>
+          <Text fontSize={14} type={'secondary'}>
             {t(`acceptance.focus.verifierDescription.${verdict}`)}
           </Text>
         )}

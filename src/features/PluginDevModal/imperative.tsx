@@ -19,9 +19,9 @@ interface PluginEditDrawerProps {
 const PluginEditDrawer = memo<PluginEditDrawerProps>(({ identifier, onClose, open }) => {
   const { allowed: canEdit } = usePermission('edit_own_content');
   const value = useToolStore(pluginSelectors.getCustomPluginById(identifier), isEqual);
-  const [uninstallPlugin, installCustomPlugin, updateNewCustomPlugin] = useToolStore((s) => [
+  const [uninstallPlugin, updateCustomPlugin, updateNewCustomPlugin] = useToolStore((s) => [
     s.uninstallCustomPlugin,
-    s.installCustomPlugin,
+    s.updateCustomPlugin,
     s.updateNewCustomPlugin,
   ]);
 
@@ -41,7 +41,8 @@ const PluginEditDrawer = memo<PluginEditDrawerProps>(({ identifier, onClose, ope
       }}
       onSave={async (devPlugin) => {
         if (!canEdit) return;
-        await installCustomPlugin(devPlugin);
+        // Edits the existing legacy row; new custom MCPs are added as connectors.
+        await updateCustomPlugin(identifier, devPlugin);
         onClose();
       }}
     />

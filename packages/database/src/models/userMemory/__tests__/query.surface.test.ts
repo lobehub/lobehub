@@ -16,12 +16,19 @@ const functionMembers = (target: object) =>
 describe('UserMemoryQueryModel surface', () => {
   it('keeps the module runtime exports', () => {
     expect(Object.keys(queryModule).sort()).toEqual([
+      'DEFAULT_HYBRID_SEARCH_LIMIT',
+      'HYBRID_SEARCH_OVERFETCH_MULTIPLIER',
       'USER_MEMORY_LEXICAL_QUERY_CHARACTER_LIMIT',
       'UserMemoryQueryModel',
       'buildBm25MatchCondition',
+      'buildRetrievalQuery',
+      'combineEmbeddings',
+      'hasSearchFilters',
       'normalizeUserMemorySearchQueries',
       'scoreHybridCandidates',
+      'shouldRunSemanticSearch',
       'shouldRunUserMemoryLexicalSearch',
+      'toSearchTags',
     ]);
     expect(queryModule.USER_MEMORY_LEXICAL_QUERY_CHARACTER_LIMIT).toBe(256);
   });

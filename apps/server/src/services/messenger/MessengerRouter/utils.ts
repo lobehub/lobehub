@@ -1,9 +1,9 @@
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import type { SlashCommandEvent } from 'chat';
 
 import type { MessengerPlatform } from '@/config/messenger';
 import { WorkspaceModel } from '@/database/models/workspace';
 import type { LobeChatDatabase } from '@/database/type';
-import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 
 import type { CommandMatch } from './types';
 
@@ -74,13 +74,11 @@ export const userIsWorkspaceMember = async (
   userId: string,
   workspaceId: string,
 ): Promise<boolean> => {
-  if (!(await isWorkspaceFeatureEnabledForUser(userId))) return false;
+  if (!isWorkspaceFeatureEnabled()) return false;
 
   const workspaces = await new WorkspaceModel(db, userId).listUserWorkspaces();
   return workspaces.some((w) => w.id === workspaceId);
 };
 
-export const isWorkspaceFeatureEnabledForUser = async (userId: string): Promise<boolean> => {
-  const featureFlags = await getServerFeatureFlagsStateFromRuntimeConfig(userId);
-  return featureFlags.enableWorkspace === true;
-};
+/** Workspaces exist wherever business features are enabled. */
+export const isWorkspaceFeatureEnabled = (): boolean => ENABLE_BUSINESS_FEATURES;

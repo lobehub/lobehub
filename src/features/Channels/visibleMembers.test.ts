@@ -1,7 +1,7 @@
 import type { ChannelPublicMember } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { getVisibleStatusMembers } from './visibleMembers';
+import { getVisibleStatusMembers, groupMembersByActor } from './visibleMembers';
 
 const member = (
   id: string,
@@ -47,5 +47,21 @@ describe('Channel header member visibility', () => {
   it('handles an empty member list in either scope', () => {
     expect(getVisibleStatusMembers([], null)).toEqual([]);
     expect(getVisibleStatusMembers([], 'workspace-1')).toEqual([]);
+  });
+});
+
+describe('Member list grouping', () => {
+  it('puts people before Agents and keeps join order inside each group', () => {
+    const entries = [
+      member('agent-a', 'agent'),
+      member('alice', 'user'),
+      member('agent-b', 'agent'),
+      member('bob', 'user'),
+    ].map((m) => ({ member: m }));
+
+    const { agents, people } = groupMembersByActor(entries);
+
+    expect(people.map((entry) => entry.member.id)).toEqual(['alice', 'bob']);
+    expect(agents.map((entry) => entry.member.id)).toEqual(['agent-a', 'agent-b']);
   });
 });

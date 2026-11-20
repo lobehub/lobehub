@@ -1,20 +1,21 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Icon, Tabs, Tag } from '@lobehub/ui';
+import { Flexbox, Icon, Tabs, Tag } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ListChecks, MessagesSquare, Paperclip, Route } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 export type AcceptanceTabKey = 'checks' | 'discussion' | 'resources' | 'flow';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = stylex.create({
   // The square variant underlines its whole list; the band below already draws
   // the full-width rule, so the list's own line would sit on top of it.
-  list: css`
-    && {
-      box-shadow: none;
-    }
-  `,
-}));
+  list: {
+    boxShadow: 'none',
+  },
+});
+
+const listClassName = stylex.props(styles.list).className;
 
 interface AcceptanceTabsProps {
   active: AcceptanceTabKey;
@@ -69,7 +70,7 @@ const AcceptanceTabs = ({
   return (
     <Tabs
       activeKey={active}
-      classNames={{ list: styles.list }}
+      classNames={{ list: listClassName }}
       style={{ minWidth: 0, overflowX: 'auto' }}
       variant={'square'}
       items={tabs

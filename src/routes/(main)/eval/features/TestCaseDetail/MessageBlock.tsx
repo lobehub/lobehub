@@ -4,6 +4,8 @@ import { createStaticStyles, cssVar, Flexbox, Tag } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css }) => ({
   body: css`
     overflow-y: auto;
@@ -12,7 +14,7 @@ const styles = createStaticStyles(({ css }) => ({
        transcript out of view; the full text stays reachable inside. */
     max-height: 240px;
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: 10px;
 
     font-size: ${cssVar.fontSize};
@@ -26,7 +28,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     max-height: 120px;
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: 10px;
 
     font-size: ${cssVar.fontSizeSM};

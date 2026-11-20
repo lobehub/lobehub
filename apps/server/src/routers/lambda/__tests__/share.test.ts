@@ -222,8 +222,7 @@ describe('shareRouter', () => {
       ownerFullName: 'Owner Person',
       ownerUsername: 'owner',
       shareConfig: {
-        maxTopicsPerVisitor: 5,
-        maxTurnsPerTopic: 20,
+        maxMessagesPerVisitor: 100,
         slug: 'shared-agent',
         toolGrants: [{ apis: ['search'], identifier: 'lobe-web-browsing' }],
       },
@@ -337,8 +336,7 @@ describe('shareRouter', () => {
         terms: {
           allowCreatorViewSessions: false,
           maxFileStorage: 512 * 1024 * 1024,
-          maxTopicsPerVisitor: 5,
-          maxTurnsPerTopic: 20,
+          maxMessagesPerVisitor: 100,
         },
         // Identifier only: the granted API list is owner-facing configuration.
         toolGrants: ['lobe-web-browsing'],

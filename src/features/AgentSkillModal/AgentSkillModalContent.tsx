@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Center, Empty } from '@lobehub/ui';
+import { Alert, Button, Center, Empty, Flexbox } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { FileWarningIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -42,13 +42,24 @@ const AgentSkillModalContent = ({ agentDocumentId, agentId }: AgentSkillModalCon
     );
   }
 
-  return (
+  const viewer = (
     <SkillViewer
       content={skill.content}
       entityId={`agent-skill:${skill.index.documentId}`}
       files={NO_OTHER_FILES}
       filesPosition={'start'}
     />
+  );
+
+  if (!skill.frontmatterError) return viewer;
+
+  return (
+    <Flexbox flex={1} style={{ minHeight: 0 }}>
+      <Flexbox flex={'none'} padding={12}>
+        <Alert showIcon message={t('agentSkillModal.frontmatterInvalid')} type={'warning'} />
+      </Flexbox>
+      {viewer}
+    </Flexbox>
   );
 };
 

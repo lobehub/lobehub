@@ -12,6 +12,7 @@ import {
   MIN_BAR_PERCENT,
   NOW_TICK_INDEX,
   resolveRowLabel,
+  resolveTopicSpan,
 } from './layout';
 
 const start = new Date('2026-11-08T10:00:00Z');
@@ -36,6 +37,49 @@ const run = (
   userId: 'u',
   waitingSince: null,
   ...overrides,
+});
+
+describe('resolveTopicSpan', () => {
+  const placedRuns = (...runs: AgentRunBoardRun[]) =>
+    layoutLaneTopics(runs, start, end).rows[0].runs;
+
+  it('covers the idle gap from the first turn to the last', () => {
+    const span = resolveTopicSpan(
+      placedRuns(run('a', 6, 12, { topicId: 't' }), run('b', 30, 36, { topicId: 't' })),
+    );
+
+    expect(span.left).toBeCloseTo(9);
+    expect(span.width).toBeCloseTo(45);
+    expect(span.endsWaiting).toBe(false);
+  });
+
+  it('reaches the end of an earlier turn that outlasts the later ones', () => {
+    const span = resolveTopicSpan(
+      placedRuns(run('a', 0, 48, { topicId: 't' }), run('b', 6, 12, { topicId: 't' })),
+    );
+
+    expect(span.width).toBeCloseTo(72);
+  });
+
+  it('includes the minimum width of a very short last turn', () => {
+    const span = resolveTopicSpan(
+      placedRuns(run('a', 0, 6, { topicId: 't' }), run('b', 30, 30, { topicId: 't' })),
+    );
+
+    expect(span.width).toBeCloseTo(45 + MIN_BAR_PERCENT);
+  });
+
+  it('flags a topic whose last turn is waiting so the span covers the wait mark', () => {
+    const span = resolveTopicSpan(
+      placedRuns(
+        run('a', 0, 6, { topicId: 't' }),
+        run('b', 12, null, { status: 'needs_human', topicId: 't', waitingSince: at(18) }),
+      ),
+    );
+
+    expect(span.width).toBeCloseTo(27);
+    expect(span.endsWaiting).toBe(true);
+  });
 });
 
 describe('layoutLaneTopics', () => {

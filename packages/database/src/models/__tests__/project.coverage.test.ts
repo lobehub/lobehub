@@ -4,11 +4,13 @@ import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { deleteTestUsers } from '../../core/testCleanup';
 import { ProjectRepository } from '../../repositories/project';
 import { agents, projects, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
 import { ProjectModel } from '../project';
+import { ProjectIdentifierTakenError } from '../projectIdentifier';
 import { TaskModel } from '../task';
 import { createProxyTestDB } from './_proxyTestDB';
 
@@ -34,7 +36,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks();
   // Projects, agents, project members and tasks cascade with their owner.
-  await serverDB.delete(users).where(inArray(users.id, [userId, otherUserId]));
+  await deleteTestUsers(serverDB, [userId, otherUserId]);
 });
 
 describe('ProjectModel coverage', () => {
@@ -49,7 +51,7 @@ describe('ProjectModel coverage', () => {
         ),
       );
 
-      expect(await model.delete('t863-proj-race')).toBeNull();
+      expect(await repo.delete('t863-proj-race')).toBeNull();
     });
   });
 
@@ -144,6 +146,24 @@ describe('ProjectModel coverage', () => {
     });
   });
 
+  describe('hasAgent', () => {
+    it('counts the main agent and bound members of a readable project, nothing else', async () => {
+      const project = await repo.create({ name: 'Crew' });
+      await serverDB.insert(agents).values([
+        { id: 't863-proj-member', userId },
+        { id: 't863-proj-outsider', userId },
+      ]);
+      await model.addAgent(project.id, { agentId: 't863-proj-member' });
+      const stranger = new ProjectModel(serverDB, otherUserId);
+
+      expect(await model.hasAgent(project.id, project.coordinatorAgentId!)).toBe(true);
+      expect(await model.hasAgent(project.id, 't863-proj-member')).toBe(true);
+      expect(await model.hasAgent(project.id, 't863-proj-outsider')).toBe(false);
+      expect(await model.hasAgent('t863-proj-missing', 't863-proj-member')).toBe(false);
+      expect(await stranger.hasAgent(project.id, 't863-proj-member')).toBe(false);
+    });
+  });
+
   describe('listTasks', () => {
     it("lists a visible project's tasks", async () => {
       const project = await repo.create({ name: 'With tasks' });
@@ -176,7 +196,7 @@ describe('ProjectModel coverage', () => {
         name: 'Legacy project',
       });
 
-      await model.delete(project.id);
+      await repo.delete(project.id);
 
       expect(await serverDB.select().from(agents).where(eq(agents.id, legacy.id))).toEqual([]);
     });
@@ -189,7 +209,7 @@ describe('ProjectModel coverage', () => {
         name: 'Picked project',
       });
 
-      await model.delete(project.id);
+      await repo.delete(project.id);
 
       expect(await serverDB.select().from(agents).where(eq(agents.id, picked.id))).toHaveLength(1);
     });
@@ -209,6 +229,49 @@ describe('ProjectModel coverage', () => {
       ).resolves.toBe(true);
       // Without the exception the project still holds it.
       await expect(model.isDedicatedCoordinator(legacy.id)).resolves.toBe(false);
+    });
+  });
+
+  describe('identifier conflict translation', () => {
+    /** Minimal insert chain: `create` is the only caller under test here. */
+    const failingDB = (error: unknown) =>
+      ({
+        insert: () => ({
+          values: () => ({
+            returning: async () => {
+              throw error;
+            },
+          }),
+        }),
+      }) as unknown as LobeChatDatabase;
+
+    it('treats a blank identifier as free without querying', async () => {
+      await expect(model.isIdentifierTaken('   ')).resolves.toBe(false);
+    });
+
+    it('rethrows an identifier error raised inside the insert path', async () => {
+      const taken = new ProjectIdentifierTakenError('LOBE');
+
+      await expect(
+        new ProjectModel(failingDB(taken), userId).create({ identifier: 'LOBE', name: 'Taken' }),
+      ).rejects.toBe(taken);
+    });
+
+    it('translates a wrapped unique-index violation into the field error', async () => {
+      const driverError = Object.assign(new Error('insert into "projects" failed'), {
+        cause: {
+          code: '23505',
+          constraint: 'projects_identifier_key',
+          message: 'duplicate key value violates unique constraint',
+        },
+      });
+
+      await expect(
+        new ProjectModel(failingDB(driverError), userId).create({
+          identifier: ' lobe ',
+          name: 'Duplicate',
+        }),
+      ).rejects.toBeInstanceOf(ProjectIdentifierTakenError);
     });
   });
 });

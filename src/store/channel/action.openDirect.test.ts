@@ -5,7 +5,7 @@ import { channelActions } from './action';
 import { useChannelStore } from './store';
 
 vi.mock('@/services/channel', () => ({
-  channelService: { list: vi.fn(), markRead: vi.fn(), openDirect: vi.fn() },
+  channelService: { list: vi.fn(), markRead: vi.fn(), openDirect: vi.fn(), openShared: vi.fn() },
 }));
 
 const { channelService } = await import('@/services/channel');
@@ -56,6 +56,31 @@ describe('channelActions.openDirect', () => {
   });
 });
 
+describe('channelActions.openShared', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    channelActions.reset();
+    vi.mocked(channelService.list).mockResolvedValue([]);
+  });
+
+  // A listed direct Channel must not skip the server: it re-checks that the share is still live.
+  it('asks the server even when a direct Channel with the Agent is listed', async () => {
+    useChannelStore.setState({ listMap: { all: [direct({})] } });
+    vi.mocked(channelService.openShared).mockResolvedValue('chn_000000000001');
+
+    await expect(channelActions.openShared('nasa')).resolves.toBe('chn_000000000001');
+    expect(channelService.openShared).toHaveBeenCalledExactlyOnceWith({ share: 'nasa' });
+    expect(channelService.list).toHaveBeenCalled();
+  });
+
+  it('rejects when the share is paused or gone', async () => {
+    vi.mocked(channelService.openShared).mockRejectedValue(new Error('Agent not found'));
+
+    await expect(channelActions.openShared('nasa')).rejects.toThrow('Agent not found');
+    expect(channelService.list).not.toHaveBeenCalled();
+  });
+});
+
 describe('channelActions.markRead', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -73,6 +98,37 @@ describe('channelActions.markRead', () => {
 
     expect(useChannelStore.getState().listMap.all?.[0].unreadCount).toBe(0);
     expect(channelService.markRead).toHaveBeenCalledExactlyOnceWith('chn_000000000001', 5);
+  });
+
+  // The mention badge reappeared after switching away, until the next list poll.
+  it('clears the listed mention count when the read reaches the known sequence', async () => {
+    useChannelStore.setState({
+      listMap: {
+        all: [direct({ mentionCount: 3, sequence: 5, unreadCount: 3 } as Partial<ChannelListItem>)],
+      },
+    });
+    vi.mocked(channelService.markRead).mockResolvedValue(5 as never);
+
+    await channelActions.markRead('chn_000000000001', 5);
+
+    expect(useChannelStore.getState().listMap.all?.[0].mentionCount).toBe(0);
+  });
+
+  // A partial read leaves later mentions unread; the cache cannot split the count.
+  it('keeps the mention count for a partial read', async () => {
+    useChannelStore.setState({
+      listMap: {
+        all: [direct({ mentionCount: 2, sequence: 9, unreadCount: 4 } as Partial<ChannelListItem>)],
+      },
+    });
+    vi.mocked(channelService.markRead).mockResolvedValue(5 as never);
+
+    await channelActions.markRead('chn_000000000001', 5);
+
+    expect(useChannelStore.getState().listMap.all?.[0]).toMatchObject({
+      mentionCount: 2,
+      unreadCount: 4,
+    });
   });
 
   it('restores the count when the write fails', async () => {

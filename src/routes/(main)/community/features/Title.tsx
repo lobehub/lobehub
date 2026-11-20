@@ -9,12 +9,13 @@ import { type ReactNode } from 'react';
 import { memo } from 'react';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   more: { display: 'flex', alignItems: 'center', color: cssVar.colorTextSecondary },
   title: { marginBlock: '0.2em', fontWeight: 'bold', lineHeight: 1.5 },
   title2: { fontSize: '18px' },
-  title3: { fontSize: '16px' },
+  title3: { fontSize: densityTokens['--lobe-density-page-title-font-size'] },
 });
 
 export interface TitleProps extends FlexboxProps {

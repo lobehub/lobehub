@@ -50,6 +50,28 @@ export const isOperationTokenRefusal = (error: unknown): boolean =>
   error.data?.code === 'UNAUTHORIZED' &&
   error.message === OPERATION_TOKEN_REFUSAL;
 
+/** A library destination cannot be filed as run-scoped evidence. The refusal
+ * happens before createFile writes, so it can use the same one-shot, same-owner
+ * fallback as a user-scoped endpoint. Never retry a general permission denial.
+ */
+const isLibraryUploadRefusal = (op: Operation, error: unknown): boolean => {
+  if (
+    op.path !== 'file.createFile' ||
+    !isTRPCClientError(error) ||
+    error.data?.code !== 'FORBIDDEN' ||
+    ![
+      "This run's token can only upload acceptance evidence",
+      "This run's token can only upload acceptance evidence or tool-result images",
+    ].includes(error.message)
+  )
+    return false;
+
+  const input = op.input as { knowledgeBaseId?: unknown; parentId?: unknown } | undefined;
+  return [input?.knowledgeBaseId, input?.parentId].some(
+    (id) => typeof id === 'string' && id.length > 0,
+  );
+};
+
 /**
  * The stored login, when it is usable and belongs to the operation token's own
  * account.
@@ -87,7 +109,10 @@ export const operationTokenFallbackLink =
       let subscription = next(op).subscribe({
         complete: () => observer.complete(),
         error: (error) => {
-          if (op.context[STORED_LOGIN] || !isOperationTokenRefusal(error)) {
+          if (
+            op.context[STORED_LOGIN] ||
+            (!isOperationTokenRefusal(error) && !isLibraryUploadRefusal(op, error))
+          ) {
             observer.error(error);
             return;
           }

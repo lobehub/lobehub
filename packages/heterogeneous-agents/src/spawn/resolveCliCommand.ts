@@ -67,7 +67,7 @@ interface RecoveredProbeEnvironment {
   resolvedPathEnv: string;
 }
 
-const VERSION_PATTERN = /v?(\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?)/;
+const VERSION_PATTERN = /v?(\d+\.\d+\.\d+(?:-[\dA-Za-z.-]+)?(?:\+[\dA-Za-z.-]+)?)/;
 
 const extractVersion = (versionBanner: string): string | undefined =>
   versionBanner.match(VERSION_PATTERN)?.[1];
@@ -305,6 +305,28 @@ const mergePathValues = (...values: Array<string | undefined>): string | undefin
     });
 
   return segments.length > 0 ? segments.join(path.delimiter) : undefined;
+};
+
+/**
+ * The PATH a child spawned by this process should search: the login shell's
+ * PATH (the Windows registry's on Windows) merged ahead of the inherited one.
+ *
+ * Use when: a long-lived host started by a service manager (launchd, systemd)
+ * spawns user tools — `npx`, `uvx`, nvm-installed binaries — that only the
+ * user's login shell puts on PATH.
+ * Returns: the inherited PATH when nothing could be recovered; never throws.
+ */
+export const resolveUserSpawnPath = async (
+  currentPath: string | undefined = process.env.PATH,
+): Promise<string | undefined> => {
+  try {
+    const recovered = isWindows()
+      ? await getWindowsRegistryPath()
+      : await getCurrentLoginShellPath();
+    return mergePathValues(recovered, currentPath) ?? currentPath;
+  } catch {
+    return currentPath;
+  }
 };
 
 const recoverProbeEnvironment = async (
@@ -665,6 +687,11 @@ export const detectValidatedCommand = async (
 ): Promise<CliCommandStatus> => detectValidatedCommandCandidates([command], options, probeEnv);
 
 const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
+  'antigravity': {
+    validateHelpKeywords: ['--input-format', '--output-format', '--conversation', 'stream-json'],
+    validatePattern:
+      /^(?:(?:agy|antigravity(?: cli)?) (?:version )?)?v?\d+\.\d+\.\d+(?:-[\dA-Z.-]+)?(?:\+[\dA-Z.-]+)?$/i,
+  },
   'amp': {
     validateFlag: '--help',
     validateKeywords: ['Amp CLI'],
@@ -709,9 +736,9 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
     validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
   },
   'opencode': {
-    // OpenCode prints only a bare version (for example `1.18.3`) for
-    // `--version`, without a product-name prefix.
-    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+    // OpenCode 1.x prints a bare version (`1.18.3`); 2.x prefixes the product
+    // name (`opencode v2.2.6`).
+    validatePattern: /^(?:opencode\s+)?v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/i,
   },
   'pi': {
     // Pi prints a bare semantic version for `--version`.
@@ -745,6 +772,14 @@ export const DEFAULT_HETERO_COMMAND = Object.fromEntries(
 // desktop app bundles a functional CLI inside its app bundle without symlinking it.
 const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[] => {
   switch (agentType) {
+    case 'antigravity': {
+      if (platform() === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA;
+        return localAppData ? [path.win32.join(localAppData, 'agy', 'bin', 'agy.exe')] : [];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+      return [path.join(homedir(), '.local', 'bin', 'agy')];
+    }
     case 'amp': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];
 

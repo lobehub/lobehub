@@ -127,16 +127,11 @@ describe('EditorRuntime', () => {
       expect(result.markdown).toBeUndefined();
     });
 
-    it('should return both formats by default', async () => {
+    it('should return both formats and metadata', async () => {
       const result = await runtime.getPageContent({ format: 'both' });
 
       expect(result.markdown).toBeDefined();
       expect(result.xml).toBeDefined();
-    });
-
-    it('should include metadata', async () => {
-      const result = await runtime.getPageContent({ format: 'both' });
-
       expect(result.title).toBe('Test Title');
       expect(result.charCount).toBeGreaterThan(0);
       expect(result.lineCount).toBeGreaterThan(0);

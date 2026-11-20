@@ -3,9 +3,20 @@
  */
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import Nav from './Nav';
+import Nav from './index';
+
+vi.mock('./Agent', () => ({ default: () => null }));
+vi.mock('@/features/NavPanel/backOrigin', () => ({ useBackButtonProps: () => ({}) }));
+vi.mock('@/features/NavPanel/SideBarHeaderLayout', () => ({
+  default: ({ left, right }: { left: ReactNode; right?: ReactNode }) => (
+    <header>
+      {left}
+      {right}
+    </header>
+  ),
+}));
 
 const mutateMock = vi.hoisted(() => vi.fn());
 const openNewTopicOrSaveTopicMock = vi.hoisted(() => vi.fn());
@@ -104,14 +115,19 @@ vi.mock('@/store/global', () => ({
 }));
 
 interface ServerConfigTestState {
-  featureFlags: { isAgentEditable: boolean };
+  featureFlags: { isAgentEditable: boolean | undefined };
   serverConfigInit: boolean;
 }
+
+const serverConfigMock = vi.hoisted((): ServerConfigTestState => ({
+  featureFlags: { isAgentEditable: true },
+  serverConfigInit: true,
+}));
 
 vi.mock('@/store/serverConfig', () => ({
   featureFlagsSelectors: (state: ServerConfigTestState) => state.featureFlags,
   useServerConfigStore: (selector: (state: ServerConfigTestState) => unknown) =>
-    selector({ featureFlags: { isAgentEditable: true }, serverConfigInit: true }),
+    selector(serverConfigMock),
 }));
 
 vi.mock('@/store/user', () => ({
@@ -120,6 +136,7 @@ vi.mock('@/store/user', () => ({
 }));
 
 vi.mock('@/store/user/selectors', () => ({
+  userGeneralSettingsSelectors: { interfaceDensity: () => 'loose' },
   labPreferSelectors: {
     enableSelfLearning: (state: { preference: { lab?: { enableSelfLearning?: boolean } } }) =>
       state.preference.lab?.enableSelfLearning ?? false,
@@ -129,6 +146,10 @@ vi.mock('@/store/user/selectors', () => ({
 }));
 
 describe('Agent sidebar header nav', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   beforeEach(() => {
     mutateMock.mockReset();
     openNewTopicOrSaveTopicMock.mockReset();
@@ -137,6 +158,7 @@ describe('Agent sidebar header nav', () => {
     toggleCommandMenuMock.mockReset();
     useParamsMock.mockReset();
     usePathnameMock.mockReset();
+    serverConfigMock.featureFlags.isAgentEditable = true;
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
     labMock.enableSelfLearning = true;
@@ -199,7 +221,8 @@ describe('Agent sidebar header nav', () => {
     ['/agent/agt_eH4zL98zBx5u/channel'],
     ['/agent/agt_eH4zL98zBx5u/channel/slack'],
     ['/agent/agt_eH4zL98zBx5u/statistics'],
-  ])('keeps the profile entry active on %s', (pathname) => {
+  ])('keeps the mobile profile entry active on %s', (pathname) => {
+    vi.stubGlobal('__MOBILE__', true);
     usePathnameMock.mockReturnValue(pathname);
 
     render(<Nav />);
@@ -208,6 +231,34 @@ describe('Agent sidebar header nav', () => {
       'data-active',
       'true',
     );
+  });
+
+  it('opens the agent profile from the desktop header settings button', () => {
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+    const settingsButton = screen.getByRole('button', { name: 'tab.profile' });
+    expect(screen.getByRole('banner')).toContainElement(settingsButton);
+    fireEvent.click(settingsButton);
+
+    expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
+    expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/profile');
+  });
+
+  it.each([
+    [false, false],
+    [false, undefined],
+    [true, false],
+    [true, undefined],
+  ])('hides profile when mobile=%s and isAgentEditable=%s', (mobile, isAgentEditable) => {
+    vi.stubGlobal('__MOBILE__', mobile);
+    serverConfigMock.featureFlags.isAgentEditable = isAgentEditable;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.queryByRole('button', { name: 'tab.profile' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'title' })).toBeInTheDocument();
   });
 
   it('navigates to the agent goals page', () => {
@@ -244,44 +295,80 @@ describe('Agent sidebar header nav', () => {
     },
   );
 
-  it('navigates to the agent self-learning page', () => {
+  it('moves self-evolving into the profile group for members who can open it', () => {
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
     render(<Nav />);
+
+    expect(screen.queryByRole('button', { name: 'title' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'tab.profile' })).toBeInTheDocument();
+  });
+
+  it('keeps self-evolving reachable when the profile entry is hidden', () => {
+    permissionMock.edit_own_content = false;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+    expect(screen.queryByRole('button', { name: 'tab.profile' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'title' }));
 
     expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
     expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/self-evolving');
   });
 
-  // The surface is opt-in WIP, so the entry must disappear with the Labs toggle
-  // rather than lead everyone to a page whose data pipeline isn't running yet.
-  it('hides the self-learning entry when the labs toggle is off', () => {
-    labMock.enableSelfLearning = false;
-    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+  describe('on mobile, where the profile Segmented has no room for it', () => {
+    beforeEach(() => {
+      vi.stubGlobal('__MOBILE__', true);
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
 
-    render(<Nav />);
+    it('lights only the self-evolving entry on its own route', () => {
+      usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u/self-evolving/dom_1');
 
-    expect(screen.queryByRole('button', { name: 'title' })).toBeNull();
+      render(<Nav />);
+
+      expect(screen.getByRole('button', { name: 'title' })).toHaveAttribute('data-active', 'true');
+      expect(screen.getByRole('button', { name: 'tab.profile' })).toHaveAttribute(
+        'data-active',
+        'false',
+      );
+    });
+
+    // The surface is opt-in WIP, so the entry must disappear with the Labs toggle
+    // rather than lead everyone to a page whose data pipeline isn't running yet.
+    it('hides the entry when the labs toggle is off', () => {
+      labMock.enableSelfLearning = false;
+      usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+      render(<Nav />);
+
+      expect(screen.queryByRole('button', { name: 'title' })).toBeNull();
+    });
   });
 
-  it('keeps the self-learning entry active on its own route', () => {
-    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u/self-evolving');
-
-    render(<Nav />);
-
-    expect(screen.getByRole('button', { name: 'title' })).toHaveAttribute('data-active', 'true');
-  });
-
-  it('places topics above profile, goals, self-learning, and tasks in the agent navigation', () => {
+  it('places goals above tasks, with profile settings in the header', () => {
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
     render(<Nav />);
 
     const labels = screen.getAllByRole('button').map((button) => button.textContent);
-    expect(labels.indexOf('management.sidebarEntry')).toBeLessThan(labels.indexOf('tab.profile'));
-    expect(labels.indexOf('tab.profile')).toBeLessThan(labels.indexOf('goalList.title'));
+    expect(labels).not.toContain('tab.profile');
+    expect(screen.getByRole('banner')).toContainElement(
+      screen.getByRole('button', { name: 'tab.profile' }),
+    );
     expect(labels.indexOf('goalList.title')).toBeLessThan(labels.indexOf('tab.tasks'));
+  });
+
+  // The full topic page is reached from the Topics section header arrow, not a
+  // nav entry that duplicated the section right below it.
+  it('has no Topics nav entry', () => {
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u/topics');
+
+    render(<Nav />);
+
+    expect(screen.queryByRole('button', { name: 'management.sidebarEntry' })).toBeNull();
   });
 
   // r1018 issue 7: in a workspace, `useResourceAccess` reports the edit check as

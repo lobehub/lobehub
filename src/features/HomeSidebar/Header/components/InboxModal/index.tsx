@@ -30,24 +30,26 @@ import {
   MoreHorizontalIcon,
   SparklesIcon,
   TagIcon,
+  XIcon,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { PENDING_TRANSFERS_SWR_KEY } from '@/features/ResourceTransferRequest';
+import { NavPanelDensityContext } from '@/features/NavPanel/density';
 import dynamic from '@/libs/next/dynamic';
-import { mutate, useClientDataSWR } from '@/libs/swr';
+import { mutate } from '@/libs/swr';
 import { inboxKeys } from '@/libs/swr/keys';
-import { notificationService } from '@/services/notification';
-import type { PendingTransferRequest } from '@/services/resourceTransferRequest';
-import { resourceTransferRequestService } from '@/services/resourceTransferRequest';
+import { useHomeStore } from '@/store/home';
+import { homeNotificationSelectors } from '@/store/home/selectors';
+import type { InboxNavigationCount } from '@/store/home/slices/notification/projection';
+import { useHeaderActionSize, useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
-import type { NotificationListHandle } from './useNotificationList';
+import { useNavigationCounts } from './useNavigationCounts';
 
 const Content = dynamic(() => import('./Content'), {
   loading: () => (
@@ -69,12 +71,18 @@ const styles = stylex.create({
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorFillSecondary,
   },
-  headerMain: { minWidth: '0', paddingBlock: '12px', paddingInline: '16px' },
+  headerMain: {
+    minWidth: '0',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
+  },
+  // Small tabs/actions are 28px tall, so 6px block padding lands on the 40px compact header.
+  headerMainCompact: { paddingBlock: '6px' },
   headerTitle: {
     flex: 'none',
     boxSizing: 'border-box',
     width: 'clamp(160px, 22vw, 220px)',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     whiteSpace: 'nowrap',
   },
   main: { overflow: 'hidden', minWidth: '0' },
@@ -91,12 +99,7 @@ const styles = stylex.create({
   },
 });
 
-interface CategoryCount {
-  category: string;
-  readCount: number;
-  totalCount: number;
-  unreadCount: number;
-}
+type CategoryCount = InboxNavigationCount;
 
 type ReadStatus = 'all' | 'read' | 'unread';
 
@@ -130,37 +133,31 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
 };
 
 const InboxModalContent = memo(() => {
+  const headerActionSize = useHeaderActionSize(true);
+  const interfaceDensity = useInterfaceDensity();
+  const compact = interfaceDensity === 'compact';
   const { i18n, t } = useTranslation('notification');
   const workspaceId = useActiveWorkspaceId();
   const [navigationFilter, setNavigationFilter] = useState(ALL_FILTER);
   const [readStatus, setReadStatus] = useState<ReadStatus>('unread');
   const [bulkAction, setBulkAction] = useState<'archive' | 'read'>();
-  const listHandleRef = useRef<NotificationListHandle>(null);
-  const registerListHandle = useCallback((handle: NotificationListHandle) => {
-    listHandleRef.current = handle;
-  }, []);
   // `undefined` = the combined "all" view (no read-state filter).
   const isRead = readStatus === 'all' ? undefined : readStatus === 'read';
 
   const {
-    data: navigationCounts,
+    counts: navigationCounts,
     error: navigationCountsError,
+    isConfirmed: isNavigationCountsConfirmed,
     isLoading: isNavigationCountsLoading,
     isValidating: isNavigationCountsValidating,
-    mutate: refreshNavigationCounts,
-  } = useClientDataSWR<CategoryCount[]>(
-    inboxKeys.navigationCounts(workspaceId),
-    () => notificationService.getNavigationCounts(),
-    { revalidateOnFocus: false },
-  );
+    retry: refreshNavigationCounts,
+  } = useNavigationCounts();
 
-  // Same key Content uses, so this reads the shared cache entry. The server
+  // The same replica Content reads (one request serves both). The server
   // folds one totalCount unit per live card into `pending`, and archive-all
   // cannot touch live cards — subtracting them yields the archivable rows.
-  const { data: liveTransfers } = useClientDataSWR<PendingTransferRequest[]>(
-    workspaceId ? [PENDING_TRANSFERS_SWR_KEY, workspaceId] : null,
-    () => resourceTransferRequestService.listMine(),
-  );
+  useHomeStore((s) => s.useFetchPendingTransferRequests)(!!workspaceId);
+  const liveTransfers = useHomeStore(homeNotificationSelectors.pendingTransferRequests);
   const liveTransferCount = liveTransfers?.length ?? 0;
 
   const categoryCounts = navigationCounts ?? [];
@@ -191,34 +188,29 @@ const InboxModalContent = memo(() => {
   const category = navigationFilter === ALL_FILTER ? undefined : navigationFilter;
 
   useEffect(() => {
+    // Only a server answer may drop a category: a restored snapshot can be stale.
     if (
       category &&
-      !isNavigationCountsLoading &&
-      !navigationCountsError &&
+      isNavigationCountsConfirmed &&
       !visibleCategorySignature.split('\0').includes(category)
     ) {
       setNavigationFilter(ALL_FILTER);
     }
-  }, [category, isNavigationCountsLoading, navigationCountsError, visibleCategorySignature]);
+  }, [category, isNavigationCountsConfirmed, visibleCategorySignature]);
 
   const refreshInbox = useCallback(() => {
-    // The notification list lives in a useSWRInfinite hook whose `$inf$` cache
-    // key is skipped by SWR's filter-form mutate, so refresh it through the
-    // bound handle Content registers instead. This is also the rollback path
-    // for optimistic updates: on failure a revalidation restores server state.
-    listHandleRef.current?.refresh();
+    // Re-reads every mounted inbox view and the counts; a rejected write has
+    // already rolled its optimistic change back, so this only reconciles.
+    void useHomeStore.getState().refreshInboxNotifications();
     void mutate(inboxKeys.unreadCount(workspaceId));
-    void mutate(inboxKeys.navigationCounts(workspaceId));
   }, [workspaceId]);
 
   const handleMarkAsRead = useCallback(
     async (id: string) => {
-      // A row read in the unread view leaves the list; in the All view it
-      // STAYS (as combined history), so removing it there would drop it from
-      // the cache until a later refresh — let the revalidation flip its state.
-      if (readStatus !== 'all') listHandleRef.current?.optimisticRemove(id);
+      // The row flips to read: the unread view drops it, the All view keeps
+      // it (as combined history) in its read state.
       try {
-        await notificationService.markAsRead([id]);
+        await useHomeStore.getState().markInboxNotificationRead(id, { category, isRead });
         refreshInbox();
       } catch (error) {
         console.error('Failed to mark notification as read:', error);
@@ -226,14 +218,13 @@ const InboxModalContent = memo(() => {
         refreshInbox();
       }
     },
-    [readStatus, refreshInbox, t],
+    [category, isRead, refreshInbox, t],
   );
 
   const handleArchive = useCallback(
     async (id: string) => {
-      listHandleRef.current?.optimisticRemove(id);
       try {
-        await notificationService.archive(id);
+        await useHomeStore.getState().archiveInboxNotification(id, { category, isRead });
         refreshInbox();
       } catch (error) {
         console.error('Failed to archive notification:', error);
@@ -241,25 +232,16 @@ const InboxModalContent = memo(() => {
         refreshInbox();
       }
     },
-    [refreshInbox, t],
+    [category, isRead, refreshInbox, t],
   );
 
   const handleMarkAllAsRead = useCallback(async () => {
     setBulkAction('read');
-    // Rows only leave the unread view when read; in the all view they stay
-    // (as read rows), so there the post-action refresh updates them in place.
-    if (readStatus === 'unread') listHandleRef.current?.optimisticClear();
-    // Pending is action-driven, not read-driven: its badge counts live
-    // requests that mark-all-as-read cannot (and must not) resolve. Zeroing
-    // it optimistically would flash the count away only to bounce back on the
-    // refresh — reading as a broken button — so it stays untouched.
-    void refreshNavigationCounts(
-      (counts) =>
-        counts?.map((item) => (item.category === 'pending' ? item : { ...item, unreadCount: 0 })),
-      { revalidate: false },
-    );
+    // Rows leave the unread view and stay (as read rows) in the all view.
+    // Pending's badge is left alone: it counts live requests that
+    // mark-all-as-read cannot (and must not) resolve.
     try {
-      await notificationService.markAllAsRead();
+      await useHomeStore.getState().markAllInboxNotificationsRead({ category, isRead });
       refreshInbox();
     } catch (error) {
       console.error('Failed to mark all notifications as read:', error);
@@ -268,13 +250,12 @@ const InboxModalContent = memo(() => {
     } finally {
       setBulkAction(undefined);
     }
-  }, [readStatus, refreshInbox, refreshNavigationCounts, t]);
+  }, [category, isRead, refreshInbox, t]);
 
   const handleArchiveAll = useCallback(async () => {
     setBulkAction('archive');
-    listHandleRef.current?.optimisticClear();
     try {
-      await notificationService.archiveAll();
+      await useHomeStore.getState().archiveAllInboxNotifications({ category, isRead });
       refreshInbox();
     } catch (error) {
       console.error('Failed to archive all notifications:', error);
@@ -283,7 +264,7 @@ const InboxModalContent = memo(() => {
     } finally {
       setBulkAction(undefined);
     }
-  }, [refreshInbox, t]);
+  }, [category, isRead, refreshInbox, t]);
 
   const countForStatus = (item: CategoryCount) => {
     if (readStatus === 'all') return item.totalCount;
@@ -311,7 +292,7 @@ const InboxModalContent = memo(() => {
         <Flexbox
           horizontal
           align="center"
-          className={stylex.props(styles.headerMain).className}
+          className={stylex.props(styles.headerMain, compact && styles.headerMainCompact).className}
           flex={1}
           justify="space-between"
         >
@@ -363,76 +344,84 @@ const InboxModalContent = memo(() => {
               <ActionIcon
                 icon={MoreHorizontalIcon}
                 loading={bulkAction === 'archive'}
-                size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                size={headerActionSize}
                 title={t('more', { ns: 'common' })}
               />
             </DropdownMenu>
-            <ModalClose style={{ position: 'static' }} />
+            <ModalClose
+              render={<ActionIcon icon={XIcon} size={headerActionSize} />}
+              style={{ position: 'static' }}
+            />
           </Flexbox>
         </Flexbox>
       </ModalHeader>
       <Flexbox horizontal className={stylex.props(styles.body).className} flex={1}>
-        <Flexbox className={stylex.props(styles.sidebar).className} gap={4}>
-          <NavItem
-            active={navigationFilter === ALL_FILTER}
-            icon={BellIcon}
-            title={t('inbox.all')}
-            extra={
-              allCount > 0 ? (
-                <Text style={{ marginInlineEnd: 6 }} type="secondary">
-                  {allCount}
-                </Text>
-              ) : undefined
-            }
-            onClick={() => setNavigationFilter(ALL_FILTER)}
-          />
-          <Flexbox className={stylex.props(styles.categoryList).className} gap={4}>
-            {isNavigationCountsLoading ? (
-              <SkeletonList rows={4} />
-            ) : (
-              <>
-                {navigationCountsError && (
-                  <AsyncError
-                    error={navigationCountsError}
-                    retrying={isNavigationCountsValidating}
-                    variant="inline"
-                    onRetry={() => void refreshNavigationCounts()}
-                  />
-                )}
-                {visibleCategoryCounts.map((item) => {
-                  const count = countForStatus(item);
-
-                  return (
-                    <NavItem
-                      active={navigationFilter === item.category}
-                      icon={CATEGORY_ICONS[item.category] ?? TagIcon}
-                      key={item.category}
-                      title={categoryLabel(item.category)}
-                      extra={
-                        !navigationCountsError && count > 0 ? (
-                          <Text style={{ marginInlineEnd: 6 }} type="secondary">
-                            {count}
-                          </Text>
-                        ) : undefined
-                      }
-                      onClick={() => setNavigationFilter(item.category)}
+        <NavPanelDensityContext value={interfaceDensity}>
+          <Flexbox className={stylex.props(styles.sidebar).className} gap={4}>
+            <NavItem
+              active={navigationFilter === ALL_FILTER}
+              icon={BellIcon}
+              title={t('inbox.all')}
+              extra={
+                allCount > 0 ? (
+                  <Text style={{ marginInlineEnd: 6 }} type="secondary">
+                    {allCount}
+                  </Text>
+                ) : undefined
+              }
+              onClick={() => setNavigationFilter(ALL_FILTER)}
+            />
+            <Flexbox className={stylex.props(styles.categoryList).className} gap={4}>
+              {isNavigationCountsLoading ? (
+                <SkeletonList rows={4} />
+              ) : (
+                <>
+                  {navigationCountsError && (
+                    <AsyncError
+                      error={navigationCountsError}
+                      retrying={isNavigationCountsValidating}
+                      variant="inline"
+                      onRetry={() => void refreshNavigationCounts()}
                     />
-                  );
-                })}
-              </>
-            )}
+                  )}
+                  {visibleCategoryCounts.map((item) => {
+                    const count = countForStatus(item);
+
+                    return (
+                      <NavItem
+                        active={navigationFilter === item.category}
+                        icon={CATEGORY_ICONS[item.category] ?? TagIcon}
+                        key={item.category}
+                        title={categoryLabel(item.category)}
+                        extra={
+                          count > 0 ? (
+                            <Text style={{ marginInlineEnd: 6 }} type="secondary">
+                              {count}
+                            </Text>
+                          ) : undefined
+                        }
+                        onClick={() => setNavigationFilter(item.category)}
+                      />
+                    );
+                  })}
+                </>
+              )}
+            </Flexbox>
           </Flexbox>
-        </Flexbox>
+        </NavPanelDensityContext>
         <Flexbox className={stylex.props(styles.main).className} flex={1}>
           <Flexbox flex={1} style={{ minHeight: 0 }}>
-            <Content
-              category={category}
-              isRead={isRead}
-              registerHandle={registerListHandle}
-              onArchive={handleArchive}
-              onMarkAsRead={handleMarkAsRead}
-              onRefreshInbox={refreshInbox}
-            />
+            {/* Compact only: loose skeletons keep their context-free metrics. The dynamic
+                loading fallback renders inside this provider, so it follows density too. */}
+            <NavPanelDensityContext value={compact ? interfaceDensity : undefined}>
+              <Content
+                category={category}
+                isRead={isRead}
+                onArchive={handleArchive}
+                onMarkAsRead={handleMarkAsRead}
+                onRefreshInbox={refreshInbox}
+              />
+            </NavPanelDensityContext>
           </Flexbox>
         </Flexbox>
       </Flexbox>

@@ -29,6 +29,8 @@ const activeTaskStatus = (s: TaskStoreState) => activeTaskDetail(s)?.status;
 
 const activeTaskPriority = (s: TaskStoreState) => activeTaskDetail(s)?.priority ?? 0;
 
+const activeTaskProjectId = (s: TaskStoreState) => activeTaskDetail(s)?.projectId ?? null;
+
 const EMPTY_LABELS: NonNullable<TaskDetailData['labels']> = [];
 const activeTaskLabels = (s: TaskStoreState) => activeTaskDetail(s)?.labels ?? EMPTY_LABELS;
 
@@ -99,6 +101,13 @@ const activeTaskRuntimeConfig =
   };
 
 const activeTaskSubtasks = (s: TaskStoreState) => activeTaskDetail(s)?.subtasks ?? [];
+
+type SubtaskNode = NonNullable<TaskDetailData['subtasks']>[number];
+const countSubtasks = (nodes: SubtaskNode[] = []): number =>
+  nodes.reduce((total, node) => total + 1 + countSubtasks(node.children), 0);
+
+/** Subtasks of the active task at every depth that the caller can see. */
+const activeTaskSubtaskCount = (s: TaskStoreState) => countSubtasks(activeTaskDetail(s)?.subtasks);
 
 const activeTaskDependencies = (s: TaskStoreState) => activeTaskDetail(s)?.dependencies ?? [];
 
@@ -201,12 +210,14 @@ export const taskDetailSelectors = {
   activeTaskParent,
   activeTaskPeriodicInterval,
   activeTaskPriority,
+  activeTaskProjectId,
   activeTaskProvider,
   activeTaskRuntimeConfig,
   activeTaskScheduleMaxExecutions,
   activeTaskSchedulePattern,
   activeTaskScheduleTimezone,
   activeTaskStatus,
+  activeTaskSubtaskCount,
   activeTaskSubtasks,
   activeTaskTopicCount,
   activeTaskVerifyConfig,

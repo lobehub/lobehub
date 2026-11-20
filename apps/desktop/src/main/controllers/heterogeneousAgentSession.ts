@@ -8,6 +8,7 @@ import { buildHeterogeneousPrompt } from '@lobechat/heterogeneous-agents/protoco
 import type { PiRpcSession } from '@lobechat/heterogeneous-agents/rpc';
 import type {
   ClaudeAgentSdkSession,
+  ClaudeCodeLiveInput,
   CodexThreadSession,
   DshAcpSessionHandle,
 } from '@lobechat/heterogeneous-agents/spawn';
@@ -38,6 +39,7 @@ import {
 } from '@lobechat/heterogeneous-agents/spawn';
 import type {
   HeterogeneousServerDefaultApiConfig,
+  HeteroPermissionMode,
   HeteroSessionImportMessage,
 } from '@lobechat/types';
 import { app as electronApp } from 'electron';
@@ -67,6 +69,12 @@ export interface SendPromptParams {
    * reach the renderer they must already carry the operation they belong to.
    */
   operationId: string;
+  /**
+   * (Claude Code, Better Coding Experience lab) Permission mode the run starts
+   * in; Claude Code then asks before acting as the mode requires and each
+   * request raises a card. Absent: every action is allowed, as before the lab.
+   */
+  permissionMode?: HeteroPermissionMode;
   prompt: string;
   /**
    * Do not spawn the CLI. Instead, read the last turn of the session's on-disk
@@ -142,6 +150,8 @@ export interface AgentSession {
   env?: Record<string, string>;
   grokAcpSession?: GrokAcpSession;
   hostedProviderBinding?: HostedProviderBinding;
+  /** Open input of a Claude Code CLI run (kept open for every run, like `lh hetero exec`). */
+  liveInput?: ClaudeCodeLiveInput;
   model?: string;
   modelSource?: string;
   modelVerificationLastAttemptAt?: number;
@@ -817,3 +827,38 @@ export const sendPromptWithAcpSession = async (
     });
   }
 };
+
+export interface CancelSessionParams {
+  sessionId: string;
+}
+
+export interface SubmitInterventionParams {
+  cancelled?: boolean;
+  /** When set, signals user-cancelled or timeout — the bridge resolves with isError. */
+  cancelReason?: 'timeout' | 'user_cancelled';
+  /** Operation id stamped on the request the renderer is responding to. */
+  operationId: string;
+  /** Structured user answer; ignored when `cancelled` is true. */
+  result?: unknown;
+  /** Correlation key carried on the original `agent_intervention_request`. */
+  toolCallId: string;
+}
+
+export interface StopSessionParams {
+  sessionId: string;
+}
+
+export interface GetSessionInfoParams {
+  sessionId: string;
+}
+
+export interface SetPermissionModeParams {
+  mode: HeteroPermissionMode;
+  sessionId: string;
+}
+
+export interface StopBackgroundTaskParams {
+  sessionId: string;
+  /** Claude Code `task_id` of the background task to stop. */
+  taskId: string;
+}

@@ -1,211 +1,286 @@
-import {
-  discoverAuthorizationServerMetadata,
-  IssuerMismatchError,
-} from '@modelcontextprotocol/client';
+import { OAuthError, OAuthErrorCode } from '@modelcontextprotocol/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type * as OauthModule from './oauth';
-import { refreshConnectorToken } from './oauth';
-import { refreshExpiredConnectorTokens } from './tokens';
+import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
+import type { DecryptedConnectorLink, OAuthCredentials } from '@/database/models/connectorLink';
+import { LEGACY_LINK_ID } from '@/database/models/connectorLink';
 
-vi.mock('@modelcontextprotocol/client', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  discoverAuthorizationServerMetadata: vi.fn(),
-}));
-vi.mock('./oauth', async (importOriginal) => ({
-  ...(await importOriginal<typeof OauthModule>()),
+import { discoverConnectorAuthorizationServerMetadata, refreshConnectorToken } from './oauth';
+import {
+  ensureFreshConnectorToken,
+  ensureFreshLinkToken,
+  refreshExpiredConnectorTokens,
+  refreshExpiredLinkTokens,
+} from './tokens';
+
+vi.mock('./oauth', () => ({
+  discoverConnectorAuthorizationServerMetadata: vi.fn(),
   refreshConnectorToken: vi.fn(),
+  toClientInformation: vi.fn(),
 }));
 
 const NOW = 1_800_000_000_000;
+const expired: OAuthCredentials = {
+  accessToken: 'expired',
+  expiresAt: NOW - 1000,
+  refreshToken: 'previous',
+  type: 'oauth2',
+};
+const rotated = {
+  tokens: { access_token: 'fresh', expires_in: 3600, refresh_token: 'next', token_type: 'Bearer' },
+};
 
-const oauthConnector = (id: string, expiresAt: number) =>
-  ({
-    credentials: { accessToken: `old-${id}`, expiresAt, refreshToken: 'refresh', type: 'oauth2' },
-    id,
-    identifier: id,
+function store(kind: 'link' | 'legacy' = 'legacy') {
+  let row = {
+    credentials: kind === 'legacy' ? expired : null,
+    id: 'connector',
     isEnabled: true,
     mcpServerUrl: 'https://mcp.example.com/mcp',
-    oidcConfig: { clientId: 'client', issuer: 'https://auth.example.com' },
-  }) as any;
+    oidcConfig: { clientId: 'client', issuer: 'https://auth.example.com', scheme: 'dcr' },
+    status: 'connected',
+    workspaceId: null,
+  } as DecryptedConnector;
+  let link = {
+    credentials: expired,
+    id: kind === 'legacy' ? LEGACY_LINK_ID : 'lnk_account',
+    status: 'connected',
+    tokenExpiresAt: new Date(expired.expiresAt!),
+  } as DecryptedConnectorLink;
+  let queue = Promise.resolve();
+  const instance = () => {
+    const model = {
+      // Every row here is in the model's own scope
+      forRow: () => model,
+      getLinkModel: () => ({
+        listByConnectorIds: async () => [
+          kind === 'legacy' ? { ...link, credentials: row.credentials, status: row.status } : link,
+        ],
+        updateCredentials: async (
+          _connectorId: string,
+          _linkId: string,
+          credentials: OAuthCredentials,
+          status: DecryptedConnectorLink['status'],
+        ) => {
+          link = { ...link, credentials, status };
+        },
+      }),
+      update: async (_id: string, { credentials, ...patch }: { credentials?: string }) => {
+        row = { ...row, ...patch, ...(credentials && { credentials: JSON.parse(credentials) }) };
+        return true;
+      },
+      withOAuthRefreshLock: vi.fn(
+        (_row, action: (current: DecryptedConnector, tx: ConnectorModel) => Promise<unknown>) => {
+          const result = queue.then(() => action(row, model as unknown as ConnectorModel));
+          queue = result.then(() => {});
+          return result;
+        },
+      ),
+    };
+    return model as unknown as ConnectorModel;
+  };
+  return {
+    instance,
+    read: () => row,
+    readLink: () => link,
+    reconnect: (credentials: OAuthCredentials) => {
+      row = { ...row, credentials };
+    },
+  };
+}
 
-describe('refreshExpiredConnectorTokens', () => {
-  beforeEach(() => {
-    vi.useFakeTimers({ now: NOW });
-    vi.mocked(discoverAuthorizationServerMetadata).mockResolvedValue({} as any);
+beforeEach(() => {
+  vi.useFakeTimers({ now: NOW });
+  vi.mocked(discoverConnectorAuthorizationServerMetadata).mockResolvedValue({} as never);
+  vi.mocked(refreshConnectorToken).mockResolvedValue(rotated);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.resetAllMocks();
+});
+
+describe('OAuth refresh coordination', () => {
+  it("refreshes a row outside the run's scope through the row's own model", async () => {
+    // Regression: a private agent's workspace run resolved its owner's personal
+    // connector; the workspace-scoped model could not write the rotated token.
+    const db = store();
+    const personal = db.instance();
+    const runModel = { forRow: vi.fn(() => personal), update: vi.fn() };
+
+    const fresh = await ensureFreshConnectorToken(db.read(), runModel as unknown as ConnectorModel);
+
+    expect(runModel.forRow).toHaveBeenCalledWith(expect.objectContaining({ id: 'connector' }));
+    expect(runModel.update).not.toHaveBeenCalled();
+    expect(fresh.credentials).toMatchObject({ accessToken: 'fresh' });
+    expect(db.read().credentials).toMatchObject({ accessToken: 'fresh' });
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.clearAllMocks();
+  it('makes one request across two instances and both ways of reading a legacy account', async () => {
+    const db = store();
+    const stale = db.read();
+    const outcomes = Promise.all([
+      ensureFreshConnectorToken(stale, db.instance()),
+      ensureFreshLinkToken(stale, db.readLink(), db.instance()),
+    ]);
+    await vi.advanceTimersByTimeAsync(500);
+
+    for (const current of await outcomes) {
+      expect(current.credentials).toMatchObject({ accessToken: 'fresh', refreshToken: 'next' });
+    }
+    expect(refreshConnectorToken).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ refreshToken: 'previous' }),
+    );
+    expect(db.read().credentials).toMatchObject({ refreshState: { status: 'complete' } });
   });
 
-  it.each([
-    new TypeError('network unavailable'),
-    new IssuerMismatchError('metadata', 'https://as', 'https://other'),
-  ])(
-    'keeps credentials and reloads a concurrent rotation after discovery failure: %s',
-    async (error) => {
-      const expired = oauthConnector('discovery-failed', NOW - 1000);
-      const findById = vi.fn().mockResolvedValue(expired);
-      vi.mocked(discoverAuthorizationServerMetadata).mockRejectedValueOnce(error);
-      const pending = refreshExpiredConnectorTokens([expired], { findById } as any);
+  it.each(['legacy', 'link'] as const)(
+    'keeps a %s refresh claimed after the caller stops waiting',
+    async (kind) => {
+      const db = store(kind);
+      const stale = db.read();
+      const link = db.readLink();
+      const pending = Promise.withResolvers<typeof rotated>();
+      const onTimeout = vi.fn();
+      vi.mocked(refreshConnectorToken).mockReturnValueOnce(pending.promise);
+      const batch = () =>
+        kind === 'legacy'
+          ? refreshExpiredConnectorTokens([stale], db.instance(), { onTimeout })
+          : refreshExpiredLinkTokens(stale, [link], db.instance(), { onTimeout });
+
+      const first = batch();
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect((await first)[0].credentials).toEqual(expired);
+
+      const second = batch();
       await vi.advanceTimersByTimeAsync(1000);
-      expect(await pending).toEqual([expired]);
-      expect(findById).toHaveBeenCalledTimes(2);
+      expect(refreshConnectorToken).toHaveBeenCalledTimes(1);
+      pending.resolve(rotated);
+      await vi.advanceTimersByTimeAsync(500);
+
+      expect((await second)[0].credentials).toMatchObject({ accessToken: 'fresh' });
+      expect(onTimeout).toHaveBeenCalledTimes(1);
+      expect(refreshConnectorToken).toHaveBeenCalledTimes(1);
     },
   );
 
-  // Agent runs baked the stored (expired) token into manifests, so
-  // the first call after every expiry 401'd even when it was refreshable.
-  it('refreshes an expired token and persists the rotated credentials', async () => {
-    vi.mocked(refreshConnectorToken).mockResolvedValue({
-      tokens: { access_token: 'new-token', expires_in: 3600, token_type: 'Bearer' },
-    } as any);
-    const update = vi.fn();
-
-    const [connector] = await refreshExpiredConnectorTokens([oauthConnector('xmind', NOW - 1000)], {
-      update,
-    } as any);
-
-    expect(connector.credentials).toMatchObject({ accessToken: 'new-token' });
-    expect(update).toHaveBeenCalledWith(
-      'xmind',
-      expect.objectContaining({ tokenExpiresAt: new Date(NOW + 3_600_000) }),
-    );
-  });
-
-  it('leaves a valid token alone without contacting the authorization server', async () => {
-    const valid = oauthConnector('valid', NOW + 3_600_000);
-
-    const result = await refreshExpiredConnectorTokens([valid], { update: vi.fn() } as any);
-
-    expect(result).toEqual([valid]);
-    expect(discoverAuthorizationServerMetadata).not.toHaveBeenCalled();
-  });
-
-  it('skips disabled connectors, which never reach the manifests', async () => {
-    const disabled = { ...oauthConnector('disabled', NOW - 1000), isEnabled: false };
-
-    const result = await refreshExpiredConnectorTokens([disabled], { update: vi.fn() } as any);
-
-    expect(result).toEqual([disabled]);
-    expect(discoverAuthorizationServerMetadata).not.toHaveBeenCalled();
-  });
-
-  it('does not refresh a token whose expiry is unknown', async () => {
-    const unknown = oauthConnector('unknown-expiry', NOW);
-    delete unknown.credentials.expiresAt;
-
-    const result = await refreshExpiredConnectorTokens([unknown], { update: vi.fn() } as any);
-
-    expect(result).toEqual([unknown]);
-    expect(discoverAuthorizationServerMetadata).not.toHaveBeenCalled();
-  });
-
-  it('keeps the stored credentials when the authorization server hangs', async () => {
-    vi.mocked(refreshConnectorToken).mockReturnValue(new Promise(() => {}));
-    const expired = oauthConnector('slow', NOW - 1000);
-
-    const onTimeout = vi.fn();
-
-    const pending = refreshExpiredConnectorTokens([expired], { update: vi.fn() } as any, {
-      onTimeout,
+  it('reuses a persisted rotation even when the provider omitted expires_in', async () => {
+    const db = store();
+    const stale = db.read();
+    db.reconnect({ accessToken: 'different', refreshToken: 'rotated', type: 'oauth2' });
+    expect((await ensureFreshConnectorToken(stale, db.instance())).credentials).toMatchObject({
+      accessToken: 'different',
+      refreshToken: 'rotated',
     });
-    await vi.advanceTimersByTimeAsync(5000);
-
-    expect(await pending).toEqual([expired]);
-    expect(onTimeout).toHaveBeenCalledTimes(1);
+    expect(refreshConnectorToken).not.toHaveBeenCalled();
   });
 
-  it('retries on a later run after a refresh hung past the timeout', async () => {
-    vi.mocked(refreshConnectorToken).mockReturnValue(new Promise(() => {}));
-    const expired = oauthConnector('hung', NOW - 1000);
-    const model = { update: vi.fn() } as any;
-
-    const first = refreshExpiredConnectorTokens([expired], model);
-    await vi.advanceTimersByTimeAsync(5000);
-    await first;
-
-    vi.mocked(refreshConnectorToken).mockResolvedValue({
-      tokens: { access_token: 'recovered', expires_in: 3600, token_type: 'Bearer' },
-    } as any);
-    const [connector] = await refreshExpiredConnectorTokens([expired], model);
-
-    expect(refreshConnectorToken).toHaveBeenCalledTimes(2);
-    expect(connector.credentials).toMatchObject({ accessToken: 'recovered' });
-  });
-
-  it('keeps the stored credentials when the refresh is rejected', async () => {
-    vi.mocked(refreshConnectorToken).mockRejectedValue(new Error('invalid_grant'));
-    const expired = oauthConnector('revoked', NOW - 1000);
-    const findById = vi.fn().mockResolvedValue(expired);
-
-    const pending = refreshExpiredConnectorTokens([expired], { findById, update: vi.fn() } as any);
-    await vi.advanceTimersByTimeAsync(1000);
-
-    expect(await pending).toEqual([expired]);
-  });
-
-  it('spends the refresh token once for concurrent runs on one instance', async () => {
-    vi.mocked(refreshConnectorToken).mockResolvedValue({
-      tokens: { access_token: 'new-token', expires_in: 3600, token_type: 'Bearer' },
-    } as any);
-    const model = { update: vi.fn() } as any;
-    const expired = oauthConnector('shared', NOW - 1000);
-
-    const [[first], [second]] = await Promise.all([
-      refreshExpiredConnectorTokens([expired], model),
-      refreshExpiredConnectorTokens([expired], model),
-    ]);
-
+  it.each([
+    new OAuthError(OAuthErrorCode.InvalidGrant, 'Grant is no longer valid'),
+    new TypeError('Connection lost with unknown refresh outcome'),
+    new DOMException('Token response timed out', 'TimeoutError'),
+  ])('marks an unusable or uncertain grant as requiring reconnection: %s', async (error) => {
+    const db = store('link');
+    const stale = db.readLink();
+    vi.mocked(refreshConnectorToken).mockRejectedValueOnce(error);
+    for (let call = 0; call < 2; call++) {
+      expect(await ensureFreshLinkToken(db.read(), stale, db.instance())).toMatchObject({
+        credentials: { refreshState: { status: 'reconnect_required' } },
+        status: 'error',
+      });
+    }
+    expect(db.read().status).toBe('error');
+    expect(db.readLink().credentials.refreshToken).toBeUndefined();
     expect(refreshConnectorToken).toHaveBeenCalledTimes(1);
-    expect(first.credentials).toMatchObject({ accessToken: 'new-token' });
-    expect(second.credentials).toMatchObject({ accessToken: 'new-token' });
   });
 
-  it('uses the token another instance rotated when its own refresh loses the race', async () => {
-    vi.mocked(refreshConnectorToken).mockRejectedValue(new Error('invalid_grant'));
-    const expired = oauthConnector('raced', NOW - 1000);
-    const rotated = {
+  it('does not submit a token again when the owner stops before recording the outcome', async () => {
+    const db = store();
+    db.reconnect({
       ...expired,
-      credentials: { accessToken: 'winner', expiresAt: NOW + 3_600_000, type: 'oauth2' },
-    };
+      refreshState: { deadline: NOW, id: 'abandoned', status: 'pending' },
+    });
 
-    const [connector] = await refreshExpiredConnectorTokens([expired], {
-      findById: vi.fn().mockResolvedValue(rotated),
-      update: vi.fn(),
-    } as any);
-
-    expect(connector.credentials).toMatchObject({ accessToken: 'winner' });
+    expect(await ensureFreshConnectorToken(db.read(), db.instance())).toMatchObject({
+      credentials: { refreshState: { status: 'reconnect_required' } },
+      status: 'error',
+    });
+    expect(refreshConnectorToken).not.toHaveBeenCalled();
   });
 
-  it('waits for a winner that is still persisting the rotated token', async () => {
-    vi.mocked(refreshConnectorToken).mockRejectedValue(new Error('invalid_grant'));
-    const expired = oauthConnector('persisting', NOW - 1000);
-    const rotated = {
-      ...expired,
-      credentials: { accessToken: 'winner', expiresAt: NOW + 3_600_000, type: 'oauth2' },
-    };
-    const findById = vi.fn().mockResolvedValueOnce(expired).mockResolvedValueOnce(rotated);
+  it('preserves credentials when discovery fails and permits a later attempt', async () => {
+    const db = store();
+    const stale = db.read();
+    vi.mocked(discoverConnectorAuthorizationServerMetadata).mockRejectedValueOnce(
+      new TypeError('Discovery unavailable'),
+    );
+    expect((await ensureFreshConnectorToken(stale, db.instance())).credentials).toEqual(expired);
+    expect(refreshConnectorToken).not.toHaveBeenCalled();
 
-    const pending = refreshExpiredConnectorTokens([expired], { findById, update: vi.fn() } as any);
-    await vi.advanceTimersByTimeAsync(1000);
-
-    expect((await pending)[0].credentials).toMatchObject({ accessToken: 'winner' });
-    expect(findById).toHaveBeenCalledTimes(2);
+    expect((await ensureFreshConnectorToken(stale, db.instance())).credentials).toMatchObject({
+      accessToken: 'fresh',
+    });
   });
 
-  it('uses a rotated token whose authorization server omitted an expiry', async () => {
-    vi.mocked(refreshConnectorToken).mockRejectedValue(new Error('invalid_grant'));
-    const expired = oauthConnector('no-expiry', NOW - 1000);
-    const rotated = { ...expired, credentials: { accessToken: 'winner', type: 'oauth2' } };
+  it('keeps a refresh token when the provider does not rotate it', async () => {
+    const db = store();
+    vi.mocked(refreshConnectorToken).mockResolvedValueOnce({
+      tokens: { access_token: 'fresh', expires_in: 3600, token_type: 'Bearer' },
+    });
 
-    const [connector] = await refreshExpiredConnectorTokens([expired], {
-      findById: vi.fn().mockResolvedValue(rotated),
-      update: vi.fn(),
-    } as any);
+    expect((await ensureFreshConnectorToken(db.read(), db.instance())).credentials).toMatchObject({
+      accessToken: 'fresh',
+      refreshToken: 'previous',
+    });
+  });
 
-    expect(connector.credentials).toMatchObject({ accessToken: 'winner' });
+  it('coalesces overlapping calls when an unrotated grant returns identical credentials', async () => {
+    const db = store();
+    db.reconnect({ ...expired, expiresAt: undefined });
+    vi.mocked(refreshConnectorToken).mockResolvedValueOnce({
+      tokens: { access_token: expired.accessToken, token_type: 'Bearer' },
+    });
+    const stale = db.read();
+    const outcomes = Promise.all([
+      ensureFreshConnectorToken(stale, db.instance()),
+      ensureFreshConnectorToken(stale, db.instance()),
+    ]);
+    await vi.advanceTimersByTimeAsync(500);
+
+    for (const current of await outcomes) {
+      expect(current.credentials).toMatchObject({
+        accessToken: expired.accessToken,
+        refreshState: { status: 'complete' },
+        refreshToken: expired.refreshToken,
+      });
+    }
+    expect(refreshConnectorToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a reauthorized grant if an older refresh finishes afterward', async () => {
+    const db = store();
+    const pending = Promise.withResolvers<typeof rotated>();
+    vi.mocked(refreshConnectorToken).mockReturnValueOnce(pending.promise);
+
+    const refresh = ensureFreshConnectorToken(db.read(), db.instance());
+    await vi.advanceTimersByTimeAsync(0);
+    const authorized: OAuthCredentials = { ...expired, accessToken: 'newly-authorized' };
+    db.reconnect(authorized);
+    pending.resolve(rotated);
+
+    expect((await refresh).credentials).toEqual(authorized);
+    expect(db.read().credentials).toEqual(authorized);
+  });
+
+  it('skips disabled, valid and unknown-expiry credentials during run preparation', async () => {
+    const db = store();
+    const row = db.read();
+    const rows = [
+      { ...row, isEnabled: false },
+      { ...row, credentials: { ...expired, expiresAt: NOW + 3_600_000 } },
+      { ...row, credentials: { ...expired, expiresAt: undefined } },
+    ];
+    const model = db.instance();
+    expect(await refreshExpiredConnectorTokens(rows, model)).toEqual(rows);
+    expect(model.withOAuthRefreshLock).not.toHaveBeenCalled();
   });
 });

@@ -52,7 +52,9 @@ const PUBLIC_METHODS = [
   'batchInsert',
   'cancelRateLimitContinuation',
   'count',
-  'countBySender',
+  'countInFlightInDirectory',
+  'countLiveTopicsUsingWorktree',
+  'countMessagesBySender',
   'countShareVisitors',
   'countTopicsForMemoryExtractor',
   'create',
@@ -61,15 +63,21 @@ const PUBLIC_METHODS = [
   'findByAgentAndDocumentTrigger',
   'findById',
   'findByIds',
+  'findByWebhookThread',
   'findOwnTopicById',
   'findOwnTopicsByIds',
+  'findOwnedWorktreeTopics',
   'findOwnersByIds',
+  'findOwnersOfWorktree',
+  'findPendingOwnedWorktreeTopics',
   'findRecentByBotThread',
   'findRunInitiators',
   'findShareVisitorTopicIds',
   'findTrashedByIds',
+  'findWaitingCleanupTopicsUnder',
   'getCronTopicsGroupedByCronJob',
   'isRunningOperationAlive',
+  'listChildTopicAgentIds',
   'listTopicsForMemoryExtractor',
   'markRead',
   'patchRunningOperation',
@@ -81,11 +89,13 @@ const PUBLIC_METHODS = [
   'queryTopics',
   'rank',
   'recomputeUsage',
+  'recordFirstSendWorktreeCheckout',
   'releaseTaskCallbackReservation',
   'removeRunningOperationChild',
   'repairAgentInterventionContinuation',
   'resetMemoryExtractStatus',
   'restore',
+  'retryWorktreeStart',
   'settleRunningOperation',
   'settleRunningStatus',
   'softDelete',
@@ -99,6 +109,7 @@ const PUBLIC_METHODS = [
   'update',
   'updateMetadata',
   'updateModelPin',
+  'updateOwnedWorktree',
   'updateRunningOperationAssistantMessage',
 ];
 
@@ -308,12 +319,37 @@ describe('TopicModel - characterization', () => {
       expect(await topicModel.findShareVisitorTopicIds(['visitor-topic', 'agent-topic'])).toEqual([
         'visitor-topic',
       ]);
-      expect(await topicModel.countBySender({ agentId, senderId: 'visitor-1' })).toBe(2);
-      expect(await topicModel.countBySender({ agentId, senderId: 'visitor-2' })).toBe(0);
       expect(await topicModel.countShareVisitors({ agentId })).toEqual({
         topicCount: 2,
         visitorCount: 1,
       });
+    });
+
+    it('countMessagesBySender counts only the visitor user messages across their topics', async () => {
+      await serverDB.insert(topics).values({
+        agentId,
+        id: 'visitor-2-topic',
+        senderId: 'visitor-2',
+        title: 'visitor 2 own',
+        userId,
+      });
+      await serverDB.insert(messages).values([
+        { id: 'v1-user-a', role: 'user', topicId: 'visitor-topic', userId },
+        { id: 'v1-reply-a', role: 'assistant', topicId: 'visitor-topic', userId },
+        { id: 'v1-user-b', role: 'user', topicId: 'visitor-topic', userId },
+        { id: 'v1-user-c', role: 'user', topicId: 'visitor-topic-2', userId },
+        { id: 'v1-tool', role: 'tool', topicId: 'visitor-topic-2', userId },
+        { id: 'v2-user', role: 'user', topicId: 'visitor-2-topic', userId },
+        { id: 'creator-user', role: 'user', topicId: 'agent-topic', userId },
+      ]);
+
+      // Replies, tool rows, other visitors and the creator's own topics never count.
+      expect(await topicModel.countMessagesBySender({ agentId, senderId: 'visitor-1' })).toBe(3);
+      expect(await topicModel.countMessagesBySender({ agentId, senderId: 'visitor-2' })).toBe(1);
+      expect(await topicModel.countMessagesBySender({ agentId, senderId: 'visitor-3' })).toBe(0);
+
+      const foreignModel = new TopicModel(serverDB, otherUserId);
+      expect(await foreignModel.countMessagesBySender({ agentId, senderId: 'visitor-1' })).toBe(0);
     });
 
     it('findRecentByBotThread matches the bot thread id, newest first, limited', async () => {

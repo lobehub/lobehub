@@ -9,7 +9,9 @@ export function registerLegacyPluginCommand(program: Command) {
   const plugin = program
     .command('legacy-plugin')
     .alias('plugin')
-    .description('Manage legacy 1.0 plugins (user_installed_plugins)');
+    .description(
+      'Manage legacy 1.0 plugins (user_installed_plugins). Add new MCP servers with lh connector add',
+    );
 
   // ── list ──────────────────────────────────────────────
 
@@ -95,103 +97,6 @@ export function registerLegacyPluginCommand(program: Command) {
         if (result?.totalCount > items.length) {
           console.log(pc.dim(`Showing ${items.length} of ${result.totalCount} results.`));
         }
-      },
-    );
-
-  // ── create ──────────────────────────────────────────
-
-  plugin
-    .command('create')
-    .description('Create a new plugin (without settings)')
-    .requiredOption('-i, --identifier <id>', 'Plugin identifier')
-    .requiredOption('--manifest <json>', 'Plugin manifest JSON')
-    .option('--type <type>', 'Plugin type: plugin or customPlugin', 'plugin')
-    .option('--custom-params <json>', 'Custom parameters JSON')
-    .action(
-      async (options: {
-        customParams?: string;
-        identifier: string;
-        manifest: string;
-        type: string;
-      }) => {
-        let manifest: any;
-        let customParams: any = {};
-        try {
-          manifest = JSON.parse(options.manifest);
-        } catch {
-          log.error('Invalid manifest JSON.');
-          process.exit(1);
-          return;
-        }
-        if (options.customParams) {
-          try {
-            customParams = JSON.parse(options.customParams);
-          } catch {
-            log.error('Invalid custom-params JSON.');
-            process.exit(1);
-            return;
-          }
-        }
-
-        const client = await getTrpcClient();
-        const result = await client.plugin.createPlugin.mutate({
-          customParams,
-          identifier: options.identifier,
-          manifest,
-          type: options.type as 'plugin' | 'customPlugin',
-        });
-
-        const r = result as any;
-        console.log(
-          `${pc.green('✓')} Created plugin ${pc.bold(r.identifier || options.identifier)}`,
-        );
-      },
-    );
-
-  // ── install ───────────────────────────────────────────
-
-  plugin
-    .command('install')
-    .description('Install a plugin')
-    .requiredOption('-i, --identifier <id>', 'Plugin identifier')
-    .requiredOption('--manifest <json>', 'Plugin manifest JSON')
-    .option('--type <type>', 'Plugin type: plugin or customPlugin', 'plugin')
-    .option('--settings <json>', 'Plugin settings JSON')
-    .action(
-      async (options: {
-        identifier: string;
-        manifest: string;
-        settings?: string;
-        type: string;
-      }) => {
-        const client = await getTrpcClient();
-
-        let manifest: any;
-        let settings: any;
-        try {
-          manifest = JSON.parse(options.manifest);
-        } catch {
-          log.error('Invalid manifest JSON.');
-          process.exit(1);
-        }
-        if (options.settings) {
-          try {
-            settings = JSON.parse(options.settings);
-          } catch {
-            log.error('Invalid settings JSON.');
-            process.exit(1);
-          }
-        }
-
-        await client.plugin.createOrInstallPlugin.mutate({
-          customParams: {},
-          identifier: options.identifier,
-          manifest,
-          settings,
-          type: options.type as 'plugin' | 'customPlugin',
-        });
-
-        console.log(`${pc.green('✓')} Installed plugin ${pc.bold(options.identifier)}`);
       },
     );
 

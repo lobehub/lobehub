@@ -2,6 +2,8 @@ import { Block, Center, createStaticStyles, cssVar, Flexbox, Popover, Progress }
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import { type ScoreResult } from '../../MCP/calculateScore';
 import { sortItemsByPriority } from '../../MCP/calculateScore';
 
@@ -37,7 +39,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   description: css`
     margin-block-start: 8px;
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     color: ${cssVar.colorTextSecondary};
   `,
   gradeBadge: css`
@@ -48,19 +50,19 @@ const styles = createStaticStyles(({ css }) => ({
     border: 2px solid;
     border-radius: 50%;
 
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     font-weight: bold;
   `,
   gradeInfo: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
     margin-block-start: 12px;
   `,
   itemList: css`
     margin-block: 8px;
     margin-inline: 0;
-    padding-inline-start: 16px;
+    padding-inline-start: ${densityVars.cardPadding};
 
     li {
       margin-block: 4px;
@@ -69,7 +71,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   legend: css`
     display: flex;
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     margin-block-start: 8px;
     font-size: 12px;
   `,
@@ -92,7 +94,7 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block-start: 8px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 600;
     color: ${cssVar.colorText};
 

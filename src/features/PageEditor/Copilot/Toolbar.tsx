@@ -3,12 +3,12 @@ import { Clock3Icon, PanelRightCloseIcon, PlusIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { conversationSelectors, useConversationStore } from '@/features/Conversation';
 import NavHeader from '@/features/NavHeader';
 import { useFetchAgentChatTopics } from '@/hooks/useFetchChatTopics';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 
 import { usePageAgentPanelControl, usePageAgentPanelOverride } from '../RightPanel/OverrideContext';
 import TopicItem from './TopicSelector/TopicItem';
@@ -21,6 +21,7 @@ interface CopilotToolbarProps {
 }
 
 const CopilotToolbar = memo<CopilotToolbarProps>(({ onCollapse, onTopicChange, topicId }) => {
+  const headerActionSize = useHeaderActionSize(true);
   const { t } = useTranslation('topic');
   const [topicPopoverOpen, setTopicPopoverOpen] = useState(false);
   const agentId = useConversationStore(conversationSelectors.agentId);
@@ -62,7 +63,7 @@ const CopilotToolbar = memo<CopilotToolbarProps>(({ onCollapse, onTopicChange, t
         <>
           <ActionIcon
             icon={PlusIcon}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={headerActionSize}
             title={t('actions.addNewTopic')}
             onClick={() =>
               onTopicChange ? onTopicChange(null) : switchTopic(null, { scope: 'page' })
@@ -110,14 +111,14 @@ const CopilotToolbar = memo<CopilotToolbarProps>(({ onCollapse, onTopicChange, t
                 disabled={isLoadingTopics}
                 icon={Clock3Icon}
                 loading={isLoadingTopics}
-                size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                size={headerActionSize}
               />
             </Popover>
           )}
           {(onCollapse || !hasOverride) && (
             <ActionIcon
               icon={PanelRightCloseIcon}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              size={headerActionSize}
               onClick={() => (onCollapse ? onCollapse() : togglePageAgentPanel())}
             />
           )}

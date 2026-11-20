@@ -12,8 +12,10 @@ import {
   type AgentExecutionResult,
   type AgentStepContinuation,
   scheduleOpportunisticStaleSweep,
+  scheduleOpportunisticVerifySweep,
 } from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { scheduleInboundWebhookSweep } from '@/server/services/inboundWebhook/sweep';
 import { runWithInvocationDeadline } from '@/server/utils/invocationDeadline';
 import {
   flushScheduledWork,
@@ -234,6 +236,10 @@ export async function runStep(c: Context): Promise<Response> {
     // inactivity watchdog. Fire-and-forget: it is background repair and must
     // not add latency to, or fail, this delivery.
     scheduleOpportunisticStaleSweep();
+    // Same for verification rounds stranded in `verifying`: their sweep route
+    // expects a QStash Schedule no deployment registers.
+    scheduleOpportunisticVerifySweep();
+    scheduleInboundWebhookSweep();
 
     // Get userId from operation metadata stored in Redis
     const coordinator = new AgentRuntimeCoordinator();
@@ -418,6 +424,9 @@ export async function runStep(c: Context): Promise<Response> {
 
             result = await aiAgentService.executeStep({
               context: next.context,
+              // The previous step's message patch, which this step's entry read
+              // completes. It never leaves this invocation.
+              deferredMessagePatch: result.deferredMessagePatch,
               inlineContinuation: true,
               operationId,
               retainStepLock: true,
@@ -436,7 +445,10 @@ export async function runStep(c: Context): Promise<Response> {
           // Whatever is still pending goes back to the queue so the operation
           // resumes in a fresh invocation.
           if (pendingContinuation) {
-            await aiAgentService.scheduleContinuation(pendingContinuation);
+            await aiAgentService.scheduleContinuation(
+              pendingContinuation,
+              result.deferredMessagePatch,
+            );
             result = { ...result, nextStepScheduled: true };
             pendingContinuation = undefined;
           }

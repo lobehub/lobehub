@@ -12,7 +12,7 @@ import { registerPageCollab } from '@/store/document/collabRegistry';
 import { pageActions } from '@/store/page';
 import { getServerConfigStoreState } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
+import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import { usePageEditorStore, useStoreApi } from '../store';
 import { getPresenceColor, type PresenceAwarenessData } from './presence';
@@ -37,12 +37,15 @@ const MAX_AWARENESS_AVATAR_LENGTH = 512;
 // exist only where the server enables page collaboration (LobeHub Cloud).
 const readGatewayUrl = () => {
   const serverConfig = getServerConfigStoreState()?.serverConfig;
-  return serverConfig?.agentGatewayUrl && serverConfig.enablePageCollab
+  return serverConfig?.agentGatewayUrl && serverConfig.enableWorkspacePageCollab
     ? serverConfig.agentGatewayUrl
     : undefined;
 };
 
-export const usePageCollabEnabled = () => !!readGatewayUrl();
+export const usePageCollabEnabled = () => {
+  const labEnabled = useUserStore(labPreferSelectors.enablePageCollab);
+  return labEnabled && !!readGatewayUrl();
+};
 
 /**
  * Whether this document edits through a room. Only workspace pages do: a
@@ -88,6 +91,8 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
 
     const provider = new PageCollabProvider(documentId!, doc, getGatewayMux({ gatewayUrl }), {
       onAccess: (access) => setCollab({ access }),
+      onBlocked: (blocked) => setCollab({ blocked }),
+      onCapacity: (capacity) => setCollab({ capacity }),
       onBootstrap: () => {
         const editor = storeApi.getState().editor;
         if (editor) void useDocumentStore.getState().onEditorInit(editor, documentId!);
@@ -96,6 +101,9 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
       onCharLimitExceeded: (refusal) =>
         useDocumentStore.getState().setCharLimitRefusal(documentId!, refusal),
       onCharLimitCleared: () => useDocumentStore.getState().clearCharLimitRefusal(documentId!),
+      onLocalEdit: () => {
+        if (!storeApi.getState().collab?.edited) setCollab({ edited: true });
+      },
       onPendingChange: (pending) => setCollab({ pending }),
       onReset: (reason) => {
         const editor = storeApi.getState().editor;

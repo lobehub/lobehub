@@ -5,6 +5,7 @@ import {
   resolveClaudeAccountSpawnEnv,
 } from '@lobechat/device-control/claude-code-account-routing';
 import {
+  buildClaudeCodeEntrypointEnv,
   buildHeteroExecStdinPayload,
   HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV,
   type HeteroExecImageRef,
@@ -12,6 +13,7 @@ import {
 } from '@lobechat/heterogeneous-agents/protocol';
 import type { ClaudeCodeAccountRouting } from '@lobechat/heterogeneous-agents/quota';
 import { resolveHeteroSpawnCwd } from '@lobechat/heterogeneous-agents/workingDirectory';
+import type { HeteroPermissionMode } from '@lobechat/types';
 
 import { getTask, removeTask, saveTask } from '../daemon/taskRegistry';
 import { registerAgentRun } from './agentRunRegistry';
@@ -24,11 +26,15 @@ export interface SpawnHeteroAgentRunParams {
   assistantMessageId?: string;
   /** Claude Code account the server routed this run to. */
   claudeAccountRouting?: ClaudeCodeAccountRouting;
+  /** Entrypoint name the agent asked Claude Code to report. */
+  claudeCodeEntrypoint?: string;
   cwd?: string;
   /** Image attachments (signed URLs) appended as image content blocks. */
   imageList?: HeteroExecImageRef[];
   jwt: string;
   operationId: string;
+  /** Claude Code permission mode, forwarded in the input envelope. */
+  permissionMode?: HeteroPermissionMode;
   prompt: string;
   /** System context used only by the automatic retry without native resume. */
   resumeFallbackSystemContext?: string;
@@ -140,6 +146,7 @@ function startHeteroAgentRun(
   const stdinPayload = buildHeteroExecStdinPayload({
     imageList,
     isNewSession: !resumeSessionId,
+    permissionMode: params.permissionMode,
     prompt,
     resumeFallbackSystemContext,
     systemContext,
@@ -172,6 +179,9 @@ function startHeteroAgentRun(
         LOBEHUB_TOPIC_ID: topicId,
         ...(workspaceId ? { LOBEHUB_WORKSPACE_ID: workspaceId } : {}),
         ...accountEnv,
+        ...(agentType === 'claude-code'
+          ? buildClaudeCodeEntrypointEnv(params.claudeCodeEntrypoint)
+          : {}),
       },
       stdio: ['pipe', 'inherit', 'inherit'],
       windowsHide: true,

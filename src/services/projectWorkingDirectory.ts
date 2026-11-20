@@ -14,8 +14,10 @@ class ProjectWorkingDirectoryService {
     lambdaClient.projectWorkingDirectory.listEnvironments.query({ projectId });
   saveEnvironment = (input: Parameters<Client['saveEnvironment']['mutate']>[0]) =>
     lambdaClient.projectWorkingDirectory.saveEnvironment.mutate(input);
-  attachEnvironment = (projectId: string, environmentId: string) =>
-    lambdaClient.projectWorkingDirectory.attachEnvironment.mutate({ projectId, environmentId });
+  getEnvironment = (projectId: string) =>
+    lambdaClient.projectWorkingDirectory.getEnvironment.query({ projectId });
+  updateEnvironment = (input: Parameters<Client['updateEnvironment']['mutate']>[0]) =>
+    lambdaClient.projectWorkingDirectory.updateEnvironment.mutate(input);
   bind = (input: BindProjectDirectoryInput) =>
     lambdaClient.projectWorkingDirectory.bind.mutate(input);
   list = (projectId?: string) => lambdaClient.projectWorkingDirectory.list.query({ projectId });
@@ -31,6 +33,10 @@ class ProjectWorkingDirectoryService {
   };
   moveTopic = (input: Parameters<Client['moveTopic']['mutate']>[0]) =>
     lambdaClient.projectWorkingDirectory.moveTopic.mutate(input);
+  relocate = (input: Parameters<Client['relocate']['mutate']>[0]) =>
+    lambdaClient.projectWorkingDirectory.relocate.mutate(input);
+  remove = (input: Parameters<Client['remove']['mutate']>[0]) =>
+    lambdaClient.projectWorkingDirectory.remove.mutate(input);
   resolve = (id: string) => lambdaClient.projectWorkingDirectory.resolve.query({ id });
   startTopic = (input: Parameters<Client['startTopic']['mutate']>[0]) =>
     lambdaClient.projectWorkingDirectory.startTopic.mutate(input);

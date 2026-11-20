@@ -128,9 +128,9 @@ vi.mock('@/store/serverConfig', () => ({
     serverConfig: { enableMultimodalUnderstanding: serverConfigMock.enableMultimodalUnderstanding },
   }),
   serverConfigSelectors: {
-    enableMultimodalUnderstanding: (state: {
-      serverConfig: { enableMultimodalUnderstanding?: boolean };
-    }) => !!state.serverConfig.enableMultimodalUnderstanding,
+    // Tool name resolution reads it once a run snapshot is passed; these runs keep MCP Apps off
+    enableMcpApps: () => false,
+    enableMultimodalUnderstanding: () => !!serverConfigMock.enableMultimodalUnderstanding,
   },
 }));
 
@@ -1298,7 +1298,7 @@ describe('StreamingExecutor actions', () => {
         expect.any(Object),
         undefined,
         expect.objectContaining({ executionEnv: 'local' }),
-        { hasOversizedFiles: false },
+        expect.objectContaining({ hasOversizedFiles: false }),
       );
       const localSystem = state.operationToolSet?.manifestMap['lobe-local-system'];
       const readFile = localSystem?.api.find((api: LobeChatPluginApi) => api.name === 'readFile');
@@ -1472,126 +1472,35 @@ describe('StreamingExecutor actions', () => {
         }),
       );
     });
-
-    it('should use excludeDefaultToolIds (not skipDefaultTools) in manual mode for builtin agents', () => {
-      act(() => {
-        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
-      });
-
-      const { result } = renderHook(() => useChatStore());
-      const userMessage = createUserMessage();
-
-      const generateToolsDetailed = vi.fn().mockReturnValue({
-        enabledManifests: [],
-        enabledToolIds: [],
-        tools: [],
-      });
-
-      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
-        agentConfig: createMockAgentConfig(),
-        chatConfig: createMockChatConfig({ skillActivateMode: 'manual' }),
-        isBuiltinAgent: true,
-        plugins: [],
-      });
-      vi.spyOn(toolEngineering, 'createAgentToolsEngine').mockReturnValue({
-        generateToolsDetailed,
-      } as any);
-
-      result.current.internal_createAgentState({
-        messages: [userMessage],
-        parentMessageId: userMessage.id,
-        agentId: TEST_IDS.SESSION_ID,
-        topicId: TEST_IDS.TOPIC_ID,
-      });
-
-      expect(generateToolsDetailed).toHaveBeenCalledWith(
-        expect.objectContaining({
-          // Must NOT use skipDefaultTools for builtin agents in manual mode
-          skipDefaultTools: undefined,
-          // Must use excludeDefaultToolIds to only exclude discovery tools
-          excludeDefaultToolIds: expect.arrayContaining(['lobe-activator', 'lobe-skill-store']),
-        }),
-      );
-    });
-
-    it('should use excludeDefaultToolIds in manual mode for regular agents', () => {
-      act(() => {
-        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
-      });
-
-      const { result } = renderHook(() => useChatStore());
-      const userMessage = createUserMessage();
-
-      const generateToolsDetailed = vi.fn().mockReturnValue({
-        enabledManifests: [],
-        enabledToolIds: [],
-        tools: [],
-      });
-
-      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
-        agentConfig: createMockAgentConfig(),
-        chatConfig: createMockChatConfig({ skillActivateMode: 'manual' }),
-        isBuiltinAgent: false,
-        plugins: [],
-      });
-      vi.spyOn(toolEngineering, 'createAgentToolsEngine').mockReturnValue({
-        generateToolsDetailed,
-      } as any);
-
-      result.current.internal_createAgentState({
-        messages: [userMessage],
-        parentMessageId: userMessage.id,
-        agentId: TEST_IDS.SESSION_ID,
-        topicId: TEST_IDS.TOPIC_ID,
-      });
-
-      expect(generateToolsDetailed).toHaveBeenCalledWith(
-        expect.objectContaining({
-          skipDefaultTools: undefined,
-          excludeDefaultToolIds: expect.arrayContaining(['lobe-activator', 'lobe-skill-store']),
-        }),
-      );
-    });
-
-    it('should not set excludeDefaultToolIds in auto mode', () => {
-      act(() => {
-        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
-      });
-
-      const { result } = renderHook(() => useChatStore());
-      const userMessage = createUserMessage();
-
-      const generateToolsDetailed = vi.fn().mockReturnValue({
-        enabledManifests: [],
-        enabledToolIds: [],
-        tools: [],
-      });
-
-      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
-        agentConfig: createMockAgentConfig(),
-        chatConfig: createMockChatConfig(),
-        isBuiltinAgent: true,
-        plugins: [],
-      });
-      vi.spyOn(toolEngineering, 'createAgentToolsEngine').mockReturnValue({
-        generateToolsDetailed,
-      } as any);
-
-      result.current.internal_createAgentState({
-        messages: [userMessage],
-        parentMessageId: userMessage.id,
-        agentId: TEST_IDS.SESSION_ID,
-        topicId: TEST_IDS.TOPIC_ID,
-      });
-
-      // In auto mode, no tools should be excluded from defaults
-      expect(generateToolsDetailed).toHaveBeenCalledWith(
-        expect.objectContaining({
-          skipDefaultTools: undefined,
-          excludeDefaultToolIds: undefined,
-        }),
-      );
-    });
+    it.each([
+      { isBuiltinAgent: true, skillActivateMode: 'manual' },
+      { isBuiltinAgent: false, skillActivateMode: 'manual' },
+      { isBuiltinAgent: true, skillActivateMode: 'auto' },
+      { isBuiltinAgent: false, skillActivateMode: 'auto' },
+    ] as const)(
+      'keeps the activator and skill loader callable with $skillActivateMode preferences (builtin: $isBuiltinAgent)',
+      ({ isBuiltinAgent, skillActivateMode }) => {
+        const chatConfig = createMockChatConfig({ skillActivateMode });
+        const plugins = ['lobe-skill-store'];
+        vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
+          agentConfig: createMockAgentConfig({ plugins }),
+          chatConfig,
+          isBuiltinAgent,
+          plugins,
+        });
+        useAiInfraStore.setState({ isInitAiProviderRuntimeState: false });
+        const userMessage = createUserMessage();
+        const { agentConfig } = useChatStore.getState().internal_createAgentState({
+          agentId: TEST_IDS.SESSION_ID,
+          messages: [userMessage],
+          parentMessageId: userMessage.id,
+          uninstalledBuiltinTools: [],
+        });
+        expect(agentConfig.enabledToolIds).toContain('lobe-skill-store');
+        expect(agentConfig.enabledToolIds).toContain('lobe-skills');
+        expect(agentConfig.enabledToolIds).toContain('lobe-activator');
+      },
+    );
 
     it('should preserve default model/provider payload when initialContext is provided', () => {
       act(() => {
@@ -1740,7 +1649,7 @@ describe('StreamingExecutor actions', () => {
 
       createState('x'.repeat(FILE_PREVIEW_CHARS + 1));
 
-      expect(spy.mock.calls.at(-1)?.[3]).toEqual({ hasOversizedFiles: true });
+      expect(spy.mock.calls.at(-1)?.[3]).toMatchObject({ hasOversizedFiles: true });
     });
 
     it('does not enable readAttachment for short attachments', () => {
@@ -1748,7 +1657,7 @@ describe('StreamingExecutor actions', () => {
 
       createState('short note');
 
-      expect(spy.mock.calls.at(-1)?.[3]).toEqual({ hasOversizedFiles: false });
+      expect(spy.mock.calls.at(-1)?.[3]).toMatchObject({ hasOversizedFiles: false });
     });
   });
 

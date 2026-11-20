@@ -40,8 +40,6 @@
   "generation.editing.hint": "صف ما تريد تغييره؛ كل شيء آخر يبقى كما هو",
   "generation.editing.modelLocked": "التعديلات تحتفظ بنموذج الفيديو الأصلي",
   "generation.editing.title": "تعديل V{{version}}",
-  "generation.freeQuota.exhausted": "🎁 لقد نفد الاستخدام المجاني. ستعتمد الفيديوهات الآن على رصيدك.",
-  "generation.freeQuota.remaining": "🎁 {{remaining}} فيديو مجاني متبقٍ اليوم",
   "generation.status.editing": "جارٍ إنشاء التعديل...",
   "generation.status.failed": "فشل في الإنشاء",
   "generation.status.generating": "جارٍ الإنشاء...",

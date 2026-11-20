@@ -1,4 +1,9 @@
-import type { WorkspaceUserPreference } from '@lobechat/types';
+import type {
+  HeteroPermissionMode,
+  HeteroPermissionModeDir,
+  WorkspaceUserPreference,
+} from '@lobechat/types';
+import { applyHeteroPermissionModeDir, applyWorktreeModeDir } from '@lobechat/types';
 import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { and, eq } from 'drizzle-orm';
 
@@ -68,9 +73,7 @@ export class WorkspaceUserSettingsModel {
    * in the patch is a no-op — pass an explicit `{}` to clear it).
    */
   updatePreference = async (patch: Partial<WorkspaceUserPreference>) => {
-    /* v8 ignore start -- unreachable: getPreference() already falls back to {}, never nullish */
-    const current = (await this.getPreference()) ?? {};
-    /* v8 ignore stop */
+    const current = await this.getPreference();
     // Per-agent override maps merge one level deeper: clients patch a single
     // agent's leaf from a local copy that may be stale or empty (for example a
     // picker used before the preference fetch settles). A top-level replace
@@ -151,4 +154,58 @@ export class WorkspaceUserSettingsModel {
       .returning();
     return row;
   };
+
+  /**
+   * Turn the composer's "New worktree" switch on or off for one directory and
+   * return the stored list. The cap (see `applyWorktreeModeDir`) is enforced
+   * here rather than trusted from a client copy that may be stale.
+   */
+  setWorktreeModeDir = async (key: string, enabled: boolean): Promise<string[]> =>
+    this.mutatePreference((current) => {
+      const worktreeModeDirs = applyWorktreeModeDir(current.worktreeModeDirs, key, enabled);
+      return { next: { ...current, worktreeModeDirs }, result: worktreeModeDirs };
+    });
+
+  /**
+   * Remember the Claude Code permission mode this member picked for one
+   * directory and return the stored list (capped here, like the worktree switch).
+   */
+  setHeteroPermissionModeDir = async (
+    key: string,
+    mode: HeteroPermissionMode,
+  ): Promise<HeteroPermissionModeDir[]> =>
+    this.mutatePreference((current) => {
+      const heteroPermissionModeDirs = applyHeteroPermissionModeDir(
+        current.heteroPermissionModeDirs,
+        key,
+        mode,
+      );
+      return { next: { ...current, heteroPermissionModeDirs }, result: heteroPermissionModeDirs };
+    });
+
+  /** Read → change → write this member's preference under the row lock. */
+  private mutatePreference = async <T>(
+    change: (current: WorkspaceUserPreference) => { next: WorkspaceUserPreference; result: T },
+  ): Promise<T> =>
+    this.db.transaction(async (trx) => {
+      const [row] = await trx
+        .select({ preference: workspaceUserSettings.preference })
+        .from(workspaceUserSettings)
+        .where(
+          and(
+            eq(workspaceUserSettings.workspaceId, this.workspaceId),
+            eq(workspaceUserSettings.userId, this.userId),
+          ),
+        )
+        .for('update');
+      const { next, result } = change(row?.preference ?? {});
+      await trx
+        .insert(workspaceUserSettings)
+        .values({ preference: next, userId: this.userId, workspaceId: this.workspaceId })
+        .onConflictDoUpdate({
+          set: { preference: next, updatedAt: new Date() },
+          target: [workspaceUserSettings.workspaceId, workspaceUserSettings.userId],
+        });
+      return result;
+    });
 }

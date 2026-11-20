@@ -19,6 +19,7 @@ import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { agentEvalService } from '@/services/agentEval';
+import { densityVars } from '@/styles/densityVars';
 
 import { getPresetsByCategory } from '../../config/datasetPresets';
 
@@ -41,7 +42,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     position: relative;
 
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
 
@@ -136,7 +137,9 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
       await agentEvalService.updateDataset({
         description: values.description?.trim() || undefined,
         evalConfig:
-          (values.evalMode === 'llm-rubric' || values.evalMode === 'answer-relevance') &&
+          (values.evalMode === 'llm-rubric' ||
+            values.evalMode === 'rule-checklist' ||
+            values.evalMode === 'answer-relevance') &&
           values.evalConfig?.judgePrompt
             ? values.evalConfig
             : null,
@@ -206,13 +209,16 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
             { label: t('evalMode.equals'), value: 'equals' },
             { label: t('evalMode.contains'), value: 'contains' },
             { label: t('evalMode.llm-rubric'), value: 'llm-rubric' },
+            { label: t('evalMode.rule-checklist'), value: 'rule-checklist' },
             { label: t('evalMode.answer-relevance'), value: 'answer-relevance' },
             { label: t('evalMode.external'), value: 'external' },
           ]}
         />
       </Form.Field>
 
-      {(evalModeValue === 'llm-rubric' || evalModeValue === 'answer-relevance') && (
+      {(evalModeValue === 'llm-rubric' ||
+        evalModeValue === 'rule-checklist' ||
+        evalModeValue === 'answer-relevance') && (
         <>
           <Form.Field label={t('evalMode.provider.label')} name="evalConfig.provider">
             <TextArea placeholder={t('evalMode.provider.placeholder')} rows={1} />

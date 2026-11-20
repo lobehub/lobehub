@@ -59,7 +59,8 @@ const normalizeIdentifierPart = (part: string) =>
     .replaceAll(/^-|-$/g, '');
 
 const mockGitHubInstance = {
-  downloadRepoZip: vi.fn(),
+  downloadCommitZip: vi.fn(),
+  resolveCommit: vi.fn().mockResolvedValue('a'.repeat(40)),
   generateIdentifier: vi.fn().mockImplementation(function (info: {
     owner: string;
     path?: string;
@@ -113,6 +114,13 @@ const mockFetch = vi.fn(function () {
   throw new Error('raw global fetch must not be used for user-supplied URLs; use ssrfSafeFetch');
 });
 vi.stubGlobal('fetch', mockFetch);
+
+const researchSkillInput = (agentId: string) => ({
+  agentId,
+  content: '# Research Helper\n\nUse this skill for research.',
+  skillName: 'research-helper',
+  targetNamespace: 'agent' as const,
+});
 
 describe('Skill Router Integration Tests', () => {
   let serverDB: LobeChatDatabase;
@@ -504,12 +512,7 @@ describe('Skill Router Integration Tests', () => {
       const caller = agentDocumentRouter.createCaller(createTestContext(userId));
       const agentId = await createTestAgent(serverDB, userId);
 
-      const result = await caller.createSkillByPath({
-        agentId,
-        content: '# Research Helper\n\nUse this skill for research.',
-        skillName: 'research-helper',
-        targetNamespace: 'agent',
-      });
+      const result = await caller.createSkillByPath(researchSkillInput(agentId));
 
       if (!result) {
         throw new Error('Expected createSkill to return a skill file node');
@@ -562,12 +565,7 @@ describe('Skill Router Integration Tests', () => {
       const caller = agentDocumentRouter.createCaller(createTestContext(userId));
       const agentId = await createTestAgent(serverDB, userId);
 
-      await caller.createSkillByPath({
-        agentId,
-        content: '# Research Helper\n\nUse this skill for research.',
-        skillName: 'research-helper',
-        targetNamespace: 'agent',
-      });
+      await caller.createSkillByPath(researchSkillInput(agentId));
 
       await expect(
         caller.createSkillByPath({
@@ -623,12 +621,7 @@ describe('Skill Router Integration Tests', () => {
       const documentCaller = agentDocumentRouter.createCaller(createTestContext(userId));
       const agentId = await createTestAgent(serverDB, userId);
 
-      await skillCaller.createSkillByPath({
-        agentId,
-        content: '# Research Helper\n\nUse this skill for research.',
-        skillName: 'research-helper',
-        targetNamespace: 'agent',
-      });
+      await skillCaller.createSkillByPath(researchSkillInput(agentId));
 
       const id = await getManagedSkillBindingId({
         agentId,
@@ -649,12 +642,7 @@ describe('Skill Router Integration Tests', () => {
       const documentCaller = agentDocumentRouter.createCaller(createTestContext(userId));
       const agentId = await createTestAgent(serverDB, userId);
 
-      await skillCaller.createSkillByPath({
-        agentId,
-        content: '# Research Helper\n\nUse this skill for research.',
-        skillName: 'research-helper',
-        targetNamespace: 'agent',
-      });
+      await skillCaller.createSkillByPath(researchSkillInput(agentId));
 
       const id = await getManagedSkillBindingId({
         agentId,
@@ -914,7 +902,7 @@ Body`,
         path: 'skills/skill-creator',
         repo: 'openclaw',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip-content'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip-content'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Skill Creator\n\nCreate skills easily.',
         manifest: { name: 'skill-creator', description: 'Create skills' },
@@ -931,7 +919,7 @@ Body`,
 
       expect(result).toBeDefined();
       expect(result!.skill.name).toBe('skill-creator');
-      expect(result!.skill.identifier).toBe('openclaw-openclaw-skill-creator');
+      expect(result!.skill.identifier).toMatch(/^openclaw-openclaw-skill-creator-[a-f0-9]{20}$/);
       expect(result!.skill.source).toBe('market');
       expect(result!.skill.manifest).toMatchObject({
         repository: 'https://github.com/openclaw/openclaw',
@@ -941,12 +929,13 @@ Body`,
       // Verify parseRepoUrl was called with correct URL
       expect(mockGitHubInstance.parseRepoUrl).toHaveBeenCalledWith(
         'https://github.com/openclaw/openclaw/tree/main/skills/skill-creator',
-        undefined,
+        'HEAD',
       );
 
-      // Verify parseZipPackage was called with basePath and repackSkillZip
+      // Verify parseZipPackage was called with basePath, the directory name as fallback, and repackSkillZip
       expect(mockParserInstance.parseZipPackage).toHaveBeenCalledWith(expect.any(Buffer), {
         basePath: 'skills/skill-creator',
+        fallbackName: 'skill-creator',
         repackSkillZip: true,
       });
     });
@@ -958,7 +947,7 @@ Body`,
         path: 'skills/demo',
         repo: 'skills',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
 
       let callCount = 0;
       mockParserInstance.parseZipPackage.mockImplementation(function () {

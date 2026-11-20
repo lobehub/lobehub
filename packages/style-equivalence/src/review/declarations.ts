@@ -1,7 +1,11 @@
 import postcss, { type ChildNode } from 'postcss';
 import ts from 'typescript';
 
+import type { MovedRule } from './moved';
+import { targetsDescendant } from './selectorText';
+
 export interface Declaration {
+  descendant?: true;
   property: string;
   selector: string;
   value: string;
@@ -12,6 +16,7 @@ export interface DeclarationRow {
   before: string[];
   differs: boolean;
   label: string;
+  movedTo?: string[];
   oneSided: boolean;
 }
 
@@ -30,22 +35,37 @@ const token = (text: string) => {
 
 const PLACEHOLDER = /__I(\d+)__/g;
 
+const normalizeSelector = (selector: string) =>
+  selector
+    .trim()
+    .replaceAll(/\s*,\s*/g, ', ')
+    .replaceAll(/\s+/g, ' ');
+
 const scopeOf = (selector: string, key: string) =>
   key.startsWith('@') ? `${selector} ${key}`.trim() : `${selector}${key}`;
 
 const fromCss = (css: string, selector = '', restore = (value: string) => value): Declaration[] => {
   const rows: Declaration[] = [];
-  const walk = (nodes: ChildNode[], scope: string) => {
+  const walk = (nodes: ChildNode[], scope: string, descendant: boolean) => {
     for (const node of nodes) {
       if (node.type === 'decl')
-        rows.push({ property: node.prop, selector: scope, value: restore(node.value.trim()) });
+        rows.push({
+          ...(descendant ? { descendant: true as const } : {}),
+          property: node.prop,
+          selector: scope,
+          value: restore(node.value.trim()),
+        });
       else if (node.type === 'rule')
-        walk(node.nodes, `${scope}${node.selector.replace(/^&/, '').trim()}`.trim());
+        walk(
+          node.nodes,
+          `${scope}${normalizeSelector(node.selector.replace(/^&/, ''))}`.trim(),
+          descendant || targetsDescendant(node.selector),
+        );
       else if (node.type === 'atrule')
-        walk(node.nodes ?? [], `${scope} @${node.name} ${node.params}`.trim());
+        walk(node.nodes ?? [], `${scope} @${node.name} ${node.params}`.trim(), descendant);
     }
   };
-  walk(postcss.parse(css).nodes, selector);
+  walk(postcss.parse(css).nodes, selector, false);
   return rows;
 };
 
@@ -159,7 +179,7 @@ export const parseDeclarations = (text: string): Declaration[] => {
   return fromObject(member.initializer, source);
 };
 
-const family = (property: string) => {
+export const family = (property: string) => {
   if (property.startsWith('background')) return 'background';
   if (/^border(-.+)?-radius$/.test(property)) return 'border-radius';
   if (property.startsWith('border')) return 'border';
@@ -177,6 +197,7 @@ export const declarationBlocks = (
   before: Record<string, string> = {},
   after: Record<string, string> = {},
   differing: string[] = [],
+  moved: Record<string, MovedRule[]> = {},
 ): DeclarationBlock[] => {
   const changed = new Set(differing.map(family));
   const slots = [...new Set([...Object.keys(before), ...Object.keys(after)])].sort();
@@ -199,6 +220,15 @@ export const declarationBlocks = (
     };
     add('before', before[slot]);
     add('after', after[slot]);
+    for (const rule of moved[slot] ?? [])
+      for (const { property, selector, value } of parseDeclarations(rule.text)) {
+        const name = family(property);
+        const row = rows.get(`${rule.selector}${selector} ${name}`);
+        if (!row?.before.length) continue;
+        row.after.push(`${property}: ${value}`);
+        const where = `<${rule.tags.join('> <')}> · ${rule.slot}`;
+        row.movedTo = [...new Set([...(row.movedTo ?? []), where])];
+      }
     for (const row of rows.values()) row.oneSided = !row.before.length || !row.after.length;
     return {
       key: slot,

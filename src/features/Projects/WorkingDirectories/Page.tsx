@@ -62,7 +62,9 @@ export function ProjectDirectoriesPage() {
     {
       key: 'environments',
       label: t('settings.environments'),
-      render: () => <ProjectWorkingDirectories projectId={detail.project.id} />,
+      render: () => (
+        <ProjectWorkingDirectories canManage={canManage} projectId={detail.project.id} />
+      ),
     },
     {
       key: 'directories',

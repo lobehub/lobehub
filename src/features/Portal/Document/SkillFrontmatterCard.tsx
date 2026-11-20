@@ -5,6 +5,7 @@ import { ChevronRight } from 'lucide-react';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
 import { parseSkillMarkdownMetadata } from '@/utils/skillMarkdown';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -22,7 +23,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   metadataRow: css`
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     &:not(:last-child) {
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};
@@ -41,7 +42,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   sectionHeader: css`
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));

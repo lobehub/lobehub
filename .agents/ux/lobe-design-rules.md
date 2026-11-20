@@ -110,9 +110,13 @@ Source: user clarification during acceptance round 6 (2026-10-27).
 
 An unreleased feature's settings, search results and settings summary counts use the same per-user feature flag as the feature itself. Channel decision settings are visible only when `serverConfigSelectors.enableChannels` is true; a default-on preference does not bypass the `channel` rollout gate.
 
+Platform visibility follows where the user can use the setting, not where its implementation process runs. A runtime available to Web conversations through a connected device belongs in General Labs; reserve `desktopOnly` for capabilities that require the Electron shell. Codex App Server dispatch reads the same user preference on Web and Desktop. Verify the Web toggle, persistence after refresh, and the selected runtime on the receiving device; a merged adapter or a successful native probe alone does not prove that conversations use it.
+
 Enforcement: `src/features/SettingsSearch/items.test.ts` covers the channel decision search entry with the flag off and on. The service-model form filters the channel row before deriving its groups and counts.
 
 Source: user correction about the unreleased Channel feature (2026-10-28).
+
+Additional source: Codex question-flow reproduction (2026-11-17): the CLI contained the native question bridge and advertised support, but the user's unset Lab flag selected `codex exec`; `desktopOnly` hid the enabling control on Web.
 
 ## LOBE-UX-016 — A stage path is `Steps`, and its current step is the blue live dot
 
@@ -138,10 +142,62 @@ Reply is the primary Channel message action. Replying to a person only posts a q
 
 Source: user correction of the proposed in-channel reply semantics (2026-10-31).
 
-## LOBE-UX-020 — Conversation day dividers follow WeChat, time included
+- Long-running experiment startup belongs to the experiment page. Do not trap users in a blocking modal; route navigation must not own or cancel launch orchestration. A short pre-launch cost confirmation may remain.
 
-A Channel day divider stamps the first message of the day the way WeChat does: today is the time alone ("10:17"), not "今天"; earlier days are the day followed by the time ("昨天 01:36", "星期五 10:15", "11 月 7 日 10:15", "2025 年 11 月 7 日 10:15"). Days are calendar days in local time, not 24-hour spans. The full date stays in the hover title and the separator's accessible label.
+## LOBE-UX-020 — Conversation times follow Discord: date dividers, dated headers
 
-Enforcement: `src/features/Channels/messagePresentation.test.ts` (`channelDayLabel`) covers today, the yesterday boundary, weekdays, this year and earlier years in zh-CN and en-US.
+A Channel day divider is the full date alone ("2026 年 6 月 22 日"), not a day label with a time. Each message header carries its own day, so a message read away from its divider still says when it was sent: today is the time alone ("16:29"), not "今天"; yesterday is "昨天 16:29"; anything earlier is the numeric date and time ("2026/6/22 01:33"), never a weekday or a year-less date. Days are calendar days in local time, not 24-hour spans. A grouped continuation's hover stamp is the time alone, and every stamp keeps the full date and time in its hover title.
 
-Source: user correction on PR #22556 (2026-11-08): "今天应该显示时间", after a first version labelled today as "今天".
+Enforcement: `src/features/Channels/messagePresentation.test.ts` (`channelMessageTime`) covers today, the yesterday boundary, and earlier dates in this and previous years in zh-CN and en-US.
+
+Source: user correction (2026-11-12): headers showed only "16:29", so a scrolled message had no visible date — "应该得是像 discord 这样改". This replaces the WeChat-style divider from PR #22556 (2026-11-08), which kept today as the time alone ("今天应该显示时间").
+
+## LOBE-UX-021 — Timeout copy follows the form's actual answer policy
+
+Use the shared form's `autoSubmitOnTimeout` result for countdown wording. Provider-owned option IDs suppress inferred answers, so those cards must say they close unanswered instead of promising option 1. Keep the legacy fallback wording only where the form actually submits fallback answers. Do not infer the policy from a renderer's provider name.
+
+Enforcement: `packages/shared-tool-ui/src/AskUserQuestion/useAskUserForm.test.ts` checks the exposed policy together with actual timeout submission and non-submission. Verify both countdown messages on the rendered cards. Source: real Codex question-card acceptance (2026-11-17), where the footer promised option 1 despite the hook correctly refusing to select it.
+
+## LOBE-UX-022 — Check icon–label optical alignment, not only bounding boxes
+
+For an icon beside a text label, equal CSS centerlines do not prove visual centering: the font's visible glyphs can sit above the line-box center. Inspect a tight rendered crop, including the hover background, before declaring alignment fixed. Use the shared component's flex alignment first and inspect its line height, font metrics, and SVG viewBox before changing it. Do not compensate with per-instance pixel translations or relative positioning; resolve an established typography or icon issue at its owning layer instead.
+
+Enforcement: visual review of the actual icon and localized label at the target scale, alongside the row's computed geometry; reject unexplained positioning offsets in icon–label alignment changes. Source: user corrections on the Agent profile return row: geometry checks missed the perceived misalignment, and a subsequent 1px icon translation was correctly rejected as a hack.
+
+## LOBE-UX-023 — Keep page editor modes outside the writing surface
+
+On a dedicated instruction-editing page, place view-mode switches alongside the page title, not in an extra toolbar row inside the input boundary. The editor's boundary should identify where to type without becoming the page's strongest visual element on focus. Use the neutral outlined surface; do not turn its entire perimeter into a primary-colored focus frame. Preserve the editor caret and the mode buttons' keyboard focus indicators.
+
+Enforcement: `EditorCanvas/index.test.tsx` checks that both mode controls remain outside the outlined input surface. Inspect the page at rest and while editing. Source: user correction on the Agent instruction editor: moving mode switches into the frame wasted a writing row, and a black focus border was too prominent.
+
+## LOBE-UX-024 — Conversation skill lists are invocation pickers
+
+User, device, project and Agent skill rows share the default skill glyph, not marketplace/custom avatars. This applies to conversation invocation lists; the agent's skill configuration page may show community skills' publisher icons via `MarketSkillIcon`, with the default skill glyph as fallback. Clicking a row in a conversation inserts the skill into the composer. Do not add per-row file counts or view/rename/delete actions, including right-click equivalents; section totals may remain.
+
+The conversation sidebar is not a full capability inventory: do not automatically add builtin instruction bundles when removing them from the Tools picker. Preserve their runtime configuration and existing slash/profile entry points where available; exposing them here is a separate product decision.
+
+Enforcement: `SkillsList` owns the glyph and exposes neither custom icons, file counts nor management-action props. `AgentDocumentsGroup.test.tsx` checks the real list's click/keyboard behavior and the absence of hover/context-menu management controls; `UserLevelSkills.test.ts` guards source-independent row data.
+
+User-skill enablement belongs in a separate management view entered through the section's settings icon (with a tooltip and accessible name). Keep the section collapsible when adding that action: use the Accordion action slot outside its trigger, and keep settings reachable while collapsed. `AgentDocumentsGroup.test.tsx` exercises the real section's collapse/expand and independent settings entry. In that view, checkboxes represent the pending enabled set: keep search, scoped bulk selection, and Save/Cancel; do not add saved-state Enabled/Disabled tabs that duplicate or conflict with the draft. `useUserSkillsManagement.test.ts` guards selection visibility and persistence across search.
+
+The title itself states the task and scope: “Choose the skills this agent can use” / 「选择当前助理可以使用的技能」. Merge useful explanatory copy into that title rather than dropping the scope or repeating it in a subtitle. Counts describe selected skills, not checked boxes; do not foreground checkbox mechanics or add uninstall disclaimers to this selection surface. Fixed-height virtual skill lists use the same row-height constant for the rendered rows, virtualizer, and short-list viewport, rather than reserving an estimated extra row.
+
+Source: user corrections while simplifying the conversation Skills panel, including removal of redundant status tabs, the text management button, and checkbox-centric copy.
+
+## LOBE-UX-025 — Chat tools show existing connector records
+
+The chat Tools picker lists services with connection records. Keep authorization actions on pending or failed connections in their existing activation group. First-time connection discovery belongs in connector management.
+
+Enforcement: `useControls.test.ts` covers missing connection records, cached unconnected providers, and pending or failed authorization rows. Source: user correction while debugging Kai’s chat Tools picker.
+
+## LOBE-UX-026 — Tool menus expose choices, not fixed loaders
+
+Keep fixed Agent infrastructure (the skill loader and tool activator) out of both loading-policy lists. Hiding the loader must not hide individual skills or the optional Skill Store.
+
+Enforcement: the picker metadata excludes always-on identifiers; builtin selector and AgentToolsEngine tests cover the visible list and the runtime defaults.
+
+## LOBE-UX-027 — One agent, one tool configuration
+
+The profile library picker and chat Tools menu are two views of the same agent configuration. Share the tool inventory, translated names, state and agent-scoped write path, **not the popup**. The profile keeps its searchable checklist; chat keeps its loading-policy filters. Derive profile counts from the same unfiltered options. Agent-owned connector provisioning and the Skills invocation picker are separate tasks.
+
+Enforcement: both surfaces use the same tool controls; regression tests cover the profile summary, runtime-backed settings and fixed-loader exclusions.

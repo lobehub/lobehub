@@ -102,9 +102,13 @@ export class WebBrowsingDocumentService {
   ): Promise<UpsertCrawledDocumentResult> => {
     const { content, contentType, description, title, topicId, url } = params;
 
-    // Raw JSON bodies must be fenced before hitting the markdown snapshot
-    // guard (see `UpsertCrawledDocumentParams.contentType`).
-    const persistedContent = contentType === 'json' ? wrapJsonCrawlContent(content) : content;
+    // PostgreSQL text and jsonb columns reject NUL (`\u0000`), and one stray NUL
+    // in a crawled page would fail the whole insert. Raw JSON bodies must be
+    // fenced before hitting the markdown snapshot guard (see
+    // `UpsertCrawledDocumentParams.contentType`).
+    const safeContent = content.replaceAll('\u0000', '');
+    const persistedContent =
+      contentType === 'json' ? wrapJsonCrawlContent(safeContent) : safeContent;
 
     const existing = await this.documentModel.findBySource(url, 'web');
 

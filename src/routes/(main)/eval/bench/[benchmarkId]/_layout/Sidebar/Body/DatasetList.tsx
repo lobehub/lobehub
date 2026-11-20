@@ -12,7 +12,10 @@ import { Database } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { benchmarkDatasetPath } from '@/features/LobeBench/experimentNavigation';
+import { useIsLobeBenchBenchmark } from '@/features/LobeBench/useIsLobeBenchBenchmark';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
@@ -25,19 +28,19 @@ interface DatasetListProps {
 }
 
 const DatasetList = memo<DatasetListProps>(({ activeKey, benchmarkId, itemKey }) => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation('eval');
   const navigate = useWorkspaceAwareNavigate();
   const datasetList = useEvalStore(datasetSelectors.datasetList(benchmarkId));
   const isLoading = useEvalStore(datasetSelectors.isLoadingDatasetList(benchmarkId));
+  const lobeBench = useIsLobeBenchBenchmark(benchmarkId);
 
   return (
     <AccordionItem value={itemKey}>
-      <AccordionHeader style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
-        <AccordionTrigger>
+      <AccordionHeader>
+        <AccordionTrigger style={sectionTriggerStyle}>
           <Flexbox horizontal align="center" gap={4}>
-            <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-              {t('sidebar.datasets')}
-            </Text>
+            <SectionTitle>{t('sidebar.datasets')}</SectionTitle>
             {datasetList.length > 0 && (
               <Text fontSize={12} type="secondary">
                 {datasetList.length}
@@ -54,10 +57,10 @@ const DatasetList = memo<DatasetListProps>(({ activeKey, benchmarkId, itemKey })
             datasetList.map((ds: any) => (
               <WorkspaceLink
                 key={ds.id}
-                to={`/eval/bench/${benchmarkId}/datasets/${ds.id}`}
+                to={benchmarkDatasetPath(ds.id, lobeBench)}
                 onClick={(e) => {
                   e.preventDefault();
-                  navigate(`/eval/bench/${benchmarkId}/datasets/${ds.id}`);
+                  navigate(benchmarkDatasetPath(ds.id, lobeBench));
                 }}
               >
                 <NavItem

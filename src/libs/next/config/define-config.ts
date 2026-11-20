@@ -14,6 +14,13 @@ interface CustomNextConfig {
   turbopack?: NextConfig['turbopack'];
 }
 
+/**
+ * The file-parse worker is started by absolute path at runtime, which no tracer can follow, so the
+ * built artifact (`bun run build:file-parse-worker`) is listed explicitly. Standalone and Vercel
+ * output must both carry it; a deployment without it fails closed instead of parsing in-process.
+ */
+const FILE_PARSE_WORKER_TRACE = 'dist/file-parse-worker/**/*';
+
 export function defineConfig(config: CustomNextConfig) {
   const isProd = process.env.NODE_ENV === 'production';
   const buildWithDocker = process.env.DOCKER === 'true';
@@ -32,6 +39,7 @@ export function defineConfig(config: CustomNextConfig) {
       '*': [
         'public/**/*',
         '.next/static/**/*',
+        FILE_PARSE_WORKER_TRACE,
 
         // Only needed for Docker standalone builds.
         // On Vercel (serverless), including native bindings can easily exceed function size limits.
@@ -54,8 +62,17 @@ export function defineConfig(config: CustomNextConfig) {
     '',
   );
 
+  const requiredTracingIncludes = isStandaloneMode
+    ? standaloneConfig.outputFileTracingIncludes!['*']
+    : [FILE_PARSE_WORKER_TRACE];
+
   const nextConfig: NextConfig = {
     ...(isStandaloneMode ? standaloneConfig : {}),
+    outputFileTracingIncludes: {
+      ...config.outputFileTracingIncludes,
+      // Deployment-specific assets must not replace the worker or standalone runtime files.
+      '*': [...requiredTracingIncludes, ...(config.outputFileTracingIncludes?.['*'] ?? [])],
+    },
     // Stop `next dev` from auto-injecting the nextjs-agent-rules block into AGENTS.md.
     agentRules: false,
     assetPrefix,
@@ -262,6 +279,10 @@ export function defineConfig(config: CustomNextConfig) {
           ],
           source: '/.well-known/assetlinks.json',
         },
+        {
+          source: '/.well-known/mcp-webhook-receiver.json',
+          headers: [{ key: 'Content-Type', value: 'application/json' }],
+        },
         ...(config.headers ?? []),
       ];
     },
@@ -273,9 +294,6 @@ export function defineConfig(config: CustomNextConfig) {
     },
     ...(config.outputFileTracingExcludes && {
       outputFileTracingExcludes: config.outputFileTracingExcludes,
-    }),
-    ...(config.outputFileTracingIncludes && {
-      outputFileTracingIncludes: config.outputFileTracingIncludes,
     }),
     reactStrictMode: true,
     // Old clients keep their image URLs; App routes take precedence over this fallback.

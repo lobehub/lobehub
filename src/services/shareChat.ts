@@ -196,6 +196,25 @@ class ShareChatService {
     });
   }
 
+  /**
+   * The visitor counterpart of `aiAgent.submitHeteroIntervention`: answers a
+   * question Claude Code / Codex asked during the visitor's run.
+   */
+  async submitHeteroIntervention(
+    shareId: string,
+    topicId: string,
+    resolution: Omit<
+      Parameters<typeof lambdaClient.shareChat.submitHeteroIntervention.mutate>[0],
+      'shareId' | 'topicId'
+    >,
+  ) {
+    return await lambdaClient.shareChat.submitHeteroIntervention.mutate({
+      ...resolution,
+      shareId,
+      topicId,
+    });
+  }
+
   async refreshGatewayToken(shareId: string, topicId: string): Promise<{ token: string }> {
     return await lambdaClient.shareChat.refreshGatewayToken.query({ shareId, topicId });
   }

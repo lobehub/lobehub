@@ -212,8 +212,8 @@ const templateMutations = (code: string, sf: ts.SourceFile, template: ts.Templat
 export const declarationMutations = (code: string, symbol: string, member: string): Mutation[] => {
   const sf = parseSource(code, 'styles.tsx');
   const property = findStyleMember(sf, symbol, member);
-  if (!property) return [];
-  const value = property.initializer;
+  const value = property?.initializer;
+  if (!value) return [];
   if (ts.isObjectLiteralExpression(value)) return firstOf(objectMutations(code, sf, value));
   if (ts.isTaggedTemplateExpression(value))
     return firstOf(templateMutations(code, sf, value.template));

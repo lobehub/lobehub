@@ -1,8 +1,7 @@
 import { isDesktop } from '@lobechat/const';
-import { getActivePluginIds, type LobeAgentConfig } from '@lobechat/types';
+import { getOptedInPluginIds, type LobeAgentConfig } from '@lobechat/types';
 import {
   ActionIcon,
-  confirmModal,
   cssVar,
   DropdownMenu,
   Flexbox,
@@ -32,10 +31,11 @@ import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useBusinessAgentImportMenuItem } from '@/business/client/hooks/useBusinessAgentImportMenuItem';
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
+import { confirmRemoveAgent } from '@/features/AgentDeleteConfirm';
 import { useAgentMarketSubmission } from '@/features/AgentMarketSubmission/useAgentMarketSubmission';
 import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
+import { type AgentProfileTab } from '@/features/AgentProfileTabs/tabOptions';
 import NavHeader from '@/features/NavHeader';
 import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditorInfoTime';
 import AccessLevelTag from '@/features/ResourcePermission/AccessLevelTag';
@@ -49,12 +49,14 @@ import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
+import { useHeaderActionSize } from '@/styles/density';
 import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
 import { openAgentSettingsModal } from '../AgentSettings';
 import { selectors as profileSelectors, useProfileStore } from '../store';
 import AgentForkTag from './AgentForkTag';
+import AgentSocialShare from './AgentSocialShare';
 import AgentVersionReviewTag from './AgentVersionReviewTag';
 
 type HeaderTranslation = TFunction<
@@ -111,7 +113,13 @@ const buildAgentProfileMarkdown = (params: {
   return `${sections.join('\n\n')}\n`;
 };
 
-const Header = memo(() => {
+interface HeaderProps {
+  /** The profile page being shown, so the page switcher highlights it. */
+  active?: AgentProfileTab;
+}
+
+const Header = memo<HeaderProps>(({ active = 'profile' }) => {
+  const headerActionSmallSize = useHeaderActionSize(true);
   const { i18n, t } = useTranslation(['setting', 'chat', 'file', 'common', 'agent']);
   const dateLocale = i18n?.resolvedLanguage || i18n?.language;
   const navigate = useWorkspaceAwareNavigate();
@@ -171,11 +179,11 @@ const Header = memo(() => {
 
   const handleDelete = useCallback(() => {
     if (!canManage || !activeAgentId) return;
-    confirmModal({
-      okButtonProps: { danger: true },
-      onOk: async () => {
+    confirmRemoveAgent({
+      agentId: activeAgentId,
+      onConfirm: async (options) => {
         try {
-          await removeAgent(activeAgentId);
+          await removeAgent(activeAgentId, options);
         } catch (error) {
           toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));
           return;
@@ -183,9 +191,6 @@ const Header = memo(() => {
         toast.success(t('confirmRemoveSessionSuccess', { ns: 'chat' }));
         navigate('/');
       },
-      content: t('confirmRemoveSessionItemAlert', { ns: 'chat' }),
-      okText: t('delete', { ns: 'common' }),
-      title: t('delete', { ns: 'common' }),
     });
   }, [activeAgentId, canManage, navigate, removeAgent, t]);
 
@@ -197,9 +202,10 @@ const Header = memo(() => {
       const profileMarkdown = buildAgentProfileMarkdown({
         description: meta?.description,
         model: config?.model,
-        // Pinned identifiers only — a disabled plugin shouldn't be advertised
-        // as "enabled" in the exported markdown.
-        plugins: getActivePluginIds(config?.plugins),
+        // Everything turned on — a disabled plugin shouldn't be advertised
+        // as "enabled" in the exported markdown, while a connector is on
+        // through an `auto` entry rather than a pin.
+        plugins: getOptedInPluginIds(config?.plugins),
         provider: config?.provider,
         systemRole: editorMarkdown ?? systemRole,
         t,
@@ -431,17 +437,19 @@ const Header = memo(() => {
       }
       right={
         <Flexbox horizontal align={'center'} gap={4}>
+          {/* Posts the agent's public Community page; disabled until it is published. */}
+          {showMarketSubmission && <AgentSocialShare />}
           {canShareAgent && (
             <ActionIcon
               icon={Share2Icon}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              size={headerActionSmallSize}
               title={t('share.entry', { ns: 'agent' })}
               tooltipProps={{ placement: 'bottom' }}
               onClick={handleOpenShare}
             />
           )}
           <DropdownMenu items={menuItems}>
-            <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
+            <ActionIcon icon={MoreHorizontal} size={headerActionSmallSize} />
           </DropdownMenu>
           {!isHeterogeneous && isStatusInit && !lockedByOther && !lockPending && (
             <ToggleRightPanelButton
@@ -464,7 +472,7 @@ const Header = memo(() => {
         },
       }}
     >
-      {activeAgentId && <AgentProfileTabs active={'profile'} agentId={activeAgentId} />}
+      {activeAgentId && <AgentProfileTabs active={active} agentId={activeAgentId} />}
     </NavHeader>
   );
 });

@@ -41,6 +41,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { useInterfaceDensity } from '@/styles/density';
 import { sx } from '@/styles/sx';
 import {
   type AiProviderDetailItem,
@@ -121,6 +122,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
   }) => {
     const {
       authType,
+      checkMode,
       proxyUrl,
       showApiKey = true,
       defaultShowBrowserRequest,
@@ -129,6 +131,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
       supportResponsesApi,
     } = settings || {};
     const { t } = useTranslation('modelProvider');
+    const compact = useInterfaceDensity() === 'compact';
     const form = useForm({
       onValuesChange: (_, values) => handleFormValuesChange(values),
     });
@@ -381,7 +384,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
       showResponsesApiSwitch
         ? {
             children: isLoading ? (
-              <Skeleton height={36} />
+              <Skeleton height={compact ? 28 : 36} />
             ) : (
               <Switch disabled={!canManageProvider} loading={configUpdating} />
             ),
@@ -395,10 +398,11 @@ const ProviderConfig = memo<ProviderConfigProps>(
       showChecker
         ? {
             children: isLoading ? (
-              <Skeleton height={36} />
+              <Skeleton height={compact ? 28 : 36} />
             ) : (
               <Checker
                 checkErrorRender={checkErrorRender}
+                checkMode={checkMode}
                 model={data?.checkModel || checkModel!}
                 provider={id}
                 onAfterCheck={async () => {

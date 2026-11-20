@@ -2,6 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { deleteTestUsers } from '../../core/testCleanup';
 import { ProjectRepository } from '../../repositories/project';
 import {
   agentLabelAssignments,
@@ -41,13 +42,13 @@ describe('the main agent a project creates', () => {
   const repo = new ProjectRepository(serverDB, userId);
 
   beforeEach(async () => {
-    await serverDB.delete(users);
+    await deleteTestUsers(serverDB);
     await serverDB.insert(users).values([{ id: userId }, { id: memberId }]);
   });
 
   afterEach(async () => {
+    await deleteTestUsers(serverDB);
     await serverDB.delete(workspaces).where(eq(workspaces.id, workspaceId));
-    await serverDB.delete(users);
   });
 
   it('is an ordinary agent named after the project, wearing its avatar and the Project label', async () => {
@@ -60,6 +61,8 @@ describe('the main agent a project creates', () => {
     expect(agent).toEqual(
       expect.objectContaining({ avatar: '🚀', title: 'Apollo Project Agent', virtual: false }),
     );
+    // A project runs in the cloud sandbox unless someone picks a device.
+    expect(agent.agencyConfig).toEqual({ executionTarget: 'sandbox' });
     expect(await labelsOf(agent.id)).toEqual([
       expect.objectContaining({ name: PROJECT_AGENT_LABEL, workspaceId: null }),
     ]);
@@ -67,6 +70,34 @@ describe('the main agent a project creates', () => {
     expect(await new AgentLabelModel(serverDB, userId).query()).toEqual([
       expect.objectContaining({ name: PROJECT_AGENT_LABEL, usageCount: 1 }),
     ]);
+  });
+
+  it('takes the ids the create form reserved, so its generated avatars match the preview', async () => {
+    const project = await createProject(repo, {
+      dedicatedAgentId: 'agt_reservedAgnt',
+      id: 'prj_reservedProj',
+      name: 'Reserved',
+    });
+
+    expect(project.id).toBe('prj_reservedProj');
+    expect(project.coordinatorAgentId).toBe('agt_reservedAgnt');
+    // The reserved agent id is not a column of the project.
+    expect(project).not.toHaveProperty('dedicatedAgentId');
+  });
+
+  it('ignores a reserved agent id when the project reuses an existing agent', async () => {
+    const existing = await new AgentModel(serverDB, userId).create({ title: 'Existing' });
+
+    const project = await createProject(repo, {
+      coordinatorAgentId: existing.id,
+      dedicatedAgentId: 'agt_unusedAgent',
+      name: 'Reuse',
+    });
+
+    expect(project.coordinatorAgentId).toBe(existing.id);
+    expect(await serverDB.select().from(agents).where(eq(agents.id, 'agt_unusedAgent'))).toEqual(
+      [],
+    );
   });
 
   it('shares one Project label across the projects of a scope', async () => {

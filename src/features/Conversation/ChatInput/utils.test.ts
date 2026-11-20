@@ -1,14 +1,19 @@
 import type { UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
+import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { fileChatSelectors, useFileStore } from '@/store/file';
+import type { UploadFileItem } from '@/types/files/upload';
 
 import {
+  clearSentAttachments,
   createQueueSendNowGate,
-  getContextWindowMessages,
+  getContextWindow,
   getConversationChatInputUiState,
   getConversationSendButtonProps,
   getQueuedHintKey,
+  partitionSendableUploads,
   putQueuedMessageInEditor,
   sendQueuedMessageNow,
   toChatInputMessages,
@@ -55,6 +60,35 @@ describe('createQueueSendNowGate', () => {
     await expect(first).resolves.toBe(true);
     await expect(gate.run(secondTask)).resolves.toBe(true);
     expect(secondTask).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('getQueuedHintKey by Follow-up behavior', () => {
+  it('says Queue sends one message per turn once the run ends', () => {
+    expect(getQueuedHintKey({ count: 1, mode: 'queue', waitsForRunEnd: false })).toBe(
+      'inputQueue.queuedRunEndHint',
+    );
+    expect(getQueuedHintKey({ count: 2, mode: 'queue', waitsForRunEnd: false })).toBe(
+      'inputQueue.queuedOneByOneHint',
+    );
+  });
+
+  it('says Steer joins the current run, merged', () => {
+    expect(getQueuedHintKey({ count: 1, mode: 'steer', waitsForRunEnd: false })).toBe(
+      'inputQueue.steerHint',
+    );
+    expect(getQueuedHintKey({ count: 3, mode: 'steer', waitsForRunEnd: false })).toBe(
+      'inputQueue.steerMergeHint',
+    );
+  });
+
+  it('says a run that cannot take a steer queues it until the end', () => {
+    expect(getQueuedHintKey({ count: 1, mode: 'steer', waitsForRunEnd: true })).toBe(
+      'inputQueue.steerUnsupportedHint',
+    );
+    expect(getQueuedHintKey({ count: 2, mode: 'steer', waitsForRunEnd: true })).toBe(
+      'inputQueue.steerUnsupportedMergeHint',
+    );
   });
 });
 
@@ -129,73 +163,158 @@ describe('toChatInputMessages', () => {
   });
 });
 
-describe('getContextWindowMessages', () => {
+describe('getContextWindow', () => {
+  const accounting = {
+    bySource: {
+      content: 500,
+      fileContext: 0,
+      reasoning: 0,
+      thoughtSignature: 0,
+      toolCallId: 2,
+      toolCalls: 30,
+      toolDefinition: 4000,
+    },
+    estimator: 'tokenx' as const,
+    messageCount: 3,
+    system: 2000,
+    total: 6532,
+  };
+
   it('uses the full conversation when history count is disabled', () => {
-    expect(
-      getContextWindowMessages(tokenMessages, {
-        enableHistoryCount: false,
-        historyCount: 2,
-      }).map((message) => message.content),
-    ).toEqual(['old user', 'old assistant', 'latest tool', 'latest user']);
+    const window = getContextWindow(tokenMessages, { enableHistoryCount: false, historyCount: 2 });
+
+    expect(window.request).toBeUndefined();
+    expect(window.history.map((message) => message.content)).toEqual([
+      'old user',
+      'old assistant',
+      'latest tool',
+      'latest user',
+    ]);
   });
 
   it('slices chat messages according to history count', () => {
     expect(
-      getContextWindowMessages(tokenMessages, {
+      getContextWindow(tokenMessages, {
         enableHistoryCount: true,
         historyCount: 2,
-      }).map((message) => message.content),
+      }).history.map((message) => message.content),
     ).toEqual(['latest tool', 'latest user']);
   });
 
   it('returns no historical chat messages when history count is zero', () => {
     expect(
-      getContextWindowMessages(tokenMessages, {
-        enableHistoryCount: true,
-        historyCount: 0,
-      }),
+      getContextWindow(tokenMessages, { enableHistoryCount: true, historyCount: 0 }).history,
     ).toEqual([]);
+  });
+
+  it('starts from the latest recorded request and keeps every message after it', () => {
+    const messages = [
+      { content: 'first', id: 'u1', role: 'user' },
+      {
+        content: 'older reply',
+        id: 'a1',
+        metadata: { contextAccounting: { ...accounting, total: 1 } },
+        role: 'assistant',
+      },
+      { content: 'read the file', id: 'u2', role: 'user' },
+      {
+        content: '',
+        id: 'a2',
+        metadata: { contextAccounting: accounting },
+        model: 'deepseek-v4-flash',
+        provider: 'deepseek',
+        role: 'assistant',
+        usage: { totalInputTokens: 7000 },
+      },
+      { content: 'file body', id: 't1', role: 'tool', tool_call_id: 'call_1' },
+    ] as UIChatMessage[];
+
+    const window = getContextWindow(messages, { enableHistoryCount: false });
+
+    expect(window.request).toMatchObject({
+      accounting,
+      inputTokens: 7000,
+      model: 'deepseek-v4-flash',
+      provider: 'deepseek',
+    });
+    expect(window.request?.messages?.map((message) => message.id)).toEqual(['a2', 't1']);
+
+    // ROOT CAUSE: with a history count every request re-truncates history, so
+    // messages the recorded request covered can drop out of the next one;
+    // adding everything after the recorded reply on top overstated usage.
+    const truncated = getContextWindow(messages, { enableHistoryCount: true, historyCount: 1 });
+
+    expect(truncated.request).toMatchObject({ accounting, model: 'deepseek-v4-flash' });
+    expect(truncated.request?.messages).toBeUndefined();
+    expect(truncated.history.map((message) => message.id)).toEqual(['t1']);
+  });
+
+  it('ignores accounting on non-assistant messages', () => {
+    const messages = [
+      { content: 'hi', id: 'u1', metadata: { contextAccounting: accounting }, role: 'user' },
+    ] as UIChatMessage[];
+
+    expect(getContextWindow(messages, {}).request).toBeUndefined();
   });
 });
 
 describe('getConversationSendButtonProps', () => {
-  it.each([false, true])(
-    'keeps uploads disabled with generating=%s despite a host override',
-    (generating) => {
-      const defaults = {
-        disabled: true,
-        generating,
-        onStop: vi.fn(),
-        showSendWhileGenerating: generating,
-      };
-      const overrides = { disabled: false, shape: 'round' as const };
-
-      expect(getConversationSendButtonProps(defaults, overrides, true)).toEqual({
-        ...defaults,
-        disabled: true,
-        shape: 'round',
-      });
-      expect(getConversationSendButtonProps(defaults, overrides, false).disabled).toBe(false);
-    },
-  );
-
   it.each([
     { customDisabled: undefined, disabled: true, expected: true },
     { customDisabled: undefined, disabled: false, expected: false },
     { customDisabled: true, disabled: false, expected: true },
     { customDisabled: false, disabled: true, expected: false },
   ])(
-    'preserves non-upload disabled overrides: $customDisabled / $disabled',
+    'lets a host override disabled: $customDisabled / $disabled',
     ({ customDisabled, disabled, expected }) => {
       expect(
         getConversationSendButtonProps(
           { disabled, generating: false, onStop: vi.fn() },
           customDisabled === undefined ? undefined : { disabled: customDisabled },
-          false,
         ).disabled,
       ).toBe(expected);
     },
   );
+});
+
+describe('partitionSendableUploads', () => {
+  it('leaves failed and cancelled uploads out, keeping the rest in composer order', () => {
+    const files = [
+      { id: 'a', status: 'success' as const },
+      { id: 'b', status: 'error' as const },
+      { id: 'c', status: 'success' as const },
+      { id: 'd', status: 'cancelled' as const },
+    ];
+
+    expect(partitionSendableUploads(files)).toEqual({
+      failed: [files[1], files[3]],
+      sendable: [files[0], files[2]],
+    });
+  });
+});
+
+describe('clearSentAttachments', () => {
+  it('keeps a failed upload in the composer and clears only what was sent', () => {
+    const contextKey = 'main_agent-1';
+    const chip = (id: string, status: UploadFileItem['status']) =>
+      ({ file: new File([], `${id}.zip`), id, status }) as UploadFileItem;
+    const uploads = [chip('sent', 'success'), chip('failed', 'error')];
+    useFileStore.setState({
+      chatContextSelectionsByContext: { [contextKey]: [{ id: 'sel' } as any] },
+      chatUploadFileListByContext: { [contextKey]: uploads },
+    });
+
+    const { sendable } = partitionSendableUploads(uploads);
+    clearSentAttachments(useFileStore.getState(), contextKey, sendable);
+
+    const state = useFileStore.getState();
+    expect(
+      fileChatSelectors
+        .chatUploadFileList(contextKey)(state)
+        .map((f) => f.id),
+    ).toEqual(['failed']);
+    expect(fileChatSelectors.chatContextSelections(contextKey)(state)).toEqual([]);
+  });
 });
 
 describe('getConversationChatInputUiState', () => {
@@ -207,7 +326,6 @@ describe('getConversationChatInputUiState', () => {
       }),
     ).toEqual({
       placeholderVariant: 'followUp',
-      showSendMenu: false,
       showSendWhileGenerating: false,
       showStopButton: true,
     });
@@ -225,7 +343,6 @@ describe('getConversationChatInputUiState', () => {
       }),
     ).toEqual({
       placeholderVariant: 'default',
-      showSendMenu: false,
       showSendWhileGenerating: true,
       showStopButton: true,
     });
@@ -252,7 +369,6 @@ describe('getConversationChatInputUiState', () => {
       }),
     ).toEqual({
       placeholderVariant: 'default',
-      showSendMenu: true,
       showSendWhileGenerating: false,
       showStopButton: false,
     });
@@ -267,7 +383,6 @@ describe('getConversationChatInputUiState', () => {
       }),
     ).toEqual({
       placeholderVariant: 'default',
-      showSendMenu: false,
       showSendWhileGenerating: false,
       showStopButton: true,
     });
@@ -311,6 +426,7 @@ describe('toDisplayableSendErrorMessage', () => {
 
 describe('sendQueuedMessageNow', () => {
   const context = { agentId: 'agt-1', topicId: 'tpc-1' };
+  const contextKey = messageMapKey(context);
   const msg = {
     content: 'now',
     createdAt: 1,
@@ -320,6 +436,7 @@ describe('sendQueuedMessageNow', () => {
   };
   const chatWith = (cancelled: boolean | Error) => {
     const order: string[] = [];
+    const dbMessagesMap: Record<string, UIChatMessage[]> = { [contextKey]: [] };
     const chat = {
       cancelOperation: vi.fn(async () => {
         order.push('cancel');
@@ -327,6 +444,17 @@ describe('sendQueuedMessageNow', () => {
         return cancelled;
       }),
       restoreQueuedMessage: vi.fn(),
+      dbMessagesMap,
+      internal_createClientMessage: vi.fn(
+        (id: string, value: Pick<UIChatMessage, 'content' | 'metadata' | 'role'>) => {
+          dbMessagesMap[contextKey].push({ ...value, createdAt: 1, id, updatedAt: 1 });
+        },
+      ),
+      internal_dispatchMessage: vi.fn(({ id }: { id: string }) => {
+        dbMessagesMap[contextKey] = dbMessagesMap[contextKey].filter(
+          (message) => message.id !== id,
+        );
+      }),
       operations: {
         'op-1': {
           context,
@@ -344,12 +472,50 @@ describe('sendQueuedMessageNow', () => {
           { content: 'after', createdAt: 2, id: 'q2', interruptMode: 'soft' },
         ],
       },
-      sendMessage: vi.fn(async () => {
+      sendMessage: vi.fn(async ({ onMessageAccepted, optimisticUserMessageId }) => {
         order.push('send');
+        const row = dbMessagesMap[contextKey].find(({ id }) => id === optimisticUserMessageId);
+        if (row) row.metadata = { steer: true };
+        onMessageAccepted();
       }),
     } as any;
     return { chat, order };
   };
+
+  it('shows a user bubble with the final message ID while the device is still stopping', async () => {
+    const { chat } = chatWith(true);
+    const cancellation = Promise.withResolvers<boolean>();
+    chat.cancelOperation.mockReturnValueOnce(cancellation.promise);
+
+    const sending = sendQueuedMessageNow({
+      context,
+      contextKey,
+      getChat: () => chat,
+      msg,
+      withdraw: async () => true,
+    });
+
+    await vi.waitFor(() => expect(chat.cancelOperation).toHaveBeenCalledOnce());
+    expect(chat.sendMessage).not.toHaveBeenCalled();
+    expect(chat.dbMessagesMap[contextKey]).toEqual([
+      expect.objectContaining({
+        content: 'now',
+        metadata: { scope: LOCAL_MESSAGE_SCOPE, steer: true },
+        role: 'user',
+      }),
+    ]);
+    const [{ id }] = chat.dbMessagesMap[contextKey];
+
+    cancellation.resolve(true);
+    await expect(sending).resolves.toBe('sent');
+    expect(chat.sendMessage).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ optimisticUserMessageId: id }),
+    );
+    expect(chat.dbMessagesMap[contextKey]).toEqual([
+      expect.objectContaining({ id, metadata: { steer: true } }),
+    ]);
+    expect(chat.restoreQueuedMessage).not.toHaveBeenCalled();
+  });
 
   // ROOT CAUSE:
   //
@@ -367,7 +533,7 @@ describe('sendQueuedMessageNow', () => {
     });
 
     await sendQueuedMessageNow({
-      chat,
+      getChat: () => chat,
       context,
       contextKey: messageMapKey(context),
       msg,
@@ -386,7 +552,7 @@ describe('sendQueuedMessageNow', () => {
     const { chat } = chatWith(true);
 
     await sendQueuedMessageNow({
-      chat,
+      getChat: () => chat,
       context,
       contextKey: messageMapKey(context),
       msg: { ...msg, forceRuntime: 'gateway' },
@@ -398,19 +564,136 @@ describe('sendQueuedMessageNow', () => {
     );
   });
 
-  it('stops nothing and sends nothing when the run already took it', async () => {
+  it('stops nothing and sends nothing when the run already wrote it', async () => {
     const { chat } = chatWith(true);
+    chat.queuedMessages[messageMapKey(context)] = [];
 
-    await sendQueuedMessageNow({
-      chat,
+    const outcome = await sendQueuedMessageNow({
+      getChat: () => chat,
       context,
       contextKey: messageMapKey(context),
       msg,
       withdraw: async () => false,
     });
 
+    expect(outcome).toBe('delivered');
     expect(chat.cancelOperation).not.toHaveBeenCalled();
     expect(chat.sendMessage).not.toHaveBeenCalled();
+  });
+
+  // ROOT CAUSE:
+  //
+  // A CLI agent run takes a follow-up from the server but only writes it
+  // between its own turns, so for minutes it stays "delivering". Send now read
+  // that as already sent: it showed "Already sent to the agent" and neither
+  // interrupted the run nor sent the message.
+  //
+  // Before: a refused withdrawal stopped nothing.
+  // After: one still in the tray interrupts the run, which hands it back, and
+  // is withdrawn again and sent.
+  it('interrupts a run that took it but has not written it yet, then sends it', async () => {
+    const { chat, order } = chatWith(true);
+    let delivering = true;
+    const withdraw = vi.fn(async () => {
+      order.push('withdraw');
+      return !delivering;
+    });
+    chat.cancelOperation.mockImplementation(async () => {
+      order.push('cancel');
+      delivering = false;
+      return true;
+    });
+
+    const outcome = await sendQueuedMessageNow({
+      getChat: () => chat,
+      context,
+      contextKey: messageMapKey(context),
+      msg,
+      withdraw,
+    });
+
+    expect(outcome).toBe('sent');
+    expect(order).toEqual(['withdraw', 'cancel', 'withdraw', 'send']);
+  });
+
+  it('sends nothing when the run wrote it before the interrupt landed', async () => {
+    const { chat } = chatWith(true);
+
+    const outcome = await sendQueuedMessageNow({
+      getChat: () => chat,
+      context,
+      contextKey: messageMapKey(context),
+      msg,
+      withdraw: async () => false,
+    });
+
+    expect(outcome).toBe('delivered');
+    expect(chat.cancelOperation).toHaveBeenCalled();
+    expect(chat.sendMessage).not.toHaveBeenCalled();
+    expect(chat.dbMessagesMap[contextKey]).toEqual([]);
+  });
+
+  it('keeps an item the run holds in the tray when the interrupt fails', async () => {
+    const { chat } = chatWith(false);
+
+    await expect(
+      sendQueuedMessageNow({
+        getChat: () => chat,
+        context,
+        contextKey: messageMapKey(context),
+        msg,
+        withdraw: async () => false,
+      }),
+    ).rejects.toThrow();
+
+    expect(chat.restoreQueuedMessage).not.toHaveBeenCalled();
+    expect(chat.sendMessage).not.toHaveBeenCalled();
+    expect(chat.dbMessagesMap[contextKey]).toEqual([]);
+  });
+
+  it('restores the queue if the replacement send returns without accepting the message', async () => {
+    const { chat } = chatWith(true);
+    chat.sendMessage.mockResolvedValueOnce(undefined);
+
+    await expect(
+      sendQueuedMessageNow({
+        context,
+        contextKey,
+        getChat: () => chat,
+        msg,
+        withdraw: async () => true,
+      }),
+    ).rejects.toThrow('The queued message was not accepted');
+
+    expect(chat.restoreQueuedMessage).toHaveBeenCalledOnce();
+    expect(chat.dbMessagesMap[contextKey]).toEqual([]);
+  });
+
+  it('keeps the bubble when persistence is acknowledged ahead of the transcript', async () => {
+    const { chat } = chatWith(true);
+    chat.sendMessage.mockImplementationOnce(
+      async ({
+        onMessageAccepted,
+        onMessagePersisted,
+      }: {
+        onMessageAccepted: () => void;
+        onMessagePersisted: () => void;
+      }) => {
+        onMessageAccepted();
+        onMessagePersisted();
+      },
+    );
+
+    await expect(
+      sendQueuedMessageNow({
+        context,
+        contextKey,
+        getChat: () => chat,
+        msg,
+        withdraw: async () => true,
+      }),
+    ).resolves.toBe('sent');
+    expect(chat.dbMessagesMap[contextKey]).toEqual([expect.objectContaining({ content: 'now' })]);
   });
 
   it.each([
@@ -421,7 +704,7 @@ describe('sendQueuedMessageNow', () => {
 
     await expect(
       sendQueuedMessageNow({
-        chat,
+        getChat: () => chat,
         context,
         contextKey: messageMapKey(context),
         msg,
@@ -432,7 +715,12 @@ describe('sendQueuedMessageNow', () => {
     // Back at its own place (index 1), not at the tail, so the order holds.
     expect(chat.restoreQueuedMessage).toHaveBeenCalledWith(
       messageMapKey(context),
-      { ...msg, serverDelivery: undefined, serverUnconfirmed: undefined },
+      {
+        ...msg,
+        serverDelivering: undefined,
+        serverDelivery: undefined,
+        serverUnconfirmed: undefined,
+      },
       1,
     );
     expect(chat.sendMessage).not.toHaveBeenCalled();

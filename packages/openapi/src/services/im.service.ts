@@ -19,11 +19,13 @@ import type { ServiceResult } from '../types';
 import type {
   ImMessage,
   ImReadRequest,
+  ImReadResult,
   ImSendRequest,
   ImSendResult,
   ImSyncQuery,
   ImSyncResult,
   PushTokenRegisterRequest,
+  PushTokenRegistration,
 } from '../types/im.type';
 import { IM_SYNC_MAX_WAIT_MS } from '../types/im.type';
 
@@ -286,7 +288,7 @@ export class ImRestService extends BaseService {
     }
   }
 
-  async markRead(topicId: string, input: ImReadRequest): ServiceResult<{ unread: number }> {
+  async markRead(topicId: string, input: ImReadRequest): ServiceResult<ImReadResult> {
     await this.requireTopic(topicId);
 
     const message = await this.findOwnMessage(input.messageId);
@@ -319,10 +321,7 @@ export class ImRestService extends BaseService {
   async registerPushToken(
     deviceId: string,
     input: PushTokenRegisterRequest,
-  ): ServiceResult<{
-    deviceId: string;
-    platform: string;
-  }> {
+  ): ServiceResult<PushTokenRegistration> {
     this.assertPersonalPushScope();
 
     const row = await new PushTokenModel(this.db, this.userId).upsert({

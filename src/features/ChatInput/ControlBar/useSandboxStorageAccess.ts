@@ -83,3 +83,20 @@ export const useSandboxStorageAccess = (agentId: string): SandboxStorageAccessRe
     status: data.entitled ? 'ready' : 'upgrade',
   };
 };
+
+/**
+ * Whether the plan includes a drive, for the execution-environment menu: asked
+ * whenever the agent could run in the cloud sandbox, not only once it does, so
+ * the persistent sandbox can be offered before it is picked.
+ */
+export const useSandboxDriveStatus = (enabled: boolean): SandboxStorageAccess | 'loading' => {
+  const shouldAsk = ENABLE_BUSINESS_FEATURES && enabled;
+  sandboxActions.useFetchEntitlement(shouldAsk, { revalidateOnFocus: false });
+  const data = useSandboxStore(sandboxSelectors.entitlement);
+
+  if (!shouldAsk) return 'hidden';
+  // Not yet known is not "no drive": a pick made meanwhile must still move the
+  // conversation off the drive it is on.
+  if (!data) return 'loading';
+  return data.entitled ? 'ready' : 'upgrade';
+};

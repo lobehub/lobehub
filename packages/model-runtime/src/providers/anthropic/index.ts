@@ -4,7 +4,7 @@ import {
   buildDefaultAnthropicPayload,
   createAnthropicCompatibleParams,
   createAnthropicCompatibleRuntime,
-} from '../../core/anthropicCompatibleFactory';
+} from '../../core/anthropicCompatible';
 import type { ChatStreamPayload } from '../../types';
 import { normalizeClaudeThinkingHistoryMessages } from './claudeThinkingHistory';
 import { supportsClaudeEffortLevel } from './modelId';

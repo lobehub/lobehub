@@ -130,6 +130,18 @@ export interface AgentDocumentContextRow extends AgentDocumentDerivedFields {
   updatedAt: Date;
 }
 
+export interface AgentDocumentContextQueryOptions {
+  /**
+   * Leave out progressive documents, for a step that renders the index from an
+   * already pinned snapshot: an agent can have over 10k of them, and reading
+   * them on every step was the bulk of agent-document reads. Disabled documents
+   * are left out too, since they are never injected. Only `always` documents and
+   * folder rows stay, so the archived tool results under `.tool-results` are
+   * still recognized.
+   */
+  excludeProgressive?: boolean;
+}
+
 export interface AgentDocumentContextPayload {
   content: string;
   contentCharCount?: number;

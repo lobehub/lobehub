@@ -15,6 +15,7 @@ import {
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from '../_helpers/assertWorkspaceRowManageable';
+import { assertCanWriteTeamPin } from '../_helpers/sidebarPin';
 import {
   agentGroupProcedureWrite,
   agentMemberInputSchema,
@@ -33,6 +34,9 @@ export const lifecycleRouter = router({
       const { group, supervisorAgentId } = await ctx.agentGroupRepo.createGroupWithSupervisor({
         ...input,
         config: ctx.agentGroupService.normalizeGroupConfig(input.config as ChatGroupConfig | null),
+        // A public workspace group's pin is the owner/admin team pin, set only
+        // through `updateGroup`; creating one never carries it.
+        ...(ctx.workspaceId && input.visibility !== 'private' ? { pinned: false } : {}),
       });
 
       if (ctx.workspaceId && group.visibility !== 'private') {
@@ -115,9 +119,6 @@ export const lifecycleRouter = router({
       // 1. Batch create virtual member agents
       const memberConfigs = input.members.map((member) => ({
         ...member,
-        // See the `batchCreateAgentsInGroup` cast above for why this bridges
-        // to `string[]` instead of failing type-check.
-        plugins: member.plugins as unknown as string[] | undefined,
         tags: member.tags as string[] | undefined,
         virtual: true,
         ...(groupVisibility ? { visibility: groupVisibility } : {}),
@@ -140,6 +141,11 @@ export const lifecycleRouter = router({
         {
           ...input.groupConfig,
           config: normalizedConfig,
+          // Same rule as `createGroup`: a public workspace group never starts
+          // as a team pin.
+          ...(ctx.workspaceId && input.groupConfig.visibility !== 'private'
+            ? { pinned: false }
+            : {}),
         },
         memberAgentIds,
         supervisorConfig as any,
@@ -236,6 +242,14 @@ export const lifecycleRouter = router({
         userId: ctx.userId,
         workspaceId: ctx.workspaceId ?? undefined,
       });
+
+      // A public workspace group's pin is the team pin every member sees:
+      // owner/admin only. A private group's pin stays its creator's own.
+      if (ctx.workspaceId && input.value.pinned !== undefined) {
+        const group = await ctx.chatGroupModel.findById(input.id);
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: 'Group not found' });
+        if (group.visibility !== 'private') await assertCanWriteTeamPin(ctx);
+      }
 
       // Collaborative edit lock: reject writes to a workspace group another
       // member is actively editing. Inert until a client acquires the lock.

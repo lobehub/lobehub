@@ -1,6 +1,6 @@
 import { definePagedReplica, type ReplicaPagedData } from '@/libs/replica';
 import { type FilesTabs, type ResourceSourceFilter, type SortType } from '@/types/files';
-import { type ResourceItem, type ResourceQueryParams } from '@/types/resource';
+import type { ResourceItem, ResourceQueryParams, ResourceSorter } from '@/types/resource';
 
 /**
  * The resource explorer shows one list at a time, so the replica keeps a single
@@ -31,7 +31,7 @@ export interface ResourceListParams {
   parentId?: string | null;
   q?: string;
   showFilesInKnowledgeBase?: boolean;
-  sorter?: 'name' | 'createdAt' | 'size';
+  sorter?: ResourceSorter;
   sortType?: SortType;
   sourceFilter?: ResourceSourceFilter;
   visibility?: 'private' | 'public';

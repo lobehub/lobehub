@@ -618,62 +618,66 @@ describe('createServerAgentToolsEngine', () => {
     expect(result.enabledToolIds).toContain(LobeAgentManifest.identifier);
   });
 
-  it('should enable lobe-agent by default since it is always-on', () => {
-    const context = createMockContext();
-    const engine = createServerAgentToolsEngine(context, {
-      agentConfig: { plugins: [] },
-      model: 'deepseek-chat',
-      provider: 'deepseek',
-    });
+  it.each(['lobe-agent', 'lobe-skill-store'])(
+    'exposes %s only after activation or pinning',
+    (id) => {
+      const options = {
+        agentConfig: { plugins: [] },
+        model: 'deepseek-chat',
+        provider: 'deepseek',
+      };
+      const input = { ...deepseekToolInput(), toolIds: [id] };
+      const engine = createServerAgentToolsEngine(createMockContext(), options);
 
-    const result = engine.generateToolsDetailed(deepseekToolInput());
+      expect(engine.generateToolsDetailed(deepseekToolInput()).enabledToolIds).not.toContain(id);
+      expect(
+        engine.generateToolsDetailed({
+          ...input,
+          context: { isExplicitActivation: true },
+          skipDefaultTools: true,
+        }).enabledToolIds,
+      ).toEqual([id]);
 
-    // lobe-agent is in alwaysOnToolIds, so its core capabilities are on for every agent-mode turn.
-    expect(result.enabledToolIds).toContain(LobeAgentManifest.identifier);
+      const pinned = createServerAgentToolsEngine(createMockContext(), {
+        ...options,
+        agentConfig: { plugins: [id] },
+      });
+      expect(pinned.generateToolsDetailed(input).enabledToolIds).toContain(id);
 
-    // Without a manifest context, the full static manifest is used — callSubAgent stays.
-    const lobeAgent = result.enabledManifests.find(
-      (m) => m.identifier === LobeAgentManifest.identifier,
-    );
-    expect(lobeAgent?.api.map((a) => a.name)).toContain(LobeAgentApiName.callSubAgent);
-  });
+      const disabled = createServerAgentToolsEngine(createMockContext(), {
+        ...options,
+        disabledPluginIds: [id],
+      });
+      expect(
+        disabled.generateToolsDetailed({
+          ...input,
+          context: { isExplicitActivation: true },
+          skipDefaultTools: true,
+        }).enabledToolIds,
+      ).toEqual([]);
+    },
+  );
 
-  it('should honor an explicit disabled policy for an always-on builtin tool', () => {
-    const context = createMockContext();
-    const engine = createServerAgentToolsEngine(context, {
-      agentConfig: { plugins: [] },
-      disabledPluginIds: [LobeAgentManifest.identifier],
-      model: 'deepseek-chat',
-      provider: 'deepseek',
-    });
-
-    const result = engine.generateToolsDetailed(deepseekToolInput());
-
-    expect(result.enabledToolIds).not.toContain(LobeAgentManifest.identifier);
-    expect(result.enabledManifests).not.toContainEqual(
-      expect.objectContaining({ identifier: LobeAgentManifest.identifier }),
-    );
-  });
-
-  it('hides lobe-agent callSubAgent when manifestContext.isSubAgent is true', () => {
-    const context = createMockContext();
-    const engine = createServerAgentToolsEngine(context, {
-      agentConfig: { plugins: [] },
-      manifestContext: { isSubAgent: true },
-      model: 'deepseek-chat',
-      provider: 'deepseek',
-    });
-
-    const result = engine.generateToolsDetailed(deepseekToolInput());
-
-    // lobe-agent's other capabilities (plan / todo / visual-media) stay on...
-    expect(result.enabledToolIds).toContain(LobeAgentManifest.identifier);
-    const lobeAgent = result.enabledManifests.find(
-      (m) => m.identifier === LobeAgentManifest.identifier,
-    );
-    // ...but callSubAgent is stripped so a nested sub-agent cannot recurse.
-    expect(lobeAgent?.api.map((a) => a.name)).not.toContain(LobeAgentApiName.callSubAgent);
-  });
+  it.each([{ isSubAgent: true }, { scope: 'group' }])(
+    'hides callSubAgent after discovery with %o',
+    (manifestContext) => {
+      const engine = createServerAgentToolsEngine(createMockContext(), {
+        agentConfig: { plugins: [] },
+        manifestContext,
+        model: 'deepseek-chat',
+        provider: 'deepseek',
+      });
+      const { enabledManifests } = engine.generateToolsDetailed({
+        ...deepseekToolInput(),
+        context: { isExplicitActivation: true },
+        skipDefaultTools: true,
+        toolIds: [LobeAgentManifest.identifier],
+      });
+      const names = enabledManifests[0].api.map((api) => api.name);
+      expect(names).toContain(LobeAgentApiName.createPlan);
+      expect(names).not.toContain(LobeAgentApiName.callSubAgent);
+    },
+  );
 
   it('rewrites lobe-skills exec descriptions when manifestContext.executionEnv is device-unrouted', () => {
     const context = createMockContext();
@@ -697,23 +701,6 @@ describe('createServerAgentToolsEngine', () => {
     expect(
       SkillsManifest.api.find((a) => a.name === SkillsApiName.runCommand)?.description,
     ).not.toContain('offline');
-  });
-
-  it('hides lobe-agent callSubAgent inside a group run (scope=group)', () => {
-    const context = createMockContext();
-    const engine = createServerAgentToolsEngine(context, {
-      agentConfig: { plugins: [] },
-      manifestContext: { scope: 'group' },
-      model: 'deepseek-chat',
-      provider: 'deepseek',
-    });
-
-    const result = engine.generateToolsDetailed(deepseekToolInput());
-
-    const lobeAgent = result.enabledManifests.find(
-      (m) => m.identifier === LobeAgentManifest.identifier,
-    );
-    expect(lobeAgent?.api.map((a) => a.name)).not.toContain(LobeAgentApiName.callSubAgent);
   });
 
   it('should enable KnowledgeBase when hasEnabledKnowledgeBases is true', () => {
@@ -828,7 +815,7 @@ describe('createServerAgentToolsEngine', () => {
       toolIds: ['test-plugin', LobeAgentManifest.identifier, WebBrowsingManifest.identifier],
     });
 
-    // Exactly the declared plugin — no always-on lobe-agent, no default web/KB.
+    // Exactly the declared plugin — no default web/KB.
     expect(result.enabledToolIds).toContain('test-plugin');
     expect(result.enabledToolIds).not.toContain(LobeAgentManifest.identifier);
     expect(result.enabledToolIds).not.toContain(WebBrowsingManifest.identifier);

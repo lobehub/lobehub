@@ -10,6 +10,7 @@ import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AvatarUpload from '@/components/AvatarUpload';
+import { densityTokens } from '@/styles/density.stylex';
 import { type CreateOAuthAppParams } from '@/types/oauthApp';
 
 import { useLogoUpload } from '../../useLogoUpload';
@@ -23,7 +24,7 @@ const styles = stylex.create({
     position: 'relative',
     flex: '1',
     minWidth: '0',
-    padding: '12px',
+    padding: densityTokens['--lobe-density-content-gap'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },

@@ -22,9 +22,25 @@ export {
   registerShellWorksForLocalRun,
 } from './localRunWorkRegistration';
 export {
+  isBetterCodingExperienceEnabled,
+  resolveShellPullRequestLinking,
+  type ShellPullRequestLinking,
+} from './pullRequestLinking';
+export {
   registerWorksForOperation,
   type RegisterWorksForOperationParams,
   type WorksRegistrationOutcome,
 } from './registerWorksForOperation';
 export { resolveRunWorkAccessScope, type ShareVisitorWorkIdentity } from './shareWorkScope';
 export { stateHasEntityFileEdits } from './stateHasEntityFileEdits';
+export {
+  linkTopicPullRequest,
+  parsePullRequestUrl,
+  setTopicPullRequestDismissed,
+} from './topicPullRequestLinks';
+export {
+  type DeviceReportedPullRequest,
+  linkPushedPullRequests,
+  type LinkPushedPullRequestsResult,
+  listTopicPullRequestsWithStatus,
+} from './topicPullRequests';

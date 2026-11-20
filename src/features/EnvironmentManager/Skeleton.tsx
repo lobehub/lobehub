@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import ListSkeleton from '@/components/ListSkeleton';
 import SkeletonBar from '@/components/Skeleton/Bar';
+import { useDensityTokens } from '@/styles/density';
 
 const styles = stylex.create({
   // Same frame as the manager's `listCol`.
@@ -24,7 +25,7 @@ const styles = stylex.create({
 
 /**
  * The environment list while it loads: the bordered list frame with the same
- * 4px inset and 72px rows (`EnvironmentItem`, 2px apart) the loaded list uses.
+ * 4px inset and 72px (compact 52px) rows (`EnvironmentItem`, 2px apart) the loaded list uses.
  */
 export const EnvironmentListSkeleton = () => (
   <Flexbox {...stylex.props(styles.listCol)}>
@@ -35,12 +36,26 @@ export const EnvironmentListSkeleton = () => (
 );
 
 /**
+ * The detail panel's definition while only the stored row is known: the row
+ * keeps no configuration, so its sections wait for the server's answer.
+ */
+export const EnvironmentDefinitionSkeleton = () => (
+  <Flexbox aria-busy data-testid={'environment-definition-skeleton'} gap={12} paddingBlock={8}>
+    <SkeletonBar height={16} width={'40%'} />
+    <SkeletonBar height={32} width={'100%'} />
+    <SkeletonBar height={16} width={'30%'} />
+    <SkeletonBar height={32} width={'100%'} />
+  </Flexbox>
+);
+
+/**
  * `EnvironmentManager` before its chunk loads: the heading row (pool tabs, or
  * the section name, then refresh + create) above the list frame. `leading`
  * replaces the section name, e.g. with a tab-strip placeholder.
  */
 export const EnvironmentManagerSkeleton = ({ leading }: { leading?: ReactNode }) => {
   const { t } = useTranslation('setting');
+  const { controlHeight } = useDensityTokens();
 
   return (
     <Flexbox aria-busy data-testid={'environments-skeleton'} gap={16}>
@@ -51,8 +66,8 @@ export const EnvironmentManagerSkeleton = ({ leading }: { leading?: ReactNode })
           </Text>
         )}
         <Flexbox horizontal align={'center'} gap={8}>
-          <SkeletonBar height={32} width={32} />
-          <SkeletonBar height={32} width={128} />
+          <SkeletonBar height={controlHeight} width={controlHeight} />
+          <SkeletonBar height={controlHeight} width={128} />
         </Flexbox>
       </Flexbox>
       <EnvironmentListSkeleton />

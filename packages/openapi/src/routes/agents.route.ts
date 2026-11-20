@@ -1,15 +1,18 @@
 import { Hono } from 'hono';
-import { describeRoute } from 'hono-openapi';
 
 import { getAllScopePermissions, getScopePermissions } from '@/utils/rbac';
 
+import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { AgentController } from '../controllers/agent.controller';
 import { AgentAccountController } from '../controllers/agent-account.controller';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission, requireApiKeyScope } from '../middleware/permission-check';
 import {
+  AgentDetailSchema,
   AgentIdParamSchema,
+  AgentListSchema,
+  AgentSchema,
   CreateAgentRequestSchema,
   DuplicateAgentSchema,
   GetAgentsQuerySchema,
@@ -19,11 +22,14 @@ import {
   AgentAccountAgentParamSchema,
   AgentAccountIdParamSchema,
   AgentAccountListQuerySchema,
+  AgentAccountListSchema,
+  AgentAccountSchema,
   CreateAgentAccountRequestSchema,
   RevokeAgentAccountQuerySchema,
   SetAgentAccountCredentialRequestSchema,
   UpdateAgentAccountRequestSchema,
 } from '../types/agent-account.type';
+import { DeletedResourceSchema } from '../types/common.type';
 
 // Agent-related routes
 const AgentRoutes = new Hono();
@@ -35,6 +41,7 @@ const AgentRoutes = new Hono();
  */
 AgentRoutes.get(
   '/',
+  routeDoc({ data: AgentListSchema, summary: 'List agents', tags: ['agents'] }),
   requireAuth,
   requireAnyPermission(
     getScopePermissions('AGENT_READ', ['ALL', 'OWNER']),
@@ -54,6 +61,7 @@ AgentRoutes.get(
  */
 AgentRoutes.post(
   '/',
+  routeDoc({ data: AgentSchema, summary: 'Create an agent', tags: ['agents'] }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AGENT_CREATE'),
@@ -73,6 +81,12 @@ AgentRoutes.post(
  */
 AgentRoutes.get(
   '/:id',
+  routeDoc({
+    data: AgentDetailSchema,
+    errors: [404],
+    summary: 'Get an agent with its mounted files and knowledge bases',
+    tags: ['agents'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AGENT_READ'),
@@ -92,6 +106,7 @@ AgentRoutes.get(
  */
 AgentRoutes.patch(
   '/:id',
+  routeDoc({ data: AgentSchema, summary: 'Update an agent', tags: ['agents'] }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AGENT_UPDATE'),
@@ -112,6 +127,7 @@ AgentRoutes.patch(
  */
 AgentRoutes.delete(
   '/:id',
+  routeDoc({ data: DeletedResourceSchema, summary: 'Delete an agent', tags: ['agents'] }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AGENT_DELETE'),
@@ -126,7 +142,13 @@ AgentRoutes.delete(
 
 AgentRoutes.post(
   '/:id/duplicate',
-  describeRoute({ summary: 'Duplicate agent', tags: ['agents'] }),
+  routeDoc({
+    data: AgentDetailSchema,
+    errors: [404],
+    status: 201,
+    summary: 'Duplicate an agent',
+    tags: ['agents'],
+  }),
   requireAuth,
   requireAnyPermission(getAllScopePermissions('AGENT_FORK')),
   zValidator('param', AgentIdParamSchema),
@@ -163,7 +185,13 @@ const agentAccountCredentialScope = requireApiKeyScope('agent:credential:write')
 /** GET /api/v1/agents/:id/accounts — never returns a credential. */
 AgentRoutes.get(
   '/:id/accounts',
-  describeRoute({ operationId: 'listAgentAccounts', tags: ['agents'] }),
+  routeDoc({
+    data: AgentAccountListSchema,
+    errors: [404],
+    operationId: 'listAgentAccounts',
+    summary: "List an agent's accounts",
+    tags: ['agents'],
+  }),
   requireAuth,
   agentAccountRead,
   zValidator('param', AgentAccountAgentParamSchema),
@@ -174,7 +202,14 @@ AgentRoutes.get(
 /** POST /api/v1/agents/:id/accounts — mount an existing handle, or provision one. */
 AgentRoutes.post(
   '/:id/accounts',
-  describeRoute({ operationId: 'createAgentAccount', tags: ['agents'] }),
+  routeDoc({
+    data: AgentAccountSchema,
+    errors: [404, 409],
+    operationId: 'createAgentAccount',
+    status: 201,
+    summary: 'Mount or provision an agent account',
+    tags: ['agents'],
+  }),
   requireAuth,
   agentAccountWrite,
   zValidator('param', AgentAccountAgentParamSchema),
@@ -185,7 +220,13 @@ AgentRoutes.post(
 /** GET /api/v1/agents/:id/accounts/:accountId */
 AgentRoutes.get(
   '/:id/accounts/:accountId',
-  describeRoute({ operationId: 'getAgentAccount', tags: ['agents'] }),
+  routeDoc({
+    data: AgentAccountSchema,
+    errors: [404],
+    operationId: 'getAgentAccount',
+    summary: 'Get an agent account',
+    tags: ['agents'],
+  }),
   requireAuth,
   agentAccountRead,
   zValidator('param', AgentAccountIdParamSchema),
@@ -195,7 +236,13 @@ AgentRoutes.get(
 /** PATCH /api/v1/agents/:id/accounts/:accountId — non-secret fields only. */
 AgentRoutes.patch(
   '/:id/accounts/:accountId',
-  describeRoute({ operationId: 'updateAgentAccount', tags: ['agents'] }),
+  routeDoc({
+    data: AgentAccountSchema,
+    errors: [404, 409],
+    operationId: 'updateAgentAccount',
+    summary: 'Update an agent account',
+    tags: ['agents'],
+  }),
   requireAuth,
   agentAccountWrite,
   zValidator('param', AgentAccountIdParamSchema),
@@ -211,7 +258,15 @@ AgentRoutes.patch(
  */
 AgentRoutes.put(
   '/:id/accounts/:accountId/credential',
-  describeRoute({ operationId: 'setAgentAccountCredential', tags: ['agents'] }),
+  routeDoc({
+    data: AgentAccountSchema,
+    description:
+      'Write-only: the response carries the non-secret hint and `hasCredential`, never the secret.',
+    errors: [404],
+    operationId: 'setAgentAccountCredential',
+    summary: 'Write an agent account credential',
+    tags: ['agents'],
+  }),
   requireAuth,
   agentAccountCredentialIssuer,
   agentAccountCredentialScope,
@@ -223,7 +278,15 @@ AgentRoutes.put(
 /** DELETE /api/v1/agents/:id/accounts/:accountId — release and revoke. */
 AgentRoutes.delete(
   '/:id/accounts/:accountId',
-  describeRoute({ operationId: 'revokeAgentAccount', tags: ['agents'] }),
+  routeDoc({
+    data: AgentAccountSchema,
+    description:
+      'Releases the account and marks it revoked. The row is kept for audit, so the response is the revoked account.',
+    errors: [404],
+    operationId: 'revokeAgentAccount',
+    summary: 'Revoke an agent account',
+    tags: ['agents'],
+  }),
   requireAuth,
   agentAccountWrite,
   zValidator('param', AgentAccountIdParamSchema),

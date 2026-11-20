@@ -17,6 +17,7 @@ import {
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
 import type { ChatToolPayload } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -33,6 +34,7 @@ import {
 } from '@/server/services/aiAgent/deviceToolAudit';
 import { resolveRunWorkAccessScope } from '@/server/services/workRegistration';
 
+import { parkAsyncShell } from '../asyncShellPark';
 import type { RuntimeExecutorContext } from '../context';
 import { dispatchClientTool } from '../dispatchClientTool';
 import {
@@ -306,12 +308,16 @@ export class ServerToolTransport implements ToolTransport {
                 : undefined,
               localSandboxNetwork:
                 context.state.world?.agent?.agencyConfig?.localSandboxNetwork === true,
+              evalMemory: context.state.plan?.eval?.memory,
+              isEval: context.state.origin?.trigger === RequestTrigger.Eval,
+              memoryEffort: context.state.world?.agent?.chatConfig?.memory?.effort,
               memoryToolPermission: context.state.world?.agent?.chatConfig?.memory?.toolPermission,
               messageId: context.state.origin?.sourceMessageId,
               operationId,
               projectId: context.state.origin?.projectId,
               projectSkills: resolveRunProjectSkills(context.state.plan),
               rootOperationId: operationId,
+              runSkillIds: context.state.plan?.skills?.skills?.map((skill) => skill.identifier),
               scope: context.state.origin?.scope,
               serverDB,
               skipResultTruncation: true,
@@ -348,6 +354,27 @@ export class ServerToolTransport implements ToolTransport {
               ),
           },
         );
+
+        // A device command still running after its wait window, which the
+        // device promised to report on: park instead of returning the
+        // `shell_id`. A no-op for every other result.
+        execution =
+          (await parkAsyncShell(
+            this.ctx,
+            {
+              existingToolMessageId: context.reuseExistingMessage
+                ? context.toolMessageId
+                : undefined,
+              parentMessageId: context.parentMessageId,
+              resultLimit: {
+                canReadArchive: enabledToolIds.includes(AgentDocumentsIdentifier),
+                maxLength: context.toolResultMaxLength,
+              },
+              state: context.state,
+              toolCall: chatToolPayload,
+            },
+            execution.result,
+          )) ?? execution;
       }
 
       if (execution.result.deferred) {

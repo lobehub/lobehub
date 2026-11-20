@@ -25,14 +25,13 @@ vi.mock('@/database/models/environment', () => ({
   }),
 }));
 
-const mockListRepositoryBranches = vi.fn();
+const mockListBranches = vi.fn();
+const mockListRepositories = vi.fn();
 
-vi.mock('@/server/services/connectorData', () => ({
-  ConnectorDataService: vi.fn(function () {
-    return {
-      getGitHubClient: async () => ({ listRepositoryBranches: mockListRepositoryBranches }),
-    };
-  }),
+vi.mock('@/server/services/scm/repositories', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listScopeGitHubRepositories: mockListRepositories,
+  listScopeGitHubRepositoryBranches: mockListBranches,
 }));
 
 // The definitions need no drive: if this router ever asked for the claim, the
@@ -44,7 +43,7 @@ vi.mock('@/server/services/sandbox', () => ({
 }));
 
 const { environmentRouter } = await import('../environment');
-const { ConnectorDataError } = await import('@lobechat/connector-data');
+const { ScmRepositoriesUnavailableError } = await import('@/server/services/scm/repositories');
 
 /** Shaped like the driver error drizzle surfaces, nested behind `cause`. */
 const driverError = (code: string, constraint?: string) => {
@@ -192,19 +191,23 @@ describe('environmentRouter', () => {
   });
 
   describe('listGithubBranches', () => {
-    it('lists the branches of one repository through the connected GitHub account', async () => {
-      mockListRepositoryBranches.mockResolvedValue(['canary', 'main']);
+    it('lists branches through the installation that grants the repository', async () => {
+      mockListBranches.mockResolvedValue(['canary', 'main']);
 
       const result = await caller().listGithubBranches({ owner: 'lobehub', repository: 'lobehub' });
 
       expect(result).toEqual({ branches: ['canary', 'main'], connected: true, truncated: false });
-      expect(mockListRepositoryBranches).toHaveBeenCalledWith('lobehub', 'lobehub');
+      expect(mockListBranches).toHaveBeenCalledWith(
+        ctx.serverDB,
+        { userId: 'user-1', workspaceId: 'ws-1' },
+        { limit: 1000, repoFullName: 'lobehub/lobehub' },
+      );
     });
 
     // At the ceiling the list may be partial; the picker falls back to typing
     // so a branch past it can still be entered.
     it('says when the list reached the ceiling and may be partial', async () => {
-      mockListRepositoryBranches.mockResolvedValue(
+      mockListBranches.mockResolvedValue(
         Array.from({ length: 1000 }, (_, index) => `branch-${index}`),
       );
 
@@ -213,20 +216,113 @@ describe('environmentRouter', () => {
       expect(result.truncated).toBe(true);
     });
 
-    it('answers not connected rather than failing when GitHub is unavailable', async () => {
-      mockListRepositoryBranches.mockRejectedValue(
-        new ConnectorDataError({
-          code: 'not_connected',
-          message: 'no token',
-          operation: 'listRepositoryBranches',
-          provider: 'github',
-          retryable: false,
-        }),
-      );
+    it('answers not connected when no installation grants the repository', async () => {
+      mockListBranches.mockResolvedValue(null);
 
       const result = await caller().listGithubBranches({ owner: 'lobehub', repository: 'lobehub' });
 
       expect(result).toEqual({ branches: [], connected: false, truncated: false });
+    });
+  });
+
+  describe('listGithubRepositories', () => {
+    const listed = (overrides: object = {}) => ({
+      configured: true,
+      installations: 1,
+      repositories: [],
+      truncated: false,
+      ...overrides,
+    });
+
+    // The regression behind T-13707: the picker read the person's Market OAuth
+    // connection, so a broken proxy hid repositories the workspace's GitHub App
+    // could clone. The list now comes from those installations.
+    it('lists what the scope GitHub App installations can read, grouped by owner', async () => {
+      mockListRepositories.mockResolvedValue(
+        listed({
+          repositories: [
+            {
+              defaultBranch: 'canary',
+              description: null,
+              fullName: 'lobehub/lobehub',
+              htmlUrl: 'https://github.com/lobehub/lobehub',
+              ownerAvatarUrl: null,
+              private: false,
+              pushedAt: '2026-11-01T00:00:00Z',
+            },
+            {
+              defaultBranch: 'main',
+              description: null,
+              fullName: 'lobehub-biz/torii',
+              htmlUrl: 'https://github.com/lobehub-biz/torii',
+              ownerAvatarUrl: null,
+              private: true,
+              pushedAt: null,
+            },
+          ],
+        }),
+      );
+
+      expect(await caller().listGithubRepositories()).toEqual({
+        configured: true,
+        connected: true,
+        truncated: false,
+        repositories: [
+          { defaultBranch: 'canary', isPrivate: false, name: 'lobehub', owner: 'lobehub' },
+          { defaultBranch: 'main', isPrivate: true, name: 'torii', owner: 'lobehub-biz' },
+        ],
+      });
+      expect(mockListRepositories).toHaveBeenCalledWith(ctx.serverDB, {
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+      });
+    });
+
+    it('answers not connected when the scope has no installation', async () => {
+      mockListRepositories.mockResolvedValue(listed({ installations: 0 }));
+      expect(await caller().listGithubRepositories()).toEqual({
+        configured: true,
+        connected: false,
+        repositories: [],
+        truncated: false,
+      });
+    });
+
+    // Without a GitHub App there is nothing to install, so the picker must not
+    // offer a connect button that leads nowhere.
+    it('says when this server has no GitHub App at all', async () => {
+      mockListRepositories.mockResolvedValue(listed({ configured: false, installations: 0 }));
+      expect(await caller().listGithubRepositories()).toMatchObject({
+        configured: false,
+        connected: false,
+      });
+    });
+
+    it('passes on that an installation held more repositories than were listed', async () => {
+      mockListRepositories.mockResolvedValue(listed({ truncated: true }));
+
+      expect((await caller().listGithubRepositories()).truncated).toBe(true);
+    });
+
+    it('keeps an installed scope with nothing granted apart from not connected', async () => {
+      mockListRepositories.mockResolvedValue(listed());
+
+      expect(await caller().listGithubRepositories()).toEqual({
+        configured: true,
+        connected: true,
+        truncated: false,
+        repositories: [],
+      });
+    });
+
+    it('reports a failure when every installation failed to answer', async () => {
+      mockListRepositories.mockRejectedValue(
+        new ScmRepositoriesUnavailableError(new Error('rate limited')),
+      );
+
+      await expect(caller().listGithubRepositories()).rejects.toMatchObject({
+        code: 'BAD_GATEWAY',
+      });
     });
   });
 });

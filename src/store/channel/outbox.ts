@@ -12,6 +12,11 @@ export interface ChannelOutgoingMessage {
   channelId: string;
   content: string;
   createdAt: Date;
+  /**
+   * Why the server refused a failed send, when it named a known category (a `ChatErrorType`);
+   * the conversation explains it in the viewer's language.
+   */
+  errorType?: string;
   fileIds: string[];
   mentions: string[];
   replyTo?: ChannelPublicMessage['replyTo'];
@@ -49,7 +54,7 @@ export const addOutgoing = (outbox: ChannelOutbox, message: ChannelOutgoingMessa
 export const patchOutgoing = (
   outbox: ChannelOutbox,
   message: ChannelOutgoingMessage,
-  patch: Partial<Pick<ChannelOutgoingMessage, 'sent' | 'status'>>,
+  patch: Partial<Pick<ChannelOutgoingMessage, 'errorType' | 'sent' | 'status'>>,
 ) => {
   const key = outboxKeyOf(message);
   const entries = outbox[key];

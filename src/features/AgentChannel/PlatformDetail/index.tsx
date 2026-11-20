@@ -27,6 +27,7 @@ import { agentBotProviderService } from '@/services/agentBotProvider';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
+import { densityVars } from '@/styles/densityVars';
 import { BOT_RUNTIME_STATUSES, type BotRuntimeStatusSnapshot } from '@/types/botRuntimeStatus';
 
 import { platformCredentialBodyMap } from '../platform/registry';
@@ -106,7 +107,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     min-width: 0;
-    padding-block: 16px 24px;
+    padding-block: ${densityVars.cardPadding} 24px;
     padding-inline-end: 32px;
 
     &[data-preview='closed'],
@@ -117,7 +118,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   hero: css`
     width: 100%;
     max-width: 1024px;
-    padding-block-end: 16px;
+    padding-block-end: ${densityVars.cardPadding};
   `,
   tabs: css`
     width: 100%;

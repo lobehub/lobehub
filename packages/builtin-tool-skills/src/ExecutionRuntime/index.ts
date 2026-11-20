@@ -44,10 +44,31 @@ export interface ExportFileResult {
   url?: string;
 }
 
+/**
+ * Host-resolved execution settings for one `execScript` call. Supplied by the
+ * caller that owns the run (the client executor from its tool context), never
+ * by the model — the manifest exposes none of these.
+ */
+export interface ExecScriptExecutionOptions {
+  /**
+   * Confine the command in the device sandbox (the "Local Sandbox" execution
+   * environment), with the same semantics as `local-system.runCommand`.
+   */
+  localSandbox?: boolean;
+  /** Let a fenced command reach the package-registry allowlist. */
+  localSandboxNetwork?: boolean;
+  /**
+   * The agent's working directory: the fence root of a sandboxed run (the
+   * skill directory is the shared skill cache and stays outside the fence),
+   * and its cwd when no skill directory resolves.
+   */
+  workingDirectory?: string;
+}
+
 export interface SkillRuntimeService {
   execScript?: (
     command: string,
-    options: {
+    options: ExecScriptExecutionOptions & {
       activatedSkills?: Array<{ description?: string; id?: string; name: string }>;
       description: string;
     },
@@ -194,7 +215,10 @@ export class SkillsExecutionRuntime {
     return resolved;
   };
 
-  async execScript(args: ExecScriptParams): Promise<BuiltinServerRuntimeOutput> {
+  async execScript(
+    args: ExecScriptParams,
+    execution?: ExecScriptExecutionOptions,
+  ): Promise<BuiltinServerRuntimeOutput> {
     const { command, description } = args;
     // Args win when the caller (client executor) already injected stepContext;
     // the constructor option covers the server path where args are raw LLM output.
@@ -204,6 +228,7 @@ export class SkillsExecutionRuntime {
     if (this.service.execScript) {
       try {
         const result = await this.service.execScript(command, {
+          ...execution,
           activatedSkills,
           description,
         });

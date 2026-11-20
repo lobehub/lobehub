@@ -41,12 +41,26 @@ export const compressedStateMarkerColumns = {
   pluginIdentifier: messagePlugins.identifier,
 };
 
+/**
+ * Column the light member select adds for `skipCompressedMembers` reads only.
+ * A window over the selected rows, so it sees exactly the members the plan does.
+ */
+export const compressedBranchMarkerColumns = {
+  parentBranches: sql<boolean>`count(*) filter (where ${messages.role} <> 'tool' and ${messages.parentId} is not null) over (partition by ${messages.messageGroupId}, ${messages.parentId}) > 1`,
+};
+
 /** The light per-member row read before any member is hydrated. */
 export interface MessageGroupMemberRecord {
   carriesTodos: boolean | null;
   favorite: boolean | null;
   id: string;
   messageGroupId: string | null;
+  /**
+   * The row's parent has more than one non-tool child in the group: the group
+   * holds a branch point, such as a regenerated reply. Selected only for
+   * `skipCompressedMembers` reads.
+   */
+  parentBranches?: boolean | null;
   pluginApiName: string | null;
   pluginIdentifier: string | null;
   role: string | null;
@@ -98,6 +112,14 @@ export interface MessageGroupHydrationPlan {
 export const planMessageGroupHydration = (
   groups: Pick<MessageGroupRow, 'id' | 'type'>[],
   records: MessageGroupMemberRecord[],
+  /**
+   * Hydrate no compression member, pinned ones included: every member is
+   * omitted, and those carrying runtime state keep only their plugin state.
+   * A group holding both a branch point and runtime state still hydrates as
+   * without the option: `parse()` keeps only the active branch, while flat
+   * state rows would also restore todos and activations from abandoned branches.
+   */
+  skipCompressedMembers = false,
 ): MessageGroupHydrationPlan => {
   const recordsByGroup = new Map<string, MessageGroupMemberRecord[]>();
   for (const record of records) {
@@ -114,12 +136,24 @@ export const planMessageGroupHydration = (
   for (const group of groups) {
     const groupRecords = recordsByGroup.get(group.id) ?? [];
     const isCompression = group.type === MessageGroupType.Compression;
-    const hydrated = isCompression ? selectCompressedGroupMembers(groupRecords) : groupRecords;
+    const skipMembers =
+      skipCompressedMembers &&
+      !(
+        groupRecords.some((record) => record.parentBranches === true) &&
+        groupRecords.some(carriesRuntimeState)
+      );
+    const hydrated = !isCompression
+      ? groupRecords
+      : skipMembers
+        ? []
+        : selectCompressedGroupMembers(groupRecords);
     hydratedByGroup.set(group.id, hydrated);
     for (const record of hydrated) ids.add(record.id);
     if (!isCompression) continue;
 
-    for (const record of groupRecords) if (record.favorite) ids.add(record.id);
+    if (!skipMembers) {
+      for (const record of groupRecords) if (record.favorite) ids.add(record.id);
+    }
     const omitted = groupRecords.slice(0, groupRecords.length - hydrated.length);
     const stateRecords = omitted.filter(carriesRuntimeState);
     stateByGroup.set(group.id, stateRecords);

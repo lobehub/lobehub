@@ -112,6 +112,35 @@ describe('ensureAgentMarketSkills', () => {
     expect(ensureFromMarket).toHaveBeenCalledWith(['my-own-skill', 'fresh-skill']);
   });
 
+  // An MCP pinned to an agent is no Market skill: a `notSkill` answer for it
+  // would let the profile's stale-plugin cleanup unpin it
+  it('leaves out MCP connectors: custom ones and finished marketplace installs', async () => {
+    const state = useToolStore.getState();
+    vi.spyOn(useToolStore, 'getState').mockReturnValue({
+      ...state,
+      connectors: [
+        { identifier: 'custom-mcp', mcpServerUrl: 'https://c.example.com', sourceType: 'custom' },
+        {
+          identifier: 'market-mcp',
+          mcpConnectionType: 'cloud',
+          metadata: { marketplaceInstalled: true },
+          sourceType: 'marketplace',
+        },
+        // A canceled install's row is not an install
+        {
+          identifier: 'unfinished-mcp',
+          mcpServerUrl: 'https://u.example.com',
+          metadata: {},
+          sourceType: 'marketplace',
+        },
+      ],
+    } as unknown as ReturnType<typeof useToolStore.getState>);
+
+    await ensureAgentMarketSkills(['custom-mcp', 'market-mcp', 'unfinished-mcp']);
+
+    expect(ensureFromMarket).toHaveBeenCalledWith(['unfinished-mcp']);
+  });
+
   it('still asks the server about installed Market skills while the list is only the persisted copy', async () => {
     // A hydrated list can predate a skill installed elsewhere; the server is
     // idempotent and answers `installed` for the ones already there.

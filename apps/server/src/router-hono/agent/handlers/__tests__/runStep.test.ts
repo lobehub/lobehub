@@ -38,6 +38,7 @@ const mockFinalizeAbandoned = vi.hoisted(() => vi.fn());
 const mockSettleStaleRunning = vi.hoisted(() => vi.fn());
 const mockResumeAbandonedParent = vi.hoisted(() => vi.fn());
 const mockScheduleOpportunisticStaleSweep = vi.hoisted(() => vi.fn());
+const mockScheduleOpportunisticVerifySweep = vi.hoisted(() => vi.fn());
 // Lets a test force the step-boundary flush to report a timeout; undefined
 // means use the real implementation.
 const flushOverride = vi.hoisted(() => ({ settled: undefined as boolean | undefined }));
@@ -79,6 +80,7 @@ vi.mock('@/server/services/agentRuntime', () => ({
     return { finalizeAbandoned: mockFinalizeAbandoned };
   }),
   scheduleOpportunisticStaleSweep: mockScheduleOpportunisticStaleSweep,
+  scheduleOpportunisticVerifySweep: mockScheduleOpportunisticVerifySweep,
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({
@@ -376,6 +378,7 @@ describe('runStep handler', () => {
 
     expect(res.status).toBe(200);
     expect(mockScheduleOpportunisticStaleSweep).toHaveBeenCalledTimes(1);
+    expect(mockScheduleOpportunisticVerifySweep).toHaveBeenCalledTimes(1);
   });
 
   it('opts the AiAgentService into visitor rows when metadata carries streamOwnerUserId', async () => {
@@ -680,9 +683,41 @@ describe('runStep inline step loop', () => {
 
     expect(res.status).toBe(200);
     expect(mockExecuteStep).toHaveBeenCalledTimes(1);
-    expect(mockScheduleContinuation).toHaveBeenCalledWith(pending);
+    expect(mockScheduleContinuation).toHaveBeenCalledWith(pending, undefined);
     expect(getCaptures()[0].body).toMatchObject({ nextStepScheduled: true, nextStepIndex: 3 });
     expect(mockReleaseOperationLock).toHaveBeenCalledWith('op-1', 'op-1:owner');
+    nowSpy.mockRestore();
+  });
+
+  it("carries each step's deferred message patch to whoever publishes it", async () => {
+    // Step 3's entry read completes step 2's patch. Once the budget is spent,
+    // the queue hand-back publishes step 3's, since no entry read here will.
+    let clock = Date.now();
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => clock);
+    const patchOf = (stepIndex: number) => ({
+      before: [],
+      scopeKey: 'tpc_1',
+      state: {},
+      stepIndex,
+    });
+
+    mockExecuteStep
+      .mockResolvedValueOnce({
+        ...runningStepResult(continuationFor(3)),
+        deferredMessagePatch: patchOf(2),
+      })
+      .mockImplementationOnce(async () => {
+        clock += 600_000;
+        return { ...runningStepResult(continuationFor(4)), deferredMessagePatch: patchOf(3) };
+      });
+
+    const { ctx } = buildContext({ body: validBody });
+    await runStep(ctx);
+
+    expect(mockExecuteStep).toHaveBeenCalledTimes(2);
+    expect(mockExecuteStep.mock.calls[0][0].deferredMessagePatch).toBeUndefined();
+    expect(mockExecuteStep.mock.calls[1][0].deferredMessagePatch).toEqual(patchOf(2));
+    expect(mockScheduleContinuation).toHaveBeenCalledWith(continuationFor(4), patchOf(3));
     nowSpy.mockRestore();
   });
 
@@ -809,7 +844,7 @@ describe('runStep inline step loop', () => {
 
       expect(res.status).toBe(200);
       expect(mockExecuteStep).toHaveBeenCalledTimes(1);
-      expect(mockScheduleContinuation).toHaveBeenCalledWith(pending);
+      expect(mockScheduleContinuation).toHaveBeenCalledWith(pending, undefined);
       expect(getCaptures()[0].body).toMatchObject({
         inlinedSteps: 0,
         nextStepIndex: 3,

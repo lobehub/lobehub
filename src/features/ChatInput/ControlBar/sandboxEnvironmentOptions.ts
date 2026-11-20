@@ -1,5 +1,9 @@
 import type { EnvironmentConfiguration } from '@lobechat/types';
 
+import { getProjectSettingsPath } from '@/features/Projects/Layout/navigation';
+
+import type { SandboxSelection } from './useSandboxPlacement';
+
 /**
  * The environments a conversation may start from. A workspace-public agent runs
  * on its caller's session, so it applies published environments only — the
@@ -26,6 +30,22 @@ export const repositorySlug = (environment: {
   } catch {
     return undefined;
   }
+};
+
+/**
+ * The repositories an environment checks out, as a label: the first one's
+ * `owner/name`, and `+N` for the rest — so a picker row never reads as one
+ * repository when the environment clones several.
+ */
+export const repositoriesLabel = (environment: {
+  configuration?: Pick<EnvironmentConfiguration, 'sources'> | null;
+}): string | undefined => {
+  const first = repositorySlug(environment);
+  if (!first) return undefined;
+  const count = (environment.configuration?.sources ?? []).filter(
+    (source) => source.kind === 'git',
+  ).length;
+  return count > 1 ? `${first} +${count - 1}` : first;
 };
 
 /**
@@ -57,3 +77,36 @@ export const environmentChipState = ({
 
   return failed ? { kind: 'loadFailed' } : { kind: 'loading' };
 };
+
+/**
+ * The environment the server applies to a project conversation nobody placed:
+ * the project's, when it checks out a repository (see
+ * `resolveProjectTopicSandbox`). Undefined while it loads, or when there is none.
+ */
+export const projectStartEnvironmentId = (
+  environments: readonly {
+    configuration?: Pick<EnvironmentConfiguration, 'sources'> | null;
+    id: string;
+  }[],
+) =>
+  environments.find((environment) =>
+    (environment.configuration?.sources ?? []).some((source) => source.kind === 'git'),
+  )?.id;
+
+/**
+ * Where a conversation's environments are managed: a project's one on the
+ * project's settings, anything else in the workspace's list.
+ */
+export const environmentSettingsPath = (projectId?: string) =>
+  projectId ? getProjectSettingsPath(projectId, 'environments') : '/settings/environments';
+
+/**
+ * Where a conversation works once a repository is picked: a fresh temporary
+ * sandbox the repository is cloned into. A repository is only cloned into an
+ * empty folder, so it never inherits the folder the conversation was on, and
+ * it is never checked out on the drive — the persistent sandbox is for keeping
+ * a folder of the drive, not a repository.
+ */
+export const repositorySelection = (environment: { id: string }): SandboxSelection => ({
+  environmentId: environment.id,
+});

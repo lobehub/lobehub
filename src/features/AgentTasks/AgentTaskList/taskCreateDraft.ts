@@ -11,6 +11,8 @@ export interface TaskCreateDraft {
   labelIds?: unknown;
   markdown?: string;
   priority?: number;
+  /** `null` is an explicit "no project"; a missing key follows the scope's default. */
+  projectId?: string | null;
   visibility?: 'private' | 'public';
 }
 

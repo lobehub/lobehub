@@ -62,6 +62,7 @@ import { buildPrefixedAgentRoutePath, parseAgentPathname } from '../../../utils/
 import { useTopicListScope } from '../../TopicListScope';
 import { getMergedPullRequestTopics } from '../../utils/mergedPullRequestTopics';
 import { type GroupItemComponentProps } from '../GroupedAccordion';
+import { useStartTopicInDirectory } from '../useStartTopicInDirectory';
 import { indicatorStyles, useCollapsedIndicators } from './CollapsedIndicators';
 import { deviceCategoryKey, deviceDisplayName } from './deviceIdentity';
 import ProjectTopicList from './ProjectTopicList';
@@ -69,8 +70,11 @@ import ProjectTopicList from './ProjectTopicList';
 const PROJECT_GROUP_PREFIX = 'project:';
 const PROJECT_ID_GROUP_PREFIX = 'project-id:';
 const SUB_GROUP_MODES: ProjectTopicSubGroupMode[] = ['none', 'byDevice', 'byTime', 'byStatus'];
-// A plain folder usually lives on one device, so sectioning it by device says
-// nothing — unless it merges one machine's personal and workspace identities.
+// One directory lives on one device, so sectioning it by device would only
+// nest the device under its own folder — devices lead in the sidebar's own
+// "by device" grouping instead. A project spans directories on several
+// machines, and a folder can merge one machine's personal and workspace
+// identities; only those section by device.
 const FOLDER_SUB_GROUP_MODES = SUB_GROUP_MODES.filter((mode) => mode !== 'byDevice');
 
 const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
@@ -192,21 +196,8 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
     activeWorkspaceSlug,
   ]);
 
-  // Start on one specific project directory — the device sub-group "+". The
-  // directory pins the device, so nothing is committed to the agent default.
-  const handleStartInDirectory = useCallback(
-    (projectWorkingDirectoryId: string) => {
-      if (!targetAgentId) return;
-      useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
-      useChatStore
-        .getState()
-        .setPendingNewTopicDirectory({ agentId: targetAgentId, projectWorkingDirectoryId });
-      router.push(
-        buildPrefixedAgentRoutePath(AGENT_CHAT_URL(targetAgentId), agentRoute, activeWorkspaceSlug),
-      );
-    },
-    [targetAgentId, router, agentRoute, activeWorkspaceSlug],
-  );
+  // Start on one specific project directory — the device sub-group "+".
+  const { startInDirectory: handleStartInDirectory } = useStartTopicInDirectory();
 
   const canAddTopic = !scope && !!currentAgentId && !!workingDirectory;
   const needsPlainStart = !!projectId && projectDirectories.length > 1;
@@ -215,7 +206,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
   const isProjectGroup = !!projectId || !!children[0]?.projectWorkingDirectoryId;
   const spansDevices =
     new Set(children.map((topic) => topic.metadata?.boundDeviceId).filter(Boolean)).size > 1;
-  const subGroupModes = isProjectGroup || spansDevices ? SUB_GROUP_MODES : FOLDER_SUB_GROUP_MODES;
+  const subGroupModes = projectId || spansDevices ? SUB_GROUP_MODES : FOLDER_SUB_GROUP_MODES;
 
   // The same folder on another machine is its own group with the same name:
   // name the device, and its category for one machine's several identities.
@@ -350,6 +341,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
               {project ? (
                 <ProjectAvatar
                   avatar={project.projectAvatar}
+                  id={project.projectId}
                   name={project.projectName}
                   size={18}
                 />

@@ -8,6 +8,8 @@ import { File, Globe, Key, TerminalSquare } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 const styles = stylex.create({
   card: {
     cursor: 'pointer',
@@ -18,7 +20,11 @@ const styles = stylex.create({
   },
   cardDisabled: { cursor: 'not-allowed', opacity: 0.5 },
   description: { fontSize: '12px', color: cssVar.colorTextSecondary, textAlign: 'center' },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: densityTokens['--lobe-density-section-gap'],
+  },
   icon: {
     display: 'flex',
     alignItems: 'center',

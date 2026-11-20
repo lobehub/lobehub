@@ -7,6 +7,7 @@ import useMergeState from 'use-merge-value';
 
 import { usePermission } from '@/hooks/usePermission';
 import { useServerConfigStore } from '@/store/serverConfig';
+import { useDensityTokens } from '@/styles/density';
 
 import { useActionBarContext } from '../context';
 import type { ActionDropdownProps } from './ActionDropdown';
@@ -44,6 +45,7 @@ const Action = memo<ActionProps>(
       value: open,
     });
     const mobile = useServerConfigStore((s) => s.isMobile);
+    const { controlHeight, iconSize } = useDensityTokens();
     const { actionSize, dropdownPlacement } = useActionBarContext();
     const { allowed: canUseChatInputAction, reason } = usePermission('create_content');
     const blocked = disabled || !canUseChatInputAction;
@@ -74,8 +76,8 @@ const Action = memo<ActionProps>(
         size={
           actionSize ??
           size ?? {
-            blockSize: 32,
-            size: 18,
+            blockSize: controlHeight,
+            size: iconSize,
           }
         }
       />

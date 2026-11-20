@@ -5,6 +5,7 @@ import { AgentDocumentRepository } from '../../../repositories/agentDocument';
 import type { LobeChatDatabase, Transaction } from '../../../type';
 import type {
   AgentDocument,
+  AgentDocumentContextQueryOptions,
   AgentDocumentContextRow,
   AgentDocumentListItem,
   AgentDocumentListSourceType,
@@ -354,8 +355,11 @@ export class AgentDocumentModel {
     return queries.findSkillDocsByAgent(this.ctx, agentId);
   }
 
-  async findContextByAgent(agentId: string): Promise<AgentDocumentContextRow[]> {
-    return queries.findContextByAgent(this.ctx, agentId);
+  async findContextByAgent(
+    agentId: string,
+    options?: AgentDocumentContextQueryOptions,
+  ): Promise<AgentDocumentContextRow[]> {
+    return queries.findContextByAgent(this.ctx, agentId, options);
   }
 
   async findByDocumentIds(
@@ -371,6 +375,22 @@ export class AgentDocumentModel {
     options?: { sourceType?: AgentDocumentListSourceType },
   ): Promise<AgentDocumentListItem[]> {
     return queries.listByDocumentIds(this.ctx, agentId, documentIds, options);
+  }
+
+  async listBindingStatesByRefs(agentId: string, refs: string[]) {
+    return queries.listBindingStatesByRefs(this.ctx, agentId, refs);
+  }
+
+  async listRevokedFromAllAgents(documentIds: string[]): Promise<string[]> {
+    return queries.listRevokedFromAllAgents(this.ctx, documentIds);
+  }
+
+  async listExistingDocumentIds(documentIds: string[]): Promise<string[]> {
+    return queries.listExistingDocumentIds(this.ctx, documentIds);
+  }
+
+  async listKnowledgeBaseMemberIds(documentIds: string[]): Promise<string[]> {
+    return queries.listKnowledgeBaseMemberIds(this.ctx, documentIds);
   }
 
   async hasByAgent(agentId: string): Promise<boolean> {

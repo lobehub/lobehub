@@ -166,3 +166,36 @@ export interface ChatServiceConfig {
   defaultProvider?: string;
   timeout?: number;
 }
+
+// ==================== Response Schemas ====================
+
+/**
+ * `POST /chat`. `model` / `provider` are the resolved values (request or the
+ * product defaults), so they are always present. `usage` is the provider's own
+ * usage object when it answered with JSON; a streamed upstream reply carries none.
+ */
+export const ChatResponseSchema = z
+  .object({
+    content: z.string(),
+    model: z.string(),
+    provider: z.string(),
+    usage: z
+      .object({
+        completion_tokens: z.number().int().optional(),
+        prompt_tokens: z.number().int().optional(),
+        total_tokens: z.number().int().optional(),
+      })
+      .optional(),
+  })
+  .strict()
+  .meta({ id: 'ChatResponse' });
+
+export const ChatTranslateResponseSchema = z
+  .object({ translatedText: z.string() })
+  .strict()
+  .meta({ id: 'ChatTranslateResponse' });
+
+export const ChatGenerateReplyResponseSchema = z
+  .object({ reply: z.string() })
+  .strict()
+  .meta({ id: 'ChatGenerateReplyResponse' });

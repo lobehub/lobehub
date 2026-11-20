@@ -98,6 +98,8 @@ describe('useAccountActions', () => {
 });
 
 describe('useInboxActions', () => {
+  const onOpen = vi.fn();
+
   beforeEach(() => {
     vi.clearAllMocks();
     service.markAllInboxRead.mockResolvedValue({ count: 1 });
@@ -106,33 +108,33 @@ describe('useInboxActions', () => {
 
   it('opens an unread message and clears its unread mark', async () => {
     const onChanged = vi.fn();
-    const { result } = renderHook(() => useInboxActions({ agentId: 'agt_1', onChanged }));
+    const { result } = renderHook(() => useInboxActions({ agentId: 'agt_1', onChanged, onOpen }));
 
     await result.current.openMessage(unreadMessage);
 
-    expect(ui.createModal).toHaveBeenCalledTimes(1);
+    expect(onOpen).toHaveBeenCalledWith('msg_1');
     expect(service.markInboxRead).toHaveBeenCalledWith(['msg_1']);
     expect(onChanged).toHaveBeenCalledTimes(1);
   });
 
   it('does not re-stamp a message that was already read', async () => {
     const onChanged = vi.fn();
-    const { result } = renderHook(() => useInboxActions({ agentId: 'agt_1', onChanged }));
+    const { result } = renderHook(() => useInboxActions({ agentId: 'agt_1', onChanged, onOpen }));
 
     await result.current.openMessage(readMessage);
 
-    expect(ui.createModal).toHaveBeenCalledTimes(1);
+    expect(onOpen).toHaveBeenCalledWith('msg_2');
     expect(service.markInboxRead).not.toHaveBeenCalled();
     expect(onChanged).not.toHaveBeenCalled();
   });
 
   it('clears the whole inbox and revalidates', async () => {
     const onChanged = vi.fn();
-    const { result } = renderHook(() => useInboxActions({ agentId: 'agt_1', onChanged }));
+    const { result } = renderHook(() => useInboxActions({ agentId: 'agt_1', onChanged, onOpen }));
 
     await result.current.markAllRead();
 
-    expect(service.markAllInboxRead).toHaveBeenCalledWith('agt_1');
+    expect(service.markAllInboxRead).toHaveBeenCalledWith('agt_1', undefined);
     expect(onChanged).toHaveBeenCalledTimes(1);
   });
 });

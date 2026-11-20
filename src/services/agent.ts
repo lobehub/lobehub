@@ -1,4 +1,9 @@
-import { type AgentItem, type AgentRankItem, type LobeAgentConfig } from '@lobechat/types';
+import {
+  type AgentDeleteImpact,
+  type AgentItem,
+  type AgentRankItem,
+  type LobeAgentConfig,
+} from '@lobechat/types';
 import { type PartialDeep } from 'type-fest';
 
 import { lambdaClient } from '@/libs/trpc/client';
@@ -75,8 +80,6 @@ const normalizeMarketAgentModel = (config?: PartialDeep<AgentItem>): PartialDeep
 export interface CreateAgentParams {
   config?: PartialDeep<AgentItem>;
   groupId?: string;
-  /** This desktop's gateway device, where the creator's direct Channel to a local Agent runs. */
-  localDeviceId?: string;
   /**
    * `private` keeps the agent visible only to its creator within the active
    * workspace; `public` (default) makes it visible to every member. The
@@ -109,6 +112,13 @@ interface AgentGroupMembershipImpactRef {
   groupTitle: string | null;
   /** `false` when the caller may not see the group; its identity is withheld. */
   groupVisible: boolean;
+}
+
+export interface RemoveAgentOptions {
+  /** The user confirmed a warning that other members' content goes with the agent. */
+  acknowledgeForeignContent?: boolean;
+  /** The user confirmed a warning that someone else created the agent. */
+  acknowledgeOtherCreator?: boolean;
 }
 
 class AgentService {
@@ -151,7 +161,6 @@ class AgentService {
     return lambdaClient.agent.createAgent.mutate({
       config: normalizedConfig as any,
       groupId: params.groupId,
-      localDeviceId: params.localDeviceId,
       visibility: params.visibility,
     });
   };
@@ -296,8 +305,17 @@ class AgentService {
   /**
    * Remove an agent and its associated session
    */
-  removeAgent = async (agentId: string) => {
-    return lambdaClient.agent.removeAgent.mutate({ agentId });
+  removeAgent = async (agentId: string, options?: RemoveAgentOptions) => {
+    return lambdaClient.agent.removeAgent.mutate({ agentId, ...options });
+  };
+
+  /**
+   * What deleting the agent takes down besides the caller's own work — other
+   * members' topics (counted) and any other foreign content — for the delete
+   * confirmation.
+   */
+  getAgentDeleteImpact = async (agentId: string): Promise<AgentDeleteImpact> => {
+    return lambdaClient.agent.getAgentDeleteImpact.query({ agentId });
   };
 
   /**

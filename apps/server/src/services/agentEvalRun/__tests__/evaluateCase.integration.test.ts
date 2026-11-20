@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
@@ -182,7 +183,7 @@ describe('evaluateCase - evalMode resolution', () => {
     expect(runTopic?.score).toBe(1);
   });
 
-  it('should skip evaluation when no evalMode and no benchmark rubrics', async () => {
+  it('grades against expected with the default rubric when no evalMode and no benchmark rubrics', async () => {
     const { run, testCase } = await setupEvalChain({
       benchmarkRubrics: [],
       datasetEvalMode: null,
@@ -201,8 +202,41 @@ describe('evaluateCase - evalMode resolution', () => {
     const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
     const runTopic = await runTopicModel.findByRunAndTestCase(run.id, testCase.id);
 
-    // Should NOT have been evaluated — no status change beyond telemetry write
-    expect(runTopic?.status).toBeNull();
+    // Nothing configured, but `expected` exists: the default contains rubric
+    // grades it, so the case reaches a verdict instead of staying running.
+    expect(runTopic?.status).toBe('passed');
+    expect(runTopic?.score).toBe(1);
+    expect(runTopic?.evalResult?.rubricScores?.[0]?.rubricId).toBe('default-contains');
+  });
+
+  it('records judge_error when there is nothing to grade against', async () => {
+    const { run, testCase } = await setupEvalChain({
+      benchmarkRubrics: [],
+      datasetEvalMode: null,
+      output: '42',
+      testCaseEvalMode: null,
+    });
+    await serverDB
+      .update(agentEvalTestCases)
+      .set({ content: { input: 'What is 6*7?' } })
+      .where(eq(agentEvalTestCases.id, testCase.id));
+
+    const service = new AgentEvalRunService(serverDB, userId);
+    await service.recordTrajectoryCompletion({
+      runId: run.id,
+      testCaseId: testCase.id,
+      telemetry: { completionReason: 'stop', duration: 100 },
+    });
+
+    const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
+    const runTopic = await runTopicModel.findByRunAndTestCase(run.id, testCase.id);
+    expect(runTopic?.status).toBe('judge_error');
+    expect(runTopic?.passed).toBeNull();
     expect(runTopic?.score).toBeNull();
+    expect(runTopic?.evalResult).toMatchObject({
+      duration: 100,
+      errorPhase: 'judge',
+      judgeError: 'No rubrics configured',
+    });
   });
 });

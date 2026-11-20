@@ -5,6 +5,10 @@ import type {
   SubagentIntent,
 } from '@lobechat/heterogeneous-agents';
 import { getEventScope, reduceMainAgent } from '@lobechat/heterogeneous-agents';
+import {
+  isPermissionModeReport,
+  permissionModeReportPatch,
+} from '@lobechat/heterogeneous-agents/claudeCodePermission/shared';
 import { isEchoedErrorText } from '@lobechat/heterogeneous-agents/errors';
 import { isHeteroStatusGuideErrorData } from '@lobechat/heterogeneous-agents/processFailure';
 import { createNanoId } from '@lobechat/utils';
@@ -212,11 +216,21 @@ export class HeterogeneousPersistenceHandler {
    * so without it a subscriber can only infer each step's row from where it
    * started. A reconnect starts from `runningOperation.assistantMessageId`,
    * the newest row, so its full replay wrote every earlier step onto that row.
+   *
+   * A `user_message` replay that delivered a steer carries that user message
+   * as `steerMessage`, so the client shows it as soon as Claude Code reads it
+   * instead of when its reply starts (the tray drops it at the same moment).
+   *
    * Without state (a retry on a cold replica) the event goes out unchanged
    * and the client falls back to its DB lookup.
    */
   publishData(operationId: string, event: AgentStreamEvent): AgentStreamEvent['data'] {
     const state = operationStates.get(operationId);
+    if (isSteerReplay(event)) {
+      const steerMessage = state?.steerMessages.get(event.data.uuid);
+      return steerMessage ? { ...event.data, steerMessage } : event.data;
+    }
+
     const key = eventKey(event);
     const assistantId = state?.streamStartAssistantIds.get(key);
     if (!assistantId) return event.data;
@@ -341,6 +355,15 @@ export class HeterogeneousPersistenceHandler {
       await this.consumeSteer(state, event.data.uuid);
       return;
     }
+    // Claude Code's mode, incl. the switch it makes when a plan is approved:
+    // the topic's next run starts in it, and the composer chip shows it.
+    if (event.type === 'step_complete' && isPermissionModeReport(event.data)) {
+      await this.deps.topicModel.updateMetadata(state.topicId, {
+        ...permissionModeReportPatch(event.data),
+        heteroPermissionModeReportPending: null,
+      });
+      return;
+    }
     await this.reduceAndApply(state, event);
   }
 
@@ -361,7 +384,7 @@ export class HeterogeneousPersistenceHandler {
     if (!steer) return;
 
     state.main = { ...state.main, lastSpineMessageId: steer.id };
-    state.steerMessages.set(steer.id, { ...steer, role: 'user' });
+    state.steerMessages.set(steer.id, { ...steer, agentId: state.agentId ?? null, role: 'user' });
   }
 
   // ─── Main-agent reducer interpreter ──────────────────────────────────────

@@ -42,12 +42,45 @@ describe('buildProjectContextPrompt', () => {
     expect(buildProjectContextPrompt({ ...input, currentAgentId: 'agt_coord' })).toMatchSnapshot();
   });
 
+  it('points hand-off messages at Channels only when the run can message them', () => {
+    const rule = '`listChannels`, then `sendMessage`';
+    expect(buildProjectContextPrompt({ ...input, currentAgentId: 'agt_coord' })).not.toContain(
+      rule,
+    );
+    const prompt = buildProjectContextPrompt({
+      ...input,
+      channelMessaging: true,
+      currentAgentId: 'agt_coord',
+    });
+    expect(prompt).toContain(rule);
+    expect(prompt.indexOf(rule)).toBeLessThan(prompt.indexOf('</coordination_rules>'));
+  });
+
   it('marks a member agent and leaves the coordination rules out', () => {
     const prompt = buildProjectContextPrompt({ ...input, currentAgentId: 'agt_writer' });
 
     expect(prompt).toContain('Writer (agt_writer): copywriter — Drafts copy [you]');
     expect(prompt).toContain('Coordinator (agt_coord): coordinator — Leads the launch');
     expect(prompt).not.toContain('<coordination_rules>');
+  });
+
+  it('introduces a named member by its name with its role behind it', () => {
+    const prompt = buildProjectContextPrompt({
+      ...input,
+      currentAgentId: 'agt_writer',
+      members: [
+        ...input.members.filter(({ agentId }) => agentId !== 'agt_writer'),
+        { agentId: 'agt_writer', name: 'Justin', role: 'copywriter', title: 'Writer' },
+      ],
+      openTasks: [
+        { assigneeAgentId: 'agt_writer', identifier: 'APO-2', priority: 2, status: 'running' },
+      ],
+    });
+
+    expect(prompt).toContain('Justin (Writer) (agt_writer): copywriter [you]');
+    // An assigned task names the same agent the roster does.
+    expect(prompt).toContain('— Justin (Writer) (agt_writer)');
+    expect(prompt).not.toMatch(/- Writer \(agt_writer\)/);
   });
 
   it('leaves the identifier out for a project without its own prefix', () => {

@@ -15,6 +15,7 @@ import { type ContextSnapshot, gatherContextFacts, runContextEngineering } from 
 import { historySummaryPrompt } from '@lobechat/prompts';
 import {
   agentIdentityLabel,
+  manifestBaseIdentifier,
   type OpenAIChatMessage,
   type RuntimeAdditionalContextFragment,
   type RuntimeInitialContext,
@@ -35,8 +36,9 @@ import {
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { getChatStoreState } from '@/store/chat';
+import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
 import { getToolStoreState } from '@/store/tool';
-import { toolSelectors } from '@/store/tool/selectors';
+import { installedImplicitBuiltinSkillIds } from '@/store/tool/slices/builtin/projection';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
@@ -68,12 +70,19 @@ interface ContextEngineeringContext {
    */
   attachmentPreviewFileIds?: string[];
   /**
+   * Library skills the agent set to `auto` (`agents.plugins` tri-state). A
+   * library skill is opt-in per agent, so one that is neither here nor in
+   * `plugins` (pinned) is left out of the client skill pool.
+   */
+  autoSkillIds?: string[];
+  /**
    * Identifiers the agent has explicitly disabled (`agents.plugins` tri-state).
    * Excluded from the client skill candidate pool entirely — not just left
    * out of `plugins` (pinned) — so a disabled skill is neither listed in
    * `<available_skills>` nor resolvable by name via `activateSkill`.
    */
   disabledPluginIds?: string[];
+  discoveryManifests?: Record<string, LobeToolManifest>;
   /**
    * Runtime-resolved agent mode. Callers may force chat mode for models without
    * function calling while keeping the stored chatConfig unchanged.
@@ -134,7 +143,9 @@ export const contextEngineering = async ({
   historyCount,
   historySummary,
   agentId,
+  autoSkillIds,
   disabledPluginIds,
+  discoveryManifests,
   enableAgentMode,
   groupId,
   initialContext,
@@ -236,10 +247,24 @@ export const contextEngineering = async ({
 
   let toolDiscoveryConfig: ToolDiscoveryConfig | undefined;
   if (isLobeToolsEnabled) {
-    const toolState = getToolStoreState();
-    const availableTools = toolSelectors
-      .availableToolsForDiscovery(toolState)
-      .filter((tool) => !enabledToolSet.has(tool.identifier));
+    // Disabled tools and connectors the agent has off are in neither set: the
+    // engine dropped their manifests, so listing them would only invite an
+    // activation that cannot succeed.
+    const disabledIdSet = new Set(disabledPluginIds ?? []);
+    // The run's discovery pool is scoped to the conversation already; a
+    // connector row's tool set is disabled with its connector
+    const availableTools = Object.values(discoveryManifests ?? {})
+      .filter(
+        (manifest) =>
+          !enabledToolSet.has(manifest.identifier) &&
+          !disabledIdSet.has(manifest.identifier) &&
+          !disabledIdSet.has(manifestBaseIdentifier(manifest)),
+      )
+      .map(({ identifier, meta }) => ({
+        description: meta?.description ?? '',
+        identifier,
+        name: meta?.title ?? identifier,
+      }));
 
     if (availableTools.length > 0) {
       toolDiscoveryConfig = { availableTools };
@@ -274,6 +299,7 @@ export const contextEngineering = async ({
       },
       agentId,
       disabledPluginIds,
+      discoverableTools: toolDiscoveryConfig?.availableTools,
       // The Profile panel edits `activeAgentId` / `activeGroupId`, not the
       // builder agent that is answering.
       editingAgentId: tools?.includes(AgentBuilderIdentifier)
@@ -291,9 +317,7 @@ export const contextEngineering = async ({
     createBrowserContextFactProviders({ agentId, groupId, shareVisitor }),
   );
 
-  // Resolve enabled skills (await: pinned DB skills fetch their content on demand).
-  // In auto mode: expose all installed skills so the AI can discover and activate them.
-  // In manual mode: only expose user-selected skills (filtered by pluginIds).
+  // Profile skill choices contribute discovery metadata only.
   let enabledSkills: OperationSkillSet['skills'] | undefined;
   if (plugins) {
     // Manual mode narrows the pool itself, so an unselected skill is neither
@@ -302,10 +326,18 @@ export const contextEngineering = async ({
       await resolveClientSkills(
         plugins,
         disabledPluginIds,
-        agentChatConfigSelectors.skillActivateMode(agentStoreState),
+        respondingChatConfig.skillActivateMode,
         // Reading another topic (`<refer_topic>` or a raw `tpc_` id) goes through `lh topic view`,
         // which the lobehub skill teaches.
         mentionsTopic(messages) ? [LobeHubIdentifier] : undefined,
+        autoSkillIds,
+        !shareVisitor && enableAgentMode !== false
+          ? installedImplicitBuiltinSkillIds(
+              getToolStoreState(),
+              agentItem?.createdAt,
+              respondingChatConfig,
+            )
+          : [],
       )
     ).skills;
   }
@@ -331,6 +363,7 @@ export const contextEngineering = async ({
       identity: { name: agentMeta?.name, title: agentMeta?.title },
       inputTemplate,
       knowledge: { fileContents, knowledgeBases },
+      revokedDocumentReads: facts.revokedDocumentReads,
       systemRole,
     },
     // Desktop local/static URLs are not fetchable by remote providers or cloud tools.
@@ -347,6 +380,9 @@ export const contextEngineering = async ({
       provider,
     },
     run: {
+      enableMcpAppContext:
+        !!getServerConfigStoreState() &&
+        serverConfigSelectors.enableMcpApps(getServerConfigStoreState()!),
       additionalContexts,
       // MessagesEngine force-disables skills / agent-document injectors when this
       // is `false` (chat mode). ChatService resolves it from stored user intent

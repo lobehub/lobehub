@@ -1,4 +1,4 @@
-import type { ChannelDetail, ChannelReplyJob } from '@lobechat/types';
+import type { ChannelDetail, ChannelPublicJob, ChannelReplyJob } from '@lobechat/types';
 import type { AgentAvatarState } from '@lobehub/ui';
 
 export const channelJobStatus = (job: ChannelReplyJob) =>
@@ -16,13 +16,21 @@ export const memberJobStatus = (job: ChannelReplyJob) => {
   return status === 'status.running' ? ('status.working' as const) : status;
 };
 
+/**
+ * A follow-up deferred behind the message's primary responder. It starts only once that reply
+ * settles and may well stay silent, so until then it is not a reply in progress.
+ */
+export const isAwaitingPrimary = (job: ChannelReplyJob) =>
+  job.status === 'queued' && job.blockedCode === 'awaiting_primary';
+
 /** Colour family of a status: working blue, attention amber, error red, settled grey. */
 export type ChannelStatusTone = 'attention' | 'done' | 'error' | 'quiet' | 'working';
 
 export const channelJobTone = (job: ChannelReplyJob): ChannelStatusTone => {
   if (job.status === 'failed') return 'error';
   if (job.publicationRevoked) return job.writerHeld ? 'attention' : 'quiet';
-  if (job.status === 'queued') return job.blockedCode ? 'attention' : 'working';
+  if (job.status === 'queued')
+    return isAwaitingPrimary(job) ? 'quiet' : job.blockedCode ? 'attention' : 'working';
   if (job.status === 'running') return 'working';
   if (job.status === 'completed') return 'done';
   return 'quiet';
@@ -34,7 +42,11 @@ export const isChannelJobActive = (job: ChannelReplyJob) =>
 
 /** Work the conversation is still waiting on: shown above the composer, not on messages. */
 export const replyActivityJobs = <T extends ChannelReplyJob>(jobs: T[]) =>
-  jobs.filter((job) => isChannelJobActive(job) || (job.publicationRevoked && job.writerHeld));
+  jobs.filter(
+    (job) =>
+      (isChannelJobActive(job) && !isAwaitingPrimary(job)) ||
+      (job.publicationRevoked && job.writerHeld),
+  );
 
 /**
  * Each member's newest job when it failed. A later reply, stop or retry by the same member
@@ -47,6 +59,41 @@ export const unresolvedFailures = <T extends ChannelReplyJob>(jobs: T[]) => {
     seen.add(job.memberId);
     return job.status === 'failed';
   });
+};
+
+/**
+ * The header's failures: the main conversation's own. Its view also carries replies still at
+ * work in threads, and one of those must not hide, then bring back, a main-timeline failure.
+ */
+export const mainTimelineFailures = <T extends ChannelReplyJob>(jobs: T[]) =>
+  unresolvedFailures(jobs.filter((job) => !job.threadId));
+
+type FailedReply = Pick<ChannelPublicJob, 'messageId' | 'openingMessageId' | 'status' | 'threadId'>;
+
+const append = <T>(map: Map<string, T[]>, key: string, value: T) =>
+  map.set(key, [...(map.get(key) ?? []), value]);
+
+/**
+ * Where a conversation's failed replies show, keyed by message id, oldest first: under the
+ * acknowledgement the reply posted before its run (`underMessage`), or, when it posted none or
+ * that is not loaded, as the Agent's own row after the request (`afterMessage`). A reply whose
+ * request is not loaded either shows only in the header.
+ */
+export const replyFailurePlacement = <T extends FailedReply>(
+  jobs: T[],
+  loadedMessageIds: ReadonlySet<string>,
+  threadId: string | null,
+) => {
+  const underMessage = new Map<string, T[]>();
+  const afterMessage = new Map<string, T[]>();
+  // Jobs arrive newest first; a message lists its failures in the order they happened.
+  for (const job of [...jobs].reverse()) {
+    if (job.status !== 'failed' || (job.threadId ?? null) !== threadId) continue;
+    if (job.openingMessageId && loadedMessageIds.has(job.openingMessageId))
+      append(underMessage, job.openingMessageId, job);
+    else if (loadedMessageIds.has(job.messageId)) append(afterMessage, job.messageId, job);
+  }
+  return { afterMessage, underMessage };
 };
 
 /** What a member is busy with now: a running reply first, then the next queued one. */
@@ -69,15 +116,10 @@ export const conversationReplies = (detail: ChannelDetail, threadId: string | nu
   };
 };
 
-/**
- * What a direct conversation's header says about its one Agent: "typing" while it works, or the
- * reply it is `waiting` on when blocked or stopping. Null when nothing is pending.
- */
-export const directReplyStatus = (detail: ChannelDetail) => {
-  const { jobs, receiving } = conversationReplies(detail, null);
-  const job = jobs[0] && memberCurrentJob(jobs, jobs[0].memberId);
-  if (!job) return receiving ? { jobs } : null;
-  return channelJobTone(job) === 'working' ? { jobs } : { jobs, waiting: job };
+/** Whether the conversation has a reply or routing in progress to show above the composer. */
+export const hasReplyActivity = (detail: ChannelDetail, threadId: string | null) => {
+  const { jobs, receiving } = conversationReplies(detail, threadId);
+  return jobs.length > 0 || receiving;
 };
 
 /**

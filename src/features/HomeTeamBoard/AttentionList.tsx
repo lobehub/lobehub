@@ -1,11 +1,17 @@
 import type { AgentRunBoardAttentionItem } from '@lobechat/types';
-import { Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+import { PanelRightCloseIcon, PanelRightOpenIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
 import AuthorChip from '@/features/HomeInbox/AuthorChip';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
+import { useDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import { formatDuration } from './layout';
@@ -26,10 +32,42 @@ const styles = stylex.create({
     borderRadius: 12,
     borderStyle: 'solid',
     borderWidth: 1,
-    paddingBlock: 16,
-    paddingInline: 16,
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
+  cardCompact: { paddingBlock: 12, paddingInline: 12 },
   count: { color: cssVar.colorTextTertiary, fontSize: 12 },
+  // Folded: a slim column that still says how much is waiting, so putting the
+  // list away never hides that something is stuck.
+  rail: {
+    alignItems: 'center',
+    backgroundColor: { 'default': cssVar.colorBgContainer, ':hover': cssVar.colorFillQuaternary },
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: 12,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: cssVar.colorTextSecondary,
+    cursor: 'pointer',
+    // Below the board's breakpoint the list wraps under the timeline, so
+    // folding saves no width there: the full card shows instead.
+    display: { 'default': 'flex', '@media (max-width: 1100px)': 'none' },
+    flexDirection: 'column',
+    gap: densityTokens['--lobe-density-content-gap'],
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: 0,
+    width: '100%',
+  },
+  // Same breakpoint as the board's grid in `index.tsx`.
+  narrowOnly: { display: { 'default': 'none', '@media (max-width: 1100px)': 'block' } },
+  wideOnly: { display: { 'default': 'inline-flex', '@media (max-width: 1100px)': 'none' } },
+  railCount: {
+    alignItems: 'center',
+    display: 'flex',
+    flexDirection: 'column',
+    fontSize: 12,
+    fontVariantNumeric: 'tabular-nums',
+    gap: 2,
+  },
   detail: {
     color: cssVar.colorTextSecondary,
     fontSize: 13,
@@ -37,7 +75,6 @@ const styles = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  empty: { color: cssVar.colorTextTertiary, fontSize: 13 },
   heading: { color: cssVar.colorTextTertiary, fontSize: 12, fontWeight: 500 },
   item: {
     backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillQuaternary },
@@ -53,12 +90,14 @@ const styles = stylex.create({
     textAlign: 'start',
     width: 'calc(100% + 16px)',
   },
+  itemCompact: { paddingBlock: 6 },
   meta: { flexShrink: 0, fontSize: 12, whiteSpace: 'nowrap' },
 });
 
 const Item = ({ item, now }: { item: AgentRunBoardAttentionItem; now: Date }) => {
   const { t } = useTranslation('home');
   const openDrawer = useOpenRunDrawer();
+  const { compact } = useDensity();
   const failed = item.kind === 'failed';
   const canAct = item.isMine && !failed;
   const elapsed = formatDuration(now.getTime() - item.since.getTime());
@@ -69,7 +108,7 @@ const Item = ({ item, now }: { item: AgentRunBoardAttentionItem; now: Date }) =>
       data-testid={`team-board-attention-${item.kind}`}
       disabled={!item.topicId}
       type={'button'}
-      {...stylex.props(styles.item)}
+      {...stylex.props(styles.item, compact && styles.itemCompact)}
       onClick={() =>
         openDrawer({
           agentId: item.agentId,
@@ -88,7 +127,7 @@ const Item = ({ item, now }: { item: AgentRunBoardAttentionItem; now: Date }) =>
             name={item.agentTitle ?? undefined}
             size={20}
           />
-          <Text ellipsis style={{ flex: 1 }} weight={500}>
+          <Text ellipsis fontSize={compact ? 13 : undefined} style={{ flex: 1 }} weight={500}>
             {title}
           </Text>
           {!item.isMine && <AuthorChip avatarOnly userId={item.ownerUserId} />}
@@ -115,54 +154,110 @@ const Item = ({ item, now }: { item: AgentRunBoardAttentionItem; now: Date }) =>
 };
 
 const Section = ({
+  action,
   items,
   now,
   title,
 }: {
+  action?: ReactNode;
   items: AgentRunBoardAttentionItem[];
   now: Date;
   title: string;
-}) => {
-  if (items.length === 0) return null;
-
-  return (
-    <Flexbox gap={4}>
-      <Flexbox horizontal gap={6}>
-        <span {...stylex.props(styles.heading)}>{title}</span>
-        <span {...stylex.props(styles.count)}>{items.length}</span>
-      </Flexbox>
-      {items.map((item) => (
-        <Item item={item} key={item.operationId} now={now} />
-      ))}
+}) => (
+  <Flexbox gap={4}>
+    <Flexbox horizontal align={'center'} gap={6}>
+      <span {...stylex.props(styles.heading)}>{title}</span>
+      <span {...stylex.props(styles.count)}>{items.length}</span>
+      {action && <div style={{ marginInlineStart: 'auto' }}>{action}</div>}
     </Flexbox>
-  );
-};
+    {items.map((item) => (
+      <Item item={item} key={item.operationId} now={now} />
+    ))}
+  </Flexbox>
+);
 
 const AttentionList = ({ items, now }: { items: AgentRunBoardAttentionItem[]; now: Date }) => {
   const { t } = useTranslation('home');
-  const waiting = items.filter((item) => item.kind === 'needs_human');
+  const { compact, tokens } = useDensity();
+  const collapsed = useGlobalStore(systemStatusSelectors.teamBoardAttentionCollapsed);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+  const setCollapsed = (next: boolean) =>
+    updateSystemStatus({ teamBoardAttentionCollapsed: next }, 'toggleTeamBoardAttention');
 
-  return (
-    <Flexbox gap={16} {...stylex.props(styles.card)} data-testid={'team-board-attention'}>
-      <Section
-        items={waiting.filter((item) => item.isMine)}
-        now={now}
-        title={t('team.attention.needsYou')}
-      />
-      <Section
-        items={waiting.filter((item) => !item.isMine)}
-        now={now}
-        title={t('team.attention.blocked')}
-      />
-      <Section
-        items={items.filter((item) => item.kind === 'failed')}
-        now={now}
-        title={t('team.attention.failed')}
-      />
-      {items.length === 0 && (
-        <span {...stylex.props(styles.empty)}>{t('team.attention.empty')}</span>
-      )}
+  const waiting = items.filter((item) => item.kind === 'needs_human');
+  const failed = items.filter((item) => item.kind === 'failed');
+
+  const sections = [
+    { items: waiting.filter((item) => item.isMine), title: t('team.attention.needsYou') },
+    { items: waiting.filter((item) => !item.isMine), title: t('team.attention.blocked') },
+    { items: failed, title: t('team.attention.failed') },
+  ].filter((section) => section.items.length > 0);
+
+  const card = (
+    <Flexbox
+      gap={tokens.sectionGap}
+      {...stylex.props(styles.card, compact && styles.cardCompact)}
+      data-testid={'team-board-attention'}
+    >
+      {sections.map((section, index) => (
+        <Section
+          items={section.items}
+          key={section.title}
+          now={now}
+          title={section.title}
+          action={
+            // The fold control rides on the first heading instead of adding a header row.
+            index === 0 && (
+              <span {...stylex.props(styles.wideOnly)}>
+                <ActionIcon
+                  data-testid={'team-board-attention-collapse'}
+                  icon={PanelRightCloseIcon}
+                  size={'small'}
+                  title={t('team.attention.collapse')}
+                  onClick={() => setCollapsed(true)}
+                />
+              </span>
+            )
+          }
+        />
+      ))}
     </Flexbox>
+  );
+
+  if (!collapsed) return card;
+
+  const counts = [
+    { count: waiting.length, status: 'needs_human' as const },
+    { count: failed.length, status: 'failed' as const },
+  ].filter(({ count }) => count > 0);
+
+  // Both render; CSS picks one by width, so a fold made on a wide screen
+  // never hides the list on a narrow one.
+  return (
+    <>
+      <Tooltip placement={'left'} title={t('team.attention.expand')}>
+        <button
+          aria-label={t('team.attention.expand')}
+          data-testid={'team-board-attention-rail'}
+          type={'button'}
+          {...stylex.props(styles.rail)}
+          onClick={() => setCollapsed(false)}
+        >
+          <Icon icon={PanelRightOpenIcon} size={16} />
+          {counts.map(({ count, status }) => (
+            <span
+              data-testid={`team-board-attention-rail-${status}`}
+              key={status}
+              {...sx(styles.railCount, { color: RUN_STATUS_VISUALS[status].color })}
+            >
+              <Icon icon={RUN_STATUS_VISUALS[status].icon} size={14} />
+              {count}
+            </span>
+          ))}
+        </button>
+      </Tooltip>
+      <div {...stylex.props(styles.narrowOnly)}>{card}</div>
+    </>
   );
 };
 

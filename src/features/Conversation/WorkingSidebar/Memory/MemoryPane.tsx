@@ -8,8 +8,11 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
 import { SkillSection } from '@/features/SkillsList';
 import { useChatStore } from '@/store/chat';
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import { groupMemoryFiles, memoryFilePortalTarget } from './memoryView';
 import { useClaudeCodeMemory } from './useClaudeCodeMemory';
@@ -17,42 +20,61 @@ import { useClaudeCodeMemory } from './useClaudeCodeMemory';
 const styles = stylex.create({
   description: {
     color: cssVar.colorTextTertiary,
-    fontSize: 12,
-    lineHeight: 1.5,
-    paddingInlineStart: 20,
+    fontSize: sidebarRow.metaFontSize,
+    lineHeight: '18px',
   },
   item: {
+    alignItems: 'flex-start',
     backgroundColor: {
       ':focus-visible': cssVar.colorFillTertiary,
       ':hover': cssVar.colorFillTertiary,
       'default': 'transparent',
     },
-    borderRadius: 6,
+    borderRadius: sidebarRow.radius,
     borderStyle: 'none',
-    color: {
-      ':focus-visible': cssVar.colorText,
-      ':hover': cssVar.colorText,
-      'default': cssVar.colorTextSecondary,
-    },
+    color: cssVar.colorText,
     cursor: 'pointer',
     display: 'flex',
-    flexDirection: 'column',
-    fontSize: 13,
-    gap: 2,
-    paddingBlock: 6,
-    paddingInlineEnd: 8,
-    paddingInlineStart: 4,
+    fontSize: sidebarRow.textFontSize,
+    gap: sidebarRow.gap,
+    lineHeight: sidebarRow.textLineHeight,
+    paddingBlock: 5,
+    paddingInline: sidebarRow.paddingInline,
     textAlign: 'start',
     width: '100%',
   },
   itemIcon: {
+    alignItems: 'center',
     color: cssVar.colorTextTertiary,
+    display: 'flex',
     flexShrink: 0,
+    height: sidebarRow.textLineHeight,
+    justifyContent: 'center',
+    width: sidebarRow.iconBox,
+  },
+  itemText: {
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    minWidth: 0,
+  },
+  list: {
+    minHeight: 0,
+    paddingBlockEnd: sidebarRow.paneBlockEnd,
+    paddingBlockStart: sidebarRow.paneBlockStart,
+    paddingInline: sidebarRow.paneInline,
   },
   location: {
+    color: cssVar.colorTextTertiary,
     flex: '1',
-    fontSize: 12,
+    fontSize: sidebarRow.labelFontSize,
     minWidth: 0,
+  },
+  toolbar: {
+    flexShrink: 0,
+    height: sidebarRow.toolbarHeight,
+    paddingInlineEnd: sidebarRow.toolbarPaddingInlineEnd,
+    paddingInlineStart: sidebarRow.toolbarPaddingInlineStart,
   },
 });
 
@@ -64,6 +86,7 @@ interface MemoryRowProps {
 
 const MemoryRow = memo<MemoryRowProps>(({ file, indexHint, onOpen }) => {
   const description = file.description ?? (file.isIndex ? indexHint : undefined);
+  const { iconSize } = useDensityTokens();
 
   return (
     <button
@@ -72,17 +95,19 @@ const MemoryRow = memo<MemoryRowProps>(({ file, indexHint, onOpen }) => {
       type="button"
       onClick={() => onOpen(file)}
     >
-      <Flexbox horizontal align={'center'} gap={6} width={'100%'}>
-        <Icon {...stylex.props(styles.itemIcon)} icon={FileTextIcon} size={14} />
-        <Text ellipsis style={{ color: 'inherit', flex: 1, minWidth: 0 }}>
+      <span {...stylex.props(styles.itemIcon)}>
+        <Icon icon={FileTextIcon} size={iconSize} />
+      </span>
+      <span {...stylex.props(styles.itemText)}>
+        <Text ellipsis style={{ color: 'inherit', fontSize: 'inherit', lineHeight: 'inherit' }}>
           {file.isIndex ? file.relativePath : file.name}
         </Text>
-      </Flexbox>
-      {description && (
-        <Text {...stylex.props(styles.description)} ellipsis={{ rows: 2 }}>
-          {description}
-        </Text>
-      )}
+        {description && (
+          <Text {...stylex.props(styles.description)} ellipsis={{ rows: 2 }}>
+            {description}
+          </Text>
+        )}
+      </span>
     </button>
   );
 });
@@ -104,6 +129,7 @@ interface MemoryPaneProps {
  */
 export const MemoryPane = memo<MemoryPaneProps>(({ agentId, deviceId, workingDirectory }) => {
   const { t } = useTranslation('chat');
+  const { sectionGap } = useDensityTokens();
   const openLocalFile = useChatStore((s) => s.openLocalFile);
   const { data, error, isLoading, isValidating, mutate } = useClaudeCodeMemory({
     agentId,
@@ -123,18 +149,11 @@ export const MemoryPane = memo<MemoryPaneProps>(({ agentId, deviceId, workingDir
   const refresh = useCallback(() => void mutate(), [mutate]);
 
   return (
-    <Flexbox
-      data-testid={'workspace-memory'}
-      flex={1}
-      gap={12}
-      paddingBlock={8}
-      paddingInline={'8px 12px'}
-      style={{ minHeight: 0 }}
-    >
+    <Flexbox data-testid={'workspace-memory'} flex={1} style={{ minHeight: 0 }}>
       {/* Outside the boundary so an empty memory can still be re-read once Claude writes one. */}
       {memoryDir && (
-        <Flexbox horizontal align={'center'} gap={4} paddingInline={4}>
-          <Text ellipsis {...stylex.props(styles.location)} title={memoryDir} type={'secondary'}>
+        <Flexbox horizontal align={'center'} gap={4} {...stylex.props(styles.toolbar)}>
+          <Text ellipsis {...stylex.props(styles.location)} title={memoryDir}>
             {t('workingPanel.claudeMemory.location', { path: memoryDir })}
           </Text>
           <ActionIcon
@@ -147,42 +166,46 @@ export const MemoryPane = memo<MemoryPaneProps>(({ agentId, deviceId, workingDir
           />
         </Flexbox>
       )}
-      <AsyncBoundary
-        data={data}
-        error={error}
-        errorVariant={'inline'}
-        isEmpty={!error && files.length === 0}
-        isLoading={isLoading}
-        empty={
-          <Center flex={1} paddingBlock={24}>
-            <Empty
-              description={t('workingPanel.claudeMemory.empty.description')}
-              icon={BrainIcon}
-              title={t('workingPanel.claudeMemory.empty.title')}
-            />
-          </Center>
-        }
-        onRetry={refresh}
-      >
-        {groups.map((group) => (
-          <SkillSection
-            key={group.key}
-            sectionHeader={{
-              count: group.files.length,
-              title: t(`workingPanel.claudeMemory.group.${group.key}`),
-            }}
-          >
-            {group.files.map((file) => (
-              <MemoryRow
-                file={file}
-                indexHint={t('workingPanel.claudeMemory.indexHint')}
-                key={file.path}
-                onOpen={openMemory}
+      <Flexbox flex={1} gap={sectionGap} {...stylex.props(styles.list)}>
+        <AsyncBoundary
+          data={data}
+          error={error}
+          errorVariant={'inline'}
+          isEmpty={!error && files.length === 0}
+          isLoading={isLoading}
+          loading={<SkeletonList compact rows={4} />}
+          empty={
+            <Center flex={1} paddingBlock={24}>
+              <Empty
+                description={t('workingPanel.claudeMemory.empty.description')}
+                icon={BrainIcon}
+                title={t('workingPanel.claudeMemory.empty.title')}
               />
-            ))}
-          </SkillSection>
-        ))}
-      </AsyncBoundary>
+            </Center>
+          }
+          onRetry={refresh}
+        >
+          {groups.map((group) => (
+            <SkillSection
+              compact
+              key={group.key}
+              sectionHeader={{
+                count: group.files.length,
+                title: t(`workingPanel.claudeMemory.group.${group.key}`),
+              }}
+            >
+              {group.files.map((file) => (
+                <MemoryRow
+                  file={file}
+                  indexHint={t('workingPanel.claudeMemory.indexHint')}
+                  key={file.path}
+                  onOpen={openMemory}
+                />
+              ))}
+            </SkillSection>
+          ))}
+        </AsyncBoundary>
+      </Flexbox>
     </Flexbox>
   );
 });

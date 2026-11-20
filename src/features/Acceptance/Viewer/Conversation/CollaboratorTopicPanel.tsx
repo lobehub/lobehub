@@ -40,7 +40,7 @@ const styles = stylex.create({
   },
   empty: {
     color: cssVar.colorTextTertiary,
-    fontSize: 13,
+    fontSize: 14,
     paddingBlock: 24,
     paddingInline: 16,
   },
@@ -194,7 +194,7 @@ const CollaboratorTopicPanel = ({ onCollapse }: { onCollapse: () => void }) => {
           background={collaboration.agent.backgroundColor ?? undefined}
           size={20}
         />
-        <Text ellipsis strong style={{ flex: 1, fontSize: 13, minWidth: 0 }}>
+        <Text ellipsis strong style={{ flex: 1, fontSize: 14, minWidth: 0 }}>
           {collaboration.topicTitle ?? agentName}
         </Text>
         <ActionIcon

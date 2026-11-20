@@ -22,7 +22,7 @@ type DraftControls = ReturnType<typeof useChannelAgentDraft>;
 
 /** Device and working directory for one Agent in one Channel. */
 export const EnvironmentFields = ({
-  controls: { change, changeDevice, draft, requiresDevice },
+  controls: { change, changeDevice, draft, remote },
   devices,
   name,
 }: {
@@ -40,15 +40,23 @@ export const EnvironmentFields = ({
       (item) => item.deviceId === draft.deviceId && item.online && !item.onlineUnknown,
     );
 
+  if (remote)
+    return (
+      <Text fontSize={12} type="secondary">
+        {t('environment.remoteHost')}
+      </Text>
+    );
+
   return (
     <>
       <Select
         aria-describedby={draft.issue ? `channel-agent-${draft.agentId}-issue` : undefined}
         aria-label={t('environment.deviceLabel', { name })}
-        placeholder={t(requiresDevice ? 'environment.chooseDevice' : 'noDevice')}
+        placeholder={t('environment.followAgent')}
         value={draft.deviceId ?? ''}
         options={[
-          ...(!requiresDevice ? [{ label: t('noDevice'), value: '' }] : []),
+          // No device is the default: the Agent runs where its own settings say.
+          { label: t('environment.followAgent'), value: '' },
           ...(missingDevice
             ? [
                 {

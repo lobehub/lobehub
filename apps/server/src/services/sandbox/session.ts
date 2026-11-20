@@ -12,16 +12,17 @@ import {
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { EnvironmentConfiguration } from '@lobechat/types';
+import { withRepositorySetup } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
 import { EnvironmentModel } from '@/database/models/environment';
 import { EnvironmentInstanceModel } from '@/database/models/environmentInstance';
 import { TopicModel } from '@/database/models/topic';
-import { resolveScmCloneCredential } from '@/server/services/scm/cloneCredential';
+import { resolveScmCloneCredentials } from '@/server/services/scm/cloneCredential';
 
 import { sandboxStorageBinding } from './binding';
-import { driveFolderExists } from './driveFolder';
+import { driveFolderExists, ensureDriveFolder } from './driveFolder';
 import { resolveSandboxStorageClaim } from './entitlement';
 import { type SandboxInitialization, toSandboxInitialization } from './environmentInit';
 import type { SandboxSessionSpecification } from './types';
@@ -123,9 +124,11 @@ export interface SandboxSessionConfig {
  * session of every environment that gained one.
  */
 const toSessionSpecification = (
-  configuration: EnvironmentConfiguration | null | undefined,
+  stored: EnvironmentConfiguration | null | undefined,
 ): SandboxSessionSpecification | undefined => {
-  if (!configuration) return undefined;
+  if (!stored) return undefined;
+  // Each repository's own setup rides in the one command the plane runs.
+  const configuration = withRepositorySetup(stored);
 
   const specification: SandboxSessionSpecification = {
     ...(configuration.bootstrapCommand && { bootstrapCommand: configuration.bootstrapCommand }),
@@ -365,10 +368,20 @@ const resolvePlacement = async ({
 
     // Deleted since it was picked — by this member in another tab, or by a
     // colleague on the public drive. Recreating it silently would bring back
-    // an empty folder under a name someone chose to remove.
+    // an empty folder under a name someone chose to remove. A repository's
+    // checkout is the exception: the environment fills the folder, so a
+    // project conversation's checkout is made on its first run, and made
+    // again — a fresh clone — after someone removes it.
     if ((await driveFolderExists({ claim, path: folder, userId, workspaceId })) === false) {
-      log('Folder %o on topic %s is no longer on the drive', folder, topicId);
-      return fallBack('directoryMissing');
+      const checkout = !!topic?.metadata?.sandboxEnvironmentId;
+      if (
+        !checkout ||
+        !(await ensureDriveFolder({ claim, path: folder, topicId, userId, workspaceId }))
+      ) {
+        log('Folder %o on topic %s is no longer on the drive', folder, topicId);
+        return fallBack('directoryMissing');
+      }
+      log('Created checkout folder %o for topic %s', folder, topicId);
     }
 
     log('Drive for topic %s: cwd=%o drive=%s', topicId, folder, drive);
@@ -436,14 +449,18 @@ const resolveInitialization = async ({
     // The same credential a build used to get, so a private repository the
     // picker offered still clones. Never throws: without one, a public
     // repository clones and a private one fails in the report, by name.
-    const cloneCredential = await resolveScmCloneCredential({
+    const cloneCredentials = await resolveScmCloneCredentials({
       configuration: environment.configuration ?? undefined,
       db: serverDB,
       userId,
       workspaceId,
     });
 
-    return cloneCredential ? { ...initialization, cloneCredential } : initialization;
+    if (cloneCredentials.length === 0) return initialization;
+    // One repository keeps the single host-wide credential it always had.
+    return cloneCredentials.length === 1
+      ? { ...initialization, cloneCredential: cloneCredentials[0] }
+      : { ...initialization, cloneCredentials };
   } catch (error) {
     log('Failed to read the environment for topic %s: %O', topicId, error);
     return undefined;

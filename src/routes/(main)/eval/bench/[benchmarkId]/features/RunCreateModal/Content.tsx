@@ -185,11 +185,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
         const timeoutMinutes = values.timeoutMinutes ?? DEFAULT_TIMEOUT_MINUTES;
         const k = values.k ?? 1;
         const run = await createRun({
-          config: {
-            k,
-            maxSteps,
-            timeout: timeoutMinutes * 60_000,
-          },
+          config: { k, maxSteps, timeout: timeoutMinutes * 60_000 },
           datasetId: (isDatasetMode ? datasetId : values.datasetId)!,
           experimentId,
           name: values.name,

@@ -1,17 +1,12 @@
 'use client';
 
-import {
-  AccordionHeader,
-  AccordionItem,
-  AccordionPanel,
-  AccordionTrigger,
-  Text,
-} from '@lobehub/ui';
+import { AccordionHeader, AccordionItem, AccordionPanel, AccordionTrigger } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { useFetchFavorites } from '@/features/Favorites';
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import { useHomeStore } from '@/store/home';
 import { favoriteSelectors } from '@/store/home/selectors';
 
@@ -30,6 +25,7 @@ interface FavoritesProps {
  */
 const Favorites = memo<FavoritesProps>(({ itemKey }) => {
   const { t } = useTranslation('common');
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { error, revalidate } = useFetchFavorites();
   const list = useHomeStore(favoriteSelectors.favoriteList);
   const loadFailed = list === undefined && !!error;
@@ -38,11 +34,12 @@ const Favorites = memo<FavoritesProps>(({ itemKey }) => {
 
   return (
     <AccordionItem value={itemKey}>
-      <AccordionHeader>
-        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
-          <Text ellipsis fontSize={12} type="secondary" weight={500}>
-            {t('favorite.section')}
-          </Text>
+      {/* Recents and Agents carry a 24px header action that sets their height;
+          Favorites has none, so pin the same height to keep the section
+          headers aligned. */}
+      <AccordionHeader style={{ minHeight: 24 + sectionTriggerStyle.paddingBlock * 2 }}>
+        <AccordionTrigger style={sectionTriggerStyle}>
+          <SectionTitle>{t('favorite.section')}</SectionTitle>
         </AccordionTrigger>
       </AccordionHeader>
       <AccordionPanel>

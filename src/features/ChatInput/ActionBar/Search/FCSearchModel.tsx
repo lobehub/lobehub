@@ -1,36 +1,25 @@
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InfoTooltip from '@/components/InfoTooltip';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import FunctionCallingModelSelect from './FunctionCallingModelSelect';
 
-const styles = createStaticStyles(({ css }) => ({
-  check: css`
-    margin-inline-start: 12px;
-    font-size: 16px;
-    color: ${cssVar.colorPrimary};
-  `,
-  content: css`
-    flex: 1;
-    width: 230px;
-  `,
-  description: css`
-    width: 200px;
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  title: css`
-    font-size: 14px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  title: {
+    fontSize: densityTokens['--lobe-density-font-size'],
+    fontWeight: 500,
+    color: cssVar.colorText,
+  },
+});
 
 interface FCSearchModelProps {
   disabled?: boolean;
@@ -46,7 +35,9 @@ const FCSearchModel = memo<FCSearchModelProps>(({ disabled }) => {
   return (
     <Flexbox horizontal distribution={'space-between'} gap={16} padding={8}>
       <Flexbox horizontal align={'center'} gap={4}>
-        <Flexbox className={styles.title}>{t('search.searchModel.title')}</Flexbox>
+        <Flexbox className={stylex.props(styles.title).className}>
+          {t('search.searchModel.title')}
+        </Flexbox>
         <InfoTooltip title={t('search.searchModel.desc')} />
       </Flexbox>
       <FunctionCallingModelSelect

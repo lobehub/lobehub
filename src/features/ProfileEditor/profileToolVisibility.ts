@@ -1,5 +1,3 @@
-import { USER_HIDDEN_BUILTIN_SKILLS } from '@/helpers/skillFilters';
-
 interface ProfileToolVisibilityOptions {
   agentConnectorIdentifiers?: ReadonlySet<string> | null;
   nonConfigurableBuiltinToolIdentifiers: ReadonlySet<string>;
@@ -20,7 +18,5 @@ export const getVisibleProfileToolIds = (
 ): string[] =>
   toolIds.filter(
     (toolId) =>
-      !USER_HIDDEN_BUILTIN_SKILLS.has(toolId) &&
-      !nonConfigurableBuiltinToolIdentifiers.has(toolId) &&
-      !agentConnectorIdentifiers?.has(toolId),
+      !nonConfigurableBuiltinToolIdentifiers.has(toolId) && !agentConnectorIdentifiers?.has(toolId),
   );

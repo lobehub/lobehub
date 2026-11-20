@@ -14,6 +14,7 @@ import { agentByIdSelectors, agentSelectors, builtinAgentSelectors } from '@/sto
 import pkg from '../../../../package.json';
 import { containerStyles } from '../style';
 import ChatList from './ChatList';
+import { resolveHeaderAvatar } from './resolveHeaderAvatar';
 import { styles } from './style';
 import { type FieldType } from './type';
 import { WidthMode } from './type';
@@ -81,11 +82,12 @@ const Preview = memo<PreviewProps>(
     });
 
     const displayTitle =
-      (isHeaderInbox ?? isInbox)
-        ? DEFAULT_INBOX_TITLE
-        : agentDisplayName(headerMeta) || title || currentTitle;
+      agentDisplayName(headerMeta) ||
+      title ||
+      currentTitle ||
+      ((isHeaderInbox ?? isInbox) ? DEFAULT_INBOX_TITLE : undefined);
     const resolvedAgentId = (headerMeta && headerAgentId) || activeAgentId;
-    const displayAvatar = headerMeta?.avatar || currentAvatar;
+    const displayAvatar = resolveHeaderAvatar(headerMeta, currentAvatar);
     const displayBackgroundColor = headerMeta?.backgroundColor || currentBackgroundColor;
     const displayModel = headerModel || currentModel;
     const displayPlugins = headerPlugins || currentPlugins;

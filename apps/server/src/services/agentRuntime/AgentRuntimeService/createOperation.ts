@@ -216,10 +216,7 @@ export async function createOperation(
           // applies the owner-configured visitor redaction policy instead of the
           // fail-closed full strip. See `gatewayVisitorRedaction.ts`.
           visitorRedaction: agentShareVisitor
-            ? {
-                showErrorDetails: agentShareVisitor.showErrorDetails,
-                showModelInfo: agentShareVisitor.showModelInfo,
-              }
+            ? { showErrorDetails: agentShareVisitor.showErrorDetails }
             : undefined,
           mirrorToOperationId,
           modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
@@ -317,7 +314,22 @@ export async function createOperation(
           retries: queueRetries,
           stepIndex: initialStepCount,
         }),
-      );
+      ).catch(async (error: unknown) => {
+        // An intervention continuation keeps its own recovery: the prepared
+        // continuation republishes this same deterministic operation, so it
+        // must stay running for that retry to execute.
+        if (!interventionResolution) {
+          // A publish timeout may still have delivered the message. The durable
+          // terminal guard makes a late delivery ACK without executing, and the
+          // reaper's running-only CAS excludes this user-visible failed request.
+          // Await persistence before returning the startup error to the caller.
+          await deps.agentOperationModel.recordDispatchFailure(
+            operationId,
+            error instanceof Error ? error.message : String(error),
+          );
+        }
+        throw error;
+      });
       if (interventionResolution && deduplicationId) {
         await deps.persistInterventionDispatchAck({
           deduplicationId,

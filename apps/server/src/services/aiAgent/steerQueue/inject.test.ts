@@ -64,6 +64,23 @@ describe('canJoinRunningTurn', () => {
     expect(canJoinRunningTurn(followUp('a', 1), state)).toBe(true);
   });
 
+  it('takes a parent’s steer instruction whatever the sub-agent run’s settings', () => {
+    const subAgentRun = {
+      ...state,
+      host: { acceptsFileWorks: true, clientProtocol: 2 },
+    } as AgentState;
+    const steer = { ...followUp('a', 1), subAgentSteer: true };
+
+    expect(canJoinRunningTurn(followUp('a', 1), subAgentRun)).toBe(false);
+    expect(canJoinRunningTurn(steer, subAgentRun)).toBe(true);
+    expect(
+      canJoinRunningTurn(
+        { ...steer, request: { ...steer.request, agentId: 'agt-2' } },
+        subAgentRun,
+      ),
+    ).toBe(false);
+  });
+
   it.each([
     ['an attachment', { fileIds: ['f1'] }],
     [

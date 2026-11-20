@@ -5,6 +5,7 @@ import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { initialState } from '@/features/ResourceManager/store/initialState';
 import { explorerSearchResource } from '@/features/ResourceManager/store/projection';
 import { getExplorerSearchParams } from '@/features/ResourceManager/store/selectors';
+import { SortType } from '@/types/files';
 import type { ResourceItem } from '@/types/resource';
 
 import { useExplorerSearchResults } from './useExplorerSearchResults';
@@ -39,6 +40,8 @@ describe('useExplorerSearchResults', () => {
     loadMoreExplorerSearch.mockReset().mockResolvedValue(undefined);
     useResourceManagerStore.setState({
       ...initialState,
+      sorter: 'name',
+      sortType: SortType.Asc,
       loadMoreExplorerSearch,
       useFetchExplorerSearch: () => ({ error: undefined, revalidate: vi.fn() }) as any,
     });
@@ -58,6 +61,34 @@ describe('useExplorerSearchResults', () => {
     expect(result.current.data.map((item) => item.id)).toEqual(['hit-1', 'hit-2']);
     expect(result.current).toMatchObject({ hasMore: true, isLoading: false, total: 120 });
   });
+
+  it.each(['list', 'masonry'] as const)(
+    'reorders %s search hits when the selected sort changes',
+    (viewMode) => {
+      useResourceManagerStore.setState({ viewMode });
+      const key = seedSearch(false);
+      const entry = useResourceManagerStore.getState().explorerSearchEntries[key];
+      const items = [row('2_file'), row('10_page')];
+      useResourceManagerStore.setState({ explorerSearchEntries: { [key]: { ...entry, items } } });
+      const { result } = renderHook(() => useExplorerSearchResults());
+      expect(result.current.data.map((item) => item.id)).toEqual(['2_file', '10_page']);
+
+      act(() => {
+        useResourceManagerStore.getState().setSort('custom', SortType.Desc);
+        const params = getExplorerSearchParams(useResourceManagerStore.getState())!;
+        useResourceManagerStore.setState({
+          explorerSearchEntries: {
+            [explorerSearchResource.key(params)]: { ...entry, items, searchParams: params },
+          },
+        });
+      });
+      expect(result.current.data.map((item) => item.id)).toEqual(['10_page', '2_file']);
+      expect(result.current.searchParams).toMatchObject({
+        sorter: 'custom',
+        sortType: SortType.Desc,
+      });
+    },
+  );
 
   // Regression: a failed page past the head was dropped on the floor — the
   // loading row disappeared while more rows remained. The overlay needs the

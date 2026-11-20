@@ -11,7 +11,12 @@ import type {
   HeterogeneousProviderBindingReference,
 } from '@lobechat/heterogeneous-agents';
 import type {
+  AntigravityQuotaParams,
+  AntigravityQuotaSnapshot,
+} from '@lobechat/heterogeneous-agents/quota';
+import type {
   HeterogeneousAgentModelCatalog,
+  HeteroPermissionMode,
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
@@ -51,6 +56,8 @@ class HeterogeneousAgentService {
     workspaceId?: string;
     imageList?: Array<{ id: string; url: string }>;
     operationId: string;
+    /** Claude Code permission mode (Better Coding Experience lab); absent allows everything. */
+    permissionMode?: HeteroPermissionMode;
     prompt: string;
     /**
      * Replay the session's on-disk transcript instead of spawning the CLI.
@@ -69,8 +76,33 @@ class HeterogeneousAgentService {
     return this.ipc.heterogeneousAgent.sendPrompt(params);
   }
 
+  /**
+   * Deliver a message into the session's running turn (Follow-up behavior:
+   * Steer). `accepted` means it was written; the agent confirms reading it
+   * with a `step_complete { phase: 'user_message' }` event naming `messageId`
+   * (or, for Pi, its text). Throws when the outcome is unknown.
+   */
+  async steerSession(params: {
+    imageList?: Array<{ id: string; url: string }>;
+    messageId: string;
+    prompt: string;
+    sessionId: string;
+  }): Promise<{ deliveredText?: string; status: 'accepted' | 'rejected' | 'unsupported' }> {
+    return this.ipc.heterogeneousAgent.steerSession(params);
+  }
+
   async cancelSession(sessionId: string) {
     return this.ipc.heterogeneousAgent.cancelSession({ sessionId });
+  }
+
+  /** Stop one background task of a local Claude Code SDK run. */
+  async stopBackgroundTask(sessionId: string, taskId: string) {
+    return this.ipc.heterogeneousAgent.stopBackgroundTask({ sessionId, taskId });
+  }
+
+  /** Switch a local Claude Code run's permission mode (Better Coding Experience mode chip). */
+  async setPermissionMode(sessionId: string, mode: HeteroPermissionMode) {
+    return this.ipc.heterogeneousAgent.setPermissionMode({ mode, sessionId });
   }
 
   async stopSession(sessionId: string) {
@@ -121,6 +153,10 @@ class HeterogeneousAgentService {
     params: ListHeterogeneousAgentModelsParams,
   ): Promise<HeterogeneousAgentModelCatalog> {
     return this.ipc.heterogeneousAgent.listModels(params);
+  }
+
+  async getAntigravityQuota(params?: AntigravityQuotaParams): Promise<AntigravityQuotaSnapshot> {
+    return this.ipc.heterogeneousAgent.getAntigravityQuota(params);
   }
 
   async getCodexQuota(params?: {

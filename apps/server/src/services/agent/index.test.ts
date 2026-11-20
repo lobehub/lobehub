@@ -841,7 +841,10 @@ describe('AgentService', () => {
 
   describe('share provider restrictions', () => {
     const storedAgent = { id: 'agent-1', model: 'gpt-4', provider: 'lobehub' };
-    let agent: Omit<typeof storedAgent, 'provider'> & { provider: string | null };
+    let agent: Omit<typeof storedAgent, 'provider'> & {
+      agencyConfig?: { heterogeneousProvider?: { command?: string; type: string } | null };
+      provider: string | null;
+    };
     let visibility: string;
 
     beforeEach(() => {
@@ -976,6 +979,108 @@ describe('AgentService', () => {
     it('pins an inherited provider when clearing a shared selection', async () => {
       await service.updateAgentConfig('agent-1', { provider: null });
       expect(agent.provider).toBe('lobehub');
+    });
+
+    it('allows switching a shared agent to Claude Code, which runs no provider model', async () => {
+      await expect(
+        service.updateAgentConfig('agent-1', {
+          agencyConfig: { heterogeneousProvider: { command: 'claude', type: 'claude-code' } },
+          provider: 'claude-code',
+        } as any),
+      ).resolves.toMatchObject({ success: true });
+      expect(agent.provider).toBe('claude-code');
+    });
+
+    it('allows the clear-then-write step of switching between two heterogeneous drivers', async () => {
+      agent.agencyConfig = { heterogeneousProvider: { type: 'claude-code' } };
+      agent.provider = 'claude-code';
+      await expect(
+        service.updateAgentConfig('agent-1', {
+          agencyConfig: { heterogeneousProvider: null },
+        } as any),
+      ).resolves.toMatchObject({ success: true });
+      await expect(
+        service.updateAgentConfig('agent-1', {
+          agencyConfig: { heterogeneousProvider: { command: 'codex', type: 'codex' } },
+          provider: 'codex',
+        } as any),
+      ).resolves.toMatchObject({ success: true });
+      expect(agent.provider).toBe('codex');
+    });
+
+    it('publishes a heterogeneous agent without pinning a harness model over its stamp', async () => {
+      agent.agencyConfig = { heterogeneousProvider: { type: 'claude-code' } };
+      agent.provider = 'claude-code';
+      await service.prepareShareModel('agent-1');
+      expect(agent.provider).toBe('claude-code');
+      expect(agent.model).toBe('gpt-4');
+    });
+
+    it('keeps a shared agent on a runtime visitors cannot run under the restriction', async () => {
+      await expect(
+        service.updateAgentConfig('agent-1', {
+          agencyConfig: { heterogeneousProvider: { type: 'openclaw' } },
+          provider: 'openclaw',
+        } as any),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(agent.provider).toBe('lobehub');
+    });
+
+    it('checks a patch that clears the whole agencyConfig of a shared Claude Code agent', async () => {
+      agent.agencyConfig = { heterogeneousProvider: { type: 'claude-code' } };
+      agent.provider = 'claude-code';
+      await expect(
+        service.updateAgentConfig('agent-1', {
+          agencyConfig: null,
+          model: 'gpt-5',
+          provider: 'openai',
+        } as any),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(agent.provider).toBe('claude-code');
+    });
+
+    it('keeps the driver type when a shared Claude Code agent edits only its env', async () => {
+      agent.agencyConfig = { heterogeneousProvider: { command: 'claude', type: 'claude-code' } };
+      agent.provider = 'claude-code';
+      await expect(
+        service.updateAgentConfig('agent-1', {
+          agencyConfig: { heterogeneousProvider: { env: { FOO: 'bar' } } },
+        } as any),
+      ).resolves.toMatchObject({ success: true });
+    });
+
+    it('rejects saving a third-party model next to a shared Claude Code driver', async () => {
+      agent.agencyConfig = { heterogeneousProvider: { type: 'claude-code' } };
+      agent.provider = 'claude-code';
+      await expect(
+        service.updateAgentConfig('agent-1', { model: 'gpt-5', provider: 'openai' }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(agent.provider).toBe('claude-code');
+    });
+
+    it('rejects clearing a Claude Code driver that would leave a third-party model', async () => {
+      agent.agencyConfig = { heterogeneousProvider: { type: 'claude-code' } };
+      agent.provider = 'openai';
+      await expect(
+        service.updateAgentConfig('agent-1', {
+          agencyConfig: { heterogeneousProvider: null },
+        } as any),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(agent.agencyConfig).toEqual({ heterogeneousProvider: { type: 'claude-code' } });
+      expect(AgentShareModel.lockScopedAgentRow).toHaveBeenCalled();
+    });
+
+    it('still rejects switching a shared heterogeneous agent back to a third-party model', async () => {
+      agent.agencyConfig = { heterogeneousProvider: { type: 'claude-code' } };
+      agent.provider = 'claude-code';
+      await expect(
+        service.updateAgentConfig('agent-1', {
+          agencyConfig: { heterogeneousProvider: null },
+          model: 'gpt-5',
+          provider: 'openai',
+        } as any),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(agent.provider).toBe('claude-code');
     });
 
     it('resolves inherited providers before publishing', async () => {

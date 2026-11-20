@@ -21,7 +21,7 @@ import {
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { useHeaderActionSize } from '@/styles/density';
 
 import type { AgentGroupBy, AgentListViewOptions, AgentOrderBy } from './listViewOptions';
 
@@ -53,6 +53,7 @@ const ListConfig = memo<ListConfigProps>(
     const [open, setOpen] = useState(false);
     const form = useForm();
     const { t } = useTranslation('common');
+    const headerActionSmallSize = useHeaderActionSize(true);
 
     const groupingOptions = useMemo<Array<{ label: string; value: AgentGroupBy }>>(
       () => [
@@ -60,6 +61,7 @@ const ListConfig = memo<ListConfigProps>(
         ...(showAuthor
           ? [{ label: t('agentViewAll.groupBy.author'), value: 'author' as const }]
           : []),
+        { label: t('agentViewAll.groupBy.folder'), value: 'folder' as const },
         { label: t('agentViewAll.groupBy.label'), value: 'label' },
       ],
       [showAuthor, t],
@@ -167,7 +169,7 @@ const ListConfig = memo<ListConfigProps>(
         trigger={['click']}
         onOpenChange={setOpen}
       >
-        <ActionIcon icon={Settings2Icon} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
+        <ActionIcon icon={Settings2Icon} size={headerActionSmallSize} />
       </Popover>
     );
   },
