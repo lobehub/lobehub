@@ -75,7 +75,17 @@ export interface PreparedParentWorkspace {
  * workspace, pass through unchanged.
  */
 export const prepareParentWorkspace = async (
-  scope: { db: LobeChatDatabase; userId: string; workspaceId?: string },
+  scope: {
+    db: LobeChatDatabase;
+    /**
+     * The device gateway principal of `deviceId`: the workspace when the device
+     * is enrolled in it, otherwise none (a member's personal device, reached as
+     * `user:<id>` even from a workspace conversation).
+     */
+    resolveDeviceWorkspaceId: (deviceId: string) => Promise<string | undefined>;
+    userId: string;
+    workspaceId?: string;
+  },
   input: InternalExecAgentParams,
 ): Promise<PreparedParentWorkspace> => {
   let params = input;
@@ -157,6 +167,9 @@ export const prepareParentWorkspace = async (
   }
   const branch = generateWorktreeBranchName();
   const sourcePath = config?.path ?? repoPath;
+  // The device's own principal, for the worktree and for its rollback — not
+  // the conversation's workspace, which a personal device is not part of.
+  const deviceWorkspaceId = await scope.resolveDeviceWorkspaceId(deviceId);
   const receipt = issueWorktreeReceipt(scope.userId);
   let created: WorkingDirConfig;
   try {
@@ -171,7 +184,7 @@ export const prepareParentWorkspace = async (
         repoType: config?.repoType === 'github' ? 'github' : 'git',
         sourcePath,
       } as any,
-      { userId: scope.userId, workspaceId: scope.workspaceId },
+      { userId: scope.userId, workspaceId: deviceWorkspaceId },
     );
   } catch (error) {
     throw new ParentWorkspaceError(
@@ -192,7 +205,7 @@ export const prepareParentWorkspace = async (
         deviceId,
         path: repoPath,
         userId: scope.userId,
-        workspaceId: scope.workspaceId,
+        workspaceId: deviceWorkspaceId,
       };
       const removed = await deviceGateway.removeGitWorktree({ ...device, worktreePath });
       if (!removed.success) return;

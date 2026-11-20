@@ -42,6 +42,13 @@ const {
   topicFindById: vi.fn(),
 }));
 
+const handleBotCallback = vi.hoisted(() => vi.fn());
+vi.mock('@/server/services/bot/BotCallbackService', () => ({
+  BotCallbackService: vi.fn(function () {
+    return { handleCallback: handleBotCallback };
+  }),
+}));
+
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn(function () {
     return {
@@ -517,6 +524,37 @@ describe('TaskResultBridgeService.queueWakeup (shared wake-up channel)', () => {
     expect(execAgent).toHaveBeenCalledTimes(1);
     // No queue to settle, so no completion hook re-drains it.
     expect(execAgent.mock.calls[0][0].hooks).toEqual([]);
+  });
+
+  // Regression: without Redis the woken run had no completion hook at all, so
+  // a bot conversation's reply was written but never sent to the platform.
+  it("still delivers the woken run's reply to a bot conversation without Redis", async () => {
+    redisClient.mockReturnValue(undefined);
+    topicFindById.mockResolvedValue({
+      agentId: 'agent-parent',
+      metadata: {
+        bot: { applicationId: 'app-1', platform: 'discord', platformThreadId: 'thread-1' },
+      },
+    });
+
+    await new TaskResultBridgeService(db, TEST_USER).queueWakeup({
+      agentId: 'agent-parent',
+      callbackMessageId: 'sub-1',
+      originTopicId: 'topic-parent',
+      receiptId: 'sub-topic-a',
+    });
+
+    const hooks = execAgent.mock.calls[0][0].hooks;
+    expect(hooks).toHaveLength(1);
+    expect(hooks[0]).toMatchObject({ id: 'result-wake-bot-delivery', type: 'onComplete' });
+    // In-process only: the queue's webhook route needs Redis.
+    expect(hooks[0].webhook).toBeUndefined();
+
+    await hooks[0].handler({ operationId: 'op-wake', reason: 'done' });
+    expect(handleBotCallback).toHaveBeenCalledWith(
+      expect.objectContaining({ platformThreadId: 'thread-1', type: 'completion' }),
+    );
+    expect(settle).not.toHaveBeenCalled();
   });
 });
 

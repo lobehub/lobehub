@@ -35,7 +35,8 @@ vi.mock('../foregroundIntervention', () => ({
   resolveForegroundInterventionConfig: vi.fn(async () => ({ approvalMode: 'auto-run' })),
 }));
 
-const scope = { db: {} as any, userId: 'user-1' };
+const resolveDeviceWorkspaceId = vi.fn();
+const scope = { db: {} as any, resolveDeviceWorkspaceId, userId: 'user-1' };
 
 const parent = {
   agentId: 'agt_lobe',
@@ -203,6 +204,37 @@ describe('prepareParentWorkspace', () => {
       prepareParentWorkspace(scope, { ...base, parentWorkspace: 'new-worktree' }),
     ).rejects.toBeInstanceOf(ParentWorkspaceError);
     expect(mocks.createFirstSendWorktree).not.toHaveBeenCalled();
+  });
+
+  // Regression: a workspace conversation on a member's PERSONAL device passed
+  // the workspace as the gateway principal (`workspace:<id>`), where that device
+  // has no connection, so the worktree could never be made or rolled back.
+  it("makes and rolls back the worktree under the device's own principal", async () => {
+    const workspaceScope = { ...scope, workspaceId: 'ws-1' };
+    resolveDeviceWorkspaceId.mockResolvedValueOnce(undefined);
+
+    const { rollback } = await prepareParentWorkspace(workspaceScope, {
+      ...base,
+      parentWorkspace: 'new-worktree',
+    });
+
+    expect(resolveDeviceWorkspaceId).toHaveBeenCalledWith('dev_mac');
+    expect(mocks.createFirstSendWorktree).toHaveBeenCalledWith(expect.anything(), {
+      userId: 'user-1',
+      workspaceId: undefined,
+    });
+    await rollback!();
+    expect(mocks.removeGitWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceId: 'dev_mac', workspaceId: undefined }),
+    );
+
+    // A device enrolled in the workspace is reached through it.
+    resolveDeviceWorkspaceId.mockResolvedValueOnce('ws-1');
+    await prepareParentWorkspace(workspaceScope, { ...base, parentWorkspace: 'new-worktree' });
+    expect(mocks.createFirstSendWorktree).toHaveBeenLastCalledWith(expect.anything(), {
+      userId: 'user-1',
+      workspaceId: 'ws-1',
+    });
   });
 
   it('takes the new worktree back unless a topic already points at it', async () => {

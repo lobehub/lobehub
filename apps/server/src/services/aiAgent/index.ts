@@ -563,7 +563,12 @@ export class AiAgentService {
     // A new topic opened from a parent: its device and directory, or a fresh
     // worktree, before anything else reads them (see `prepareParentWorkspace`).
     const prepared = await prepareParentWorkspace(
-      { db: this.db, userId: this.userId, workspaceId: this.workspaceId },
+      {
+        db: this.db,
+        resolveDeviceWorkspaceId: (deviceId) => this.resolveDeviceWorkspaceId(deviceId),
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      },
       inputParams,
     );
     if (!prepared.rollback) return this.execPreparedAgent(prepared.params);
