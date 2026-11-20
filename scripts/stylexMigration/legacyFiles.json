@@ -462,8 +462,6 @@
   "src/features/PlanIcon/index.tsx",
   "src/features/PluginDevModal/MCPManifestForm/CollapsibleSection.tsx",
   "src/features/PluginDevModal/MCPManifestForm/MCPTypeSelect.tsx",
-  "src/features/PluginDevModal/PluginPreview/ApiVisualizer.tsx",
-  "src/features/PluginDevModal/PluginPreview/EmptyState.tsx",
   "src/features/Portal/AcceptanceCheck/Body.tsx",
   "src/features/Portal/Artifacts/Body/Renderer/SVG.tsx",
   "src/features/Portal/DashboardWidget/Body.tsx",

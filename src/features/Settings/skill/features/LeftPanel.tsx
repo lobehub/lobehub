@@ -9,12 +9,10 @@ import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { CustomConnectorModal } from '@/features/Connectors';
-import { MARKETPLACE_SKILL_PATH } from '@/features/Marketplace/paths';
 import { pillTabClassNames } from '@/features/Marketplace/pillTabs';
 import { NavPanelDensityContext } from '@/features/NavPanel/density';
 import { createMarketSkillStoreModal, createSkillStoreModal } from '@/features/SkillStore';
 import { openSkillImportModal } from '@/features/SkillStore/SkillImportModal';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 import { usePermission } from '@/hooks/usePermission';
 import { useInterfaceDensity } from '@/styles/density';
@@ -104,15 +102,9 @@ const LeftPanel = memo<LeftPanelProps>(
     const [keyword, setKeyword] = useState('');
 
     const isConnectorView = viewMode === 'connector';
-    const navigate = useWorkspaceAwareNavigate();
+    // Mobile column only: it has no Discover / Installed tabs, so the store
+    // button stays its way to find more.
     const handleOpenStore = isConnectorView ? createSkillStoreModal : createMarketSkillStoreModal;
-    // The page now lives in the Marketplace beside the skill catalog, so
-    // browsing more skills switches to the Discover tab instead of stacking
-    // the same catalog in a modal. Connectors keep their store modal: it also
-    // offers the connector installation flows.
-    const handleBrowseStore = isConnectorView
-      ? createSkillStoreModal
-      : () => navigate(MARKETPLACE_SKILL_PATH);
     const { allowed: canCreate } = usePermission('create_content');
     const isPrivateTab = isConnectorView && visibility === 'private';
     // Adding a shared workspace connector follows the same member policy as
@@ -159,7 +151,6 @@ const LeftPanel = memo<LeftPanelProps>(
             toolbarExtra={
               isConnectorView && !isPrivateTab && <ConnectorManagePolicy variant={'toolbar'} />
             }
-            onBrowseStore={handleBrowseStore}
             onKeywordChange={setKeyword}
             onRefresh={onRefresh}
           />
