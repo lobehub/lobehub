@@ -377,8 +377,8 @@ bash "$GUARD" stop                      # teardown, always
 | ------------------------- | --------------------------------------------- | ---------------------------------------------------------- |
 | `ACCEPTANCE_RUN_TAG`      | — (required)                                  | Proves ownership; must be ≥ 8 chars and `[A-Za-z0-9._-]+`  |
 | `ACCEPTANCE_GUARD_DIR`    | `${TMPDIR:-/tmp}/lobe-acceptance/guard/<tag>` | Keeps the run's samples and claims out of the working tree |
-| `ACCEPTANCE_GUARD_YELLOW` | `swap=60,free=20`                             | Linux host warning thresholds                              |
-| `ACCEPTANCE_GUARD_RED`    | `swap=80,free=8`                              | Linux host stop thresholds                                 |
+| `ACCEPTANCE_GUARD_YELLOW` | `free=20`                                     | Linux host warning threshold (`MemAvailable` %)            |
+| `ACCEPTANCE_GUARD_RED`    | `free=8`                                      | Linux host stop threshold (`MemAvailable` %)               |
 
 Thresholds are host-level on purpose. The groups (`Google Chrome for Testing`,
 `next-server|vite`, `tsrs`) also match other worktrees' servers and other runs'
@@ -391,7 +391,8 @@ On **macOS**, kernel pressure (`kern.memorystatus_vm_pressure_level`: 1 normal,
 diagnostics only: neither low unused RAM nor a high fraction of dynamically
 allocated swap proves exhaustion. Three consecutive red samples are required
 before automatic termination. Unknown pressure exits 2 and never kills processes.
-On **Linux**, the existing `MemAvailable` and swap thresholds apply; cgroup/PSI
+On **Linux**, the `MemAvailable` thresholds apply; swap occupancy is diagnostic
+only, because swapped pages can stay in zram after pressure subsides. cgroup/PSI
 support is not implemented. Native Windows is unsupported. See the skill's
 [platform policy](../skills/acceptance/references/resource-guard.md#platform-policy).
 
