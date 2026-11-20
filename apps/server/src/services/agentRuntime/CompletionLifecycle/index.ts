@@ -495,7 +495,9 @@ export class CompletionLifecycle {
       // Delivery checker: on a successful completion, run the confirmed verify
       // plan against the deliverable. Fire-and-forget and self-guarded — a run
       // without an opted-in plan is a no-op, and failures never affect the run.
-      if (reason === 'done') {
+      // A capped run delivered too, and its Task settles it as `done` and
+      // waits for this verify, so gating on `done` alone would strand it.
+      if (isSuccessLikeCompletionReason(reason)) {
         // The task's verify plan is instantiated fire-and-forget at run start; a
         // fast or no-op run can reach completion before it settles. Await the
         // in-flight instantiation (if any) so the gate sees the confirmed plan
