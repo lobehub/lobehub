@@ -157,7 +157,7 @@ export class GitHub {
     });
     // A missing repository answers 404, a missing ref answers 422.
     if (response.status === 404 || response.status === 422)
-      throw new GitHubNotFoundError('GitHub repository or ref not found');
+      throw new GitHubNotFoundError('GitHub repository or ref not found', response.status);
     if (
       response.status === 429 ||
       (response.status === 403 &&
@@ -165,6 +165,8 @@ export class GitHub {
           response.headers.get('x-ratelimit-remaining') === '0'))
     )
       throw new GitHubRateLimitError('GitHub rate limit reached');
+    if (response.status === 403)
+      throw new GitHubNotFoundError('GitHub repository is inaccessible', 403);
     if (!response.ok)
       throw new GitHubDownloadError(`Could not resolve GitHub revision (HTTP ${response.status})`);
     const commit = (await response.text()).trim();
@@ -175,7 +177,10 @@ export class GitHub {
   async downloadCommitZip(info: GitHubRepoInfo, commit: string) {
     if (!/^[a-f0-9]{40}$/.test(commit)) throw new GitHubParseError('Invalid commit SHA');
     const url = `https://codeload.github.com/${encodeURIComponent(info.owner)}/${encodeURIComponent(info.repo)}/zip/${commit}`;
-    return this.readArchive(await fetch(url, { signal: AbortSignal.timeout(30_000) }));
+    const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+    if (response.status === 404 || response.status === 403)
+      throw new GitHubNotFoundError('GitHub repository or commit is inaccessible');
+    return this.readArchive(response);
   }
 
   /**
@@ -195,6 +200,32 @@ export class GitHub {
     if (!/^[a-f0-9]{40}$/.test(commit))
       throw new GitHubDownloadError('GitHub archive does not name its commit');
     return { buffer, commit };
+  }
+
+  /** A private commit's signed archive URL is short-lived and must never be logged. */
+  async downloadSnapshotZip(location: string) {
+    const signal = AbortSignal.timeout(30_000);
+    for (let redirects = 0; redirects <= 3; redirects++) {
+      const url = new URL(location);
+      if (
+        !['https://github.com', 'https://api.github.com', 'https://codeload.github.com'].includes(
+          url.origin,
+        ) ||
+        url.username ||
+        url.password
+      )
+        throw new GitHubDownloadError('Invalid GitHub archive location');
+      const response = await fetch(url.href, { redirect: 'manual', signal });
+      if (response.status >= 300 && response.status < 400) {
+        await response.body?.cancel();
+        const next = response.headers.get('location');
+        if (!next) throw new GitHubDownloadError('Missing GitHub archive location');
+        location = new URL(next, url).href;
+        continue;
+      }
+      return this.readArchive(response);
+    }
+    throw new GitHubDownloadError('Too many GitHub archive redirects');
   }
 
   private async readArchive(response: Response) {
@@ -319,7 +350,10 @@ export class GitHubParseError extends GitHubError {
 }
 
 export class GitHubNotFoundError extends GitHubError {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
     super(message);
     this.name = 'GitHubNotFoundError';
   }

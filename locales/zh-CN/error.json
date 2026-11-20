@@ -20,6 +20,8 @@
   "forbidden.backHome": "返回首页",
   "forbidden.desc": "你没有权限访问该页面。如需访问，请联系空间所有者",
   "forbidden.title": "无权访问",
+  "import.github.access": "请检查链接中的仓库和分支，并确认已连接的 GitHub 账号有权读取该仓库。",
+  "import.github.connect": "请检查链接。如果这是私有仓库，请连接有读取权限的 GitHub 账号后重试。",
   "import.importConfigFile.description": "原因：{{reason}}",
   "import.importConfigFile.title": "导入遇到了问题",
   "import.incompatible.description": "该文件由更高版本导出。请升级到最新版后再导入",

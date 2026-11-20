@@ -7,6 +7,7 @@ import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { densityTokens } from '@/styles/density.stylex';
 
 import { GithubSkillPicker } from './GithubSkillPicker';
@@ -33,7 +34,7 @@ const styles = stylex.create({
 });
 
 export const GithubImport = ({ state }: { state: ReturnType<typeof useGithubSkillImport> }) => {
-  const { t } = useTranslation(['setting', 'common']);
+  const { t } = useTranslation(['setting', 'common', 'error']);
   const { close } = useModalContext();
   const inputId = useId();
   const {
@@ -69,17 +70,29 @@ export const GithubImport = ({ state }: { state: ReturnType<typeof useGithubSkil
       retrying={loading}
       variant="inline"
       action={
-        scan && failure.stage !== 'refresh' ? (
+        failure.recovery ? (
+          <WorkspaceLink
+            rel="noopener noreferrer"
+            target="_blank"
+            to="/settings/connector?open=lobehub-connector%3Agithub"
+          >
+            {t('tab.connector')}
+          </WorkspaceLink>
+        ) : scan && failure.stage !== 'refresh' ? (
           <Button disabled={loading || !canCreate} size="small" type="text" onClick={discover}>
             {t('agentSkillModal.github.rescan')}
           </Button>
         ) : undefined
       }
-      title={t(
-        failure.stage === 'import'
-          ? 'agentSkillModal.github.batchFailed'
-          : `agentSkillModal.github.${failure.stage}Failed`,
-      )}
+      title={
+        failure.recovery
+          ? t(`error:import.github.${failure.recovery}`)
+          : t(
+              failure.stage === 'import'
+                ? 'agentSkillModal.github.batchFailed'
+                : `agentSkillModal.github.${failure.stage}Failed`,
+            )
+      }
       onRetry={failure.stage === 'refresh' ? refreshLibrary : undefined}
     />
   );

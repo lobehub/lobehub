@@ -360,8 +360,7 @@ export default {
   'agentSkillModal.github.clearSearch': 'Clear search',
   'agentSkillModal.github.complete_one': '{{count}} skill is ready to use',
   'agentSkillModal.github.complete_other': '{{count}} skills are ready to use',
-  'agentSkillModal.github.desc':
-    'Paste the URL of a skill directory from a public GitHub repository. The directory must contain a SKILL.md file.',
+  'agentSkillModal.github.desc': 'Choose a GitHub repository or folder containing a SKILL.md file.',
   'agentSkillModal.github.empty':
     'No SKILL.md found at this URL. Try another repository or directory.',
   'agentSkillModal.github.example': 'https://github.com/owner/repository',
@@ -369,7 +368,7 @@ export default {
   'agentSkillModal.github.findFailed':
     'Couldn’t read this GitHub link. Check the URL and try again.',
   'agentSkillModal.github.finding': 'Finding skills…',
-  'agentSkillModal.github.hint': 'Find skills in a public repository, then choose which to import.',
+  'agentSkillModal.github.hint': 'Private repositories use your GitHub connector.',
   'agentSkillModal.github.importFailed':
     'Couldn’t import the selected skills. Find skills again, then retry.',
   'agentSkillModal.github.importSelected_one': 'Import {{count}} skill',
@@ -2325,7 +2324,7 @@ When I am ___, I need ___
   'tab.hotkey': 'Hotkeys',
   'tab.image': 'Image Generation',
   'tab.importFromGithub': 'Import from GitHub',
-  'tab.importFromGithub.desc': 'Import from a public GitHub repository',
+  'tab.importFromGithub.desc': 'Import from a GitHub repository',
   'tab.importFromUrl': 'Import from URL',
   'tab.importFromUrl.desc': 'Import via a direct link to SKILL.md',
   'tab.labels': 'Labels',

@@ -62,6 +62,18 @@ describe('useGithubSkillImport', () => {
     expect(result.current.selected).toEqual(['skills/demo']);
   });
 
+  it.each([
+    ['PRECONDITION_FAILED', 'connect'],
+    ['NOT_FOUND', 'access'],
+  ])('keeps the source URL and exposes recovery for %s', async (code, recovery) => {
+    mocks.discoverGitHubSkills.mockRejectedValueOnce(
+      Object.assign(new Error('GitHub access failed'), { data: { code } }),
+    );
+    const { result } = await scanned();
+    expect(result.current.failure).toMatchObject({ recovery, stage: 'find' });
+    expect(result.current.url.trim()).toBe('https://github.com/lobehub/skills');
+  });
+
   it('records a failed scan with its raw message as details', async () => {
     mocks.discoverGitHubSkills.mockRejectedValue(new Error('[{"code":"invalid_format"}]'));
 
