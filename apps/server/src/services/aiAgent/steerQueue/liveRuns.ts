@@ -61,9 +61,10 @@ export const findOwnLiveRuns = async (
 };
 
 /**
- * Every live top-level run `userId` has in `topicId` — on its main line and in
- * every thread — for a flow that retires the whole conversation and must stop
- * all of them first.
+ * Every live run `userId` has in `topicId` — on its main line, in every
+ * thread, and the sub-agents it started (a background one outlives its
+ * parent's turn) — for a flow that retires the whole conversation and must
+ * stop all of them first.
  */
 export const findOwnLiveRunsInTopic = async (
   ctx: LiveRunContext,
@@ -75,7 +76,6 @@ export const findOwnLiveRunsInTopic = async (
     .where(
       and(
         eq(agentOperations.topicId, params.topicId),
-        isNull(agentOperations.parentOperationId),
         eq(agentOperations.userId, params.userId),
         inArray(agentOperations.status, LIVE_STATUSES),
       ),
@@ -88,9 +88,10 @@ export const findOwnLiveRunsInTopic = async (
 };
 
 /**
- * Of `topicIds`, the ones with a live top-level run that another member (not
- * `userId`) started, on the main line or in a thread. The caller cannot stop
- * those runs, so a flow that retires the topics must leave them alone.
+ * Of `topicIds`, the ones with a live run that another member (not `userId`)
+ * started — on the main line, in a thread, or a sub-agent of theirs. The
+ * caller cannot stop those runs, so a flow that retires the topics must leave
+ * them alone.
  */
 export const findTopicsRunByOthers = async (
   ctx: LiveRunContext,
@@ -107,7 +108,6 @@ export const findTopicsRunByOthers = async (
     .where(
       and(
         inArray(agentOperations.topicId, params.topicIds),
-        isNull(agentOperations.parentOperationId),
         not(eq(agentOperations.userId, params.userId)),
         inArray(agentOperations.status, LIVE_STATUSES),
         ctx.workspaceId ? eq(agentOperations.workspaceId, ctx.workspaceId) : undefined,

@@ -1,5 +1,4 @@
-import type { TopicQuerySortBy } from '@lobechat/types';
-
+import type { SidebarTopicListQuery } from '@/hooks/chatTopicListQuery';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -10,15 +9,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 /**
  * Fetch topics for the current session (agent or group)
  */
-export const useFetchTopics = (
-  options?: {
-    excludeStatuses?: string[];
-    excludeTriggers?: string[];
-    onlyMine?: boolean;
-    sortBy?: TopicQuerySortBy;
-  },
-  enabled = true,
-) => {
+export const useFetchTopics = (options?: SidebarTopicListQuery, enabled = true) => {
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
   const [activeAgentId, activeGroupId, useFetchTopicsHook] = useChatStore((s) => [
     s.activeAgentId,
@@ -34,6 +25,7 @@ export const useFetchTopics = (
   );
   const { isValidating } = useFetchTopicsHook(enabled, {
     agentId: activeAgentId,
+    ...(options?.excludeOpenedTopics ? { excludeOpenedTopics: true } : {}),
     ...(options?.excludeStatuses && options.excludeStatuses.length > 0
       ? { excludeStatuses: options.excludeStatuses }
       : {}),

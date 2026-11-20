@@ -35,7 +35,15 @@ const styles = stylex.create({
     paddingBlock: '2px',
     paddingInline: '6px',
   },
-  text: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  text: {
+    // Wide layouts float the title as a pill capped at 220px (the header's
+    // FLOATING_HEADER_QUERY): there the label would squeeze the topic title to
+    // a few letters, so the link shrinks to its icon and the tooltip says it.
+    display: { 'default': 'inline', '@container agent-chat-layout (min-width: 1200px)': 'none' },
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
 });
 
 /**
@@ -70,8 +78,9 @@ const OpenedByLink = memo<{ topicId?: string | null }>(({ topicId }) => {
   });
 
   return (
-    <Tooltip title={t('subTopic.backToOpener')}>
+    <Tooltip title={`${label} · ${t('subTopic.backToOpener')}`}>
       <button
+        aria-label={label}
         data-testid="sub-topic-opened-by"
         type={'button'}
         onClick={() => navigate(AGENT_CHAT_TOPIC_URL(openedBy.agentId!, openerId))}

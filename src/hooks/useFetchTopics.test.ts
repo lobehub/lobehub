@@ -161,4 +161,26 @@ describe('useFetchTopics', () => {
       pageSize: customPageSize,
     });
   });
+
+  // Regression: the hook re-listed the query's fields and dropped this one, so
+  // with Better Coding Experience on every agent list still showed the
+  // sub-topics that belong under their parents, and the "Show topics others
+  // opened for me" filter changed nothing.
+  it('asks for the list without topics opened from a live parent when told to', () => {
+    mockUseChatStore.mockImplementation((selector) =>
+      selector({
+        activeAgentId: 'agent-123',
+        activeGroupId: undefined,
+        useFetchTopics: mockUseFetchTopicsFn,
+        topicDataMap: {},
+      }),
+    );
+
+    renderHook(() => useFetchTopics({ excludeOpenedTopics: true }));
+
+    expect(mockUseFetchTopicsFn).toHaveBeenCalledWith(
+      true,
+      expect.objectContaining({ excludeOpenedTopics: true }),
+    );
+  });
 });

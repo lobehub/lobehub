@@ -43,7 +43,11 @@ const topicMetaCardMock = vi.hoisted(() => ({
 // Assertions key on the raw lucide displayName, which the real Icon does not
 // expose in the DOM.
 // The sub-topic hierarchy has its own tests; these rows render without it.
-vi.mock('../../SubTopic/SubTopicToggle', () => ({ default: () => null }));
+vi.mock('../../SubTopic/SubTopicToggle', () => ({
+  default: ({ inActions }: { inActions?: boolean }) => (
+    <span data-in-actions={String(!!inActions)} data-testid="sub-topic-toggle" />
+  ),
+}));
 vi.mock('../../SubTopic/SubTopicChildren', () => ({ default: () => null }));
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
@@ -478,6 +482,18 @@ describe('TopicItem active state', () => {
     render(<TopicItem id="tpc_test" title="Topic" />);
 
     expect(screen.getByTestId('topic-actions')).toHaveAttribute('data-show-inline-archive', 'true');
+  });
+
+  // Regression: the hover actions overlay the row's trailing end, so a toggle
+  // only in the in-flow extras sat under "⋯" and a click opened the menu.
+  it('keeps the sub-topic toggle clickable among the hover actions', () => {
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    const inActions = screen
+      .getAllByTestId('sub-topic-toggle')
+      .filter((node) => node.dataset.inActions === 'true');
+    expect(inActions).toHaveLength(1);
+    expect(inActions[0].parentElement).toContainElement(screen.getByTestId('topic-actions'));
   });
 
   it('keeps idle topics iconless', () => {
