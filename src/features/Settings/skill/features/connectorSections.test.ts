@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import zhSetting from '../../../../../locales/zh-CN/setting.json';
 import {
   buildIntegrationItems,
+  countConnectorTabItems,
   getVisibleSectionItems,
   isSectionExpandable,
   matchesConnectorKeyword,
@@ -14,6 +15,18 @@ import {
 } from './connectorSections';
 
 const noConnectors = { composio: false, lobehub: false };
+
+describe('countConnectorTabItems', () => {
+  it('counts an installed custom MCP connector when the other sources are empty', () => {
+    expect(
+      countConnectorTabItems({
+        customConnectors: [{ identifier: 'private-mcp' }],
+        integrations: [],
+        marketplaceConnectors: [],
+      }),
+    ).toBe(1);
+  });
+});
 
 describe('buildIntegrationItems', () => {
   it('omits builtin recommendations from the connector catalog', () => {
