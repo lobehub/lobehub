@@ -121,7 +121,7 @@
   "interests.title3": "慢慢来，我会逐渐了解你",
   "next": "下一步",
   "proSettings.connectors.title": "连接你常用的工具",
-  "responseLanguage.hint": "切换后，助理回复语言会同步更新；界面语言也会随之切换",
+  "responseLanguage.hint": "如果希望助理用固定语言回复，可以在这里选择。之后也可以在设置中更改。",
   "responseLanguage.saveFailed": "保存失败，请重试。",
   "responseLanguage.title": "我们用哪种语言协作？",
   "responseLanguage.title2": "从语言开始，建立理解",
