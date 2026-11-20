@@ -340,6 +340,7 @@ export const getWorkspaceDependencyIssue = (
   }
 
   const relative = path.relative(realProjectRoot, realNodeModules);
+  // Resolving to the project root itself is pathological, so treat it as a failure.
   const insideWorktree =
     relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
 
@@ -413,7 +414,6 @@ export const __testing = {
   createPackageScriptProcessConfig,
   createDevProcessHandle,
   findFreePort,
-  getWorkspaceDependencyIssue,
   resolveNextPort,
   resolveVitePortEnv,
   sendSignalToDevProcess,

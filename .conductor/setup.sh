@@ -44,24 +44,98 @@ fi
 # database name and password stay aligned with DATABASE_URL.
 COMPOSE_ENV_DIR="$PWD/docker-compose/dev"
 COMPOSE_ENV="$COMPOSE_ENV_DIR/.env"
+COMPOSE_ENV_TEMPLATE="$COMPOSE_ENV_DIR/.env.example"
 COMPOSE_ENV_SOURCE="$CONDUCTOR_ROOT_PATH/docker-compose/dev/.env"
+ROOT_ENV="$CONDUCTOR_ROOT_PATH/.env"
 log "--- Preparing Docker Compose environment ---"
-if [ -f "$COMPOSE_ENV_SOURCE" ] && [ "$COMPOSE_ENV_SOURCE" != "$COMPOSE_ENV" ]; then
+
+# Compare canonical paths so equivalent spellings of the same file are not
+# mistaken for different source and target files.
+COMPOSE_ENV_SOURCE_REAL=$(realpath "$COMPOSE_ENV_SOURCE" 2>/dev/null || true)
+COMPOSE_ENV_TARGET_REAL=$(realpath "$COMPOSE_ENV" 2>/dev/null || true)
+
+if [ -f "$COMPOSE_ENV" ]; then
+  if [ -n "$COMPOSE_ENV_SOURCE_REAL" ] && [ "$COMPOSE_ENV_SOURCE_REAL" = "$COMPOSE_ENV_TARGET_REAL" ]; then
+    log "Keeping existing docker-compose/dev/.env at the source checkout path; local customizations are never overwritten"
+  else
+    log "Keeping existing docker-compose/dev/.env untouched to preserve local customizations"
+  fi
+elif [ -f "$COMPOSE_ENV_SOURCE" ]; then
   mkdir -p "$COMPOSE_ENV_DIR"
   if cp -f "$COMPOSE_ENV_SOURCE" "$COMPOSE_ENV"; then
     log "SUCCESS: docker-compose/dev/.env copied from source checkout"
   else
     log "ERROR: Failed to copy docker-compose/dev/.env"
   fi
-elif [ ! -f "$COMPOSE_ENV" ] && [ -f "$COMPOSE_ENV_DIR/.env.example" ]; then
+elif [ -f "$ROOT_ENV" ] && [ -f "$COMPOSE_ENV_TEMPLATE" ]; then
   mkdir -p "$COMPOSE_ENV_DIR"
-  if cp -f "$COMPOSE_ENV_DIR/.env.example" "$COMPOSE_ENV"; then
-    log "SUCCESS: docker-compose/dev/.env seeded from .env.example"
+  if cp -f "$COMPOSE_ENV_TEMPLATE" "$COMPOSE_ENV"; then
+    if command -v node >/dev/null 2>&1 && node --input-type=module - "$ROOT_ENV" "$COMPOSE_ENV" <<'NODE'
+import fs from 'node:fs';
+
+const [rootEnvPath, composeEnvPath] = process.argv.slice(2);
+
+const readEnvValue = (contents, key) => {
+  for (const line of contents.split(/\r?\n/)) {
+    const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!match || match[1] !== key) continue;
+
+    let value = match[2].trim();
+    if (value.startsWith('"') && value.endsWith('"')) {
+      value = JSON.parse(value);
+    } else if (value.startsWith("'") && value.endsWith("'")) {
+      value = value.slice(1, -1);
+    } else {
+      value = value.replace(/\s+#.*$/, '').trim();
+    }
+    return value;
+  }
+};
+
+const quoteEnvValue = (value) => {
+  if (/[\r\n]/.test(value)) throw new Error('Unsupported newline in DATABASE_URL');
+  // env_file values are not interpolated, so `$` must be written literally.
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+};
+
+try {
+  const databaseUrl = readEnvValue(fs.readFileSync(rootEnvPath, 'utf8'), 'DATABASE_URL');
+  if (!databaseUrl) throw new Error('DATABASE_URL is missing');
+
+  const parsed = new URL(databaseUrl);
+  if (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') {
+    throw new Error('DATABASE_URL is not a PostgreSQL URL');
+  }
+
+  const databaseName = decodeURIComponent(parsed.pathname.replace(/^\/+/, ''));
+  const password = decodeURIComponent(parsed.password);
+  if (!databaseName || !password) throw new Error('Database name or password is missing');
+
+  const lines = fs
+    .readFileSync(composeEnvPath, 'utf8')
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*(LOBE_DB_NAME|POSTGRES_PASSWORD)\s*=/.test(line));
+  while (lines.at(-1) === '') lines.pop();
+  lines.push(
+    `LOBE_DB_NAME=${quoteEnvValue(databaseName)}`,
+    `POSTGRES_PASSWORD=${quoteEnvValue(password)}`,
+    '',
+  );
+  fs.writeFileSync(composeEnvPath, lines.join('\n'));
+} catch {
+  process.exitCode = 1;
+}
+NODE
+    then
+      log "SUCCESS: docker-compose/dev/.env seeded from .env.example and root DATABASE_URL"
+    else
+      log "WARNING: Could not parse DATABASE_URL from $ROOT_ENV; docker-compose/dev/.env remains the .env.example template and Postgres may fail authentication"
+    fi
   else
-    log "ERROR: Failed to seed docker-compose/dev/.env"
+    log "ERROR: Failed to seed docker-compose/dev/.env from .env.example"
   fi
 else
-  log "docker-compose/dev/.env already available, skipping"
+  log "No source docker-compose/dev/.env or usable root .env; keeping existing docker-compose/dev/.env state unchanged"
 fi
 
 log ""
@@ -155,16 +229,6 @@ log ""
 log "=========================================="
 log "Setup Complete"
 log "=========================================="
-log ""
-
-# List created symlinks for verification
-log "--- Verification: Listing symlinks in workspace ---"
-find . -maxdepth 1 -type l -exec ls -la {} \; 2> /dev/null >> "$LOG_FILE"
-find ./packages -maxdepth 4 -type l -name "node_modules" -exec ls -la {} \; 2> /dev/null >> "$LOG_FILE"
-find ./packages/business -maxdepth 4 -type l -name "node_modules" -exec ls -la {} \; 2> /dev/null >> "$LOG_FILE"
-find ./apps -maxdepth 4 -type l -name "node_modules" -exec ls -la {} \; 2> /dev/null >> "$LOG_FILE"
-find ./e2e -maxdepth 4 -type l -name "node_modules" -exec ls -la {} \; 2> /dev/null >> "$LOG_FILE"
-
 log ""
 log "Log file saved to: $LOG_FILE"
 log "Setup script finished."

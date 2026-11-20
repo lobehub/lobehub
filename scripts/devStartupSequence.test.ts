@@ -87,5 +87,36 @@ describe('devStartupSequence', () => {
         cleanup(externalRoot);
       }
     });
+
+    it('reports a dangling node_modules link as unresolvable', () => {
+      const projectRoot = makeTempDir('lobehub-dev-preflight-dangling-');
+      const externalRoot = makeTempDir('lobehub-dev-preflight-dangling-target-');
+      const nodeModulesLink = path.join(projectRoot, 'node_modules');
+      try {
+        const externalNodeModules = path.join(externalRoot, 'node_modules');
+        fs.mkdirSync(externalNodeModules);
+        fs.symlinkSync(
+          externalNodeModules,
+          nodeModulesLink,
+          process.platform === 'win32' ? 'junction' : undefined,
+        );
+
+        fs.rmSync(externalRoot, { force: true, recursive: true });
+
+        const issue = getWorkspaceDependencyIssue(projectRoot);
+
+        expect(issue).toContain('cannot be resolved');
+        expect(issue).not.toContain('is missing');
+        expect(issue).not.toContain('outside the worktree');
+      } finally {
+        try {
+          fs.unlinkSync(nodeModulesLink);
+        } catch {
+          // Cleanup is best effort and must not mask the assertion result.
+        }
+        cleanup(projectRoot);
+        cleanup(externalRoot);
+      }
+    });
   });
 });
