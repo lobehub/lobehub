@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { MARKETPLACE_CONNECTOR_PATH } from '@/features/Marketplace/paths';
 import { useDiscoverStore } from '@/store/discover';
 import { assistantSelectors, mcpSelectors } from '@/store/discover/selectors';
 import { AssistantSorts, McpSorts } from '@/types/discover';
@@ -47,7 +48,7 @@ const HomePage = memo(() => {
   return (
     <>
       <CreatorRewardBanner />
-      <Title more={t('home.more')} moreLink={'/community/agent'}>
+      <Title more={t('home.more')} moreLink={'/marketplace/agent'}>
         {t('home.featuredAssistants')}
       </Title>
       <AsyncBoundary
@@ -60,7 +61,7 @@ const HomePage = memo(() => {
         <AssistantList data={assistantList?.items ?? []} rows={4} />
       </AsyncBoundary>
       <div />
-      <Title more={t('home.more')} moreLink={'/community/mcp'}>
+      <Title more={t('home.more')} moreLink={MARKETPLACE_CONNECTOR_PATH}>
         {t('home.featuredTools')}
       </Title>
       <AsyncBoundary

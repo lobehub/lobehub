@@ -64,7 +64,7 @@ const AssistantItem = memo<DiscoverAssistantItem>(
     const navigate = useWorkspaceAwareNavigate();
     const { source } = useQuery() as { source?: AssistantMarketSource };
     const isGroupAgent = type === 'agent-group';
-    const basePath = isGroupAgent ? '/community/group_agent' : '/community/agent';
+    const basePath = isGroupAgent ? '/marketplace/group_agent' : '/marketplace/agent';
     const link = qs.stringifyUrl(
       {
         query: { source },

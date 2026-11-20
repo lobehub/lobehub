@@ -47,7 +47,7 @@ const Category = memo(() => {
           q,
           sort: key === AssistantCategory.Discover ? AssistantSorts.Recommended : null,
         },
-        url: '/community/agent',
+        url: '/marketplace/agent',
       },
       { skipNull: true },
     );

@@ -4,6 +4,11 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { getRouteById } from '@/config/routes';
+import {
+  MARKETPLACE_INSTALLED_SKILLS_PATH,
+  MARKETPLACE_PATH,
+  MARKETPLACE_SEGMENT,
+} from '@/features/Marketplace/paths';
 import { useGlobalStore } from '@/store/global';
 import { SidebarTabKey } from '@/store/global/initialState';
 import {
@@ -116,12 +121,14 @@ export const useNavLayout = (): NavLayout => {
           title: t('tab.generation'),
           url: '/image',
         },
+        // Always shown: installed skills and connectors live in the Marketplace,
+        // so with the market off the entry opens straight on the installed skills.
         {
-          hidden: !showMarket,
+          activeTab: MARKETPLACE_SEGMENT,
           icon: getRouteById('community')!.icon,
           key: SidebarTabKey.Community,
-          title: t('tab.community'),
-          url: '/community',
+          title: t('tab.marketplace'),
+          url: showMarket ? MARKETPLACE_PATH : MARKETPLACE_INSTALLED_SKILLS_PATH,
         },
         {
           hidden: !!activeWorkspaceSlug,

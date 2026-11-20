@@ -5,6 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { getManageLibraryPath } from '@/features/Marketplace/paths';
 import SharedAgentTool, { type AgentToolProps } from '@/features/ProfileEditor/AgentTool';
 import { type ToolGroupMeta } from '@/features/ProfileEditor/ToolListGroup';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -32,7 +33,7 @@ const AgentUserTools = memo<AgentToolProps>((props) => {
       <Button
         size={'small'}
         type={'text'}
-        onClick={() => navigate(isSkills ? '/settings/skill' : '/settings/connector')}
+        onClick={() => navigate(getManageLibraryPath(toolProps.kind))}
       >
         {t('settingAgent.tools.manageLibrary')}
       </Button>

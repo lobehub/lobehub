@@ -1,17 +1,39 @@
 'use client';
 
 import type { ConnectorVisibility } from '@lobechat/types';
-import { Button, DropdownMenu, Flexbox, Icon, SearchBar, Tabs, Text, Tooltip } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  SearchBar,
+  Tabs,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronDown, Grid2x2Plus, Import, LockIcon, Plus, Store, UsersIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import {
+  ChevronDown,
+  Grid2x2Plus,
+  Import,
+  LockIcon,
+  Plus,
+  RotateCw,
+  Store,
+  UsersIcon,
+} from 'lucide-react';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { CustomConnectorModal } from '@/features/Connectors';
+import { MARKETPLACE_SKILL_PATH } from '@/features/Marketplace/paths';
+import { pillTabClassNames } from '@/features/Marketplace/pillTabs';
 import { NavPanelDensityContext } from '@/features/NavPanel/density';
 import { createMarketSkillStoreModal, createSkillStoreModal } from '@/features/SkillStore';
 import { openSkillImportModal } from '@/features/SkillStore/SkillImportModal';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 import { usePermission } from '@/hooks/usePermission';
 import { useInterfaceDensity } from '@/styles/density';
@@ -19,8 +41,9 @@ import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 import { densityVars } from '@/styles/densityVars';
 
 import ConnectorManagePolicy from './ConnectorManagePolicy';
+import { getPageSearchPlacement } from './pageHeaderLayout';
 import { type ToolDetailType } from './SkillDetail';
-import SkillList, { type SkillViewMode } from './SkillList';
+import SkillList, { type SkillListHeaderContext, type SkillViewMode } from './SkillList';
 import { SkillListVariantProvider } from './SkillListRow';
 
 const styles = stylex.create({
@@ -42,21 +65,39 @@ const styles = stylex.create({
   body: { overflowY: 'auto', flex: '1', paddingBlock: '4px', paddingInline: '8px' },
   columnTabs: { paddingInline: '8px' },
   pageBody: { paddingBlockStart: '0', paddingBlockEnd: '24px', paddingInline: '0' },
-  // Title and one line of what connectors do on the left; search and the page
-  // actions on the right, the primary Add last.
+  // The Codex Plugins header: the title shares its row with search, the page
+  // controls and the primary Add (last); one line of what the page does sits
+  // 8px under both, so a long description never pushes the toolbar down.
   pageHeader: {
     display: 'flex',
+    flexDirection: 'column',
     flexShrink: 0,
-    flexWrap: 'wrap',
-    gap: densityTokens['--lobe-density-section-gap'],
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+    gap: densityTokens['--lobe-density-gap'],
     paddingBlockStart: '32px',
     paddingBlockEnd: '8px',
     paddingInline: densityTokens['--lobe-density-content-gap'],
   },
+  // Mobile: the shell's top bar sits right above, so the title needs less air.
+  pageHeaderCompact: { paddingBlockStart: '16px' },
+  pageHeadRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: densityTokens['--lobe-density-section-gap'],
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  // No radius token reaches a pill; the Codex search field and Add button are pills.
   pageSearch: { width: '240px' },
-  pageTabs: { paddingInline: densityTokens['--lobe-density-content-gap'] },
+  // Mobile: a 240px field beside refresh and Add is ~390px of toolbar that
+  // cannot wrap, wider than a 375px screen; the field takes its own row.
+  pageSearchCompact: { width: '100%' },
+  // SearchBar draws its border on the inner input box, so the pill goes there.
+  pageSearchInput: { borderRadius: '999px' },
+  // 8px under the header + 12px: the Codex 20px from description to view tabs.
+  pageTabs: {
+    paddingBlockStart: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-content-gap'],
+  },
   pageTitle: {
     marginBlock: 0,
     fontSize: cssVar.fontSizeHeading3,
@@ -90,8 +131,15 @@ const styles = stylex.create({
 });
 
 interface LeftPanelProps {
+  /**
+   * Page only: lay the header out for a phone. The search field moves under
+   * the title row, which keeps just refresh and Add, so nothing overflows.
+   */
+  compact?: boolean;
   /** Fill the page instead of sitting as a 300px column beside the detail (mobile). */
   fullWidth?: boolean;
+  /** Rendered under the page header, e.g. the Marketplace Discover / Installed tabs. */
+  headerExtra?: ReactNode;
   onDeleteSelected: () => void;
   onSelect: (identifier: string, type: ToolDetailType) => void;
   onVisibilityChange?: (visibility: ConnectorVisibility) => void;
@@ -108,7 +156,9 @@ interface LeftPanelProps {
 
 const LeftPanel = memo<LeftPanelProps>(
   ({
+    compact,
     fullWidth,
+    headerExtra,
     onDeleteSelected,
     onSelect,
     onVisibilityChange,
@@ -123,7 +173,15 @@ const LeftPanel = memo<LeftPanelProps>(
     const [keyword, setKeyword] = useState('');
 
     const isConnectorView = viewMode === 'connector';
+    const navigate = useWorkspaceAwareNavigate();
     const handleOpenStore = isConnectorView ? createSkillStoreModal : createMarketSkillStoreModal;
+    // The page now lives in the Marketplace beside the skill catalog, so
+    // browsing more skills switches to the Discover tab instead of stacking
+    // the same catalog in a modal. Connectors keep their store modal: it also
+    // lists the OAuth and builtin connectors the Marketplace MCP list lacks.
+    const handleBrowseStore = isConnectorView
+      ? createSkillStoreModal
+      : () => navigate(MARKETPLACE_SKILL_PATH);
     const { allowed: canCreate } = usePermission('create_content');
     const isPrivateTab = isConnectorView && visibility === 'private';
     // Adding a shared workspace connector follows the same member policy as
@@ -135,6 +193,10 @@ const LeftPanel = memo<LeftPanelProps>(
     const visibilityTabs = isConnectorView && visibility && (
       <Tabs
         activeKey={visibility}
+        // Page: the Codex Public / Personal pills; column: the compact default.
+        classNames={page ? pillTabClassNames : undefined}
+        size={page ? 'middle' : undefined}
+        variant={page ? 'rounded' : undefined}
         items={[
           {
             icon: <Icon icon={UsersIcon} />,
@@ -189,7 +251,7 @@ const LeftPanel = memo<LeftPanelProps>(
                 icon: <Icon icon={Store} />,
                 key: 'store',
                 label: t('connectorMarket.add.browseStore'),
-                onClick: handleOpenStore,
+                onClick: handleBrowseStore,
               },
             ]),
         ...(!isConnectorView
@@ -209,41 +271,61 @@ const LeftPanel = memo<LeftPanelProps>(
         isConnectorView ? 'connectorMarket.search.placeholder' : 'skillView.search.placeholder',
       );
 
-      const renderHeader = () => (
+      const searchBelowTitle = getPageSearchPlacement(compact) === 'below-title';
+      const search = (
+        <SearchBar
+          allowClear
+          aria-label={searchPlaceholder}
+          classNames={{ input: stylex.props(styles.pageSearchInput).className }}
+          placeholder={searchPlaceholder}
+          value={keyword}
+          variant={'outlined'}
+          className={
+            stylex.props(searchBelowTitle ? styles.pageSearchCompact : styles.pageSearch).className
+          }
+          onInputChange={setKeyword}
+        />
+      );
+
+      const renderHeader = ({ onRefresh, refreshing }: SkillListHeaderContext) => (
         <>
-          <div {...stylex.props(styles.pageHeader)}>
-            <Flexbox gap={4} style={{ minWidth: 0 }}>
+          <div {...stylex.props(styles.pageHeader, compact && styles.pageHeaderCompact)}>
+            <div {...stylex.props(styles.pageHeadRow)}>
               <h1 {...stylex.props(styles.pageTitle)}>
                 {t(isConnectorView ? 'skillView.connectors' : 'skillView.skills')}
               </h1>
-              <Text type={'secondary'}>
-                {isConnectorView ? connectorsDesc : t('skillView.skillsDesc')}
-              </Text>
-            </Flexbox>
-            <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
-              <SearchBar
-                allowClear
-                aria-label={searchPlaceholder}
-                className={stylex.props(styles.pageSearch).className}
-                placeholder={searchPlaceholder}
-                value={keyword}
-                variant={'outlined'}
-                onInputChange={setKeyword}
-              />
-              <DropdownMenu items={addItems} placement={'bottomRight'}>
-                <Button
-                  className={stylex.props(styles.addTrigger).className}
-                  icon={Plus}
-                  type={'primary'}
-                >
-                  {t('connectorMarket.add')}
-                  <Icon icon={ChevronDown} size={14} />
-                </Button>
-              </DropdownMenu>
-            </Flexbox>
+              <Flexbox horizontal align={'center'} flex={'none'} gap={12}>
+                {!searchBelowTitle && search}
+                {/* The member policy governs the shared pool only */}
+                {isConnectorView && !isPrivateTab && <ConnectorManagePolicy variant={'toolbar'} />}
+                <ActionIcon
+                  aria-label={t('connectorMarket.refresh')}
+                  icon={RotateCw}
+                  loading={refreshing}
+                  title={t('connectorMarket.refresh')}
+                  onClick={onRefresh}
+                />
+                <DropdownMenu items={addItems} placement={'bottomRight'}>
+                  <Button
+                    className={stylex.props(styles.addTrigger).className}
+                    icon={Plus}
+                    shape={'round'}
+                    type={'primary'}
+                  >
+                    {t('connectorMarket.add')}
+                    <Icon icon={ChevronDown} size={14} />
+                  </Button>
+                </DropdownMenu>
+              </Flexbox>
+            </div>
+            {searchBelowTitle && search}
+            <Text type={'secondary'}>
+              {isConnectorView ? connectorsDesc : t('skillView.skillsDesc')}
+            </Text>
           </div>
           {visibilityTabs && <div {...stylex.props(styles.pageTabs)}>{visibilityTabs}</div>}
-          {/* The member policy governs the shared pool only */}
+          {headerExtra}
+          {/* A member who may not manage shared connectors reads why once, here */}
           {isConnectorView && !isPrivateTab && <ConnectorManagePolicy variant={'page'} />}
         </>
       );

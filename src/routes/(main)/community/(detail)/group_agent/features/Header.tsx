@@ -92,7 +92,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     <WorkspaceLink
       to={qs.stringifyUrl({
         query: { category },
-        url: '/community/group_agent',
+        url: '/marketplace/group_agent',
       })}
     >
       <Button size={'middle'}>{category}</Button>

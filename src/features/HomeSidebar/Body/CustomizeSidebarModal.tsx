@@ -82,7 +82,7 @@ const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
   { alwaysVisible: true, id: 'agent', labelKey: 'navPanel.agent' },
   { id: 'channels', labelKey: 'title', labelNs: 'channel' },
   { id: 'image', labelKey: 'tab.generation', routeId: 'image' },
-  { id: 'community', labelKey: 'tab.community', routeId: 'community' },
+  { id: 'community', labelKey: 'tab.marketplace', routeId: 'community' },
   { id: 'resource', labelKey: 'tab.resource', routeId: 'resource' },
   { id: 'memory', labelKey: 'tab.memory', routeId: 'memory' },
 ];
