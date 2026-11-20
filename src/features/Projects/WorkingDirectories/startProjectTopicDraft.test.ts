@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   canStageDraftOn,
   isRunnableProjectDirectory,
+  pickStartDirectory,
   startProjectTopicDraft,
 } from './startProjectTopicDraft';
 
@@ -91,5 +92,41 @@ describe('startProjectTopicDraft', () => {
       projectId: 'prj_1',
     });
     expect(navigate).toHaveBeenCalledWith('/project/prj_1/topic?agent=agt_1');
+  });
+});
+
+describe('pickStartDirectory', () => {
+  const runnable = { environmentId: 'env', instanceId: 'ins', permission: 'readWrite' };
+  const first = { ...runnable, deviceId: 'laptop', id: 'a' };
+  const second = { ...runnable, deviceId: 'desktop', id: 'b' };
+
+  it('follows the device priority to the first online device', () => {
+    expect(
+      pickStartDirectory(
+        [first, second],
+        [
+          { deviceId: 'laptop', online: false },
+          { deviceId: 'desktop', online: true },
+        ],
+      )?.id,
+    ).toBe('b');
+    expect(
+      pickStartDirectory(
+        [first, second],
+        [
+          { deviceId: 'laptop', online: true },
+          { deviceId: 'desktop', online: true },
+        ],
+      )?.id,
+    ).toBe('a');
+  });
+
+  it('keeps the first runnable folder when every device is offline', () => {
+    expect(pickStartDirectory([first, second], [])?.id).toBe('a');
+  });
+
+  it('skips folders the agent cannot run in', () => {
+    expect(pickStartDirectory([{ ...first, permission: 'read' }, second], undefined)?.id).toBe('b');
+    expect(pickStartDirectory([first, second], undefined, 'desktop')?.id).toBe('b');
   });
 });

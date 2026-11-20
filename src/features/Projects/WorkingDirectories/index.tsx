@@ -1,5 +1,4 @@
-import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
-import { FolderIcon } from 'lucide-react';
+import { Flexbox, Text } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,14 +8,11 @@ import EnvironmentForm, {
 } from '@/features/EnvironmentManager/EnvironmentForm';
 import EnvironmentSummary from '@/features/EnvironmentManager/EnvironmentSummary';
 import { EnvironmentListSkeleton } from '@/features/EnvironmentManager/Skeleton';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { SandboxEnvironmentSpecification } from '@/services/environment';
-import {
-  useProjectDirectories,
-  useProjectDirectoryStore,
-  useProjectEnvironments,
-} from '@/store/projectWorkingDirectory';
+import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projectWorkingDirectory';
 import { useDensityTokens } from '@/styles/density';
+
+import { LocalDirectories } from './LocalDirectories';
 
 interface ProjectWorkingDirectoriesProps {
   /** Whether the caller may change the project, and so its environment. */
@@ -30,6 +26,10 @@ interface ProjectWorkingDirectoriesProps {
  * none, each with its own setup), the setup that runs after, and the variables
  * every command sees. Every project has exactly one, made with it — there is nothing
  * to link, pick or create here, only the environment itself to fill in.
+ *
+ * The project's local folders sit right under the repositories: they are where
+ * those repositories are checked out on the project's devices, and their order
+ * is the device priority a local run follows.
  */
 export function ProjectWorkingDirectories({
   canManage,
@@ -37,12 +37,9 @@ export function ProjectWorkingDirectories({
 }: ProjectWorkingDirectoriesProps) {
   const { t } = useTranslation(['project', 'setting']);
   const { pageTitleFontSize } = useDensityTokens();
-  const navigate = useWorkspaceAwareNavigate();
   const request = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
-  const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
   const updateEnvironment = useProjectDirectoryStore((s) => s.updateProjectEnvironment);
   const [environment] = useProjectEnvironments(projectId);
-  const directories = useProjectDirectories(projectId);
 
   const save = async (changes: {
     configuration?: SandboxEnvironmentSpecification;
@@ -62,33 +59,32 @@ export function ProjectWorkingDirectories({
     content = <EnvironmentListSkeleton />;
   } else {
     const value: EnvironmentFormValue = environment;
+    const localDirectories = (
+      <LocalDirectories
+        canManage={!!canManage}
+        environmentId={environment.id}
+        projectId={projectId}
+      />
+    );
     content = canManage ? (
-      <EnvironmentForm hideBasics environment={value} onSave={save} />
+      <EnvironmentForm
+        allowLocalOnly
+        hideBasics
+        environment={value}
+        localDirectories={localDirectories}
+        onSave={save}
+      />
     ) : (
-      <EnvironmentSummary environment={value} />
+      <EnvironmentSummary environment={value} localDirectories={localDirectories} />
     );
   }
-
-  const folderCount = directoriesRequest.hasData ? directories.length : undefined;
 
   return (
     <Flexbox gap={16}>
       <Flexbox gap={8}>
-        <Flexbox horizontal align="center" gap={12} justify="space-between" wrap="wrap">
-          <Text fontSize={pageTitleFontSize} weight={600}>
-            {t('settings.environments')}
-          </Text>
-          {folderCount !== undefined && (
-            <Button
-              icon={<Icon icon={FolderIcon} />}
-              onClick={() => navigate(`/project/${projectId}/settings/directories`)}
-            >
-              {t(folderCount ? 'settings.viewDirectories' : 'settings.configureDirectory', {
-                count: folderCount,
-              })}
-            </Button>
-          )}
-        </Flexbox>
+        <Text fontSize={pageTitleFontSize} weight={600}>
+          {t('settings.environments')}
+        </Text>
         <Text type="secondary">{t('settings.environmentIntro')}</Text>
       </Flexbox>
       {content}

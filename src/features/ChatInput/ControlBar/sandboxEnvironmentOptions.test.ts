@@ -108,4 +108,12 @@ describe('projectStartEnvironmentId', () => {
     );
     expect(projectStartEnvironmentId([])).toBeUndefined();
   });
+
+  // Same rule as the server: a local-only repository is never cloned in the cloud.
+  it('is none when every repository is local-only', () => {
+    const localOnly = { sources: [{ ...git.sources[0], localOnly: true }] };
+    expect(projectStartEnvironmentId([{ configuration: localOnly, id: 'env-project' }])).toBe(
+      undefined,
+    );
+  });
 });

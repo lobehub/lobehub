@@ -961,6 +961,8 @@
   "environments.form.jsonSyntax": "JSON 格式有误，请检查双引号、逗号和花括号后重新保存。",
   "environments.form.jsonValues": "请使用每个变量值均为字符串的 JSON 对象，例如 {\"NODE_ENV\":\"production\"}。",
   "environments.form.layoutHint": "每个仓库各放在一个文件夹里，并排检出。之后可以在环境设置里调整。",
+  "environments.form.localOnly": "仅本地设备",
+  "environments.form.localOnlyHint": "云端沙盒不会克隆此仓库，环境的 setup 在云端也不能依赖它。需要它的对话会在项目的本地目录中运行。",
   "environments.form.maintenance": "维护命令",
   "environments.form.maintenanceHint": "每次回到这个副本继续工作时执行——更新代码、补一次迁移。它不是再跑一遍初始化命令：那个很贵，本来就只该跑一次。",
   "environments.form.noRepositories": "没有关联仓库，对话从空文件夹开始。",

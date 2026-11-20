@@ -35,6 +35,8 @@ class ProjectWorkingDirectoryService {
     lambdaClient.projectWorkingDirectory.moveTopic.mutate(input);
   relocate = (input: Parameters<Client['relocate']['mutate']>[0]) =>
     lambdaClient.projectWorkingDirectory.relocate.mutate(input);
+  reorder = (input: Parameters<Client['reorder']['mutate']>[0]) =>
+    lambdaClient.projectWorkingDirectory.reorder.mutate(input);
   remove = (input: Parameters<Client['remove']['mutate']>[0]) =>
     lambdaClient.projectWorkingDirectory.remove.mutate(input);
   resolve = (id: string) => lambdaClient.projectWorkingDirectory.resolve.query({ id });

@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Text } from '@lobehub/ui';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { EnvironmentFormValue } from './EnvironmentForm';
@@ -12,13 +12,18 @@ import PanelSection from './PanelSection';
  * repositories it checks out with their own setup, the setup after them, and
  * which variables it sets (names only). Laid out like the form, flat.
  */
-const EnvironmentSummary = memo<{ environment: EnvironmentFormValue }>(({ environment }) => {
+const EnvironmentSummary = memo<{
+  environment: EnvironmentFormValue;
+  /** A project's local folders, under its repositories as in the form. */
+  localDirectories?: ReactNode;
+}>(({ environment, localDirectories }) => {
   const { t } = useTranslation('setting');
   const configuration = environment.configuration ?? {};
   const repositories = (configuration.sources ?? []).flatMap((source) =>
     source.kind === 'git' && source.url
       ? [
           {
+            localOnly: !!source.localOnly,
             name: source.url.replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, ''),
             setupCommand: (source as { setupCommand?: string }).setupCommand,
           },
@@ -33,9 +38,16 @@ const EnvironmentSummary = memo<{ environment: EnvironmentFormValue }>(({ enviro
         {repositories.length > 0 ? (
           repositories.map((repository) => (
             <Flexbox gap={4} key={repository.name}>
-              <Text fontSize={13} weight={500}>
-                {repository.name}
-              </Text>
+              <Flexbox horizontal align={'center'} gap={8}>
+                <Text fontSize={13} weight={500}>
+                  {repository.name}
+                </Text>
+                {repository.localOnly && (
+                  <Text fontSize={12} type={'secondary'}>
+                    {t('environments.form.localOnly')}
+                  </Text>
+                )}
+              </Flexbox>
               {repository.setupCommand && (
                 <Text code fontSize={12}>
                   {repository.setupCommand}
@@ -49,6 +61,7 @@ const EnvironmentSummary = memo<{ environment: EnvironmentFormValue }>(({ enviro
           </Text>
         )}
       </PanelSection>
+      {localDirectories}
       <PanelSection title={t('environments.form.setup')}>
         <Text code={!!configuration.bootstrapCommand} fontSize={13}>
           {configuration.bootstrapCommand || t('environments.detail.noSetup')}

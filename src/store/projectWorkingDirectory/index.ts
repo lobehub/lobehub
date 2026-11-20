@@ -111,6 +111,11 @@ interface ProjectDirectoryStore extends ProjectDirectoryStoreState {
   relocateDirectory: (...args: ServiceParams<'relocate'>) => Promise<ServiceData<'relocate'>>;
   /** Remove a directory from a project; its conversations stay in the project. */
   removeDirectory: (projectId: string, id: string) => Promise<void>;
+  /**
+   * Rank a project's directories — its device priority. The new order shows at
+   * once and is confirmed by a refetch either way.
+   */
+  reorderDirectories: (projectId: string, ids: string[]) => Promise<void>;
   /** Create or rename an environment. */
   saveEnvironment: (
     ...args: ServiceParams<'saveEnvironment'>
@@ -264,6 +269,24 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
         environments.revalidate(input.projectId),
       ]);
       return result.data;
+    },
+    reorderDirectories: async (projectId, ids) => {
+      const current = get().directoriesMap[projectId];
+      if (current) {
+        const rank = new Map(ids.map((id, index) => [id, index]));
+        const next = [...current].sort(
+          (a, b) => (rank.get(a.id) ?? ids.length) - (rank.get(b.id) ?? ids.length),
+        );
+        set({ directoriesMap: { ...get().directoriesMap, [projectId]: next } });
+      }
+      try {
+        await projectWorkingDirectoryService.reorder({ ids, projectId });
+      } finally {
+        await Promise.all([
+          directories.revalidate(projectId),
+          directories.revalidate(ALL_PROJECTS_KEY),
+        ]);
+      }
     },
     removeDirectory: async (projectId, id) => {
       await projectWorkingDirectoryService.remove({ id, projectId });

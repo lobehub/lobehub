@@ -1,4 +1,5 @@
 import type { EnvironmentConfiguration } from '@lobechat/types';
+import { isCloudRepositorySource } from '@lobechat/types';
 
 import { getProjectSettingsPath } from '@/features/Projects/Layout/navigation';
 
@@ -80,7 +81,7 @@ export const environmentChipState = ({
 
 /**
  * The environment the server applies to a project conversation nobody placed:
- * the project's, when it checks out a repository (see
+ * the project's, when it checks out a repository a cloud sandbox may clone (see
  * `resolveProjectTopicSandbox`). Undefined while it loads, or when there is none.
  */
 export const projectStartEnvironmentId = (
@@ -90,7 +91,7 @@ export const projectStartEnvironmentId = (
   }[],
 ) =>
   environments.find((environment) =>
-    (environment.configuration?.sources ?? []).some((source) => source.kind === 'git'),
+    (environment.configuration?.sources ?? []).some(isCloudRepositorySource),
   )?.id;
 
 /**

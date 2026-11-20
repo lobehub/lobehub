@@ -15,7 +15,6 @@ export default {
   'settings.removeDirectoryConfirmTitle': 'Remove {{name}} from this project?',
   'settings.removeDirectoryFailed':
     'Could not remove the folder. If a topic is running here, wait for it to finish and try again.',
-  'settings.configureDirectory': 'Add a working directory',
   'settings.addDirectoryFailed': 'Could not add working directory',
   'settings.identifier': 'Project identifier',
   'settings.identifierDescription':
@@ -24,11 +23,6 @@ export default {
     'Used in the project URL. Changing it updates the address; leave blank to use the project ID.',
   'settings.description': 'Description',
   'settings.generalDescription': 'Manage the project name, address, and description.',
-  'settings.workLocations': 'Working directories',
-  'settings.directoryListDescription':
-    'Device folders this project works in. Agents read and change files in them on that device.',
-  'settings.allEnvironments': 'All environments',
-  'settings.viewDirectories': 'View folders ({{count}})',
   'directories.noEnvironment': 'No environment linked',
   'directories.sourceSummary': 'Existing directory',
   'directories.keepFiles':
@@ -94,10 +88,14 @@ export default {
   'settings.advanced': 'Advanced',
   'settings.noRepository': 'No GitHub repository linked',
   'settings.noDirectories':
-    'No folders in this environment yet. Add an existing folder on a connected device to start working.',
+    'No local folders yet. Add a folder on a connected device to run this project there.',
+  'settings.localDirectories': 'Local folders',
+  'settings.localDirectoriesHint':
+    'Where this project is checked out on your devices. Agents read and change files there. Drag to set device priority: a new topic starts in the first folder whose device is online.',
+  'settings.preferredDevice': 'Preferred',
+  'settings.reorderDirectoriesFailed': 'Could not save the device order. Try again.',
   'settings.title': 'Project settings',
   'settings.environments': 'Environment',
-  'settings.addEnvironment': 'Add environment',
   'directories.environmentName': 'Environment name',
   'directories.editEnvironment': 'Configure environment',
 

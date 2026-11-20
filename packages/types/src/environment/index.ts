@@ -11,6 +11,12 @@ export type EnvironmentVisibility = 'private' | 'public';
 export type EnvironmentSource =
   | {
       kind: 'git';
+      /**
+       * Checked out on the project's local devices only: a cloud sandbox or
+       * cluster build leaves it out (see {@link withoutLocalOnlySources}), so a
+       * conversation that needs it runs in one of the project's local folders.
+       */
+      localOnly?: boolean;
       path?: string;
       ref?: string;
       /**
@@ -135,7 +141,7 @@ export const DEFAULT_REGENERABLE_PATHS = ['node_modules', '.venv', 'target'] as 
 export const toExecutionConfiguration = (
   configuration: EnvironmentConfiguration,
 ): EnvironmentConfiguration => {
-  const { kind: _kind, ...rest } = withRepositorySetup(configuration);
+  const { kind: _kind, ...rest } = withRepositorySetup(withoutLocalOnlySources(configuration));
 
   return rest.sources ? { ...rest, sources: layoutRepositorySources(rest.sources) } : rest;
 };
@@ -253,6 +259,41 @@ export const withRepositorySetup = (
       if (source.kind !== 'git' || source.setupCommand === undefined) return source;
       const { setupCommand: _setupCommand, ...rest } = source;
       return rest;
+    }),
+  };
+};
+
+/** Whether a source is a repository a cloud sandbox may check out. */
+export const isCloudRepositorySource = (source: EnvironmentSource): boolean =>
+  source.kind === 'git' && !source.localOnly;
+
+/**
+ * The definition a cloud sandbox or cluster receives: without the repositories
+ * marked {@link EnvironmentSource localOnly}, which only the project's local
+ * devices check out.
+ *
+ * Laid out before the filter, so a repository keeps the folder it has on a
+ * device and its own setup finds the same path in either place. The
+ * environment's own setup still runs in the sandbox, so a step that depends
+ * on a local-only repository fails there — the switch's hint says so.
+ *
+ * A definition without any local-only repository comes back as it was, so the
+ * digest of every build made before the flag existed is unchanged.
+ */
+export const withoutLocalOnlySources = (
+  configuration: EnvironmentConfiguration,
+): EnvironmentConfiguration => {
+  const sources = configuration.sources ?? [];
+  if (!sources.some((source) => source.kind === 'git' && source.localOnly !== undefined))
+    return configuration;
+
+  return {
+    ...configuration,
+    sources: layoutRepositorySources(sources).flatMap((source): EnvironmentSource[] => {
+      if (source.kind !== 'git') return [source];
+      if (source.localOnly) return [];
+      const { localOnly: _localOnly, ...rest } = source;
+      return [rest];
     }),
   };
 };

@@ -31,6 +31,26 @@ export const canStageDraftOn = (
   (fixedDeviceId === undefined || (!!fixedDeviceId && directory.deviceId === fixedDeviceId));
 
 /**
+ * The folder a new project conversation starts in: the first one, in the
+ * project's device priority (the order its folders are ranked in), that the
+ * agent may run in and whose device is online. With every such device offline
+ * the first runnable folder is still the pick — the composer then says the
+ * device is offline, which beats silently starting somewhere else.
+ */
+export const pickStartDirectory = <T extends RunnableDirectoryLike & { deviceId?: string | null }>(
+  directories: T[],
+  devices: { deviceId: string; online?: boolean }[] | undefined,
+  fixedDeviceId?: string | null,
+): T | undefined => {
+  const runnable = directories.filter((directory) => canStageDraftOn(directory, fixedDeviceId));
+  return (
+    runnable.find(
+      (directory) => devices?.find((device) => device.deviceId === directory.deviceId)?.online,
+    ) ?? runnable[0]
+  );
+};
+
+/**
  * Open a blank project conversation, the same habit as an agent's "+": no
  * topic row is created here. A staged directory pins the agent and device for
  * the composer; without one the project alone is staged. Either way the first
