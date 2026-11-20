@@ -98,6 +98,9 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
       filterTopics(scopedTopics, filter, { directories }).length === 0,
     [filter, scopedTopics, directories],
   );
+  // Device priority skips offline devices, so their presence has to be loaded
+  // here: no other part of every sidebar layout guarantees it.
+  useDeviceStore((s) => s.useFetchDevices)(true);
   const devices = useDeviceStore(deviceSelectors.deviceList);
   const startTopic = useStartProjectTopic(projectId);
   const fixedDeviceId = useAgentFixedDeviceId(coordinatorAgentId);

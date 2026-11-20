@@ -203,6 +203,12 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
     stateKey: 'directoryTopicsReplica',
     view: recordLens<ProjectDirectoryStore, DirectoryTopic[]>('directoryTopicsMap'),
   });
+  // Reorders run one after another, so the server ends on the last drag; only
+  // the last one in flight refetches, so an earlier one cannot flash its
+  // order back over a newer optimistic one.
+  let reorderQueue: Promise<unknown> = Promise.resolve();
+  let reorderVersion = 0;
+
   const environmentTopics = createReplicaSlice(environmentTopicsResource, {
     actionPrefix: 'projectWorkingDirectory/environmentTopics',
     fetcher: (idsKey) =>
@@ -279,13 +285,19 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
         );
         set({ directoriesMap: { ...get().directoriesMap, [projectId]: next } });
       }
+      const version = ++reorderVersion;
+      const operation = reorderQueue
+        .catch(() => undefined)
+        .then(() => projectWorkingDirectoryService.reorder({ ids, projectId }));
+      reorderQueue = operation;
       try {
-        await projectWorkingDirectoryService.reorder({ ids, projectId });
+        await operation;
       } finally {
-        await Promise.all([
-          directories.revalidate(projectId),
-          directories.revalidate(ALL_PROJECTS_KEY),
-        ]);
+        if (version === reorderVersion)
+          await Promise.all([
+            directories.revalidate(projectId),
+            directories.revalidate(ALL_PROJECTS_KEY),
+          ]);
       }
     },
     removeDirectory: async (projectId, id) => {

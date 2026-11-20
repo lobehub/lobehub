@@ -23,7 +23,8 @@ export const pickableEnvironments = <T extends { visibility?: string | null }>(
 export const repositorySlug = (environment: {
   configuration?: Pick<EnvironmentConfiguration, 'sources'> | null;
 }): string | undefined => {
-  const source = environment.configuration?.sources?.[0];
+  // The repository a sandbox checks out first: a local-only one never reaches it.
+  const source = environment.configuration?.sources?.find(isCloudRepositorySource);
   if (source?.kind !== 'git') return undefined;
   const { url } = source;
   try {
@@ -43,9 +44,7 @@ export const repositoriesLabel = (environment: {
 }): string | undefined => {
   const first = repositorySlug(environment);
   if (!first) return undefined;
-  const count = (environment.configuration?.sources ?? []).filter(
-    (source) => source.kind === 'git',
-  ).length;
+  const count = (environment.configuration?.sources ?? []).filter(isCloudRepositorySource).length;
   return count > 1 ? `${first} +${count - 1}` : first;
 };
 

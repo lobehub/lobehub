@@ -121,6 +121,18 @@ describe('pickStartDirectory', () => {
     ).toBe('a');
   });
 
+  it('does not trust a persisted device whose presence is unconfirmed', () => {
+    expect(
+      pickStartDirectory(
+        [first, second],
+        [
+          { deviceId: 'laptop', online: true, onlineUnknown: true },
+          { deviceId: 'desktop', online: true },
+        ],
+      )?.id,
+    ).toBe('b');
+  });
+
   it('keeps the first runnable folder when every device is offline', () => {
     expect(pickStartDirectory([first, second], [])?.id).toBe('a');
   });

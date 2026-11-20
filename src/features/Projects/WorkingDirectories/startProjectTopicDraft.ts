@@ -39,14 +39,16 @@ export const canStageDraftOn = (
  */
 export const pickStartDirectory = <T extends RunnableDirectoryLike & { deviceId?: string | null }>(
   directories: T[],
-  devices: { deviceId: string; online?: boolean }[] | undefined,
+  devices: { deviceId: string; online?: boolean; onlineUnknown?: boolean }[] | undefined,
   fixedDeviceId?: string | null,
 ): T | undefined => {
   const runnable = directories.filter((directory) => canStageDraftOn(directory, fixedDeviceId));
   return (
-    runnable.find(
-      (directory) => devices?.find((device) => device.deviceId === directory.deviceId)?.online,
-    ) ?? runnable[0]
+    runnable.find((directory) => {
+      // A device restored from the persisted list is not confirmed online yet.
+      const device = devices?.find((item) => item.deviceId === directory.deviceId);
+      return !!device?.online && !device.onlineUnknown;
+    }) ?? runnable[0]
   );
 };
 

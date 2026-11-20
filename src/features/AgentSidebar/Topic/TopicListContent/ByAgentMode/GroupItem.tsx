@@ -120,6 +120,9 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
     [canAddTopic, directories, fixedDeviceId],
   );
 
+  // Device priority skips offline devices, so their presence has to be loaded
+  // here: no other part of every sidebar layout guarantees it.
+  useDeviceStore((s) => s.useFetchDevices)(true);
   const devices = useDeviceStore(deviceSelectors.deviceList);
   const startTopic = useStartProjectTopic(scope?.projectId);
   // Same habit as an agent's "+": straight into this agent's conversation, on
