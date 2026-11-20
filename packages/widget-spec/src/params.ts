@@ -1,5 +1,5 @@
-import type { WidgetParam, WidgetParamValue } from '@lobechat/types';
-import { WIDGET_PARAM_TYPES } from '@lobechat/types';
+import type { WidgetParam, WidgetParamValue } from '@lobechat/types/widget';
+import { WIDGET_PARAM_TYPES } from '@lobechat/types/widget';
 import { z } from 'zod';
 
 /** Most params one widget declares. */

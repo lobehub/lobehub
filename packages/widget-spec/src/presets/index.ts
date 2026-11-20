@@ -1,4 +1,4 @@
-import type { WidgetPreset } from '@lobechat/types';
+import type { WidgetPreset } from '@lobechat/types/widget';
 
 import { countdown } from './countdown';
 import { githubRepo } from './githubRepo';

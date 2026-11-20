@@ -1,4 +1,4 @@
-import type { WidgetOutput, WidgetOutputType } from '@lobechat/types';
+import type { WidgetOutput, WidgetOutputType } from '@lobechat/types/widget';
 import { z } from 'zod';
 
 /** Upper bounds a widget output must stay within; anything larger is rejected, not clipped. */

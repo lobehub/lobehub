@@ -1,11 +1,11 @@
-import type { WidgetLayoutNode } from '@lobechat/types';
+import type { WidgetLayoutNode } from '@lobechat/types/widget';
 import {
   WIDGET_LAYOUT_COLORS,
   WIDGET_LAYOUT_FORMATS,
   WIDGET_LAYOUT_ICONS,
   WIDGET_LAYOUT_LIMITS,
   WIDGET_LAYOUT_SURFACES,
-} from '@lobechat/types';
+} from '@lobechat/types/widget';
 import { z } from 'zod';
 
 /**

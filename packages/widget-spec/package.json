@@ -1,18 +1,59 @@
 {
   "name": "@lobechat/widget-spec",
   "version": "1.0.0",
-  "private": true,
-  "description": "Widget authoring contract: layout, view, manifest and preset validation shared by LobeHub and Market",
+  "description": "LobeHub widget authoring contract: manifest, view, layout, output and preset schemas (zod, TypeScript types and JSON Schema)",
+  "keywords": [
+    "lobehub",
+    "widget",
+    "json-schema",
+    "zod"
+  ],
+  "homepage": "https://github.com/lobehub/lobehub/tree/canary/packages/widget-spec",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lobehub/lobehub",
+    "directory": "packages/widget-spec"
+  },
+  "license": "MIT",
   "sideEffects": false,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./schema/*.json": "./schema/*.json"
   },
   "main": "./src/index.ts",
-  "dependencies": {
-    "@lobechat/types": "workspace:*"
+  "files": [
+    "dist",
+    "schema"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "generate": "bun scripts/generate-json-schema.ts",
+    "prepack": "bun scripts/generate-json-schema.ts --check && tsdown",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage --silent='passed-only'"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*",
+    "@types/node": "^24.13.2",
+    "ajv": "^8.20.0",
+    "tsdown": "^0.21.10",
+    "typescript": "^6.0.3"
   },
   "peerDependencies": {
     "zod": "^4.4.3"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "default": "./dist/index.mjs"
+      },
+      "./schema/*.json": "./schema/*.json"
+    },
+    "main": "./dist/index.mjs",
+    "types": "./dist/index.d.mts"
   }
 }

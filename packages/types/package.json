@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./agent/graph": "./src/agent/graph.ts"
+    "./agent/graph": "./src/agent/graph.ts",
+    "./widget": "./src/widget/index.ts"
   },
   "main": "./src/index.ts",
   "scripts": {

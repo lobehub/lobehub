@@ -1,0 +1,646 @@
+{
+  "21 env entries": {
+    "issues": [
+      {
+        "code": "too_big",
+        "message": "Too big: expected array to have <=20 items",
+        "path": ["manifest", "env"]
+      }
+    ],
+    "success": false
+  },
+  "50 network hosts": {
+    "data": {
+      "manifest": {
+        "network": {
+          "allow": [
+            "h0.example.com",
+            "h1.example.com",
+            "h2.example.com",
+            "h3.example.com",
+            "h4.example.com",
+            "h5.example.com",
+            "h6.example.com",
+            "h7.example.com",
+            "h8.example.com",
+            "h9.example.com",
+            "h10.example.com",
+            "h11.example.com",
+            "h12.example.com",
+            "h13.example.com",
+            "h14.example.com",
+            "h15.example.com",
+            "h16.example.com",
+            "h17.example.com",
+            "h18.example.com",
+            "h19.example.com",
+            "h20.example.com",
+            "h21.example.com",
+            "h22.example.com",
+            "h23.example.com",
+            "h24.example.com",
+            "h25.example.com",
+            "h26.example.com",
+            "h27.example.com",
+            "h28.example.com",
+            "h29.example.com",
+            "h30.example.com",
+            "h31.example.com",
+            "h32.example.com",
+            "h33.example.com",
+            "h34.example.com",
+            "h35.example.com",
+            "h36.example.com",
+            "h37.example.com",
+            "h38.example.com",
+            "h39.example.com",
+            "h40.example.com",
+            "h41.example.com",
+            "h42.example.com",
+            "h43.example.com",
+            "h44.example.com",
+            "h45.example.com",
+            "h46.example.com",
+            "h47.example.com",
+            "h48.example.com",
+            "h49.example.com"
+          ]
+        }
+      },
+      "outputType": "stat",
+      "runtime": "node",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))"
+    },
+    "success": true
+  },
+  "51 network hosts": {
+    "issues": [
+      {
+        "code": "too_big",
+        "message": "Too big: expected array to have <=50 items",
+        "path": ["manifest", "network", "allow"]
+      }
+    ],
+    "success": false
+  },
+  "change note at 500 chars": {
+    "data": {
+      "outputType": "stat",
+      "runtime": "node",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))",
+      "changeNote": "<500 chars>"
+    },
+    "success": true
+  },
+  "change note over 500 chars": {
+    "issues": [
+      {
+        "code": "too_big",
+        "message": "Too big: expected string to have <=500 characters",
+        "path": ["changeNote"]
+      }
+    ],
+    "success": false
+  },
+  "data layout": {
+    "data": {
+      "outputType": "data",
+      "runtime": "node",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))",
+      "view": {
+        "layout": {
+          "children": [
+            {
+              "type": "text",
+              "value": {
+                "bind": "data.temp",
+                "format": "number"
+              }
+            }
+          ],
+          "type": "stack"
+        },
+        "surface": {
+          "bind": "data.cond",
+          "map": {
+            "*": "sky"
+          }
+        }
+      }
+    },
+    "success": true
+  },
+  "date param with a bad default": {
+    "issues": [
+      {
+        "code": "custom",
+        "message": "default must be a YYYY-MM-DD date",
+        "path": ["manifest", "params", "0", "default"]
+      }
+    ],
+    "success": false
+  },
+  "duplicate param": {
+    "issues": [
+      {
+        "code": "custom",
+        "message": "param \"CITY\" is declared twice",
+        "path": ["manifest", "params", "1", "name"]
+      }
+    ],
+    "success": false
+  },
+  "empty network allow list": {
+    "data": {
+      "manifest": {
+        "network": {
+          "allow": []
+        }
+      },
+      "outputType": "stat",
+      "runtime": "node",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))"
+    },
+    "success": true
+  },
+  "empty network host": {
+    "issues": [
+      {
+        "code": "too_small",
+        "message": "Too small: expected string to have >=1 characters",
+        "path": ["manifest", "network", "allow", "0"]
+      }
+    ],
+    "success": false
+  },
+  "empty script": {
+    "issues": [
+      {
+        "code": "too_small",
+        "message": "Too small: expected string to have >=1 characters",
+        "path": ["script"]
+      }
+    ],
+    "success": false
+  },
+  "env name with a dash": {
+    "issues": [
+      {
+        "code": "invalid_format",
+        "message": "env names must be valid shell identifiers",
+        "path": ["manifest", "env", "0", "name"]
+      }
+    ],
+    "success": false
+  },
+  "env name with a leading digit": {
+    "issues": [
+      {
+        "code": "invalid_format",
+        "message": "env names must be valid shell identifiers",
+        "path": ["manifest", "env", "0", "name"]
+      }
+    ],
+    "success": false
+  },
+  "fractional timeout": {
+    "issues": [
+      {
+        "code": "invalid_type",
+        "message": "Invalid input: expected int, received number",
+        "path": ["manifest", "timeoutMs"]
+      }
+    ],
+    "success": false
+  },
+  "full manifest": {
+    "data": {
+      "manifest": {
+        "description": "Open issues",
+        "env": [
+          {
+            "connector": "github",
+            "inject": {
+              "header": "Authorization",
+              "host": "api.github.com",
+              "prefix": "Bearer "
+            },
+            "name": "GITHUB_TOKEN",
+            "required": true
+          }
+        ],
+        "metric": {
+          "key": "open_issues",
+          "kind": "gauge",
+          "unit": "issues",
+          "valuePath": "value"
+        },
+        "network": {
+          "allow": ["api.github.com"]
+        },
+        "params": [
+          {
+            "default": "lobehub/lobehub",
+            "name": "REPO",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "schedule": {
+          "pattern": "*/30 * * * *",
+          "timezone": "Asia/Shanghai"
+        },
+        "timeoutMs": 30000,
+        "title": "Issues"
+      },
+      "outputType": "stat",
+      "runtime": "python",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))",
+      "view": {
+        "size": "md"
+      },
+      "changeNote": "first cut"
+    },
+    "success": true
+  },
+  "html view": {
+    "data": {
+      "outputType": "stat",
+      "runtime": "node",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))",
+      "view": {
+        "html": "<svg></svg>"
+      }
+    },
+    "success": true
+  },
+  "inject header with a space": {
+    "issues": [
+      {
+        "code": "invalid_format",
+        "message": "inject.header must be a valid header name",
+        "path": ["manifest", "env", "0", "inject", "header"]
+      }
+    ],
+    "success": false
+  },
+  "inject host list with wildcard": {
+    "data": {
+      "manifest": {
+        "env": [
+          {
+            "inject": {
+              "host": ["us.posthog.com", "*.posthog.com"]
+            },
+            "name": "T"
+          }
+        ]
+      },
+      "outputType": "stat",
+      "runtime": "node",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))"
+    },
+    "success": true
+  },
+  "inject host with a scheme": {
+    "issues": [
+      {
+        "code": "invalid_format",
+        "message": "hosts must be a hostname or *.domain, without scheme or path",
+        "path": ["manifest", "env", "0", "inject", "host"]
+      }
+    ],
+    "success": false
+  },
+  "inject prefix with a newline": {
+    "issues": [
+      {
+        "code": "invalid_format",
+        "message": "inject.prefix must be a single line",
+        "path": ["manifest", "env", "0", "inject", "prefix"]
+      }
+    ],
+    "success": false
+  },
+  "layout with an unknown node key": {
+    "issues": [
+      {
+        "code": "unrecognized_keys",
+        "message": "Unrecognized key: \"wat\"",
+        "path": ["view", "layout"]
+      }
+    ],
+    "success": false
+  },
+  "lowercase env name": {
+    "data": {
+      "manifest": {
+        "env": [
+          {
+            "name": "api_key"
+          }
+        ]
+      },
+      "outputType": "stat",
+      "runtime": "node",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))"
+    },
+    "success": true
+  },
+  "metric with unknown kind": {
+    "issues": [
+      {
+        "code": "invalid_value",
+        "message": "Invalid option: expected one of \"gauge\"|\"counter\"",
+        "path": ["manifest", "metric", "kind"]
+      }
+    ],
+    "success": false
+  },
+  "metric without key": {
+    "issues": [
+      {
+        "code": "invalid_type",
+        "message": "Invalid input: expected string, received undefined",
+        "path": ["manifest", "metric", "key"]
+      }
+    ],
+    "success": false
+  },
+  "minimal stat draft": {
+    "data": {
+      "outputType": "stat",
+      "runtime": "node",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))"
+    },
+    "success": true
+  },
+  "missing outputType": {
+    "issues": [
+      {
+        "code": "invalid_value",
+        "message": "Invalid option: expected one of \"stat\"|\"list\"|\"series\"|\"table\"|\"data\"",
+        "path": ["outputType"]
+      }
+    ],
+    "success": false
+  },
+  "missing runtime": {
+    "issues": [
+      {
+        "code": "invalid_value",
+        "message": "Invalid option: expected one of \"node\"|\"python\"|\"bash\"",
+        "path": ["runtime"]
+      }
+    ],
+    "success": false
+  },
+  "missing script": {
+    "issues": [
+      {
+        "code": "invalid_type",
+        "message": "Invalid input: expected string, received undefined",
+        "path": ["script"]
+      }
+    ],
+    "success": false
+  },
+  "mixed-case env name": {
+    "data": {
+      "manifest": {
+        "env": [
+          {
+            "name": "_Api_Key2"
+          }
+        ]
+      },
+      "outputType": "stat",
+      "runtime": "node",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))"
+    },
+    "success": true
+  },
+  "network host at 253 chars": {
+    "data": {
+      "manifest": {
+        "network": {
+          "allow": ["<253 chars>"]
+        }
+      },
+      "outputType": "stat",
+      "runtime": "node",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))"
+    },
+    "success": true
+  },
+  "network host over 253 chars": {
+    "issues": [
+      {
+        "code": "too_big",
+        "message": "Too big: expected string to have <=253 characters",
+        "path": ["manifest", "network", "allow", "0"]
+      }
+    ],
+    "success": false
+  },
+  "network without allow": {
+    "issues": [
+      {
+        "code": "invalid_type",
+        "message": "Invalid input: expected array, received undefined",
+        "path": ["manifest", "network", "allow"]
+      }
+    ],
+    "success": false
+  },
+  "non-ASCII env name": {
+    "issues": [
+      {
+        "code": "invalid_format",
+        "message": "env names must be valid shell identifiers",
+        "path": ["manifest", "env", "0", "name"]
+      }
+    ],
+    "success": false
+  },
+  "not an object": {
+    "issues": [
+      {
+        "code": "invalid_type",
+        "message": "Invalid input: expected object, received string",
+        "path": []
+      }
+    ],
+    "success": false
+  },
+  "null manifest, view and note": {
+    "data": {
+      "manifest": null,
+      "outputType": "stat",
+      "runtime": "bash",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))",
+      "view": null,
+      "changeNote": null
+    },
+    "success": true
+  },
+  "outputType data": {
+    "data": {
+      "outputType": "data",
+      "runtime": "node",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))"
+    },
+    "success": true
+  },
+  "outputType list": {
+    "data": {
+      "outputType": "list",
+      "runtime": "node",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))"
+    },
+    "success": true
+  },
+  "outputType series": {
+    "data": {
+      "outputType": "series",
+      "runtime": "node",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))"
+    },
+    "success": true
+  },
+  "outputType table": {
+    "data": {
+      "outputType": "table",
+      "runtime": "node",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))"
+    },
+    "success": true
+  },
+  "param named like an env requirement": {
+    "issues": [
+      {
+        "code": "custom",
+        "message": "param \"CITY\" has the same name as an env requirement",
+        "path": ["manifest", "params", "0", "name"]
+      }
+    ],
+    "success": false
+  },
+  "runtime bash": {
+    "data": {
+      "outputType": "stat",
+      "runtime": "bash",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))"
+    },
+    "success": true
+  },
+  "runtime python": {
+    "data": {
+      "outputType": "stat",
+      "runtime": "python",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))"
+    },
+    "success": true
+  },
+  "schedule without pattern": {
+    "issues": [
+      {
+        "code": "invalid_type",
+        "message": "Invalid input: expected string, received undefined",
+        "path": ["manifest", "schedule", "pattern"]
+      }
+    ],
+    "success": false
+  },
+  "script at 256 KiB": {
+    "data": {
+      "outputType": "stat",
+      "runtime": "node",
+      "script": "<262144 chars>"
+    },
+    "success": true
+  },
+  "script over 256 KiB": {
+    "issues": [
+      {
+        "code": "too_big",
+        "message": "Too big: expected string to have <=262144 characters",
+        "path": ["script"]
+      }
+    ],
+    "success": false
+  },
+  "select param without options": {
+    "issues": [
+      {
+        "code": "custom",
+        "message": "a select param needs options",
+        "path": ["manifest", "params", "0", "options"]
+      }
+    ],
+    "success": false
+  },
+  "timeout at two minutes": {
+    "data": {
+      "manifest": {
+        "timeoutMs": 120000
+      },
+      "outputType": "stat",
+      "runtime": "node",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))"
+    },
+    "success": true
+  },
+  "timeout over two minutes": {
+    "issues": [
+      {
+        "code": "too_big",
+        "message": "Too big: expected number to be <=120000",
+        "path": ["manifest", "timeoutMs"]
+      }
+    ],
+    "success": false
+  },
+  "unknown keys are stripped": {
+    "data": {
+      "manifest": {},
+      "outputType": "stat",
+      "runtime": "node",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))"
+    },
+    "success": true
+  },
+  "unknown outputType": {
+    "issues": [
+      {
+        "code": "invalid_value",
+        "message": "Invalid option: expected one of \"stat\"|\"list\"|\"series\"|\"table\"|\"data\"",
+        "path": ["outputType"]
+      }
+    ],
+    "success": false
+  },
+  "unknown runtime": {
+    "issues": [
+      {
+        "code": "invalid_value",
+        "message": "Invalid option: expected one of \"node\"|\"python\"|\"bash\"",
+        "path": ["runtime"]
+      }
+    ],
+    "success": false
+  },
+  "wildcard network host": {
+    "data": {
+      "manifest": {
+        "network": {
+          "allow": ["*.posthog.com"]
+        }
+      },
+      "outputType": "stat",
+      "runtime": "node",
+      "script": "console.log(JSON.stringify({ type: \"stat\", value: 1 }))"
+    },
+    "success": true
+  }
+}

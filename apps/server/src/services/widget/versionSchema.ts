@@ -1,13 +1,11 @@
-import { widgetContentSchema } from '@lobechat/widget-spec';
-import { z } from 'zod';
-
-export { widgetManifestSchema, widgetViewSchema } from '@lobechat/widget-spec';
-
 /**
- * Validation of a widget version's authored content, shared by every
- * entry point that records a draft so all accept exactly the same content.
- * The content rules live in `@lobechat/widget-spec`, which presets share.
+ * Validation of a widget version's authored content, shared by every entry
+ * point that records a draft so all accept exactly the same content. The
+ * rules live in the public `@lobechat/widget-spec` package, which presets,
+ * the REST API and third-party authoring tools share.
  */
-export const widgetVersionContentSchema = widgetContentSchema.extend({
-  changeNote: z.string().max(500).nullish(),
-});
+export {
+  widgetManifestSchema,
+  widgetVersionContentSchema,
+  widgetViewSchema,
+} from '@lobechat/widget-spec';

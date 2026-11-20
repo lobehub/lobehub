@@ -1,7 +1,14 @@
 import { WIDGET_HTML_MAX_LENGTH } from '@lobechat/types';
+import * as spec from '@lobechat/widget-spec';
 import { describe, expect, it } from 'vitest';
 
-import { widgetManifestSchema, widgetViewSchema } from '../versionSchema';
+import {
+  widgetManifestSchema,
+  widgetVersionContentSchema,
+  widgetViewSchema,
+} from '../versionSchema';
+import legacyVerdicts from './fixtures/legacyVerdicts.json';
+import { summarizeParse, widgetDraftCorpus } from './fixtures/widgetDraftCorpus';
 
 const withInject = (inject: unknown) =>
   widgetManifestSchema.safeParse({ env: [{ connector: 'github', inject, name: 'GITHUB_TOKEN' }] });
@@ -36,5 +43,24 @@ describe('widgetViewSchema html', () => {
 
   it.each([[''], ['x'.repeat(WIDGET_HTML_MAX_LENGTH + 1)], [42]])('rejects %#', (html) => {
     expect(widgetViewSchema.safeParse({ html }).success).toBe(false);
+  });
+});
+
+describe('widgetVersionContentSchema equivalence with the pre-move server schema', () => {
+  it('is the public widget-spec schema, not a server copy', () => {
+    expect(widgetVersionContentSchema).toBe(spec.widgetVersionContentSchema);
+    expect(widgetManifestSchema).toBe(spec.widgetManifestSchema);
+    expect(widgetViewSchema).toBe(spec.widgetViewSchema);
+  });
+
+  it('records a verdict for every draft in the corpus', () => {
+    expect(Object.keys(legacyVerdicts).sort()).toEqual(Object.keys(widgetDraftCorpus).sort());
+  });
+
+  // Same success, same parsed draft, same issue codes, paths and messages.
+  it.each(Object.entries(widgetDraftCorpus))('%s', (name, draft) => {
+    expect(summarizeParse(widgetVersionContentSchema.safeParse(draft))).toEqual(
+      legacyVerdicts[name as keyof typeof legacyVerdicts],
+    );
   });
 });

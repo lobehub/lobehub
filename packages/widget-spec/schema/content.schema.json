@@ -1,0 +1,1002 @@
+{
+  "$defs": {
+    "__schema0": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "__schema1": {
+      "description": "Credentials the script reads from its environment, resolved from connectors.",
+      "$ref": "#/$defs/__schema2"
+    },
+    "__schema2": {
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema3"
+      }
+    },
+    "__schema3": {
+      "type": "object",
+      "properties": {
+        "connector": {
+          "description": "Connector supplying the credential, e.g. 'github'.",
+          "$ref": "#/$defs/__schema4"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "field": {
+          "description": "Header to read when the connector holds several, e.g. DD-API-KEY.",
+          "$ref": "#/$defs/__schema5"
+        },
+        "inject": {
+          "description": "Where a Market connector's token is sent: the egress proxy sets `header` on requests to `host`.",
+          "$ref": "#/$defs/__schema6"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Z_a-z]\\w*$",
+          "description": "Environment variable the script reads, e.g. GITHUB_TOKEN."
+        },
+        "required": {
+          "type": "boolean"
+        }
+      },
+      "required": ["name"]
+    },
+    "__schema4": {
+      "type": "string",
+      "minLength": 1
+    },
+    "__schema5": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "__schema6": {
+      "type": "object",
+      "properties": {
+        "header": {
+          "type": "string",
+          "maxLength": 100,
+          "pattern": "^[!#$%&'*+.^`|~\\w-]+$"
+        },
+        "host": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/__schema7"
+            },
+            {
+              "minItems": 1,
+              "maxItems": 5,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema7"
+              }
+            }
+          ]
+        },
+        "prefix": {
+          "type": "string",
+          "maxLength": 100,
+          "pattern": "^[^\\0\\n\\r]*$"
+        }
+      },
+      "required": ["host"]
+    },
+    "__schema7": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253,
+      "pattern": "^(?:\\*\\.)?[\\w-]+(?:\\.[\\w-]+)+$"
+    },
+    "__schema8": {
+      "description": "Record the output as a metric on every published run, for a trend line.",
+      "$ref": "#/$defs/__schema9"
+    },
+    "__schema9": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["gauge", "counter"]
+        },
+        "unit": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "valuePath": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "required": ["key"]
+    },
+    "__schema10": {
+      "description": "Hosts the sandbox may reach; omitted or empty means no network.",
+      "$ref": "#/$defs/__schema11"
+    },
+    "__schema11": {
+      "type": "object",
+      "properties": {
+        "allow": {
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema12"
+          }
+        }
+      },
+      "required": ["allow"]
+    },
+    "__schema12": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253
+    },
+    "__schema13": {
+      "description": "Plain-text settings a person fills in, exposed to the script as env vars.",
+      "$ref": "#/$defs/__schema14"
+    },
+    "__schema14": {
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema15"
+      }
+    },
+    "__schema15": {
+      "type": "object",
+      "properties": {
+        "default": {
+          "$ref": "#/$defs/__schema16"
+        },
+        "description": {
+          "$ref": "#/$defs/__schema18"
+        },
+        "label": {
+          "$ref": "#/$defs/__schema19"
+        },
+        "name": {
+          "$ref": "#/$defs/__schema20"
+        },
+        "options": {
+          "$ref": "#/$defs/__schema21"
+        },
+        "required": {
+          "$ref": "#/$defs/__schema23"
+        },
+        "type": {
+          "$ref": "#/$defs/__schema24"
+        },
+        "value": {
+          "$ref": "#/$defs/__schema25"
+        }
+      },
+      "required": ["name", "type"]
+    },
+    "__schema16": {
+      "$ref": "#/$defs/__schema17"
+    },
+    "__schema17": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 500
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        }
+      ]
+    },
+    "__schema18": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "__schema19": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "__schema20": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[A-Z][\\dA-Z_]*$"
+    },
+    "__schema21": {
+      "minItems": 1,
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema22"
+      }
+    },
+    "__schema22": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "value": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "required": ["value"]
+    },
+    "__schema23": {
+      "type": "boolean"
+    },
+    "__schema24": {
+      "type": "string",
+      "enum": ["string", "number", "boolean", "date", "select"]
+    },
+    "__schema25": {
+      "$ref": "#/$defs/__schema17"
+    },
+    "__schema26": {
+      "description": "Suggested refresh cadence as a cron pattern, applied on publish.",
+      "$ref": "#/$defs/__schema27"
+    },
+    "__schema27": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string"
+        },
+        "timezone": {
+          "type": "string"
+        }
+      },
+      "required": ["pattern"]
+    },
+    "__schema28": {
+      "description": "Script time limit in milliseconds; defaults to 30000.",
+      "$ref": "#/$defs/__schema29"
+    },
+    "__schema29": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 120000
+    },
+    "__schema30": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "__schema31": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 12
+    },
+    "__schema32": {
+      "type": "string",
+      "enum": ["narrow", "short"]
+    },
+    "__schema33": {
+      "type": "object",
+      "properties": {
+        "bind": {
+          "$ref": "#/$defs/__schema34"
+        },
+        "eq": {
+          "$ref": "#/$defs/__schema35"
+        },
+        "exists": {
+          "type": "boolean"
+        },
+        "gt": {
+          "type": "number"
+        },
+        "gte": {
+          "type": "number"
+        },
+        "in": {
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema35"
+          }
+        },
+        "lt": {
+          "type": "number"
+        },
+        "lte": {
+          "type": "number"
+        },
+        "ne": {
+          "$ref": "#/$defs/__schema35"
+        }
+      },
+      "required": ["bind"],
+      "additionalProperties": false
+    },
+    "__schema34": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[\\w$-]+(?:\\.[\\w$-]+)*$"
+    },
+    "__schema35": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 500
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema36": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema31"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema32"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema33"
+            },
+            "align": {
+              "type": "string",
+              "enum": ["start", "center", "end", "stretch", "baseline"]
+            },
+            "children": {
+              "maxItems": 200,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema36"
+              }
+            },
+            "direction": {
+              "type": "string",
+              "enum": ["row", "column"]
+            },
+            "gap": {
+              "$ref": "#/$defs/__schema37"
+            },
+            "justify": {
+              "$ref": "#/$defs/__schema38"
+            },
+            "padding": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 48
+            },
+            "type": {
+              "type": "string",
+              "const": "stack"
+            },
+            "wrap": {
+              "type": "boolean"
+            }
+          },
+          "required": ["children", "type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema31"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema32"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema33"
+            },
+            "children": {
+              "maxItems": 200,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema36"
+              }
+            },
+            "columns": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            "gap": {
+              "$ref": "#/$defs/__schema37"
+            },
+            "type": {
+              "type": "string",
+              "const": "grid"
+            }
+          },
+          "required": ["children", "columns", "type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema31"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema32"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema33"
+            },
+            "align": {
+              "type": "string",
+              "enum": ["start", "center", "end"]
+            },
+            "lines": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "size": {
+              "type": "string",
+              "enum": ["xs", "sm", "md", "lg", "xl", "2xl", "display"]
+            },
+            "tone": {
+              "type": "string",
+              "enum": ["default", "secondary", "tertiary", "success", "warning", "error"]
+            },
+            "type": {
+              "type": "string",
+              "const": "text"
+            },
+            "value": {
+              "$ref": "#/$defs/__schema39"
+            },
+            "weight": {
+              "type": "string",
+              "enum": ["regular", "medium", "semibold", "bold"]
+            }
+          },
+          "required": ["type", "value"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema31"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema32"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema33"
+            },
+            "color": {
+              "$ref": "#/$defs/__schema39"
+            },
+            "name": {
+              "$ref": "#/$defs/__schema39"
+            },
+            "size": {
+              "type": "number",
+              "minimum": 8,
+              "maximum": 160
+            },
+            "type": {
+              "type": "string",
+              "const": "icon"
+            }
+          },
+          "required": ["name", "type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema31"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema32"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema33"
+            },
+            "fit": {
+              "type": "string",
+              "enum": ["cover", "contain"]
+            },
+            "height": {
+              "type": "number",
+              "minimum": 8,
+              "maximum": 800
+            },
+            "radius": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 400
+            },
+            "src": {
+              "$ref": "#/$defs/__schema39"
+            },
+            "type": {
+              "type": "string",
+              "const": "image"
+            },
+            "width": {
+              "type": "number",
+              "minimum": 8,
+              "maximum": 1600
+            }
+          },
+          "required": ["src", "type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema31"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema32"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema33"
+            },
+            "color": {
+              "$ref": "#/$defs/__schema39"
+            },
+            "max": {
+              "$ref": "#/$defs/__schema39"
+            },
+            "min": {
+              "$ref": "#/$defs/__schema39"
+            },
+            "type": {
+              "type": "string",
+              "const": "progress"
+            },
+            "value": {
+              "$ref": "#/$defs/__schema39"
+            }
+          },
+          "required": ["type", "value"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema31"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema32"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema33"
+            },
+            "children": {
+              "maxItems": 200,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema36"
+              }
+            },
+            "color": {
+              "$ref": "#/$defs/__schema39"
+            },
+            "max": {
+              "$ref": "#/$defs/__schema39"
+            },
+            "size": {
+              "type": "number",
+              "minimum": 24,
+              "maximum": 400
+            },
+            "type": {
+              "type": "string",
+              "const": "ring"
+            },
+            "value": {
+              "$ref": "#/$defs/__schema39"
+            }
+          },
+          "required": ["type", "value"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema31"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema32"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema33"
+            },
+            "color": {
+              "$ref": "#/$defs/__schema39"
+            },
+            "columns": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 60
+            },
+            "total": {
+              "$ref": "#/$defs/__schema39"
+            },
+            "type": {
+              "type": "string",
+              "const": "dots"
+            },
+            "value": {
+              "$ref": "#/$defs/__schema39"
+            }
+          },
+          "required": ["total", "type", "value"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema31"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema32"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema33"
+            },
+            "color": {
+              "$ref": "#/$defs/__schema39"
+            },
+            "height": {
+              "type": "number",
+              "minimum": 8,
+              "maximum": 400
+            },
+            "key": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "kind": {
+              "type": "string",
+              "enum": ["line", "area", "bar"]
+            },
+            "type": {
+              "type": "string",
+              "const": "sparkline"
+            },
+            "values": {
+              "$ref": "#/$defs/__schema34"
+            }
+          },
+          "required": ["type", "values"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema31"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema32"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema33"
+            },
+            "color": {
+              "$ref": "#/$defs/__schema39"
+            },
+            "type": {
+              "type": "string",
+              "const": "badge"
+            },
+            "value": {
+              "$ref": "#/$defs/__schema39"
+            }
+          },
+          "required": ["type", "value"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema31"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema32"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema33"
+            },
+            "type": {
+              "type": "string",
+              "const": "divider"
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema31"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema32"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema33"
+            },
+            "type": {
+              "type": "string",
+              "const": "spacer"
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema31"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema32"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema33"
+            },
+            "direction": {
+              "type": "string",
+              "enum": ["row", "column"]
+            },
+            "gap": {
+              "$ref": "#/$defs/__schema37"
+            },
+            "items": {
+              "$ref": "#/$defs/__schema34"
+            },
+            "justify": {
+              "$ref": "#/$defs/__schema38"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 48
+            },
+            "template": {
+              "$ref": "#/$defs/__schema36"
+            },
+            "type": {
+              "type": "string",
+              "const": "repeat"
+            }
+          },
+          "required": ["items", "template", "type"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "__schema37": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 48
+    },
+    "__schema38": {
+      "type": "string",
+      "enum": ["start", "center", "end", "between", "around"]
+    },
+    "__schema39": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/__schema35"
+        },
+        {
+          "$ref": "#/$defs/__schema40"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "template": {
+              "type": "string",
+              "maxLength": 500
+            }
+          },
+          "required": ["template"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "__schema40": {
+      "type": "object",
+      "properties": {
+        "bind": {
+          "$ref": "#/$defs/__schema34"
+        },
+        "digits": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6
+        },
+        "fallback": {
+          "$ref": "#/$defs/__schema35"
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "number",
+            "compact",
+            "percent",
+            "date",
+            "time",
+            "datetime",
+            "weekday",
+            "relative"
+          ]
+        },
+        "map": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema35"
+          }
+        },
+        "pattern": {
+          "type": "string",
+          "maxLength": 50
+        }
+      },
+      "required": ["bind"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A widget's authored content: script, runtime, output contract, manifest and view.",
+  "properties": {
+    "manifest": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "description": {
+              "$ref": "#/$defs/__schema0"
+            },
+            "env": {
+              "$ref": "#/$defs/__schema1"
+            },
+            "metric": {
+              "$ref": "#/$defs/__schema8"
+            },
+            "network": {
+              "$ref": "#/$defs/__schema10"
+            },
+            "params": {
+              "$ref": "#/$defs/__schema13"
+            },
+            "schedule": {
+              "$ref": "#/$defs/__schema26"
+            },
+            "timeoutMs": {
+              "$ref": "#/$defs/__schema28"
+            },
+            "title": {
+              "$ref": "#/$defs/__schema30"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "outputType": {
+      "type": "string",
+      "enum": ["stat", "list", "series", "table", "data"],
+      "description": "The output document type stdout must match."
+    },
+    "runtime": {
+      "type": "string",
+      "enum": ["node", "python", "bash"],
+      "description": "Interpreter the sandbox runs the script with."
+    },
+    "script": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 262144,
+      "description": "Source that prints one JSON output document to stdout."
+    },
+    "view": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "chart": {
+              "type": "string",
+              "enum": ["line", "bar", "area"]
+            },
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "html": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 204800
+            },
+            "layout": {
+              "$ref": "#/$defs/__schema36"
+            },
+            "limit": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 500
+            },
+            "size": {
+              "type": "string",
+              "enum": ["sm", "md", "lg"]
+            },
+            "surface": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "default",
+                    "sky",
+                    "cloudy",
+                    "rain",
+                    "storm",
+                    "snow",
+                    "night",
+                    "sunset",
+                    "forest",
+                    "ocean",
+                    "sand",
+                    "rose",
+                    "slate"
+                  ]
+                },
+                {
+                  "$ref": "#/$defs/__schema40"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["outputType", "runtime", "script"],
+  "title": "LobeHub widget content",
+  "type": "object"
+}
