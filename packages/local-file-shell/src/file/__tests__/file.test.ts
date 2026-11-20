@@ -274,6 +274,25 @@ describe('file operations', () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain('Content cannot be empty');
     });
+
+    // A path pinned under another OS account (e.g. C:\Users\<previous user>)
+    // must fail naming the account this device now runs as, so an account
+    // switch mid-session is visible instead of looking like a broken path.
+    it('names the host and OS account when the target path is unreachable', async () => {
+      const blocker = path.join(tmpDir, 'not-a-dir');
+      await writeFile(blocker, '');
+
+      const result = await writeLocalFile({
+        content: 'data',
+        path: path.join(blocker, 'nested', 'f.txt'),
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Failed to write file:');
+      expect(result.error).toContain(
+        `This device is running on ${os.hostname()} (OS user ${os.userInfo().username}).`,
+      );
+    });
   });
 
   // ─── editLocalFile ───
