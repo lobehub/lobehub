@@ -1,6 +1,6 @@
 import type { TaskTemplateConnectorReference } from '@lobechat/const';
-import { Button, Flexbox, Icon, toast, Tooltip } from '@lobehub/ui';
-import { ArrowUpRight } from 'lucide-react';
+import { Alert, Button, Flexbox, Icon, toast, Tooltip } from '@lobehub/ui';
+import { ArrowUpRight, LockKeyhole } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,7 +20,7 @@ interface GithubImportRecoveryProps {
 }
 
 export const GithubImportRecovery = ({ recovery, onConnected }: GithubImportRecoveryProps) => {
-  const { t } = useTranslation(['setting', 'common']);
+  const { t } = useTranslation(['setting', 'common', 'error']);
   const create = usePermission('create_content');
   const edit = usePermission('edit_own_content');
   const { connect, isConnecting, isAllConnected } = useConnectorConnection(github);
@@ -32,20 +32,6 @@ export const GithubImportRecovery = ({ recovery, onConnected }: GithubImportReco
       onConnected();
     }
   }, [isAllConnected, onConnected]);
-
-  if (recovery === 'access' || isAllConnected)
-    return (
-      <WorkspaceLink
-        rel="noopener noreferrer"
-        target="_blank"
-        to="/settings/connector?open=lobehub-connector%3Agithub"
-      >
-        <Flexbox horizontal align="center" as="span" gap={4}>
-          {t('agentSkillModal.github.connectionSettings')}
-          <Icon icon={ArrowUpRight} size={14} />
-        </Flexbox>
-      </WorkspaceLink>
-    );
 
   const authorize = async () => {
     startedHere.current = true;
@@ -64,16 +50,36 @@ export const GithubImportRecovery = ({ recovery, onConnected }: GithubImportReco
     }
   };
 
+  const showSettings = recovery === 'access' || isAllConnected;
   return (
-    <Tooltip title={create.reason ?? edit.reason}>
-      <Button
-        disabled={!create.allowed || !edit.allowed}
-        loading={isConnecting}
-        size="small"
-        onClick={authorize}
-      >
-        {t('environments.github.connect')}
-      </Button>
-    </Tooltip>
+    <Alert
+      icon={LockKeyhole}
+      title={t(showSettings ? 'error:import.github.access' : 'error:import.github.connect')}
+      type="warning"
+      action={
+        showSettings ? (
+          <WorkspaceLink
+            rel="noopener noreferrer"
+            target="_blank"
+            to="/settings/connector?open=lobehub-connector%3Agithub"
+          >
+            <Flexbox horizontal align="center" as="span" gap={4}>
+              {t('agentSkillModal.github.connectionSettings')}
+              <Icon icon={ArrowUpRight} size={14} />
+            </Flexbox>
+          </WorkspaceLink>
+        ) : (
+          <Tooltip title={create.reason ?? edit.reason}>
+            <Button
+              disabled={!create.allowed || !edit.allowed}
+              loading={isConnecting}
+              onClick={authorize}
+            >
+              {t('environments.github.connect')}
+            </Button>
+          </Tooltip>
+        )
+      }
+    />
   );
 };

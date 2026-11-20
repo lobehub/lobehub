@@ -33,7 +33,7 @@ const styles = stylex.create({
 });
 
 export const GithubImport = ({ state }: { state: ReturnType<typeof useGithubSkillImport> }) => {
-  const { t } = useTranslation(['setting', 'common', 'error']);
+  const { t } = useTranslation(['setting', 'common']);
   const { close } = useModalContext();
   const {
     canCreate,
@@ -61,50 +61,47 @@ export const GithubImport = ({ state }: { state: ReturnType<typeof useGithubSkil
   const failureCount = results.filter((item) =>
     ['failed', 'conflict', 'forbidden'].includes(item.status),
   ).length;
-  const error = failure && (
-    <AsyncError
-      align="start"
-      details={failure.details}
-      retrying={loading}
-      variant="inline"
-      action={
-        failure.recovery ? (
-          <GithubImportRecovery
-            recovery={failure.recovery}
-            onConnected={state.resumeAfterConnect}
-          />
-        ) : scan && failure.stage !== 'refresh' ? (
-          <Button disabled={loading || !canCreate} size="small" type="text" onClick={discover}>
-            {t('agentSkillModal.github.rescan')}
-          </Button>
-        ) : undefined
-      }
-      title={
-        failure.recovery
-          ? t(`error:import.github.${failure.recovery}`)
-          : t(
-              failure.stage === 'import'
-                ? 'agentSkillModal.github.batchFailed'
-                : `agentSkillModal.github.${failure.stage}Failed`,
-            )
-      }
-      onRetry={failure.stage === 'refresh' ? refreshLibrary : undefined}
-    />
+  const error = failure?.recovery ? (
+    <GithubImportRecovery recovery={failure.recovery} onConnected={state.resumeAfterConnect} />
+  ) : (
+    failure && (
+      <AsyncError
+        align="start"
+        details={failure.details}
+        retrying={loading}
+        variant="inline"
+        action={
+          scan && failure.stage !== 'refresh' ? (
+            <Button disabled={loading || !canCreate} size="small" type="text" onClick={discover}>
+              {t('agentSkillModal.github.rescan')}
+            </Button>
+          ) : undefined
+        }
+        title={t(
+          failure.stage === 'import'
+            ? 'agentSkillModal.github.batchFailed'
+            : `agentSkillModal.github.${failure.stage}Failed`,
+        )}
+        onRetry={failure.stage === 'refresh' ? refreshLibrary : undefined}
+      />
+    )
   );
 
   if (!scan)
     return (
       <Flexbox gap={20}>
-        <Input
-          aria-label={t('agentSkillModal.github.label')}
-          disabled={loading || !canCreate}
-          placeholder={t('agentSkillModal.github.example')}
-          prefix={<Icon icon={GithubIcon} />}
-          value={url}
-          onChange={(event) => setUrl(event.target.value)}
-          onPressEnter={discover}
-        />
-        {error}
+        <Flexbox gap={8}>
+          <Input
+            aria-label={t('agentSkillModal.github.label')}
+            disabled={loading || !canCreate}
+            placeholder={t('agentSkillModal.github.example')}
+            prefix={<Icon icon={GithubIcon} />}
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            onPressEnter={discover}
+          />
+          {error}
+        </Flexbox>
         <Flexbox horizontal justify="flex-end">
           <Button
             disabled={!canCreate || !url.trim()}
