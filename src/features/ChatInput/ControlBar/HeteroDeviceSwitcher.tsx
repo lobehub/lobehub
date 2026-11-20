@@ -8,7 +8,6 @@ import { Button, Flexbox, Icon, Popover, Tag, toast, Tooltip } from '@lobehub/ui
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
-  BoxesIcon,
   ChevronDownIcon,
   ExternalLinkIcon,
   HardDriveIcon,
@@ -765,7 +764,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       <GroupSubmenu
         active={!!activeSandboxLabel}
         hint={activeSandboxLabel}
-        icon={<Icon icon={BoxesIcon} size={14} />}
+        icon={<ExecutionTargetIcon target={'sandbox'} />}
         label={t('heteroAgent.executionTarget.sandboxGroup')}
         testId={'sandbox-group'}
       >
