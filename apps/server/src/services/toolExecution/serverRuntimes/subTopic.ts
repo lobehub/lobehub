@@ -266,8 +266,11 @@ export const subTopicRuntime: ServerRuntimeRegistration = {
             queued = (await queue.append({ request } as any)) as typeof queued;
           } catch (error) {
             if ((error as { code?: string })?.code !== 'SERVICE_UNAVAILABLE') throw error;
+            // The queue cannot say whether the message was stored (a write
+            // whose answer was lost, or no queue at all): a blind resend could
+            // run it twice, so the agent checks before sending again.
             throw new Error(
-              `Topic ${topic.id} is running a turn and the message could not be queued behind it; try again after that turn ends.`,
+              `Topic ${topic.id} is running a turn and the queue could not confirm whether this message was stored behind it. Do not resend it blindly: once that turn ends, check the sub-topic with readTopic and send again only if the message is not there.`,
               { cause: error },
             );
           }

@@ -307,6 +307,9 @@ describe('lobe-topic server runtime — scoping and delivery', () => {
 
     expect(result.success).toBe(false);
     expect(result.content).toContain('running a turn');
+    // The outcome is unknown, not a failure: no unconditional "try again".
+    expect(result.content).toMatch(/could not confirm/);
+    expect(result.content).toMatch(/Do not resend it blindly/);
     expect(mocks.startComposerRun).not.toHaveBeenCalled();
   });
 });
