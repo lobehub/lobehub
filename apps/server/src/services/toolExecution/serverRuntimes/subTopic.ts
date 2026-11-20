@@ -23,7 +23,7 @@ import {
 import { readTopicTranscript } from '@/server/routers/lambda/topic/transcript';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { startComposerRun } from '@/server/services/aiAgent/composerRun';
-import { resolveDeviceAccessPolicy } from '@/server/services/aiAgent/deviceAccessPolicy';
+import { runDeniesDevices } from '@/server/services/aiAgent/deviceAccessPolicy';
 import { resolveForegroundInterventionConfig } from '@/server/services/aiAgent/foregroundIntervention';
 import { findOwnLiveRuns } from '@/server/services/aiAgent/steerQueue/liveRuns';
 import { readSubTopicsEnabled } from '@/server/services/subTopic/labGate';
@@ -65,11 +65,7 @@ export const subTopicRuntime: ServerRuntimeRegistration = {
       // The run's own device decision covers every source of a denial (an
       // IM sender, a share visitor, a device-denied run that started this one
       // through `lh`); the sender check backs it up for a run without one.
-      if (
-        context.deviceAccess?.canUseDevice === false ||
-        (context.botContext &&
-          !resolveDeviceAccessPolicy({ botContext: context.botContext }).canUseDevice)
-      ) {
+      if (runDeniesDevices(context)) {
         throw new Error(
           'Sub-topics can only be started or continued by the bot owner or a trusted sender in this chat.',
         );
