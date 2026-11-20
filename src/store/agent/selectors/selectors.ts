@@ -1,9 +1,9 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import {
   DEFAULT_AGENT_CONFIG,
-  DEFAULT_AVATAR,
   DEFAULT_BACKGROUND_COLOR,
   DEFAULT_INBOX_AVATAR,
+  DEFAULT_INBOX_TITLE,
   DEFAULT_MODEL,
   DEFAUTT_AGENT_TTS_CONFIG,
   isDesktop,
@@ -12,17 +12,15 @@ import {
   agentDisplayName,
   type AgentMode,
   type AgentProfile,
+  getActivePluginIds,
+  getDisabledPluginIds,
+  getWorkingDirEffectivePath,
   type KnowledgeItem,
+  KnowledgeType,
   type LobeAgentConfig,
   type LobeAgentTTSConfig,
   type MetaData,
   type RuntimeEnvConfig,
-} from '@lobechat/types';
-import {
-  getActivePluginIds,
-  getDisabledPluginIds,
-  getWorkingDirEffectivePath,
-  KnowledgeType,
 } from '@lobechat/types';
 
 import { DEFAULT_OPENING_QUESTIONS } from '@/features/AgentSetting/store/selectors';
@@ -50,7 +48,7 @@ const currentAgentDisplayName = (s: AgentStoreState) => agentDisplayName(current
 const getDefaultAvatarByAgentId = (s: AgentStoreState, agentId?: string) => {
   const inboxAgentId = builtinAgentSelectors.inboxAgentId(s);
 
-  return agentId && inboxAgentId === agentId ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR;
+  return agentId && inboxAgentId === agentId ? DEFAULT_INBOX_AVATAR : undefined;
 };
 
 const currentAgentAvatar = (s: AgentStoreState) =>
@@ -68,6 +66,10 @@ const currentAgentAuthorId = (s: AgentStoreState) => currentAgentData(s)?.userId
 const currentAgentCreatedAt = (s: AgentStoreState) => currentAgentData(s)?.createdAt;
 
 const currentAgentVisibility = (s: AgentStoreState) => currentAgentData(s)?.visibility;
+
+/** An agent's visibility by id — for a conversation whose agent is not the active one. */
+const getAgentVisibilityById = (agentId: string) => (s: AgentStoreState) =>
+  s.agentMap[agentId]?.visibility;
 
 /**
  * Get complete meta data for the current agent
@@ -106,6 +108,20 @@ const getAgentMetaById =
       title: data.title || undefined,
     };
   };
+
+/**
+ * The inbox agent's label: the name the user gave it, else its title, else `DEFAULT_INBOX_TITLE`.
+ * Use it wherever the inbox is named, rather than the brand constant.
+ */
+const inboxAgentDisplayName = (s: AgentStoreState) =>
+  agentDisplayName(
+    getAgentMetaById(builtinAgentSelectors.inboxAgentId(s) ?? '')(s),
+    DEFAULT_INBOX_TITLE,
+  );
+
+/** The inbox agent's avatar, else `DEFAULT_INBOX_AVATAR`. */
+const inboxAgentAvatar = (s: AgentStoreState) =>
+  getAgentMetaById(builtinAgentSelectors.inboxAgentId(s) ?? '')(s).avatar || DEFAULT_INBOX_AVATAR;
 
 /**
  * Full-body artwork of the agent's character, or `undefined` when it has none.
@@ -374,7 +390,19 @@ const currentAgentExecutionTarget = (s: AgentStoreState) =>
 const getAgentDocumentsById = (agentId: string) => (s: AgentStoreState) =>
   s.agentDocumentsMap[agentId];
 
+/** The agent a user-chosen slug names, as known locally (persisted copy first). */
+const getAgentIdBySlug = (slug?: string | null) => (s: AgentStoreState) =>
+  slug ? s.agentSlugIdMap[slug] : undefined;
+
+/** The server confirmed the slug's agent in this session (not only the persisted copy). */
+const isAgentSlugConfirmed = (slug?: string | null) => (s: AgentStoreState) =>
+  !!slug && !!s.agentSlugIdMap[slug] && s.agentSlugIdReplica.entries[slug]?.source === 'server';
+
+const heteroServerDefaultCapability = (s: AgentStoreState) => s.heteroServerDefaultCapability;
+
 export const agentSelectors = {
+  inboxAgentAvatar,
+  inboxAgentDisplayName,
   currentAgentExecutionTarget,
   currentAgentHeterogeneousProviderType,
   currentAgentAuthorId,
@@ -400,12 +428,16 @@ export const agentSelectors = {
   currentAgentDisplayName,
   currentAgentTitle,
   currentAgentVisibility,
+  getAgentVisibilityById,
   currentAgentWorkingDirectory,
   currentEnabledKnowledge,
   currentKnowledgeIds,
   displayableAgentPlugins,
   getAgentConfigById,
   getAgentDocumentsById,
+  getAgentIdBySlug,
+  heteroServerDefaultCapability,
+  isAgentSlugConfirmed,
   getAgentFullBodyArtworkById,
   getAgentMetaById,
   getAgentProfileById,

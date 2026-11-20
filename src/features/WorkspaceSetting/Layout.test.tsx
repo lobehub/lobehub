@@ -33,6 +33,7 @@ vi.mock('./hooks/useCategory', () => ({
         { key: 'credential', label: 'Credentials' },
         { key: 'statistics', label: 'Statistics' },
         { key: 'storage', label: 'Storage' },
+        { key: 'trash', label: 'Trash' },
         { key: 'usage', label: 'Usage' },
         { key: 'audit-log', label: 'Audit Log' },
         { key: 'profile', label: 'Jane Doe' },
@@ -72,6 +73,7 @@ describe('WorkspaceSettingsContentLayout', () => {
     ['credential', 'Credentials'],
     ['statistics', 'Statistics'],
     ['storage', 'Storage'],
+    ['trash', 'Trash'],
     ['usage', 'Usage'],
     ['appearance', 'Appearance'],
     ['hotkey', 'Hotkeys'],
@@ -90,9 +92,10 @@ describe('WorkspaceSettingsContentLayout', () => {
     expect(html).toContain('<div>Page content</div></main>');
   });
 
-  it('spans the full pane on the devices tab and keeps the 1024 column elsewhere', () => {
-    expect(renderLayout('devices')).toContain('<main data-max-width="100%">');
+  it('keeps the devices tab in the shared 1024 column and spans only the account list', () => {
+    expect(renderLayout('devices')).toContain('<main data-max-width="1024">');
     expect(renderLayout('members')).toContain('<main data-max-width="1024">');
+    expect(renderLayout('subscription-accounts')).toContain('<main data-max-width="100%">');
   });
 
   it.each(['audit-log', 'advanced'])('keeps the %s tab on the content-only layout', (tab) => {

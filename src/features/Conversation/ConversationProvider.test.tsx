@@ -120,11 +120,15 @@ vi.mock('@/store/chat/selectors', () => ({
   operationSelectors: {
     isAgentRuntimeRunningByContext: () => () => chatListMocks.isStreaming,
   },
+  topicSelectors: { getTopicById: () => () => undefined },
 }));
 
+// Selectors run against the mocked state, so `enableMcpApps` reads false (flag off)
 vi.mock('@/store/serverConfig', () => ({
-  featureFlagsSelectors: vi.fn(),
-  useServerConfigStore: () => ({}),
+  featureFlagsSelectors: vi.fn(() => ({})),
+  serverConfigSelectors: { enableMcpApps: () => false },
+  getServerConfigStoreState: () => undefined,
+  useServerConfigStore: (selector?: (state: object) => unknown) => (selector ? selector({}) : {}),
 }));
 
 vi.mock('@/store/user', () => ({ useUserStore: () => false }));

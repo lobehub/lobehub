@@ -8,15 +8,25 @@ const messengerServiceMocks = vi.hoisted(() => ({
   pollLinqLink: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  QRCode: ({ value }: { value: string }) => <span data-value={value} role="img" />,
-}));
-
-vi.mock('antd-style', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  createStaticStyles: () => ({ code: 'code', qrSlot: 'qrSlot', setup: 'setup', tips: 'tips' }),
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      QRCode: ({ value }: { value: string }) => <span data-value={value} role="img" />,
+    }),
+    async (importOriginal) => ({
+      ...((await importOriginal()) as Record<string, unknown>),
+      createStaticStyles: () => ({ code: 'code', qrSlot: 'qrSlot', setup: 'setup', tips: 'tips' }),
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

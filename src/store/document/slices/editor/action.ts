@@ -2,7 +2,7 @@
 
 import type { IEditor } from '@lobehub/editor';
 import type { EditorState as LobehubEditorState } from '@lobehub/editor/react';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 
@@ -13,8 +13,17 @@ import type { StoreSetter } from '@/store/types';
 import { composeSkillMarkdown, parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 import { setNamespace } from '@/utils/storeDebug';
 
+import { PAGE_SYNC_WAIT_MS, waitForPageSynced } from '../../collabRegistry';
 import type { DocumentStore } from '../../store';
 import { documentDetailResource } from '../document/projection';
+import {
+  type DocumentCharLimitRefusal,
+  getCharLimitRefusal,
+  notifyCharLimitRefused,
+} from './charLimit';
+import type { DocumentFormatFields } from './contentFormat';
+import { hasDocumentFormatFields, resolveDocumentContentFormat } from './contentFormat';
+import type { EditorContentState } from './initialState';
 import type { DocumentDispatch } from './reducer';
 import { documentReducer } from './reducer';
 
@@ -29,17 +38,32 @@ export interface SaveMetadata {
 }
 
 export interface SaveExecutionOptions {
+  /** Persist title/emoji without reading, writing or acknowledging the editor body. */
+  metadataOnly?: boolean;
   restoreFromHistoryId?: string;
   saveSource?: 'autosave' | 'manual' | 'restore' | 'system' | 'llm_call';
 }
 
-export interface RemoteDocumentRow {
+export interface RemoteDocumentRow extends DocumentFormatFields {
   content?: string | null;
   editorData?: unknown;
   updatedAt: Date | string;
 }
 
 export type ReconcileResult = 'unchanged' | 'rebased' | 'adopted';
+
+/**
+ * How a save may recover from a version CONFLICT once the store has reconciled
+ * the latest row: `body` replays a content save over an unchanged body base;
+ * `metadata` replays a title / emoji-only save when nobody else touched the
+ * meta it was built from (`base`, the cached row; without one it never replays).
+ */
+type ConflictRetry =
+  | { kind: 'body' }
+  | {
+      base?: { metadata?: unknown; title?: string | null };
+      kind: 'metadata';
+    };
 
 type Setter = StoreSetter<DocumentStore>;
 export const createEditorSlice = (set: Setter, get: () => DocumentStore, _api?: unknown) =>
@@ -49,6 +73,8 @@ export class EditorActionImpl {
   readonly #get: () => DocumentStore;
   readonly #set: Setter;
   readonly #inflightSaves = new Map<string, Promise<void>>();
+  /** Document whose body each editor instance was last loaded with. */
+  readonly #editorDocumentIds = new WeakMap<IEditor, string>();
 
   constructor(set: Setter, get: () => DocumentStore, _api?: unknown) {
     void _api;
@@ -87,18 +113,54 @@ export class EditorActionImpl {
     const id = documentId || activeDocumentId;
 
     if (!editor || !id || id !== activeDocumentId) return false;
+    // A document switch moves `activeDocumentId` before the editor in the store
+    // holds the new body (each canvas mount creates its own editor, and the store
+    // keeps the previous one until it updates). Reading it now would write the
+    // previous document's body into this one.
+    const loadedDocumentId = this.#editorDocumentIds.get(editor);
+    if (loadedDocumentId !== undefined && loadedDocumentId !== id) return false;
 
     const doc = documents[id];
-    if (!doc) return false;
+    if (!doc || doc.contentFormat === 'html') return false;
 
     try {
       const editorMarkdown = (editor.getDocument('markdown') as unknown as string) || '';
       const markdown = this.getPersistedMarkdown(id, editorMarkdown);
       const editorData = editor.getDocument('json');
 
+      if (doc.collab) {
+        // The room persists the body on its own and reports only refusals, so
+        // a page shortened back within the refused limit is saved again.
+        const backWithinLimit = !!doc.charLimitError && markdown.length <= doc.charLimitError.limit;
+        internal_dispatchDocument(
+          {
+            id,
+            type: 'updateDocument',
+            value: {
+              content: markdown,
+              editorData,
+              isDirty: false,
+              lastSavedContent: markdown,
+              lastSavedEditorData: editorData,
+              ...(backWithinLimit
+                ? { charLimitError: undefined, saveStatus: 'idle' as const }
+                : {}),
+            },
+          },
+          'handleContentChange/collab',
+        );
+        return false;
+      }
+
       const markdownChanged = markdown !== doc.lastSavedContent;
       const editorDataChanged = !isEqual(editorData, doc.lastSavedEditorData);
-      const contentChanged = markdownChanged || editorDataChanged;
+      // The editor state determines its markdown, so an unchanged tree under the
+      // same frontmatter is the loaded body without comparing markdown text.
+      const isLoadedBody =
+        !!doc.loadedBody &&
+        doc.loadedBody.skillFrontmatter === doc.skillFrontmatter &&
+        isEqual(editorData, doc.loadedBody.editorData);
+      const contentChanged = !isLoadedBody && (markdownChanged || editorDataChanged);
 
       internal_dispatchDocument(
         {
@@ -187,6 +249,141 @@ export class EditorActionImpl {
     );
   };
 
+  setDocumentCollab = (documentId: string, collab: boolean): void => {
+    const { documents, internal_dispatchDocument } = this.#get();
+    if (!documents[documentId] || documents[documentId].collab === collab) return;
+
+    if (collab) this.#get().cancelDebouncedSave(documentId);
+    internal_dispatchDocument(
+      { id: documentId, type: 'updateDocument', value: { collab, isDirty: false } },
+      n('setDocumentCollab'),
+    );
+  };
+
+  /**
+   * An agent command starts editing the stored page: save what the user typed
+   * so the agent reads it, and hold the page read-only until the command ends.
+   */
+  beginAgentEdit = (documentId: string): void => {
+    const doc = this.#get().documents[documentId];
+    if (!doc) return;
+
+    this.#get().internal_dispatchDocument(
+      {
+        id: documentId,
+        type: 'updateDocument',
+        value: { agentEditing: (doc.agentEditing ?? 0) + 1 },
+      },
+      n('beginAgentEdit'),
+    );
+    if (doc.isDirty) void this.#get().performSave(documentId);
+  };
+
+  /** One agent command ended; `all` releases the page when the whole run is over. */
+  endAgentEdit = (documentId: string, options?: { all?: boolean }): void => {
+    const doc = this.#get().documents[documentId];
+    if (!doc?.agentEditing) return;
+
+    this.#get().internal_dispatchDocument(
+      {
+        id: documentId,
+        type: 'updateDocument',
+        value: { agentEditing: options?.all ? 0 : doc.agentEditing - 1 },
+      },
+      n('endAgentEdit'),
+    );
+  };
+
+  /**
+   * Saves the page as a version the user asked for (the save hotkey, accepting
+   * AI suggestions). A room page persists through its room, which
+   * `performSave` skips, so the server records the room's state once this
+   * client's pending updates reached it.
+   */
+  saveVersion = async (documentId: string): Promise<void> => {
+    if (!this.#get().documents[documentId]?.collab) {
+      return this.#get().performSave(documentId, undefined, { saveSource: 'manual' });
+    }
+
+    await waitForPageSynced(documentId, PAGE_SYNC_WAIT_MS);
+    try {
+      await documentService.snapshotPageVersion(documentId, 'manual');
+      // The version stored the room's page, which may still be over the limit when it did not grow.
+      this.#get().clearCharLimitRefusal(documentId);
+    } catch (error) {
+      const refusal = getCharLimitRefusal(
+        error,
+        (this.#get().documents[documentId]?.content ?? '').length,
+      );
+      if (!refusal) throw error;
+      this.#get().setCharLimitRefusal(documentId, refusal);
+      notifyCharLimitRefused(refusal);
+    }
+  };
+
+  /**
+   * The server stored a room page it had refused for its length. A page already
+   * over the limit is stored once it does not grow, so the client cannot tell
+   * this from the length alone.
+   */
+  clearCharLimitRefusal = (documentId: string): void => {
+    if (!this.#get().documents[documentId]?.charLimitError) return;
+    this.#get().internal_dispatchDocument(
+      {
+        id: documentId,
+        type: 'updateDocument',
+        value: { charLimitError: undefined, saveStatus: 'saved' },
+      },
+      n('clearCharLimitRefusal'),
+    );
+  };
+
+  /**
+   * Marks a room page as refused for the plan's per-page character limit: its
+   * room keeps the edits, but the stored page stays at its last accepted
+   * version until the page is shortened.
+   */
+  setCharLimitRefusal = (documentId: string, refusal: DocumentCharLimitRefusal): void => {
+    if (!this.#get().documents[documentId]) return;
+    this.#get().internal_dispatchDocument(
+      {
+        id: documentId,
+        type: 'updateDocument',
+        value: { charLimitError: refusal, saveStatus: 'failed' },
+      },
+      n('setCharLimitRefusal'),
+    );
+  };
+
+  /**
+   * Restores a history version into the page. A room page restores on the
+   * server, which merges it into the room for everyone; applying it here as
+   * well would insert it into the room a second time.
+   */
+  restoreVersion = async (
+    documentId: string,
+    version: { editorData: unknown; historyId: string },
+  ): Promise<void> => {
+    const { documents, editor, markDirty, performSave } = this.#get();
+
+    if (documents[documentId]?.collab) {
+      await documentService.updateDocument({
+        editorData: JSON.stringify(version.editorData),
+        id: documentId,
+        restoreFromHistoryId: version.historyId,
+        saveSource: 'restore',
+      });
+      return;
+    }
+
+    editor?.setDocument('json', JSON.stringify(version.editorData));
+    markDirty(documentId);
+    await performSave(documentId, undefined, {
+      restoreFromHistoryId: version.historyId,
+      saveSource: 'restore',
+    });
+  };
+
   markDirty = (documentId: string): void => {
     const { documents, internal_dispatchDocument } = this.#get();
     if (!documents[documentId]) return;
@@ -204,15 +401,41 @@ export class EditorActionImpl {
       return 'unchanged';
     }
 
+    // The live room owns the body; a projected row can lag behind it.
+    if (doc.collab) {
+      internal_dispatchDocument(
+        { id: documentId, type: 'updateDocument', value: { lastUpdatedTime: updatedAt } },
+        n('reconcileRemote/collab'),
+      );
+      return 'rebased';
+    }
+
     const content = row.content ?? '';
     const editorData = isValidEditorData(row.editorData) ? row.editorData : null;
     const sameBody =
       content === (doc.lastSavedContent ?? '') &&
       isEqual(editorData, doc.lastSavedEditorData ?? null);
+    // A remote write can change the type alone (`lh doc edit --file-type`): the
+    // HTML guards and the SKILL.md frontmatter split must follow the new type.
+    const contentFormat = hasDocumentFormatFields(row)
+      ? resolveDocumentContentFormat(row)
+      : doc.contentFormat;
+    const formatChanged = contentFormat !== doc.contentFormat;
+    const skillFrontmatter =
+      contentFormat === 'skillMarkdown'
+        ? parseSkillMarkdownFrontmatter(content).frontmatter
+        : undefined;
 
     if (sameBody) {
       internal_dispatchDocument(
-        { id: documentId, type: 'updateDocument', value: { lastUpdatedTime: updatedAt } },
+        {
+          id: documentId,
+          type: 'updateDocument',
+          value: {
+            lastUpdatedTime: updatedAt,
+            ...(formatChanged ? { contentFormat, skillFrontmatter } : {}),
+          },
+        },
         n('reconcileRemote/rebased'),
       );
       return 'rebased';
@@ -225,14 +448,16 @@ export class EditorActionImpl {
         type: 'updateDocument',
         value: {
           content,
+          contentFormat,
           editorData,
-          ...(doc.contentFormat === 'skillMarkdown'
-            ? { skillFrontmatter: parseSkillMarkdownFrontmatter(content).frontmatter }
-            : {}),
+          ...(contentFormat === 'skillMarkdown' || formatChanged ? { skillFrontmatter } : {}),
           isDirty: false,
           lastSavedContent: content,
           lastSavedEditorData: editorData,
           lastUpdatedTime: updatedAt,
+          // The editor reloads the adopted body and records it again.
+          loadedBody: undefined,
+          charLimitError: undefined,
           saveBlockedByLock: false,
           saveStatus: 'saved',
         },
@@ -242,19 +467,84 @@ export class EditorActionImpl {
     return 'adopted';
   };
 
-  onEditorInit = async (editor: IEditor): Promise<void> => {
-    const { activeDocumentId, documents } = this.#get();
-    if (!editor || !activeDocumentId) return;
+  /**
+   * Hydrate the document owned by this canvas. A child's initialization effect can
+   * run before the parent's activeDocumentId update, so the global selection is
+   * not a reliable identity for the body being mounted.
+   */
+  onEditorInit = async (editor: IEditor, documentId: string): Promise<void> => {
+    const { documents } = this.#get();
+    if (!editor) return;
 
-    const doc = documents[activeDocumentId];
+    const doc = documents[documentId];
 
-    if (!doc) return;
+    if (!doc || doc.contentFormat === 'html') return;
 
+    this.#loadDocumentIntoEditor(editor, doc);
+    this.#editorDocumentIds.set(editor, documentId);
+    if (!doc.isDirty) this.#adoptLoadedBody(editor, documentId);
+  };
+
+  /**
+   * Record the body the editor just loaded as unedited. Loading is not
+   * byte-stable: markdown is parsed into a fresh tree with new node ids, and the
+   * editor's own markdown need not match the stored text. A page an agent or
+   * the CLI wrote has no editorData at all, so without this the load itself
+   * reads as an edit — opening the page marks it dirty, autosaves it and holds
+   * navigation behind a "Saving…" toast although the user changed nothing.
+   *
+   * Only the tree is recorded. Its markdown export costs more than the load
+   * itself on a long, deeply nested page and would run inside the route switch;
+   * `content` keeps the stored markdown, which is this body.
+   *
+   * `lastSaved*` keeps the server's body: conflict reconciliation compares
+   * remote rows against it, and a normalized copy there would make a remote
+   * title-only change look like a body change and discard local edits.
+   */
+  #adoptLoadedBody = (editor: IEditor, documentId: string): void => {
+    try {
+      const editorData = editor.getDocument('json');
+      if (!isValidEditorData(editorData)) return;
+
+      // An unlocked load's own change event may have queued an autosave of this body.
+      this.#get().cancelDebouncedSave(documentId);
+      this.#get().internal_dispatchDocument(
+        {
+          id: documentId,
+          type: 'updateDocument',
+          value: {
+            editorData,
+            isDirty: false,
+            loadedBody: {
+              editorData,
+              skillFrontmatter: this.#get().documents[documentId]?.skillFrontmatter,
+            },
+          },
+        },
+        'adoptLoadedBody',
+      );
+    } catch (error) {
+      console.error('[DocumentStore] Failed to read the loaded body:', error);
+    }
+  };
+
+  #loadDocumentIntoEditor = (editor: IEditor, doc: EditorContentState): void => {
     // Check if editorData is valid and non-empty
+    const editorDataRoot = (doc.editorData as { root?: { children?: unknown[] } } | null)?.root;
+    // A childless root (empty-parse shell) throws Lexical error #38 on hydration;
+    // treat it as no editor data so the markdown/empty fallbacks below take over.
+    // Only the targeted Lexical shell shape (root node present with an empty
+    // children array) is rejected — legacy non-Lexical payloads without a root
+    // node (e.g. { type: 'doc', content: [] }) keep loading via setDocument('json').
+    const isEmptyParseShell =
+      !!editorDataRoot &&
+      Array.isArray(editorDataRoot.children) &&
+      editorDataRoot.children.length === 0;
     const hasValidEditorData =
       doc.editorData &&
       typeof doc.editorData === 'object' &&
-      Object.keys(doc.editorData).length > 0;
+      Object.keys(doc.editorData).length > 0 &&
+      !isEmptyParseShell;
 
     // SKILL.md frontmatter is metadata, not editable document body. Keep it out of the rich
     // Markdown editor because `---` fences are otherwise parsed as Markdown dividers/headings,
@@ -262,7 +552,7 @@ export class EditorActionImpl {
     if (doc.contentFormat === 'skillMarkdown') {
       if (hasValidEditorData) {
         try {
-          editor.setDocument('json', JSON.stringify(doc.editorData), { keepId: true });
+          editor.setDocument('json', doc.editorData, { keepId: true });
           return;
         } catch {
           console.warn(
@@ -284,7 +574,7 @@ export class EditorActionImpl {
     // Set content from document state
     if (hasValidEditorData) {
       try {
-        editor.setDocument('json', JSON.stringify(doc.editorData), { keepId: true });
+        editor.setDocument('json', doc.editorData, { keepId: true });
         return;
       } catch {
         // Fallback to markdown if JSON fails
@@ -316,7 +606,7 @@ export class EditorActionImpl {
     const id = documentId || this.#get().activeDocumentId;
     if (!id) return;
 
-    this.syncEditorContent(id, { triggerAutoSave: false });
+    if (!options?.metadataOnly) this.syncEditorContent(id, { triggerAutoSave: false });
     const previous = this.#inflightSaves.get(id) ?? Promise.resolve();
     const run = previous.catch(() => {}).then(() => this.#runSave(id, metadata, options));
     this.#inflightSaves.set(id, run);
@@ -339,7 +629,21 @@ export class EditorActionImpl {
     const doc = documents[id];
     if (!doc) return;
 
-    const hasMetadataChanges = metadata?.emoji !== undefined || metadata?.title !== undefined;
+    const hasEmojiChange = metadata !== undefined && 'emoji' in metadata;
+    const hasMetadataChanges = hasEmojiChange || metadata?.title !== undefined;
+    const savedMetadata = hasEmojiChange
+      ? Object.fromEntries(
+          Object.entries({
+            ...this.#get().documentDetailMap[id]?.document?.metadata,
+            emoji: metadata?.emoji,
+          }).filter(([, value]) => value !== undefined),
+        )
+      : undefined;
+    // An HTML page's body is never edited here, and a room page's body persists
+    // through its room: only their title / emoji save.
+    const metadataOnly =
+      options?.metadataOnly === true || doc.contentFormat === 'html' || !!doc.collab;
+    if (metadataOnly && !hasMetadataChanges) return;
 
     // Skip save if neither document content nor metadata changed
     if (!doc.isDirty && !hasMetadataChanges) return;
@@ -351,7 +655,7 @@ export class EditorActionImpl {
       const currentContent = doc.content ?? '';
       const currentEditorData = doc.editorData;
 
-      if (!isValidEditorData(currentEditorData)) {
+      if (!metadataOnly && !isValidEditorData(currentEditorData)) {
         console.warn('[DocumentStore] Refusing to save invalid editorData:', currentEditorData);
         internal_dispatchDocument({ id, type: 'updateDocument', value: { saveStatus: 'idle' } });
         return;
@@ -362,23 +666,39 @@ export class EditorActionImpl {
       // in DiffAllToolbar, which mutates editor state before calling performSave.
       const requestSave = (expectedUpdatedAt?: Date) =>
         documentService.updateDocument({
-          content: currentContent,
-          editorData: JSON.stringify(currentEditorData),
+          ...(!metadataOnly
+            ? { content: currentContent, editorData: JSON.stringify(currentEditorData) }
+            : {}),
           ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}),
           id,
           lockOwnerId: doc.lockOwnerId,
-          metadata: metadata?.emoji ? { emoji: metadata.emoji } : undefined,
+          metadata: savedMetadata,
           restoreFromHistoryId: options?.restoreFromHistoryId,
           saveSource: options?.saveSource,
           title: metadata?.title,
         });
 
+      // A title / emoji-only save sends no body, so a version moved by a body
+      // write (another session, or this page's own room projection) cannot be
+      // clobbered by replaying it — only a concurrent meta change could.
+      const cachedMeta = this.#get().documentDetailMap[id]?.document;
+      let conflictRetry: ConflictRetry | undefined;
+      if (!options?.restoreFromHistoryId) {
+        if (!hasMetadataChanges) conflictRetry = { kind: 'body' };
+        else if (metadataOnly)
+          conflictRetry = {
+            base: cachedMeta
+              ? { metadata: cachedMeta.metadata, title: cachedMeta.title }
+              : undefined,
+            kind: 'metadata',
+          };
+      }
+
       let result: Awaited<ReturnType<typeof requestSave>>;
       try {
         result = await requestSave(doc.lastUpdatedTime ?? undefined);
       } catch (error) {
-        const canRetry = !hasMetadataChanges && !options?.restoreFromHistoryId;
-        result = await this.retrySaveAfterReconcile(id, doc, error, requestSave, canRetry);
+        result = await this.retrySaveAfterReconcile(id, doc, error, requestSave, conflictRetry);
       }
 
       // Old servers omit updatedAt. Keep the known token; conflict reconciliation
@@ -394,13 +714,24 @@ export class EditorActionImpl {
         id,
         type: 'updateDocument',
         value: {
-          isDirty:
-            current?.content !== currentContent || !isEqual(current?.editorData, currentEditorData),
-          lastSavedContent: currentContent,
-          lastSavedEditorData: structuredClone(currentEditorData),
+          // A metadata response cannot acknowledge body edits that it never sent.
+          ...(!metadataOnly
+            ? {
+                isDirty:
+                  current?.content !== currentContent ||
+                  !isEqual(current?.editorData, currentEditorData),
+                lastSavedContent: currentContent,
+                lastSavedEditorData: structuredClone(currentEditorData),
+                // The saved body is now the editor's own serialization.
+                loadedBody: undefined,
+                // Only a saved body clears a body refused for its length.
+                charLimitError: undefined,
+              }
+            : {}),
           ...(savedAt ? { lastUpdatedTime: savedAt } : {}),
           saveBlockedByLock: false,
-          saveStatus: 'saved',
+          // A title save does not save a body still refused for its length.
+          saveStatus: metadataOnly && current?.charLimitError ? 'failed' : 'saved',
         },
       });
 
@@ -409,13 +740,18 @@ export class EditorActionImpl {
       // leaving the pre-edit body there would render stale content — and keep
       // rendering it when the confirming read is slow or fails.
       const cachedDetail = this.#get().documentDetailMap[id]?.document;
-      if (cachedDetail) {
+      // A read that landed while this save was in flight may already hold a
+      // newer writer's revision; mirroring this save over it would regress it.
+      const cachedIsNewer =
+        !!savedAt &&
+        !!cachedDetail?.updatedAt &&
+        new Date(cachedDetail.updatedAt).getTime() > savedAt.getTime();
+      if (cachedDetail && !cachedIsNewer) {
         this.#get().internal_adoptDocumentDetail(
           id,
           {
             ...cachedDetail,
-            content: currentContent,
-            editorData: currentEditorData,
+            ...(!metadataOnly ? { content: currentContent, editorData: currentEditorData } : {}),
             // Mirror the metadata this save wrote, exactly as the server applies
             // it (`title` also renames `filename`; `metadata` is replaced). A
             // stale title / emoji here would be republished by the next body
@@ -423,17 +759,33 @@ export class EditorActionImpl {
             ...(metadata?.title !== undefined
               ? { filename: metadata.title, title: metadata.title }
               : {}),
-            ...(metadata?.emoji ? { metadata: { emoji: metadata.emoji } } : {}),
+            ...(savedMetadata ? { metadata: savedMetadata } : {}),
             updatedAt: savedAt ?? cachedDetail.updatedAt,
           },
           scope,
         );
       }
 
-      if (this.#get().documents[id]?.isDirty && doc.autoSave !== false) {
+      if (!metadataOnly && this.#get().documents[id]?.isDirty && doc.autoSave !== false) {
         this.#get().triggerDebouncedSave(id);
       }
     } catch (error) {
+      // The plan's per-document character limit refused this body. Keep it dirty
+      // and surface a persistent banner instead of a toast on every autosave; no
+      // debounced retry, since the same body would be refused again until the
+      // user shortens it (the next edit schedules the next attempt).
+      const charLimitError = getCharLimitRefusal(error, (doc.content ?? '').length);
+      if (charLimitError) {
+        internal_dispatchDocument({
+          id,
+          type: 'updateDocument',
+          value: { charLimitError, saveStatus: 'failed' },
+        });
+        if (options?.saveSource === 'manual') notifyCharLimitRefused(charLimitError);
+        if (hasMetadataChanges) throw error;
+        return;
+      }
+
       const errorCode = (error as { data?: { code?: string } })?.data?.code;
       const conflicted = errorCode === 'CONFLICT';
       // A view-level workspace member has no edit right on this document
@@ -448,10 +800,15 @@ export class EditorActionImpl {
       internal_dispatchDocument({
         id,
         type: 'updateDocument',
-        value: {
-          saveBlockedByLock: lockBlocked || undefined,
-          saveStatus: adoptedRemote ? 'saved' : 'idle',
-        },
+        // A refused title / emoji has no autosave to re-arm, and the body lock
+        // never gates it: `idle` would read as "Latest version loaded" over a
+        // rename that never reached the server.
+        value: metadataOnly
+          ? { saveStatus: 'failed' }
+          : {
+              saveBlockedByLock: lockBlocked || undefined,
+              saveStatus: adoptedRemote ? 'saved' : 'idle',
+            },
       });
       if (conflicted && !lockBlocked && live?.isDirty && live.autoSave !== false) {
         this.#get().triggerDebouncedSave(id);
@@ -469,7 +826,7 @@ export class EditorActionImpl {
     },
     error: unknown,
     requestSave: (expectedUpdatedAt?: Date) => Promise<T>,
-    canRetry: boolean,
+    retry: ConflictRetry | undefined,
   ): Promise<T> => {
     const errorCode = (error as { data?: { code?: string } })?.data?.code;
     if (errorCode !== 'CONFLICT') throw error;
@@ -496,7 +853,26 @@ export class EditorActionImpl {
       // reconciles against it instead of re-adopting a stale server read.
       this.#get().internal_adoptDocumentDetail(id, latest, scope);
     }
-    if (outcome === 'adopted' || !canRetry) throw error;
+    if (!retry) throw error;
+
+    if (retry.kind === 'metadata') {
+      // The request carries no body, so whatever moved the version (a body
+      // write — for a room page, its own projection) is not overwritten, and
+      // the body lock does not gate it. Only a concurrent title / emoji change
+      // would be: replay just when the meta still matches the base it was built
+      // from (`savedMetadata` replaces the whole object). Without a cached
+      // base there is nothing to compare, so a collaborator's change cannot be
+      // ruled out: keep the conflict.
+      const { base } = retry;
+      const metaUnchanged =
+        !!base &&
+        (latest.title ?? null) === (base.title ?? null) &&
+        isEqual(latest.metadata ?? null, base.metadata ?? null);
+      if (!metaUnchanged) throw error;
+      return await requestSave(latest.updatedAt);
+    }
+
+    if (outcome === 'adopted') throw error;
 
     // `baseDoc` is the store snapshot this request was built from; an
     // overlapping newer save from this tab may have moved the live base since,

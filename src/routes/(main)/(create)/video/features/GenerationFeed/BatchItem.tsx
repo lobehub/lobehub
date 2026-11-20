@@ -1,8 +1,16 @@
 'use client';
 
-import { ActionIconGroup, Block, Flexbox, Markdown } from '@lobehub/ui';
-import { Button, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  ActionIconGroup,
+  Block,
+  Button,
+  createStaticStyles,
+  Flexbox,
+  Markdown,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { CopyIcon, RotateCcwSquareIcon, SquarePenIcon, Trash2, XIcon } from 'lucide-react';
 import { type RuntimeVideoGenParams } from 'model-bank';
@@ -13,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import useRenderBusinessVideoBatchItem from '@/business/client/hooks/useRenderBusinessVideoBatchItem';
 import { ModelIcon } from '@/components/LobeIcons';
+import { openGenerationShareModal, useCanShareGeneration } from '@/features/GenerationShareModal';
 import { GenerationInvalidAPIKey } from '@/routes/(main)/(create)/features/GenerationInput';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useVideoStore } from '@/store/video';
@@ -184,6 +193,16 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(
       }
     }, [generation?.asset?.url, generation?.createdAt, batch.prompt]);
 
+    const canShare = useCanShareGeneration(generation?.fileId, batch.creator?.id);
+    const handleShare = useCallback(() => {
+      if (!generation?.fileId) return;
+      openGenerationShareModal({
+        fileId: generation.fileId,
+        prompt: batch.prompt,
+        type: 'video',
+      });
+    }, [batch.prompt, generation]);
+
     const handleCopyError = useCallback(async () => {
       if (!generation?.task.error) return;
 
@@ -246,6 +265,7 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(
             isEditing={isEditingSource}
             onDelete={handleDelete}
             onDownload={handleDownload}
+            onShare={canShare ? handleShare : undefined}
           />
         );
       }

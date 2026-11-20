@@ -2,9 +2,13 @@ import { type ReactNode } from 'react';
 import { z } from 'zod';
 
 import { type DeviceUnavailableErrorData } from '../device';
-import type { BuiltinToolContext, BuiltinToolResult } from './executorTypes';
+import { type RuntimeStepContext } from '../stepContext';
+import { type PluginApiWorkConfig, PluginApiWorkConfigSchema } from './builtinWork';
 import { type HumanInterventionConfig, type HumanInterventionPolicy } from './intervention';
 import { HumanInterventionConfigSchema, HumanInterventionPolicySchema } from './intervention';
+
+export * from './builtinIntervention';
+export * from './builtinWork';
 
 export interface Meta {
   /**
@@ -132,42 +136,6 @@ export const ExtendedHumanInterventionConfigSchema = z.union([
   HumanInterventionConfigSchema,
   z.object({ dynamic: DynamicInterventionConfigSchema }),
 ]);
-
-/**
- * Lifecycle action a tool API performs on its Work resource. Drives the Work
- * version `role` (`create`/`update` → `created`/`updated`) and, for `delete`,
- * routes to the resource's delete path instead of a version upsert.
- */
-export type PluginApiWorkAction = 'create' | 'delete' | 'update';
-
-/**
- * The Work resource kind an API produces. Selects the framework-side identity
- * extractor and the `WorkModel` register method used by the dispatch layer.
- */
-export type PluginApiWorkResourceType = 'document' | 'task';
-
-/**
- * Declarative Work-registration config on a builtin tool API.
- *
- * Presence of this field is the single source of truth for "this API produces a
- * Work". The tool-execution dispatch layers (server `BuiltinToolsExecutor` /
- * client `invokeExecutor`) read it after a successful call, extract the resource
- * identity from the result/args, and register the Work version — so tools need
- * zero imperative registration code.
- *
- * Like `humanIntervention`, this is framework-only config: the model tools
- * schema conversion only reads `name`/`description`/`parameters`, so `work`
- * never leaks into the LLM-facing tool spec.
- */
-export interface PluginApiWorkConfig {
-  action: PluginApiWorkAction;
-  resourceType: PluginApiWorkResourceType;
-}
-
-export const PluginApiWorkConfigSchema = z.object({
-  action: z.enum(['create', 'update', 'delete']),
-  resourceType: z.enum(['document', 'task']),
-});
 
 export interface LobeChatPluginApi {
   /**
@@ -561,62 +529,227 @@ export interface BuiltinServerRuntimeOutput {
   errorData?: DeviceUnavailableErrorData;
   state?: any;
   success: boolean;
+  /**
+   * The tool message this call already created for itself (e.g. a background
+   * sub-agent's placeholder, which anchors its thread). The agent runtime
+   * writes the result into that row instead of creating a second one.
+   */
+  toolMessageId?: string;
 }
 
-export interface BuiltinInterventionProps<Arguments = any> {
+// ==================== Executor Types ====================
+
+/**
+ * Result returned by builtin tool executors
+ */
+export interface BuiltinToolResult {
   /**
-   * When present, a custom intervention should portal its action footer
-   * (submit / skip + status) into this node so it stays pinned below the
-   * scrollable content instead of scrolling with it. Hosts that render a fixed
-   * footer (e.g. the global approval card) supply this; when absent the
-   * component renders its footer inline.
+   * The content to display in the tool message
    */
-  actionsPortalTarget?: HTMLElement | null;
-  apiName?: string;
-  args: Arguments;
-  /** Keep the form visible but inert while a remote resolution awaits producer ACK. */
-  disabled?: boolean;
-  identifier?: string;
-  interactionMode?: 'approval' | 'custom';
+  content?: string;
+
+  /**
+   * When true, the tool's real result is delivered out-of-band later (e.g. a
+   * sub-agent that parked on human approval). The client runtime parks the
+   * operation (`waiting_for_async_tool`) instead of settling the tool call,
+   * and a completion bridge backfills the tool message + resumes the parent —
+   * mirroring the server runtime's deferred-tool path. The `content` written
+   * here is the placeholder the parked parent shows while waiting.
+   */
+  deferred?: boolean;
+
+  /**
+   * Error information if the tool execution failed
+   */
+  error?: {
+    body?: any;
+    message: string;
+    type: string;
+  };
+
+  /**
+   * Metadata to attach to the tool message
+   * Used to mark messages for special handling (e.g., agentCouncil for parallel display)
+   */
+  metadata?: Record<string, any>;
+
+  /**
+   * Plugin state for UI rendering
+   */
+  state?: any;
+
+  /**
+   * Whether to stop the current execution flow
+   * - true: Stop execution (e.g., speak/broadcast in group management)
+   * - false/undefined: Continue execution
+   */
+  stop?: boolean;
+
+  /**
+   * Whether the tool execution was successful
+   */
+  success: boolean;
+}
+
+/**
+ * Context passed to builtin tool executors
+ */
+export interface BuiltinToolContext {
+  /**
+   * The current agent ID executing this tool (supervisor agent in group context)
+   * Used to identify which agent called the tool for orchestration purposes
+   */
+  agentId?: string;
+
+  /** Assistant message that owns this tool call. */
+  anchorMessageId?: string;
+
+  /**
+   * The current page document ID when the conversation is scoped to an open editor
+   * Uses the underlying `documents.id`, not tool-specific association IDs
+   */
+  documentId?: string | null;
+
+  /**
+   * The current group ID (only available in group chat context)
+   * Used by group management tools to access group member information
+   */
+  groupId?: string;
+
+  /**
+   * Group orchestration callbacks (only available in group chat context)
+   * Used by group management tools to trigger the next orchestration phase
+   */
+  groupOrchestration?: GroupOrchestrationCallbacks;
+
+  /**
+   * Whether the current tool is executing inside a sub-agent. Sub-agents must
+   * not spawn additional sub-agents.
+   */
+  isSubAgent?: boolean;
+
+  /**
+   * The run executes on this machine AND its owner asked for the device sandbox
+   * (`agencyConfig.localSandbox` on a `local` target). The Local System executor
+   * forwards it to `runCommand` so the desktop confines the spawned command.
+   *
+   * Resolved by the caller that builds this context — the executor must not
+   * re-derive it, so the in-process path and the server device-proxy stay in
+   * agreement about which runs are fenced.
+   */
+  localSandbox?: boolean;
+
+  /**
+   * The fenced run may reach the package-registry allowlist
+   * (`agencyConfig.localSandboxNetwork`). Meaningless without
+   * {@link localSandbox}.
+   */
+  localSandboxNetwork?: boolean;
+
+  /**
+   * Tool execution context key. It is the tool message ID for locally persisted
+   * tool messages, but gateway execution can temporarily use the toolCallId
+   * before the server-side tool result message exists.
+   */
   messageId: string;
+
   /**
-   * Hold the host's approve action while the intervention cannot show what is
-   * being approved — e.g. its review data is still loading or failed to load.
-   * Pass `true` to block approval and `false` to release it; reject / stop stay
-   * available. Hosts without approval controls ignore it. Only approval-mode
-   * interventions receive it.
+   * Optional callback for streaming updates
+   * Only needed for tools that support streaming output
    */
-  onApprovalBlockedChange?: (blocked: boolean) => void;
+  onStreamingUpdate?: (chunk: string) => Promise<void>;
+
   /**
-   * Callback to update the arguments before approval
-   * This is called when the user modifies the intervention content
-   * The approve action will wait for this async callback to complete
+   * The current operation ID (for abort signal)
    */
-  onArgsChange?: (args: Arguments) => void | Promise<void>;
-  onInteractionAction?: (
-    action:
-      | { type: 'submit'; payload: Record<string, unknown> }
-      | { type: 'skip'; payload?: Record<string, unknown>; reason?: string }
-      | { type: 'cancel'; payload?: Record<string, unknown> },
-  ) => Promise<void>;
+  operationId?: string;
+
   /**
-   * Register a callback to be called before approval
-   * Used by intervention components that need to flush pending saves (e.g., debounced saves)
-   * before the approve action proceeds
-   * @param id - Unique identifier for the callback (for reliable cleanup)
-   * @param callback - The callback to execute before approval
-   * @returns Cleanup function to unregister the callback
+   * Current plugin state for this tool message
+   * Use `stepContext` instead for cross-message state
    */
-  registerBeforeApprove?: (id: string, callback: () => void | Promise<void>) => () => void;
+  pluginState?: Record<string, unknown>;
+
+  /**
+   * Register a callback to execute after AgentRuntime completes
+   * Used for actions that should happen after the current execution flow finishes
+   * to avoid race conditions with message updates
+   */
+  registerAfterCompletion?: (callback: AfterCompletionCallback) => void;
+
+  /**
+   * Root AI runtime operation ID for aggregating artifacts produced by one run.
+   */
+  rootOperationId?: string;
+
+  /**
+   * Conversation scope captured when the operation was created
+   */
+  scope?: string | null;
+
+  /**
+   * AbortSignal for cancellation detection
+   */
+  signal?: AbortSignal;
+
+  /**
+   * The source user message ID for tools that need to inspect the current turn.
+   */
+  sourceMessageId?: string;
+
+  /**
+   * Step context computed at the beginning of each step
+   * Contains dynamic state like lobe-agent todos that changes between steps
+   * Computed by AgentRuntime and passed to Tool Executors
+   */
+  stepContext?: RuntimeStepContext;
+
+  /**
+   * Sub-agent execution callback injected by the client runtime.
+   * Lets a tool (e.g. lobe-agent.callSubAgent) recursively run a sub-agent in
+   * an isolated thread using the *current* runtime, then resume as a normal
+   * tool result. Only present during client-mode tool execution.
+   */
+  subAgent?: SubAgentCallbacks;
+
+  /** Agent whose profile is used for this run when it differs from the conversation owner. */
+  subAgentId?: string;
+
+  /**
+   * Current task identifier or database id when the conversation is scoped to a task detail page.
+   */
+  taskId?: string | null;
+
+  /**
+   * The current thread ID when operating inside a thread-scoped conversation.
+   */
+  threadId?: string | null;
+
+  /**
+   * The tool call ID from the assistant message.
+   */
+  toolCallId?: string;
+
+  /**
+   * Explicit source tool message ID for provenance. Prefer this over `messageId`
+   * when persisting cross-domain records because gateway tool execution may use
+   * `messageId` as a client-side context key before the server creates the tool
+   * message row.
+   */
+  toolMessageId?: string;
+
+  /**
+   * The current topic ID (only available when operating within a topic)
+   * Used by tools that need to create messages or operations within a topic
+   */
+  topicId?: string | null;
+
+  /**
+   * The working directory configured for file operations
+   * When set, file operations should be restricted to this directory
+   */
+  workingDirectory?: string;
 }
-
-export type BuiltinIntervention = (props: BuiltinInterventionProps) => ReactNode;
-
-// Executor types (`BuiltinToolResult` / `BuiltinToolContext`) live in
-// `./executorTypes` — this file was over the 800-line limit and must not grow.
-// The re-export keeps every existing `from './builtin'` / barrel import
-// unchanged.
-export type { BuiltinToolContext, BuiltinToolResult } from './executorTypes';
 
 /**
  * Callback type for after-completion actions

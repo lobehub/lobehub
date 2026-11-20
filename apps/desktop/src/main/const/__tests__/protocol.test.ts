@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isBackendPath } from '../protocol';
+import { isBackendPath, isSandboxedBackendRequestAllowed } from '../protocol';
 
 describe('isBackendPath', () => {
   // The renderer runs relayed local-model calls and uploads their output to
@@ -13,5 +13,12 @@ describe('isBackendPath', () => {
   it('keeps other /api/agent paths and lookalike prefixes local', () => {
     expect(isBackendPath('/api/agent/run')).toBe(false);
     expect(isBackendPath('/api/agent/llm-relayx')).toBe(false);
+  });
+});
+
+describe('isSandboxedBackendRequestAllowed', () => {
+  it('blocks opaque origins from authenticated backend paths', () => {
+    expect(isSandboxedBackendRequestAllowed('null')).toBe(false);
+    expect(isSandboxedBackendRequestAllowed(null)).toBe(true);
   });
 });

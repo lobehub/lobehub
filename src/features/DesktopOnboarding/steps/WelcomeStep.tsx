@@ -1,11 +1,10 @@
 'use client';
 
+import { DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { type IconProps } from '@lobehub/ui';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Block, Button, cssVar, Flexbox, Icon, Steps, Text } from '@lobehub/ui';
 import { TypewriterEffect } from '@lobehub/ui/awesome';
-import { Button, Steps, Text } from '@lobehub/ui/base-ui';
 import { LoadingDots } from '@lobehub/ui/chat';
-import { cssVar } from 'antd-style';
 import { BrainIcon, HeartHandshakeIcon, PencilRulerIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -60,7 +59,7 @@ const WelcomeStep = memo<WelcomeStepProps>(({ onNext }) => {
             pauseDuration={16_000}
             typingSpeed={64}
             sentences={[
-              t('telemetry.title', { name: 'Lobe AI' }),
+              t('telemetry.title', { name: DEFAULT_INBOX_TITLE }),
               t('telemetry.title2'),
               t('telemetry.title3'),
             ]}

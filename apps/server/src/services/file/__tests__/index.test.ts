@@ -54,7 +54,8 @@ vi.mock('@lobechat/utils', async (importOriginal) => {
 
 describe('FileService', () => {
   let service: FileService;
-  const mockDb = { transaction: (run: (tx: unknown) => unknown) => run({}) } as any;
+  const recordTx = { name: 'record-tx' };
+  const mockDb = { transaction: (run: (tx: unknown) => unknown) => run(recordTx) } as any;
   const mockUserId = 'test-user';
   let mockFileModel: any;
   let mockTempManager: any;
@@ -191,6 +192,53 @@ describe('FileService', () => {
       expect(mockTempManager.writeTempFile).toHaveBeenCalledWith(mockContent, mockFile.name);
     });
 
+    describe('maxBytes', () => {
+      it('refuses by the stored size before any bytes are read', async () => {
+        mockFileModel.findById.mockResolvedValue({ ...mockFile, size: 65 });
+
+        await expect(
+          service.downloadFileToLocal('test-file-id', undefined, { maxBytes: 64 }),
+        ).rejects.toMatchObject({ code: 'PAYLOAD_TOO_LARGE' });
+
+        expect(service['impl'].getFileByteArray).not.toHaveBeenCalled();
+        expect(mockTempManager.writeTempFile).not.toHaveBeenCalled();
+      });
+
+      it('refuses by the received bytes when the stored size understates them', async () => {
+        mockFileModel.findById.mockResolvedValue({ ...mockFile, size: 3 });
+        vi.mocked(service['impl'].getFileByteArray).mockResolvedValue(new Uint8Array(65));
+
+        await expect(
+          service.downloadFileToLocal('test-file-id', undefined, { maxBytes: 64 }),
+        ).rejects.toMatchObject({ code: 'PAYLOAD_TOO_LARGE' });
+
+        expect(mockTempManager.writeTempFile).not.toHaveBeenCalled();
+      });
+
+      it('keeps the access scope and downloads a file within the limit', async () => {
+        const accessScope = agentShareFileAccessScope({
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        });
+        mockFileModel.findById.mockResolvedValue({ ...mockFile, size: 3 });
+        vi.mocked(service['impl'].getFileByteArray).mockResolvedValue(new Uint8Array(3));
+        mockTempManager.writeTempFile.mockResolvedValue('/tmp/test.txt');
+
+        await service.downloadFileToLocal('test-file-id', accessScope, { maxBytes: 64 });
+
+        expect(mockFileModel.findById).toHaveBeenCalledWith('test-file-id', { accessScope });
+        expect(mockTempManager.writeTempFile).toHaveBeenCalled();
+      });
+
+      it('applies no limit unless one is passed (skill ZIP import keeps its own contract)', async () => {
+        mockFileModel.findById.mockResolvedValue({ ...mockFile, size: 10 ** 9 });
+        vi.mocked(service['impl'].getFileByteArray).mockResolvedValue(new Uint8Array(3));
+        mockTempManager.writeTempFile.mockResolvedValue('/tmp/test.txt');
+
+        await expect(service.downloadFileToLocal('test-file-id')).resolves.toBeDefined();
+      });
+    });
+
     it('should resolve an agent-share file only through its provenance scope', async () => {
       const accessScope = agentShareFileAccessScope({
         shareId: 'share-1',
@@ -290,7 +338,7 @@ describe('FileService', () => {
 
     const result = await service.createPreSignedUpload(testKey);
 
-    expect(service['impl'].createPreSignedUpload).toHaveBeenCalledWith(testKey);
+    expect(service['impl'].createPreSignedUpload).toHaveBeenCalledWith(testKey, undefined);
     expect(result).toBe(expectedUpload);
   });
 
@@ -330,8 +378,19 @@ describe('FileService', () => {
     expect(service['impl'].uploadContent).toHaveBeenCalledWith(testPath, testContent);
   });
 
+  it('should return an empty URL for native document placeholders without accessing storage', async () => {
+    vi.mocked(service['impl'].getFullFileUrl).mockResolvedValue(
+      'https://example.com/invalid-object',
+    );
+
+    const result = await service.getFullFileUrl('internal://document/placeholder', 3600);
+
+    expect(result).toBe('');
+    expect(service['impl'].getFullFileUrl).not.toHaveBeenCalled();
+  });
+
   it('should delegate getFullFileUrl to implementation', async () => {
-    const testUrl = 'test-url';
+    const testUrl = 'files/report.pdf';
     const expiresIn = 3600;
     const expectedUrl = 'https://example.com/full-url';
     vi.mocked(service['impl'].getFullFileUrl).mockResolvedValue(expectedUrl);
@@ -389,7 +448,7 @@ describe('FileService', () => {
           }),
         }),
         expect.any(Boolean),
-        undefined,
+        recordTx,
       );
     });
 
@@ -417,7 +476,7 @@ describe('FileService', () => {
           }),
         }),
         expect.any(Boolean),
-        undefined,
+        recordTx,
       );
     });
   });
@@ -446,10 +505,11 @@ describe('FileService', () => {
         'files/test-user/abc/report.pdf',
         content,
         'application/pdf',
+        undefined,
       );
     });
 
-    it('should write metadata compatible with UI upload path', async () => {
+    it('records upload metadata and a nonempty content hash', async () => {
       const content = Buffer.from('test content');
 
       await service.uploadFromBuffer(content, 'text/plain', 'files/test-user/abc/test.txt');
@@ -466,6 +526,10 @@ describe('FileService', () => {
         expect.any(Boolean),
         expect.anything(),
       );
+
+      expect(mockFileModel.checkHash).toHaveBeenCalled();
+      const createdRecord = mockFileModel.create.mock.calls[0][0];
+      expect(createdRecord.fileHash.length).toBeGreaterThan(0);
     });
 
     it('preserves private visibility and page-editor source for rehosted images', async () => {
@@ -488,14 +552,29 @@ describe('FileService', () => {
       );
     });
 
-    it('should compute hash for deduplication', async () => {
-      const content = Buffer.from('test content');
+    /**
+     * 2026-11-02: a page-editor paste sent 78 `rehostImage` calls in one batch. Each held a pool
+     * connection while waiting on the owner's row lock, and the lock holder's `checkHash` waited
+     * for an 11th connection on the default 10-connection pool, so the instance hung until it
+     * timed out. Every globalFiles query of the record step must run on the transaction.
+     */
+    it('runs the globalFiles queries on the record transaction, not the shared pool', async () => {
+      const tx = { name: 'record-tx' };
+      const txDb = { transaction: (run: (trx: unknown) => unknown) => run(tx) } as any;
+      const txService = new FileService(txDb, mockUserId);
+      vi.mocked(txService['impl'].uploadBuffer).mockResolvedValue({ key: 'images/new.png' });
+      vi.mocked(txService['impl'].getFileMetadata).mockRejectedValue(new Error('NoSuchKey'));
+      mockFileModel.checkHash.mockResolvedValue({ isExist: true, url: 'images/old.png' });
 
-      await service.uploadFromBuffer(content, 'text/plain', 'files/test-user/abc/test.txt');
+      await txService.uploadFromBuffer(Buffer.from('image'), 'image/png', 'images/new.png');
 
-      expect(mockFileModel.checkHash).toHaveBeenCalled();
-      const createdRecord = mockFileModel.create.mock.calls[0][0];
-      expect(createdRecord.fileHash.length).toBeGreaterThan(0);
+      expect(mockFileModel.checkHash).toHaveBeenCalledWith(expect.any(String), tx);
+      expect(mockFileModel.updateGlobalFile).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ url: 'images/new.png' }),
+        tx,
+      );
+      expect(mockFileModel.create).toHaveBeenCalledWith(expect.anything(), false, tx);
     });
   });
 
@@ -559,7 +638,7 @@ describe('FileService', () => {
           fileHash: 'new-hash',
         }),
         true, // insertToGlobalFiles = true when hash doesn't exist
-        undefined,
+        recordTx,
       );
     });
 
@@ -580,7 +659,7 @@ describe('FileService', () => {
           fileHash: 'existing-hash',
         }),
         false, // insertToGlobalFiles = false when hash exists
-        undefined,
+        recordTx,
       );
       expect(mockFileModel.updateGlobalFile).not.toHaveBeenCalled();
     });
@@ -600,17 +679,21 @@ describe('FileService', () => {
         url: 'new/path.txt',
       });
 
-      expect(mockFileModel.updateGlobalFile).toHaveBeenCalledWith('existing-hash', {
-        metadata: { dirname: 'new', filename: 'test.txt', path: 'new/path.txt' },
-        url: 'new/path.txt',
-      });
+      expect(mockFileModel.updateGlobalFile).toHaveBeenCalledWith(
+        'existing-hash',
+        {
+          metadata: { dirname: 'new', filename: 'test.txt', path: 'new/path.txt' },
+          url: 'new/path.txt',
+        },
+        recordTx,
+      );
       expect(mockFileModel.create).toHaveBeenCalledWith(
         expect.objectContaining({
           fileHash: 'existing-hash',
           url: 'new/path.txt',
         }),
         false,
-        undefined,
+        recordTx,
       );
       consoleSpy.mockRestore();
     });
@@ -639,7 +722,7 @@ describe('FileService', () => {
           url: 'new/path.txt',
         }),
         false,
-        undefined,
+        recordTx,
       );
     });
   });

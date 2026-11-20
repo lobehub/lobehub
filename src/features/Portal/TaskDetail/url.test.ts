@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
-import { getTaskDetailPageUrl } from './url';
+import { getTaskDetailPagePath, getTaskDetailPageUrl } from './url';
 
 describe('getTaskDetailPageUrl', () => {
+  it('uses a public short link while the portal keeps a stable task id', () => {
+    expect(
+      getTaskDetailPageUrl({
+        appOrigin: 'https://app.example.com',
+        taskId: 'task_stable',
+        identifier: 'T-3',
+        workspaceSlug: 'team',
+        agentId: 'agt_1',
+      }),
+    ).toBe('https://app.example.com/team/agent/agt_1/task/T-3');
+  });
   it('builds a workspace-aware agent task URL', () => {
     expect(
       getTaskDetailPageUrl({
@@ -34,5 +45,22 @@ describe('getTaskDetailPageUrl', () => {
   it('returns undefined without a resolvable absolute URL', () => {
     expect(getTaskDetailPageUrl({ appOrigin: 'https://app.example.com' })).toBeUndefined();
     expect(getTaskDetailPageUrl({ taskId: 'T-245' })).toBeUndefined();
+  });
+});
+
+describe('getTaskDetailPagePath', () => {
+  it('scopes a task from another workspace to that workspace', () => {
+    expect(
+      getTaskDetailPagePath({
+        agentId: 'agt_1',
+        identifier: 'T-198',
+        title: 'Ship it',
+        workspaceSlug: 'lobe-team',
+      }),
+    ).toBe('/lobe-team/agent/agt_1/task/T-198/ship-it');
+  });
+
+  it('has no path without a task reference', () => {
+    expect(getTaskDetailPagePath({ workspaceSlug: 'lobe-team' })).toBeUndefined();
   });
 });

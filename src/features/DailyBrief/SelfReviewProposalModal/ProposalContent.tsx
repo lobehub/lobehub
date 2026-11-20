@@ -2,11 +2,11 @@ import {
   formatSelfReviewItemHeadline,
   type SelfReviewProposalContentItem,
 } from '@lobechat/agent-signal/brief';
-import { Block, Flexbox, Markdown } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Block, createStaticStyles, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { densityVars } from '@/styles/densityVars';
 
 import { useSelfReviewTranslator } from '../useSelfReviewBriefView';
 
@@ -36,7 +36,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   text: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 1.6;
     color: ${cssVar.colorTextSecondary};
     white-space: pre-wrap;

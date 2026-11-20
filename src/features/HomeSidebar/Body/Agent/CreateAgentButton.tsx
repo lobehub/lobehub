@@ -1,12 +1,23 @@
 'use client';
 
-import { Block, Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, Spin, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  ActionIcon,
+  Block,
+  Center,
+  createStaticStyles,
+  cssVar,
+  cx,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useNavItemMetrics } from '@/features/NavPanel/density';
 import { usePermission } from '@/hooks/usePermission';
 import { SessionDefaultGroup } from '@/types/session';
 
@@ -44,17 +55,16 @@ interface CreateAgentButtonProps {
 }
 
 const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, visibility }) => {
+  const metrics = useNavItemMetrics();
   const { t } = useTranslation('chat');
   const { allowed: canCreate, reason } = usePermission('create_content');
   const {
-    createAgent,
     createAgentListMenuItem,
     createAgentMenuItem,
     createConnectAgentMenuItem,
     createGroupChatMenuItem,
     createMarketAgentMenuItem,
-    isMutatingAgent,
-    openCreateModal,
+    openCreateAgentModal,
   } = useCreateMenuItems();
 
   const isCustomGroup = Boolean(groupId) && groupId !== SessionDefaultGroup.Default;
@@ -100,12 +110,7 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
   ]);
 
   const handleClick = () => {
-    if (!canCreate) return;
-    if (openCreateModal) {
-      openCreateModal('agent', menuOptions);
-    } else {
-      createAgent(menuOptions);
-    }
+    openCreateAgentModal(menuOptions);
   };
 
   const content = (
@@ -114,19 +119,19 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
       align={'center'}
       className={cx(styles.container, className)}
       clickable={canCreate}
-      gap={8}
-      height={36}
-      paddingInline={4}
-      style={canCreate ? { height: 36 } : { cursor: 'not-allowed', height: 36, opacity: 0.5 }}
+      gap={metrics.gap}
+      height={metrics.rowHeight}
+      paddingInline={metrics.paddingInline}
       variant={'borderless'}
+      style={
+        canCreate
+          ? { height: metrics.rowHeight }
+          : { cursor: 'not-allowed', height: metrics.rowHeight, opacity: 0.5 }
+      }
       onClick={handleClick}
     >
-      <Center flex={'none'} height={28} width={28}>
-        {isMutatingAgent ? (
-          <Spin size="small" variant="network" />
-        ) : (
-          <Icon icon={PlusIcon} size={'small'} />
-        )}
+      <Center flex={'none'} height={metrics.iconBox} width={metrics.iconBox}>
+        <Icon icon={PlusIcon} size={'small'} />
       </Center>
       <Text style={{ flex: 1 }} type={'secondary'}>
         {t('addAgent')}

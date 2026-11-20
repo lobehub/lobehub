@@ -29,3 +29,23 @@ export const isPdfFile = ({ fileName, fileType, path }: PdfFileFields): boolean 
     PDF_FILE_EXTENSIONS.some((extension) => candidate.endsWith(extension)),
   );
 };
+
+// Formats the browser `<audio>` element can play. `.ogg` / `.webm` stay with the
+// video renderer unless the MIME type says audio, since they are container formats.
+const AUDIO_FILE_EXTENSIONS = ['.aac', '.flac', '.m4a', '.mp3', '.oga', '.opus', '.wav', '.weba'];
+const AUDIO_FILE_TYPES = new Set(['aac', 'flac', 'm4a', 'mp3', 'oga', 'opus', 'wav', 'weba']);
+
+export const isAudioFile = ({ fileName, fileType }: Omit<PdfFileFields, 'path'>): boolean => {
+  const normalizedFileType = normalizeFileType(fileType);
+
+  if (normalizedFileType) {
+    if (normalizedFileType.startsWith('audio/')) return true;
+    if (AUDIO_FILE_TYPES.has(normalizedFileType)) return true;
+  }
+
+  if (!fileName) return false;
+
+  const candidate = stripUrlSuffix(fileName).toLowerCase();
+
+  return AUDIO_FILE_EXTENSIONS.some((extension) => candidate.endsWith(extension));
+};

@@ -121,6 +121,32 @@ describe('parseInternalLink', () => {
     });
   });
 
+  it('normalizes away the active workspace slug so the link opens in-context', () => {
+    expect(
+      parseInternalLink(
+        'https://app.lobehub.com/lobehub/page/docs_LgOiA6TLUUKQro6L',
+        'app://renderer',
+        ['lobehub'],
+        'lobehub',
+      ),
+    ).toEqual({
+      documentId: 'docs_LgOiA6TLUUKQro6L',
+      pathname: '/page/docs_LgOiA6TLUUKQro6L',
+      type: 'document',
+    });
+  });
+
+  it('keeps the slug of a workspace other than the active one', () => {
+    expect(
+      parseInternalLink(
+        '/lobe-team/page/docs_document',
+        undefined,
+        ['lobe-team', 'lobehub'],
+        'lobehub',
+      ),
+    ).toMatchObject({ pathname: '/lobe-team/page/docs_document', workspaceSlug: 'lobe-team' });
+  });
+
   it('accepts the current self-hosted origin', () => {
     expect(
       parseInternalLink('https://chat.example.com/task/T-200', 'https://chat.example.com'),

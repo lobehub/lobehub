@@ -5,8 +5,10 @@ import {
   nanoBananaProParameters,
 } from '../../const/imageParameters';
 import type { ModelParamsSchema } from '../../standard-parameters';
-import type { AIChatModelCard, AIImageModelCard, AIVideoModelCard } from '../../types';
+import type { AIChatModelCard, AIImageModelCard } from '../../types';
 import { gemini25ChatModels } from './gemini25';
+import { googleTTSModels } from './tts';
+import { googleVideoModels } from './video';
 
 /**
  * gemini implicit caching not extra cost
@@ -164,6 +166,149 @@ const googleChatModels: AIChatModelCard[] = [
       video: true,
       vision: true,
     },
+    // Same unified 1M window as Argon: 64K output by default, up to 1M with long decode.
+    // https://ai.google.dev/gemini-api/docs/models/gemini-4-carbon
+    contextWindowTokens: 1_048_576,
+    description:
+      "Gemini 4 Carbon is Google's strongest model, with state-of-the-art cybersecurity and long-horizon capabilities for sustained agentic coding, multimodal knowledge work, and scientific reasoning.",
+    displayName: 'Gemini 4 Carbon',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-4',
+    id: 'gemini-4-carbon',
+    isOfficial: true,
+    maxOutput: 65_536,
+    /** Introductory rates through 2026-11-30; they double afterward ($4 input, $0.20 cached input,
+     * $20 output). Explicit caching is not supported, so there is no cache-write price.
+     * @see https://ai.google.dev/gemini-api/docs/pricing
+     */
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-11-10',
+    // Sampling parameters are ignored by the API.
+    // https://ai.google.dev/gemini-api/docs/latest-model
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['thinkingLevel3', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      audio: true,
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    // Unified 1M window shared by input, thinking and output: 64K output per synchronous request,
+    // up to 1M with long decode.
+    // https://ai.google.dev/gemini-api/docs/models/gemini-4-neon
+    contextWindowTokens: 1_048_576,
+    description:
+      'Gemini 4 Neon sits between Hydrogen and Carbon, bringing near-Carbon quality to complex software engineering, knowledge work and science workflows at faster speeds and lower cost.',
+    displayName: 'Gemini 4 Neon',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-4',
+    id: 'gemini-4-neon',
+    isOfficial: true,
+    maxOutput: 65_536,
+    /** Explicit caching is not supported, so there is no cache-write price.
+     * @see https://ai.google.dev/gemini-api/docs/pricing
+     */
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-11-18',
+    // Thinking levels are low / medium / high (default) / xhigh; `minimal` is rejected and
+    // sampling parameters are ignored. https://ai.google.dev/gemini-api/docs/whats-new-gemini-4-neon
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['thinkingLevel5', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      audio: true,
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    // Unified 1M window shared by input, thinking and output; a response defaults to 64K output
+    // and can go up to 1M with long decode.
+    // https://ai.google.dev/gemini-api/docs/models/gemini-4-argon
+    contextWindowTokens: 1_048_576,
+    description:
+      "Gemini 4 Argon is Google's flagship reasoning model, built for complex software engineering, deep math and science, autonomous multi-step agents, and long decode up to 1M tokens.",
+    displayName: 'Gemini 4 Argon',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-4',
+    id: 'gemini-4-argon',
+    isOfficial: true,
+    knowledgeCutoff: '2026-03',
+    maxOutput: 65_536,
+    /** Introductory rates through 2026-11-30; they double afterward ($4 input, $0.20 cached input,
+     * $20 output). Explicit caching is not supported, so there is no cache-write price.
+     * @see https://ai.google.dev/gemini-api/docs/pricing
+     */
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-10-13',
+    // Sampling parameters are ignored by the API.
+    // https://ai.google.dev/gemini-api/docs/latest-model
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['thinkingLevel3', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      audio: true,
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
     contextWindowTokens: 1_048_576 + 65_536,
     description:
       "Gemini 3.8 Flash is Google's most intelligent Flash model, engineered for long-horizon software engineering, autonomous agents, and complex enterprise workflows.",
@@ -172,6 +317,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.8',
     id: 'gemini-3.8-flash',
+    isOfficial: true,
     knowledgeCutoff: '2026-03',
     maxOutput: 65_536,
     /** Introductory rates through 2026-12-31; standard token rates double afterward.
@@ -219,6 +365,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.7',
     id: 'gemini-3.7-flash',
+    isOfficial: true,
     knowledgeCutoff: '2026-03',
     maxOutput: 65_536,
     // Introductory pricing, in effect through 2026-12-31. From 2027-01-01 standard rates apply:
@@ -266,6 +413,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.6',
     id: 'gemini-3.6-flash',
+    isOfficial: true,
     knowledgeCutoff: '2026-03',
     maxOutput: 65_536,
     // Introductory pricing, in effect through 2026-12-31. From 2027-01-01 standard rates apply:
@@ -313,6 +461,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.5',
     id: 'gemini-3.5-flash',
+    isOfficial: true,
     knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
@@ -357,6 +506,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.5',
     id: 'gemini-3.5-flash-lite',
+    isOfficial: true,
     knowledgeCutoff: '2026-03',
     maxOutput: 65_536,
     pricing: {
@@ -386,6 +536,43 @@ const googleChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      // no functionCall: the model does not support function calling
+      imageOutput: true,
+      reasoning: true,
+      search: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072 + 32_768,
+    description:
+      'Nano Banana 2.1 is an update to Nano Banana 2 with better visual quality, prompt adherence, multi-turn character consistency and text rendering across 1K, 2K and 4K output.',
+    displayName: 'Nano Banana 2.1',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-3.1',
+    id: 'gemini-nano-banana-2.1',
+    isOfficial: true,
+    maxOutput: 32_768,
+    // https://ai.google.dev/gemini-api/docs/pricing ($0.0336 per 1K image)
+    pricing: {
+      approximatePricePerImage: 0.0336,
+      units: [
+        { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 7.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-10-06',
+    // Thinking levels are minimal / medium (default) / high, which no `thinkingLevel*` param covers.
+    settings: {
+      extendParams: ['imageAspectRatio2', 'imageResolution2'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
       imageOutput: true,
       reasoning: true,
       search: true,
@@ -399,6 +586,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.1',
     id: 'gemini-3.1-flash-image',
+    isOfficial: true,
     knowledgeCutoff: '2025-01',
     maxOutput: 32_768,
     pricing: {
@@ -467,6 +655,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.1',
     id: 'gemini-3.1-flash-lite-image',
+    isOfficial: true,
     knowledgeCutoff: '2025-01',
     maxOutput: 4_096,
     pricing: {
@@ -503,6 +692,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.1',
     id: 'gemini-3.1-pro-preview',
+    isOfficial: true,
     knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
@@ -710,6 +900,7 @@ const googleChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3',
     id: 'gemini-3-pro-image-preview',
+    isOfficial: true,
     knowledgeCutoff: '2025-01',
     maxOutput: 32_768,
     pricing: {
@@ -799,8 +990,33 @@ export const imagenGenParameters: ModelParamsSchema = {
 
 const googleImageModels: AIImageModelCard[] = [
   {
+    displayName: 'Nano Banana 2.1',
+    id: 'gemini-nano-banana-2.1:image',
+    isOfficial: true,
+    type: 'image',
+    enabled: true,
+    description:
+      'Nano Banana 2.1 is an update to Nano Banana 2 with better visual quality, prompt adherence, multi-turn character consistency and text rendering across 1K, 2K and 4K output.',
+    releasedAt: '2026-10-06',
+    // Output resolutions are 1K / 2K / 4K only (no 512).
+    parameters: {
+      ...nanoBanana2Parameters,
+      resolution: { default: '1K', enum: ['1K', '2K', '4K'] },
+    },
+    pricing: {
+      approximatePricePerImage: 0.0336,
+      units: [
+        { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 7.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+  },
+  {
     displayName: 'Nano Banana 2',
     id: 'gemini-3.1-flash-image:image',
+    isOfficial: true,
     type: 'image',
     enabled: true,
     description:
@@ -837,6 +1053,7 @@ const googleImageModels: AIImageModelCard[] = [
   {
     displayName: 'Nano Banana 2 Lite',
     id: 'gemini-3.1-flash-lite-image:image',
+    isOfficial: true,
     type: 'image',
     enabled: true,
     description:
@@ -856,6 +1073,7 @@ const googleImageModels: AIImageModelCard[] = [
   {
     displayName: 'Nano Banana Pro',
     id: 'gemini-3-pro-image-preview:image',
+    isOfficial: true,
     type: 'image',
     enabled: true,
     description:
@@ -874,6 +1092,7 @@ const googleImageModels: AIImageModelCard[] = [
   {
     displayName: 'Nano Banana',
     id: 'gemini-2.5-flash-image:image',
+    isOfficial: true,
     type: 'image',
     description:
       'Nano Banana is Google’s newest, fastest, and most efficient native multimodal model, enabling conversational image generation and editing.',
@@ -890,73 +1109,11 @@ const googleImageModels: AIImageModelCard[] = [
   },
 ];
 
-const googleVideoModels: AIVideoModelCard[] = [
-  {
-    description:
-      'Our latest video generation model, available to developers on the paid tier of the Gemini API.',
-    displayName: 'Veo 3.1 Generate Preview',
-    enabled: true,
-    id: 'veo-3.1-generate-preview',
-    parameters: {
-      aspectRatio: {
-        default: '16:9',
-        enum: ['16:9', '9:16'],
-      },
-      duration: { default: 8, enum: [4, 6, 8] },
-      endImageUrl: {
-        default: null,
-      },
-      imageUrls: {
-        default: [],
-        maxCount: 3,
-      },
-      prompt: { default: '' },
-      resolution: {
-        default: '720p',
-        enum: ['720p', '1080p', '4k'],
-      },
-      seed: { default: null },
-    },
-    pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.6, strategy: 'fixed', unit: 'second' }],
-    },
-    releasedAt: '2026-01-13',
-    type: 'video',
-  },
-  {
-    description:
-      'Our latest video generation model, available to developers on the paid tier of the Gemini API.',
-    displayName: 'Veo 3.1 Fast Generate Preview',
-    enabled: true,
-    id: 'veo-3.1-fast-generate-preview',
-    parameters: {
-      aspectRatio: {
-        default: '16:9',
-        enum: ['16:9', '9:16'],
-      },
-      duration: { default: 8, enum: [4, 6, 8] },
-      endImageUrl: {
-        default: null,
-      },
-      imageUrls: {
-        default: [],
-        maxCount: 3,
-      },
-      prompt: { default: '' },
-      resolution: {
-        default: '720p',
-        enum: ['720p', '1080p', '4k'],
-      },
-      seed: { default: null },
-    },
-    pricing: {
-      units: [{ name: 'videoGeneration', rate: 0.35, strategy: 'fixed', unit: 'second' }],
-    },
-    releasedAt: '2026-01-13',
-    type: 'video',
-  },
+export const allModels = [
+  ...googleChatModels,
+  ...googleImageModels,
+  ...googleVideoModels,
+  ...googleTTSModels,
 ];
-
-export const allModels = [...googleChatModels, ...googleImageModels, ...googleVideoModels];
 
 export default allModels;

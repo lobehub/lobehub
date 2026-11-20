@@ -5,6 +5,7 @@ import { getFileIdForUrl } from './attachmentRegistry';
 import {
   getEditorAttachmentStateFromJson,
   getExistingEditorAttachment,
+  hasIncompleteEditorAttachments,
   insertExistingAttachmentsIntoEditor,
   preservePendingFileNodeSize,
 } from './editorAttachments';
@@ -38,6 +39,33 @@ describe('getEditorAttachmentStateFromJson', () => {
         },
       }),
     ).toEqual({ hasCompletedAttachments: true, hasIncompleteAttachments: false });
+  });
+});
+
+describe('hasIncompleteEditorAttachments', () => {
+  const editorWith = (children: unknown[]) =>
+    ({ getDocument: () => ({ root: { children, type: 'root' } }) }) as unknown as IEditor;
+
+  it('flags an image that is still uploading with its local blob URL', () => {
+    expect(
+      hasIncompleteEditorAttachments(
+        editorWith([
+          { src: 'blob:app://renderer/1', status: 'loading', type: 'block-image' },
+          { children: [{ text: 'why so slow', type: 'text' }], type: 'paragraph' },
+        ]),
+      ),
+    ).toBe(true);
+  });
+
+  it('lets text and uploaded images through', () => {
+    expect(
+      hasIncompleteEditorAttachments(
+        editorWith([
+          { src: 'https://app.lobehub.com/f/file_1', status: 'uploaded', type: 'block-image' },
+        ]),
+      ),
+    ).toBe(false);
+    expect(hasIncompleteEditorAttachments(undefined)).toBe(false);
   });
 });
 

@@ -3,10 +3,11 @@ import type { GoalGraphSnapshot, GoalItem, GoalRolloutVariantAxis } from '@lobec
 import { TRPCError } from '@trpc/server';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
-import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
+import { GoalRepository } from '@/database/repositories/goal';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { assertGoalNotArchived } from './archiveGuard';
 import { GoalManagerService } from './manager';
 import {
   materializeRolloutBatch,
@@ -19,6 +20,8 @@ export interface StartGoalRolloutInput {
   probeNodeIds: string[];
   /** The one procedure every unit follows; the batch's Template. */
   recipe: string;
+  /** A short kebab-case name for the plan skill, saying what the recipe does. */
+  skillName?: string;
   /** Overrides the goal's own `config.rollout.trigger`; `off` is not a way to start a batch. */
   trigger?: 'canary' | 'full';
   /** Seeds that become roster units; every other seed when omitted. Seeds left out stay ordinary tasks. */
@@ -120,9 +123,10 @@ export class GoalStartService {
   start = async (goalId: string, input: StartGoalInput = {}): Promise<GoalItem> =>
     this.db.transaction(async (tx) => {
       const db = tx as unknown as LobeChatDatabase;
-      const goalModel = new GoalModel(db, this.userId, this.workspaceId);
+      const goalModel = new GoalRepository(db, this.userId, this.workspaceId);
       const goal = await goalModel.lockById(goalId);
       if (!goal) return refuse('Goal not found');
+      assertGoalNotArchived(goal);
       if (goal.status !== 'draft')
         refuse(`Goal is ${goal.status}; only a draft goal can be started`, 'CONFLICT');
 
@@ -292,10 +296,11 @@ export class GoalStartService {
       canarySize: probes.length,
       createdByAgentId: goal.agentId ?? undefined,
       goalId: goal.id,
-      goalModel: new GoalModel(db, this.userId, this.workspaceId),
+      goalModel: new GoalRepository(db, this.userId, this.workspaceId),
       planSkillOwner: {
         db,
         goalTitle: goal.title,
+        skillName: rollout.skillName,
         userId: this.userId,
         workspaceId: this.workspaceId,
       },

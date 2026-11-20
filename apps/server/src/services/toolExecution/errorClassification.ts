@@ -26,6 +26,8 @@ const STOP_CODES = new Set([
   'CONTENT_POLICY_VIOLATION',
   'FORBIDDEN',
   'INSUFFICIENT_PERMISSIONS',
+  // The server's SSRF policy refused the MCP server address; a retry gets the same answer
+  'MCP_SSRF_BLOCKED',
   'NOT_IMPLEMENTED',
   'PERMISSION_DENIED',
   'UNAUTHORIZED',
@@ -107,6 +109,8 @@ const normalizeSignal = (error: unknown): ToolErrorSignal => {
 
   if (error && typeof error === 'object') {
     const raw = error as {
+      /** Builtin runtimes wrap the thrown error as `{ body, message, type }`. */
+      body?: { code?: unknown };
       code?: string;
       error?: { code?: string; message?: string; status?: number; statusCode?: number };
       message?: string;
@@ -119,7 +123,7 @@ const normalizeSignal = (error: unknown): ToolErrorSignal => {
     const message = (raw.message || nestedMessage || 'unknown error').toLowerCase();
 
     return {
-      code: normalizeCode(raw.code || nestedCode),
+      code: normalizeCode(raw.code || nestedCode || toRecord(raw.body)?.code),
       message,
       status:
         typeof raw.status === 'number'

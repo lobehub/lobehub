@@ -11,7 +11,6 @@ import { messageService } from '@/services/message';
 import {
   clearMessageListClientCacheState,
   isMessageListServerVerified,
-  messageListKey,
   runMessageListQuery,
 } from '@/services/message/cache';
 import { conversationMessagesKey, conversationMessagesResource } from '@/services/message/replica';
@@ -20,6 +19,7 @@ import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { useChatStore } from '../../store';
+import { transcriptSyncKey } from './actions/testUtils';
 
 // Mock @/libs/swr mutate
 vi.mock('@lobehub/ui', async (importOriginal) => ({
@@ -777,7 +777,7 @@ describe('chatMessage actions', () => {
       // 在每个测试用例开始前恢复到实际的 SWR 实现
       vi.resetAllMocks();
     });
-    it('should refresh messages by invalidating message:list for the active agent+topic', async () => {
+    it('should refresh messages by revalidating the transcript syncs of the active agent+topic', async () => {
       useChatStore.setState({ refreshMessages: realRefreshMessages });
 
       const { result } = renderHook(() => useChatStore());
@@ -793,17 +793,15 @@ describe('chatMessage actions', () => {
 
       expect(isMessageListServerVerified(context)).toBe(false);
 
-      // refreshMessages now mutates with a single matcher targeting the
-      // accurate `message:list` key for this agent+topic.
       expect(mutate).toHaveBeenCalledTimes(1);
       const matcher = (mutate as any).mock.calls[0][0];
-      expect(typeof matcher).toBe('function');
-      expect(matcher(messageListKey(context))).toBe(true);
-      // other domains / other topics are not matched
-      expect(matcher(['topic:list', 'container', {}])).toBe(false);
-      expect(matcher(['message:list', { agentId: activeAgentId, topicId: 'other' }, 1])).toBe(
+      expect(matcher(transcriptSyncKey(context))).toBe(true);
+      expect(matcher(transcriptSyncKey({ ...context, threadId: 'thread-id' }))).toBe(true);
+      // other topics and the old `message:list` key are not matched
+      expect(matcher(['message:list', { ...context, groupId: null, threadId: null }, 2])).toBe(
         false,
       );
+      expect(matcher(transcriptSyncKey({ agentId: activeAgentId, topicId: 'other' }))).toBe(false);
     });
     it('should handle errors during refreshing messages', async () => {
       useChatStore.setState({ refreshMessages: realRefreshMessages });
@@ -849,7 +847,9 @@ describe('chatMessage actions', () => {
       });
 
       expect(mutate).toHaveBeenCalledTimes(1);
-      expect(mutate).toHaveBeenCalledWith(messageListKey(context));
+      const matcher = (mutate as any).mock.calls[0][0];
+      expect(matcher(transcriptSyncKey(context))).toBe(true);
+      expect(matcher(transcriptSyncKey({ ...context, threadId: 'other' }))).toBe(false);
     });
   });
 

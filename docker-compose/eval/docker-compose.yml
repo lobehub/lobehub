@@ -103,7 +103,7 @@ services:
   # The unified image runs both gateways. Ports are intentionally swapped from
   # its defaults to preserve the existing eval contract: device=8787, agent=8788.
   gateway:
-    image: ghcr.io/lobehub/lobehub-gateway:0.3.2
+    image: ghcr.io/lobehub/lobehub-gateway:0.5.0
     depends_on:
       rustfs-init:
         condition: service_completed_successfully

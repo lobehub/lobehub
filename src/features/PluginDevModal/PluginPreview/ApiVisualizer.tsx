@@ -1,11 +1,11 @@
 'use client';
 
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Input, Tag } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Block, createStaticStyles, cssVar, Flexbox, Icon, Input, Tag } from '@lobehub/ui';
 import { ChevronDown, ChevronRight, SearchIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   apiDesc: css`
@@ -46,7 +46,7 @@ const styles = createStaticStyles(({ css }) => ({
   paramGrid: css`
     display: grid;
     grid-template-columns: 1fr 2fr;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     margin-block-end: 12px;

@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import {
   Activity,
   ArrowRight,
@@ -26,6 +24,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { densityVars } from '@/styles/densityVars';
 
 import Sparkline from '../Sparkline';
 import StatusBadge from '../StatusBadge';
@@ -70,7 +69,7 @@ const styles = createStaticStyles(({ css }) => ({
   // Tonal hero band that carries the headline metric — the first thing the eye
   // lands on, separated from the identity row by a subtle fill.
   metricBand: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border-radius: ${cssVar.borderRadius};
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -83,7 +82,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   ctaBand: css`
     padding-block: 24px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border: 1px dashed ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
 

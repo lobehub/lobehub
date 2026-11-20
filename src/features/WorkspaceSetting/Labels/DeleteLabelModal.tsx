@@ -1,14 +1,14 @@
 import { type AgentLabelListItem } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
 import {
   Button,
   createModal,
+  Flexbox,
   Input,
   ModalFooter,
   Text,
   toast,
   useModalContext,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

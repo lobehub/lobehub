@@ -1,12 +1,25 @@
-import { Block, DropdownMenu, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, Spin, Tag, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Spin,
+  Tag,
+  toast,
+} from '@lobehub/ui';
 import { ArrowRight, ChevronRight, Database, Ellipsis, Pencil, Play, Trash2 } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { benchmarkDatasetPath } from '@/features/LobeBench/experimentNavigation';
+import { useIsLobeBenchBenchmark } from '@/features/LobeBench/useIsLobeBenchBenchmark';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useEvalStore } from '@/store/eval';
+import { densityVars } from '@/styles/densityVars';
 
 import { DATASET_PRESETS } from '../../../../config/datasetPresets';
 import TestCaseEmptyState from './TestCaseEmptyState';
@@ -26,7 +39,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: flex-end;
 
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadius};
 
     background: ${cssVar.colorFillQuaternary};
@@ -66,11 +79,11 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     width: 100%;
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border: none;
 
     text-align: start;
@@ -114,7 +127,7 @@ const styles = createStaticStyles(({ css }) => ({
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   footer: css`
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   footerLink: css`
@@ -168,6 +181,7 @@ const DatasetCard = memo<DatasetCardProps>(
   }) => {
     const { t } = useTranslation('eval');
     const deleteDataset = useEvalStore((s) => s.deleteDataset);
+    const lobeBench = useIsLobeBenchBenchmark(benchmarkId);
 
     const handleDelete = useCallback(() => {
       confirmModal({
@@ -282,7 +296,7 @@ const DatasetCard = memo<DatasetCardProps>(
             <Flexbox horizontal align="center" className={styles.footer} justify="center">
               <WorkspaceLink
                 className={styles.footerLink}
-                to={`/eval/bench/${benchmarkId}/datasets/${dataset.id}`}
+                to={benchmarkDatasetPath(dataset.id, lobeBench)}
               >
                 <Button icon={ArrowRight} iconPosition="end" size="small" type="text">
                   {t('dataset.detail.viewDetail')}

@@ -320,6 +320,13 @@ export interface AgentInterventionRuntimeAppContext {
    * resumes with no target (the run is owned by the builder itself).
    */
   editingAgentId?: string;
+  /**
+   * The group a Group Agent Builder run edits. Without it a `group_agent_builder`
+   * continuation falls back to `topics.metadata.editingGroupId`, which older
+   * topics never received — the member tools then answer `NoGroupContext`.
+   * Cloud rebuilds it from the parked operation's durable row.
+   */
+  editingGroupId?: string;
   groupId?: string | null;
   scope?: MessageMapScope;
   sessionId?: string;

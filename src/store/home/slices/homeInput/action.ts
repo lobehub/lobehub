@@ -2,6 +2,7 @@ import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 import type { ContextSelection, PageSelection } from '@lobechat/types';
 
+import { docsPagePath } from '@/features/ResourceHome/paths';
 import { stableWorkspaceAwareNavigate } from '@/features/Workspace/stableWorkspaceAwareNavigate';
 import { chatGroupService } from '@/services/chatGroup';
 import { documentService } from '@/services/document';
@@ -340,7 +341,7 @@ export class HomeInputActionImpl {
       });
 
       // 3. Navigate to Page
-      stableWorkspaceAwareNavigate(`/page/${newDoc.id}`);
+      stableWorkspaceAwareNavigate(docsPagePath(newDoc.id));
 
       // 4. Send the initial page-agent message. Hydrate first to avoid the same
       // race the agent/group flows hit.

@@ -84,3 +84,25 @@ describe('AcceptanceService.resolveOrigin', () => {
     expect(origin).toEqual({ agent: null, topic: { id: 'tpc_1', title: 'Harbor' } });
   });
 });
+
+describe('AcceptanceService.findRepairOrigin', () => {
+  it.each([
+    {
+      expected: { agentId: 'agt_2', topicId: 'tpc_2' },
+      runs: [{ origin: { topicId: 'tpc_1' } }, { origin: { agentId: 'agt_2', topicId: 'tpc_2' } }],
+    },
+    {
+      expected: { agentId: undefined, topicId: 'tpc_1' },
+      runs: [{ origin: { topicId: 'tpc_1' } }],
+    },
+    { expected: null, runs: [{ origin: { agentId: 'agt_1' } }] },
+    { expected: null, runs: [] },
+  ])('resolves the latest recorded origin to $expected', async ({ expected, runs }) => {
+    const service = new AcceptanceService({} as never, 'user', 'ws');
+    vi.spyOn((service as any).runModel, 'listByAcceptance').mockResolvedValue(
+      runs.map(({ origin }) => ({ metadata: { origin } })),
+    );
+
+    await expect(service.findRepairOrigin('acc-1')).resolves.toEqual(expected);
+  });
+});

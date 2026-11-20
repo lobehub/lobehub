@@ -7,8 +7,8 @@ import {
   windowsToCalibrationIntervals,
 } from './calibration';
 import { computeTurnCostUsd, totalTokens } from './cost';
-import { selectAccount } from './loadBalancer';
-import { buildClaudeQuotaWindows } from './readings';
+import { selectAccount, summarizeAvailability } from './loadBalancer';
+import { buildClaudeQuotaWindows, dropRetiredLimits } from './readings';
 import type { QuotaLimitReading } from './types';
 import { CLAUDE_SESSION_WINDOW_SECONDS, windowSecondsForKind } from './types';
 import { findWindowAt, isWindowContaminated, projectWindows } from './windows';
@@ -321,6 +321,61 @@ describe('buildClaudeQuotaWindows', () => {
       weekly: null,
     });
   });
+
+  it('drops a session window the plan no longer reports (Max upgraded to Ultra)', () => {
+    // Ultra has no 5-hour limit. The last Max-era session reading stays the
+    // newest one in its bucket, and once its window ended it would render as
+    // a refilled 5-hour meter on a plan that has none.
+    const windows = buildClaudeQuotaWindows(
+      [
+        reading({ capturedAt: now - 8 * 3_600_000, resetsAt: now - 6 * 3_600_000 }),
+        reading({ limitType: 'weekly_all', resetsAt: now + 3_600_000, utilization: 12 }),
+      ],
+      now,
+    );
+
+    expect(windows.session).toBeNull();
+    expect(windows.weekly).toMatchObject({ usedPercent: 12 });
+  });
+});
+
+describe('dropRetiredLimits', () => {
+  const sampledAt = Date.parse('2026-07-12T18:00:00Z');
+  const reading = (over: Partial<QuotaLimitReading> = {}): QuotaLimitReading => ({
+    capturedAt: sampledAt,
+    limitType: 'weekly_all',
+    resetsAt: sampledAt + 3_600_000,
+    scopeKey: '',
+    utilization: 30,
+    ...over,
+  });
+
+  it('keeps every limit of the newest sample, an idle rolled-over window included', () => {
+    const idleSession = reading({ limitType: 'session', resetsAt: sampledAt - 3_600_000 });
+    const readings = [idleSession, reading()];
+
+    expect(dropRetiredLimits(readings)).toEqual(readings);
+  });
+
+  it('keeps an older limit whose window was still live at the newest sample', () => {
+    const session = reading({
+      capturedAt: sampledAt - 3_600_000,
+      limitType: 'session',
+      resetsAt: sampledAt + 3_600_000,
+    });
+
+    expect(dropRetiredLimits([session, reading()])).toContain(session);
+  });
+
+  it('drops an older limit whose window had ended before the newest sample', () => {
+    const retired = reading({
+      capturedAt: sampledAt - 6 * 3_600_000,
+      limitType: 'session',
+      resetsAt: sampledAt - 3_600_000,
+    });
+
+    expect(dropRetiredLimits([retired, reading()])).toEqual([reading()]);
+  });
 });
 
 // ── load balancer ─────────────────────────────────────────────────────────────
@@ -379,5 +434,102 @@ describe('selectAccount', () => {
       { now: 0 },
     );
     expect(pick?.accountId).toBe('p1');
+  });
+});
+
+describe('summarizeAvailability', () => {
+  const base = { enabled: true, priority: 0 };
+  const now = 1000;
+
+  it('is available while any account has headroom', () => {
+    expect(
+      summarizeAvailability(
+        [
+          { ...base, accountId: 'spent', sessionResetsAt: 9000, sessionUtil: 100 },
+          { ...base, accountId: 'free', sessionUtil: 0, weeklyUtil: 56 },
+        ],
+        { now },
+      ),
+    ).toEqual({ available: true });
+  });
+
+  it('is exhausted when the only candidate is spent, and says when it comes back', () => {
+    // A device pin leaves one candidate: its spent 5-hour window decides.
+    expect(
+      summarizeAvailability(
+        [
+          {
+            ...base,
+            accountId: 'pin',
+            rateLimitedUntil: 9000,
+            sessionResetsAt: 9000,
+            sessionUtil: 100,
+          },
+        ],
+        { now },
+      ),
+    ).toEqual({ available: false, resetsAt: 9000 });
+  });
+
+  it('comes back at the earliest account, each at the latest limit benching it', () => {
+    expect(
+      summarizeAvailability(
+        [
+          // Both windows spent: back only once the weekly one resets too.
+          {
+            ...base,
+            accountId: 'both',
+            sessionResetsAt: 2000,
+            sessionUtil: 100,
+            weeklyResetsAt: 8000,
+            weeklyUtil: 100,
+          },
+          { ...base, accountId: 'weekly', weeklyResetsAt: 5000, weeklyUtil: 100 },
+        ],
+        { now },
+      ),
+    ).toEqual({ available: false, resetsAt: 5000 });
+  });
+
+  it('promises no time when a benching limit gives none', () => {
+    expect(
+      summarizeAvailability(
+        [
+          { ...base, accountId: 'timed', sessionResetsAt: 2000, sessionUtil: 100 },
+          { ...base, accountId: 'untimed', weeklyResetsAt: null, weeklyUtil: 100 },
+        ],
+        { now },
+      ),
+    ).toEqual({ available: false });
+  });
+
+  it('judges the scoped weekly only for work on that model', () => {
+    const fableSpent = [
+      {
+        ...base,
+        accountId: 'a',
+        scopedWeeklyResetsAt: { Fable: 7000 },
+        scopedWeeklyUtil: { Fable: 100 },
+        weeklyUtil: 40,
+      },
+    ];
+    expect(summarizeAvailability(fableSpent, { modelScope: 'Fable', now })).toEqual({
+      available: false,
+      resetsAt: 7000,
+    });
+    expect(summarizeAvailability(fableSpent, { now })).toEqual({ available: true });
+  });
+
+  it('ignores disabled accounts: they never come back on their own', () => {
+    expect(
+      summarizeAvailability(
+        [
+          { ...base, accountId: 'off', enabled: false, weeklyUtil: 0 },
+          { ...base, accountId: 'spent', sessionResetsAt: 3000, sessionUtil: 100 },
+        ],
+        { now },
+      ),
+    ).toEqual({ available: false, resetsAt: 3000 });
+    expect(summarizeAvailability([], { now })).toEqual({ available: false });
   });
 });

@@ -13,8 +13,8 @@ export const directoryAgentName = (
   inboxName: string,
 ) => agentDisplayName(agent) ?? (isInbox ? inboxName : undefined);
 
-export const useDirectoryAgent = (coordinatorAgentId: string) => {
-  const [agentId, setAgentId] = useState(coordinatorAgentId);
+export const useDirectoryAgent = (coordinatorAgentId: string, initialAgentId?: string) => {
+  const [agentId, setAgentId] = useState(initialAgentId ?? coordinatorAgentId);
   const { t } = useTranslation('chat');
   const inboxId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const listName = useHomeStore((s) =>

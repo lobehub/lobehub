@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
   entriesByPrefix: vi.fn(),
   get: vi.fn(),
   initialize: vi.fn(),
+  keyGroupsByPrefix: vi.fn(),
+  keysByPrefix: vi.fn(),
+  listCollections: vi.fn(),
   set: vi.fn(),
 }));
 
@@ -31,6 +34,7 @@ describe('createElectronLocalDatabaseAdapter', () => {
     vi.clearAllMocks();
 
     mocks.initialize.mockResolvedValue(undefined);
+    mocks.listCollections.mockResolvedValue([{ entryCount: 2, name: 'cache' }]);
     mocks.get.mockImplementation(async ({ collection, key }: DesktopLocalDatabaseKey) =>
       records.get(recordKey(collection, key)),
     );
@@ -77,6 +81,33 @@ describe('createElectronLocalDatabaseAdapter', () => {
     await expect(adapter.get('cache', 'item')).resolves.toEqual(value);
   });
 
+  it('forwards key-only queries without deserializing any value', async () => {
+    const adapter = createElectronLocalDatabaseAdapter();
+    mocks.keysByPrefix.mockResolvedValue({ keys: ['scope::1'], total: 5 });
+    mocks.keyGroupsByPrefix.mockResolvedValue([{ entryCount: 5, name: 'scope' }]);
+
+    await expect(
+      adapter.keysByPrefix('cache', 'scope::', { limit: 1, search: 'x' }),
+    ).resolves.toEqual({ keys: ['scope::1'], total: 5 });
+    await expect(adapter.keyGroupsByPrefix('cache', '', '::')).resolves.toEqual([
+      { entryCount: 5, name: 'scope' },
+    ]);
+
+    expect(mocks.keysByPrefix).toHaveBeenCalledWith({
+      collection: 'cache',
+      limit: 1,
+      prefix: 'scope::',
+      search: 'x',
+    });
+    expect(mocks.keyGroupsByPrefix).toHaveBeenCalledWith({
+      collection: 'cache',
+      delimiter: '::',
+      prefix: '',
+    });
+    expect(mocks.entriesByPrefix).not.toHaveBeenCalled();
+    expect(mocks.get).not.toHaveBeenCalled();
+  });
+
   it('supports prefix queries and atomic batch payloads through IPC', async () => {
     const adapter = createElectronLocalDatabaseAdapter();
 
@@ -90,5 +121,6 @@ describe('createElectronLocalDatabaseAdapter', () => {
       { key: 'scope::1', value: { id: 1 } },
       { key: 'scope::2', value: { id: 2 } },
     ]);
+    await expect(adapter.listCollections()).resolves.toEqual([{ entryCount: 2, name: 'cache' }]);
   });
 });

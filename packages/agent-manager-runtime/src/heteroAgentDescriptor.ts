@@ -41,6 +41,13 @@ const CODING_CAPABILITIES = [
 ];
 
 const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
+  'antigravity': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      "Antigravity — Google's native CLI coding agent (agy). It uses its own signed-in account, models and built-in tools to read and edit files and run permitted commands in a working directory. Command execution follows the user's Antigravity permission policy.",
+    displayName: 'Antigravity',
+    kind: 'cli',
+  },
   'amp': {
     capabilities: CODING_CAPABILITIES,
     description:
@@ -67,6 +74,13 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
     description:
       "Codex — OpenAI's autonomous CLI coding agent. It has full access to a working directory: it can read, edit and write files, run shell commands and tests, and complete multi-step software-engineering tasks autonomously. It does NOT use the chat `plugins`/`model` settings — it runs its own built-in toolset and model.",
     displayName: 'Codex',
+    kind: 'cli',
+  },
+  'copilot': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      "GitHub Copilot — GitHub's autonomous CLI coding agent. It can inspect and edit a working directory, run shell commands and tests, search code, and complete multi-step software-engineering tasks through its built-in tools.",
+    displayName: 'GitHub Copilot',
     kind: 'cli',
   },
   'cursor': {

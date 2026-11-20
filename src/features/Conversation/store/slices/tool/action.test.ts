@@ -3,12 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ConversationContext, type ConversationHooks } from '../../../types';
 import { createStore } from '../../index';
+import type { PendingIntervention } from '../data/pendingInterventions';
+import { dataSelectors } from '../data/selectors';
 
 // Mock dependencies
 const mockApproveToolCalling = vi.fn();
 const mockRejectToolCalling = vi.fn();
 const mockRejectAndContinueToolCalling = vi.fn();
 const mockSubmitHeteroIntervention = vi.fn();
+const mockApproveAllToolCalls = vi.fn();
+const mockAddToolToAllowList = vi.fn();
 
 vi.mock('@/store/chat', () => ({
   useChatStore: {
@@ -17,6 +21,7 @@ vi.mock('@/store/chat', () => ({
       messagesMap: {},
       operations: {},
       approveToolCalling: mockApproveToolCalling,
+      approveAllToolCalls: mockApproveAllToolCalls,
       rejectToolCalling: mockRejectToolCalling,
       rejectAndContinueToolCalling: mockRejectAndContinueToolCalling,
       submitHeteroIntervention: mockSubmitHeteroIntervention,
@@ -33,6 +38,10 @@ vi.mock('@/store/chat', () => ({
     })),
     setState: vi.fn(),
   },
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: { getState: () => ({ addToolToAllowList: mockAddToolToAllowList }) },
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
@@ -61,6 +70,19 @@ vi.mock('@/services/message', () => ({
   },
 }));
 
+const chatContext = (): ConversationContext => ({
+  agentId: 'session-1',
+  topicId: null,
+  threadId: null,
+});
+
+const builderContext = (): ConversationContext => ({
+  agentId: 'builder-agent',
+  topicId: 'builder-topic',
+  threadId: 'builder-thread',
+  scope: 'agent_builder',
+});
+
 describe('Tool Actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -72,11 +94,7 @@ describe('Tool Actions', () => {
 
   describe('approveToolCall', () => {
     it('should pass entire context object to ChatStore.approveToolCalling', async () => {
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
+      const context: ConversationContext = chatContext();
 
       const store = createStore({ context });
 
@@ -89,12 +107,7 @@ describe('Tool Actions', () => {
     });
 
     it('should pass agent_builder scope context correctly', async () => {
-      const context: ConversationContext = {
-        agentId: 'builder-agent',
-        topicId: 'builder-topic',
-        threadId: 'builder-thread',
-        scope: 'agent_builder',
-      };
+      const context: ConversationContext = builderContext();
 
       const store = createStore({ context });
 
@@ -108,11 +121,7 @@ describe('Tool Actions', () => {
 
     it('should call onToolApproved hook before approval', async () => {
       const onToolApproved = vi.fn().mockResolvedValue(true);
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
+      const context: ConversationContext = chatContext();
       const hooks: ConversationHooks = { onToolApproved };
 
       const store = createStore({ context, hooks });
@@ -127,11 +136,7 @@ describe('Tool Actions', () => {
 
     it('should respect onToolApproved hook returning false', async () => {
       const onToolApproved = vi.fn().mockResolvedValue(false);
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
+      const context: ConversationContext = chatContext();
       const hooks: ConversationHooks = { onToolApproved };
 
       const store = createStore({ context, hooks });
@@ -146,11 +151,7 @@ describe('Tool Actions', () => {
 
     it('should call onToolCallComplete hook after approval', async () => {
       const onToolCallComplete = vi.fn();
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
+      const context: ConversationContext = chatContext();
       const hooks: ConversationHooks = { onToolCallComplete };
 
       const store = createStore({ context, hooks });
@@ -160,6 +161,30 @@ describe('Tool Actions', () => {
       });
 
       expect(onToolCallComplete).toHaveBeenCalledWith('tool-call-1', undefined);
+    });
+  });
+
+  it('writes legacy-fallback edits without loading the still-pending server rows', async () => {
+    const context: ConversationContext = { agentId: 'session-1', topicId: null, threadId: null };
+    const store = createStore({ context });
+    const updatePluginArguments = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      store.setState({
+        dbMessages: [{ id: 'tool-msg-1', role: 'tool', tool_call_id: 'call-1' } as any],
+        updatePluginArguments,
+      });
+    });
+
+    await act(async () => {
+      await store
+        .getState()
+        .approveToolCall('tool-msg-1', 'group-1', { editedArguments: { path: 'edited' } });
+    });
+    const [, , , options] = mockApproveToolCalling.mock.calls[0];
+    await options.onLegacyEditFallback();
+
+    expect(updatePluginArguments).toHaveBeenCalledWith('call-1', { path: 'edited' }, true, {
+      refresh: false,
     });
   });
 
@@ -213,11 +238,7 @@ describe('Tool Actions', () => {
   describe('rejectToolCall', () => {
     it('should call onToolRejected hook before rejection', async () => {
       const onToolRejected = vi.fn().mockResolvedValue(true);
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
+      const context: ConversationContext = chatContext();
       const hooks: ConversationHooks = { onToolRejected };
 
       const store = createStore({ context, hooks });
@@ -231,11 +252,7 @@ describe('Tool Actions', () => {
 
     it('should respect onToolRejected hook returning false', async () => {
       const onToolRejected = vi.fn().mockResolvedValue(false);
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
+      const context: ConversationContext = chatContext();
       const hooks: ConversationHooks = { onToolRejected };
 
       const store = createStore({ context, hooks });
@@ -249,11 +266,7 @@ describe('Tool Actions', () => {
     });
 
     it('should delegate to ChatStore.rejectToolCalling with context', async () => {
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
+      const context: ConversationContext = chatContext();
 
       const store = createStore({ context });
 
@@ -265,12 +278,7 @@ describe('Tool Actions', () => {
     });
 
     it('should pass agent_builder scope context correctly', async () => {
-      const context: ConversationContext = {
-        agentId: 'builder-agent',
-        topicId: 'builder-topic',
-        threadId: 'builder-thread',
-        scope: 'agent_builder',
-      };
+      const context: ConversationContext = builderContext();
 
       const store = createStore({ context });
 
@@ -284,11 +292,7 @@ describe('Tool Actions', () => {
 
   describe('rejectAndContinueToolCall', () => {
     it('should pass entire context object to ChatStore.rejectAndContinueToolCalling', async () => {
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
+      const context: ConversationContext = chatContext();
 
       const store = createStore({ context });
 
@@ -305,12 +309,7 @@ describe('Tool Actions', () => {
     });
 
     it('should pass agent_builder scope context correctly', async () => {
-      const context: ConversationContext = {
-        agentId: 'builder-agent',
-        topicId: 'builder-topic',
-        threadId: 'builder-thread',
-        scope: 'agent_builder',
-      };
+      const context: ConversationContext = builderContext();
 
       const store = createStore({ context });
 
@@ -348,11 +347,7 @@ describe('Tool Actions', () => {
     });
 
     it('should NOT also call ChatStore.rejectToolCalling (avoid double-dispatch with rejected_continue)', async () => {
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
+      const context: ConversationContext = chatContext();
 
       const store = createStore({ context });
 
@@ -370,11 +365,7 @@ describe('Tool Actions', () => {
 
     it('should still fire the onToolRejected hook', async () => {
       const onToolRejected = vi.fn().mockResolvedValue(true);
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
+      const context: ConversationContext = chatContext();
       const hooks: ConversationHooks = { onToolRejected };
 
       const store = createStore({ context, hooks });
@@ -393,11 +384,7 @@ describe('Tool Actions', () => {
 
     it('should respect onToolRejected hook returning false and skip the continue call', async () => {
       const onToolRejected = vi.fn().mockResolvedValue(false);
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
+      const context: ConversationContext = chatContext();
       const hooks: ConversationHooks = { onToolRejected };
 
       const store = createStore({ context, hooks });
@@ -413,11 +400,7 @@ describe('Tool Actions', () => {
 
   describe('waitForPendingArgsUpdate integration', () => {
     it('approveToolCall should wait for pending args update before proceeding', async () => {
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
+      const context: ConversationContext = chatContext();
 
       const store = createStore({ context });
 
@@ -458,11 +441,7 @@ describe('Tool Actions', () => {
 
     it('rejectToolCall should wait for pending args update before proceeding', async () => {
       const onToolRejected = vi.fn().mockResolvedValue(true);
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
+      const context: ConversationContext = chatContext();
       const hooks: ConversationHooks = { onToolRejected };
 
       const store = createStore({ context, hooks });
@@ -503,11 +482,7 @@ describe('Tool Actions', () => {
     });
 
     it('rejectAndContinueToolCall should wait for pending args update before proceeding', async () => {
-      const context: ConversationContext = {
-        agentId: 'session-1',
-        topicId: null,
-        threadId: null,
-      };
+      const context: ConversationContext = chatContext();
 
       const store = createStore({ context });
 
@@ -548,6 +523,88 @@ describe('Tool Actions', () => {
         'Reason',
         context,
       );
+    });
+  });
+
+  describe('approveToolCallAndCovered', () => {
+    const context: ConversationContext = { agentId: 'agent', topicId: 'topic' };
+    const pending = (
+      toolMessageId: string,
+      apiName = 'dryRunWidget',
+      batchId = 'batch-1',
+    ): PendingIntervention =>
+      ({
+        apiName,
+        batchId,
+        identifier: 'builtin-dashboard',
+        operationId: 'op-1',
+        requestArgs: JSON.stringify({ versionId: toolMessageId }),
+        toolCallId: `call-${toolMessageId}`,
+        toolMessageId,
+      }) as PendingIntervention;
+
+    const withPending = (items: PendingIntervention[]) =>
+      vi.spyOn(dataSelectors, 'pendingInterventions').mockReturnValue(items);
+
+    it('approves siblings the remember now covers together with the card, in one batch', async () => {
+      withPending([pending('tool-a'), pending('tool-b'), pending('tool-c', 'requestPublish')]);
+      const store = createStore({ context });
+      const isCovered = vi.fn(async () => true);
+
+      await act(async () => {
+        await store.getState().approveToolCallAndCovered('tool-a', 'group-1', { isCovered });
+      });
+
+      // Only the same tool's calls are re-checked; another API in the batch still asks.
+      expect(isCovered).toHaveBeenCalledTimes(1);
+      expect(mockApproveAllToolCalls).toHaveBeenCalledWith(['tool-a', 'tool-b'], context);
+      expect(mockApproveToolCalling).not.toHaveBeenCalled();
+    });
+
+    it('approves the card alone when no sibling is covered', async () => {
+      withPending([pending('tool-a'), pending('tool-b')]);
+      const store = createStore({ context });
+
+      await act(async () => {
+        await store.getState().approveToolCallAndCovered('tool-a', 'group-1', {
+          isCovered: async () => false,
+          rememberToolKey: 'builtin-dashboard/dryRunWidget',
+        });
+      });
+
+      expect(mockApproveAllToolCalls).not.toHaveBeenCalled();
+      expect(mockApproveToolCalling).toHaveBeenCalledWith('tool-a', 'group-1', context, {
+        editedArguments: undefined,
+        rememberToolKey: 'builtin-dashboard/dryRunWidget',
+      });
+    });
+
+    it('writes the allow-list itself when siblings ride along on the batch approval', async () => {
+      withPending([pending('tool-a'), pending('tool-b')]);
+      const store = createStore({ context });
+
+      await act(async () => {
+        await store.getState().approveToolCallAndCovered('tool-a', 'group-1', {
+          isCovered: async () => true,
+          rememberToolKey: 'builtin-dashboard/dryRunWidget',
+        });
+      });
+
+      expect(mockAddToolToAllowList).toHaveBeenCalledWith('builtin-dashboard/dryRunWidget');
+      expect(mockApproveAllToolCalls).toHaveBeenCalledWith(['tool-a', 'tool-b'], context);
+    });
+
+    it('never reaches into another batch', async () => {
+      withPending([pending('tool-a'), pending('tool-b', 'dryRunWidget', 'batch-2')]);
+      const store = createStore({ context });
+      const isCovered = vi.fn(async () => true);
+
+      await act(async () => {
+        await store.getState().approveToolCallAndCovered('tool-a', 'group-1', { isCovered });
+      });
+
+      expect(isCovered).not.toHaveBeenCalled();
+      expect(mockApproveToolCalling).toHaveBeenCalled();
     });
   });
 });

@@ -34,20 +34,6 @@ describe('ZenMux Runtime', () => {
     delete process.env.DEBUG_ZENMUX_CHAT_COMPLETION;
   });
 
-  describe('Debug Configuration', () => {
-    it('should return false when DEBUG_ZENMUX_CHAT_COMPLETION is not set', () => {
-      delete process.env.DEBUG_ZENMUX_CHAT_COMPLETION;
-      const debugResult = process.env.DEBUG_ZENMUX_CHAT_COMPLETION === '1';
-      expect(debugResult).toBe(false);
-    });
-
-    it('should return true when DEBUG_ZENMUX_CHAT_COMPLETION is set to 1', () => {
-      process.env.DEBUG_ZENMUX_CHAT_COMPLETION = '1';
-      const debugResult = process.env.DEBUG_ZENMUX_CHAT_COMPLETION === '1';
-      expect(debugResult).toBe(true);
-    });
-  });
-
   describe('LobeZenMuxAI - custom features', () => {
     describe('Params Export', () => {
       it('should have correct provider ID', () => {

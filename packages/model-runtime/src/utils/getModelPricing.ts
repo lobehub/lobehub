@@ -2,6 +2,7 @@ import type {
   LobeDefaultAiModelListItem,
   ModelParamsSchema,
   Pricing,
+  TTSModelParamsSchema,
   VideoModelParamsSchema,
 } from 'model-bank';
 
@@ -57,7 +58,7 @@ export async function getModelParameters(
   model: string,
   provider?: string,
   pricingContext?: ModelPricingContext,
-): Promise<ModelParamsSchema | VideoModelParamsSchema | undefined> {
+): Promise<ModelParamsSchema | TTSModelParamsSchema | VideoModelParamsSchema | undefined> {
   const card = await findModelCard(
     model,
     provider,
@@ -65,4 +66,17 @@ export async function getModelParameters(
     (m) => 'parameters' in m && !!m.parameters,
   );
   return card && 'parameters' in card ? card.parameters : undefined;
+}
+
+/**
+ * Model type (`chat`, `decision`, …) of the model-bank card for `model`, resolved like
+ * {@link getModelPricing}. Undefined when model-bank does not list the model.
+ */
+export async function getModelType(
+  model: string,
+  provider?: string,
+  pricingContext?: ModelPricingContext,
+): Promise<LobeDefaultAiModelListItem['type'] | undefined> {
+  const card = await findModelCard(model, provider, pricingContext, (m) => !!m.type);
+  return card?.type;
 }

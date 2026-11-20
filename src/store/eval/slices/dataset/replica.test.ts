@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * The dataset lists (benchmark-scoped + scope-wide) and the dataset detail are
- * `@lobechat/replica` resources whose views are `datasetListMap` /
+ * `local-replica` resources whose views are `datasetListMap` /
  * `datasetDetailMap`. This suite drives the real replica sync through SWR (no
  * mocked fetch hook) to show the behaviour the migration must preserve: a
  * persisted list paints while the network answers, a server response settles

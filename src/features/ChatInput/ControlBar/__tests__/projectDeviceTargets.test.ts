@@ -83,4 +83,14 @@ describe('listProjectDeviceTargets', () => {
     );
     expect(target).toMatchObject({ label: 'Build box', online: false });
   });
+
+  it('carries the registered device so the row can show its details', () => {
+    const [known, unknown] = listProjectDeviceTargets(
+      [directory('dir-a', 'dev-a'), directory('dir-x', 'dev-x')],
+      devices,
+      undefined,
+    );
+    expect(known.device).toBe(devices[0]);
+    expect(unknown.device).toBeUndefined();
+  });
 });

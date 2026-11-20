@@ -1,4 +1,6 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
+
+import { densityVars } from '@/styles/densityVars';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   actionBtn: css`
@@ -9,7 +11,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   actionBtnPrimary: css`
     width: auto !important;
-    padding-inline: 12px !important;
+    padding-inline: ${densityVars.contentGap} !important;
   `,
   expandLink: css`
     border: 1px solid ${cssVar.colorFillTertiary} !important;

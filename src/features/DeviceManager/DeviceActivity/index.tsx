@@ -2,9 +2,16 @@
 
 import { AGENT_CHAT_URL } from '@lobechat/const';
 import { agentDisplayName, type DeviceBoundAgentItem } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Avatar, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Avatar,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import { ArrowUpRightIcon, LockIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +21,7 @@ import TopicRow, { getTopicChatUrl } from '@/features/HomeInbox/TopicRow';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useClientDataSWR } from '@/libs/swr';
 import { type DeviceRunningTopic, deviceService } from '@/services/device';
+import { densityVars } from '@/styles/densityVars';
 
 import { RunUserAvatar } from './RunningUsers';
 
@@ -39,7 +47,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   placeholder: css`
     padding-block: 14px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
   `,
 }));
 

@@ -152,3 +152,73 @@ describe('TopicReferenceService scope resolution', () => {
     });
   });
 });
+
+describe('TopicReferenceService.isNamedInConversation', () => {
+  const ownerId = 'topic-named-owner';
+  const scopeId = 'topic-named-workspace';
+  const conversation = 'tpc_namedConvo01';
+
+  beforeAll(async () => {
+    await db.insert(users).values({ id: ownerId });
+    await db.insert(workspaces).values({
+      id: scopeId,
+      name: scopeId,
+      primaryOwnerId: ownerId,
+      slug: scopeId,
+    });
+    await db.insert(topics).values([
+      { id: conversation, userId: ownerId, workspaceId: scopeId },
+      { id: 'tpc_namedElsewhere', userId: ownerId, workspaceId: scopeId },
+    ]);
+    const say = (id: string, content: string, role = 'user', topicId = conversation) => ({
+      content,
+      id,
+      role,
+      topicId,
+      userId: ownerId,
+      workspaceId: scopeId,
+    });
+    await db
+      .insert(messages)
+      .values([
+        say('named-bare', '参考这个对话，tpc_bareRef0001，clone 3 个项目到当前目录'),
+        say('named-tag', '<refer_topic name="Earlier" id="tpc_tagRef00001" />\nSummarize it'),
+        say('named-escaped', String.raw`\<refer\_topic name="Earlier" id="tpc\_escRef00001" />`),
+        say('named-longer', 'see tpc_prefixRef0001extra'),
+        say('named-assistant', 'I could also read tpc_assistRef001', 'assistant'),
+        say('named-other-topic', 'tpc_otherConvo01', 'user', 'tpc_namedElsewhere'),
+      ]);
+  });
+
+  afterAll(async () => {
+    await db.delete(users).where(inArray(users.id, [ownerId]));
+  });
+
+  const service = new TopicReferenceService(db, ownerId, scopeId);
+
+  it.each([
+    ['the conversation itself', conversation],
+    ['a bare id the user wrote', 'tpc_bareRef0001'],
+    ['a <refer_topic> tag', 'tpc_tagRef00001'],
+    ['a markdown-escaped <refer_topic> tag', 'tpc_escRef00001'],
+  ])('reaches %s', async (_label, topicId) => {
+    await expect(service.isNamedInConversation(conversation, topicId)).resolves.toBe(true);
+  });
+
+  it.each([
+    ['an id that only starts a longer one', 'tpc_prefixRef0001'],
+    ['an id only the assistant mentioned', 'tpc_assistRef001'],
+    ['an id named in another conversation', 'tpc_otherConvo01'],
+    ['a pattern rather than an id', 'tpc_.*'],
+  ])('does not reach %s', async (_label, topicId) => {
+    await expect(service.isNamedInConversation(conversation, topicId)).resolves.toBe(false);
+  });
+
+  it("does not read another scope's conversation", async () => {
+    const outsider = new TopicReferenceService(db, ownerId);
+
+    await expect(outsider.isNamedInConversation(conversation, 'tpc_bareRef0001')).resolves.toBe(
+      false,
+    );
+  });
+});

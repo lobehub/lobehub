@@ -1,5 +1,8 @@
-import type { WorkspaceApiKeyMemberCreation } from '@lobechat/types';
-import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
+import type {
+  WorkspaceApiKeyMemberCreation,
+  WorkspaceConnectorMemberManage,
+} from '@lobechat/types';
+import { and, count, desc, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
 
 import {
   type NewWorkspace,
@@ -11,6 +14,7 @@ import {
 } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
 import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from './agentTransferJob';
+import { countOf } from './utils/rows';
 import { DEFAULT_TEAM_IDENTIFIER, deriveTeamIdentifier } from './workspaceTeam';
 
 export const getActiveWorkspaceMembershipRole = async (
@@ -77,6 +81,19 @@ export const getWorkspaceApiKeyMemberCreation = (
   if (!apiKey || typeof apiKey !== 'object') return 'all_members';
 
   return (apiKey as { memberCreation?: unknown }).memberCreation === 'admins_only'
+    ? 'admins_only'
+    : 'all_members';
+};
+
+export const getWorkspaceConnectorMemberManage = (
+  settings: unknown,
+): WorkspaceConnectorMemberManage => {
+  if (!settings || typeof settings !== 'object') return 'all_members';
+
+  const connector = (settings as { connector?: unknown }).connector;
+  if (!connector || typeof connector !== 'object') return 'all_members';
+
+  return (connector as { memberManage?: unknown }).memberManage === 'admins_only'
     ? 'admins_only'
     : 'all_members';
 };
@@ -188,6 +205,10 @@ export class WorkspaceModel {
     return getWorkspaceApiKeyMemberCreation(await this.getSettings(id));
   };
 
+  getConnectorMemberManage = async (id: string): Promise<WorkspaceConnectorMemberManage> => {
+    return getWorkspaceConnectorMemberManage(await this.getSettings(id));
+  };
+
   /**
    * Count every workspace this user belongs to — owned + joined. Reads the
    * membership table directly because owners are always inserted as members on
@@ -198,27 +219,17 @@ export class WorkspaceModel {
       .select({ count: count() })
       .from(workspaceMembers)
       .where(and(eq(workspaceMembers.userId, this.userId), isNull(workspaceMembers.deletedAt)));
-    return result[0]?.count ?? 0;
+    return countOf(result, 'the workspace membership count');
   };
 
   listUserWorkspaces = async () => {
-    const memberships = await this.db.query.workspaceMembers.findMany({
-      where: and(eq(workspaceMembers.userId, this.userId), isNull(workspaceMembers.deletedAt)),
-    });
-
-    if (memberships.length === 0) return [];
-
-    const workspaceIds = memberships.map((m) => m.workspaceId);
-
-    const results = await this.db.query.workspaces.findMany({
-      orderBy: [desc(workspaces.updatedAt)],
-      where: (ws, { inArray }) => inArray(ws.id, workspaceIds),
-    });
-
-    return results.map((ws) => ({
-      ...ws,
-      role: memberships.find((m) => m.workspaceId === ws.id)?.role ?? 'viewer',
-    }));
+    // The inner join pairs each workspace with the caller's (unique) membership row.
+    return this.db
+      .select({ ...getTableColumns(workspaces), role: workspaceMembers.role })
+      .from(workspaceMembers)
+      .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+      .where(and(eq(workspaceMembers.userId, this.userId), isNull(workspaceMembers.deletedAt)))
+      .orderBy(desc(workspaces.updatedAt));
   };
 
   update = async (
@@ -248,6 +259,22 @@ export class WorkspaceModel {
         settings: sql`coalesce(${workspaces.settings}, '{}'::jsonb) || jsonb_build_object(
           'apiKey',
           coalesce(${workspaces.settings}->'apiKey', '{}'::jsonb) || jsonb_build_object('memberCreation', ${memberCreation}::text)
+        )`,
+        updatedAt: new Date(),
+      })
+      .where(eq(workspaces.id, id));
+  };
+
+  updateConnectorMemberManage = async (
+    id: string,
+    memberManage: WorkspaceConnectorMemberManage,
+  ) => {
+    return this.db
+      .update(workspaces)
+      .set({
+        settings: sql`coalesce(${workspaces.settings}, '{}'::jsonb) || jsonb_build_object(
+          'connector',
+          coalesce(${workspaces.settings}->'connector', '{}'::jsonb) || jsonb_build_object('memberManage', ${memberManage}::text)
         )`,
         updatedAt: new Date(),
       })

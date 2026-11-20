@@ -1,7 +1,8 @@
-import { DashboardIdentifier } from '@lobechat/builtin-tool-dashboard';
+import { DashboardIdentifier, LegacyDashboardIdentifier } from '@lobechat/builtin-tool-dashboard';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { toolSetsFrom } from '../../__tests__/helpers/connectorToolSets';
 import { AiAgentService } from '../../index';
 
 // Feature-flagged builtin tools must leave a server run's tool pool while
@@ -87,6 +88,7 @@ vi.mock('@/database/models/connector', () => ({
     return {
       queryByIdentifiers: vi.fn().mockResolvedValue([]),
       resolveByIdentifiers: mockResolveByIdentifiers,
+      resolveToolSets: toolSetsFrom(mockResolveByIdentifiers),
     };
   }),
 }));
@@ -232,7 +234,7 @@ describe('discoverTools - feature-flagged builtin tools', () => {
       chatConfig: {},
       id: 'agent-1',
       model: 'gpt-4',
-      // Even a pinned lobe-dashboard must not be offered while the flag is off.
+      // Even a pinned builtin-dashboard must not be offered while the flag is off.
       plugins: [DashboardIdentifier],
       provider: 'openai',
       systemRole: '',
@@ -243,15 +245,33 @@ describe('discoverTools - feature-flagged builtin tools', () => {
   const disabledIds = () =>
     mockCreateServerAgentToolsEngine.mock.calls[0][1].disabledPluginIds as string[];
 
-  it('drops lobe-dashboard from the run while the dashboard flag is off', async () => {
+  it('drops builtin-dashboard from the run while the dashboard flag is off', async () => {
     dashboardFlag.value = false;
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
     expect(disabledIds()).toContain(DashboardIdentifier);
   });
 
-  it('keeps lobe-dashboard available for a user the flag enables', async () => {
+  it('keeps builtin-dashboard available for a user the flag enables', async () => {
     dashboardFlag.value = ['user-1'];
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
     expect(disabledIds()).not.toContain(DashboardIdentifier);
+  });
+
+  it('offers the current id to an agent that pinned the tool before its rename', async () => {
+    dashboardFlag.value = ['user-1'];
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: [LegacyDashboardIdentifier],
+      provider: 'openai',
+      systemRole: '',
+    });
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+    const engine = mockCreateServerAgentToolsEngine.mock.results[0].value;
+    const { toolIds } = engine.generateToolsDetailed.mock.calls[0][0];
+    expect(toolIds).toContain(DashboardIdentifier);
+    expect(toolIds).not.toContain(LegacyDashboardIdentifier);
   });
 });

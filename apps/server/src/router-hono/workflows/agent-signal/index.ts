@@ -7,6 +7,7 @@ import type { AgentSignalWorkflowRunPayload } from '@/server/workflows/agentSign
 
 import { qstashAuth } from '../middlewares/qstashAuth';
 import { createWorkflowQstashClient } from '../qstashClient';
+import { pruneSignals } from './handlers/pruneSignals';
 import { scheduleNightlyReview } from './handlers/scheduleNightlyReview';
 import {
   executeNightlyReviewUser,
@@ -18,6 +19,8 @@ import {
 const app = new Hono();
 
 app.post('/cron-hourly-nightly-self-review', qstashAuth(), scheduleNightlyReview);
+
+app.post('/prune-signals', qstashAuth(), pruneSignals);
 
 app.post(
   '/paginate-nightly-review-users',

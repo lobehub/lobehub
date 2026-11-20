@@ -1,11 +1,11 @@
 import type { VerifyCheckItem, VerifyEvidenceType } from '@lobechat/types';
 
 /** Bump when the plan-gen prompt meaningfully changes (tracing partition key). */
-export const VERIFY_PLAN_PROMPT_VERSION = 'v3';
+export const VERIFY_PLAN_PROMPT_VERSION = 'v4';
 /** Bump when the judge prompt meaningfully changes. */
 export const VERIFY_JUDGE_PROMPT_VERSION = 'v3';
 /** Bump when the report prompt meaningfully changes. */
-export const VERIFY_REPORT_PROMPT_VERSION = 'v1';
+export const VERIFY_REPORT_PROMPT_VERSION = 'v2';
 /**
  * Bump when the review-prediction prompt meaningfully changes. Doubles as part
  * of the uniqueness key on `verify_review_predictions`, so a bump makes the next
@@ -196,12 +196,25 @@ export const REVIEW_PREDICTION_JSON_SCHEMA = {
   strict: true,
 };
 
+/**
+ * The language rule for user-facing verify text. A Task's run goal is wrapped in
+ * English system scaffolding ("Verify only this Task…", "Required Task outcome…")
+ * around the user's own words, so "the language of the run goal" reads as
+ * English. The account's response language, when set, wins outright.
+ */
+const verifyOutputLanguageRule = (fields: string, language?: string) =>
+  language
+    ? `Write ${fields} in ${language}, whatever language the run goal is written in. Keep identifiers, file paths, commands and quoted output as they are.`
+    : `Write ${fields} in the language the user wrote the run goal's own content in. Ignore the English system wording around it, such as "Verify only this Task" or "Required Task outcome".`;
+
 export interface PlanPromptInput {
   /** Optional run context (agent role, repo, constraints). */
   context?: string;
   /** Already-mounted criteria titles, so the AI proposes complementary ones. */
   existingTitles?: string[];
   goal: string;
+  /** The account's response language (e.g. `zh-CN`); the criteria render on its acceptance page. */
+  language?: string;
   maxCriteria: number;
 }
 
@@ -209,6 +222,7 @@ export const chainVerifyPlan = ({
   goal,
   context,
   existingTitles,
+  language,
   maxCriteria,
 }: PlanPromptInput) => {
   const system = [
@@ -225,6 +239,7 @@ export const chainVerifyPlan = ({
     '- description: a one-sentence summary of what this criterion verifies.',
     '- instruction: a detailed, fine-grained judging rubric for this criterion — the exact conditions that constitute a pass, what counts as a fail, the concrete evidence to look for, and edge cases to check. Be specific and thorough, not a one-liner.',
     '- Do not restate criteria already mounted (listed below); propose complementary ones only.',
+    `- ${verifyOutputLanguageRule('title, description, instruction and every requiredEvidence hint', language)}`,
   ].join('\n');
 
   const user = [
@@ -259,6 +274,8 @@ export interface JudgeEvidence {
    * every file to their isolated run.
    */
   fileId?: string | null;
+  /** The row's metadata bag — the coverage gate reads a terminal evidence's provenance from it. */
+  metadata?: unknown;
   type: VerifyEvidenceType;
 }
 
@@ -362,6 +379,8 @@ export interface ReportPromptInput {
   deliverable: string;
   goal: string;
   items: ReportPromptItem[];
+  /** The account's response language (e.g. `zh-CN`); the report renders on its acceptance page. */
+  language?: string;
   /** Pre-computed rollup so the narrative never contradicts the numbers. */
   stats: { failed: number; passed: number; total: number; uncertain: number };
   verdict: string;
@@ -376,13 +395,14 @@ export const chainVerifyReport = ({
   goal,
   deliverable,
   items,
+  language,
   stats,
   verdict,
 }: ReportPromptInput) => {
   const system = [
     'You are writing a delivery-verification report for the user who owns this task.',
     'The overall verdict and the pass/fail/uncertain counts are already decided and given to you — never contradict or recompute them.',
-    'Write in the language of the run goal.',
+    verifyOutputLanguageRule('both fields', language),
     'Produce two fields:',
     '- summary: 3-5 sentences for a chat notification — the verdict, what was checked, and the single most important finding.',
     '- content: a full Markdown report. Use a per-criterion section with its verdict, the reasoning, the evidence that backs it, and a concrete next step for anything failed or uncertain. Reference captured artifacts where they support a claim.',
@@ -420,6 +440,12 @@ export const chainVerifyReport = ({
 // ============================================
 
 export interface ReviewPredictPromptInput {
+  /**
+   * The builder's answer to the previous rejection of this check, claiming the
+   * evidence already proves it. Rendered only when present, so reviews without a
+   * dispute keep the exact prompt their prediction cohort was measured on.
+   */
+  builderRebuttal?: string;
   /** The check's detailed rule body, when the criterion has one. */
   instruction?: string;
   /** The acceptance's one-sentence requirement — the scope test for `new-idea`. */
@@ -523,6 +549,9 @@ Answer in the language the check is written in. Set confidence honestly: it is r
     `\n## Attached evidence\n${visualBlock}`,
     input.withheldEvidence ? `\n## Withheld from this request\n${input.withheldEvidence}` : '',
     input.textEvidence ? `\n## Original text evidence\n${input.textEvidence}` : '',
+    input.builderRebuttal
+      ? `\n## The builder disputes the previous rejection\n${input.builderRebuttal}\n\nThe builder says the evidence above already proves this check. Look again at exactly what it points to. If that evidence does prove the check, accept. A rebuttal is a claim, not evidence: if the evidence does not show it, reject and say what is still missing.`
+      : '',
     '\nRe-judge the check against the attached evidence.',
   ]
     .filter(Boolean)

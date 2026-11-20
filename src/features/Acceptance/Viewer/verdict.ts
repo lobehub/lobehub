@@ -1,8 +1,10 @@
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
 import type { TFunction } from 'i18next';
 import {
   BadgeCheck,
   CircleDashed,
+  CircleDot,
+  CircleX,
   HelpCircle,
   Loader2,
   RefreshCw,
@@ -64,6 +66,22 @@ export const resolveAcceptanceVerdictMeta = (
       color: cssVar.colorError,
       icon: RotateCcw,
       label: t('acceptance.status.rejected'),
+    };
+  }
+  if (status === 'delivered') {
+    return {
+      bg: cssVar.colorFillSecondary,
+      color: cssVar.colorText,
+      icon: CircleDot,
+      label: t('acceptance.status.delivered'),
+    };
+  }
+  if (status === 'failed') {
+    return {
+      bg: cssVar.colorErrorBg,
+      color: cssVar.colorError,
+      icon: CircleX,
+      label: t('acceptance.status.failed'),
     };
   }
   if (status === 'errored') {

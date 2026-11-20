@@ -1,6 +1,6 @@
 'use client';
 
-import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
+import { createModal, type ModalInstance } from '@lobehub/ui';
 import { t } from 'i18next';
 
 import CompareContent, { type CompareContentProps } from './CompareContent';

@@ -1,13 +1,13 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { ActionIcon, cssVar, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowLeft } from 'lucide-react';
 import { memo } from 'react';
 import { useLocation } from 'react-router';
 import urlJoin from 'url-join';
 
+import { MARKETPLACE_SEGMENT } from '@/features/Marketplace/paths';
 import NavHeader from '@/features/NavHeader';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import StoreSearchBar from '@/routes/(main)/community/features/Search';
@@ -21,7 +21,7 @@ const Header = memo(() => {
   const location = useLocation();
   const navigate = useWorkspaceAwareNavigate();
   const path = location.pathname.split('/').filter(Boolean);
-  const communityIndex = path.indexOf('community');
+  const communityIndex = path.indexOf(MARKETPLACE_SEGMENT);
   const detailType = communityIndex >= 0 ? path[communityIndex + 1] : undefined;
   const detailSlug = communityIndex >= 0 ? path[communityIndex + 2] : undefined;
   const profileUsername =
@@ -39,7 +39,7 @@ const Header = memo(() => {
   const handleGoBack = () => {
     // group_agent goes back to agent list page
     if (detailType === 'group_agent') {
-      navigate('/community/agent');
+      navigate('/marketplace/agent');
       return;
     }
 
@@ -47,10 +47,10 @@ const Header = memo(() => {
     const typesWithListPage = ['agent', 'model', 'provider', 'mcp', 'skill'];
 
     if (detailType && typesWithListPage.includes(detailType)) {
-      navigate(urlJoin('/community', detailType));
+      navigate(urlJoin('/marketplace', detailType));
     } else {
       // For user or any other type without a list page
-      navigate('/community');
+      navigate('/marketplace');
     }
   };
 
@@ -60,7 +60,7 @@ const Header = memo(() => {
 
   return (
     <NavHeader
-      className={styles.headerContainer}
+      className={stylex.props(styles.headerContainer).className}
       right={<UserAvatar avatarOverride={detailAvatar} />}
       style={cssVariables}
       left={

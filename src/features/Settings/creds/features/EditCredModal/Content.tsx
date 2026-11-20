@@ -1,7 +1,7 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { useModalContext } from '@lobehub/ui/base-ui';
+import { useModalContext } from '@lobehub/ui';
 import { type FC } from 'react';
 
 import { type CredsApi } from '../useCredsApi';
@@ -10,18 +10,18 @@ import EditMetaForm from './EditMetaForm';
 
 export interface EditCredModalContentProps {
   cred: UserCredSummary;
-  /**
-   * Bound explicitly by the caller (rendered inline, inside CredsApiProvider)
-   * instead of read via useCredsApi() here — this content tree is portaled by
-   * createModal() to a global ModalHost that sits outside CredsApiProvider,
-   * so a local useCredsApi() call would silently fall back to the personal
-   * (market.creds) API even on the workspace creds page.
-   */
   credsApi: CredsApi;
   onSuccess?: () => void;
+  /** Values cannot be read back (see `isWriteOnlyCredRow`); they can only be replaced. */
+  writeOnly?: boolean;
 }
 
-const EditCredModalContent: FC<EditCredModalContentProps> = ({ cred, credsApi, onSuccess }) => {
+const EditCredModalContent: FC<EditCredModalContentProps> = ({
+  cred,
+  credsApi,
+  onSuccess,
+  writeOnly,
+}) => {
   const { close } = useModalContext();
 
   const isKVType = cred.type === 'kv-env' || cred.type === 'kv-header';
@@ -32,7 +32,13 @@ const EditCredModalContent: FC<EditCredModalContentProps> = ({ cred, credsApi, o
   };
 
   return isKVType ? (
-    <EditKVForm cred={cred} credsApi={credsApi} onCancel={close} onSuccess={handleSuccess} />
+    <EditKVForm
+      cred={cred}
+      credsApi={credsApi}
+      writeOnly={writeOnly}
+      onCancel={close}
+      onSuccess={handleSuccess}
+    />
   ) : (
     <EditMetaForm cred={cred} credsApi={credsApi} onCancel={close} onSuccess={handleSuccess} />
   );

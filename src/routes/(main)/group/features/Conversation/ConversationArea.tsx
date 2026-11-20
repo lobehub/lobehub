@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox } from '@lobehub/ui';
 import { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -76,7 +75,7 @@ const Conversation = memo<ConversationAreaProps>(({ mobile = false }) => {
         {topicPending ? (
           <TopicMigrationPlaceholder groupId={context.groupId} topicId={context.topicId} />
         ) : (
-          <ChatList messageDeepLink={messageDeepLink} welcome={<WelcomeChatItem />} />
+          <ChatList printable messageDeepLink={messageDeepLink} welcome={<WelcomeChatItem />} />
         )}
       </Flexbox>
       {topicPending ? (

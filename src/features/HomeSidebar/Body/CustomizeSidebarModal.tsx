@@ -20,16 +20,19 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
   createModal,
+  Flexbox,
+  Icon,
   type ModalInstance,
   Text,
+  Tooltip,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+} from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { t } from 'i18next';
 import { ArrowDownToLine, Eye, EyeOff, GripVertical, PinIcon, RotateCcw } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -39,6 +42,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { getRouteById } from '@/config/routes';
+import { useChannelsEnabled } from '@/features/Channels/useChannelsEnabled';
 import { useGlobalStore } from '@/store/global';
 import { DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -49,6 +53,9 @@ import {
   SIDEBAR_SPACER_ID,
 } from '@/store/global/selectors/systemStatus';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 // ---------------------------------------------------------------------------
 // Types & constants
@@ -60,42 +67,54 @@ export interface SidebarItemConfig {
   alwaysVisible?: boolean;
   id: string;
   labelKey: string;
+  /** i18n namespace of `labelKey`; defaults to `common`. */
+  labelNs?: string;
   routeId?: string;
 }
 
 const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
   { id: 'tasks', labelKey: 'tab.tasks', routeId: 'tasks' },
+  { id: 'goals', labelKey: 'tab.goals', routeId: 'goals' },
   { id: 'dashboard', labelKey: 'tab.dashboard', routeId: 'dashboard' },
-  { id: 'pages', labelKey: 'tab.pages', routeId: 'page' },
+  { id: 'favorites', labelKey: 'favorite.section' },
   { id: 'recents', labelKey: 'recents' },
-  { id: 'project', labelKey: 'project:sidebar.title' },
-  { id: 'private', labelKey: 'navPanel.privateAgents' },
+  { id: 'project', labelKey: 'tab.projects', routeId: 'project' },
   { alwaysVisible: true, id: 'agent', labelKey: 'navPanel.agent' },
+  { id: 'channels', labelKey: 'title', labelNs: 'channel' },
   { id: 'image', labelKey: 'tab.generation', routeId: 'image' },
-  { id: 'community', labelKey: 'tab.community', routeId: 'community' },
+  { id: 'community', labelKey: 'tab.marketplace', routeId: 'community' },
   { id: 'resource', labelKey: 'tab.resource', routeId: 'resource' },
   { id: 'memory', labelKey: 'tab.memory', routeId: 'memory' },
 ];
 
-// Private is workspace-only; in personal mode every row is implicitly
-// owner-private, so hide it from the customizer where toggling it on
-// would render an empty accordion no user can populate.
+interface SidebarItemAvailability {
+  channelsEnabled?: boolean;
+  dashboardEnabled?: boolean;
+  goalsEnabled?: boolean;
+}
+
 // Dashboards also stay out until the `dashboard` feature flag is on for the
-// user; a dropped id is restored by `withAllKnownKeys` once it is.
+// user, Channels until Channels are enabled, and Goals until the user turns on
+// its lab; a dropped id is restored by `withAllKnownKeys` once it is.
 export const getAvailableSidebarItems = (
   isWorkspaceMode: boolean,
-  { dashboardEnabled = false }: { dashboardEnabled?: boolean } = {},
+  {
+    channelsEnabled = false,
+    dashboardEnabled = false,
+    goalsEnabled = false,
+  }: SidebarItemAvailability = {},
 ): SidebarItemConfig[] =>
   ALL_SIDEBAR_ITEMS.filter((item) => {
+    if (item.id === 'channels' && !channelsEnabled) return false;
     if (item.id === 'dashboard' && !dashboardEnabled) return false;
+    if (item.id === 'goals' && !goalsEnabled) return false;
     if (isWorkspaceMode && (item.id === 'memory' || item.id === 'dashboard')) return false;
-    if (!isWorkspaceMode && item.id === 'private') return false;
     return true;
   });
 
 export const getSortableSidebarItemIds = (
   isWorkspaceMode: boolean,
-  options?: { dashboardEnabled?: boolean },
+  options?: SidebarItemAvailability,
 ): Set<string> =>
   new Set([
     ...getAvailableSidebarItems(isWorkspaceMode, options).map((item) => item.id),
@@ -126,46 +145,45 @@ const mergeAvailableSidebarItems = (
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = createStaticStyles(({ css }) => ({
-  accordionGroup: css`
-    margin-inline: -5px;
-    padding: 4px;
-    border: 1px dashed ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  item: css`
-    height: 40px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-    transition: background 0.2s ease-in-out;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  itemDragging: css`
-    opacity: 0;
-  `,
-  overlay: css`
-    height: 40px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowSecondary};
-  `,
-  spacerLine: css`
-    flex: 1;
-    block-size: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  footer: css`
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    padding-block-start: 16px;
-  `,
-}));
+const styles = stylex.create({
+  accordionGroup: {
+    marginInline: '-5px',
+    padding: '4px',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+  },
+  item: {
+    height: '40px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    transition: 'background 0.2s ease-in-out',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  itemDragging: { opacity: 0 },
+  overlay: {
+    height: '40px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowSecondary,
+  },
+  spacerLine: {
+    flex: '1',
+    blockSize: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  footer: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: '8px',
+    paddingBlockStart: densityTokens['--lobe-density-card-padding'],
+  },
+});
 
 // ---------------------------------------------------------------------------
 // SortableItem
@@ -176,13 +194,9 @@ const SortableItem = memo<{
   id: string;
   onToggle: (key: string) => void;
 }>(({ id, hiddenSections, onToggle }) => {
-  const { t } = useTranslation('common');
-  const isWorkspaceMode = !!useActiveWorkspaceSlug();
+  const { t } = useTranslation(['common', 'channel']);
   const item = ITEM_MAP.get(id);
-  // In workspace mode the Agent bucket pairs with Private, so the label
-  // switches to "Public" — mirroring the sidebar header.
-  const labelKey =
-    item?.id === 'agent' && isWorkspaceMode ? 'navPanel.publicAgents' : item?.labelKey;
+  const labelKey = item?.labelKey;
   const {
     attributes,
     isDragging,
@@ -202,10 +216,14 @@ const SortableItem = memo<{
     <Flexbox
       horizontal
       align={'center'}
-      className={isDragging ? cx(styles.item, styles.itemDragging) : styles.item}
       gap={4}
       justify={'space-between'}
       ref={setNodeRef}
+      className={
+        isDragging
+          ? stylex.props(styles.item, styles.itemDragging).className
+          : stylex.props(styles.item).className
+      }
       style={{
         opacity: isHidden && !isDragging ? 0.5 : undefined,
         transform: CSS.Translate.toString(transform),
@@ -222,7 +240,7 @@ const SortableItem = memo<{
           <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
         </Flexbox>
         {route?.icon && <Icon icon={route.icon} size={18} />}
-        <Text>{t(labelKey as any)}</Text>
+        <Text>{t(labelKey as any, { ns: item.labelNs ?? 'common' })}</Text>
       </Flexbox>
       {item.alwaysVisible ? (
         <Tooltip title={t('navPanel.pinned' as any)}>
@@ -258,9 +276,13 @@ const SpacerSortableItem = memo(() => {
     <Flexbox
       horizontal
       align={'center'}
-      className={isDragging ? cx(styles.item, styles.itemDragging) : styles.item}
       gap={8}
       ref={setNodeRef}
+      className={
+        isDragging
+          ? stylex.props(styles.item, styles.itemDragging).className
+          : stylex.props(styles.item).className
+      }
       style={{
         transform: CSS.Translate.toString(transform),
         transition,
@@ -275,11 +297,11 @@ const SpacerSortableItem = memo(() => {
         <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
       </Flexbox>
       <Icon icon={ArrowDownToLine} size={14} style={{ color: cssVar.colorTextQuaternary }} />
-      <div className={styles.spacerLine} />
+      <div {...stylex.props(styles.spacerLine)} />
       <Text style={{ fontSize: 12 }} type={'secondary'}>
         {t('navPanel.bottomDivider' as any)}
       </Text>
-      <div className={styles.spacerLine} />
+      <div {...stylex.props(styles.spacerLine)} />
     </Flexbox>
   );
 });
@@ -288,13 +310,13 @@ const BoundSpacerItem = memo(() => {
   const { t } = useTranslation('common');
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.item} gap={8}>
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.item).className} gap={8}>
       <Icon icon={ArrowDownToLine} size={14} style={{ color: cssVar.colorTextQuaternary }} />
-      <div className={styles.spacerLine} />
+      <div {...stylex.props(styles.spacerLine)} />
       <Text style={{ fontSize: 12 }} type={'secondary'}>
         {t('navPanel.bottomDivider' as any)}
       </Text>
-      <div className={styles.spacerLine} />
+      <div {...stylex.props(styles.spacerLine)} />
     </Flexbox>
   );
 });
@@ -310,7 +332,7 @@ const AccordionGroup = memo<{ children: React.ReactNode }>(({ children }) => {
 
   return (
     <div
-      className={styles.accordionGroup}
+      className={stylex.props(styles.accordionGroup).className}
       ref={setNodeRef}
       style={{
         transform: CSS.Translate.toString(transform),
@@ -327,14 +349,18 @@ const AccordionGroup = memo<{ children: React.ReactNode }>(({ children }) => {
 // ---------------------------------------------------------------------------
 
 const OverlayItem = memo<{ id: string }>(({ id }) => {
-  const { t } = useTranslation('common');
-  const isWorkspaceMode = !!useActiveWorkspaceSlug();
-  const agentLabelKey = isWorkspaceMode ? 'navPanel.publicAgents' : 'navPanel.agent';
+  const { t } = useTranslation(['common', 'channel']);
+  const agentLabelKey = 'navPanel.agent';
 
   // Accordion group overlay: render a compact representation
   if (id === ACCORDION_GROUP_ID) {
     return (
-      <Flexbox horizontal align={'center'} className={styles.overlay} gap={8}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.overlay).className}
+        gap={8}
+      >
         <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
         <Text>{t(agentLabelKey as any)}</Text>
         <Text type={'secondary'}>+ {t('recents' as any)}</Text>
@@ -344,7 +370,12 @@ const OverlayItem = memo<{ id: string }>(({ id }) => {
 
   if (isSpacer(id)) {
     return (
-      <Flexbox horizontal align={'center'} className={styles.overlay} gap={8}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.overlay).className}
+        gap={8}
+      >
         <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
         <Icon icon={ArrowDownToLine} size={14} style={{ color: cssVar.colorTextQuaternary }} />
         <Text style={{ fontSize: 12 }} type={'secondary'}>
@@ -358,12 +389,13 @@ const OverlayItem = memo<{ id: string }>(({ id }) => {
   if (!item) return null;
   const route = item.routeId ? getRouteById(item.routeId) : undefined;
   const labelKey = item.id === 'agent' ? agentLabelKey : item.labelKey;
+  const labelNs = item.id === 'agent' ? 'common' : (item.labelNs ?? 'common');
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.overlay} gap={8}>
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.overlay).className} gap={8}>
       <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
       {route?.icon && <Icon icon={route.icon} size={18} />}
-      <Text>{t(labelKey as any)}</Text>
+      <Text>{t(labelKey as any, { ns: labelNs })}</Text>
     </Flexbox>
   );
 });
@@ -391,9 +423,16 @@ const CustomizeSidebarContent = memo(() => {
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const isWorkspaceMode = !!useActiveWorkspaceSlug();
   const dashboardEnabled = useServerConfigStore(serverConfigSelectors.enableDashboard);
+  const goalsEnabled = useUserStore(labPreferSelectors.enableGoals);
+  const channelsEnabled = useChannelsEnabled();
   const sortableItemIds = useMemo(
-    () => getSortableSidebarItemIds(isWorkspaceMode, { dashboardEnabled }),
-    [isWorkspaceMode, dashboardEnabled],
+    () =>
+      getSortableSidebarItemIds(isWorkspaceMode, {
+        channelsEnabled,
+        dashboardEnabled,
+        goalsEnabled,
+      }),
+    [isWorkspaceMode, channelsEnabled, dashboardEnabled, goalsEnabled],
   );
   const filteredStoreItems = useMemo(
     () => storeItems.filter((id) => sortableItemIds.has(id)),
@@ -576,7 +615,7 @@ const CustomizeSidebarContent = memo(() => {
           document.body,
         )}
       </DndContext>
-      <div className={styles.footer}>
+      <div {...stylex.props(styles.footer)}>
         <Button
           block
           htmlType="button"

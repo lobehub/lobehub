@@ -1,6 +1,7 @@
 import type { IconType } from '@lobehub/icons';
 import {
   Amp,
+  Antigravity,
   ClaudeCode,
   CodeBuddy,
   Codex,
@@ -8,6 +9,7 @@ import {
   DeepSeek,
   Devin,
   getLobeIconCDN,
+  GithubCopilot,
   Grok,
   Kimi,
   OpenCode,
@@ -39,10 +41,12 @@ export type LocalRuntimeHeterogeneousAgentClientConfig =
   };
 
 const heterogeneousAgentIcons = {
+  'antigravity': Antigravity,
   'amp': Amp,
   'claude-code': ClaudeCode,
   'codebuddy': CodeBuddy,
   'codex': Codex,
+  'copilot': GithubCopilot,
   'cursor': Cursor,
   'droid': DroidIcon,
   'devin': Devin,

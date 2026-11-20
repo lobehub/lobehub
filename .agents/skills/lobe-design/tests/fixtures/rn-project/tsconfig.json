@@ -1,0 +1,10 @@
+{
+  // RN 项目把自己的组件库通过 alias 暴露成 @lobehub/ui-rn
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@lobehub/ui-rn": ["./src/components"]
+    }
+  }
+}

@@ -1,8 +1,10 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { clearFalInputSchemaCache } from './catalog';
 import { buildFalVideoRequest, parseFalVideoInferenceId } from './createVideo';
 import { LobeFalAI } from './index';
+import { buildFalCatalogResponse } from './testUtils';
 
 const { queue } = vi.hoisted(() => ({
   queue: { result: vi.fn(), status: vi.fn(), submit: vi.fn() },
@@ -183,11 +185,89 @@ describe('LobeFalAI video', () => {
     expect(queue.submit).toHaveBeenCalledWith('minimax/h3-max/text-to-video', expect.anything());
   });
 
-  it('rejects models without a video endpoint', async () => {
-    await expect(
-      runtime.createVideo({ model: 'fal-ai/qwen-image', params: { prompt: 'p' } }),
-    ).rejects.toMatchObject({ errorType: 'ProviderBizError' });
-    expect(queue.submit).not.toHaveBeenCalled();
+  describe('any other fal video endpoint', () => {
+    const KLING = 'fal-ai/kling-video/v2.1/standard/image-to-video';
+
+    beforeEach(() => {
+      clearFalInputSchemaCache();
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('submits to the endpoint as is and fits params to its schema', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify(
+            buildFalCatalogResponse(KLING, {
+              duration: { default: '5', enum: ['5', '10'], type: 'string' },
+              image_url: { type: 'string' },
+              prompt: { type: 'string' },
+            }),
+          ),
+        ),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      queue.submit.mockResolvedValue({ request_id: 'req-3' });
+
+      const result = await runtime.createVideo({
+        model: KLING,
+        params: {
+          aspectRatio: '16:9',
+          duration: 10,
+          imageUrl: 'https://img/first.png',
+          prompt: 'p',
+        },
+      });
+
+      expect(queue.submit).toHaveBeenCalledWith(KLING, {
+        // fal takes the duration as a string enum and has no aspect ratio on this endpoint
+        input: { duration: '10', image_url: 'https://img/first.png', prompt: 'p' },
+      });
+      expect(String(fetchMock.mock.calls[0][0])).toContain(
+        `endpoint_id=${encodeURIComponent(KLING)}`,
+      );
+      expect(result).toEqual({ inferenceId: `${KLING}/requests/req-3` });
+    });
+
+    it('keeps endpoints from other owners verbatim and matches suffixed durations', async () => {
+      const endpoint = 'bytedance/seedance-2.0/text-to-video';
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify(
+              buildFalCatalogResponse(endpoint, {
+                duration: { enum: ['4s', '8s'], type: 'string' },
+                prompt: { type: 'string' },
+              }),
+            ),
+          ),
+        ),
+      );
+      queue.submit.mockResolvedValue({ request_id: 'req-4' });
+
+      await runtime.createVideo({ model: endpoint, params: { duration: 8, prompt: 'p' } });
+
+      expect(queue.submit).toHaveBeenCalledWith(endpoint, {
+        input: { duration: '8s', prompt: 'p' },
+      });
+    });
+
+    it('sends the request as built when the schema cannot be loaded', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+      queue.submit.mockResolvedValue({ request_id: 'req-5' });
+
+      await runtime.createVideo({
+        model: 'someone/custom-video',
+        params: { duration: 5, prompt: 'p' },
+      });
+
+      expect(queue.submit).toHaveBeenCalledWith('someone/custom-video', {
+        input: { duration: 5, prompt: 'p' },
+      });
+    });
   });
 
   it('maps a 401 submit error to InvalidProviderAPIKey', async () => {
@@ -238,6 +318,16 @@ describe('LobeFalAI video', () => {
       await expect(runtime.handlePollVideoStatus(inferenceId)).resolves.toEqual({
         error: 'Image aspect ratio is out of range',
         status: 'failed',
+      });
+    });
+
+    it('reads the first entry of a videos array', async () => {
+      queue.status.mockResolvedValue({ status: 'COMPLETED' });
+      queue.result.mockResolvedValue({ data: { videos: [{ url: 'https://v/1.mp4' }] } });
+
+      await expect(runtime.handlePollVideoStatus(inferenceId)).resolves.toEqual({
+        status: 'success',
+        videoUrl: 'https://v/1.mp4',
       });
     });
 

@@ -17,6 +17,7 @@ import {
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
 import type { ChatToolPayload } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -33,6 +34,7 @@ import {
 } from '@/server/services/aiAgent/deviceToolAudit';
 import { resolveRunWorkAccessScope } from '@/server/services/workRegistration';
 
+import { parkAsyncShell } from '../asyncShellPark';
 import type { RuntimeExecutorContext } from '../context';
 import { dispatchClientTool } from '../dispatchClientTool';
 import {
@@ -166,7 +168,12 @@ export class ServerToolTransport implements ToolTransport {
 
     try {
       const hookResult = await this.dispatchBeforeToolCall(chatToolPayload, context);
-      if (context.abortSignal?.aborted) return this.abortedBeforeLaunch();
+      if (
+        context.abortSignal?.aborted ||
+        (await isOperationInterrupted(this.ctx)) ||
+        context.abortSignal?.aborted
+      )
+        return this.abortedBeforeLaunch();
       let toolCallMocked = false;
 
       if (isDeviceToolIdentifier(chatToolPayload.identifier) && !hookResult?.isMocked) {
@@ -208,7 +215,12 @@ export class ServerToolTransport implements ToolTransport {
         // so Stop can land between entering `run` and reaching this line. The
         // executor's race has already settled the call by then — launching now
         // would start side-effecting work for a cancelled operation.
-        if (context.abortSignal?.aborted) return this.abortedBeforeLaunch();
+        if (
+          context.abortSignal?.aborted ||
+          (await isOperationInterrupted(this.ctx)) ||
+          context.abortSignal?.aborted
+        )
+          return this.abortedBeforeLaunch();
 
         const dispatchResult = await dispatchClientTool(chatToolPayload, {
           agentId: context.state.origin?.agentId,
@@ -240,7 +252,12 @@ export class ServerToolTransport implements ToolTransport {
 
         // Re-checked after the visibility await for the same reason as above:
         // every await between entry and launch reopens the cancellation window.
-        if (context.abortSignal?.aborted) return this.abortedBeforeLaunch();
+        if (
+          context.abortSignal?.aborted ||
+          (await isOperationInterrupted(this.ctx)) ||
+          context.abortSignal?.aborted
+        )
+          return this.abortedBeforeLaunch();
 
         log(`[${operationLogId}] Executing tool ${context.toolName} ...`);
         execution = await executeToolWithRetry(
@@ -263,6 +280,9 @@ export class ServerToolTransport implements ToolTransport {
               ...(agentVisibility !== undefined && { agentVisibility }),
               // Assistant message owning this tool call (≠ source user message).
               assistantMessageId: context.parentMessageId,
+              // Who in the IM conversation asked for this run; tools that act for the owner
+              // (changing a bot's settings) refuse anyone else.
+              botContext: context.state.principal?.actor?.bot,
               clientIp: context.state.principal?.audit?.clientIp,
               currentTodos: context.currentTodos,
               deviceCapable: context.state.plan?.execution
@@ -288,11 +308,16 @@ export class ServerToolTransport implements ToolTransport {
                 : undefined,
               localSandboxNetwork:
                 context.state.world?.agent?.agencyConfig?.localSandboxNetwork === true,
+              evalMemory: context.state.plan?.eval?.memory,
+              isEval: context.state.origin?.trigger === RequestTrigger.Eval,
+              memoryEffort: context.state.world?.agent?.chatConfig?.memory?.effort,
               memoryToolPermission: context.state.world?.agent?.chatConfig?.memory?.toolPermission,
               messageId: context.state.origin?.sourceMessageId,
               operationId,
+              projectId: context.state.origin?.projectId,
               projectSkills: resolveRunProjectSkills(context.state.plan),
               rootOperationId: operationId,
+              runSkillIds: context.state.plan?.skills?.skills?.map((skill) => skill.identifier),
               scope: context.state.origin?.scope,
               serverDB,
               skipResultTruncation: true,
@@ -329,6 +354,27 @@ export class ServerToolTransport implements ToolTransport {
               ),
           },
         );
+
+        // A device command still running after its wait window, which the
+        // device promised to report on: park instead of returning the
+        // `shell_id`. A no-op for every other result.
+        execution =
+          (await parkAsyncShell(
+            this.ctx,
+            {
+              existingToolMessageId: context.reuseExistingMessage
+                ? context.toolMessageId
+                : undefined,
+              parentMessageId: context.parentMessageId,
+              resultLimit: {
+                canReadArchive: enabledToolIds.includes(AgentDocumentsIdentifier),
+                maxLength: context.toolResultMaxLength,
+              },
+              state: context.state,
+              toolCall: chatToolPayload,
+            },
+            execution.result,
+          )) ?? execution;
       }
 
       if (execution.result.deferred) {
@@ -430,6 +476,9 @@ export class ServerToolTransport implements ToolTransport {
         mocked: toolCallMocked || execution.mocked,
         result: executionResult,
         resultBlocked: controlled.blocked,
+        // A tool that created its own row (a background sub-agent's placeholder)
+        // gets its result written there instead of into a second tool message.
+        toolMessageId: execution.toolMessageId ?? executionResult.toolMessageId,
       };
     } catch (error) {
       executeToolSpan.recordException(error as Error);

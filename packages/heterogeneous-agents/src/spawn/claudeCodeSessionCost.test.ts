@@ -95,4 +95,28 @@ describe('readClaudeCodeSessionCost', () => {
       await readClaudeCodeSessionCost({ configDir, cwd, sessionId: '../../escape' }),
     ).toBeUndefined();
   });
+
+  it('reads a session created under another cwd', async () => {
+    // A topic that moves into a worktree resumes the session from the new cwd,
+    // but CC keeps appending to the transcript under the cwd the session was
+    // created in. Missing it there reports the whole session's spend as this
+    // run's cost.
+    const repo = path.join(dir, 'repo');
+    const worktree = path.join(dir, 'wt-feature');
+    await mkdir(repo);
+    await mkdir(worktree);
+
+    const configDir = path.join(dir, 'profile');
+    const file = (await resolveClaudeCodeTranscriptPath({
+      configDir,
+      cwd: repo,
+      sessionId: SESSION_ID,
+    }))!;
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, `${costState(58.87)}\n`);
+
+    expect(
+      await readClaudeCodeSessionCost({ configDir, cwd: worktree, sessionId: SESSION_ID }),
+    ).toBe(58.87);
+  });
 });

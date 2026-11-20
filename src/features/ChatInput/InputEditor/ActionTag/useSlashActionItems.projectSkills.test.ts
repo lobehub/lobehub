@@ -40,10 +40,6 @@ vi.mock('@/hooks/useEffectiveWorkingDirectory', () => ({
   useEffectiveWorkingDirectory: () => '/repo/pane',
 }));
 
-vi.mock('@/hooks/useFetchProjectSkills', () => ({
-  useFetchProjectSkills: state.useFetchProjectSkills,
-}));
-
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (s: object) => unknown) => selector({ agentMap: {} }),
 }));
@@ -62,11 +58,15 @@ vi.mock('@/store/chat', () => ({
 
 vi.mock('@/store/tool', () => ({
   useToolStore: (selector: (s: object) => unknown) =>
-    selector({ useFetchAgentDocumentSkills: () => undefined }),
+    selector({
+      useFetchAgentDocumentSkills: () => undefined,
+      useFetchProjectSkills: state.useFetchProjectSkills,
+    }),
 }));
 
 vi.mock('@/store/tool/selectors', () => ({
   agentDocumentSkillsSelectors: { getAgentDocumentSkills: () => () => [] },
+  projectSkillsSelectors: { getProjectSkills: () => () => undefined },
 }));
 
 vi.mock('./useInstalledSkillsAndTools', () => ({ useInstalledSkillsAndTools: () => [] }));

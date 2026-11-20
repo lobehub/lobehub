@@ -1,0 +1,215 @@
+# Project design rules
+
+## LOBE-UX-001 — Verify reference alignment structurally
+
+When aligning a Channel member picker with CPC, compare the rendered structure and interactions in both creation and the header's single “Invite members” entry (people and Agents together in workspace Channels): searchable available members on the left; selected members on the right with a one-line summary of where each runs. Device/directory fields appear only when an Agent cannot run without a choice (see LOBE-UX-011). Functional creation success alone does not prove visual alignment. Capture the configured-member state, a member that needs a directory, the search empty state, and a narrower viewport.
+
+Source: user correction during Channel PR #21545 acceptance (2026-10-24); revised by review feedback on acceptance round 4 (2026-10-26).
+
+## LOBE-UX-002 — Carry Agent execution choices into Channel setup
+
+When adding an Agent to a Channel, initialize the channel-local device and same-device working directory from the Agent's effective configuration. Do not ask for an already configured value again. Preserve explicit channel edits across refreshes; never replace an offline or inaccessible binding with another machine. Block submission with an actionable member-level reason when a coding Agent lacks an online device or directory. For coding Agents, list only device choices; “Choose a device” is a placeholder, never a selectable empty option. Native Agents retain an explicit “No device” choice.
+
+Enforcement: `src/features/Channels/CreateChannel/agentEnvironment.test.ts` covers inherited defaults, device-scoped directories, explicit overrides, presence and required fields. `useChannelAgentDraft.test.ts` exercises empty Select events (`undefined` / `null` / empty string): clear both the channel-local device and directory, preserve that override after refresh, and keep coding-Agent device requirements. The Channel member form uses these shared initialization and validation functions.
+
+Source: user correction during local Channel collaboration testing (2026-10-26).
+
+## LOBE-UX-003 — Size stepped dialogs for the current task (superseded)
+
+Superseded by LOBE-UX-011: Channel creation is now a single member-first dialog, so there is no compact naming step to size. The general principle still holds for other stepped dialogs: a short step should not inherit the width of a later two-pane step.
+
+Source: user correction that the Channel name dialog was unnecessarily wide (2026-10-26).
+
+## LOBE-UX-004 — Personal Channel headers omit the implicit owner
+
+The Channel header shows active Agents in personal scope; human member avatars and their popovers appear only for workspace-owned Channels. Use the Channel's own workspace identity, not member count or the currently selected navigation scope. This is a presentation filter, not a change to membership, permissions, or message attribution.
+
+Enforcement: `src/features/Channels/visibleMembers.test.ts` covers both scopes, a single workspace person, inactive members, and preservation of membership.
+
+Source: user correction during personal Channel testing (2026-10-26).
+
+## LOBE-UX-005 — Channel deletion is a complete lifecycle action
+
+Channel row menus and context menus expose deletion to the channel owner/admin. Confirm the named target and consequences before mutating. Archive rather than erase active execution records, revoke publication across all branches, and request physical stop without prematurely releasing directory locks. Remove every cached view after success and leave only the deleted channel's active route; failure keeps a retryable confirmation and restores the row. Backend scope and membership checks are authoritative.
+
+Enforcement: Channel repository `__tests__/remove.test.ts`, `src/store/channel/action.remove.test.ts`, and `src/features/Channels/useRemoveChannel.test.ts`.
+
+Source: user correction comparing the missing deletion flow with CPC (2026-10-26).
+
+## LOBE-UX-006 — Distinguish Channel startup from blocked work
+
+Independent Channel Agents start concurrently. Preserve per-member ordering and physical directory exclusivity; a slow startup or recovery must not serialize unrelated Agents. A newly queued job is presented as preparing, not as waiting behind another Agent. Actual blocking states name the reason, including an earlier reply by the same Agent.
+
+Enforcement: `ChannelCoordinator.advance.test.ts` covers concurrent startup, bounded fan-out, per-member recovery order and failure isolation; Channel execution integration tests cover member/directory locks; `src/features/Channels/jobStatus.test.ts` covers preparing versus blocked labels.
+
+Source: user correction of misleading Channel queue labels and sequential startup (2026-10-26).
+
+## LOBE-UX-007 — Opening a Channel branch is not a write
+
+Opening a branch shows a local preview of its root and default participants. Do not persist a thread or add a sidebar row until the user sends the first message. Create/reuse the thread and send that message in one channel-locked transaction, preserving request-key idempotency. Failed sends retain the draft; late responses must not reopen a closed preview or navigate away from a different selection or identity.
+
+Enforcement: repository `__tests__/threadSend.test.ts` covers atomicity, retries and scope; `useThreadPanel.test.ts` covers local open/close and delayed completions; `src/store/channel/action.send.test.ts` covers sidebar/detail refresh after success.
+
+Source: user correction of empty threads created merely by opening the branch panel (2026-10-26).
+
+## LOBE-UX-008 — Channel reply progress follows live state, above the composer
+
+Present pre-reply receipt as “Agent 接收消息中…” rather than exposing responder selection. Once a job starts, show the named Agent's reply status instead of retaining the receipt label until completion. Progress lives on one line above the composer (“锦妍・正在回复…”, “A 和 B 正在回复…”, “3 位成员正在回复…”), like a chat app's typing line, not as chips under each message; one click lists each reply with its state and a stop action. Publish claimed/blocked states independently of slow runtime startup and other members. The mounted view must reactively accelerate refresh for pending receipt, queued/running jobs and unconfirmed stops even without gateway notifications, then slow down after settlement. Keep refresh scoped to the displayed branch.
+
+Enforcement: the reactive Channel selector and replica sync schedule are covered by `src/store/channel/action.polling.test.ts`, including an idle view becoming active after send. `ChannelCoordinator.advance.test.ts` guards notification before runtime startup settles. `jobStatus.test.ts` covers which jobs count as activity.
+
+Source: user correction of hidden Pi reply progress and implementation-facing receipt copy (2026-10-26); moved above the composer after acceptance round 4 review (2026-10-26).
+
+## LOBE-UX-009 — Channel self identity uses the personal avatar
+
+Render the signed-in author's Channel messages, thread roots, @ suggestions and workspace member header with the same `UserAvatar` component as the personal identity header. Do not choose a separate emoji default or prefer a stale message-profile avatar over the live personal profile. Match both human actor type and the current user ID; never borrow the viewer's avatar for another member, a deleted user, or an Agent.
+
+Enforcement: `ChannelMessage.tsx` and the shared `MemberAvatar.tsx` reuse `UserAvatar`; `memberName.test.ts` checks author and member identity isolation, and the existing `UserAvatar.test.tsx` checks profile-picture updates. Mention menus and member headers consume `MemberAvatar`, not a second avatar-source policy.
+
+Source: user correction that the Channel message must use their personal avatar directly, rather than a separate fallback (2026-10-26).
+
+## LOBE-UX-010 — Center whole-conversation failures in their own content region
+
+A Channel or thread with no readable content uses the shared page-level error state, centered horizontally and vertically in the remaining conversation area below its header. Do not render it as a top-left widget. A thread failure stays inside its own panel; background refresh and action errors remain inline with readable content.
+
+Enforcement: `ChannelConversation.tsx` selects `AsyncBoundary`'s `page` error variant for both hosts. Browser geometry checks compare the error content center with the owning conversation bounds; the proving environment must load the real layout CSS.
+
+Source: user correction of the Channel load-failure layout in acceptance screenshots (2026-10-26).
+
+## LOBE-UX-011 — Create a Channel by choosing members first
+
+Creating a Channel works like starting a group chat: one dialog opens on the member picker; the name is optional and defaults to the members' names (“锦妍、Codex、Pi”, more than three summarized). Owners and admins rename from the sidebar menu. The header has one “Invite members” action, not separate add-person and add-Agent buttons; in workspace Channels its picker lists workspace members and Agents under one search and adds both in one submit. Each selected Agent shows where it runs as one muted line taken from its own settings; device and directory fields appear only when the Agent cannot run without them. Changing an Agent's channel-local environment happens later, from the member popover, and applies to later replies only.
+
+Enforcement: `CreateChannel/channelTitle.test.ts` covers the generated name; repository `__tests__/channelSettings.test.ts` and `src/store/channel/action.rename.test.ts` cover rename permissions and optimistic rollback; `ChannelService.environment.test.ts` covers environment validation.
+
+Source: acceptance round 4 review — “先拉人再改名”, “为什么要在这里选目录” (2026-10-26).
+
+## LOBE-UX-012 — Failures belong to the header, with a marker on the message
+
+A failed reply does not keep a chip under its message. The header shows an error indicator with the count of each Agent's unresolved failure (its newest job failed); the Agent's status dot turns red. The popover gives the reason, a jump to the message and Open Agent. The message keeps only a text-less red dot that opens the same reason. A newer reply, stop or retry from that Agent settles the header entry.
+
+Enforcement: `jobStatus.test.ts` covers unresolved failures and the member status fallback.
+
+Source: acceptance round 4 review — “回执错误应该放到右上角” (2026-10-26).
+
+## LOBE-UX-013 — Channel timeline reads like a chat app
+
+The composer is one row (attach, input, send) that grows with its content. Mentioned members render as chips in sent messages; the viewer cannot mention themself. Hovering a message highlights its row and shows a toolbar with a labelled “Start thread” action. The main timeline starts with who joined (“你邀请了 … 加入频道”), and later additions appear in time order; the generic empty state is only for a Channel with neither. The tab shows the Channel's name.
+
+Enforcement: `mentionMarkdown.test.ts` covers mention chips (boundaries, code); `joinEvents.test.ts` covers join grouping, inviter attribution and paging.
+
+Source: acceptance round 4 review — Discord comparisons for composer, typing line and threads (2026-10-26).
+
+## LOBE-UX-014 — Pair each invited member’s avatar with their name
+
+Channel join events identify people and Agents using their own avatars, not a generic invitation icon. Render each avatar beside its member name, including every member in a grouped event. Let member pairs wrap at narrow widths; do not detach the avatar stack from the names or silently omit later avatars. A member’s emoji avatar is identity, even when it resembles a warning symbol.
+
+Source: user clarification during acceptance round 6 (2026-10-27).
+
+## LOBE-UX-015 — Feature-gated settings follow the feature's availability
+
+An unreleased feature's settings, search results and settings summary counts use the same per-user feature flag as the feature itself. Channel decision settings are visible only when `serverConfigSelectors.enableChannels` is true; a default-on preference does not bypass the `channel` rollout gate.
+
+Platform visibility follows where the user can use the setting, not where its implementation process runs. A runtime available to Web conversations through a connected device belongs in General Labs; reserve `desktopOnly` for capabilities that require the Electron shell. Codex App Server dispatch reads the same user preference on Web and Desktop. Verify the Web toggle, persistence after refresh, and the selected runtime on the receiving device; a merged adapter or a successful native probe alone does not prove that conversations use it.
+
+Enforcement: `src/features/SettingsSearch/items.test.ts` covers the channel decision search entry with the flag off and on. The service-model form filters the channel row before deriving its groups and counts.
+
+Source: user correction about the unreleased Channel feature (2026-10-28).
+
+Additional source: Codex question-flow reproduction (2026-11-17): the CLI contained the native question bridge and advertised support, but the user's unset Lab flag selected `codex exec`; `desktopOnly` hid the enabling control on Web.
+
+## LOBE-UX-016 — A stage path is `Steps`, and its current step is the blue live dot
+
+Show where a flow stands (draft → dry run → publish, select → fill) with `Steps` from `@lobehub/ui`, not a hand-rolled row of labels and chevrons: `Steps` owns the connectors and spacing that make the path readable. Mark the current step with `Badge status="processing"` (the blue `colorInfo` dot with its pulse), not `colorPrimary`, which renders near-black in LobeHub's theme and reads as plain text. Done steps keep a check; upcoming steps are a quiet dot. Leave room above the path when it sits right under a tab bar or divider. Copy under the stage title uses `colorTextDescription`.
+
+Source: reviewer correction on widget approval cards, lobehub#21936 acceptance round 1 (2026-10-30).
+
+## LOBE-UX-017 — A strip of tabs is `Tabs`, with plain labels that tell each tab apart
+
+Switching between items in one space (the approval bar's pending calls) uses `@lobehub/ui` `Tabs` (`size="small"`), not a hand-styled underline row. Do not decorate tab labels with emoji (no `🔧`). When two tabs would read the same (two dry runs of one tool), number them ("试运行组件 1", "试运行组件 2"). Read a reviewer's circled region against the exact screenshot coordinates before acting: in this case, two rounds of feedback on the tab strip were misread as feedback on the stage path below it.
+
+Source: reviewer correction on the approval tab bar, lobehub#21936 acceptance round 2 (2026-10-30).
+
+## LOBE-UX-018 — Judge a component's size against the whole page, not only inside itself
+
+When reviewing a single component (a composer, toolbar, card or bar), look at it in a full-page screenshot next to its neighbours (sidebar rows, page header, the main chat input) and compare height, padding and visual weight. Checking only internal spacing and alignment misses a component that is the wrong size for the app. Record the comparison as evidence: which neighbours, and their measured heights.
+
+Source: the Channel composer audit checked internal asymmetry and button weight but missed that the whole composer was oversized; the user caught it (“输入框看起来有点太大了”, 2026-10-31).
+
+## LOBE-UX-019 — Reply behavior follows the author's identity
+
+Reply is the primary Channel message action. Replying to a person only posts a quoted message in the current feed, with no Agent dispatch or new thread, even if the text mentions Agents. Replying to an Agent on the main feed atomically creates/reuses a thread rooted at that Agent's answer and sends the continuation there. The target Agent and explicitly mentioned Agents participate; unrelated Agents do not join. Inside a thread, keep replies in that thread and retain existing participants. Opening or cancelling reply mode never persists an empty thread.
+
+Source: user correction of the proposed in-channel reply semantics (2026-10-31).
+
+- Long-running experiment startup belongs to the experiment page. Do not trap users in a blocking modal; route navigation must not own or cancel launch orchestration. A short pre-launch cost confirmation may remain.
+
+## LOBE-UX-020 — Conversation times follow Discord: date dividers, dated headers
+
+A Channel day divider is the full date alone ("2026 年 6 月 22 日"), not a day label with a time. Each message header carries its own day, so a message read away from its divider still says when it was sent: today is the time alone ("16:29"), not "今天"; yesterday is "昨天 16:29"; anything earlier is the numeric date and time ("2026/6/22 01:33"), never a weekday or a year-less date. Days are calendar days in local time, not 24-hour spans. A grouped continuation's hover stamp is the time alone, and every stamp keeps the full date and time in its hover title.
+
+Enforcement: `src/features/Channels/messagePresentation.test.ts` (`channelMessageTime`) covers today, the yesterday boundary, and earlier dates in this and previous years in zh-CN and en-US.
+
+Source: user correction (2026-11-12): headers showed only "16:29", so a scrolled message had no visible date — "应该得是像 discord 这样改". This replaces the WeChat-style divider from PR #22556 (2026-11-08), which kept today as the time alone ("今天应该显示时间").
+
+## LOBE-UX-021 — Timeout copy follows the form's actual answer policy
+
+Use the shared form's `autoSubmitOnTimeout` result for countdown wording. Provider-owned option IDs suppress inferred answers, so those cards must say they close unanswered instead of promising option 1. Keep the legacy fallback wording only where the form actually submits fallback answers. Do not infer the policy from a renderer's provider name.
+
+Enforcement: `packages/shared-tool-ui/src/AskUserQuestion/useAskUserForm.test.ts` checks the exposed policy together with actual timeout submission and non-submission. Verify both countdown messages on the rendered cards. Source: real Codex question-card acceptance (2026-11-17), where the footer promised option 1 despite the hook correctly refusing to select it.
+
+## LOBE-UX-022 — Check icon–label optical alignment, not only bounding boxes
+
+For an icon beside a text label, equal CSS centerlines do not prove visual centering: the font's visible glyphs can sit above the line-box center. Inspect a tight rendered crop, including the hover background, before declaring alignment fixed. Use the shared component's flex alignment first and inspect its line height, font metrics, and SVG viewBox before changing it. Do not compensate with per-instance pixel translations or relative positioning; resolve an established typography or icon issue at its owning layer instead.
+
+Enforcement: visual review of the actual icon and localized label at the target scale, alongside the row's computed geometry; reject unexplained positioning offsets in icon–label alignment changes. Source: user corrections on the Agent profile return row: geometry checks missed the perceived misalignment, and a subsequent 1px icon translation was correctly rejected as a hack.
+
+## LOBE-UX-023 — Keep page editor modes outside the writing surface
+
+On a dedicated instruction-editing page, place view-mode switches alongside the page title, not in an extra toolbar row inside the input boundary. The editor's boundary should identify where to type without becoming the page's strongest visual element on focus. Use the neutral outlined surface; do not turn its entire perimeter into a primary-colored focus frame. Preserve the editor caret and the mode buttons' keyboard focus indicators.
+
+Enforcement: `EditorCanvas/index.test.tsx` checks that both mode controls remain outside the outlined input surface. Inspect the page at rest and while editing. Source: user correction on the Agent instruction editor: moving mode switches into the frame wasted a writing row, and a black focus border was too prominent.
+
+## LOBE-UX-024 — Conversation skill lists are invocation pickers
+
+User, device, project and Agent skill rows share the default skill glyph, not marketplace/custom avatars. This applies to conversation invocation lists; the agent's skill configuration page may show community skills' publisher icons via `MarketSkillIcon`, with the default skill glyph as fallback. Clicking a row in a conversation inserts the skill into the composer. Do not add per-row file counts or view/rename/delete actions, including right-click equivalents; section totals may remain.
+
+The conversation sidebar is not a full capability inventory: do not automatically add builtin instruction bundles when removing them from the Tools picker. Preserve their runtime configuration and existing slash/profile entry points where available; exposing them here is a separate product decision.
+
+Enforcement: `SkillsList` owns the glyph and exposes neither custom icons, file counts nor management-action props. `AgentDocumentsGroup.test.tsx` checks the real list's click/keyboard behavior and the absence of hover/context-menu management controls; `UserLevelSkills.test.ts` guards source-independent row data.
+
+User-skill enablement belongs in a separate management view entered through the section's settings icon (with a tooltip and accessible name). Keep the section collapsible when adding that action: use the Accordion action slot outside its trigger, and keep settings reachable while collapsed. `AgentDocumentsGroup.test.tsx` exercises the real section's collapse/expand and independent settings entry. In that view, checkboxes represent the pending enabled set: keep search, scoped bulk selection, and Save/Cancel; do not add saved-state Enabled/Disabled tabs that duplicate or conflict with the draft. `useUserSkillsManagement.test.ts` guards selection visibility and persistence across search.
+
+The title itself states the task and scope: “Choose the skills this agent can use” / 「选择当前助理可以使用的技能」. Merge useful explanatory copy into that title rather than dropping the scope or repeating it in a subtitle. Counts describe selected skills, not checked boxes; do not foreground checkbox mechanics or add uninstall disclaimers to this selection surface. Fixed-height virtual skill lists use the same row-height constant for the rendered rows, virtualizer, and short-list viewport, rather than reserving an estimated extra row.
+
+Source: user corrections while simplifying the conversation Skills panel, including removal of redundant status tabs, the text management button, and checkbox-centric copy.
+
+## LOBE-UX-025 — Chat tools show existing connector records
+
+The chat Tools picker lists services with connection records. Keep authorization actions on pending or failed connections in their existing activation group. First-time connection discovery belongs in connector management.
+
+Enforcement: `useControls.test.ts` covers missing connection records, cached unconnected providers, and pending or failed authorization rows. Source: user correction while debugging Kai’s chat Tools picker.
+
+## LOBE-UX-026 — Tool menus expose choices, not fixed loaders
+
+Keep fixed Agent infrastructure (the skill loader and tool activator) out of both loading-policy lists. Hiding the loader must not hide individual skills or the optional Skill Store.
+
+Enforcement: the picker metadata excludes always-on identifiers; builtin selector and AgentToolsEngine tests cover the visible list and the runtime defaults.
+
+## LOBE-UX-027 — One agent, one tool configuration
+
+The profile library picker and chat Tools menu are two views of the same agent configuration. Share the tool inventory, translated names, state and agent-scoped write path, **not the popup**. The profile keeps its searchable checklist; chat keeps its loading-policy filters. Derive profile counts from the same unfiltered options. Agent-owned connector provisioning and the Skills invocation picker are separate tasks.
+
+Enforcement: both surfaces use the same tool controls; regression tests cover the profile summary, runtime-backed settings and fixed-loader exclusions.
+
+## LOBE-UX-028 — Recover GitHub skill imports in the import dialog
+
+Show GitHub authorization guidance when an import encounters an access error. Keep the source URL in the dialog while the user connects. Offer technical details only when they add diagnostic information beyond the recovery message.
+
+Enforcement: `useGithubSkillImport.test.ts` covers the single access message, retrying discovery after authorization, and retaining the user's selection when an import needs reconnection.
+
+## LOBE-UX-029 — Let success stay quiet; mark only the exceptions
+
+On result surfaces (acceptance checks, verify boards, run summaries), passing is the default state and carries no badge of its own: no per-item "Passed" tag, check stamp or green outline. Show the outcome once, in one plain sentence (for example "6 项已核对，等你确认"). Item identifiers stay neutral (`01`, `04B`), without a check mark. Color and badges are reserved for what needs a person: a failed check (error color with the reason) or a pending decision. Actions such as "Accept" may keep their icon; status may not.
+
+Source: lead review of the artboard acceptance redesign (2026-11-16): too many Pass tags read as AI-generated.

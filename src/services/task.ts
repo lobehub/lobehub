@@ -1,13 +1,15 @@
+import type { TaskCompletedWindow } from '@lobechat/builtin-tool-task';
 import type {
   CheckpointConfig,
   TaskAutomationMode,
   TaskInstructionSynthesis,
   TaskIntentAnalysis,
+  TaskListFilter,
   TaskStatus,
 } from '@lobechat/types';
 
-import { lambdaClient, withLlmRelay } from '@/libs/trpc/client';
-import { oneShotRelay } from '@/services/llmRelay';
+import { createWorkspaceLambdaClient, lambdaClient, withLlmRelay } from '@/libs/trpc/client';
+import { buildLlmExecutorDeclaration, oneShotRelay } from '@/services/llmRelay';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
 
@@ -21,11 +23,25 @@ class TaskService {
 
   getDetail = async (id: string) => lambdaClient.task.detail.query({ id });
 
+  /**
+   * Read a task from a workspace other than the active one. Task identifiers
+   * are only unique within a workspace, so the read is pinned to the owning
+   * workspace instead of resolving against the active scope.
+   */
+  getDetailInWorkspace = async (id: string, workspaceId: string) =>
+    createWorkspaceLambdaClient(workspaceId).task.detail.query({ id });
+
   list = async (params: {
     /** Keyset cursor: rows strictly after this `(orderBy timestamp, seq)` position. */
     after?: { at: Date | string; seq: number };
     assigneeAgentId?: string;
     automated?: boolean;
+    /** Keep completed / canceled tasks only when closed within this window. */
+    completedWithin?: TaskCompletedWindow;
+    /** The Tasks page filter, applied server-side before paging. */
+    filter?: TaskListFilter;
+    /** Archived tasks are left out unless this is set. */
+    includeArchived?: boolean;
     orderBy?: 'createdAt' | 'updatedAt';
     limit?: number;
     offset?: number;
@@ -42,14 +58,19 @@ class TaskService {
   groupList = async (params: {
     assigneeAgentId?: string;
     automated?: boolean;
+    completedWithin?: TaskCompletedWindow;
     excludeStatuses?: TaskStatus[];
-    groupBy?: 'assignee' | 'member' | 'priority';
+    filter?: TaskListFilter;
+    groupBy?: 'assignee' | 'label' | 'member' | 'priority' | 'project';
     groups?: Array<{
       key: string;
       limit?: number;
       offset?: number;
       statuses: string[];
     }>;
+    includeArchived?: boolean;
+    /** The label group whose labels are the columns when `groupBy` is 'label'. */
+    labelGroupId?: string;
     parentTaskId?: string | null;
     projectId?: string;
     /** "My tasks" narrowing: assigned to the caller, or created by them. */
@@ -118,6 +139,8 @@ class TaskService {
     description?: string;
     editorData?: unknown;
     instruction: string;
+    /** Labels attached on creation; validated before the task is written. */
+    labelIds?: string[];
     name?: string;
     parentTaskId?: string;
     priority?: number;
@@ -127,8 +150,15 @@ class TaskService {
     visibility?: 'private' | 'public';
   }) => lambdaClient.task.create.mutate(params);
 
-  updateVisibility = async (id: string, visibility: 'private' | 'public') =>
-    lambdaClient.task.updateVisibility.mutate({ id, visibility });
+  updateVisibility = async (
+    id: string,
+    visibility: 'private' | 'public',
+    options?: { takeOwnership?: boolean },
+  ) => lambdaClient.task.updateVisibility.mutate({ id, visibility, ...options });
+
+  /** File a task without a project, with all its subtasks, under `projectId`. */
+  moveTreeToProject = async (id: string, projectId: string) =>
+    lambdaClient.task.moveTreeToProject.mutate({ id, projectId });
 
   update = async (
     id: string,
@@ -157,6 +187,8 @@ class TaskService {
       name?: string;
       parentTaskId?: string | null;
       priority?: number;
+      // null takes the task out of its project
+      projectId?: string | null;
       // schedulePattern: cron expression for scheduled automation (e.g. '0 9 * * *')
       schedulePattern?: string | null;
       // scheduleTimezone: IANA timezone for the cron expression (e.g. 'Asia/Shanghai')
@@ -164,7 +196,40 @@ class TaskService {
     },
   ) => lambdaClient.task.update.mutate({ id, ...data });
 
+  // ── Batch (list multi-select) ──
+  // One request per action for the whole selection; the server answers with a
+  // per-task outcome (`updated` / `skipped` / `failed`).
+
+  batchUpdate = async (params: {
+    assigneeAgentId?: string | null;
+    assigneeUserId?: string | null;
+    ids: string[];
+    priority?: number;
+  }) => lambdaClient.task.batchUpdate.mutate(params);
+
+  batchUpdateStatus = async (
+    ids: string[],
+    status: 'backlog' | 'canceled' | 'completed' | 'paused',
+  ) => lambdaClient.task.batchUpdateStatus.mutate({ ids, status });
+
+  batchArchive = async (ids: string[], archived: boolean) =>
+    lambdaClient.task.batchArchive.mutate({ archived, ids });
+
+  batchDelete = async (ids: string[]) => lambdaClient.task.batchDelete.mutate({ ids });
+
+  /** Undo of a batch status / field / archive change (the `reverts` it returned). */
+  batchRevert = async (
+    reverts: Parameters<typeof lambdaClient.task.batchRevert.mutate>[0]['reverts'],
+  ) => lambdaClient.task.batchRevert.mutate({ reverts });
+
+  /** Undo of a batch delete: restore the tasks from the recycle bin. */
+  batchRestoreDeleted = async (ids: string[]) =>
+    lambdaClient.task.batchRestoreDeleted.mutate({ ids });
+
   delete = async (id: string) => lambdaClient.task.delete.mutate({ id });
+
+  archive = async (id: string, archived: boolean) =>
+    lambdaClient.task.archive.mutate({ archived, id });
 
   clearAll = async () => lambdaClient.task.clearAll.mutate();
 
@@ -184,8 +249,10 @@ class TaskService {
   updateStatusCascade = async (id: string, status: 'canceled' | 'completed') =>
     lambdaClient.task.updateStatusCascade.mutate({ id, status });
 
-  run = async (id: string, params?: { continueTopicId?: string; prompt?: string }) =>
-    lambdaClient.task.run.mutate({ id, ...params });
+  run = async (
+    id: string,
+    params?: { continueTopicId?: string; model?: string; prompt?: string; provider?: string },
+  ) => lambdaClient.task.run.mutate({ id, ...params });
 
   previewSubtaskLayers = async (id: string) => lambdaClient.task.previewSubtaskLayers.query({ id });
 
@@ -238,8 +305,16 @@ class TaskService {
     ...args: Parameters<typeof lambdaClient.task.updateVerifyConfig.mutate>
   ) => lambdaClient.task.updateVerifyConfig.mutate(...args);
 
+  /**
+   * Judge the task's output against its rubrics. The server picks the judge
+   * model (the task's own judge, else the topic model), so any device provider
+   * this tab runs is reason to stand by as its executor.
+   */
   runReview = async (id: string, params?: { content?: string; topicId?: string }) =>
-    lambdaClient.task.runReview.mutate({ id, ...params });
+    oneShotRelay.run(
+      () => buildLlmExecutorDeclaration()?.providers ?? [],
+      (relay) => lambdaClient.task.runReview.mutate({ id, ...params }, withLlmRelay(relay)),
+    );
 
   pinDocument = async (taskId: string, documentId: string, pinnedBy?: string) =>
     lambdaClient.task.pinDocument.mutate({ documentId, pinnedBy, taskId });

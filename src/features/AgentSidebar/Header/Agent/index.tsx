@@ -1,11 +1,14 @@
 'use client';
 
+import { DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import type { PropsWithChildren } from 'react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
+import AgentAvatar from '@/components/AgentAvatar';
+import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { SkeletonItem } from '@/features/NavPanel/components/SkeletonList';
+import { useNavItemMetrics } from '@/features/NavPanel/density';
 import { SidebarHeaderSelectTrigger } from '@/features/NavPanel/SidebarHeaderSelect';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
@@ -14,8 +17,10 @@ import SwitchPanel from './SwitchPanel';
 
 const Agent = memo<PropsWithChildren>(() => {
   const { t } = useTranslation(['chat', 'common']);
+  const { headerAvatarSize } = useNavItemMetrics();
 
-  const [isLoading, isInbox, title, avatar, backgroundColor] = useAgentStore((s) => [
+  const [agentId, isLoading, isInbox, title, avatar, backgroundColor] = useAgentStore((s) => [
+    s.activeAgentId,
     agentSelectors.isAgentConfigLoading(s),
     builtinAgentSelectors.isInboxAgent(s),
     agentSelectors.currentAgentDisplayName(s),
@@ -24,18 +29,25 @@ const Agent = memo<PropsWithChildren>(() => {
   ]);
 
   const displayTitle = isInbox
-    ? title || 'Lobe AI'
+    ? title || DEFAULT_INBOX_TITLE
     : title || t('defaultSession', { ns: 'common' });
 
-  if (isLoading) return <SkeletonItem height={32} padding={0} />;
+  if (isLoading) return <SkeletonItem height={headerAvatarSize + 4} padding={0} />;
 
   return (
     <SwitchPanel>
       <SidebarHeaderSelectTrigger
-        avatar={isInbox ? avatar || DEFAULT_INBOX_AVATAR : avatar || DEFAULT_AVATAR}
-        background={backgroundColor || undefined}
         name={displayTitle}
         title={displayTitle}
+        avatarNode={
+          <AgentAvatar
+            agentId={agentId}
+            avatar={isInbox ? avatar || DEFAULT_INBOX_AVATAR : avatar}
+            background={backgroundColor || undefined}
+            name={displayTitle}
+            size={headerAvatarSize}
+          />
+        }
       />
     </SwitchPanel>
   );

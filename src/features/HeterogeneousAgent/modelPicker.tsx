@@ -1,5 +1,5 @@
 import type { ServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 import type { LobeDefaultAiModelListItem } from 'model-bank';
 
 import { ModelItemRender, TAG_CLASSNAME } from '@/components/ModelSelect';

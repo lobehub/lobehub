@@ -1,8 +1,16 @@
 import type { UpdateInfo } from '@lobechat/electron-client-ipc';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Flexbox, Icon, Markdown } from '@lobehub/ui';
-import { Button as BaseButton, createModal, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Button as BaseButton,
+  createModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Markdown,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
 import { t } from 'i18next';
 import { X } from 'lucide-react';
 import React, { memo, useEffect, useRef, useState } from 'react';
@@ -12,10 +20,12 @@ import { autoUpdateService } from '@/services/electron/autoUpdate';
 import { rendererOtaService } from '@/services/electron/rendererOta';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import { applyCoreUpdate } from './applyCoreUpdate';
 import { formatCoreVersion } from './coreVersion';
 import { selectUpdateInfo } from './selectUpdateInfo';
+import { useAppliedNotice } from './useAppliedNotice';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   installLaterCloseButton: css`
@@ -56,7 +66,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     max-inline-size: calc(100vw - 32px);
     padding-block: 8px;
-    padding-inline: 12px 8px;
+    padding-inline: ${densityVars.contentGap} 8px;
     border-radius: ${cssVar.borderRadiusLG};
 
     font-size: ${cssVar.fontSizeSM};
@@ -144,7 +154,13 @@ export const UpdateNotification: React.FC = () => {
     'unconfirm' | 'installLater' | 'installNow' | null
   >('unconfirm');
   const [isInstalling, setIsInstalling] = useState(false);
-  const [appliedVersion, setAppliedVersion] = useState<string | null>(null);
+  // The "updated to version" toast only shows when no pending update takes its slot
+  const {
+    appliedVersion,
+    dismiss: dismissAppliedNotice,
+    hoverHandlers: appliedToastHoverHandlers,
+    setAppliedVersion,
+  } = useAppliedNotice(!!updateInfo);
   const receivedUpdateEvent = useRef(false);
   useEffect(() => {
     let active = true;
@@ -167,7 +183,7 @@ export const UpdateNotification: React.FC = () => {
     return () => {
       active = false;
     };
-  }, []);
+  }, [setAppliedVersion]);
   useWatchBroadcast('coreUpdateApplied', (version) => {
     receivedUpdateEvent.current = true;
     setAppliedVersion(version);
@@ -247,11 +263,11 @@ export const UpdateNotification: React.FC = () => {
 
   if (!updateInfo)
     return appliedVersion ? (
-      <div className={styles.installLaterToast}>
+      <div className={styles.installLaterToast} {...appliedToastHoverHandlers}>
         <span>
           {tElectron('updater.rendererUpdated', { version: formatCoreVersion(appliedVersion) })}
         </span>
-        <BaseButton size={'small'} type={'text'} onClick={() => setAppliedVersion(null)}>
+        <BaseButton size={'small'} type={'text'} onClick={dismissAppliedNotice}>
           {tElectron('updater.ignore')}
         </BaseButton>
       </div>

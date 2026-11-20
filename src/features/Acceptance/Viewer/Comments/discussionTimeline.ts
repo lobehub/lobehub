@@ -30,7 +30,9 @@ export type DiscussionEntry =
       roundIndex: number;
       runId?: string;
     }
-  | { approval: AcceptanceCommentItem; at: Date; kind: 'approval' };
+  | { approval: AcceptanceCommentItem; at: Date; kind: 'approval' }
+  /** Someone asking the deciders for reject access, answered in place. */
+  | { at: Date; kind: 'accessRequest'; request: AcceptanceCommentItem };
 
 /**
  * Threads that belong in the discussion stream: plain, delivery-wide remarks.
@@ -97,10 +99,20 @@ export const buildDiscussionTimeline = ({
 
   // Flattened: the discussion is a chat, so a reply to a delivery-wide remark
   // is just the next message. Threading is for regions, where a note and its
-  // answers are about one spot on one picture.
-  for (const thread of messageThreads(threads))
-    for (const comment of [thread.root, ...thread.replies])
+  // answers are about one spot on one picture. An access request is a turn of
+  // its own — it carries an answer — while what people say back to it stays
+  // ordinary messages.
+  for (const thread of messageThreads(threads)) {
+    const isRequest = thread.root.kind === 'access_request';
+    if (isRequest && !thread.root.deletedAt)
+      entries.push({
+        at: new Date(thread.root.createdAt),
+        kind: 'accessRequest',
+        request: thread.root,
+      });
+    for (const comment of isRequest ? thread.replies : [thread.root, ...thread.replies])
       entries.push({ at: new Date(comment.createdAt), comment, kind: 'message' });
+  }
 
   // A region note leads with its root: that is when it was said, and its
   // replies stay under it because they are about the same spot.
@@ -175,6 +187,9 @@ export const countDiscussionMessages = (input: BuildInput): number =>
       }
       case 'roundReject': {
         return total + (entry.comment ? 1 : 0);
+      }
+      case 'accessRequest': {
+        return total + 1;
       }
       default: {
         return total;

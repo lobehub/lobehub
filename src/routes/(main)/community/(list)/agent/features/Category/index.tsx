@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
+import { Icon, Tag } from '@lobehub/ui';
 import qs from 'query-string';
 import { memo, useMemo } from 'react';
 
@@ -48,7 +47,7 @@ const Category = memo(() => {
           q,
           sort: key === AssistantCategory.Discover ? AssistantSorts.Recommended : null,
         },
-        url: '/community/agent',
+        url: '/marketplace/agent',
       },
       { skipNull: true },
     );

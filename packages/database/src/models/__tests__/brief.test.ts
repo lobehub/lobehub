@@ -781,4 +781,18 @@ describe('BriefModel', () => {
       expect(found).toBeNull();
     });
   });
+
+  describe('markRead / resolve on an id the caller does not own', () => {
+    const unknownId = '00000000-0000-0000-0000-000000000000';
+
+    it('should return null from markRead when no owned row matches', async () => {
+      const model = new BriefModel(serverDB, userId);
+      await expect(model.markRead(unknownId)).resolves.toBeNull();
+    });
+
+    it('should return null from resolve when no owned row matches', async () => {
+      const model = new BriefModel(serverDB, userId);
+      await expect(model.resolve(unknownId, { action: 'read' })).resolves.toBeNull();
+    });
+  });
 });

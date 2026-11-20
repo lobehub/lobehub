@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchClaudeCodeQuota } from './claudeCodeQuota';
+import { claudeCodeKeychainService, fetchClaudeCodeQuota } from './claudeCodeQuota';
 
 vi.mock('node:fs/promises', () => ({
   readFile: vi.fn(),
@@ -31,6 +31,23 @@ const mockKeychain = (result: string | Error) => {
       else callback(null, `${result}\n`, '');
     },
   );
+};
+
+/** One Keychain item per service name, like the real login keychain. */
+const mockKeychainItems = (items: Record<string, string>) => {
+  execFileMock.mockImplementation(
+    (_cmd: string, args: string[], _opts: unknown, callback: ExecFileCallback) => {
+      const service = args[args.indexOf('-s') + 1];
+      const item = items[service];
+      if (item === undefined) callback(new Error('item could not be found'), '', '');
+      else callback(null, `${item}\n`, '');
+    },
+  );
+};
+
+const keychainServiceArg = (call: unknown[]) => {
+  const args = call[1] as string[];
+  return args[args.indexOf('-s') + 1];
 };
 
 const credentialsJson = (expiresAt: number, accessToken = 'file-token') =>
@@ -213,11 +230,6 @@ describe('fetchClaudeCodeQuota', () => {
 
   it('prefers the CLAUDE_CONFIG_DIR profile over a fresh default keychain login', async () => {
     setPlatform('darwin');
-    mockKeychain(
-      JSON.stringify({
-        claudeAiOauth: { accessToken: 'default-account-token', expiresAt: FRESH_EXPIRES_AT },
-      }),
-    );
     vi.mocked(readFile).mockImplementation(async (file) => {
       if (file === '/custom/claude/.credentials.json') {
         return credentialsJson(FRESH_EXPIRES_AT, 'profile-token');
@@ -225,12 +237,19 @@ describe('fetchClaudeCodeQuota', () => {
       throw new Error('ENOENT');
     });
     vi.mocked(fetch).mockResolvedValue(okUsageResponse({ five_hour: { utilization: 10 } }));
+    mockKeychainItems({
+      'Claude Code-credentials': JSON.stringify({
+        claudeAiOauth: { accessToken: 'default-account-token', expiresAt: FRESH_EXPIRES_AT },
+      }),
+    });
 
     const result = await fetchClaudeCodeQuota({ env: { CLAUDE_CONFIG_DIR: '/custom/claude' } });
 
     expect(result.status).toBe('ok');
-    // The custom profile's token is used and the default keychain is never consulted.
-    expect(execFileMock).not.toHaveBeenCalled();
+    // The custom profile's token is used and the default keychain item is never consulted.
+    expect(execFileMock.mock.calls.map(keychainServiceArg)).toEqual([
+      claudeCodeKeychainService('/custom/claude'),
+    ]);
     expect(fetch).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
@@ -239,18 +258,43 @@ describe('fetchClaudeCodeQuota', () => {
     );
   });
 
-  it('reports not-found for an unauthenticated CLAUDE_CONFIG_DIR profile instead of falling back', async () => {
+  it('reads a CLAUDE_CONFIG_DIR profile login from its own macOS Keychain item', async () => {
     setPlatform('darwin');
-    mockKeychain(
-      JSON.stringify({
+    mockKeychainItems({
+      'Claude Code-credentials': JSON.stringify({
         claudeAiOauth: { accessToken: 'default-account-token', expiresAt: FRESH_EXPIRES_AT },
       }),
+      [claudeCodeKeychainService('/custom/claude')]: JSON.stringify({
+        claudeAiOauth: { accessToken: 'profile-keychain-token', expiresAt: FRESH_EXPIRES_AT },
+      }),
+    });
+    vi.mocked(fetch).mockResolvedValue(okUsageResponse({ five_hour: { utilization: 10 } }));
+
+    const result = await fetchClaudeCodeQuota({ env: { CLAUDE_CONFIG_DIR: '/custom/claude' } });
+
+    expect(result.status).toBe('ok');
+    expect(fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer profile-keychain-token' }),
+      }),
     );
+  });
+
+  it('reports not-found for an unauthenticated CLAUDE_CONFIG_DIR profile instead of falling back', async () => {
+    setPlatform('darwin');
+    mockKeychainItems({
+      'Claude Code-credentials': JSON.stringify({
+        claudeAiOauth: { accessToken: 'default-account-token', expiresAt: FRESH_EXPIRES_AT },
+      }),
+    });
 
     const result = await fetchClaudeCodeQuota({ env: { CLAUDE_CONFIG_DIR: '/custom/claude' } });
 
     expect(result).toMatchObject({ reason: 'credentials-not-found', status: 'unavailable' });
-    expect(execFileMock).not.toHaveBeenCalled();
+    expect(execFileMock.mock.calls.map(keychainServiceArg)).toEqual([
+      claudeCodeKeychainService('/custom/claude'),
+    ]);
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -471,5 +515,16 @@ describe('fetchClaudeCodeQuota', () => {
 
     expect(result.status).toBe('error');
     expect(result.error).toContain('timed out');
+  });
+});
+
+describe('claudeCodeKeychainService', () => {
+  it('matches the CLI: bare name by default, sha256(dir)[0..8] suffix for a profile', () => {
+    expect(claudeCodeKeychainService()).toBe('Claude Code-credentials');
+    // sha256('/Users/me/.claude-work') starts with these 8 hex chars.
+    expect(claudeCodeKeychainService('/Users/me/.claude-work')).toMatch(
+      /^Claude Code-credentials-[\da-f]{8}$/,
+    );
+    expect(claudeCodeKeychainService('/a')).not.toBe(claudeCodeKeychainService('/b'));
   });
 });

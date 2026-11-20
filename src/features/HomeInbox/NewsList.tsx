@@ -1,7 +1,5 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Avatar, Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +13,8 @@ import { useSelfReviewBriefView } from '@/features/DailyBrief/useSelfReviewBrief
 import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useBriefStore } from '@/store/brief';
+import { useInterfaceDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import NewsChatActions from './NewsChatActions';
 
@@ -48,8 +48,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: ${cssVar.borderRadius};
   `,
   body: css`
-    padding-block-end: 12px;
+    padding-block-end: ${densityVars.contentGap};
     padding-inline: ${ROW_PADDING_INLINE + HEADLINE_INSET}px ${ROW_PADDING_INLINE}px;
+  `,
+  bodyCompact: css`
+    padding-block-end: 8px;
   `,
   list: css`
     overflow: hidden;
@@ -74,10 +77,18 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorFillQuaternary};
     }
   `,
+  // Compact rows (plain and bare) land on the 32px row height: 6px + 20px line + 6px.
+  rowCompact: css`
+    padding-block: 6px;
+  `,
   section: css`
     &:not(:last-child) {
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     }
+  `,
+  titleCompact: css`
+    font-size: 13px;
+    line-height: 20px;
   `,
 }));
 
@@ -96,6 +107,7 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
   const markBriefRead = useBriefStore((s) => s.markBriefRead);
   // Nightly self-review ideas list themselves from metadata, like proposals do.
   const selfReview = useSelfReviewBriefView(brief.metadata);
+  const compact = useInterfaceDensity() === 'compact';
 
   const [expanded, setExpanded] = useState(false);
   const [localRead, setLocalRead] = useState(false);
@@ -124,7 +136,11 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
 
   return (
     <Flexbox className={bare ? undefined : styles.section}>
-      <Button className={cx(styles.row, bare && styles.bareRow)} type={'text'} onClick={toggle}>
+      <Button
+        className={cx(styles.row, bare && styles.bareRow, compact && styles.rowCompact)}
+        type={'text'}
+        onClick={toggle}
+      >
         <Flexbox horizontal align={'center'} gap={ROW_GAP} style={{ width: '100%' }}>
           {/* Priority leads the row, so a scan down the list reads levels first. */}
           <BriefPriorityIcon muted={read} priority={brief.priority} />
@@ -144,7 +160,7 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
           )}
           <Text
             ellipsis
-            className={homeType.itemTitle}
+            className={cx(homeType.itemTitle, compact && styles.titleCompact)}
             style={{
               color: read ? cssVar.colorTextTertiary : undefined,
               flex: 1,
@@ -164,7 +180,10 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
       </Button>
 
       {expanded && (brief.summary || brief.artifacts || hasTopicChat) && (
-        <Flexbox className={bare ? styles.bareBody : styles.body} gap={8}>
+        <Flexbox
+          className={bare ? styles.bareBody : cx(styles.body, compact && styles.bodyCompact)}
+          gap={8}
+        >
           {selfReview ? (
             <SelfReviewBriefDetails content={selfReview.content} details={selfReview.details} />
           ) : (
@@ -176,7 +195,7 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
               </Suspense>
             )
           )}
-          <BriefCardArtifacts artifacts={brief.artifacts} />
+          <BriefCardArtifacts agentId={agentId} artifacts={brief.artifacts} />
           {agentId && topicId && (
             <NewsChatActions
               agentId={agentId}
@@ -207,6 +226,7 @@ interface NewsListProps {
 const NewsList = memo<NewsListProps>(({ bare, news, showTime }) => {
   const { t } = useTranslation('home');
   const [expanded, setExpanded] = useState(false);
+  const compact = useInterfaceDensity() === 'compact';
 
   if (news.length === 0) return null;
 
@@ -222,8 +242,13 @@ const NewsList = memo<NewsListProps>(({ bare, news, showTime }) => {
       ))}
       {collapsed && (
         <Button
-          className={cx(styles.row, styles.bareRow, homeType.supporting)}
           type={'text'}
+          className={cx(
+            styles.row,
+            styles.bareRow,
+            compact && styles.rowCompact,
+            homeType.supporting,
+          )}
           onClick={() => setExpanded(true)}
         >
           {t('inbox.news.showAll', { count: news.length })}

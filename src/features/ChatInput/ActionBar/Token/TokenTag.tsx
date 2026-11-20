@@ -12,24 +12,10 @@ import { useTokenBreakdown } from './useTokenBreakdown';
 const Token = memo(() => {
   const { t } = useTranslation('chat');
 
-  const { chatsToken, historySummaryToken, maxTokens, systemRoleToken, toolsToken, totalToken } =
-    useTokenBreakdown();
+  const breakdown = useTokenBreakdown();
+  const { maxTokens, totalToken } = breakdown;
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
-  const content = useMemo(
-    () => (
-      <TokenDetails
-        breakdown={{
-          chatsToken,
-          historySummaryToken,
-          maxTokens,
-          systemRoleToken,
-          toolsToken,
-          totalToken,
-        }}
-      />
-    ),
-    [chatsToken, historySummaryToken, maxTokens, systemRoleToken, toolsToken, totalToken],
-  );
+  const content = useMemo(() => <TokenDetails breakdown={breakdown} />, [breakdown]);
 
   // Keep the composer quiet for regular users until context pressure is real;
   // dev mode always shows the tag for inspection.

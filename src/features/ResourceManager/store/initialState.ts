@@ -1,6 +1,7 @@
 import { type ResourceManagerMode } from '@/features/ResourceManager';
 import { createReplicaState, type ReplicaState } from '@/libs/replica';
 import { FilesTabs, type ResourceSourceFilter, SortType } from '@/types/files';
+import type { ResourceSorter } from '@/types/resource';
 
 import { type ExplorerSearchValue, type HierarchySearchValue } from './projection';
 
@@ -30,7 +31,7 @@ export type ResourceListVisibilityFilter = 'private' | 'workspace';
 export const DEFAULT_WORKSPACE_LIST_VISIBILITY: ResourceListVisibilityFilter = 'workspace';
 
 /**
- * The ResourceManager's two search surfaces as `@lobechat/replica` views.
+ * The ResourceManager's two search surfaces as `local-replica` views.
  *
  * Both were bare `useClientDataSWR` entries before: the rows only lived in the
  * SWR cache, so re-opening a search (or coming back to the surface) had to wait
@@ -125,10 +126,10 @@ export interface State extends ResourceSearchState {
    * caller-owned rows for members and the full visible result set for owners.
    */
   selectionTotal?: number;
-  /**
-   * Field to sort files by
-   */
-  sorter: 'name' | 'createdAt' | 'size';
+  /** Field to sort files by. */
+  sorter: ResourceSorter;
+  /** Library whose sort settings are initialized; undefined denotes Drive. */
+  sortLibraryId?: string;
   /**
    * Sort direction (ascending or descending)
    */
@@ -168,6 +169,7 @@ export const initialState: State = {
   selectAllState: 'none',
   selectionTotal: undefined,
   selectedFileIds: [],
+  sortLibraryId: undefined,
   sortType: SortType.Desc,
   sorter: 'createdAt',
   sourceFilter: undefined,

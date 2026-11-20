@@ -190,7 +190,9 @@ export const runClientSubAgent = async (
       completionReason: 'done',
       metadata: {
         totalCost,
+        totalLlmCalls: usage?.llm?.apiCalls,
         totalMessages: subTaskMessages.length,
+        totalSteps: usage?.llm?.apiCalls,
         totalTokens,
         totalToolCalls,
       },

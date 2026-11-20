@@ -7,12 +7,15 @@ import {
 import { getMimeType } from '@lobechat/utils';
 import debug from 'debug';
 import { sha256 } from 'js-sha256';
+import pMap from 'p-map';
 
 import { FileService } from '@/server/services/file';
 
 import { SkillResourceError } from './errors';
 
 const log = debug('lobe-chat:service:skill-resource');
+
+const STORE_RESOURCES_CONCURRENCY = 16;
 
 function isTextMimeType(mimeType: string): boolean {
   if (mimeType.startsWith('text/')) return true;
@@ -51,12 +54,29 @@ export class SkillResourceService {
     log('storeResources: starting with zipHash=%s, resourceCount=%d', zipHash, resources.size);
     const result: Record<string, SkillResourceMeta> = {};
 
+    // Paths with identical contents (e.g. several empty `__init__.py`) share one
+    // global file; registering that hash from parallel workers would race on its
+    // insert, so each distinct content is stored once, from its first path.
+    const pathsByHash = new Map<string, { buffer: Buffer; paths: string[] }>();
     for (const [virtualPath, buffer] of resources) {
-      log('storeResources: storing resource path=%s, size=%d bytes', virtualPath, buffer.length);
-      const fileHash = await this.storeResource(zipHash, virtualPath, buffer);
-      result[virtualPath] = { fileHash, size: buffer.length };
-      log('storeResources: stored resource path=%s, fileHash=%s', virtualPath, fileHash);
+      const fileHash = sha256(buffer);
+      const entry = pathsByHash.get(fileHash);
+      if (entry) entry.paths.push(virtualPath);
+      else pathsByHash.set(fileHash, { buffer, paths: [virtualPath] });
     }
+
+    // Each file is an object-storage upload plus a row insert; a Market skill can
+    // carry hundreds of them, so storing them one at a time dominated install time.
+    await pMap(
+      pathsByHash.values(),
+      async ({ buffer, paths }) => {
+        log('storeResources: storing resource path=%s, size=%d bytes', paths[0], buffer.length);
+        const fileHash = await this.storeResource(zipHash, paths[0], buffer);
+        for (const virtualPath of paths) result[virtualPath] = { fileHash, size: buffer.length };
+        log('storeResources: stored %d path(s), fileHash=%s', paths.length, fileHash);
+      },
+      { concurrency: STORE_RESOURCES_CONCURRENCY },
+    );
 
     log('storeResources: completed, stored %d resources', Object.keys(result).length);
     return result;

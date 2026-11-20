@@ -137,6 +137,14 @@ export const getAttachmentFileIdsFromEditor = (editor: IEditor | undefined): str
 };
 
 /**
+ * An image or file still uploading (or whose upload failed) serializes with
+ * its local `blob:` preview URL. Sending it would persist that URL, which no
+ * one else (the agent included) can open, so composers must hold the send.
+ */
+export const hasIncompleteEditorAttachments = (editor: IEditor | undefined): boolean =>
+  getEditorAttachmentStateFromJson(editor?.getDocument?.('json')).hasIncompleteAttachments;
+
+/**
  * Images → `INSERT_IMAGE_COMMAND`; everything else → `INSERT_FILE_COMMAND`.
  */
 export const insertFilesIntoEditor = (editor: IEditor | undefined, files: File[]): void => {

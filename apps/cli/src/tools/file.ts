@@ -1,19 +1,27 @@
+import type {
+  GrepContentParams,
+  ReadFileParams,
+  UploadedImageRecord,
+} from '@lobechat/local-file-shell';
 import {
   getLocalImageMimeType,
-  type ReadFileParams,
   readLocalFile as readLocalTextFile,
   readLocalImageFile,
-  type UploadedImageRecord,
 } from '@lobechat/local-file-shell';
+import { createContentSearchImpl } from '@lobechat/local-file-shell/content-search';
 
 export {
   editLocalFile,
   globLocalFiles,
-  grepContent,
   listLocalFiles,
   searchLocalFiles,
   writeLocalFile,
 } from '@lobechat/local-file-shell';
+
+const contentSearch = createContentSearchImpl();
+
+export const grepContent = (params: GrepContentParams) =>
+  contentSearch.grep({ ...params, glob: params.glob ?? params.filePattern });
 
 /** Uploads a local image to file storage with the connected device's credentials. */
 export type ImageUploader = (filePath: string) => Promise<UploadedImageRecord | undefined>;

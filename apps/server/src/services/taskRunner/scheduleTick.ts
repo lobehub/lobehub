@@ -1,3 +1,4 @@
+import { isCronOccurrence } from '@lobechat/utils/cronEval';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
@@ -20,6 +21,7 @@ export type ScheduleTickOutcome =
   { ran: true; taskIdentifier: string } | { ran: false; reason: ScheduleTickSkipReason };
 
 export type ScheduleTickSkipReason =
+  | 'archived'
   | 'human-waiting'
   | 'in-flight'
   | 'max-executions-reached'
@@ -27,6 +29,7 @@ export type ScheduleTickSkipReason =
   | 'no-pattern'
   | 'not-found'
   | 'paused'
+  | 'schedule-changed'
   | 'terminal';
 
 /**
@@ -39,6 +42,7 @@ export type ScheduleTickSkipReason =
 export async function runScheduleTick(
   taskId: string,
   userId: string,
+  options: { occurrence?: string } = {},
 ): Promise<ScheduleTickOutcome> {
   const db = await getServerDB();
 
@@ -57,6 +61,11 @@ export async function runScheduleTick(
     log('skip task=%s reason=not-found', taskId);
     return { ran: false, reason: 'not-found' };
   }
+  // Archived tasks are hidden from every list; never run them out of sight.
+  if (task.archivedAt) {
+    log('skip task=%s reason=archived', taskId);
+    return { ran: false, reason: 'archived' };
+  }
   const wsId = task.workspaceId ?? undefined;
   if (task.automationMode !== 'schedule') {
     log('skip task=%s reason=mode-changed (mode=%s)', taskId, task.automationMode);
@@ -65,6 +74,15 @@ export async function runScheduleTick(
   if (!task.schedulePattern) {
     log('skip task=%s reason=no-pattern', taskId);
     return { ran: false, reason: 'no-pattern' };
+  }
+  // A delayed delivery was reserved before it fires; the user may have moved the
+  // schedule since, and the new time is dispatched on its own.
+  if (
+    options.occurrence &&
+    !isCronOccurrence(task.schedulePattern, task.scheduleTimezone, new Date(options.occurrence))
+  ) {
+    log('skip task=%s reason=schedule-changed (occurrence=%s)', taskId, options.occurrence);
+    return { ran: false, reason: 'schedule-changed' };
   }
   if (isTerminal(task.status)) {
     log('skip task=%s reason=terminal (status=%s)', taskId, task.status);

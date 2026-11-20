@@ -60,6 +60,13 @@ vi.mock('@/database/models/project', () => ({
     return { findById: vi.fn().mockResolvedValue(null) };
   }),
 }));
+// Goal Widget bindings have their own integration suite; this router test keeps
+// to its mocked models, so a goal subject reads as having no bindings.
+vi.mock('@/server/services/goal/subscriptions', () => ({
+  GoalSubscriptionService: class {
+    list = async () => [];
+  },
+}));
 vi.mock('@/database/models/task', () => ({
   TaskModel: vi.fn(function () {
     return { findById: vi.fn().mockResolvedValue(null) };

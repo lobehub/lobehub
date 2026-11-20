@@ -1,11 +1,11 @@
 'use client';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
-import { type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { Check, ChevronDown, GitCompareArrows } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useHeaderActionSize } from '@/styles/density';
 
 import type { GoalGraphView } from '../goalGraphViewModel';
 import type { BatchModel, BatchRound } from '../Graph/batchModel';
@@ -24,11 +24,12 @@ interface PlanHeaderActionsProps {
  */
 const PlanHeaderActions = memo<PlanHeaderActionsProps>(({ graph, model, round }) => {
   const { t } = useTranslation('chat');
+  const headerActionSmallSize = useHeaderActionSize(true);
   const { selected, setSelected } = usePlanVersionSelection();
-  const { versions } = usePlanVersions(graph, model);
+  const { skillId, versions } = usePlanVersions(graph, model);
   if (versions.length < 2) return null;
 
-  const current = selected ?? round.revision;
+  const current = selected ?? round.planVersion;
   const latest = versions.at(-1)!.revision;
   const items: DropdownItem[] = [...versions].reverse().map((version) => ({
     extra: version.revision === current ? <Icon icon={Check} /> : undefined,
@@ -57,9 +58,9 @@ const PlanHeaderActions = memo<PlanHeaderActionsProps>(({ graph, model, round })
         data-plan-compare-open
         disabled={!versions.some((version) => version.revision < current)}
         icon={GitCompareArrows}
-        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+        size={headerActionSmallSize}
         title={t('goalBatch.planPanel.compare')}
-        onClick={() => openPlanCompareModal({ target: current, versions })}
+        onClick={() => openPlanCompareModal({ skillId, target: current, versions })}
       />
     </Flexbox>
   );

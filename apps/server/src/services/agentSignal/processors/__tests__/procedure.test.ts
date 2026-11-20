@@ -7,7 +7,6 @@ import { createRuntimeProcessorContext } from '../../runtime/context';
 import type { ProcedureStateService } from '../../services/types';
 import {
   accumulateSignal,
-  type FeedbackDomainSignal,
   type SatisfiedSkillFeedbackDomainSignal,
   scoreIncrease,
   suppressHandled,
@@ -192,18 +191,6 @@ const createScored = (
 };
 
 describe('procedure processors', () => {
-  /**
-   * @example
-   * Exact policy signal fixtures compile against the processor input contracts.
-   */
-  it('uses exact policy signal fixtures for processor inputs', () => {
-    const feedbackSignal: FeedbackDomainSignal = createMemorySignal();
-    const skillSignal: SatisfiedSkillFeedbackDomainSignal = createSatisfiedSkillSignal();
-
-    expect(feedbackSignal.signalType).toBe('signal.feedback.domain.memory');
-    expect(skillSignal.payload.satisfactionResult).toBe('satisfied');
-  });
-
   /**
    * @example
    * A satisfied memory signal checks `memory:user-preference` handled markers, then stops with a no-op.

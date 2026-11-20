@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, exists, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 
 import type {
   ConnectorToolPermission,
@@ -6,9 +6,18 @@ import type {
   ToolCRUDType,
   UserConnectorToolItem,
 } from '../schemas';
-import { ConnectorToolPermission as Permission, userConnectorTools } from '../schemas';
+import {
+  ConnectorToolPermission as Permission,
+  userConnectors,
+  userConnectorTools,
+} from '../schemas';
 import type { LobeChatDatabase } from '../type';
-import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import {
+  buildWorkspacePayload,
+  buildWorkspaceWhere,
+  normalizeWorkspaceId,
+} from '../utils/workspace';
+import { connectorAccessScope } from './connectorScope';
 
 export interface SyncToolInput {
   crudType: ToolCRUDType;
@@ -17,24 +26,121 @@ export interface SyncToolInput {
   description?: string;
   displayName?: string;
   inputSchema?: Record<string, unknown>;
+  /** Manifest-derived metadata, e.g. the MCP Apps `visibility` of the tool. */
+  metadata?: Record<string, unknown> | null;
   outputSchema?: Record<string, unknown>;
   renderConfig?: Record<string, unknown>;
   toolName: string;
+}
+
+export interface ConnectorToolModelOptions {
+  /**
+   * For agent runs and their tool calls. Besides the scoped rows, by-connector
+   * reads also reach the tools of the caller's own personal connectors: a
+   * private agent's workspace run resolves its owner's personal connectors
+   * (`ConnectorModel.resolveByIdentifiers`), and their tool rows live in the
+   * personal scope. Management reads and every write keep the strict scope.
+   */
+  agentRun?: boolean;
 }
 
 export class ConnectorToolModel {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
+  private evaluationDatasetId?: string;
+  private readsOwnPersonalTools: boolean;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  static forEvaluation(
+    db: LobeChatDatabase,
+    userId: string,
+    datasetId: string,
+    workspaceId?: string,
+  ) {
+    if (!datasetId) throw new Error('A Dataset is required for evaluation tools');
+    const model = new ConnectorToolModel(db, userId, workspaceId);
+    model.evaluationDatasetId = datasetId;
+    return model;
+  }
+
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    options: ConnectorToolModelOptions = {},
+  ) {
     this.db = db;
     this.userId = userId;
     this.workspaceId = workspaceId;
+    this.readsOwnPersonalTools = !!options.agentRun;
   }
 
   private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, userConnectorTools);
+    and(
+      buildWorkspaceWhere(
+        { userId: this.userId, workspaceId: this.workspaceId },
+        userConnectorTools,
+      ),
+      exists(
+        this.db
+          .select({ id: userConnectors.id })
+          .from(userConnectors)
+          .where(
+            and(
+              eq(userConnectors.id, userConnectorTools.userConnectorId),
+              connectorAccessScope(
+                this.db,
+                { userId: this.userId, workspaceId: this.workspaceId },
+                this.evaluationDatasetId,
+              ),
+            ),
+          ),
+      ),
+    );
+
+  /**
+   * Scope for by-connector reads. A run model (`agentRun`) in a workspace
+   * also reads the tools of the caller's own personal connectors; reading
+   * one's own personal tool list grants nothing the personal scope does not.
+   */
+  private resolvedReadScope = () => {
+    if (
+      !this.readsOwnPersonalTools ||
+      this.evaluationDatasetId ||
+      !normalizeWorkspaceId(this.workspaceId)
+    ) {
+      return this.ownership();
+    }
+    return or(
+      this.ownership(),
+      and(
+        eq(userConnectorTools.userId, this.userId),
+        isNull(userConnectorTools.workspaceId),
+        exists(
+          this.db
+            .select({ id: userConnectors.id })
+            .from(userConnectors)
+            .where(
+              and(
+                eq(userConnectors.id, userConnectorTools.userConnectorId),
+                connectorAccessScope(this.db, { userId: this.userId }),
+              ),
+            ),
+        ),
+      ),
+    );
+  };
+
+  /**
+   * Deterministic tool order: grouped by connector, sorted by toolName within it.
+   * Tool lists feed the model's tool schema array, so they must not follow the
+   * physical row order, which changes whenever `upsertMany` rewrites a row.
+   * Unstable tool order invalidates provider prompt caches between runs.
+   */
+  private toolOrder = () => [
+    asc(userConnectorTools.userConnectorId),
+    asc(userConnectorTools.toolName),
+  ];
 
   findById = async (toolId: string): Promise<UserConnectorToolItem | undefined> => {
     const [row] = await this.db
@@ -49,12 +155,26 @@ export class ConnectorToolModel {
    * Batch-upsert tools from a manifest sync.
    *
    * Manifest-derived fields are always overwritten (toolName, displayName,
-   * description, inputSchema, outputSchema, crudType, renderConfig).
+   * description, inputSchema, outputSchema, crudType, renderConfig, metadata).
    * User-controlled fields (permission, isWorkArtifact, workArtifactConfig,
    * limitConfig) are preserved on conflict.
    */
   upsertMany = async (userConnectorId: string, tools: SyncToolInput[]): Promise<void> => {
     if (tools.length === 0) return;
+    const [parent] = await this.db
+      .select({ id: userConnectors.id })
+      .from(userConnectors)
+      .where(
+        and(
+          eq(userConnectors.id, userConnectorId),
+          connectorAccessScope(
+            this.db,
+            { userId: this.userId, workspaceId: this.workspaceId },
+            this.evaluationDatasetId,
+          ),
+        ),
+      );
+    if (!parent) throw new Error('Connection not available');
 
     const values: NewUserConnectorTool[] = tools.map((t) =>
       buildWorkspacePayload(
@@ -65,6 +185,7 @@ export class ConnectorToolModel {
           displayName: t.displayName ?? null,
           inputSchema: t.inputSchema ?? null,
           isWorkArtifact: false,
+          metadata: t.metadata ?? null,
           outputSchema: t.outputSchema ?? null,
           permission: t.defaultPermission ?? Permission.auto,
           renderConfig: t.renderConfig ?? null,
@@ -87,6 +208,7 @@ export class ConnectorToolModel {
           description: sql`excluded.description`,
           displayName: sql`excluded.display_name`,
           inputSchema: sql`excluded.input_schema`,
+          metadata: sql`excluded.metadata`,
           outputSchema: sql`excluded.output_schema`,
           renderConfig: sql`excluded.render_config`,
           updatedAt: new Date(),
@@ -121,7 +243,8 @@ export class ConnectorToolModel {
     return this.db
       .select()
       .from(userConnectorTools)
-      .where(and(eq(userConnectorTools.userConnectorId, userConnectorId), this.ownership()));
+      .where(and(eq(userConnectorTools.userConnectorId, userConnectorId), this.resolvedReadScope()))
+      .orderBy(...this.toolOrder());
   };
 
   /**
@@ -136,11 +259,12 @@ export class ConnectorToolModel {
       .from(userConnectorTools)
       .where(
         and(
-          this.ownership(),
+          this.resolvedReadScope(),
           inArray(userConnectorTools.userConnectorId, connectorIds),
           ne(userConnectorTools.permission, Permission.disabled),
         ),
-      );
+      )
+      .orderBy(...this.toolOrder());
   };
 
   /**
@@ -153,7 +277,10 @@ export class ConnectorToolModel {
     return this.db
       .select()
       .from(userConnectorTools)
-      .where(and(this.ownership(), inArray(userConnectorTools.userConnectorId, connectorIds)));
+      .where(
+        and(this.resolvedReadScope(), inArray(userConnectorTools.userConnectorId, connectorIds)),
+      )
+      .orderBy(...this.toolOrder());
   };
 
   /**

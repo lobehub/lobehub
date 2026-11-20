@@ -2,11 +2,9 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { ImessageBridgeConfig, ImessageBridgeStatus } from '@lobechat/electron-client-ipc';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Switch, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { Form, useFormInstance, useWatch } from '@lobehub/ui/base-ui/form';
-import { createStaticStyles } from 'antd-style';
-import { KeyRound, Link2, Wrench } from 'lucide-react';
+import { Button, createStaticStyles, Flexbox, Switch, Tag, Text, toast } from '@lobehub/ui';
+import { Form, useFormInstance, useWatch } from '@lobehub/ui/form';
+import { Wrench } from 'lucide-react';
 import { memo, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,6 +14,7 @@ import { useClientDataSWR } from '@/libs/swr';
 import { imessageKeys } from '@/libs/swr/keys';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { imessageBridgeService } from '@/services/electron/imessageBridge';
+import { densityVars } from '@/styles/densityVars';
 
 import { ChannelPostSaveContext } from '../../PlatformDetail/postSaveContext';
 
@@ -27,10 +26,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: ${cssVar.borderRadiusLG};
 
     background: ${cssVar.colorBgContainer};
-  `,
-  fieldIcon: css`
-    flex: none;
-    color: ${cssVar.colorTextSecondary};
   `,
   headerIcon: css`
     overflow: hidden;
@@ -48,7 +43,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   statusCard: css`
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -254,9 +249,7 @@ const CredentialExtras = memo(() => {
 
       {/* Middle: the credential fields the operator fills in. */}
       <Form.Field
-        avatar={<Icon className={styles.fieldIcon} icon={Link2} size={20} />}
-        minWidth={'max(50%, 360px)'}
-        variant="outlined"
+        layout="vertical"
         label={
           <Flexbox horizontal align="center" gap={8}>
             {t('channel.imessage.blueBubblesServerUrl')}
@@ -279,9 +272,7 @@ const CredentialExtras = memo(() => {
       </Form.Field>
       <Form.Field
         divider
-        avatar={<Icon className={styles.fieldIcon} icon={KeyRound} size={20} />}
-        minWidth={'max(50%, 360px)'}
-        variant="outlined"
+        layout="vertical"
         label={
           <Flexbox horizontal align="center" gap={8}>
             {t('channel.imessage.blueBubblesPassword')}

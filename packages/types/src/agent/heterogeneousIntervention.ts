@@ -5,9 +5,12 @@ export type HeterogeneousAgentInterventionKind =
 
 export const HETEROGENEOUS_AGENT_INTERVENTION_PROVIDERS = [
   'claude-code',
+  'codex',
+  'copilot',
   'cursor',
   'devin',
   'droid',
+  'opencode',
   'qoder',
 ] as const;
 

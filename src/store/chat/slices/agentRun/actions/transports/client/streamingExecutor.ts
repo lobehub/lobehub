@@ -9,21 +9,16 @@ import {
   AgentRuntime,
   computeStepContext,
   GeneralChatAgent,
+  getLlmCallCount,
   isParkedStatus,
 } from '@lobechat/agent-runtime';
-import { createDryRunAudit, DASHBOARD_DRY_RUN_AUDIT } from '@lobechat/builtin-tool-dashboard';
+import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
-import { createPathScopeAudit } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
-import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import { isDesktop, resolveSubAgentChatConfig } from '@lobechat/const';
 import { type ToolsEngine } from '@lobechat/context-engine';
-import {
-  buildTaskDetailPrompt,
-  buildTaskListPrompt,
-  FILE_PREVIEW_CHARS,
-  isOversizedFileContent,
-} from '@lobechat/prompts';
+import { initialToolSelection } from '@lobechat/mecha';
+import { FILE_PREVIEW_CHARS, isOversizedFileContent } from '@lobechat/prompts';
 import {
   buildGoalOverviewContext,
   type ConversationContext,
@@ -36,13 +31,16 @@ import {
 import debug from 'debug';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
+import {
+  applyAgentConnectorActivation,
+  resolveAgentConnectorActivation,
+} from '@/helpers/toolEngineering/connectorActivation';
 import { isCanUseAudio, isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
-import { dashboardService } from '@/services/dashboard';
-import { localFileService } from '@/services/electron/localFileService';
 import { messageService } from '@/services/message';
 import { hydrateProjectedConversation } from '@/services/message/hydrateProjectedTools';
+import { refreshRunConnectors } from '@/services/runConnectors';
 import { workService } from '@/services/work';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -66,31 +64,21 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getElectronStoreState } from '@/store/electron';
 import { getGoalStoreState } from '@/store/goal';
 import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
-import { getTaskStoreState } from '@/store/task';
-import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
+import { getToolStoreState } from '@/store/tool';
 import { type StoreSetter } from '@/store/types';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 import { getUserStoreState } from '@/store/user/store';
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
+import { getFollowUpMode } from '../../lifecycle/followUpMode';
 import type { RunParkedReason, RunScope } from '../../lifecycle/types';
+import { buildViewedTaskPrompt } from '../viewedTaskPrompt';
+import { steerQueuedFollowUps } from './clientSteer';
+import { buildRunManifestMap } from './discoverableManifests';
+import { clientInterventionAudits } from './interventionAudits';
 import { runClientSubAgent as runClientSubAgentImpl } from './runClientSubAgent';
 
 const log = debug('lobe-store:streaming-executor');
-
-const dynamicInterventionAudits = {
-  [DASHBOARD_DRY_RUN_AUDIT]: createDryRunAudit({
-    loadVersion: (widgetId, versionId) => dashboardService.getVersion(widgetId, versionId),
-  }),
-  pathScopeAudit: createPathScopeAudit({
-    areAllPathsSafe: async ({ paths, resolveAgainstScope }) => {
-      if (!isDesktop) return false;
-
-      const result = await localFileService.auditSafePaths({ paths, resolveAgainstScope });
-      return result.allSafe;
-    },
-  }),
-};
 
 const getMediaAvailability = (messages: UIChatMessage[]) => ({
   hasAudios: messages.some((message) => message.role === 'user' && !!message.audioList?.length),
@@ -146,7 +134,9 @@ export class StreamingExecutorActionImpl {
     isSubAgent,
     modelOverride,
     chatConfigOverride,
+    uninstalledBuiltinTools,
   }: {
+    uninstalledBuiltinTools?: string[];
     messages: UIChatMessage[];
     parentMessageId: string;
     agentId?: string;
@@ -233,10 +223,24 @@ export class StreamingExecutorActionImpl {
           }
         : resolvedAgentConfig;
 
-    const { agentConfig: agentConfigData, plugins: pluginIds } = agentConfig;
+    const { agentConfig: agentConfigData, plugins: resolvedPluginIds } = agentConfig;
     const selectedToolIds = initialContext?.initialContext?.selectedTools?.map(
       (tool) => tool.identifier,
     );
+    // Connectors are two-state: one the agent has on is found through the
+    // activator, so it leaves the invocation set here unless this turn mentions
+    // it. Manual mode has no activator and invokes it directly instead.
+    const runAgent = {
+      id: effectiveAgentId,
+      chatConfig: agentConfig.chatConfig,
+      enabledPluginIds: resolvedPluginIds,
+      plugins: agentConfigData?.plugins,
+    };
+    const connectors = resolveAgentConnectorActivation(runAgent, selectedToolIds);
+    const pluginIds =
+      disableTools || !resolvedPluginIds
+        ? resolvedPluginIds
+        : applyAgentConnectorActivation(resolvedPluginIds, connectors);
 
     if (!agentConfigData || !agentConfigData.model) {
       throw new Error(
@@ -291,34 +295,35 @@ export class StreamingExecutorActionImpl {
       // sub-agent runs. Desktop client runs also need the local environment so
       // local-system can advertise IPC-only capabilities such as direct image reads.
       { executionEnv: isDesktop ? 'local' : undefined, isSubAgent, scope },
-      { hasOversizedFiles: hasPreviewableFiles(messages) },
+      {
+        hasOversizedFiles: hasPreviewableFiles(messages),
+        runAgent: { ...runAgent, connectors },
+        ...(topicId && { topicId }),
+        uninstalledBuiltinTools,
+      },
     );
-    // When skillActivateMode is 'manual':
-    // Exclude only discovery tools (activator, skill-store) so runtime-managed defaults
-    // (skills, web-browsing, sandbox, memory, etc.) remain available for all agents.
-    const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
-
     const toolsDetailed = toolsEngine.generateToolsDetailed({
-      excludeDefaultToolIds: isManualMode ? manualModeExcludeToolIds : undefined,
       model: agentConfigData.model,
       provider: agentConfigData.provider!,
-      skipDefaultTools: disableTools || undefined,
-      toolIds: mergedToolIds,
+      ...initialToolSelection(mergedToolIds, runAgent.chatConfig, disableTools),
     });
 
     const { enabledToolIds, enabledManifests, tools } = composeEnabledTools({
-      context: {
-        isPageEditorReady: pageAgentRuntime.isReady(),
-        scope,
-      },
+      context: { scope },
       injectedManifests: initialContext?.initialContext?.injectedManifests,
       toolsDetailed,
     });
 
     // Use enabledManifests directly to avoid getEnabledPluginManifests adding default tools again
-    const toolManifestMap = Object.fromEntries(
-      enabledManifests.map((manifest) => [manifest.identifier, manifest]),
-    );
+    const toolManifestMap = enabledToolIds.includes(LobeActivatorIdentifier)
+      ? buildRunManifestMap(
+          getToolStoreState(),
+          toolsEngine.getAllPluginManifests(),
+          enabledManifests,
+          // The conversation's own connector rows are what it may discover
+          { agentId: agentId || undefined, topicId: topicId ?? undefined },
+        )
+      : Object.fromEntries(enabledManifests.map((manifest) => [manifest.identifier, manifest]));
 
     // Merge tools generation result into agentConfig for chatService to use
     const agentConfigWithTools = {
@@ -399,61 +404,12 @@ export class StreamingExecutorActionImpl {
       },
     };
 
-    // Build initialContext for page editor if lobe-page-agent is enabled
     let runtimeInitialContext: RuntimeInitialContext | undefined;
-
-    if (scope === 'page' && enabledToolIds.includes(PageAgentIdentifier)) {
-      try {
-        // Get page content context from page agent runtime
-        const pageContentContext = pageAgentRuntime.getPageContentContext('both');
-
-        runtimeInitialContext = {
-          pageEditor: {
-            markdown: pageContentContext.markdown || '',
-            xml: pageContentContext.xml || '',
-            metadata: {
-              title: pageContentContext.metadata.title,
-              charCount: pageContentContext.metadata.charCount,
-              lineCount: pageContentContext.metadata.lineCount,
-            },
-          },
-        };
-        log(
-          '[internal_createAgentState] Page Agent detected, injected initialContext.pageEditor with title: %s',
-          pageContentContext.metadata.title,
-        );
-      } catch (error) {
-        // Page agent runtime may not be initialized (e.g., editor not set)
-        // This is expected in some scenarios, so we just log and continue
-        log('[internal_createAgentState] Failed to get page content context: %o', error);
-      }
-    }
 
     const viewedTask = operation?.context.viewedTask;
     if (viewedTask) {
       try {
-        const taskState = getTaskStoreState();
-        let contextPrompt: string | undefined;
-
-        if (viewedTask.type === 'list') {
-          const viewedList = taskState.activeTaskListKey
-            ? taskState.taskListMap[taskState.activeTaskListKey]
-            : undefined;
-          const tasks = viewedList?.items ?? [];
-          contextPrompt = buildTaskListPrompt({
-            defaultAssigneeAgentId: operation.context.defaultTaskAssigneeAgentId,
-            tasks,
-            total: viewedList?.total || tasks.length,
-          });
-        } else {
-          const detail = taskState.taskDetailMap[viewedTask.taskId];
-          if (detail)
-            contextPrompt = buildTaskDetailPrompt({
-              defaultAssigneeAgentId: operation.context.defaultTaskAssigneeAgentId,
-              task: detail,
-            });
-        }
-
+        const contextPrompt = buildViewedTaskPrompt(operation.context);
         if (contextPrompt) {
           runtimeInitialContext = {
             ...runtimeInitialContext,
@@ -530,6 +486,8 @@ export class StreamingExecutorActionImpl {
   };
 
   executeClientAgent = async (params: {
+    /** Already resolved for a resumed run and its initial operation tool set. */
+    uninstalledBuiltinTools?: string[];
     context: ConversationContext;
     disableTools?: boolean;
     initialContext?: AgentRuntimeContext;
@@ -669,11 +627,15 @@ export class StreamingExecutorActionImpl {
     // bodies, so put the stored payloads back first. Ids come from the raw
     // store list too: a folded tool result no longer carries `payloadOmitted`.
     // Also returns a new array, so the caller's messages are never mutated.
-    const messages = await hydrateProjectedConversation(
-      [...originalMessages],
-      this.#get().dbMessagesMap[messageKey],
-      messageService.getToolResultPayloads,
-    );
+    const [messages, uninstalledBuiltinTools] = await Promise.all([
+      hydrateProjectedConversation(
+        [...originalMessages],
+        this.#get().dbMessagesMap[messageKey],
+        messageService.getToolResultPayloads,
+      ),
+      params.uninstalledBuiltinTools ??
+        (disableTools ? undefined : getToolStoreState().getUninstalledBuiltinToolsForRun()),
+    ]);
 
     // Decide tool / function-calling capability from real data, not a guess.
     // The enabled-model list hydrates asynchronously (auth session → aiProvider
@@ -684,6 +646,9 @@ export class StreamingExecutorActionImpl {
     // without rechecking capability. Wait (bounded) for the list so a fast first
     // send after reload never attaches tools to a model that can't use them.
     await getAiInfraStoreState().ensureAiProviderRuntimeStateReady();
+    // The connector rows this conversation may run, as the server resolves
+    // them (bounded; the local lists stand in on a timeout or failure)
+    await refreshRunConnectors({ agentId, topicId: topicId ?? undefined });
 
     // ===========================================
     // Step 1: Create Agent State (resolves config once)
@@ -698,6 +663,7 @@ export class StreamingExecutorActionImpl {
       messages,
       parentMessageId: params.parentMessageId,
       agentId,
+      uninstalledBuiltinTools,
       disableTools,
       topicId,
       threadId: threadId ?? undefined,
@@ -726,7 +692,6 @@ export class StreamingExecutorActionImpl {
     const modelRuntimeConfig = {
       model,
       provider: provider!,
-      // TODO: Support dedicated compression model from chatConfig.compressionModelId
       compressionModel: { model, provider: provider! },
     };
     // ===========================================
@@ -745,7 +710,7 @@ export class StreamingExecutorActionImpl {
         enabled: agentConfigData.chatConfig?.enableContextCompression ?? true, // Default to enabled
         maxWindowToken: contextWindowTokens ?? undefined,
       },
-      dynamicInterventionAudits,
+      dynamicInterventionAudits: clientInterventionAudits,
       operationId: `${messageKey}/${params.parentMessageId}`,
       modelRuntimeConfig,
     });
@@ -810,26 +775,26 @@ export class StreamingExecutorActionImpl {
       );
       // Accumulate activated skills from activateSkill messages
       const activatedSkills = selectActivatedSkillsFromMessages(currentDBMessages);
-      const hasQueuedMessages = (this.#get().queuedMessages[contextKey]?.length ?? 0) > 0;
+      // Steer joins what can join right here; Queue lets the run finish first.
+      const followUpMode = getFollowUpMode();
+      if (followUpMode === 'steer') {
+        const steered = await steerQueuedFollowUps(this.#get, {
+          context,
+          contextKey,
+          nextContext,
+          operationId,
+          state,
+        });
+        if (steered) ({ nextContext, state } = steered);
+      }
+      const hasQueuedMessages =
+        followUpMode !== 'queue' && (this.#get().queuedMessages[contextKey]?.length ?? 0) > 0;
       const stepContext = computeStepContext({
         activatedSkills,
         activatedToolIds,
         hasQueuedMessages,
         todos,
       });
-
-      // If page agent is enabled, get the latest XML for stepPageEditor
-      if (scope === 'page' && nextContext.initialContext?.pageEditor) {
-        try {
-          const pageContentContext = pageAgentRuntime.getPageContentContext('xml');
-          stepContext.stepPageEditor = {
-            xml: pageContentContext.xml || '',
-          };
-        } catch (error) {
-          // Page agent runtime may not be available, ignore errors
-          log('[executeClientAgent] Failed to get page XML for step: %o', error);
-        }
-      }
 
       // Inject stepContext into the runtime context for this step
       nextContext = { ...nextContext, stepContext };
@@ -920,6 +885,9 @@ export class StreamingExecutorActionImpl {
 
       state = result.newState;
 
+      // User-facing LLM-call total; `stepCount` above remains the execution index.
+      this.#get().updateOperationMetadata(operationId, { llmCalls: getLlmCallCount(state) });
+
       // Check if operation was cancelled after step completion
       const operationAfterStep = this.#get().operations[operationId];
       if (operationAfterStep?.status === 'cancelled') {
@@ -962,6 +930,7 @@ export class StreamingExecutorActionImpl {
     // Registered Works survive message folding; anchor them before refreshing
     // the message list so its summary query can attach them to the final reply.
     const finalAssistantId = state.metadata?.workAssistantMessageId;
+    let anchoredWork = false;
     if (state.status === 'done' && typeof finalAssistantId === 'string') {
       try {
         const works = await workService.listByRootOperation({
@@ -969,6 +938,7 @@ export class StreamingExecutorActionImpl {
           rootOperationId: operationId,
         });
         if (works.length > 0) {
+          anchoredWork = true;
           await messageService.updateMessageMetadata(
             finalAssistantId,
             {
@@ -1042,6 +1012,10 @@ export class StreamingExecutorActionImpl {
     // across operations of the same child).
     if (requeued) return;
 
+    // The run-end refresh above lands while this operation still counts as running, so
+    // the transcript keeps its streamed rows and drops the Work summaries the server attached.
+    if (anchoredWork) await this.#get().refreshMessages(context);
+
     // Terminal boundary of a client run: settle any completion bridge parked
     // on this run's thread (a parent parked on THIS run as its sub-agent /
     // group member). Parked runs exit earlier — only terminal states fire.
@@ -1085,9 +1059,8 @@ export class StreamingExecutorActionImpl {
     toolMessageId: string;
     topicId: string;
   }): Promise<RunSubAgentResult> => {
-    // Extracted to ./runClientSubAgent (source-layout §3: this file is over
-    // the 800-line limit and must not grow). Thin delegation keeps the store
-    // action API and its callers unchanged.
+    // Implemented in ./runClientSubAgent (with its parked-run bridge
+    // registration); thin delegation keeps the store action API unchanged.
     return runClientSubAgentImpl(this.#get, params);
   };
 }

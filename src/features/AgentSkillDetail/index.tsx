@@ -2,20 +2,21 @@
 
 import { type SkillResourceTreeNode } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { DotIcon, ExternalLinkIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MarketSkillIcon from '@/components/MarketSkillIcon';
 import PublishedTime from '@/components/PublishedTime';
 import { ArticleSkeleton } from '@/components/Skeleton';
 import SkillAvatar from '@/components/SkillAvatar';
 import FileTree, { FileTreeSkeleton } from '@/features/FileTree';
 import { useToolStore } from '@/store/tool';
+import { densityVars } from '@/styles/densityVars';
 
 import ContentViewer from './ContentViewer';
+import { GitHubSkillUpdate, hasGitHubSource } from './GitHubSkillUpdate';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   description: css`
@@ -23,11 +24,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     margin: 0;
 
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: 12px;
+    line-height: 16px;
     color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
     white-space: nowrap;
+  `,
+  /**
+   * Two stacked lines whose combined height matches the 40px avatar on the
+   * left, so the header block reads as one row aligned with the icon instead of
+   * a loose paragraph hanging beside it.
+   */
+  headerText: css`
+    overflow: hidden;
+    height: 40px;
   `,
   divider: css`
     flex-shrink: 0;
@@ -42,13 +52,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   meta: css`
     flex-shrink: 0;
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   name: css`
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     font-weight: 500;
-    line-height: 1.4;
+    line-height: 20px;
     color: ${cssVar.colorText};
   `,
   right: css`
@@ -115,8 +125,17 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
       {skillDetail && (
         <div className={styles.meta}>
           <Flexbox horizontal align={'center'} gap={12}>
-            <SkillAvatar size={40} />
-            <Flexbox flex={1} gap={4} style={{ overflow: 'hidden' }}>
+            {skillDetail.source === 'market' ? (
+              <MarketSkillIcon
+                fallback={<SkillAvatar size={40} />}
+                identifier={skillDetail.identifier}
+                name={skillDetail.name}
+                size={40}
+              />
+            ) : (
+              <SkillAvatar size={40} />
+            )}
+            <Flexbox className={styles.headerText} flex={1} justify={'space-between'}>
               <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
                 <Flexbox horizontal align={'center'} className={styles.description} gap={4}>
                   <span className={styles.name}>{skillDetail.name}</span>
@@ -140,6 +159,7 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
                         <ActionIcon
                           fill={cssVar.colorTextDescription}
                           icon={Github}
+                          size={'small'}
                           title={t('agentSkillDetail.repository')}
                         />
                       </a>
@@ -148,6 +168,7 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
                       <a href={sourceUrl} rel="noreferrer" target={'_blank'}>
                         <ActionIcon
                           icon={ExternalLinkIcon}
+                          size={'small'}
                           title={t('agentSkillDetail.sourceUrl')}
                         />
                       </a>
@@ -158,6 +179,21 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
               {description && <p className={styles.description}>{description}</p>}
             </Flexbox>
           </Flexbox>
+          {hasGitHubSource(skillDetail) && (
+            <Flexbox horizontal align="center" gap={8} wrap="wrap">
+              {skillDetail.upstream && (
+                <Text ellipsis fontSize={12} type="secondary">
+                  {skillDetail.upstream.owner}/{skillDetail.upstream.repo}
+                  {skillDetail.upstream.path && '/' + skillDetail.upstream.path}
+                  {' @ '}
+                  {skillDetail.upstream.ref === skillDetail.upstream.installedCommit
+                    ? skillDetail.upstream.installedCommit.slice(0, 7)
+                    : skillDetail.upstream.ref}
+                </Text>
+              )}
+              <GitHubSkillUpdate skill={skillDetail} />
+            </Flexbox>
+          )}
         </div>
       )}
       <Flexbox horizontal style={{ flex: 1, overflow: 'hidden' }}>

@@ -29,6 +29,7 @@ import type {
   AnalyzeMediaParams,
   AskUserQuestionArgs,
   CallSubAgentParams,
+  CancelSubAgentParams,
   ClearTodosParams,
   CreatePlanParams,
   CreateTodosParams,
@@ -481,6 +482,17 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       };
     }
 
+    // Background delivery wakes the parent through the server runtime, which
+    // this runtime does not have. Running it in the foreground instead would
+    // block a turn the model expected to keep going.
+    if (params.runInBackground) {
+      return {
+        content:
+          'Background sub-agents (runInBackground) are not supported in this runtime. Call callSubAgent again without runInBackground to wait for the result.',
+        success: false,
+      };
+    }
+
     if (!ctx.subAgent) {
       return { content: 'Sub-agent execution is not available in this runtime.', success: false };
     }
@@ -544,6 +556,21 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
         totalTokens,
       },
       success: true,
+    };
+  };
+
+  // Client-run sub-agents block the turn that dispatched them, so none of them
+  // is ever still running when the model could ask to cancel it. Cancelling a
+  // background sub-agent is implemented by the server runtime only.
+  cancelSubAgent = async (
+    _params: CancelSubAgentParams,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    if (ctx.isSubAgent) return nestedSubAgentDisabledResult();
+
+    return {
+      content: 'Cancelling a sub-agent is not supported in this runtime.',
+      success: false,
     };
   };
 }

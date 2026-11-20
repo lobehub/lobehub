@@ -170,6 +170,20 @@ describe('LinuxMenu', () => {
       expect(menuLabels).toContain('Window');
       expect(menuLabels).toContain('Help');
     });
+
+    it('reopens the last closed tab from File > Reopen Closed Tab (Ctrl+Shift+T)', () => {
+      linuxMenu.buildAndSetAppMenu();
+
+      const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
+      const fileMenu = template.find((item: any) => item.label === 'File');
+      const reopenItem = fileMenu.submenu.find((item: any) => item.accelerator === 'Ctrl+Shift+T');
+
+      expect(reopenItem).toBeDefined();
+      reopenItem.click(undefined, null);
+      const mainWindow = (mockApp.browserManager.getMainWindow as any).mock.results.at(-1).value;
+      expect(mainWindow.show).toHaveBeenCalled();
+      expect(mainWindow.broadcast).toHaveBeenCalledWith('reopenClosedTab');
+    });
   });
 
   describe('buildContextMenu', () => {
@@ -199,6 +213,42 @@ describe('LinuxMenu', () => {
       linuxMenu.buildContextMenu('chat', data);
 
       expect(Menu.buildFromTemplate).toHaveBeenCalled();
+    });
+  });
+
+  describe('image context menu', () => {
+    it.each(['default', 'chat'])('copies the right-clicked image itself in the %s menu', (type) => {
+      const imageData = {
+        mediaType: 'image' as const,
+        srcURL: 'https://example.com/a.png',
+        x: 12,
+        y: 34,
+      };
+      linuxMenu.buildContextMenu(type, imageData);
+
+      const template = (Menu.buildFromTemplate as any).mock.calls.at(-1)[0];
+      const copyImage = template.find((item: any) => item.label === 'context.copyImage');
+      expect(copyImage).toBeDefined();
+
+      const copyImageAt = vi.fn();
+      const win = { isDestroyed: () => false, webContents: { copyImageAt } };
+      copyImage.click({}, win);
+
+      expect(copyImageAt).toHaveBeenCalledWith(12, 34);
+    });
+
+    it('disables Copy Image when the image has no decoded contents', () => {
+      linuxMenu.buildContextMenu('default', {
+        hasImageContents: false,
+        mediaType: 'image',
+        srcURL: 'https://example.com/broken.png',
+        x: 12,
+        y: 34,
+      });
+
+      const template = (Menu.buildFromTemplate as any).mock.calls.at(-1)[0];
+      const copyImage = template.find((item: any) => item.label === 'context.copyImage');
+      expect(copyImage.enabled).toBe(false);
     });
   });
 
@@ -286,6 +336,38 @@ describe('LinuxMenu', () => {
       expect(mockApp.updaterManager.installNow).toHaveBeenCalled();
     });
 
+    // The shell updater only knows full releases: a downloaded core OTA update
+    // must not be hidden behind "already latest" right after a shell check.
+    it('does not claim the latest version while a core update is staged', () => {
+      mockApp.updaterManager.getUpdaterState = vi.fn(() => ({ stage: 'latest' })) as any;
+      (mockApp as any).coreUpdateManager = {
+        getStatus: vi.fn(() => ({ staged: '2.3.4-canary.1-core.45' })),
+      };
+      linuxMenu.buildAndSetAppMenu();
+
+      const template = (Menu.buildFromTemplate as any).mock.calls.at(-1)[0];
+      const fileMenu = template.find((item: any) => item.label === 'File');
+      const item = fileMenu.submenu.find((entry: any) => entry.label === 'Check for Updates');
+
+      expect(item).toBeDefined();
+      expect(item.enabled).not.toBe(false);
+      item.click();
+      expect(mockApp.updaterManager.checkForUpdates).toHaveBeenCalledWith({ manual: true });
+    });
+
+    it('reports the latest version when no core update is staged', () => {
+      mockApp.updaterManager.getUpdaterState = vi.fn(() => ({ stage: 'latest' })) as any;
+      (mockApp as any).coreUpdateManager = { getStatus: vi.fn(() => ({ staged: null })) };
+      linuxMenu.buildAndSetAppMenu();
+
+      const template = (Menu.buildFromTemplate as any).mock.calls.at(-1)[0];
+      const fileMenu = template.find((item: any) => item.label === 'File');
+
+      expect(fileMenu.submenu.find((entry: any) => entry.label === 'Check for Updates')).toBe(
+        undefined,
+      );
+    });
+
     it('sends the user to the download page when the install format cannot self-update', () => {
       mockApp.updaterManager.getUpdaterState = vi.fn(() => ({ stage: 'unsupported' })) as any;
       linuxMenu.buildAndSetAppMenu();
@@ -322,7 +404,7 @@ describe('LinuxMenu', () => {
 
       expect(githubItem).toBeDefined();
       await githubItem.click();
-      expect(shell.openExternal).toHaveBeenCalledWith('https://github.com/lobehub/lobe-chat');
+      expect(shell.openExternal).toHaveBeenCalledWith('https://github.com/lobehub/lobehub');
     });
 
     it('should handle about dialog click', () => {

@@ -1,6 +1,8 @@
 import type { UIChatMessage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
+import { mergeFetchedMessagesWithLocalState } from '@/store/chat/slices/message/transcript/mergeFetched';
+
 import {
   hasPendingInterventions,
   reconcileIntervention,
@@ -98,6 +100,29 @@ describe('cross-device intervention reconciliation', () => {
         pluginIntervention: { batchId: 'new-batch', status: 'approved' },
       }),
     ).toBeUndefined();
+  });
+
+  it('settles a resolving card from a terminal row whose producer write dropped the batch identity', () => {
+    // Producer ACK writes replace the whole intervention with `{ status, rejectedReason }`,
+    // so the server row loses operationId/batchId. The local card still carries them,
+    // plus a client-clock updatedAt that can be newer than the server's.
+    const resolving: UIChatMessage = {
+      ...question('pending', 2000),
+      pluginIntervention: {
+        batchId: 'batch-1',
+        operationId: 'op-1',
+        resolving: true,
+        status: 'pending',
+      },
+    };
+    const skipped: UIChatMessage = {
+      ...question('rejected', 1999),
+      pluginIntervention: { rejectedReason: 'user_cancelled', status: 'rejected' },
+    };
+    expect(reconcileIntervention(resolving, skipped)).toBe(skipped);
+    expect(
+      mergeFetchedMessagesWithLocalState([skipped], [resolving], new Set(), new Set()),
+    ).toEqual([skipped]);
   });
 
   it('supports legacy plugin intervention rows and ignores optimistic rows', () => {

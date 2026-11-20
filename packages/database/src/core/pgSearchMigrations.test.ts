@@ -8,7 +8,7 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-// @ts-ignore tsgo handle esm import cjs and compatibility issues
+// @ts-ignore tsrs handle esm import cjs and compatibility issues
 import {
   assertPgSearchReady,
   PgSearchNotReadyError,

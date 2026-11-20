@@ -1,5 +1,5 @@
 import type { FileTreeRowDecoration, GitStatusEntry } from '@pierre/trees';
-import type { CSSProperties, DragEvent, KeyboardEvent, MouseEvent, ReactNode } from 'react';
+import type { CSSProperties, DragEvent, KeyboardEvent, MouseEvent, ReactNode, Ref } from 'react';
 
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 
@@ -160,6 +160,8 @@ export interface ExplorerTreeProps<TData = unknown> {
     ctx: ExplorerTreeKeyDownCtx<TData>,
   ) => boolean | void;
   overscan?: number;
+  /** Imperative tree API; passed as a prop, as React 19 expects. */
+  ref?: Ref<ExplorerTreeHandle>;
   selectedIds?: string[];
   /**
    * Sibling order. Without it the tree lists folders first, then names by code

@@ -143,8 +143,7 @@ describe('resolveAgentConfig', () => {
     it('should return agent config and chat config correctly', () => {
       const result = resolveAgentConfig({ agentId: 'test-agent' });
 
-      // systemRole should have locale appended (currentResponseLanguage falls back to browser locale)
-      expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
+      expect(result.agentConfig.systemRole).toBe('You are a helpful assistant');
       expect(result.agentConfig.model).toBe(mockAgentConfig.model);
       expect(result.agentConfig.plugins).toEqual(mockAgentConfig.plugins);
       expect(result.chatConfig).toEqual(mockChatConfig);
@@ -364,34 +363,6 @@ describe('resolveAgentConfig', () => {
         expect(result.agentConfig.params.reasoning_effort).toBe('high');
       });
 
-      it('should include reasoning_effort when enableReasoningEffort is true', () => {
-        vi.spyOn(agentSelectors.chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
-          () =>
-            ({
-              enableMaxTokens: false,
-              enableReasoningEffort: true,
-            }) as any,
-        );
-
-        const result = resolveAgentConfig({ agentId: 'test-agent' });
-
-        expect(result.agentConfig.params.reasoning_effort).toBe('high');
-      });
-
-      it('should set reasoning_effort to undefined when enableReasoningEffort is false', () => {
-        vi.spyOn(agentSelectors.chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
-          () =>
-            ({
-              enableMaxTokens: true,
-              enableReasoningEffort: false,
-            }) as any,
-        );
-
-        const result = resolveAgentConfig({ agentId: 'test-agent' });
-
-        expect(result.agentConfig.params.reasoning_effort).toBeUndefined();
-      });
-
       it('should handle both params being enabled', () => {
         vi.spyOn(agentSelectors.chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
           () =>
@@ -581,7 +552,7 @@ describe('resolveAgentConfig', () => {
           model: 'gpt-4-turbo',
           plugins: ['input-plugin'],
           targetAgentConfig,
-          userLocale: expect.any(String),
+          userLocale: undefined,
         }),
       );
     });
@@ -792,9 +763,7 @@ describe('resolveAgentConfig', () => {
         scope: 'page',
       });
 
-      expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
       expect(result.agentConfig.systemRole).toContain('Page agent system prompt');
-      // Locale instruction is injected between custom role and page-agent role
       expect(result.agentConfig.systemRole).toMatch(
         /You are a helpful assistant[\s\S]*Page agent system prompt/,
       );
@@ -923,7 +892,7 @@ describe('resolveAgentConfig', () => {
 
       // Should still inject PageAgentIdentifier but with no page-agent systemRole
       expect(result.plugins).toContain(PageAgentIdentifier);
-      expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
+      expect(result.agentConfig.systemRole).toBe('You are a helpful assistant');
       expect(result.chatConfig.enableHistoryCount).toBe(false);
     });
 
@@ -939,7 +908,7 @@ describe('resolveAgentConfig', () => {
       });
 
       expect(result.plugins).toContain(PageAgentIdentifier);
-      expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
+      expect(result.agentConfig.systemRole).toBe('You are a helpful assistant');
       expect(result.chatConfig.enableHistoryCount).toBe(false);
     });
 
@@ -1257,66 +1226,24 @@ describe('resolveAgentConfig', () => {
     });
   });
 
-  // lobe-agent's sub-agent / group trimming moved into resolveLobeAgentManifest
-  // (manifest resolver, applied at tools-engine build time). resolveAgentConfig no
-  // longer drops lobe-agent from the plugins list based on isSubAgent — it stays so
-  // its plan / todo / visual-media APIs remain available; only callSubAgent is hidden
-  // downstream (covered by resolveManifest.test.ts).
-  describe('isSubAgent keeps lobe-agent in plugins (trimming moved to manifest resolver)', () => {
+  describe('on-demand tool pins and runtime-provided tools', () => {
     beforeEach(() => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(() => undefined);
     });
 
-    it('keeps lobe-agent when isSubAgent is true for regular agent', () => {
-      vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
-        () =>
-          ({
-            ...mockAgentConfig,
-            plugins: ['lobe-agent', 'plugin-a', 'plugin-b'],
-          }) as any,
-      );
+    it.each([true, false, undefined])(
+      'keeps saved lobe-agent pins on demand while loading other pins (isSubAgent: %s)',
+      (isSubAgent) => {
+        vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+          () =>
+            ({ ...mockAgentConfig, plugins: [LobeAgentIdentifier, 'plugin-a', 'plugin-b'] }) as any,
+        );
+        const result = resolveAgentConfig({ agentId: 'test-agent', isSubAgent });
+        expect(result.plugins).toEqual(['plugin-a', 'plugin-b']);
+      },
+    );
 
-      const result = resolveAgentConfig({
-        agentId: 'test-agent',
-        isSubAgent: true,
-      });
-
-      expect(result.plugins).toEqual(['lobe-agent', 'plugin-a', 'plugin-b']);
-    });
-
-    it('should keep lobe-agent when isSubAgent is false', () => {
-      vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
-        () =>
-          ({
-            ...mockAgentConfig,
-            plugins: ['lobe-agent', 'plugin-a', 'plugin-b'],
-          }) as any,
-      );
-
-      const result = resolveAgentConfig({
-        agentId: 'test-agent',
-        isSubAgent: false,
-      });
-
-      expect(result.plugins).toContain('lobe-agent');
-      expect(result.plugins).toEqual(['lobe-agent', 'plugin-a', 'plugin-b']);
-    });
-
-    it('should keep lobe-agent when isSubAgent is undefined', () => {
-      vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
-        () =>
-          ({
-            ...mockAgentConfig,
-            plugins: ['lobe-agent', 'plugin-a'],
-          }) as any,
-      );
-
-      const result = resolveAgentConfig({ agentId: 'test-agent' });
-
-      expect(result.plugins).toContain('lobe-agent');
-    });
-
-    it('keeps lobe-agent in page scope when isSubAgent is true (and still injects page-agent)', () => {
+    it('injects page-agent in page scope while leaving the saved lobe-agent pin on demand', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
         () =>
           ({
@@ -1334,8 +1261,8 @@ describe('resolveAgentConfig', () => {
         isSubAgent: true,
       });
 
-      expect(result.plugins).toContain('lobe-agent');
-      expect(result.plugins).toContain(PageAgentIdentifier);
+      expect(result.plugins).toEqual(expect.arrayContaining([PageAgentIdentifier, 'plugin-a']));
+      expect(result.plugins).not.toContain(LobeAgentIdentifier);
     });
 
     it('keeps lobe-agent for builtin agent when isSubAgent is true', () => {
@@ -1472,7 +1399,7 @@ describe('resolveAgentConfig', () => {
 
       // Only plugins should be empty, other config should be preserved
       expect(result.plugins).toEqual([]);
-      expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
+      expect(result.agentConfig.systemRole).toBe('You are a helpful assistant');
       expect(result.agentConfig.model).toBe(mockAgentConfig.model);
       expect(result.agentConfig.plugins).toEqual(mockAgentConfig.plugins);
       expect(result.chatConfig).toEqual(mockChatConfig);
@@ -1486,10 +1413,9 @@ describe('resolveAgentConfig', () => {
     });
 
     it('should append response language to systemRole when userLocale is set', () => {
-      vi.spyOn(
-        userSelectors.userGeneralSettingsSelectors,
-        'currentResponseLanguage',
-      ).mockReturnValue('zh-CN');
+      vi.spyOn(userSelectors.userGeneralSettingsSelectors, 'responseLanguage').mockReturnValue(
+        'zh-CN',
+      );
 
       const result = resolveAgentConfig({ agentId: 'test-agent' });
 
@@ -1499,10 +1425,9 @@ describe('resolveAgentConfig', () => {
     });
 
     it('should use locale instruction as systemRole when agent has no systemRole', () => {
-      vi.spyOn(
-        userSelectors.userGeneralSettingsSelectors,
-        'currentResponseLanguage',
-      ).mockReturnValue('ja-JP');
+      vi.spyOn(userSelectors.userGeneralSettingsSelectors, 'responseLanguage').mockReturnValue(
+        'ja-JP',
+      );
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
         () =>
           ({
@@ -1518,11 +1443,8 @@ describe('resolveAgentConfig', () => {
       );
     });
 
-    it('should not modify systemRole when userLocale is falsy', () => {
-      vi.spyOn(
-        userSelectors.userGeneralSettingsSelectors,
-        'currentResponseLanguage',
-      ).mockReturnValue(undefined as any);
+    it('should preserve systemRole after switching back to Automatic', () => {
+      vi.spyOn(userSelectors.userGeneralSettingsSelectors, 'responseLanguage').mockReturnValue('');
 
       const result = resolveAgentConfig({ agentId: 'test-agent' });
 

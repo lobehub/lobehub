@@ -5,16 +5,18 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import Avatar from '@/components/Avatar';
 import { useUserAvatar } from '@/hooks/useUserAvatar';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { useAgentMeta } from '../../hooks';
+import { contextSelectors, useConversationStore } from '../../store';
 import ContentBlock from '../AssistantGroup/components/ContentBlock';
 import Group from '../AssistantGroup/components/Group';
 import UserMessageContent from '../User/components/MessageContent';
-import { getBotSender, resolveSenderIdentity } from '../User/resolveSenderIdentity';
+import { resolveSenderIdentity } from '../User/resolveSenderIdentity';
 import { resolveCompressedMessageView } from './resolveCompressedMessageView';
 
 interface CompressedMessageItemProps {
@@ -30,16 +32,20 @@ const CompressedMessageItem = memo<CompressedMessageItemProps>(({ message }) => 
   const userAvatar = useUserAvatar();
   const currentUserId = useUserStore(userProfileSelectors.userId);
   const agentAvatar = useAgentMeta(message.agentId);
+  const contextAgentId = useConversationStore(contextSelectors.agentId);
   const { children, sender } = message;
   const view = resolveCompressedMessageView(message);
 
   // Render user message
   if (view === 'user') {
     // A shared (workspace) topic's compressed history may hold messages from
-    // other members — render the sender's identity, not the viewer's.
+    // other members — render the sender's identity, not the viewer's. The
+    // resolver reads the server-written blocks off the row itself, so this path
+    // cannot drop one of them (an agent → agent turn used to revert to the human
+    // owner here).
     const { avatar, title } = resolveSenderIdentity({
-      botSender: getBotSender(message),
       currentUserId,
+      message,
       selfAvatar: userAvatar,
       sender,
       unknownLabel: t('sender.unknownMember'),
@@ -58,7 +64,13 @@ const CompressedMessageItem = memo<CompressedMessageItemProps>(({ message }) => 
   if (view === 'assistant-content') {
     return (
       <Flexbox horizontal gap={8} paddingBlock={4}>
-        <Avatar {...agentAvatar} name={agentDisplayName(agentAvatar)} size={28} />
+        <AgentAvatar
+          agentId={message.agentId || contextAgentId}
+          avatar={agentAvatar.avatar}
+          background={agentAvatar.backgroundColor}
+          name={agentDisplayName(agentAvatar)}
+          size={28}
+        />
         <Flexbox flex={1} style={{ overflow: 'hidden' }}>
           <ContentBlock
             disableEditing
@@ -78,7 +90,13 @@ const CompressedMessageItem = memo<CompressedMessageItemProps>(({ message }) => 
   if (view === 'assistant-turn-chain') {
     return (
       <Flexbox horizontal gap={8} paddingBlock={4}>
-        <Avatar {...agentAvatar} name={agentDisplayName(agentAvatar)} size={28} />
+        <AgentAvatar
+          agentId={message.agentId || contextAgentId}
+          avatar={agentAvatar.avatar}
+          background={agentAvatar.backgroundColor}
+          name={agentDisplayName(agentAvatar)}
+          size={28}
+        />
         <Flexbox flex={1} style={{ overflow: 'hidden' }}>
           <Group
             disableEditing

@@ -1,3 +1,6 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+import { promptAssistantName } from '@lobechat/const';
+
 /**
  * System role template for Group Supervisor agent
  *
@@ -9,7 +12,9 @@
  * - {{model}} - Current model ID (requires )
  * - {{provider}} - Current provider (requires )
  */
-export const supervisorSystemRole = `You are LobeAI, an intelligent team coordinator developed by LobeHub, powered by {{model}}. You are orchestrating the multi-agent group "{{GROUP_TITLE}}". Your primary responsibility is to facilitate productive, natural conversations by strategically coordinating when and how AI agents participate.
+// Name and product both come from the branding slot — `LobeAI` here leaked the
+// upstream brand into every group conversation. Unchanged under default branding.
+export const supervisorSystemRole = `You are ${promptAssistantName('LobeAI')}, an intelligent team coordinator developed by ${BRANDING_NAME}, powered by {{model}}. You are orchestrating the multi-agent group "{{GROUP_TITLE}}". Your primary responsibility is to facilitate productive, natural conversations by strategically coordinating when and how AI agents participate.
 
 <system_context>
 - Current date: {{date}}

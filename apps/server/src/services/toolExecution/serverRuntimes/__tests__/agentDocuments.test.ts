@@ -20,6 +20,34 @@ vi.mock('@/envs/app', () => ({
   appEnv: { APP_URL: 'https://app.example.com' },
 }));
 
+const dailyDocument = () => ({
+  documentId: 'documents-row-id',
+  filename: 'daily-brief',
+  id: 'agent-doc-assoc-id',
+  title: 'Daily Brief',
+});
+
+const documentRuntimeStub = () => ({
+  copyDocument: vi.fn(),
+  createDocument: vi.fn(),
+  createTopicDocument: vi.fn(),
+  listDocuments: vi.fn(),
+  listTopicDocuments: vi.fn(),
+  modifyNodes: vi.fn(),
+  readDocument: vi.fn(),
+  removeDocument: vi.fn(),
+  renameDocument: vi.fn(),
+  replaceDocumentContent: vi.fn(),
+  updateLoadRule: vi.fn(),
+});
+
+const topicDocument = () => ({
+  documentId: 'documents-row-id',
+  filename: 'topic-note',
+  id: 'agent-doc-assoc-id',
+  title: 'Topic Note',
+});
+
 describe('agentDocumentsRuntime', () => {
   it('should have correct identifier', () => {
     expect(agentDocumentsRuntime.identifier).toBe('lobe-agent-documents');
@@ -54,12 +82,7 @@ describe('agentDocumentsRuntime', () => {
 });
 
 describe('agentDocumentsRuntime auto-pin to task', () => {
-  const newDoc = {
-    documentId: 'documents-row-id',
-    filename: 'daily-brief',
-    id: 'agent-doc-assoc-id',
-    title: 'Daily Brief',
-  };
+  const newDoc = dailyDocument();
 
   let serviceImpl: {
     copyDocumentById: ReturnType<typeof vi.fn>;
@@ -377,12 +400,7 @@ describe('agentDocumentsRuntime Work registration state', () => {
   // `state`, which the generic dispatch-layer resolver reads. These tests assert
   // the runtime surfaces that block (create + delete-via-pre-read) and does NOT
   // call the legacy sink.
-  const newDoc = {
-    documentId: 'documents-row-id',
-    filename: 'daily-brief',
-    id: 'agent-doc-assoc-id',
-    title: 'Daily Brief',
-  };
+  const newDoc = dailyDocument();
 
   let serviceImpl: Record<string, ReturnType<typeof vi.fn>>;
 
@@ -452,28 +470,11 @@ describe('agentDocumentsRuntime Work registration state', () => {
 });
 
 describe('AgentDocumentsExecutionRuntime.createDocument', () => {
-  const makeStub = () => ({
-    copyDocument: vi.fn(),
-    createDocument: vi.fn(),
-    createTopicDocument: vi.fn(),
-    listDocuments: vi.fn(),
-    listTopicDocuments: vi.fn(),
-    modifyNodes: vi.fn(),
-    readDocument: vi.fn(),
-    removeDocument: vi.fn(),
-    renameDocument: vi.fn(),
-    replaceDocumentContent: vi.fn(),
-    updateLoadRule: vi.fn(),
-  });
+  const makeStub = () => documentRuntimeStub();
 
   it('returns both agentDocuments.id and documents.id in create state', async () => {
     const stub = makeStub();
-    stub.createDocument.mockResolvedValue({
-      documentId: 'documents-row-id',
-      filename: 'daily-brief',
-      id: 'agent-doc-assoc-id',
-      title: 'Daily Brief',
-    });
+    stub.createDocument.mockResolvedValue(dailyDocument());
 
     const runtime = new AgentDocumentsExecutionRuntime(stub);
     const result = await runtime.createDocument(
@@ -491,12 +492,7 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
 
   it('forwards parentId when creating a document in a folder', async () => {
     const stub = makeStub();
-    stub.createDocument.mockResolvedValue({
-      documentId: 'documents-row-id',
-      filename: 'daily-brief',
-      id: 'agent-doc-assoc-id',
-      title: 'Daily Brief',
-    });
+    stub.createDocument.mockResolvedValue(dailyDocument());
 
     const runtime = new AgentDocumentsExecutionRuntime(stub);
     await runtime.createDocument(
@@ -551,12 +547,7 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
 
   it('creates a document in the current topic when scope is currentTopic', async () => {
     const stub = makeStub();
-    stub.createTopicDocument.mockResolvedValue({
-      documentId: 'documents-row-id',
-      filename: 'topic-note',
-      id: 'agent-doc-assoc-id',
-      title: 'Topic Note',
-    });
+    stub.createTopicDocument.mockResolvedValue(topicDocument());
 
     const runtime = new AgentDocumentsExecutionRuntime(stub);
     const result = await runtime.createDocument(
@@ -658,30 +649,11 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
 });
 
 describe('AgentDocumentsExecutionRuntime.listDocuments', () => {
-  const makeStub = () => ({
-    copyDocument: vi.fn(),
-    createDocument: vi.fn(),
-    createTopicDocument: vi.fn(),
-    listDocuments: vi.fn(),
-    listTopicDocuments: vi.fn(),
-    modifyNodes: vi.fn(),
-    readDocument: vi.fn(),
-    removeDocument: vi.fn(),
-    renameDocument: vi.fn(),
-    replaceDocumentContent: vi.fn(),
-    updateLoadRule: vi.fn(),
-  });
+  const makeStub = () => documentRuntimeStub();
 
   it('lists current topic documents while preserving agent document ids', async () => {
     const stub = makeStub();
-    stub.listTopicDocuments.mockResolvedValue([
-      {
-        documentId: 'documents-row-id',
-        filename: 'topic-note',
-        id: 'agent-doc-assoc-id',
-        title: 'Topic Note',
-      },
-    ]);
+    stub.listTopicDocuments.mockResolvedValue([topicDocument()]);
 
     const runtime = new AgentDocumentsExecutionRuntime(stub);
     const result = await runtime.listDocuments(
@@ -689,14 +661,7 @@ describe('AgentDocumentsExecutionRuntime.listDocuments', () => {
       { agentId: 'agent-1', topicId: 'topic-1' },
     );
 
-    const documents = [
-      {
-        documentId: 'documents-row-id',
-        filename: 'topic-note',
-        id: 'agent-doc-assoc-id',
-        title: 'Topic Note',
-      },
-    ];
+    const documents = [topicDocument()];
     expect(result).toEqual({
       content: JSON.stringify(documents),
       state: { documents },

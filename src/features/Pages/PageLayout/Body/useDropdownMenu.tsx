@@ -1,6 +1,6 @@
 'use client';
 
-import { type MenuProps } from '@lobehub/ui';
+import { type DropdownItem } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { Hash, LucideCheck } from 'lucide-react';
 import { useMemo } from 'react';
@@ -10,7 +10,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { usePageStore } from '@/store/page';
 
-export const useDropdownMenu = (): MenuProps['items'] => {
+export const useDropdownMenu = (): DropdownItem[] => {
   const { t } = useTranslation();
   const showOnlyPagesNotInLibrary = usePageStore((s) => s.showOnlyPagesNotInLibrary);
 

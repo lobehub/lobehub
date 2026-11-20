@@ -1,21 +1,32 @@
 'use client';
 
-import { AGENT_CHAT_URL, DEFAULT_AVATAR, GROUP_CHAT_URL } from '@lobechat/const';
+import { AGENT_CHAT_URL, DEFAULT_USER_AVATAR_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
-import { ContextMenuTrigger, Flexbox, type MenuProps, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Avatar, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Avatar,
+  ContextMenuTrigger,
+  createStaticStyles,
+  cssVar,
+  cx,
+  type DropdownItem,
+  Flexbox,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { EyeIcon, EyeOffIcon } from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { useDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
-import AgentAvatar from './AgentAvatar';
 import ItemActions from './ItemActions';
 import LabelTags from './LabelTags';
+import SidebarItemAvatar from './SidebarItemAvatar';
 
 /** Fixed action-column width (sidebar-eye toggle + "…" menu) so rows stay aligned. */
 export const ACTION_COL_WIDTH = 64;
@@ -23,17 +34,35 @@ export const ACTION_COL_WIDTH = 64;
 /** Author avatar slot — reserved even when the author is unknown. */
 const AUTHOR_COL_WIDTH = 20;
 
+/** Name and role column widths, shared by every row so the columns line up. */
+export const NAME_COL_WIDTH = 240;
+export const ROLE_COL_WIDTH = 200;
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  // The link spans the name column (not the whole row) — a management list
-  // is for scanning and acting, and a full-row link turns clicks on the
-  // author / timestamp / action columns into a navigation. The name column
-  // stays a generous target, including the space right of a short title.
+  /**
+   * Fills the rest of the identity link and truncates to one line. Its minimum
+   * makes the name and role columns give up width first on mid-size screens;
+   * only a row too narrow for all three drops it.
+   */
+  description: css`
+    flex: 1 1 0;
+    min-width: 180px;
+    color: ${cssVar.colorTextTertiary};
+
+    @container agent-row (width < 600px) {
+      display: none;
+    }
+  `,
+  // The link spans the identity columns (name, role, description) but not the
+  // whole row — a management list is for scanning and acting, and a full-row
+  // link turns clicks on the author / timestamp / action columns into a
+  // navigation.
   identity: css`
     cursor: pointer;
 
     display: flex;
     flex: 1;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     min-width: 0;
@@ -44,15 +73,42 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       text-decoration: underline;
     }
   `,
+  name: css`
+    flex: 0 1 ${NAME_COL_WIDTH}px;
+    min-width: 0;
+
+    /* Without the description, name and role share the space 3:2. */
+    @container agent-row (width < 600px) {
+      flex: 3 1 0;
+    }
+  `,
+  /** Reserved even when empty so every row's description starts at the same x. */
+  role: css`
+    flex: 0 1 ${ROLE_COL_WIDTH}px;
+    min-width: 0;
+    color: ${cssVar.colorTextSecondary};
+
+    @container agent-row (width < 600px) {
+      flex: 2 1 0;
+    }
+  `,
   row: css`
+    container: agent-row / inline-size;
+
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadiusLG};
+
     color: inherit;
 
     &:hover {
       background: ${cssVar.colorFillTertiary};
     }
+  `,
+  /** Compact density: 6px block padding + 24px avatar → 36px rows, 13px text. */
+  rowCompact: css`
+    padding-block: 6px;
+    font-size: 13px;
   `,
   /**
    * Reserved width, right-aligned: "3 天前" and "2026-07-22" differ by ~30px,
@@ -101,19 +157,20 @@ interface AgentRowProps {
 const AgentRow = memo<AgentRowProps>(
   ({ author, item, onToggleSidebar, showAuthor, sidebarHidden }) => {
     const { t } = useTranslation('common');
-    const { id, type, updatedAt } = item;
+    const { description, id, type, updatedAt } = item;
     // Groups have no personal name, so this resolves to their title.
     const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
-    const roleTag = agentSecondaryDisplayName(item);
+    const role = agentSecondaryDisplayName(item);
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+    const { compact, tokens } = useDensity();
 
     // Right-click support (Task-List-style): the hook-bearing menu mounts on
     // the ROW's pointer-enter (which always precedes a right-click) and hands
     // its filtered items back via ref for the ContextMenuTrigger.
     const [menuActivated, setMenuActivated] = useState(false);
     const activateMenu = useCallback(() => setMenuActivated(true), []);
-    const menuItemsRef = useRef<(() => MenuProps['items']) | null>(null);
-    const handleMenuReady = useCallback((getItems: () => MenuProps['items']) => {
+    const menuItemsRef = useRef<(() => DropdownItem[]) | null>(null);
+    const handleMenuReady = useCallback((getItems: () => DropdownItem[]) => {
       menuItemsRef.current = getItems;
     }, []);
     const getContextMenuItems = useCallback(() => menuItemsRef.current?.() ?? [], []);
@@ -131,7 +188,7 @@ const AgentRow = memo<AgentRowProps>(
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.row}
+          className={cx(styles.row, compact && styles.rowCompact)}
           gap={12}
           ref={setAnchor}
           onPointerEnter={activateMenu}
@@ -141,21 +198,18 @@ const AgentRow = memo<AgentRowProps>(
             className={styles.identity}
             to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
           >
-            <AgentAvatar item={item} size={28} />
-            <Flexbox flex={1} style={{ minWidth: 0 }}>
-              {/* Single-line row (Linear-style density) — the description only
-                renders in card mode, where there is room to browse. */}
-              <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
-                <Text ellipsis className={'agent-row-title'} weight={500}>
-                  {displayTitle}
-                </Text>
-                {roleTag ? (
-                  <Tag size={'small'} style={{ flex: 'none' }}>
-                    {roleTag}
-                  </Tag>
-                ) : null}
-              </Flexbox>
-            </Flexbox>
+            <SidebarItemAvatar item={item} size={tokens.headerAvatarSize} />
+            {/* Three single-line columns: who the agent is, the role it plays,
+              and what it is responsible for. */}
+            <Text ellipsis className={cx('agent-row-title', styles.name)} weight={500}>
+              {displayTitle}
+            </Text>
+            <Text ellipsis className={styles.role} title={role}>
+              {role}
+            </Text>
+            <Text ellipsis className={styles.description} title={description ?? undefined}>
+              {description}
+            </Text>
           </WorkspaceLink>
           {/* Trailing cluster (Task-list-style): label pills + author avatar +
             update time as one tight right-aligned group. */}
@@ -174,7 +228,10 @@ const AgentRow = memo<AgentRowProps>(
               <Flexbox flex={'none'} style={{ width: AUTHOR_COL_WIDTH }}>
                 {author && (
                   <Tooltip title={author.name}>
-                    <Avatar avatar={author.avatar || DEFAULT_AVATAR} size={AUTHOR_COL_WIDTH} />
+                    <Avatar
+                      avatar={author.avatar || DEFAULT_USER_AVATAR_URL}
+                      size={AUTHOR_COL_WIDTH}
+                    />
                   </Tooltip>
                 )}
               </Flexbox>

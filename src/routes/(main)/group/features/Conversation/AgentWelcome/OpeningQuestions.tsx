@@ -1,7 +1,6 @@
 'use client';
 
-import { Block, Flexbox, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cx, responsive } from 'antd-style';
+import { Block, createStaticStyles, cx, Flexbox, responsive, Tooltip } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,16 +8,17 @@ import { useConversationStore } from '@/features/Conversation';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     padding-block: 8px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-radius: 48px;
 
     ${responsive.sm} {
       padding-block: 8px;
-      padding-inline: 16px;
+      padding-inline: ${densityVars.cardPadding};
     }
   `,
 

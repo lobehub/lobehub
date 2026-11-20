@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 
 /** Section label — one consistent treatment for every field heading in the detail panel. */

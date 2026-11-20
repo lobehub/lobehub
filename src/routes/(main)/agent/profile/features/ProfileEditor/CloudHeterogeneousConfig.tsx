@@ -2,10 +2,13 @@
 
 import { type HeterogeneousProviderConfig, type UserCredSummary } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { Flexbox } from '@lobehub/ui';
 import {
   Avatar,
   Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
   Input,
   InputPassword,
   Select,
@@ -13,8 +16,7 @@ import {
   Tag,
   Text,
   toast,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import { CheckCircle2, KeyRound, X } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,18 +24,20 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import {
+  canRemoveClaudeCodeToken,
   CLAUDE_CODE_TOKEN_CRED_KEY,
   type ClaudeCodeTokenStatus,
   resolveClaudeCodeTokenStatus,
 } from '@/helpers/claudeCodeTokenCred';
 import { usePermission } from '@/hooks/usePermission';
 import { refreshScopedCreds, useCredsForContext, usePersonalCreds } from '@/hooks/useScopedCreds';
-import { saveClaudeCodeToken } from '@/services/claudeCodeToken';
+import { deleteClaudeCodeToken, saveClaudeCodeToken } from '@/services/claudeCodeToken';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
-    padding-block: 16px 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.cardPadding} 12px;
+    padding-inline: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
@@ -195,6 +199,32 @@ const TokenSection = memo<TokenSectionProps>(
       setEditing(false);
     };
 
+    const canRemove = !!personalCred && canRemoveClaudeCodeToken(tokenStatus);
+
+    const handleRemove = () => {
+      if (!canEdit || !personalCred) return;
+
+      confirmModal({
+        cancelText: t('heterogeneousStatus.cloud.tokenCancel'),
+        content: t('heterogeneousStatus.cloud.tokenRemoveConfirm'),
+        okButtonProps: { danger: true },
+        okText: t('heterogeneousStatus.cloud.tokenRemove'),
+        onOk: async () => {
+          const ok = await deleteClaudeCodeToken(personalCred);
+          onSaved();
+          if (!ok) {
+            toast.error(t('heterogeneousStatus.cloud.tokenRemoveError'));
+            return;
+          }
+
+          onEnvChange({ CLAUDE_CODE_CRED_KEY: '' });
+          setTokenInput('');
+          setEditing(true);
+        },
+        title: t('heterogeneousStatus.cloud.tokenRemoveTitle'),
+      });
+    };
+
     return (
       <Flexbox gap={8}>
         <Flexbox horizontal align="center" justify="space-between">
@@ -202,18 +232,25 @@ const TokenSection = memo<TokenSectionProps>(
             <KeyRound size={12} />
             <span className={styles.sectionLabel}>{t('heterogeneousStatus.cloud.tokenLabel')}</span>
           </Flexbox>
-          {configured && tokenStatus.editable && !editing && (
-            <span
-              className={styles.manageLink}
-              onClick={() => {
-                if (!canEdit) return;
+          <Flexbox horizontal align="center" gap={12}>
+            {configured && tokenStatus.editable && !editing && (
+              <span
+                className={styles.manageLink}
+                onClick={() => {
+                  if (!canEdit) return;
 
-                setEditing(true);
-              }}
-            >
-              {t('heterogeneousStatus.cloud.tokenChange')}
-            </span>
-          )}
+                  setEditing(true);
+                }}
+              >
+                {t('heterogeneousStatus.cloud.tokenChange')}
+              </span>
+            )}
+            {canRemove && canEdit && !(configured && editing) && (
+              <span className={styles.manageLink} onClick={handleRemove}>
+                {t('heterogeneousStatus.cloud.tokenRemove')}
+              </span>
+            )}
+          </Flexbox>
         </Flexbox>
 
         {configured && !editing ? (
@@ -256,11 +293,7 @@ const TokenSection = memo<TokenSectionProps>(
 
         {tokenStatus.status === 'personalNotShared' && (
           <Text fontSize={12} type={'warning'}>
-            {t(
-              tokenStatus.sharedElsewhere
-                ? 'heterogeneousStatus.cloud.tokenSharedElsewhere'
-                : 'heterogeneousStatus.cloud.tokenNotShared',
-            )}
+            {t('heterogeneousStatus.cloud.tokenNotShared')}
           </Text>
         )}
 

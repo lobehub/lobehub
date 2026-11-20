@@ -21,10 +21,26 @@ export interface DataState {
   earlierMessagesError?: unknown;
 
   /**
+   * A forward transcript has rounds after its loaded pages, mirrored from the
+   * chat store's paging with the rows.
+   */
+  hasLaterMessages: boolean;
+
+  /**
    * A round-cursor fetch for history older than the server's newest-first
    * window is in flight. Drives the top-of-list loading hint.
    */
   isLoadingEarlierMessages: boolean;
+
+  /** A forward transcript's next page is in flight. Drives the end-of-list loading row. */
+  isLoadingLaterMessages: boolean;
+
+  /**
+   * The last forward page fetch failed. Drives the inline error row with Retry
+   * after the last message; cleared when a retry starts and on conversation
+   * switch.
+   */
+  laterMessagesError?: unknown;
 
   /**
    * Whether messages have been initialized
@@ -54,7 +70,9 @@ export interface DataState {
 export const dataInitialState: DataState = {
   dbMessages: [],
   displayMessages: [],
+  hasLaterMessages: false,
   isLoadingEarlierMessages: false,
+  isLoadingLaterMessages: false,
   messagesInit: false,
   transcriptSource: 'chat',
 };

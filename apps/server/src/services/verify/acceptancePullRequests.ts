@@ -56,6 +56,12 @@ export const updateAcceptancePullRequests = async (
   db: LobeChatDatabase,
   acceptanceId: string,
   update: (links: AcceptancePullRequestLink[] | undefined) => AcceptancePullRequestLink[] | null,
+  /**
+   * Writes that must move with the links, run in the same transaction under
+   * the same row lock — so an overlapping link and unlink of one PR cannot
+   * leave the links and those writes disagreeing.
+   */
+  alongside?: (tx: LobeChatDatabase) => Promise<void>,
 ): Promise<AcceptancePullRequestLink[] | null> =>
   db.transaction(async (tx) => {
     const [row] = await tx
@@ -74,6 +80,7 @@ export const updateAcceptancePullRequests = async (
         updatedAt: new Date(),
       })
       .where(eq(acceptances.id, acceptanceId));
+    await alongside?.(tx as unknown as LobeChatDatabase);
     return next;
   });
 

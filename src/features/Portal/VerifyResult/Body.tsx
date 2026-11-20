@@ -1,8 +1,6 @@
 import type { VerifierType } from '@lobechat/types';
 import { formatDuration as formatDurationMs } from '@lobechat/utils';
-import { Flexbox, Markdown } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { ListTree } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
@@ -17,10 +15,11 @@ import {
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, threadSelectors } from '@/store/chat/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   confidenceCard: css`
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
@@ -46,7 +45,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   metaRow: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
     justify-content: space-between;
 

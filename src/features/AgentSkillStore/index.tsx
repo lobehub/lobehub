@@ -1,6 +1,6 @@
 'use client';
 
-import { createModal } from '@lobehub/ui/base-ui';
+import { createModal } from '@lobehub/ui';
 import { t } from 'i18next';
 
 import AgentSkillStoreContent from './Content';
@@ -10,6 +10,6 @@ export const createAgentSkillStoreModal = (agentId: string) =>
   createModal({
     content: <AgentSkillStoreContent agentId={agentId} />,
     footer: null,
-    title: t('settingAgent.agentTools.connectNewPickerTitle', { ns: 'setting' }),
+    title: t('settingAgent.tools.connection.connectForAgent', { ns: 'setting' }),
     width: 'min(80%, 800px)',
   });

@@ -1,7 +1,5 @@
 import { DEFAULT_USER_AVATAR_URL } from '@lobechat/const';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Avatar, createStaticStyles, cssVar, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { AlarmClockIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +20,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface AuthorChipProps {
+  /** Just the face (or the schedule glyph), where the row already has its own text. */
+  avatarOnly?: boolean;
   /** `topic.trigger` — a `cron` run has no human triggerer, only an owning schedule. */
   trigger?: string | null;
   /** `topic.userId` — the member who started (or owns) this run. */
@@ -36,7 +36,7 @@ interface AuthorChipProps {
  * A `cron`-triggered run has no person behind it, so it reads as a schedule
  * rather than borrowing its owner's face (which would imply they just ran it).
  */
-const AuthorChip = memo<AuthorChipProps>(({ userId, trigger }) => {
+const AuthorChip = memo<AuthorChipProps>(({ avatarOnly, userId, trigger }) => {
   const { t } = useTranslation('home');
   const profiles = useWorkspaceMemberProfiles();
 
@@ -44,7 +44,7 @@ const AuthorChip = memo<AuthorChipProps>(({ userId, trigger }) => {
     return (
       <Flexbox horizontal align={'center'} className={styles.chip} gap={4}>
         <Icon color={cssVar.colorTextQuaternary} icon={AlarmClockIcon} size={12} />
-        <span className={styles.label}>{t('inbox.author.scheduled')}</span>
+        {!avatarOnly && <span className={styles.label}>{t('inbox.author.scheduled')}</span>}
       </Flexbox>
     );
 
@@ -62,9 +62,11 @@ const AuthorChip = memo<AuthorChipProps>(({ userId, trigger }) => {
           size={AVATAR_SIZE}
         />
       </Tooltip>
-      <Text ellipsis className={styles.label} style={{ maxWidth: 72 }}>
-        {name}
-      </Text>
+      {!avatarOnly && (
+        <Text ellipsis className={styles.label} style={{ maxWidth: 72 }}>
+          {name}
+        </Text>
+      )}
     </Flexbox>
   );
 });

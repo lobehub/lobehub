@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -279,6 +281,47 @@ describe('runPullRequestAction head protection', () => {
       expect(result).toEqual({ error: 'head changed', success: false });
     },
   );
+});
+
+describe('runPullRequestAction by GitHub identity', () => {
+  const url = 'https://github.com/owner/repo/pull/42';
+  const path = '/registered/source';
+
+  beforeEach(() => {
+    childProcessMocks.execFileAsync.mockReset();
+  });
+
+  it('marks the confirmed PR ready without running the mutation in a checkout', async () => {
+    childProcessMocks.execFileAsync.mockResolvedValueOnce({ stdout: JSON.stringify({ url }) });
+    childProcessMocks.execFileAsync.mockResolvedValueOnce({ stdout: '' });
+
+    await expect(
+      runPullRequestAction({ action: { type: 'ready' }, number: 42, path, url }),
+    ).resolves.toEqual({ success: true });
+    expect(childProcessMocks.execFileAsync).toHaveBeenNthCalledWith(
+      1,
+      'gh',
+      ['pr', 'view', '42', '--json', 'url'],
+      expect.objectContaining({ cwd: path }),
+    );
+    expect(childProcessMocks.execFileAsync).toHaveBeenNthCalledWith(
+      2,
+      'gh',
+      ['pr', 'ready', url],
+      expect.objectContaining({ cwd: tmpdir() }),
+    );
+  });
+
+  it('does not mutate a same-number PR in another repository', async () => {
+    childProcessMocks.execFileAsync.mockResolvedValueOnce({
+      stdout: JSON.stringify({ url: 'https://github.com/owner/another-repo/pull/42' }),
+    });
+
+    await expect(
+      runPullRequestAction({ action: { type: 'ready' }, number: 42, path, url }),
+    ).resolves.toMatchObject({ success: false });
+    expect(childProcessMocks.execFileAsync).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('getPullRequestDetail', () => {

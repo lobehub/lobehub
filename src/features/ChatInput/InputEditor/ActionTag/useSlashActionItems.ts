@@ -13,12 +13,11 @@ import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
-import { useFetchProjectSkills } from '@/hooks/useFetchProjectSkills';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { useToolStore } from '@/store/tool';
-import { agentDocumentSkillsSelectors } from '@/store/tool/selectors';
+import { agentDocumentSkillsSelectors, projectSkillsSelectors } from '@/store/tool/selectors';
 import type { AgentDocumentSkillItem } from '@/store/tool/slices/agentDocumentSkills/initialState';
 
 import { useAgentId } from '../../hooks/useAgentId';
@@ -89,11 +88,12 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   // makes filesystem skills reachable even when this client isn't the desktop app
   // (previously gated on `isDesktop` alone, so remote/web runs got nothing).
   const projectSkillsEnabled = (isDesktop || !!remoteDeviceId) && !!workingDirectory;
-  const { data: projectSkillsData } = useFetchProjectSkills(
-    projectSkillsEnabled ? workingDirectory : undefined,
-    remoteDeviceId,
+  const projectSkillsDirectory = projectSkillsEnabled ? workingDirectory : undefined;
+  useToolStore((s) => s.useFetchProjectSkills)(projectSkillsDirectory, remoteDeviceId);
+  const projectSkills = useToolStore(
+    (s) =>
+      projectSkillsSelectors.getProjectSkills(projectSkillsDirectory, remoteDeviceId)(s)?.skills,
   );
-  const projectSkills = projectSkillsData?.skills;
 
   // Agent-document skill bundles (the "Agent skills" group in the working
   // sidebar). The registry is a per-agent replica, so a switch paints the

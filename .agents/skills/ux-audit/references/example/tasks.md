@@ -28,7 +28,7 @@ branch** (user-supplied screenshot of the populated list), see the **§6 addendu
 KanbanColumn,EmptyState,CreateTaskInlineEntry}`, `features/AgentTasks/features/AgentTaskItem.tsx`,
 `features/AgentTasks/hooks/useTaskItemContextMenu.tsx`, `CreateTaskModal/*`,
 `store/task/slices/{list,detail,lifecycle}/action.ts`, `store/task/selectors/listSelectors.ts`,
-`apps/server/src/routers/lambda/task.ts`.
+`apps/server/src/routers/lambda/task/`.
 
 ## 1 — Patterns in use
 
@@ -90,7 +90,7 @@ onboarding hero into the permanent skeleton — a failed load reads as neither e
 _Remedy:_ add `onError` → an error state + Reload; read the hook's `error` at the call site.
 
 **L② List sort / group / filter run client-side over a 50-row cap; no virtualization — Read §1.2** 🟠
-The server caps the list at `limit` default **50** (`apps/server/src/routers/lambda/task.ts`), and
+The server caps the list at `limit` default **50** (`apps/server/src/routers/lambda/task/queries.ts` `list`, schema in `_helpers/taskListSchemas.ts`), and
 `fetchTaskList` passes no limit/offset, so 50 rows load while `tasksTotal` can be larger.
 `TaskList.tsx:135-201` then filters, sorts, and groups **entirely in-memory over those 50** — no
 pagination, no load-more, no windowing (plain `.map`, `TaskList.tsx:43-48`; kanban maps all,

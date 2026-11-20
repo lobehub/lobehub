@@ -9,11 +9,38 @@ import type {
   ScmReviewDecision,
   ScmUpsertChangeRequestParams,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, or, type SQL, sql } from 'drizzle-orm';
 
 import type { ScmChangeRequestItem } from '../../schemas';
-import { scmChangeRequests, scmInstallations } from '../../schemas';
+import { acceptances, scmChangeRequests, scmInstallations } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+
+const ownedByScope = (scope: { userId: string; workspaceId?: string | null }) =>
+  scope.workspaceId
+    ? eq(scmChangeRequests.workspaceId, scope.workspaceId)
+    : and(eq(scmChangeRequests.userId, scope.userId), isNull(scmChangeRequests.workspaceId));
+
+/**
+ * What a scope may read: its own change requests, plus everything on the
+ * installations it connected (see {@link ScmChangeRequestModel.listByScope}).
+ */
+const visibleToScope = (
+  db: LobeChatDatabase,
+  scope: { userId: string; workspaceId?: string | null },
+) => {
+  const connected = db
+    .select({ id: scmInstallations.id })
+    .from(scmInstallations)
+    .where(
+      and(
+        isNull(scmInstallations.revokedAt),
+        scope.workspaceId
+          ? eq(scmInstallations.workspaceId, scope.workspaceId)
+          : and(eq(scmInstallations.userId, scope.userId), isNull(scmInstallations.workspaceId)),
+      ),
+    );
+  return or(ownedByScope(scope), inArray(scmChangeRequests.installationId, connected));
+};
 
 /**
  * Conclusions worth waking an agent over: something broke and there is
@@ -148,6 +175,32 @@ export class ScmChangeRequestModel {
     return row ?? null;
   };
 
+  /**
+   * {@link findByIdentity} for a name typed by a person, e.g. a pasted PR URL:
+   * GitHub names are case-insensitive, while the row keeps the provider's
+   * canonical casing.
+   */
+  static findByIdentityIgnoringCase = async (
+    db: LobeChatDatabase,
+    provider: ScmProvider,
+    repoFullName: string,
+    number: number,
+  ): Promise<ScmChangeRequestItem | null> => {
+    const [row] = await db
+      .select()
+      .from(scmChangeRequests)
+      .where(
+        and(
+          eq(scmChangeRequests.provider, provider),
+          eq(scmChangeRequests.number, number),
+          sql`lower(${scmChangeRequests.repoFullName}) = ${repoFullName.toLowerCase()}`,
+        ),
+      )
+      .limit(1);
+
+    return row ?? null;
+  };
+
   static findById = async (
     db: LobeChatDatabase,
     id: string,
@@ -198,29 +251,101 @@ export class ScmChangeRequestModel {
     db: LobeChatDatabase,
     scope: { userId: string; workspaceId?: string | null },
     options: { limit?: number } = {},
-  ): Promise<ScmChangeRequestItem[]> => {
-    const owned = scope.workspaceId
-      ? eq(scmChangeRequests.workspaceId, scope.workspaceId)
-      : and(eq(scmChangeRequests.userId, scope.userId), isNull(scmChangeRequests.workspaceId));
+  ): Promise<ScmChangeRequestItem[]> =>
+    db
+      .select()
+      .from(scmChangeRequests)
+      .where(visibleToScope(db, scope))
+      .orderBy(desc(scmChangeRequests.updatedAt))
+      .limit(options.limit ?? 50);
 
-    const connected = db
-      .select({ id: scmInstallations.id })
-      .from(scmInstallations)
-      .where(
-        and(
-          isNull(scmInstallations.revokedAt),
-          scope.workspaceId
-            ? eq(scmInstallations.workspaceId, scope.workspaceId)
-            : and(eq(scmInstallations.userId, scope.userId), isNull(scmInstallations.workspaceId)),
-        ),
-      );
+  /**
+   * The rows a scope can see for these `owner/repo#number` identities, matched
+   * case-insensitively (GitHub names are). Same visibility as
+   * {@link listByScope}; an identity no installation tracks has no row.
+   */
+  static listByIdentities = async (
+    db: LobeChatDatabase,
+    scope: { userId: string; workspaceId?: string | null },
+    identities: { number: number; repoFullName: string }[],
+  ): Promise<ScmChangeRequestItem[]> => {
+    if (identities.length === 0) return [];
 
     return db
       .select()
       .from(scmChangeRequests)
-      .where(or(owned, inArray(scmChangeRequests.installationId, connected)))
-      .orderBy(desc(scmChangeRequests.updatedAt))
-      .limit(options.limit ?? 50);
+      .where(
+        and(
+          eq(scmChangeRequests.provider, 'github'),
+          or(
+            ...identities.map(({ number, repoFullName }) =>
+              and(
+                eq(scmChangeRequests.number, number),
+                sql`lower(${scmChangeRequests.repoFullName}) = ${repoFullName.toLowerCase()}`,
+              ),
+            ),
+          ),
+          visibleToScope(db, scope),
+        ),
+      );
+  };
+
+  /**
+   * Open pull requests of `repoFullName` whose head is one of `branches`, as
+   * a scope can see them: what a `git push` to those branches updated.
+   */
+  static listOpenByHeadRefs = async (
+    db: LobeChatDatabase,
+    scope: { userId: string; workspaceId?: string | null },
+    repoFullName: string,
+    branches: string[],
+  ): Promise<ScmChangeRequestItem[]> => {
+    if (branches.length === 0) return [];
+
+    return db
+      .select()
+      .from(scmChangeRequests)
+      .where(
+        and(
+          eq(scmChangeRequests.provider, 'github'),
+          sql`lower(${scmChangeRequests.repoFullName}) = ${repoFullName.toLowerCase()}`,
+          inArray(scmChangeRequests.headRef, branches),
+          eq(scmChangeRequests.state, 'open'),
+          visibleToScope(db, scope),
+        ),
+      )
+      .orderBy(desc(scmChangeRequests.updatedAt));
+  };
+
+  /**
+   * Whether a provider event could still wake `topicId`: the static half of
+   * `ScmControlService.wake`'s gate. Scoped like that wake, which resolves the
+   * topic under the row's own tenant. Lets an open conversation poll for a
+   * background run only when one can actually arrive.
+   */
+  static hasWakeTarget = async (
+    db: LobeChatDatabase,
+    scope: { userId: string; workspaceId?: string | null },
+    topicId: string,
+    maxWakes: number,
+  ): Promise<boolean> => {
+    const [row] = await db
+      .select({ id: scmChangeRequests.id })
+      .from(scmChangeRequests)
+      .where(
+        and(
+          eq(scmChangeRequests.topicId, topicId),
+          eq(scmChangeRequests.state, 'open'),
+          eq(scmChangeRequests.isDraft, false),
+          lt(scmChangeRequests.wakeCount, maxWakes),
+          // Auto-fix turned off for this pull request: nothing will wake it.
+          sql`coalesce(${scmChangeRequests.metadata} ->> 'autoFix', '') <> 'false'`,
+          ownedByScope(scope),
+        ),
+      )
+      .limit(1);
+
+    return !!row;
   };
 
   static listByTopic = async (
@@ -320,8 +445,12 @@ export class ScmChangeRequestModel {
           params.eventKind !== 'reopened');
       const stale = !!existing && (outOfOrder || regressesLifecycle);
 
-      const headChanged =
-        !stale && !!params.headSha && !!existing && existing.headSha !== params.headSha;
+      // The incoming head sha when this upsert moves the head, otherwise null.
+      const newHeadSha =
+        !stale && params.headSha && existing && existing.headSha !== params.headSha
+          ? params.headSha
+          : null;
+      const headChanged = newHeadSha !== null;
       const links = params.links ?? {};
       const now = new Date();
 
@@ -377,26 +506,60 @@ export class ScmChangeRequestModel {
       const inherited = scopeMoved ? undefined : existing;
       const pick = <T>(incoming: T | null | undefined, stored: T | null | undefined): T | null =>
         (stale ? (stored ?? incoming) : (incoming ?? stored)) ?? null;
-      const linkValues = {
+      const linkValues: {
+        acceptanceId: string | SQL | null;
+        installationId: string | null;
+        taskId: string | null;
+        topicId: string | null;
+        workId: string | null;
+      } = {
         acceptanceId: pick(links.acceptanceId, inherited?.acceptanceId),
         installationId: links.installationId ?? existing?.installationId ?? null,
         taskId: pick(links.taskId, inherited?.taskId),
         topicId: pick(links.topicId, inherited?.topicId),
         workId: pick(links.workId, inherited?.workId),
       };
+
+      // Both link sources below are resolved before this transaction opens, so
+      // an unlink may have committed in between. Writing the acceptance anyway
+      // would put back a binding the user removed, and a later merge would
+      // accept a delivery from a pull request that no longer leads to it.
+      const stored = inherited?.acceptanceId ?? null;
+      if (!stale && links.acceptanceSource && links.acceptanceId) {
+        if (links.acceptanceSource === 'row-binding' && stored !== links.acceptanceId) {
+          // The resolver only echoed the binding the row carried. The locked
+          // row is the authority, and an unlink may have cleared it since.
+          linkValues.acceptanceId = stored;
+        } else if (stored !== links.acceptanceId) {
+          const handLinkHolds = sql`EXISTS (
+            SELECT 1 FROM ${acceptances} AS hand_link
+            WHERE hand_link.id = ${links.acceptanceId}::uuid
+              AND EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements(
+                  COALESCE(hand_link.metadata -> 'pullRequests', '[]'::jsonb)
+                ) AS pr
+                WHERE pr ->> 'provider' = ${params.provider}
+                  AND pr ->> 'number' = ${String(params.number)}
+                  AND lower(pr ->> 'repoFullName') = ${params.repoFullName.toLowerCase()}
+              )
+          )`;
+          linkValues.acceptanceId = sql`CASE WHEN ${handLinkHolds} THEN ${links.acceptanceId}::uuid ELSE ${stored}::uuid END`;
+        }
+      }
       const ownerValues = scopeMoved
         ? { userId: params.userId, workspaceId: params.workspaceId ?? null }
         : {};
 
-      const ciValues = headChanged
+      const ciValues = newHeadSha
         ? (() => {
             // Results reported before this push became the head belong to
             // the new commit, not to the one being replaced.
             const held = existing?.metadata?.pendingChecks;
-            const adopted = held && held.sha === params.headSha ? held.checks : null;
+            const adopted = held && held.sha === newHeadSha ? held.checks : null;
             return {
               checks: adopted,
-              ciHeadSha: params.headSha ?? null,
+              ciHeadSha: newHeadSha,
               ciStatus: adopted ? rollupCiStatus(adopted) : null,
             };
           })()
@@ -465,27 +628,124 @@ export class ScmChangeRequestModel {
       return row ?? null;
     });
 
-  /** Fill in links that are still null. Never overwrites a link already set. */
+  /**
+   * Fill in links that are still null. Never overwrites a link already set.
+   *
+   * The null check lives in the UPDATE itself (`COALESCE`), not in a read
+   * first: a concurrent `pull_request` ingest filling a link between a
+   * read-modify-write's two statements would otherwise be overwritten.
+   * `guard` narrows the same statement further (e.g. a scope fence); a row
+   * that fails it is untouched. Returns the row after the update, `null`
+   * when it does not exist or the guard refused it.
+   */
   static attachLinks = async (
     db: LobeChatDatabase,
     id: string,
     links: ScmChangeRequestLinks,
+    guard?: SQL,
   ): Promise<ScmChangeRequestItem | null> => {
-    const existing = await ScmChangeRequestModel.findById(db, id);
-    if (!existing) return null;
-
-    const set: Partial<ScmChangeRequestLinks> = {};
+    const set: Record<string, SQL> = {};
     for (const key of ['acceptanceId', 'installationId', 'taskId', 'topicId', 'workId'] as const) {
-      if (!existing[key] && links[key]) set[key] = links[key];
+      if (links[key]) {
+        set[key] = sql`coalesce(${scmChangeRequests[key]}, ${links[key]})`;
+      }
     }
-    if (Object.keys(set).length === 0) return existing;
+    if (Object.keys(set).length === 0) return ScmChangeRequestModel.findById(db, id);
 
     const [row] = await db
       .update(scmChangeRequests)
       .set({ ...set, updatedAt: new Date() })
-      .where(eq(scmChangeRequests.id, id))
+      .where(and(eq(scmChangeRequests.id, id), guard))
       .returning();
-    return row;
+    return row ?? null;
+  };
+
+  /**
+   * Backfill the row for a pull request a Work registration just tied to a
+   * conversation — but only when the row lives in the Work's own scope.
+   * Provider events re-resolve links on every `pull_request` delivery, so
+   * this covers the gap between the last delivery and the next: a review or
+   * a failing check in between would otherwise find no conversation to
+   * wake. Fill-only like the event path; a link already set is never
+   * replaced.
+   */
+  static attachPullRequestWork = async (
+    db: LobeChatDatabase,
+    params: {
+      number: number;
+      repoFullName: string;
+      scope: { userId: string; workspaceId?: string | null };
+      topicId?: string | null;
+      workId: string;
+    },
+  ): Promise<void> => {
+    const row = await ScmChangeRequestModel.findByIdentityIgnoringCase(
+      db,
+      'github',
+      params.repoFullName,
+      params.number,
+    );
+    if (!row) return;
+
+    // A row routed to another scope learns nothing: its `topicId` is looked
+    // up under the row's owner when a wake fires, so a foreign conversation
+    // would occupy a fill-only slot the right link can never take. The check
+    // rides inside the UPDATE — a row re-routed between our read and write
+    // is refused, not written.
+    await ScmChangeRequestModel.attachLinks(
+      db,
+      row.id,
+      {
+        topicId: params.topicId,
+        workId: params.workId,
+      },
+      and(
+        eq(scmChangeRequests.userId, params.scope.userId),
+        params.scope.workspaceId == null
+          ? isNull(scmChangeRequests.workspaceId)
+          : eq(scmChangeRequests.workspaceId, params.scope.workspaceId),
+      ),
+    );
+  };
+
+  /**
+   * Point the row at `acceptanceId` unless it already names another one,
+   * decided in the UPDATE itself so two acceptances claiming the same row at
+   * once cannot overwrite each other. Only the acceptance link moves, so
+   * {@link detachAcceptance} undoes it completely. Returns the row when this
+   * acceptance holds it.
+   */
+  static claimAcceptance = async (
+    db: LobeChatDatabase,
+    id: string,
+    acceptanceId: string,
+  ): Promise<ScmChangeRequestItem | null> => {
+    const [row] = await db
+      .update(scmChangeRequests)
+      .set({ acceptanceId, updatedAt: new Date() })
+      .where(
+        and(
+          eq(scmChangeRequests.id, id),
+          or(
+            isNull(scmChangeRequests.acceptanceId),
+            eq(scmChangeRequests.acceptanceId, acceptanceId),
+          ),
+        ),
+      )
+      .returning();
+    return row ?? null;
+  };
+
+  /** Clear the acceptance link, but only while it still points at `acceptanceId`. */
+  static detachAcceptance = async (
+    db: LobeChatDatabase,
+    id: string,
+    acceptanceId: string,
+  ): Promise<void> => {
+    await db
+      .update(scmChangeRequests)
+      .set({ acceptanceId: null, updatedAt: new Date() })
+      .where(and(eq(scmChangeRequests.id, id), eq(scmChangeRequests.acceptanceId, acceptanceId)));
   };
 
   /**
@@ -687,8 +947,10 @@ export class ScmChangeRequestModel {
    * Redis there is no debounce, so two webhooks landing together both read
    * the same `wakeCount` and a read-modify-write would lose one increment.
    * A conditional `UPDATE … WHERE wake_count < max` lets exactly one of them
-   * through per remaining slot. Returns the new count, or `null` when the
-   * cap is already spent.
+   * through per remaining slot. The same condition holds the pull request's
+   * Auto-fix switch: a wake that read the row before the person turned it
+   * off, and was still building its prompt, is refused here. Returns the
+   * new count, or `null` when the cap is spent or Auto-fix is off.
    */
   static reserveWake = async (
     db: LobeChatDatabase,
@@ -713,7 +975,13 @@ export class ScmChangeRequestModel {
         updatedAt: now,
         wakeCount: sql`${scmChangeRequests.wakeCount} + 1`,
       })
-      .where(and(eq(scmChangeRequests.id, id), lt(scmChangeRequests.wakeCount, max)))
+      .where(
+        and(
+          eq(scmChangeRequests.id, id),
+          lt(scmChangeRequests.wakeCount, max),
+          sql`coalesce(${scmChangeRequests.metadata} ->> 'autoFix', '') <> 'false'`,
+        ),
+      )
       .returning({ wakeCount: scmChangeRequests.wakeCount });
 
     return reserved?.wakeCount ?? null;
@@ -768,6 +1036,44 @@ export class ScmChangeRequestModel {
         updatedAt: new Date(),
       })
       .where(eq(scmChangeRequests.id, id));
+  };
+
+  /**
+   * Turn Auto-fix on or off for one change request the scope owns — the
+   * tenant whose conversation it wakes. Atomic on the metadata bag, like
+   * every other writer here. Turning it off drops a wake the debounce window
+   * is still holding, so an opt-out is never followed by a run; turning it
+   * back on from off starts the wake count over, since the person asked the
+   * agent to keep fixing. Returns `null` when the scope does not own the row.
+   */
+  static setAutoFix = async (
+    db: LobeChatDatabase,
+    scope: { userId: string; workspaceId?: string | null },
+    id: string,
+    enabled: boolean,
+  ): Promise<{ autoFix: boolean; wakeCount: number } | null> => {
+    const wasOff = sql`coalesce(${scmChangeRequests.metadata} ->> 'autoFix', '') = 'false'`;
+    const flag = sql`${JSON.stringify({ autoFix: enabled })}::jsonb`;
+
+    const [updated] = await db
+      .update(scmChangeRequests)
+      .set(
+        enabled
+          ? {
+              metadata: sql`${scmChangeRequests.metadata} || ${flag}`,
+              updatedAt: new Date(),
+              wakeCount: sql`case when ${wasOff} then 0 else ${scmChangeRequests.wakeCount} end`,
+            }
+          : {
+              metadata: sql`(${scmChangeRequests.metadata} - 'pendingWake') || ${flag}`,
+              updatedAt: new Date(),
+            },
+      )
+      .where(and(eq(scmChangeRequests.id, id), ownedByScope(scope)))
+      .returning({ metadata: scmChangeRequests.metadata, wakeCount: scmChangeRequests.wakeCount });
+
+    if (!updated) return null;
+    return { autoFix: updated.metadata?.autoFix !== false, wakeCount: updated.wakeCount };
   };
 
   /** Hand a reserved wake back when the run never started. */

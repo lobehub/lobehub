@@ -72,7 +72,7 @@ describe('extractTaskWorkTargets', () => {
         args: { name: 'A', instruction: 'do' },
         result: { state: { identifier: 'T-1', taskId: 'task_1', success: true }, success: true },
       }),
-    ).toEqual([{ taskId: 'task_1', taskIdentifier: 'T-1' }]);
+    ).toEqual([{ taskId: 'task_1', taskIdentifier: undefined }]);
   });
 
   it('falls back to args.identifier for updates that return no state (server runtime)', () => {
@@ -146,7 +146,7 @@ describe('resolveWorkRegistration', () => {
     ).toEqual({
       action: 'create',
       changeType: 'created',
-      targets: [{ taskId: 'task_1', taskIdentifier: 'T-1' }],
+      targets: [{ taskId: 'task_1', taskIdentifier: undefined }],
       type: 'task',
     });
 
@@ -163,6 +163,55 @@ describe('resolveWorkRegistration', () => {
     });
   });
 
+  it('carries agentEditable only when the API work config declares it', () => {
+    const editable = [
+      {
+        identifier: 'lobe-task',
+        manifest: {
+          api: [
+            {
+              name: 'createTask',
+              work: { action: 'create', agentEditable: true, resourceType: 'task' },
+            },
+          ],
+        },
+      },
+      {
+        identifier: 'lobe-agent-documents',
+        manifest: {
+          api: [
+            {
+              name: 'createDocument',
+              work: { action: 'create', agentEditable: true, resourceType: 'document' },
+            },
+          ],
+        },
+      },
+    ] as unknown as LobeBuiltinTool[];
+    const taskCall = {
+      args: {},
+      result: { state: { taskId: 'task_1', success: true }, success: true },
+    };
+    const documentCall = {
+      args: {},
+      result: {
+        state: { agentId: 'agt_1', documentId: 'doc_1', success: true },
+        success: true,
+      },
+    };
+
+    expect(resolveWorkRegistration(editable, 'lobe-task', 'createTask', taskCall)).toMatchObject({
+      agentEditable: true,
+    });
+    expect(
+      resolveWorkRegistration(editable, 'lobe-agent-documents', 'createDocument', documentCall),
+    ).toMatchObject({ document: { agentEditable: true } });
+    // Undeclared stays off the intent, so Works default to system-owned.
+    expect(
+      resolveWorkRegistration(registry, 'lobe-task', 'createTask', taskCall),
+    ).not.toHaveProperty('agentEditable');
+  });
+
   it('resolves delete into a changeType-less plan keyed off state.taskId', () => {
     expect(
       resolveWorkRegistration(registry, 'lobe-task', 'deleteTask', {
@@ -171,7 +220,7 @@ describe('resolveWorkRegistration', () => {
       }),
     ).toEqual({
       action: 'delete',
-      targets: [{ taskId: 'task_1', taskIdentifier: 'T-1' }],
+      targets: [{ taskId: 'task_1', taskIdentifier: undefined }],
       type: 'task',
     });
   });
@@ -381,6 +430,28 @@ describe('dispatchWorkRegistrationIntent', () => {
         2,
         expect.objectContaining({ taskId: 'task_2', taskIdentifier: 'T-2' }),
       );
+      expect(ports.registerTask).not.toHaveBeenCalledWith(
+        expect.objectContaining({ agentEditable: expect.anything() }),
+      );
+    });
+
+    it('passes agentEditable through to every registered task', async () => {
+      const ports = buildPorts();
+      await dispatchWorkRegistrationIntent(
+        {
+          action: 'create',
+          agentEditable: true,
+          changeType: 'created',
+          targets: [{ taskId: 'task_1' }],
+          type: 'task',
+        },
+        ports,
+        provenance,
+      );
+
+      expect(ports.registerTask).toHaveBeenCalledWith(
+        expect.objectContaining({ agentEditable: true, taskId: 'task_1' }),
+      );
     });
 
     it('deletes each target that has a taskId and skips targetless ids', async () => {
@@ -553,5 +624,132 @@ describe('dispatchWorkRegistrationIntent', () => {
         }),
       );
     });
+  });
+});
+
+describe('dispatchWorkRegistrationIntent · canvas', () => {
+  const provenance: WorkRegistrationProvenance = {
+    agentId: 'agent-1',
+    cumulativeCost: 0.02,
+    messageId: 'msg-1',
+    rootOperationId: 'op-root',
+    threadId: 'thread-1',
+    toolCallId: 'call-1',
+    toolIdentifier: 'lobe-canvas',
+    toolName: 'createCanvas',
+    topicId: 'topic-1',
+  };
+
+  const intent: WorkRegistrationIntent = {
+    action: 'register',
+    canvas: {
+      canvasId: 'cvs_1',
+      description: 'Cost up',
+      metadata: {
+        entry: 'index.html',
+        fileCount: 1,
+        manifestKey: 'k',
+        runtimeMajor: 1,
+        totalSize: 10,
+      },
+      title: 'Cost report',
+      toolName: 'writeCanvasFiles',
+    },
+    type: 'canvas',
+  };
+
+  it('registers the canvas version with provenance', async () => {
+    const registerCanvas = vi.fn().mockResolvedValue(undefined);
+    await dispatchWorkRegistrationIntent(
+      intent,
+      {
+        deleteTaskWork: vi.fn(),
+        handleSkillToolResult: vi.fn(),
+        registerCanvas,
+        registerDocument: vi.fn(),
+        registerTask: vi.fn(),
+      },
+      provenance,
+    );
+
+    expect(registerCanvas).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      canvasId: 'cvs_1',
+      cumulativeCost: 0.02,
+      cumulativeUsage: undefined,
+      description: 'Cost up',
+      messageId: 'msg-1',
+      metadata: intent.type === 'canvas' ? intent.canvas.metadata : undefined,
+      rootOperationId: 'op-root',
+      threadId: 'thread-1',
+      title: 'Cost report',
+      toolCallId: 'call-1',
+      toolIdentifier: 'lobe-canvas',
+      toolName: 'writeCanvasFiles',
+      topicId: 'topic-1',
+    });
+  });
+
+  it('is a no-op when the side has no canvas port', async () => {
+    await expect(
+      dispatchWorkRegistrationIntent(
+        intent,
+        {
+          deleteTaskWork: vi.fn(),
+          handleSkillToolResult: vi.fn(),
+          registerDocument: vi.fn(),
+          registerTask: vi.fn(),
+        },
+        provenance,
+      ),
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe('dispatchWorkRegistrationIntent · artboard', () => {
+  it('registers the artboard version with provenance and its project', async () => {
+    const registerArtboard = vi.fn().mockResolvedValue(undefined);
+    await dispatchWorkRegistrationIntent(
+      {
+        action: 'register',
+        artboard: {
+          artboardId: 'art_1',
+          changeType: 'created',
+          description: '3 组 · 10 个画面',
+          projectId: 'prj_1',
+          title: '新用户首次进入项目',
+          toolName: 'createArtboard',
+        },
+        type: 'artboard',
+      },
+      {
+        deleteTaskWork: vi.fn(),
+        handleSkillToolResult: vi.fn(),
+        registerArtboard,
+        registerDocument: vi.fn(),
+        registerTask: vi.fn(),
+      },
+      {
+        agentId: 'agent-1',
+        messageId: 'msg-1',
+        rootOperationId: 'op-root',
+        toolCallId: 'call-1',
+        toolIdentifier: 'builtin-artboard',
+        toolName: 'createArtboard',
+        topicId: 'topic-1',
+      },
+    );
+
+    expect(registerArtboard).toHaveBeenCalledWith(
+      expect.objectContaining({
+        artboardId: 'art_1',
+        changeType: 'created',
+        projectId: 'prj_1',
+        rootOperationId: 'op-root',
+        toolCallId: 'call-1',
+        toolIdentifier: 'builtin-artboard',
+        toolName: 'createArtboard',
+      }),
+    );
   });
 });

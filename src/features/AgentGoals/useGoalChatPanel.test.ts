@@ -6,10 +6,12 @@ import { useGoalChatPanel } from './useGoalChatPanel';
 const manager = { agentId: 'creator', topicId: 'persistent-supervision' };
 
 describe('useGoalChatPanel', () => {
-  it('starts collapsed and replaces the responsible conversation with supervision', () => {
+  it('starts open and replaces the responsible conversation with supervision', () => {
     const { result } = renderHook(() => useGoalChatPanel('goal-a', 'worker'));
-    expect(result.current.open).toBe(false);
+    expect(result.current.open).toBe(true);
     expect(result.current.agentId).toBe('worker');
+    act(() => result.current.setOpen(false));
+    expect(result.current.open).toBe(false);
     act(() => result.current.setOpen(true));
     expect(result.current.open).toBe(true);
     act(() => result.current.openConversation(manager));
@@ -65,18 +67,70 @@ describe('useGoalChatPanel', () => {
     expect(result.current).toMatchObject({ agentId: 'worker', open: true, request });
   });
 
-  it('never carries another goal’s open panel or creator into the next goal', () => {
+  // Every goal starts on its own conversation, open: a panel folded on one goal
+  // stays folded only there.
+  it('never carries another goal’s panel state or creator into the next goal', () => {
     const { result, rerender } = renderHook(({ id, agent }) => useGoalChatPanel(id, agent), {
       initialProps: { id: 'goal-a', agent: 'worker-a' },
     });
     act(() => result.current.openConversation(manager));
     rerender({ id: 'goal-b', agent: 'worker-b' });
-    expect(result.current).toMatchObject({ open: false, agentId: 'worker-b' });
+    expect(result.current).toMatchObject({ open: true, agentId: 'worker-b' });
     expect(result.current.topicId).toBeUndefined();
+    act(() => result.current.setOpen(false));
     rerender({ id: 'goal-a', agent: 'worker-a' });
-    expect(result.current.open).toBe(false);
+    expect(result.current.open).toBe(true);
+    expect(result.current.topicId).toBeUndefined();
     rerender({ id: 'goal-b', agent: 'worker-b' });
     act(() => result.current.setOpen(true));
     expect(result.current).toMatchObject({ open: true, agentId: 'worker-b' });
+  });
+
+  // Sending a plan back hands the correction to the main Agent, whose turn may
+  // be the one that opens the supervision record; the panel must end up there,
+  // not on the side conversation it opened while the record did not exist.
+  it('moves to the supervision record once the awaited record exists', () => {
+    const { rerender, result } = renderHook(
+      ({ record }: { record?: typeof manager }) => useGoalChatPanel('goal-a', 'creator', record),
+      { initialProps: {} as { record?: typeof manager } },
+    );
+
+    act(() => result.current.openAwaitingRecord({ agentId: 'creator' }));
+    expect(result.current).toMatchObject({ agentId: 'creator', awaitingRecord: true, open: true });
+    expect(result.current.topicId).toBeUndefined();
+    const fallbackRequest = result.current.request;
+
+    rerender({ record: manager });
+    expect(result.current).toMatchObject({ awaitingRecord: false, open: true, ...manager });
+    expect(result.current.request).not.toBe(fallbackRequest);
+
+    // Followed once: closing the panel later does not get it reopened.
+    act(() => result.current.setOpen(false));
+    rerender({ record: manager });
+    expect(result.current.open).toBe(false);
+  });
+
+  it('does not move to a record nobody is waiting for', () => {
+    const { rerender, result } = renderHook(
+      ({ record }: { record?: typeof manager }) => useGoalChatPanel('goal-a', 'creator', record),
+      { initialProps: {} as { record?: typeof manager } },
+    );
+
+    act(() => result.current.openConversation({ agentId: 'creator' }));
+    rerender({ record: manager });
+
+    expect(result.current.topicId).toBeUndefined();
+  });
+
+  // The main Agent may never take the correction up (no turn left, goal paused):
+  // waiting gives way to the conversation the panel opened on.
+  it('stays on the opened conversation once it stops waiting', () => {
+    const { result } = renderHook(() => useGoalChatPanel('goal-a', 'creator'));
+
+    act(() => result.current.openAwaitingRecord({ agentId: 'creator' }));
+    act(() => result.current.stopAwaitingRecord());
+
+    expect(result.current).toMatchObject({ agentId: 'creator', awaitingRecord: false, open: true });
+    expect(result.current.topicId).toBeUndefined();
   });
 });

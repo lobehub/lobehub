@@ -1,13 +1,13 @@
 'use client';
 
-import { Block } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Block, Text } from '@lobehub/ui';
 import { ChevronsUpDownIcon } from 'lucide-react';
-import { type PropsWithChildren } from 'react';
 import React, { memo } from 'react';
+import { type PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { SkeletonItem } from '@/features/NavPanel/components/SkeletonList';
+import { useNavItemMetrics } from '@/features/NavPanel/density';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import SupervisorAvatar from '@/routes/(main)/group/features/GroupAvatar';
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -17,6 +17,8 @@ import SwitchPanel from './SwitchPanel';
 
 const Agent = memo<PropsWithChildren>(() => {
   const { t } = useTranslation(['chat', 'common']);
+  const { headerAvatarSize, headerChevronSize, headerLabelFontSize, headerLabelWeight } =
+    useNavItemMetrics();
 
   const { gid } = useActiveRouteParams<{ gid: string }>();
   const [isGroupsInit, groupMeta] = useAgentGroupStore((s) => [
@@ -26,7 +28,7 @@ const Agent = memo<PropsWithChildren>(() => {
 
   const displayTitle = groupMeta?.title || t('untitledGroup', { ns: 'chat' });
 
-  if (isGroupsInit) return <SkeletonItem height={32} padding={0} />;
+  if (isGroupsInit) return <SkeletonItem height={headerAvatarSize + 4} padding={0} />;
 
   return (
     <SwitchPanel>
@@ -42,18 +44,15 @@ const Agent = memo<PropsWithChildren>(() => {
           overflow: 'hidden',
         }}
       >
-        <SupervisorAvatar size={28} />
-        <Text ellipsis weight={500}>
+        <SupervisorAvatar size={headerAvatarSize} />
+        <Text ellipsis fontSize={headerLabelFontSize} weight={headerLabelWeight}>
           {displayTitle}
         </Text>
         <ActionIcon
           icon={ChevronsUpDownIcon}
-          size={{
-            blockSize: 28,
-            size: 16,
-          }}
+          size={headerChevronSize}
           style={{
-            width: 24,
+            width: headerChevronSize.blockSize,
           }}
         />
       </Block>

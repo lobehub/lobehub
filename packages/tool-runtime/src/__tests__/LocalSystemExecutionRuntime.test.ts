@@ -51,7 +51,6 @@ describe('LocalSystemExecutionRuntime.editFile', () => {
     );
     // The model reads `content`; it must still carry the real reason.
     expect(output.content).toBe('The specified old_string was not found in the file');
-    expect(output.content).not.toContain('UNKNOWN_EXEC_ERROR');
     expect((output.state as { replacements: number }).replacements).toBe(0);
   });
 
@@ -317,7 +316,6 @@ describe('LocalSystemExecutionRuntime.readFile', () => {
     const output = await runtime.readFile({ endLine: 2545, path: '/tmp/big.txt', startLine: 2500 });
 
     expect(output.content).toBe('2501 tail');
-    expect(output.content).not.toContain('(lines');
   });
 
   it('prefixes each content line with its 1-based line number', async () => {

@@ -1,7 +1,8 @@
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { environments, users } from '../../schemas';
+import { environments, users, workspaces } from '../../schemas';
 import { EnvironmentModel, normalizeProjectRepository } from '../environment';
 
 const db = await getTestDB();
@@ -61,6 +62,70 @@ describe('EnvironmentModel', () => {
     });
     expect((await model.list())[0].name).toBe('Updated resource');
     await expect(other.save({ id: env.id, name: 'Denied' })).rejects.toThrow('access denied');
+  });
+
+  describe('ensureForRepository', () => {
+    it('reuses the caller’s environment for the same repository', async () => {
+      const created = await model.ensureForRepository({
+        name: 'lobehub/lobehub',
+        repositoryUrl: 'https://github.com/lobehub/lobehub',
+      });
+      expect(created.configuration).toMatchObject({
+        kind: 'code',
+        sources: [{ kind: 'git', url: 'https://github.com/lobehub/lobehub' }],
+      });
+
+      const reused = await model.ensureForRepository({
+        name: 'anything',
+        repositoryUrl: 'git@github.com:lobehub/lobehub.git',
+      });
+      expect(reused.id).toBe(created.id);
+
+      // Another member's environment is never borrowed.
+      const theirs = await other.ensureForRepository({
+        name: 'lobehub/lobehub',
+        repositoryUrl: 'https://github.com/lobehub/lobehub',
+      });
+      expect(theirs.id).not.toBe(created.id);
+    });
+
+    // A workspace-public agent applies published environments only, so asking
+    // for one must not hand back the caller's private environment for the repo.
+    it('reuses or makes a published environment when one is asked for', async () => {
+      const workspaceId = 'environment-workspace';
+      await db.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Env Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      const scoped = new EnvironmentModel(db, userId, workspaceId);
+      const repo = { name: 'lobehub/lobehub', repositoryUrl: 'https://github.com/lobehub/lobehub' };
+
+      const privateEnv = await scoped.ensureForRepository(repo);
+      const published = await scoped.ensureForRepository({ ...repo, visibility: 'public' });
+
+      expect(privateEnv.visibility).toBe('private');
+      expect(published.id).not.toBe(privateEnv.id);
+      expect(published.visibility).toBe('public');
+      expect((await scoped.ensureForRepository({ ...repo, visibility: 'public' })).id).toBe(
+        published.id,
+      );
+
+      await db.delete(environments);
+      await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
+    });
+
+    it('suffixes the name when another environment already holds it', async () => {
+      await model.save({ name: 'lobehub/lobehub' });
+      await model.save({ name: 'lobehub/lobehub (2)' });
+
+      const env = await model.ensureForRepository({
+        name: 'lobehub/lobehub',
+        repositoryUrl: 'https://github.com/lobehub/lobehub',
+      });
+      expect(env.name).toBe('lobehub/lobehub (3)');
+    });
   });
 });
 

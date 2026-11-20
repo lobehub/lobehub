@@ -1,6 +1,6 @@
 'use client';
 
-import LabelsContent from '@/features/WorkspaceSetting/Labels';
+import LabelsContent from '@/features/TaskLabels/Settings/LabelsSettingsTabs';
 
 /**
  * Personal label registry. The same surface serves both scopes — it reads the

@@ -1,6 +1,6 @@
 import type { GoalGraphNode } from '@lobechat/types';
 import { experimentMembers } from '@lobechat/utils/goalGraph';
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
 
 import type { GoalGraphView } from '../goalGraphViewModel';
 
@@ -31,6 +31,15 @@ export const resolveMainline = (
   // host draws the plain map instead of a mainline nothing stands against.
   return mainlineContrasts(mainline, graph) ? mainline : undefined;
 };
+
+/**
+ * The mainline the map paints. A finished Goal's map reads as the plain map
+ * first: the bold path is drawn only once the user turns 主线 on in the legend.
+ */
+export const shownMainline = (
+  graph: Parameters<typeof resolveMainline>[0],
+  shown: boolean,
+): Mainline | undefined => (shown ? resolveMainline(graph) : undefined);
 
 /**
  * A card is on the mainline when it was marked, or when it is an experiment
@@ -127,19 +136,19 @@ export const edgeTone = (
  * On the light canvas the border token at a third opacity reads as intended —
  * clearly behind the mainline, still present. On the dark canvas that same
  * combination sinks into the background, so the line is lifted just enough to
- * stay legible. The mainline keeps its own bold primary line either way, so the
+ * stay legible. The mainline's lines stay at full strength either way, so the
  * hierarchy is never flattened.
  */
 export const MUTED_EDGE_OPACITY = 0.3;
 export const MUTED_EDGE_OPACITY_DARK = 0.5;
 
 /**
- * The arrowhead that ends a line, in the same tone as the line itself. An
- * off-mainline marker uses the border token on the light canvas; on the dark one
+ * The arrowhead that ends a line, in the same tone as the line itself. The
+ * mainline's lines are ordinary lines, so they share the plain marker. A plain
+ * marker uses the border token on the light canvas; on the dark one
  * that token is nearly invisible, so it borrows the lighter text token.
  */
 export const edgeMarkerColor = (tone: EdgeTone, isDarkMode: boolean): string => {
-  if (tone === 'mainline') return cssVar.colorPrimary;
   if (tone === 'detour') return cssVar.colorWarning;
   return isDarkMode ? cssVar.colorTextQuaternary : cssVar.colorBorder;
 };

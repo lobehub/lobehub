@@ -1,23 +1,31 @@
 import type { MockCase } from '@lobechat/agent-mock';
-import { Flexbox, Popover, usePopoverContext } from '@lobehub/ui';
-import { Input, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Input,
+  Popover,
+  Text,
+  usePopoverContext,
+} from '@lobehub/ui';
 import { ChevronDown } from 'lucide-react';
 import { memo, type ReactNode, useMemo, useState } from 'react';
+
+import { densityVars } from '@/styles/densityVars';
 
 import { useMockCases } from './hooks/useMockCases';
 import { useAgentMockStore } from './store/agentMockStore';
 
 const styles = createStaticStyles(({ css }) => ({
   empty: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
     text-align: center;
   `,
   group: css`
     padding-block: 8px 4px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     font-size: 11px;
     font-weight: 500;
@@ -32,7 +40,7 @@ const styles = createStaticStyles(({ css }) => ({
     justify-content: space-between;
 
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-inline-start: 1px solid transparent;
 
     font-size: 12px;

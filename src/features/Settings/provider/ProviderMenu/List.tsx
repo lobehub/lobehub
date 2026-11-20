@@ -1,6 +1,5 @@
 'use client';
 
-import { ContextMenuTrigger, Flexbox, type MenuProps } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
@@ -9,14 +8,18 @@ import {
   accordionStyles,
   AccordionTrigger,
   ActionIcon,
+  ContextMenuTrigger,
+  cx,
+  type DropdownItem,
+  Flexbox,
   Text,
-} from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+} from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { ArrowDownUpIcon } from 'lucide-react';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import { aiProviderSelectors } from '@/store/aiInfra';
 import { useAiInfraStore } from '@/store/aiInfra/store';
 import { useGlobalStore } from '@/store/global';
@@ -31,7 +34,7 @@ import { SortType, useProviderDropdownMenu } from './useDropdownMenu';
 interface ProviderSectionProps {
   action?: ReactNode;
   children: ReactNode;
-  contextMenuItems: MenuProps['items'];
+  contextMenuItems: DropdownItem[];
   title: string;
   value: string;
 }
@@ -42,35 +45,37 @@ const ProviderSection = ({
   contextMenuItems,
   title,
   value,
-}: ProviderSectionProps) => (
-  <AccordionItem value={value}>
-    <ContextMenuTrigger items={contextMenuItems}>
-      <AccordionHeader>
-        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
-          <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-            {title}
-          </Text>
-        </AccordionTrigger>
-        {action && (
-          <div
-            className={cx(
-              'accordion-action',
-              accordionStyles.action,
-              accordionStyles.actionBorderless,
-            )}
-          >
-            {action}
-          </div>
-        )}
-      </AccordionHeader>
-    </ContextMenuTrigger>
-    <AccordionPanel>
-      <Flexbox gap={4} paddingBlock={1}>
-        {children}
-      </Flexbox>
-    </AccordionPanel>
-  </AccordionItem>
-);
+}: ProviderSectionProps) => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
+
+  return (
+    <AccordionItem value={value}>
+      <ContextMenuTrigger items={contextMenuItems}>
+        <AccordionHeader>
+          <AccordionTrigger style={sectionTriggerStyle}>
+            <SectionTitle>{title}</SectionTitle>
+          </AccordionTrigger>
+          {action && (
+            <div
+              className={cx(
+                'accordion-action',
+                accordionStyles.action,
+                accordionStyles.actionBorderless,
+              )}
+            >
+              {action}
+            </div>
+          )}
+        </AccordionHeader>
+      </ContextMenuTrigger>
+      <AccordionPanel>
+        <Flexbox gap={4} paddingBlock={1}>
+          {children}
+        </Flexbox>
+      </AccordionPanel>
+    </AccordionItem>
+  );
+};
 
 const ProviderList = (props: {
   mobile?: boolean;

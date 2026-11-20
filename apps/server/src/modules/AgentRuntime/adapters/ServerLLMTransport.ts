@@ -43,7 +43,11 @@ import { RequestTrigger, toAgentShareVisitorIds } from '@lobechat/types';
 import { type AiModelConfig, ModelProvider } from 'model-bank';
 
 import { AiModelModel } from '@/database/models/aiModel';
-import { initModelRuntimeFromDB, resolveServerModel } from '@/server/modules/ModelRuntime';
+import {
+  initModelRuntimeFromDB,
+  resolveProviderResponseApiMode,
+  resolveServerModel,
+} from '@/server/modules/ModelRuntime';
 
 import type { RuntimeExecutorContext } from '../context';
 import { log, sleep } from '../executorHelpers';
@@ -286,6 +290,17 @@ export class ServerLLMTransport implements LLMTransport {
 
   private readonly executionSitePromises = new Map<string, Promise<LlmExecutionSite>>();
 
+  /**
+   * Provider-level Responses API preference (`ai_providers.config.enableResponseApi`),
+   * resolved once per provider. The run's attempts share it, exactly like
+   * {@link modelRuntimePromises} — a gateway run makes the provider call here, so
+   * without it the browser-side `apiMode` never reaches the wire.
+   */
+  private readonly responseApiModePromises = new Map<
+    string,
+    ReturnType<ServerLLMTransport['loadResponseApiMode']>
+  >();
+
   private readonly modelRuntimePromises = new Map<
     string,
     ReturnType<ServerLLMTransport['createModelRuntime']>
@@ -384,12 +399,19 @@ export class ServerLLMTransport implements LLMTransport {
         ? frozenCard.deploymentName
         : await this.resolveStreamDeploymentName(payload.provider, payload.model);
     const { provider: _provider, ...runtimePayload } = payload;
+    // Compression shares the run's provider, so it must share the same wire protocol:
+    // the browser resolved `apiMode` from the provider switch, a server run has to as well.
+    const apiMode = await this.getResponseApiMode(payload.provider);
     let content = '';
     let usage: LLMStreamResult['usage'];
     let streamError: unknown;
 
     const response = await runtime.chat(
-      { ...runtimePayload, ...(deploymentName && { deploymentName }) } as any,
+      {
+        ...runtimePayload,
+        ...(deploymentName && { deploymentName }),
+        ...(apiMode && { apiMode }),
+      } as any,
       {
         callback: {
           onCompletion: async (data: any) => {
@@ -614,6 +636,24 @@ export class ServerLLMTransport implements LLMTransport {
     );
   }
 
+  private async loadResponseApiMode(provider: string) {
+    return resolveProviderResponseApiMode(
+      this.ctx.serverDB,
+      this.ctx.userId!,
+      provider,
+      this.ctx.workspaceId,
+    );
+  }
+
+  private getResponseApiMode(provider: string) {
+    let promise = this.responseApiModePromises.get(provider);
+    if (!promise) {
+      promise = this.loadResponseApiMode(provider);
+      this.responseApiModePromises.set(provider, promise);
+    }
+    return promise;
+  }
+
   private getModelRuntime(provider: string) {
     let promise = this.modelRuntimePromises.get(provider);
     if (!promise) {
@@ -655,11 +695,13 @@ export class ServerLLMTransport implements LLMTransport {
       : frozenCard
         ? frozenCard.deploymentName
         : await this.resolveAttemptDeploymentName(input.provider, input.model);
+    const apiMode = await this.getResponseApiMode(input.provider);
     const chatPayload = {
       messages: input.context.messages as ChatStreamPayload['messages'],
       model: input.model,
       stream: resolveRequestStream(this.ctx, input.context),
       tools,
+      ...(apiMode && { apiMode }),
       ...(input.context.modelParameters as Partial<ChatStreamPayload>),
       ...(typeof input.context.preserveThinking === 'boolean' && {
         preserveThinking: input.context.preserveThinking,

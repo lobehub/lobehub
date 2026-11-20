@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { DecryptedConnector } from '@/database/models/connector';
-import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
+import {
+  ensureFreshConnectorToken,
+  ensureFreshLinkToken,
+} from '@/server/services/connector/tokens';
 
 import {
   ForbiddenWidgetCredentialsError,
@@ -13,6 +16,7 @@ import {
 
 vi.mock('@/server/services/connector/tokens', () => ({
   ensureFreshConnectorToken: vi.fn(async (connector) => connector),
+  ensureFreshLinkToken: vi.fn(async (_connector, link) => link),
 }));
 
 const connector = (overrides: Partial<DecryptedConnector>): DecryptedConnector =>
@@ -27,7 +31,8 @@ const connector = (overrides: Partial<DecryptedConnector>): DecryptedConnector =
     ...overrides,
   }) as DecryptedConnector;
 
-const modelReturning = (rows: DecryptedConnector[]) => ({
+const modelReturning = (rows: DecryptedConnector[], accounts: object[] = []) => ({
+  getLinkModel: () => ({ listByConnectorIds: async () => accounts }),
   resolveByIdentifiers: vi.fn().mockResolvedValue(rows),
   update: vi.fn(),
 });
@@ -86,7 +91,7 @@ describe('resolveWidgetEnv', () => {
 
     expect(
       await resolveWidgetEnv({} as any, personal, undefined, { connectorModel: model as any }),
-    ).toEqual({});
+    ).toEqual({ env: {}, inject: [] });
     expect(model.resolveByIdentifiers).not.toHaveBeenCalled();
   });
 
@@ -95,7 +100,7 @@ describe('resolveWidgetEnv', () => {
       connector({ credentials: { token: 'agent-tok', type: 'bearer' } }),
     ]);
 
-    const env = await resolveWidgetEnv(
+    const { env } = await resolveWidgetEnv(
       {} as any,
       { ...personal, agentId: 'agt_1' },
       [{ connector: 'github', name: 'GITHUB_TOKEN' }],
@@ -103,7 +108,7 @@ describe('resolveWidgetEnv', () => {
     );
 
     expect(env).toEqual({ GITHUB_TOKEN: 'agent-tok' });
-    expect(model.resolveByIdentifiers).toHaveBeenCalledWith(['github'], 'agt_1');
+    expect(model.resolveByIdentifiers).toHaveBeenCalledWith(['github'], { agentId: 'agt_1' });
   });
 
   it('never lets a personal credential reach a workspace widget', async () => {
@@ -142,7 +147,7 @@ describe('resolveWidgetEnv', () => {
   it('uses an API-key connector whose tool sync never ran (status disconnected)', async () => {
     const model = modelReturning([connector({ status: 'disconnected' })]);
 
-    const env = await resolveWidgetEnv(
+    const { env } = await resolveWidgetEnv(
       {} as any,
       personal,
       [{ connector: 'github', name: 'GITHUB_TOKEN' }],
@@ -171,7 +176,7 @@ describe('resolveWidgetEnv', () => {
   });
 
   it('leaves optional variables out when they cannot be resolved', async () => {
-    const env = await resolveWidgetEnv(
+    const { env } = await resolveWidgetEnv(
       {} as any,
       workspace,
       [{ connector: 'slack', name: 'SLACK_TOKEN', required: false }],
@@ -188,7 +193,7 @@ describe('resolveWidgetEnv', () => {
       }),
     ]);
 
-    const env = await resolveWidgetEnv(
+    const { env } = await resolveWidgetEnv(
       {} as any,
       personal,
       [
@@ -244,7 +249,7 @@ describe('resolveWidgetEnv', () => {
     });
 
     it('lets the workspace owner use any workspace connector', async () => {
-      const env = await resolveWidgetEnv({} as any, workspace, requirement, {
+      const { env } = await resolveWidgetEnv({} as any, workspace, requirement, {
         connectorModel: modelReturning([teammates]) as any,
         isWorkspaceOwner: vi.fn().mockResolvedValue(true),
       });
@@ -255,13 +260,64 @@ describe('resolveWidgetEnv', () => {
     it('lets the creator use their own workspace connector without an owner lookup', async () => {
       const isWorkspaceOwner = vi.fn();
 
-      const env = await resolveWidgetEnv({} as any, workspace, requirement, {
+      const { env } = await resolveWidgetEnv({} as any, workspace, requirement, {
         connectorModel: modelReturning([connector({ workspaceId: 'ws1' })]) as any,
         isWorkspaceOwner,
       });
 
       expect(env).toEqual({ GITHUB_TOKEN: 'tok' });
       expect(isWorkspaceOwner).not.toHaveBeenCalled();
+    });
+
+    // A script can read and send its environment anywhere
+    describe("an OAuth connector's accounts", () => {
+      const oauth = connector({
+        credentials: null,
+        id: 'c1',
+        oidcConfig: { clientId: 'client', scheme: 'dcr' },
+        workspaceId: 'ws1',
+      } as Partial<DecryptedConnector>);
+      const account = (id: string, userId: string, createdAt: number) => ({
+        createdAt: new Date(createdAt),
+        credentials: { accessToken: `token-${id}`, type: 'oauth2' },
+        id,
+        name: id,
+        status: 'connected',
+        tokenExpiresAt: null,
+        userConnectorId: 'c1',
+        userId,
+      });
+      const teammateFirst = [account('lnk_teammate', 'u2', 1), account('lnk_mine', 'u1', 2)];
+
+      it("never hands the creator a teammate's token, even the primary one", async () => {
+        const { env } = await resolveWidgetEnv({} as any, workspace, requirement, {
+          connectorModel: modelReturning([oauth], teammateFirst) as any,
+          isWorkspaceOwner: vi.fn().mockResolvedValue(false),
+        });
+
+        expect(env).toEqual({ GITHUB_TOKEN: 'token-lnk_mine' });
+      });
+
+      it('refuses when only teammates connected accounts, before refreshing any', async () => {
+        vi.mocked(ensureFreshLinkToken).mockClear();
+        const error = await resolveWidgetEnv({} as any, workspace, requirement, {
+          connectorModel: modelReturning([oauth], [account('lnk_teammate', 'u2', 1)]) as any,
+          isWorkspaceOwner: vi.fn().mockResolvedValue(false),
+        }).catch((e) => e);
+
+        expect(error).toBeInstanceOf(ForbiddenWidgetCredentialsError);
+        expect(error.connectors).toEqual(['github']);
+        expect(ensureFreshLinkToken).not.toHaveBeenCalled();
+      });
+
+      it("lets the workspace owner use a member's account when they have none", async () => {
+        const { env } = await resolveWidgetEnv({} as any, workspace, requirement, {
+          connectorModel: modelReturning([oauth], [account('lnk_teammate', 'u2', 1)]) as any,
+          isWorkspaceOwner: vi.fn().mockResolvedValue(true),
+        });
+
+        expect(env).toEqual({ GITHUB_TOKEN: 'token-lnk_teammate' });
+      });
     });
 
     it('injects nothing once the author no longer exists', async () => {
@@ -271,6 +327,165 @@ describe('resolveWidgetEnv', () => {
           isWorkspaceOwner: vi.fn().mockResolvedValue(true),
         }),
       ).rejects.toBeInstanceOf(ForbiddenWidgetCredentialsError);
+    });
+  });
+
+  describe('LobeHub Market connectors', () => {
+    const market = (overrides: Partial<DecryptedConnector> = {}) =>
+      connector({ credentials: null, sourceType: 'marketplace', ...overrides });
+    const github = [{ connector: 'github', name: 'GITHUB_TOKEN' }];
+    const placeholder = /^lh_ph_[\da-f]{32}$/;
+
+    it('exposes a placeholder and asks the egress proxy to inject the Market token', async () => {
+      const options = {
+        connectorModel: modelReturning([market()]) as any,
+        networkAllow: ['api.github.com'],
+      };
+
+      const first = await resolveWidgetEnv({} as any, personal, github, options);
+      const second = await resolveWidgetEnv({} as any, personal, github, options);
+
+      expect(first.env.GITHUB_TOKEN).toMatch(placeholder);
+      expect(second.env.GITHUB_TOKEN).not.toBe(first.env.GITHUB_TOKEN);
+      expect(first.inject).toEqual([
+        {
+          header: 'Authorization',
+          host: 'api.github.com',
+          prefix: 'Bearer ',
+          secretRef: { key: 'github' },
+        },
+      ]);
+    });
+
+    it('keeps a usable local secret over Market injection', async () => {
+      const result = await resolveWidgetEnv({} as any, personal, github, {
+        connectorModel: modelReturning([
+          market({ credentials: { token: 'local-tok', type: 'bearer' } }),
+        ]) as any,
+        networkAllow: ['api.github.com'],
+      });
+
+      expect(result).toEqual({ env: { GITHUB_TOKEN: 'local-tok' }, inject: [] });
+    });
+
+    it('fails, even for an optional variable, when the inject host is not allowed', async () => {
+      const error = await resolveWidgetEnv(
+        {} as any,
+        personal,
+        [{ connector: 'github', name: 'GITHUB_TOKEN', required: false }],
+        { connectorModel: modelReturning([market()]) as any, networkAllow: ['github.com'] },
+      ).catch((e) => e);
+
+      expect(error).toBeInstanceOf(MissingWidgetEnvError);
+      expect(error.message).toBe(
+        'Missing required environment: GITHUB_TOKEN (connector "github" is a LobeHub Market connector: its token is sent as the Authorization header to api.github.com; add that host to manifest.network.allow)',
+      );
+    });
+
+    it('accepts an inject host covered by a wildcard allow entry', async () => {
+      const { inject } = await resolveWidgetEnv({} as any, personal, github, {
+        connectorModel: modelReturning([market()]) as any,
+        networkAllow: ['*.github.com'],
+      });
+
+      expect(inject.map((i) => i.host)).toEqual(['api.github.com']);
+    });
+
+    it('does not treat a Composio row as a Market connector', async () => {
+      const error = await resolveWidgetEnv(
+        {} as any,
+        personal,
+        [{ connector: 'notion', name: 'NOTION_TOKEN' }],
+        {
+          connectorModel: modelReturning([
+            market({
+              identifier: 'notion',
+              metadata: { composio: { appSlug: 'NOTION' } as any },
+            }),
+          ]) as any,
+          networkAllow: ['api.notion.com'],
+        },
+      ).catch((e) => e);
+
+      expect(error).toBeInstanceOf(MissingWidgetEnvError);
+      expect(error.missing).toEqual([
+        { connector: 'notion', name: 'NOTION_TOKEN', reason: 'connector_without_secret' },
+      ]);
+    });
+
+    it('asks for an inject host when the provider has no default', async () => {
+      const error = await resolveWidgetEnv(
+        {} as any,
+        personal,
+        [{ connector: 'posthog', name: 'POSTHOG_TOKEN' }],
+        { connectorModel: modelReturning([market({ identifier: 'posthog' })]) as any },
+      ).catch((e) => e);
+
+      expect(error.message).toBe(
+        'Missing required environment: POSTHOG_TOKEN (connector "posthog" is a LobeHub Market connector with no default API host; set manifest.env[].inject.host to the API host the script calls)',
+      );
+    });
+
+    it('routes the token by the manifest override, without a prefix for other headers', async () => {
+      const { inject } = await resolveWidgetEnv(
+        {} as any,
+        personal,
+        [
+          {
+            connector: 'posthog',
+            inject: { header: 'X-Api-Key', host: ['us.posthog.com', '*.posthog.com'] },
+            name: 'POSTHOG_TOKEN',
+          },
+        ],
+        {
+          connectorModel: modelReturning([market({ identifier: 'posthog' })]) as any,
+          networkAllow: ['us.posthog.com', '*.posthog.com'],
+        },
+      );
+
+      expect(inject).toEqual([
+        { header: 'X-Api-Key', host: 'us.posthog.com', secretRef: { key: 'posthog' } },
+        { header: 'X-Api-Key', host: '*.posthog.com', secretRef: { key: 'posthog' } },
+      ]);
+    });
+
+    it('requires a wildcard inject host to be allowed verbatim', async () => {
+      const error = await resolveWidgetEnv(
+        {} as any,
+        personal,
+        [{ connector: 'github', inject: { host: '*.api.github.com' }, name: 'GITHUB_TOKEN' }],
+        { connectorModel: modelReturning([market()]) as any, networkAllow: ['*.github.com'] },
+      ).catch((e) => e);
+
+      expect(error.missing[0]).toMatchObject({
+        hosts: ['*.api.github.com'],
+        reason: 'inject_host_not_allowed',
+      });
+    });
+
+    it('injects one header per host when several variables share a connector', async () => {
+      const { env, inject } = await resolveWidgetEnv(
+        {} as any,
+        personal,
+        [
+          { connector: 'github', name: 'GITHUB_TOKEN' },
+          { connector: 'github', name: 'GH_TOKEN' },
+        ],
+        { connectorModel: modelReturning([market()]) as any, networkAllow: ['api.github.com'] },
+      );
+
+      expect(Object.keys(env)).toEqual(['GITHUB_TOKEN', 'GH_TOKEN']);
+      expect(inject).toHaveLength(1);
+    });
+
+    it("still refuses a teammate's Market connector to a non-owner author", async () => {
+      const error = await resolveWidgetEnv({} as any, workspace, github, {
+        connectorModel: modelReturning([market({ userId: 'u2', workspaceId: 'ws1' })]) as any,
+        isWorkspaceOwner: vi.fn().mockResolvedValue(false),
+        networkAllow: ['api.github.com'],
+      }).catch((e) => e);
+
+      expect(error).toBeInstanceOf(ForbiddenWidgetCredentialsError);
     });
   });
 });

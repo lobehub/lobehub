@@ -18,10 +18,16 @@ import { ConnectorModel } from '@/database/models/connector';
 import { PluginModel } from '@/database/models/plugin';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { AgentService } from '@/server/services/agent';
+import {
+  installMarketplaceMcpConnector,
+  type MarketMcpManifest,
+  type MarketplaceInstallOptions,
+} from '@/server/services/connector/marketplaceInstall';
 import { DiscoverService } from '@/server/services/discover';
 import { filterHiddenProviderModels } from '@/utils/aiProvider';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
+import { searchMarketTools } from './marketToolSearch';
 import {
   NEXT_RUN_NOTE,
   resolveOrInstallMarketPlugin,
@@ -73,6 +79,12 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
     const discoverService = new DiscoverService({
       userInfo: { userId, workspaceId: context.workspaceId },
     });
+    const installScope = { serverDB: context.serverDB, userId, workspaceId: context.workspaceId };
+    const installMarketplaceConnector = (
+      identifier: string,
+      manifest: MarketMcpManifest,
+      options?: MarketplaceInstallOptions,
+    ) => installMarketplaceMcpConnector(installScope, identifier, manifest, options);
 
     return {
       getAvailableModels: async (
@@ -164,40 +176,8 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         }
       },
 
-      searchMarketTools: async (params: SearchMarketToolsParams): Promise<ToolExecutionResult> => {
-        try {
-          const response = await discoverService.getMcpList({
-            category: params.category,
-            pageSize: params.pageSize || 10,
-            q: params.query,
-          });
-
-          const tools = response.items.map((item) => ({
-            author: item.author,
-            description: item.description,
-            identifier: item.identifier,
-            name: item.name,
-            tags: item.tags,
-          }));
-
-          let summary = `Found ${response.totalCount} tool(s) in the marketplace.`;
-          if (params.query) {
-            summary = `Found ${response.totalCount} tool(s) matching "${params.query}".`;
-          }
-
-          const toolLines = tools
-            .map((t) => `- ${t.name} (${t.identifier})${t.description ? ': ' + t.description : ''}`)
-            .join('\n');
-
-          return {
-            content: `${summary}\n\n${toolLines}`,
-            state: { query: params.query, tools, totalCount: response.totalCount },
-            success: true,
-          };
-        } catch (error) {
-          return handleError(error, 'Failed to search market tools');
-        }
-      },
+      searchMarketTools: (params: SearchMarketToolsParams): Promise<ToolExecutionResult> =>
+        searchMarketTools({ connectorModel, discoverService, pluginModel }, params),
 
       updateConfig: async (
         params: UpdateAgentConfigParams,
@@ -371,7 +351,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
 
           const { installedNow, resolution } = await resolveOrInstallMarketPlugin(
             identifier,
-            { connectorModel, discoverService, pluginModel },
+            { connectorModel, discoverService, installMarketplaceConnector, pluginModel },
             { agentId, source: 'market' },
           );
           if (resolution.status !== 'loadable')

@@ -1,4 +1,4 @@
-import { type AgentState, normalizeAgentState } from '@lobechat/agent-runtime';
+import { type AgentState, getLlmCallCount, normalizeAgentState } from '@lobechat/agent-runtime';
 import debug from 'debug';
 
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
@@ -33,7 +33,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
       existingMeta.lastActiveAt = new Date().toISOString();
       existingMeta.status = state.status;
       existingMeta.totalCost = state.cost?.total || 0;
-      existingMeta.totalSteps = state.stepCount;
+      existingMeta.totalSteps = getLlmCallCount(state);
     }
 
     log('[%s] Saved state for step %d', operationId, state.stepCount);
@@ -48,6 +48,10 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     log('[%s] Loaded state (step %d)', operationId, state.stepCount);
     // Return deep clone to prevent external modifications from affecting internal state
     return normalizeAgentState(structuredClone(state));
+  }
+
+  async loadAgentStatus(operationId: string): Promise<AgentState['status'] | null> {
+    return this.states.get(operationId)?.status ?? null;
   }
 
   async saveStepResult(operationId: string, stepResult: StepResult): Promise<void> {
@@ -85,7 +89,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
       existingMeta.lastActiveAt = new Date().toISOString();
       existingMeta.status = stepResult.newState.status;
       existingMeta.totalCost = stepResult.newState.cost?.total || 0;
-      existingMeta.totalSteps = stepResult.newState.stepCount;
+      existingMeta.totalSteps = getLlmCallCount(stepResult.newState);
     }
 
     log('[%s:%d] Saved step result', operationId, stepResult.stepIndex);
@@ -110,7 +114,6 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     data: {
       acceptsMemberRuntimeEnd?: boolean;
       agentConfig?: any;
-      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
       streamOwnerUserId?: string;
@@ -121,7 +124,6 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     const metadata: AgentOperationMetadata = {
       acceptsMemberRuntimeEnd: data.acceptsMemberRuntimeEnd,
       agentConfig: data.agentConfig,
-      visitorRedaction: data.visitorRedaction,
       createdAt: new Date().toISOString(),
       lastActiveAt: new Date().toISOString(),
       mirrorToOperationId: data.mirrorToOperationId,

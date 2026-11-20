@@ -1,5 +1,5 @@
 import type { ComfyUIKeyVault } from '@lobechat/types';
-import { createBasicAuthCredentials } from '@lobechat/utils';
+import { createBasicAuthCredentials } from '../../utils/base64';
 import debug from 'debug';
 
 import type { LobeRuntimeAI } from '../../core/BaseAI';

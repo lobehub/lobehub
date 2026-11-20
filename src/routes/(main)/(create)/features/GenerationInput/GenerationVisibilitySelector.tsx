@@ -1,7 +1,6 @@
 'use client';
 
-import { Block, Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Block, createStaticStyles, cssVar, Icon } from '@lobehub/ui';
 import { LockIcon, UsersIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +10,7 @@ import {
   getTaskVisibilityLabelKey,
 } from '@/features/AgentTasks/features/taskVisibilityLabel';
 import TaskVisibilityTag from '@/features/AgentTasks/features/TaskVisibilityTag';
+import { densityVars } from '@/styles/densityVars';
 
 interface GenerationVisibilitySelectorProps {
   disabledReason?: string;
@@ -33,7 +33,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-width: 0;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 1;
     color: ${cssVar.colorText};
     text-overflow: ellipsis;

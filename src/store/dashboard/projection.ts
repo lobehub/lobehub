@@ -4,6 +4,7 @@ import { defineReplica } from '@/libs/replica';
 import {
   type DashboardDetail,
   type DashboardListItem,
+  type DashboardProjectWidgetItem,
   dashboardService,
   type DashboardTrendSeries,
   type DashboardWidgetDetail,
@@ -19,6 +20,7 @@ import { dashboardLevelKey } from './initialState';
 export type {
   DashboardDetail,
   DashboardListItem,
+  DashboardProjectWidgetItem,
   DashboardTrendSeries,
   DashboardWidgetDetail,
   DashboardWidgetItem,
@@ -61,7 +63,7 @@ export const projectDashboardListResource = defineReplica<string, DashboardListI
 });
 
 /** Every widget of a project (placed or not), one entry per project. */
-export const projectWidgetListResource = defineReplica<string, DashboardWidgetItem[]>({
+export const projectWidgetListResource = defineReplica<string, DashboardProjectWidgetItem[]>({
   fetcher: (projectId) => dashboardService.listWidgetsByProject(projectId),
   key: (projectId) => projectId,
   name: 'projectWidgetList',

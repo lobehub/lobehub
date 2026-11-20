@@ -110,7 +110,6 @@ beforeEach(() => {
       threadLoadingIds: [],
       threadMaps: {},
       threadStartMessageId: undefined,
-      threadsInit: false,
     },
     false,
   );
@@ -118,6 +117,15 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+const firstUserMessage = (): UIChatMessage => ({
+  id: 'msg-1',
+  role: 'user',
+  content: 'first',
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+  agentId: 'test-session-id',
 });
 
 describe('thread action', () => {
@@ -143,14 +151,7 @@ describe('thread action', () => {
       const { result } = renderHook(() => useChatStore());
 
       const mainMessages: UIChatMessage[] = [
-        {
-          id: 'msg-1',
-          role: 'user',
-          content: 'first',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          agentId: 'test-session-id',
-        },
+        firstUserMessage(),
         {
           id: 'msg-2',
           role: 'assistant',
@@ -194,14 +195,7 @@ describe('thread action', () => {
       const { result } = renderHook(() => useChatStore());
 
       const mainMessages: UIChatMessage[] = [
-        {
-          id: 'msg-1',
-          role: 'user',
-          content: 'first',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          agentId: 'test-session-id',
-        },
+        firstUserMessage(),
         {
           id: 'msg-2',
           role: 'assistant',
@@ -221,14 +215,7 @@ describe('thread action', () => {
       ];
 
       const threadMessages: UIChatMessage[] = [
-        {
-          id: 'msg-1',
-          role: 'user',
-          content: 'first',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          agentId: 'test-session-id',
-        },
+        firstUserMessage(),
         {
           id: 'thread-msg-1',
           role: 'user',

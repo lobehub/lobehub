@@ -44,6 +44,59 @@ describe('buildConnectorManifest', () => {
       buildConnectorManifest({ identifier: 'x', isEnabled: true, name: 'x', tools: [] }),
     ).toBeUndefined();
   });
+
+  it('leaves out tools whose MCP Apps visibility excludes the model', () => {
+    const built = buildConnectorManifest({
+      identifier: 'dashboard',
+      isEnabled: true,
+      name: 'Dashboard',
+      tools: [
+        { metadata: { visibility: ['model', 'app'] }, permission: 'auto', toolName: 'show' },
+        { metadata: { visibility: ['app'] }, permission: 'auto', toolName: 'load_page' },
+        { metadata: { visibility: ['model'] }, permission: 'auto', toolName: 'export' },
+        { metadata: null, permission: 'auto', toolName: 'legacy' },
+      ],
+    })!;
+
+    expect(built.api.map((a) => a.name)).toEqual(['show', 'export', 'legacy']);
+    expect(built.meta.description).toBe('Dashboard connector with 3 tools');
+  });
+
+  // Auto-run and headless skip `required` but never `always`
+  it('keeps a tool its manifest made mandatory on always, whatever its permission', () => {
+    const mandatory = { mandatoryApproval: true };
+    const built = buildConnectorManifest({
+      identifier: 'cloud-mail',
+      isEnabled: true,
+      name: 'Cloud Mail',
+      tools: [
+        { metadata: mandatory, permission: 'needs_approval', toolName: 'send' },
+        { metadata: { ...mandatory, visibility: ['model'] }, permission: 'auto', toolName: 'wipe' },
+        { metadata: mandatory, permission: 'disabled', toolName: 'purge' },
+        { metadata: { mandatoryApproval: 'yes' }, permission: 'auto', toolName: 'read' },
+      ],
+    })!;
+
+    expect(built.api.map((a) => [a.name, a.humanIntervention])).toEqual([
+      ['send', 'always'],
+      ['wipe', 'always'],
+      // Execution refuses a disabled tool regardless
+      ['purge', 'required'],
+      ['read', undefined],
+    ]);
+    expect(built.api[2].description).toContain('[TOOL DISABLED]');
+  });
+
+  it('builds nothing when every tool is for views only', () => {
+    expect(
+      buildConnectorManifest({
+        identifier: 'dashboard',
+        isEnabled: true,
+        name: 'Dashboard',
+        tools: [{ metadata: { visibility: ['app'] }, permission: 'auto', toolName: 'load_page' }],
+      }),
+    ).toBeUndefined();
+  });
 });
 
 describe('patchManifestWithPermissions', () => {
@@ -64,6 +117,47 @@ describe('patchManifestWithPermissions', () => {
     expect(patched.api[0]).toMatchObject({ humanIntervention: 'required' });
     expect(patched.api[1].description).toContain('[TOOL DISABLED]');
     expect(patched.api[2]).toEqual({ name: 'c', parameters: {} });
+  });
+
+  it("never loosens a manifest's own always into a required that auto-run skips", () => {
+    const patched = patchManifestWithPermissions(
+      {
+        api: [
+          { humanIntervention: 'always', name: 'a' },
+          { humanIntervention: [{ match: { force: true }, policy: 'always' }], name: 'b' },
+          { humanIntervention: { dynamic: { default: 'never', type: 'audit' } }, name: 'c' },
+          { humanIntervention: 'required', name: 'd' },
+          { name: 'e' },
+          { humanIntervention: 'always', name: 'f' },
+        ] as { humanIntervention?: unknown; name: string }[],
+      },
+      new Map([
+        ['a', 'needs_approval'],
+        ['b', 'needs_approval'],
+        ['c', 'needs_approval'],
+        ['d', 'needs_approval'],
+        ['e', 'needs_approval'],
+        ['f', 'auto'],
+      ]),
+    );
+
+    expect(patched.api.map((a) => [a.name, a.humanIntervention])).toEqual([
+      ['a', 'always'],
+      ['b', 'always'],
+      // A dynamic config's unset `policy` is `always` on a match
+      ['c', 'always'],
+      ['d', 'required'],
+      ['e', 'required'],
+      ['f', 'always'],
+    ]);
+  });
+
+  it('reads a manifest-level always where the tool sets none, as the runtime does', () => {
+    const patched = patchManifestWithPermissions(
+      { api: [{ name: 'a' }], humanIntervention: 'always' },
+      new Map([['a', 'needs_approval']]),
+    );
+    expect(patched.api[0]).toMatchObject({ humanIntervention: 'always' });
   });
 });
 
@@ -160,5 +254,54 @@ describe('assembleManifestPool', () => {
       { identifier: 'broken', reason: 'missing `api` field (expected array)' },
     ]);
     warn.mockRestore();
+  });
+});
+
+describe('connector rows sharing an identifier', () => {
+  const tools = [{ permission: 'auto', toolName: 'create_issue' }];
+  const shared = buildConnectorManifest({
+    id: 'c-shared',
+    identifier: 'github',
+    isEnabled: true,
+    name: 'GitHub',
+    toolIdentifier: 'github',
+    tools,
+  })!;
+  const mine = buildConnectorManifest({
+    id: 'c-mine',
+    identifier: 'github',
+    isEnabled: true,
+    name: 'GitHub',
+    toolIdentifier: 'github-3f9a1c2e',
+    tools,
+  })!;
+
+  it("keys each row's manifest by its tool prefix and names the row and its connector", () => {
+    expect(mine.identifier).toBe('github-3f9a1c2e');
+    expect(mine.connector).toEqual({ id: 'c-mine', identifier: 'github' });
+    expect(mine.meta.description).toBe('GitHub connector (your own connection) with 1 tools');
+    expect(shared.meta.description).toBe('GitHub connector with 1 tools');
+  });
+
+  it('replaces the plugin and follows the exclusion of the connector they serve', () => {
+    const pool = assembleManifestPool({
+      connectors: [shared, mine],
+      installedPlugins: [manifest('github')],
+    });
+    expect(pool.manifests.map((m) => m.identifier)).toEqual(['github', 'github-3f9a1c2e']);
+    expect([...pool.connectorIdentifiers]).toEqual(['github']);
+
+    // A private-only connector still replaces the same-named plugin
+    expect(
+      assembleManifestPool({
+        connectors: [mine],
+        installedPlugins: [manifest('github')],
+      }).manifests.map((m) => m.identifier),
+    ).toEqual(['github-3f9a1c2e']);
+
+    expect(
+      assembleManifestPool({ connectors: [shared, mine] }, { excludedIdentifiers: ['github'] })
+        .manifests,
+    ).toEqual([]);
   });
 });

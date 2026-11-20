@@ -1,8 +1,10 @@
 import type * as DeviceControlModule from '@lobechat/device-control';
+import type * as DeviceGatewayModule from '@lobechat/device-gateway-client';
 import { GatewayClient } from '@lobechat/device-gateway-client';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as ApiClientModule from '../api/client';
 import type * as RefreshModule from '../auth/refresh';
 import { resolveToken } from '../auth/resolveToken';
 import type * as DeviceRegister from '../device/register';
@@ -59,13 +61,22 @@ vi.mock('../auth/resolveToken', () => ({
 vi.mock('../settings', () => ({
   addWorkspaceEnrollment: vi.fn(),
   loadOrCreateConnectionId: vi.fn().mockReturnValue('test-connection-id'),
+  loadDeviceGatewayUrl: vi.fn().mockReturnValue(undefined),
   loadSettings: vi.fn().mockReturnValue(null),
   // Default: no persisted workspace shares, so runConnect skips the restore path.
   loadWorkspaceEnrollments: vi.fn().mockReturnValue([]),
   normalizeUrl: vi.fn((url?: string) => (url ? url.replace(/\/$/, '') : undefined)),
   removeWorkspaceEnrollment: vi.fn(),
   resolveDeviceMetricsBacklogPath: vi.fn((id: string) => `/tmp/device-metrics/${id}.json`),
+  saveDeviceGatewayUrl: vi.fn(),
   saveSettings: vi.fn(),
+}));
+
+vi.mock('../api/client', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiClientModule>()),
+  createPublicLambdaClient: vi.fn(() => ({
+    config: { getGlobalConfig: { query: vi.fn().mockResolvedValue({ serverConfig: {} }) } },
+  })),
 }));
 
 vi.mock('../tools/shell', () => ({
@@ -122,7 +133,8 @@ vi.mock('@lobechat/device-control', async (importOriginal) => ({
   }),
 }));
 
-vi.mock('@lobechat/device-gateway-client', () => ({
+vi.mock('@lobechat/device-gateway-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof DeviceGatewayModule>()),
   GatewayClient: vi.fn().mockImplementation(function () {
     clientEventHandlers = {};
     lastSentSystemInfoResponse = null;

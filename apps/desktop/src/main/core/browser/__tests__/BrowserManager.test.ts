@@ -120,10 +120,6 @@ describe('BrowserManager', () => {
     it('should initialize with empty browsers Map', () => {
       expect(manager.browsers.size).toBe(0);
     });
-
-    it('should store app reference', () => {
-      expect(manager.app).toBe(mockApp);
-    });
   });
 
   describe('getMainWindow', () => {

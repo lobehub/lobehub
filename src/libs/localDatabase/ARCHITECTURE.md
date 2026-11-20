@@ -1,7 +1,12 @@
 # Local Database Architecture
 
-The local database is a runtime-neutral persistence boundary. SWR cache persistence is its first
-consumer, but the database contract and adapters do not depend on SWR.
+The local database is a runtime-neutral persistence boundary. Its consumer is the replica storage
+(`src/libs/replica/storage.ts`, collection `query-projections`), which persists the local copies
+of server data the UI paints. The database contract and adapters do not depend on any consumer.
+
+SWR does not persist anything: it keeps request state in memory only. The former SWR cache
+collection (`swr-cache`) and its `lobechat-swr-cache:*` localStorage entries are removed once
+per install by `src/spa/initialize/purgeLegacySWRCache.ts`.
 
 ```text
 Repository / feature
@@ -24,7 +29,7 @@ IndexedDB          Electron IPC
 | Layer                            | Responsibility                                                        |
 | -------------------------------- | --------------------------------------------------------------------- |
 | `src/libs/localDatabase`         | Runtime-neutral contract, adapter registration, IndexedDB adapter     |
-| `src/libs/swr/localDataCache.ts` | SWR-specific repository and cache-key semantics                       |
+| `src/libs/replica/storage.ts`    | Replica row storage (`query-projections`) and its key semantics       |
 | `apps/desktop/src/main/database` | SQLite client, Drizzle schema, and migration execution                |
 | `LocalDatabaseSrv`               | Collection-scoped reads and writes expressed through Drizzle builders |
 | Electron IPC                     | Serialization and process-boundary transport only                     |

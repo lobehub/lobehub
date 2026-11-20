@@ -1,5 +1,4 @@
-import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
-import { ChatErrorType } from '@lobechat/types';
+import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 
 /**
  * Error types that `ErrorMessageExtra` renders with a dedicated card instead of the
@@ -20,6 +19,7 @@ export const DEDICATED_ERROR_CARD_TYPES = [
   AgentRuntimeErrorType.OllamaServiceUnavailable,
   AgentRuntimeErrorType.OllamaBizError,
   AgentRuntimeErrorType.ExceededContextWindow,
+  AgentRuntimeErrorType.RequestBodyTooLarge,
   AgentRuntimeErrorType.NoOpenAIAPIKey,
 ] as const;
 

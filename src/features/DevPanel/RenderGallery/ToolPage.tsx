@@ -1,9 +1,9 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Tabs, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Tabs, Tag, Text } from '@lobehub/ui';
 import { useEffect, useRef, useState } from 'react';
+
+import { densityVars } from '@/styles/densityVars';
 
 import ApiList from './ApiList';
 import { LIFECYCLE_MODE_LABEL, LIFECYCLE_MODES, type LifecycleMode } from './lifecycleMode';
@@ -69,7 +69,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   header: css`
     gap: 8px;
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   modeBar: css`
@@ -77,12 +77,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     z-index: 2;
     inset-block-start: 0;
 
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     align-items: center;
 
     min-height: 44px;
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     background: ${cssVar.colorBgContainer};

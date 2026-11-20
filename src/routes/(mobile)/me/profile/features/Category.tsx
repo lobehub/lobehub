@@ -4,8 +4,8 @@ import { ChartColumnBigIcon, LogOut, UserCircle } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type CellProps } from '@/components/Cell';
 import Cell from '@/components/Cell';
+import { type CellProps } from '@/components/Cell';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { ProfileTabs } from '@/store/global/initialState';
 import { useUserStore } from '@/store/user';

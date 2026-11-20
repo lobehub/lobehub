@@ -16,7 +16,7 @@ import {
 import { isRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { supportsConversationalVideoEdit } from 'model-bank/standardParameters';
 import { z } from 'zod';
 
@@ -25,7 +25,6 @@ import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPer
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
 import { chargeBeforeGenerate } from '@/business/server/video-generation/chargeBeforeGenerate';
-import { getVideoFreeQuota } from '@/business/server/video-generation/getVideoFreeQuota';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
 import { GenerationTopicModel } from '@/database/models/generationTopic';
@@ -38,6 +37,7 @@ import {
   type NewGenerationBatch,
 } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
+import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -58,8 +58,49 @@ const getVideoGenerationRoute = (value: unknown): VideoGenerationRoute | undefin
 
   return {
     apiType: value.apiType,
+    ...(typeof value.attemptId === 'string' ? { attemptId: value.attemptId } : {}),
     ...(typeof value.channelId === 'string' ? { channelId: value.channelId } : {}),
     ...(typeof value.routerId === 'string' ? { routerId: value.routerId } : {}),
+  };
+};
+
+type ChargeErrorBatch = NonNullable<Awaited<ReturnType<typeof chargeBeforeGenerate>>['errorBatch']>;
+
+/**
+ * An error batch (insufficient budget, frozen workspace, …) links each generation to
+ * an errored async task after inserting it, so the returned rows may lack
+ * `asyncTaskId`. Callers such as the generateVideo tool need that id to read the
+ * real failure reason, so fill it in from the persisted rows.
+ */
+const withErrorBatchAsyncTaskIds = async (
+  db: LobeChatDatabase,
+  userId: string,
+  errorBatch: ChargeErrorBatch,
+): Promise<ChargeErrorBatch> => {
+  const items = errorBatch.data?.generations;
+  if (!Array.isArray(items)) return errorBatch;
+
+  const missingIds = items
+    .filter((item) => !item.asyncTaskId && typeof item.id === 'string')
+    .map((item) => item.id as string);
+  if (missingIds.length === 0) return errorBatch;
+
+  const rows = await db.query.generations.findMany({
+    columns: { asyncTaskId: true, id: true },
+    where: and(inArray(generations.id, missingIds), eq(generations.userId, userId)),
+  });
+  const taskIdByGenerationId = new Map(rows.map((row) => [row.id, row.asyncTaskId]));
+
+  return {
+    ...errorBatch,
+    data: {
+      ...errorBatch.data,
+      generations: items.map((item) =>
+        item.asyncTaskId || !item.id
+          ? item
+          : { ...item, asyncTaskId: taskIdByGenerationId.get(item.id) ?? item.asyncTaskId },
+      ),
+    },
   };
 };
 
@@ -293,7 +334,7 @@ export const videoRouter = router({
         userId,
         workspaceId: wsId,
       });
-      if (errorBatch) return errorBatch;
+      if (errorBatch) return withErrorBatchAsyncTaskIds(serverDB, userId, errorBatch);
 
       // Generate a one-time token for webhook callback verification
       const webhookToken = randomBytes(32).toString('hex');
@@ -544,11 +585,13 @@ export const videoRouter = router({
       }));
     }),
 
+  /**
+   * @deprecated The daily free video quota is retired. Kept for released desktop builds and
+   * web pages loaded before the removal, which still query it; always reports no quota.
+   */
   getVideoFreeQuota: authedProcedure
     .input(z.object({ model: z.string() }))
-    .query(async ({ ctx, input }) => {
-      return getVideoFreeQuota(ctx.userId, input.model);
-    }),
+    .query((): { limit: number; used: number } | null => null),
 });
 
 export type VideoRouter = typeof videoRouter;

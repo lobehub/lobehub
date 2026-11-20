@@ -1,14 +1,17 @@
 import type React from 'react';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import {
+  filterSkillItems,
   type SkillListItem,
   SkillSection,
   SkillsList,
   useProjectSkills,
 } from '@/features/SkillsList';
+
+import { useSelectSkill } from './useSelectSkill';
 
 const handleSkillDragStart = (item: SkillListItem, event: React.DragEvent) => {
   startSkillDrag(event, {
@@ -26,22 +29,28 @@ interface DeviceLevelSkillsProps {
    * collapsed to a single visible source and wants the list rendered flat.
    */
   hideHeader?: boolean;
+  /** Only render skills matching this query. */
+  searchQuery?: string;
   workingDirectory: string;
 }
 
 const DeviceLevelSkills = memo<DeviceLevelSkillsProps>(
-  ({ deviceId, hideHeader, workingDirectory }) => {
+  ({ deviceId, hideHeader, searchQuery = '', workingDirectory }) => {
     const { t } = useTranslation('chat');
-    const { deviceItems, error, getRowActions, mutate, onOpenFile, onOpenSkill } = useProjectSkills(
-      workingDirectory,
-      deviceId,
+    const onSelectSkill = useSelectSkill('projectSkill');
+    const { deviceItems, error, mutate } = useProjectSkills(workingDirectory, deviceId);
+
+    const items = useMemo(
+      () => filterSkillItems(deviceItems, searchQuery),
+      [deviceItems, searchQuery],
     );
 
     if (deviceItems.length === 0) {
       if (!error) return null;
-      if (hideHeader) return <SkillSection isEmpty error={error} onRetry={mutate} />;
+      if (hideHeader) return <SkillSection compact isEmpty error={error} onRetry={mutate} />;
       return (
         <SkillSection
+          compact
           isEmpty
           error={error}
           sectionHeader={{ title: t('workingPanel.skills.section.device') }}
@@ -50,12 +59,13 @@ const DeviceLevelSkills = memo<DeviceLevelSkillsProps>(
       );
     }
 
+    if (items.length === 0) return null;
+
     const list = (
       <SkillsList
-        getRowActions={getRowActions}
-        items={deviceItems}
-        onOpenFile={onOpenFile}
-        onOpenSkill={onOpenSkill}
+        compact
+        items={items}
+        onSelectSkill={onSelectSkill}
         onSkillDragStart={handleSkillDragStart}
       />
     );
@@ -64,8 +74,9 @@ const DeviceLevelSkills = memo<DeviceLevelSkillsProps>(
 
     return (
       <SkillSection
+        compact
         sectionHeader={{
-          count: deviceItems.length,
+          count: items.length,
           title: t('workingPanel.skills.section.device'),
         }}
       >

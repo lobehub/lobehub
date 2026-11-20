@@ -6,69 +6,53 @@ const sample = (locale?: string, times = 200) =>
   Array.from({ length: times }, () => randomAgentName(locale));
 
 describe('randomAgentName', () => {
-  it('returns a Chinese name of 2–4 characters for zh locales', () => {
-    for (const locale of ['zh-CN', 'zh-TW', 'zh']) {
-      for (const name of sample(locale, 50)) {
-        expect(name).toMatch(/^\p{Script=Han}{2,4}$/u);
+  it('returns a two-character Chinese name for zh locales', () => {
+    for (const locale of ['zh-CN', 'zh-TW', 'zh-HK', 'zh']) {
+      for (const name of sample(locale, 100)) {
+        expect(name).toMatch(/^\p{Script=Han}{2}$/u);
       }
     }
   });
 
-  it('produces two, three and four character Chinese names over enough draws', () => {
-    const lengths = new Set(sample('zh-CN', 500).map((name) => name.length));
+  it('mixes "小X", reduplicated and composed Chinese names', () => {
+    const names = sample('zh-CN', 1000);
 
-    expect(lengths).toContain(2);
-    expect(lengths).toContain(3);
-    expect(lengths).toContain(4);
+    expect(names.some((name) => name.startsWith('小'))).toBe(true);
+    expect(names.some((name) => name[0] === name[1])).toBe(true);
+    expect(names.some((name) => !name.startsWith('小') && name[0] !== name[1])).toBe(true);
   });
 
-  it('never composes a double given name that reads as an everyday word', () => {
-    // Pair-level blocks: composeDouble rejects these pairs, so they cannot
-    // appear anywhere in a name — bare, after a surname, or after a compound
-    // surname — hence the substring assertion.
-    // prettier-ignore
-    const blockedHans = [
-      '明白', '晚安', '安眠', '雪白', '青白', '风月', '风雨', '云雨', '望风', '望远',
-      '清华', '昭然', '雪山', '梅雨', '朝阳', '新华', '雅安', '洛阳', '宁夏', '新竹',
-      '永和', '云烟', '风烟', '竹笙', '夕阳', '祈雨', '文言', '碧玉', '牧歌', '时辰',
-      '岁月', '素颜', '新颖', '明星', '风雪', '文墨', '春梦', '鹿晗',
-    ];
-    // prettier-ignore
-    const blockedHant = [
-      '明白', '晚安', '安眠', '雪白', '青白', '風月', '風雨', '雲雨', '望風', '望遠',
-      '清華', '昭然', '雪山', '梅雨', '朝陽', '新華', '雅安', '洛陽', '寧夏', '新竹',
-      '永和', '雲煙', '風煙', '竹笙', '夕陽', '祈雨', '文言', '碧玉', '牧歌', '時辰',
-      '歲月', '素顏', '新穎', '明星', '風雪', '文墨', '春夢', '鹿晗',
-    ];
-
-    for (const name of sample('zh-CN', 2000)) {
-      for (const word of blockedHans) expect(name).not.toContain(word);
-    }
-    for (const name of sample('zh-TW', 2000)) {
-      for (const word of blockedHant) expect(name).not.toContain(word);
-    }
+  it('draws Chinese names from a space wide enough to rarely repeat', () => {
+    // A flat pool of ~100 names repeated within a few dozen agents; the
+    // composed shape is what keeps a long sidebar varied.
+    expect(new Set(sample('zh-CN', 2000)).size).toBeGreaterThan(1000);
+    expect(new Set(sample('zh-TW', 2000)).size).toBeGreaterThan(1000);
   });
 
-  it('never returns a full name that collides with a brand or iconic person', () => {
-    // Full-name blocks are exact-match only — "马云汐" is a legitimate draw
-    // even though it starts with a blocked name.
-    const blockedFull = new Set(['马云', '李宁', '周瑜', '馬雲', '李寧']);
+  it('never returns an assistant brand, an everyday word or a place name', () => {
+    // prettier-ignore
+    const blocked = new Set([
+      '小爱', '小度', '小艺', '小冰', '小布', '小娜', '小微', '小蜜', '小米', '小智',
+      '小心', '小时', '小说', '小姐', '小三', '小学', '小人', '小吃',
+      '明白', '晚安', '可乐', '语言', '明星', '南宁', '洛阳', '慕容', '荷兰', '乐意',
+      '小愛', '小藝', '小說', '小時', '小學', '語言', '南寧', '洛陽', '荷蘭', '樂意',
+    ]);
 
     for (const locale of ['zh-CN', 'zh-TW']) {
-      for (const name of sample(locale, 3000)) {
-        expect(blockedFull.has(name)).toBe(false);
+      for (const name of sample(locale, 5000)) {
+        expect(blocked.has(name), name).toBe(false);
       }
     }
   });
 
   it('uses traditional script for zh-TW and simplified for zh-CN', () => {
-    const simplifiedOnly = /[诺宁欢云轩远静晓]/;
-    const traditionalOnly = /[諾寧歡雲軒遠靜曉]/;
+    const simplifiedOnly = /[诺宁乐云满远树圆鸥书诗语听鹤栀兰阳晓锦忆仪桥静颖莹]/;
+    const traditionalOnly = /[諾寧樂雲滿遠樹圓鷗書詩語聽鶴梔蘭陽曉錦憶儀橋靜穎瑩]/;
 
-    for (const name of sample('zh-TW', 300)) {
+    for (const name of sample('zh-TW', 3000)) {
       expect(name).not.toMatch(simplifiedOnly);
     }
-    for (const name of sample('zh-CN', 300)) {
+    for (const name of sample('zh-CN', 3000)) {
       expect(name).not.toMatch(traditionalOnly);
     }
   });
@@ -122,7 +106,7 @@ describe('randomAgentName', () => {
       }
     });
 
-    it('avoids excluded names for composed Chinese names', () => {
+    it('avoids excluded names for Chinese names', () => {
       const taken = Array.from({ length: 20 }, () => randomAgentName('zh-CN'));
 
       for (let i = 0; i < 200; i++) {

@@ -1,51 +1,62 @@
 'use client';
 
-import { DraggablePanel } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
-import { memo } from 'react';
+import { DraggablePanel } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { lazy, memo, Suspense, useState } from 'react';
 
 import { CHAT_PORTAL_TOOL_UI_WIDTH } from '@/const/layoutTokens';
-import { PortalContent } from '@/features/Portal/router';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
-const styles = createStaticStyles(({ cssVar, css }) => ({
-  body: css`
-    overflow: hidden;
-    display: flex;
-    flex: 1;
-    flex-direction: column;
+import ShareLoading from '../../shell/ShareLoading';
 
-    height: 0;
-    padding-block-end: 12px;
-  `,
-  content: css`
-    position: relative;
+const styles = stylex.create({
+  body: {
+    overflow: 'hidden',
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    height: '0',
+    paddingBlockEnd: '12px',
+  },
+  content: {
+    position: 'relative',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    minHeight: '100%',
+    maxHeight: '100%',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  drawer: {
+    zIndex: 10,
+    height: '100%',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    height: 100%;
-    min-height: 100%;
-    max-height: 100%;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  drawer: css`
-    z-index: 10;
-    height: 100%;
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+// Every portal view (artifacts, documents, tasks, goals…) ships with the router,
+// about 1MB gzipped, for a panel that starts collapsed. Loading it on first open
+// keeps it off the download the transcript waits for.
+const PortalContent = lazy(() =>
+  import('@/features/Portal/router').then((module) => ({ default: module.PortalContent })),
+);
 
 const SharePortal = memo(() => {
   const showPortal = useChatStore(chatPortalSelectors.showPortal);
+  // Latched: once opened the content stays mounted, as it always has, so
+  // closing the panel animates out with its view instead of an empty body.
+  const [opened, setOpened] = useState(showPortal);
+  if (showPortal && !opened) setOpened(true);
 
   return (
     <DraggablePanel
-      className={styles.drawer}
-      classNames={{ content: styles.content }}
+      className={stylex.props(styles.drawer).className}
+      classNames={{ content: stylex.props(styles.content).className }}
       defaultSize={{ width: CHAT_PORTAL_TOOL_UI_WIDTH }}
       expand={showPortal}
       expandable={false}
@@ -55,7 +66,11 @@ const SharePortal = memo(() => {
       showHandleWideArea={false}
       size={{ height: '100%', width: CHAT_PORTAL_TOOL_UI_WIDTH }}
     >
-      <PortalContent renderBody={(body) => <div className={styles.body}>{body}</div>} />
+      {opened && (
+        <Suspense fallback={<ShareLoading />}>
+          <PortalContent renderBody={(body) => <div {...stylex.props(styles.body)}>{body}</div>} />
+        </Suspense>
+      )}
     </DraggablePanel>
   );
 });

@@ -1,8 +1,7 @@
-import { useClientDataSWR } from '@/libs/swr';
-import { homeKeys } from '@/libs/swr/keys';
-import { homeService } from '@/services/home';
+import { useHomeStore } from '@/store/home';
+import { homeInboxSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
-import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { authSelectors } from '@/store/user/selectors';
 
 interface HomeDailyBriefPair {
   hint: string;
@@ -16,18 +15,18 @@ interface UseHomeDailyBriefResult {
   pairs: HomeDailyBriefPair[];
 }
 
+const EMPTY: HomeDailyBriefPair[] = [];
+
+/**
+ * The brief is a replica partitioned by the cache scope (user + workspace), so
+ * an account switch never serves the previous user's pairs, and a reload shows
+ * the last pairs on the first frame while the server confirms them.
+ */
 export const useHomeDailyBrief = (): UseHomeDailyBriefResult => {
   const isLogin = useUserStore(authSelectors.isLogin);
-  const userId = useUserStore(userProfileSelectors.userId);
 
-  // Scope the SWR key by userId so an account switch within the same SPA
-  // session (or signing in as a different user after sign-out) refetches
-  // and never serves the previous user's cached pairs from this slot.
-  const { data } = useClientDataSWR(isLogin && userId ? homeKeys.dailyBrief(userId) : null, () =>
-    homeService.getDailyBrief(),
-  );
-
-  const pairs = data?.pairs ?? [];
+  useHomeStore((s) => s.useFetchHomeDailyBrief)(isLogin);
+  const pairs = useHomeStore(homeInboxSelectors.dailyBrief)?.pairs ?? EMPTY;
 
   return {
     currentPair: pairs[0],

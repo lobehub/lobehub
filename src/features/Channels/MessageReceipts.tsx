@@ -1,0 +1,184 @@
+import type { ChannelDetail, ChannelPublicJob, ChannelPublicMessage } from '@lobechat/types';
+import { ChatErrorType } from '@lobechat/types';
+import { Button, Flexbox, Text, usePopoverContext } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
+import { ExternalLink, Square } from 'lucide-react';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import AgentAvatar from '@/components/AgentAvatar';
+import AsyncError from '@/components/AsyncError';
+import { channelActions } from '@/store/channel';
+
+import { ChannelStatus } from './ChannelStatus';
+import { channelJobStatus, channelJobTone, isChannelJobActive } from './jobStatus';
+import { memberAvatar, memberName } from './memberName';
+import { statusStyles, styles } from './styles';
+import { useOpenReplyAgent } from './useOpenReplyAgent';
+
+/** Failure categories with their own text; a shared Agent's visitor learns why only from these. */
+const RECEIPT_ERROR_KEYS = {
+  [ChatErrorType.ShareHeteroDeviceUnavailable]: 'receipt.errorShareHeteroDevice',
+  [ChatErrorType.ShareHeterogeneousAgentUnsupported]: 'receipt.errorShareHeteroUnsupported',
+  [ChatErrorType.ShareMessageLimitExceeded]: 'receipt.errorShareMessageLimit',
+  [ChatErrorType.SharePromptTooLong]: 'receipt.errorSharePromptTooLong',
+  [ChatErrorType.ShareSpendLimitExceeded]: 'receipt.errorShareSpendLimit',
+} as const;
+
+type ReceiptErrorKey =
+  (typeof RECEIPT_ERROR_KEYS)[keyof typeof RECEIPT_ERROR_KEYS] | 'receipt.errorUnavailable';
+
+/** The viewer-language text for a known failure category, if it is one. */
+export const receiptErrorKey = (errorType?: string | null) =>
+  errorType && Object.hasOwn(RECEIPT_ERROR_KEYS, errorType)
+    ? RECEIPT_ERROR_KEYS[errorType as keyof typeof RECEIPT_ERROR_KEYS]
+    : undefined;
+
+/**
+ * The failure reason under a reply. A known category reads in the viewer's language: a shared
+ * Agent's visitor gets no raw text, so the category is all that explains a share's refusal.
+ */
+export const receiptErrorText = (
+  job: Pick<ChannelPublicJob, 'errorMessage' | 'errorType'>,
+  t: (key: ReceiptErrorKey) => string,
+) => {
+  const key = receiptErrorKey(job.errorType);
+  return key ? t(key) : job.errorMessage?.trim() || t('receipt.errorUnavailable');
+};
+
+export interface ReplyEntry {
+  agentId?: string | null;
+  avatar?: string;
+  job: ChannelPublicJob;
+  name: string;
+}
+
+/** Names and avatars for jobs, from the members that own them. */
+export const replyEntries = (
+  detail: ChannelDetail,
+  jobs: ChannelPublicJob[],
+  fallbackName: string,
+): ReplyEntry[] =>
+  jobs.map((job) => {
+    const member = (detail.members ?? []).find((entry) => entry.id === job.memberId);
+    return {
+      agentId: member?.agentId,
+      avatar: memberAvatar(member),
+      job,
+      name: memberName(member, fallbackName),
+    };
+  });
+
+/** One reply: its state, why it failed, and how to stop it or open its Agent. */
+export function ReplyDetail({
+  channelId,
+  entry: { agentId, avatar, job, name },
+}: {
+  channelId: string;
+  entry: ReplyEntry;
+}) {
+  const { t } = useTranslation('channel');
+  const { close } = usePopoverContext();
+  const openAgent = useOpenReplyAgent(agentId, close);
+  const [stopping, setStopping] = useState(false);
+  const [error, setError] = useState<unknown>();
+  const stop = async () => {
+    setStopping(true);
+    setError(undefined);
+    try {
+      await channelActions.stop(channelId, { jobId: job.id });
+    } catch (cause) {
+      console.error('Failed to stop Channel reply', cause);
+      setError(cause);
+    } finally {
+      setStopping(false);
+    }
+  };
+  return (
+    <Flexbox gap={8}>
+      <Flexbox horizontal align="center" gap={8}>
+        <AgentAvatar
+          agentId={agentId}
+          avatar={avatar}
+          name={name}
+          shape={'circle'}
+          size={24}
+          title={name}
+        />
+        <Flexbox flex={1} style={{ minWidth: 0 }}>
+          {agentId ? (
+            <Button
+              aria-label={t('openAgentNamed', { name })}
+              icon={ExternalLink}
+              iconPosition="end"
+              outdent="start"
+              size="small"
+              style={{ alignSelf: 'flex-start', maxWidth: '100%', minWidth: 0 }}
+              title={t('openAgentNamed', { name })}
+              type="text"
+              onClick={openAgent}
+            >
+              <Text ellipsis as="span" style={{ minWidth: 0 }} weight={500}>
+                {name}
+              </Text>
+            </Button>
+          ) : (
+            <Text ellipsis weight={500}>
+              {name}
+            </Text>
+          )}
+        </Flexbox>
+        <ChannelStatus label={t(channelJobStatus(job))} tone={channelJobTone(job)} />
+      </Flexbox>
+      {job.worktreeBranch && (
+        <Text ellipsis fontSize={12} title={job.worktreeBranch} type="secondary">
+          {t('receipt.worktree', { branch: job.worktreeBranch })}
+        </Text>
+      )}
+      {job.status === 'failed' && (
+        <Flexbox gap={4}>
+          <Text weight={500}>{t('receipt.errorReason')}</Text>
+          <Text style={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
+            {receiptErrorText(job, t)}
+          </Text>
+        </Flexbox>
+      )}
+      {job.canStop && isChannelJobActive(job) && (
+        <Button
+          danger
+          icon={Square}
+          loading={stopping}
+          size="small"
+          style={{ alignSelf: 'flex-start' }}
+          type="text"
+          onClick={() => void stop()}
+        >
+          {t('stopReply')}
+        </Button>
+      )}
+      {error !== undefined && <AsyncError error={error} variant="inline" />}
+    </Flexbox>
+  );
+}
+
+/** Replies listed one after another, as popover content. */
+export function ReplyList({ channelId, entries }: { channelId: string; entries: ReplyEntry[] }) {
+  return (
+    <Flexbox gap={16} {...stylex.props(statusStyles.popover, statusStyles.replyList)}>
+      {entries.map((entry) => (
+        <ReplyDetail channelId={channelId} entry={entry} key={entry.job.id} />
+      ))}
+    </Flexbox>
+  );
+}
+
+/** A message that no Agent picked up; the routing outcome stays with the message. */
+export function MessageRoutingStatus({ message }: { message: ChannelPublicMessage }) {
+  const { t } = useTranslation('channel');
+  if (message.routingStatus !== 'unassigned') return null;
+  return (
+    <span role="status" {...stylex.props(statusStyles.receipts, styles.muted)}>
+      {t('routing.unassigned')}
+    </span>
+  );
+}

@@ -7,6 +7,7 @@ import { oneShotRelay } from '@/services/llmRelay';
 import { useUserStore } from '@/store/user';
 
 import { expertiseService } from './expertise';
+import { goalService } from './goal';
 import { taskService } from './task';
 import { verifyService } from './verify';
 
@@ -20,8 +21,13 @@ vi.mock('@/libs/trpc/client', async (importOriginal) => ({
       distillRules: { mutate: vi.fn(async () => ({})) },
       judgeRuleDirections: { mutate: vi.fn(async () => ({ judged: 0 })) },
     },
+    goal: {
+      advance: { mutate: vi.fn(async () => ({ data: {} })) },
+      tick: { mutate: vi.fn(async () => ({ data: {} })) },
+    },
     task: {
       analyzeIntent: { mutate: vi.fn(async () => ({})) },
+      runReview: { mutate: vi.fn(async () => ({ data: {} })) },
       synthesizeInstruction: { mutate: vi.fn(async () => ({})) },
     },
     verify: {
@@ -34,6 +40,7 @@ vi.mock('@/libs/trpc/client', async (importOriginal) => ({
   },
 }));
 vi.mock('@/services/llmRelay', () => ({
+  buildLlmExecutorDeclaration: vi.fn(() => ({ providers: ['ollama', 'lmstudio'] })),
   oneShotRelay: { run: vi.fn() },
 }));
 
@@ -93,6 +100,25 @@ describe('system-agent browser entries and the one-shot relay', () => {
         params,
         RELAY_OPTIONS,
       );
+    });
+
+    // `goal.advance` / `goal.tick` decompose and explore the goal inline, on
+    // the goal model, inside the request.
+    it('goal advance', async () => {
+      await goalService.advance('goal-1');
+
+      expect(oneShotRelay.run).toHaveBeenCalledWith('ollama', expect.any(Function));
+      expect(lambdaClient.goal.advance.mutate).toHaveBeenCalledWith(
+        { id: 'goal-1' },
+        RELAY_OPTIONS,
+      );
+    });
+
+    it('goal tick', async () => {
+      await goalService.tick('goal-1');
+
+      expect(oneShotRelay.run).toHaveBeenCalledWith('ollama', expect.any(Function));
+      expect(lambdaClient.goal.tick.mutate).toHaveBeenCalledWith({ id: 'goal-1' }, RELAY_OPTIONS);
     });
 
     it('generateGoalPlan', async () => {
@@ -197,6 +223,21 @@ describe('system-agent browser entries and the one-shot relay', () => {
 
       expect(oneShotRelay.run).toHaveBeenCalledWith('ollama', expect.any(Function));
       expect(lambdaClient.verify.executeVerify.mutate).toHaveBeenCalledWith(params, RELAY_OPTIONS);
+    });
+  });
+
+  describe('task review', () => {
+    // The judge model is resolved on the server (task judge, else the topic
+    // model), so any device provider this tab runs is reason to stand by.
+    it('runReview stands by for every device provider this tab runs', async () => {
+      await taskService.runReview('task-1', { content: 'done' });
+
+      const providers = vi.mocked(oneShotRelay.run).mock.calls[0][0] as () => string[];
+      expect(providers()).toEqual(['ollama', 'lmstudio']);
+      expect(lambdaClient.task.runReview.mutate).toHaveBeenCalledWith(
+        { content: 'done', id: 'task-1' },
+        RELAY_OPTIONS,
+      );
     });
   });
 });

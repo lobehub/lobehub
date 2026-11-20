@@ -7,6 +7,9 @@ import { WindowsMenu } from './windows';
 
 // Mock Electron modules
 vi.mock('electron', () => ({
+  BrowserWindow: class BrowserWindow {
+    static getFocusedWindow = vi.fn();
+  },
   Menu: {
     buildFromTemplate: vi.fn((template) => ({ template })),
     setApplicationMenu: vi.fn(),
@@ -150,6 +153,20 @@ describe('WindowsMenu', () => {
       expect(fileMenu.id).toBe('app-0');
       expect(newTab.id).toBe('app-0-1');
     });
+
+    it('reopens the last closed tab from File > Reopen Closed Tab (Ctrl+Shift+T)', () => {
+      windowsMenu.buildAndSetAppMenu();
+
+      const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
+      const fileMenu = template.find((item: any) => item.label === 'File');
+      const reopenItem = fileMenu.submenu.find((item: any) => item.accelerator === 'Ctrl+Shift+T');
+
+      expect(reopenItem).toBeDefined();
+      reopenItem.click(undefined, null);
+      const mainWindow = (mockApp.browserManager.getMainWindow as any).mock.results.at(-1).value;
+      expect(mainWindow.show).toHaveBeenCalled();
+      expect(mainWindow.broadcast).toHaveBeenCalledWith('reopenClosedTab');
+    });
   });
 
   describe('buildContextMenu', () => {
@@ -179,6 +196,42 @@ describe('WindowsMenu', () => {
       windowsMenu.buildContextMenu('editor', data);
 
       expect(Menu.buildFromTemplate).toHaveBeenCalled();
+    });
+  });
+
+  describe('image context menu', () => {
+    it.each(['default', 'chat'])('copies the right-clicked image itself in the %s menu', (type) => {
+      const imageData = {
+        mediaType: 'image' as const,
+        srcURL: 'https://example.com/a.png',
+        x: 12,
+        y: 34,
+      };
+      windowsMenu.buildContextMenu(type, imageData);
+
+      const template = (Menu.buildFromTemplate as any).mock.calls.at(-1)[0];
+      const copyImage = template.find((item: any) => item.label === 'context.copyImage');
+      expect(copyImage).toBeDefined();
+
+      const copyImageAt = vi.fn();
+      const win = { isDestroyed: () => false, webContents: { copyImageAt } };
+      copyImage.click({}, win);
+
+      expect(copyImageAt).toHaveBeenCalledWith(12, 34);
+    });
+
+    it('disables Copy Image when the image has no decoded contents', () => {
+      windowsMenu.buildContextMenu('default', {
+        hasImageContents: false,
+        mediaType: 'image',
+        srcURL: 'https://example.com/broken.png',
+        x: 12,
+        y: 34,
+      });
+
+      const template = (Menu.buildFromTemplate as any).mock.calls.at(-1)[0];
+      const copyImage = template.find((item: any) => item.label === 'context.copyImage');
+      expect(copyImage.enabled).toBe(false);
     });
   });
 
@@ -271,7 +324,7 @@ describe('WindowsMenu', () => {
 
       expect(githubItem).toBeDefined();
       await githubItem.click();
-      expect(shell.openExternal).toHaveBeenCalledWith('https://github.com/lobehub/lobe-chat');
+      expect(shell.openExternal).toHaveBeenCalledWith('https://github.com/lobehub/lobehub');
     });
 
     it('should handle tray open click', () => {

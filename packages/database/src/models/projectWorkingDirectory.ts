@@ -45,7 +45,7 @@ export class ProjectWorkingDirectoryModel {
     return { userId: this.userId, workspaceId: this.workspaceId };
   }
 
-  private async project(id: string, write = false) {
+  private async project(id: string) {
     const [row] = await this.db
       .select()
       .from(projects)
@@ -54,7 +54,6 @@ export class ProjectWorkingDirectoryModel {
           eq(projects.id, id),
           buildWorkspaceWhere(this.scope(), projects),
           isNull(projects.deletedAt),
-          write ? eq(projects.userId, this.userId) : undefined,
         ),
       );
     if (!row) throw new Error('Project not found or access denied');
@@ -116,6 +115,9 @@ export class ProjectWorkingDirectoryModel {
         platform: devices.platform,
         path: sql<string>`coalesce(${environmentInstances.workingDirectory}, ${projectWorkingDirectories.path})`,
         permission: projectWorkingDirectories.permission,
+        // Whether a run can start here: the same linked, enabled and writable
+        // binding `resolve` requires, so a UI start affordance can match it.
+        runnable: sql<boolean>`coalesce(${environments.id} is not null and ${environmentInstances.enabled} and ${environments.enabled} and ${projectEnvironments.enabled} and ${projectWorkingDirectories.permission} = 'readWrite', false)`,
       })
       .from(projectWorkingDirectories)
       .innerJoin(projects, eq(projects.id, projectWorkingDirectories.projectId))

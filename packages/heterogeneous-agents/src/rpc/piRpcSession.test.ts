@@ -387,6 +387,34 @@ describe('PiRpcSession', () => {
     await session.close();
   });
 
+  it('ends the turn when an extension command consumes the prompt', async () => {
+    mocks.command.mockResolvedValue({
+      command: 'prompt',
+      data: { disposition: 'handled' },
+      success: true,
+      type: 'response',
+    });
+    const { events, session } = createSession({ autoCloseOnSettle: false });
+
+    // Pi starts no run for a handled prompt, so agent_settled never arrives.
+    await expect(session.run({ text: '/mcp' })).resolves.toEqual({ aborted: false });
+    expect(events.at(-1)?.type).toBe('agent_runtime_end');
+    expect(session.isReusable).toBe(true);
+    await session.close();
+  });
+
+  it('reports a run as aborted when Pi settles it as aborted', async () => {
+    mocks.command.mockResolvedValue({ success: true });
+    const { session } = createSession();
+    const run = session.run({ text: 'long task' });
+    await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+
+    await emit(session, { type: 'turn_start' });
+    await emit(session, { aborted: true, type: 'agent_settled' });
+
+    await expect(run).resolves.toEqual({ aborted: true });
+  });
+
   it('keeps the settled result when it arrives before the prompt ACK', async () => {
     let acknowledge!: (response: { success: boolean }) => void;
     mocks.command.mockImplementation(

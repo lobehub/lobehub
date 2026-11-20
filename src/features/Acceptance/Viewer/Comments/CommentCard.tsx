@@ -1,22 +1,24 @@
 'use client';
 
 import type { AcceptanceCommentItem } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import type { DropdownItem } from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui';
 import {
   ActionIcon,
   Avatar,
   confirmModal,
   DropdownMenu,
+  Flexbox,
+  Icon,
   Tag,
   Text,
   toast,
-} from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+} from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Link2, MoreHorizontal, Trash2 } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAcceptanceOrigin } from '@/features/Acceptance/origin';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -85,6 +87,7 @@ const CommentCard = memo<CommentCardProps>(
   }) => {
     const { t } = useTranslation('verify');
     const time = useActivityTime(comment.createdAt);
+    const appOrigin = useAcceptanceOrigin();
     const [deleting, setDeleting] = useState(false);
     const name = nameOverride ?? commentAuthorName(comment.author);
     const viewerId = useUserStore(userProfileSelectors.userId);
@@ -92,7 +95,7 @@ const CommentCard = memo<CommentCardProps>(
 
     const copyAnchor = async () => {
       try {
-        await navigator.clipboard.writeText(commentAnchorUrl(comment.id));
+        await navigator.clipboard.writeText(commentAnchorUrl(comment.id, appOrigin));
         toast.success(t('acceptance.comments.linkCopied'));
       } catch (cause) {
         console.error('[acceptance:comments]', cause);
@@ -151,16 +154,16 @@ const CommentCard = memo<CommentCardProps>(
         <Flexbox
           horizontal
           align={'center'}
-          className={variant === 'boxed' ? styles.boxHeader : undefined}
           gap={8}
           wrap={'wrap'}
+          {...stylex.props(variant === 'boxed' && styles.boxHeader)}
         >
           {variant === 'plain' && <CommentAvatar comment={comment} size={18} />}
           {variant === 'feed' && <CommentAvatar comment={comment} size={TIMELINE_NODE} />}
           <Text
-            className={nameOverride ? styles.headline : styles.authorName}
-            fontSize={13}
+            fontSize={14}
             weight={600}
+            {...stylex.props(nameOverride ? styles.headline : styles.authorName)}
           >
             {name}
           </Text>
@@ -179,7 +182,7 @@ const CommentCard = memo<CommentCardProps>(
              * want is the link to paste somewhere else.
              */
             <button
-              className={cx(styles.meta, styles.timeLink)}
+              {...stylex.props(styles.meta, styles.timeLink)}
               title={t('acceptance.comments.copyLinkHint', { time: time.title })}
               type={'button'}
               onClick={(event) => {
@@ -190,13 +193,13 @@ const CommentCard = memo<CommentCardProps>(
               {nameOverride ? time.text : t('acceptance.comments.commented', { time: time.text })}
             </button>
           ) : (
-            <span className={styles.meta} title={time.title}>
+            <span {...stylex.props(styles.meta)} title={time.title}>
               {nameOverride ? time.text : t('acceptance.comments.commented', { time: time.text })}
             </span>
           )}
           {badges}
           {menuItems.length > 0 && (
-            <div data-comment-actions className={styles.rowActions}>
+            <div {...stylex.props(styles.rowActions)}>
               <DropdownMenu
                 items={menuItems}
                 placement={'bottomRight'}
@@ -213,13 +216,13 @@ const CommentCard = memo<CommentCardProps>(
           )}
         </Flexbox>
         <div
-          className={
+          {...stylex.props(
             variant === 'boxed'
               ? styles.body
               : variant === 'feed'
                 ? styles.feedBody
-                : styles.panelBody
-          }
+                : styles.panelBody,
+          )}
         >
           <CommentContent comment={comment} />
           {onReact && (

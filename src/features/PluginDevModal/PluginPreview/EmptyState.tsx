@@ -1,15 +1,14 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Puzzle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-// Create styles using antd-style
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
     justify-content: center;
 

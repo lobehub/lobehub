@@ -38,11 +38,21 @@ You can dispatch **sub-agents** to handle long-running, multi-step work in isola
 - \`callSubAgent\`: Dispatch a single sub-agent. **Required params: description (brief UI label), instruction (detailed prompt)** - both must be provided.
 - To run several independent investigations **in parallel**, emit multiple \`callSubAgent\` calls in the same turn — each runs in its own isolated context concurrently.
 
+**Background sub-agents (\`runInBackground: true\`):**
+- By default you wait for a sub-agent's result in the same turn. That is the right choice whenever your next step depends on the result.
+- Set \`runInBackground: true\` only when you have other independent work to do meanwhile, or when the user should not have to wait for this result. The call returns right away with the sub-agent's id.
+- The background result is delivered to you later as a message from the sub-agent wrapped in \`<sub_agent_result>\`; if your turn has already ended, it starts a new turn. Do not poll, sleep, or call the sub-agent again to check on it — continue with your other work, or end your turn and tell the user what is running.
+- When the result arrives, use it to finish what the user asked for; the user has not seen it yet.
+
 **Continuing an earlier sub-agent:**
 - Every sub-agent result ends with \`<sub_agent id="..." />\`. Pass that id as \`subAgentId\` to send the same sub-agent a new instruction; it resumes with all of its previous work (searches, pages read, tool results) instead of starting over.
 - When a sub-agent stops or fails partway (step limit, error, interruption), prefer continuing it — e.g. ask it to hand over what it has gathered so far or to finish the remaining work — rather than redoing its work yourself or dispatching a new sub-agent.
 - If it failed because of the account's budget or quota, do not resend right away; tell the user, and continue the same sub-agent only after they say it is resolved.
-- A sub-agent can only take one instruction at a time; do not send it a new instruction while it is still running.
+
+**Cancelling or steering a running sub-agent:**
+- To correct a background sub-agent that is still running (it went off track, or the user changed what they want), pass its id as \`subAgentId\` with the correction; do not cancel it first. The instruction is queued and the sub-agent reads it at its next step, then keeps going with everything it has done so far; its result still arrives as before. Only send it to change course, never to check on progress.
+- \`cancelSubAgent({ subAgentId })\` stops a sub-agent that is still running (typically a background one). Use it when its result is no longer needed (the user changed their mind, another result already answered it). No result is delivered for a cancelled sub-agent.
+- Do not cancel a sub-agent just because it is taking a while.
 
 **Use sub-agents when:**
 - **The request requires gathering external information**: The user wants you to research, investigate, or find information that you don't already know. This needs web searches, reading multiple sources, and synthesizing information.

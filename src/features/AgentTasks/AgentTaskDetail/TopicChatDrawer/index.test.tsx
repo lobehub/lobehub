@@ -15,26 +15,34 @@ const mocks = vi.hoisted(() => ({
     agentMap: {},
     useHydrateAgentConfig: vi.fn(),
   },
+  appOrigin: 'https://app.example.com',
   chatState: {
     closeArtifact: vi.fn(),
+    closeFilePreview: vi.fn(),
     clearPortalStack: vi.fn(),
     dbMessagesMap: {
       'topic-chat-key': [{ id: 'message-1' }],
     } as Record<string, { id: string }[]>,
     messagesMap: {} as Record<string, { id: string }[]>,
-    portalStack: [] as { artifact?: { id: string }; taskId?: string; type: string }[],
+    portalStack: [] as {
+      artifact?: { id: string };
+      file?: { fileId: string };
+      sourceTopicId?: string;
+      taskId?: string;
+      type: string;
+    }[],
     replaceMessages: vi.fn(),
     showPortal: false,
     topicDataMap: {},
     topicDetailMap: {},
-    revalidateTopicDetail: vi.fn().mockResolvedValue(undefined),
-    useFetchTopicDetail: vi.fn(),
   },
   permission: {
     allowed: true,
     reason: 'requires member',
   },
   navigate: vi.fn(),
+  openTrustedExternalUrl: vi.fn(),
+  workspaceSlug: undefined as string | undefined,
   serverConfigState: {
     serverConfig: {
       enableBusinessFeatures: false,
@@ -93,10 +101,6 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
       )}
     </>
   ),
-}));
-
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
   ActionIcon: ({
     disabled,
     icon,
@@ -213,6 +217,18 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mocks.navigate,
 }));
 
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  useActiveWorkspaceSlug: () => mocks.workspaceSlug,
+}));
+
+vi.mock('@/hooks/useAppOrigin', () => ({
+  useAppOrigin: () => mocks.appOrigin,
+}));
+
+vi.mock('@/utils/openTrustedExternalUrl', () => ({
+  openTrustedExternalUrl: mocks.openTrustedExternalUrl,
+}));
+
 vi.mock('@/hooks/useGatewayReconnect', () => ({
   useGatewayReconnect: vi.fn(),
 }));
@@ -277,15 +293,14 @@ describe('TopicChatDrawer', () => {
   beforeEach(() => {
     mocks.agentState.useHydrateAgentConfig.mockClear();
     mocks.chatState.replaceMessages.mockClear();
-    mocks.chatState.revalidateTopicDetail.mockClear();
-    mocks.chatState.useFetchTopicDetail.mockReset();
-    mocks.chatState.useFetchTopicDetail.mockReturnValue({
-      revalidate: mocks.chatState.revalidateTopicDetail,
-    });
     mocks.chatState.portalStack = [];
     mocks.chatState.showPortal = false;
     mocks.chatState.closeArtifact.mockClear();
     mocks.chatState.closeArtifact.mockImplementation(() => {
+      mocks.chatState.portalStack = mocks.chatState.portalStack.slice(0, -1);
+    });
+    mocks.chatState.closeFilePreview.mockClear();
+    mocks.chatState.closeFilePreview.mockImplementation(() => {
       mocks.chatState.portalStack = mocks.chatState.portalStack.slice(0, -1);
     });
     mocks.chatState.clearPortalStack.mockClear();
@@ -294,6 +309,9 @@ describe('TopicChatDrawer', () => {
       mocks.chatState.showPortal = false;
     });
     mocks.navigate.mockClear();
+    mocks.openTrustedExternalUrl.mockClear();
+    mocks.appOrigin = 'https://app.example.com';
+    mocks.workspaceSlug = undefined;
     mocks.taskState.closeTopicDrawer.mockClear();
     mocks.taskState.activeTopicDrawerFocusRequest = undefined;
     mocks.taskState.activeTopicDrawerTopicId = 'topic-1';
@@ -335,24 +353,6 @@ describe('TopicChatDrawer', () => {
     );
   });
 
-  /** @example A completed same-Topic continuation still refreshes the receipt. */
-  it('passes completed operation changes from Task activity into the run inspector', () => {
-    mocks.taskState.taskDetailMap['T-1'].activities[0].operationId = 'op-first';
-    const { rerender } = render(
-      <TopicChatDrawerBody agentId={'agt_assignee'} topicId={'topic-1'} />,
-    );
-    /** @example The mount itself loads through the by-id SWR entry. */
-    expect(mocks.chatState.revalidateTopicDetail).not.toHaveBeenCalled();
-    mocks.taskState.taskDetailMap['T-1'].activities[0].operationId = 'op-completed';
-    // The memoized body re-renders when its store subscription changes; a prop
-    // change stands in for that subscription here.
-    rerender(
-      <TopicChatDrawerBody disableInputCollapse agentId={'agt_assignee'} topicId={'topic-1'} />,
-    );
-    /** @example No running marker is required to invalidate an older cached receipt. */
-    expect(mocks.chatState.revalidateTopicDetail).toHaveBeenCalledTimes(1);
-  });
-
   /** @example Embedded Topic B never reconnects against active drawer Topic A. */
   it('keeps embedded operation context separate from an unrelated active drawer', () => {
     mocks.taskState.taskDetailMap['T-1'].activities[0].runningOperation = {
@@ -365,8 +365,6 @@ describe('TopicChatDrawer', () => {
     );
     /** @example An unrelated active drawer supplies no fallback operation. */
     expect(useGatewayReconnect).toHaveBeenLastCalledWith('topic-2', undefined, 'embedded-agent');
-    /** @example No unrelated operation triggers a receipt refresh for Topic B. */
-    expect(mocks.chatState.revalidateTopicDetail).not.toHaveBeenCalled();
     const runningOperation = {
       assistantMessageId: 'ast-2',
       heteroType: 'codex',
@@ -379,22 +377,18 @@ describe('TopicChatDrawer', () => {
         topicId={'topic-2'}
       />,
     );
-    /** @example An explicit embedded run owns both streaming and receipt context. */
+    /** @example An explicit embedded run owns its streaming context. */
     expect(useGatewayReconnect).toHaveBeenLastCalledWith(
       'topic-2',
       runningOperation,
       'embedded-agent',
     );
-    /** @example The embedded run refreshes its own Topic's receipt. */
-    expect(mocks.chatState.revalidateTopicDetail).toHaveBeenCalledTimes(1);
-    expect(mocks.chatState.useFetchTopicDetail).toHaveBeenLastCalledWith('topic-2');
   });
 
   it('hydrates the task assignee agent config for drawer messages', () => {
     render(<TopicChatDrawer />);
 
     expect(mocks.agentState.useHydrateAgentConfig).toHaveBeenCalledWith(true, 'agt_assignee');
-    expect(mocks.chatState.useFetchTopicDetail).toHaveBeenCalledWith('topic-1');
   });
 
   it('keeps the floating drawer reply input collapsed by default', () => {
@@ -439,7 +433,7 @@ describe('TopicChatDrawer', () => {
 
     expect(getByTestId('topic-panel')).toHaveAttribute(
       'data-panel-background',
-      'var(--ant-color-bg-container)',
+      'var(--lobe-color-bg-container)',
     );
   });
 
@@ -473,6 +467,39 @@ describe('TopicChatDrawer', () => {
     );
     expect(getByTestId('topic-panel')).toHaveAttribute('data-height', 'calc(100dvh - 16px)');
     expect(getByTitle('taskDetail.topicDrawer.collapse')).toBeInTheDocument();
+  });
+
+  it('opens expanded on hosts that default to the wide reading panel', () => {
+    const { getByTestId, getByTitle } = render(<TopicChatDrawer defaultExpanded />);
+
+    expect(getByTestId('topic-panel')).toHaveAttribute(
+      'data-width',
+      'min(960px, calc(100vw - 16px))',
+    );
+    expect(getByTestId('topic-panel')).toHaveAttribute('data-height', 'calc(100dvh - 16px)');
+    expect(getByTitle('taskDetail.topicDrawer.collapse')).toBeInTheDocument();
+  });
+
+  it('restores the host default size each time the drawer reopens', () => {
+    // The store mock is not reactive, so a throwaway prop forces each re-render.
+    const renderAt = (revision: number) => (
+      <TopicChatDrawer defaultExpanded {...({ 'data-revision': revision } as object)} />
+    );
+    const { getByTestId, getByTitle, queryByTestId, rerender } = render(renderAt(0));
+
+    fireEvent.click(getByTitle('taskDetail.topicDrawer.collapse'));
+    expect(getByTestId('topic-panel')).toHaveAttribute('data-width', '640');
+
+    mocks.taskState.activeTopicDrawerTopicId = undefined as unknown as string;
+    rerender(renderAt(1));
+    expect(queryByTestId('topic-panel')).not.toBeInTheDocument();
+
+    mocks.taskState.activeTopicDrawerTopicId = 'topic-1';
+    rerender(renderAt(2));
+    expect(getByTestId('topic-panel')).toHaveAttribute(
+      'data-width',
+      'min(960px, calc(100vw - 16px))',
+    );
   });
 
   it('opens the run in its Agent conversation', () => {
@@ -573,6 +600,72 @@ describe('TopicChatDrawer', () => {
     expect(view.getByTestId('chat-list')).toBeInTheDocument();
     expect(view.queryByTestId('artifact-portal')).not.toBeInTheDocument();
     expect(mocks.taskState.closeTopicDrawer).not.toHaveBeenCalled();
+  });
+
+  it('shows a file preview opened from its run inside the drawer instead of behind it', () => {
+    mocks.chatState.portalStack = [
+      { file: { fileId: 'file_1' }, sourceTopicId: 'topic-1', type: 'filePreview' },
+    ];
+    mocks.chatState.showPortal = true;
+
+    const view = render(<TopicChatDrawer />);
+
+    expect(view.getByTestId('artifact-portal')).toBeInTheDocument();
+    expect(view.queryByTestId('chat-list')).not.toBeInTheDocument();
+
+    fireEvent.click(view.getByTestId('artifact-portal'));
+    expect(mocks.chatState.closeFilePreview).toHaveBeenCalledOnce();
+    expect(mocks.chatState.closeArtifact).not.toHaveBeenCalled();
+    expect(mocks.taskState.closeTopicDrawer).not.toHaveBeenCalled();
+  });
+
+  it('closes its file preview together with the drawer', () => {
+    mocks.chatState.portalStack = [
+      { file: { fileId: 'file_1' }, sourceTopicId: 'topic-1', type: 'filePreview' },
+    ];
+    mocks.chatState.showPortal = true;
+
+    const view = render(<TopicChatDrawer />);
+    fireEvent.click(view.getByTestId('panel-close-icon'));
+
+    expect(mocks.chatState.closeFilePreview).toHaveBeenCalledOnce();
+    expect(mocks.taskState.closeTopicDrawer).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['another topic', 'topic-2'],
+    ['no conversation', undefined],
+  ])('leaves a file preview opened from %s to the page portal', (_, sourceTopicId) => {
+    mocks.chatState.portalStack = [
+      { file: { fileId: 'file_1' }, sourceTopicId, type: 'filePreview' },
+    ];
+    mocks.chatState.showPortal = true;
+
+    const view = render(<TopicChatDrawer />);
+
+    expect(view.getByTestId('chat-list')).toBeInTheDocument();
+    expect(view.queryByTestId('artifact-portal')).not.toBeInTheDocument();
+
+    fireEvent.click(view.getByTestId('panel-close-icon'));
+    expect(mocks.chatState.closeFilePreview).not.toHaveBeenCalled();
+  });
+
+  it('opens the run conversation in the browser', () => {
+    mocks.workspaceSlug = 'acme';
+    const view = render(<TopicChatDrawer />);
+
+    fireEvent.click(view.getByTitle('report.actions.openInBrowser'));
+
+    expect(mocks.openTrustedExternalUrl).toHaveBeenCalledWith(
+      'https://app.example.com/acme/agent/agt_assignee/topic-1',
+    );
+  });
+
+  it('disables open in browser without an app origin', () => {
+    mocks.appOrigin = '';
+    const view = render(<TopicChatDrawer />);
+
+    expect(view.getByTitle('report.actions.openInBrowser')).toBeDisabled();
   });
 
   it('uses a resizable bottom-right floating panel', () => {

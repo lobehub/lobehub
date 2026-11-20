@@ -12,17 +12,18 @@ interface ActiveTaskResultState {
 
 /** Fetches only the Task snapshot needed by the result review surface. */
 export const useActiveTaskResult = (taskId?: string): ActiveTaskResultState => {
-  const setActiveTaskId = useTaskStore((state) => state.setActiveTaskId);
+  const claimActiveTask = useTaskStore((state) => state.claimActiveTask);
   const useFetchTaskDetail = useTaskStore((state) => state.useFetchTaskDetail);
   const hasTaskDetail = useTaskStore((state) =>
-    taskId ? Boolean(state.taskDetailMap[taskId]) : false,
+    taskId ? Boolean(state.taskDetailMap[state.taskRefIndex?.[taskId] ?? taskId]) : false,
   );
 
+  // Claimed like the detail surfaces (see `useActiveTaskDetail`), so closing
+  // the result hands the active task back to the page underneath.
   useEffect(() => {
     if (!taskId) return;
-    setActiveTaskId(taskId);
-    return () => setActiveTaskId(undefined);
-  }, [setActiveTaskId, taskId]);
+    return claimActiveTask(taskId);
+  }, [claimActiveTask, taskId]);
 
   const { error: taskError, mutate } = useFetchTaskDetail(taskId);
 

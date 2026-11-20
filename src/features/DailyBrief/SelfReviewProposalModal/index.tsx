@@ -1,7 +1,7 @@
 'use client';
 
 import { type SelfReviewProposalContentItem } from '@lobechat/agent-signal/brief';
-import { createModal } from '@lobehub/ui/base-ui';
+import { createModal } from '@lobehub/ui';
 import { t } from 'i18next';
 import { lazy, Suspense } from 'react';
 

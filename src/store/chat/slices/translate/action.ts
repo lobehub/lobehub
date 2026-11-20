@@ -13,6 +13,19 @@ import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
 
 /**
+ * The locale the detection prompt answered with. Small local models append the
+ * echoed input or a translation after it, so only the first token counts.
+ */
+const parseDetectedLocale = (output?: string) => {
+  const token = output
+    ?.trim()
+    .split(/\s+/)[0]
+    ?.replaceAll(/^[{"'`]+|[}"'`.,]+$/g, '');
+
+  return token && supportLocales.includes(token) ? token : undefined;
+};
+
+/**
  * chat translate
  */
 
@@ -78,7 +91,8 @@ export class ChatTranslateActionImpl {
       // detect from language
       chatService.fetchPresetTaskResult({
         onFinish: async (data) => {
-          if (data && supportLocales.includes(data)) from = data;
+          const detected = parseDetectedLocale(data);
+          if (detected) from = detected;
 
           await updateMessageTranslate(id, { content, from, to: targetLang });
         },

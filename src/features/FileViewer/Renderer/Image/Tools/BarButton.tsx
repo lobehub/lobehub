@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, type ButtonProps } from '@lobehub/ui/base-ui';
+import { Button, type ButtonProps } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 

@@ -1,0 +1,103 @@
+---
+title: GitHub Integration
+description: >-
+  Connect the LobeHub GitHub App so pull requests opened by your Agents are
+  tracked, merges accept their deliveries, and failing checks or review
+  feedback go back to the Agent that opened the pull request.
+tags:
+  - LobeHub
+  - Integration
+  - GitHub
+  - Pull Request
+  - CI
+  - Code Review
+---
+
+# GitHub Integration
+
+**The GitHub Integration connects your Agents' pull requests to what happens on GitHub.** Once the LobeHub GitHub App is installed on your account or organization, LobeHub follows the pull requests your Agents open:
+
+- **Merge** → the linked acceptance is accepted and its task is completed.
+- **Failing checks** → the Agent that opened the pull request receives the failing checks, plus the job log when available, and can fix them.
+- **Review feedback** → requested changes and review comments reach that Agent in its conversation.
+
+> \[!NOTE]
+>
+> Integrations is an Alpha feature. Turn it on in **Settings → Labs → Integrations** first; **Integrations** then appears in Settings.
+
+## Connect GitHub
+
+1. Open **Settings → Integrations → GitHub**.
+2. Click **Connect account**. GitHub opens the LobeHub app installation page.
+3. Choose the personal account or organization to install on, then choose **All repositories** or only the repositories you select.
+4. Confirm the installation. GitHub returns you to LobeHub, which shows **GitHub connected: \<account>**.
+
+The connected account then appears under **Connections** with its status and repository scope. To add or remove repositories, or to uninstall, choose **Manage on GitHub** from the menu next to the account.
+
+If you started the installation on github.com instead of from LobeHub, LobeHub asks you to confirm which account the installation belongs to. Click **Connect** to finish.
+
+In a Workspace, the installation belongs to that Workspace, and the info bar shows who enabled it. Only Workspace members who can edit can connect GitHub.
+
+## Which pull requests are tracked
+
+LobeHub links a pull request to your records when any of these is true:
+
+- An Agent opened it from a LobeHub conversation, for example with `gh pr create` in a sandbox or on a device.
+- Its description contains a LobeHub acceptance link (`…/acceptance/<id>`).
+- An acceptance round recorded the pull request URL.
+
+Pull requests without a link are still recorded but do not trigger any automation. If the GitHub account that opened the pull request is linked to a LobeHub user, LobeHub acts for that user, who needs write access to the Workspace; otherwise automation is skipped. If the account is not linked, or a bot opened the pull request, LobeHub uses the account that installed the app instead.
+
+## Automation
+
+These switches decide what LobeHub does on its own when GitHub reports activity. All three are on by default.
+
+| Switch                               | What happens                                                                                                                                                                                                                          |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Accept deliveries on merge**       | When a linked pull request is merged, its acceptance is accepted and the task is completed. With stacked pull requests, every linked open pull request must be merged or closed first.                                                |
+| **Notify agents on CI failure**      | When a check fails, the Agent that opened the pull request is woken with the failing checks and, for GitHub Actions jobs, the log tail when available. At most three times per pull request; draft pull requests never wake an Agent. |
+| **Notify agents on review feedback** | When a reviewer requests changes or comments, the feedback is delivered to that Agent.                                                                                                                                                |
+
+Only feedback from repository owners, members, and collaborators, plus the Codex code review bot (`chatgpt-codex-connector[bot]`), wakes an Agent. Comments from anyone else stay on GitHub and never become instructions for an Agent. The pull request author's own comments are ignored.
+
+## Comments in GitHub
+
+LobeHub can leave one comment on a linked pull request with links back to its acceptance and conversation, and update it as the work moves.
+
+- **Private repositories**: on by default.
+- **Public repositories**: off by default, because a public thread is not the place for links into your Workspace.
+
+The switches under **Automation** and **Comments in GitHub** follow the settings of the account that installed the app.
+
+## Troubleshooting
+
+| Message                                                            | What to do                                                                                                          |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| **Not configured on this deployment**                              | The server has no GitHub App configured. See [Self-hosted deployments](#self-hosted-deployments).                   |
+| **This GitHub account is already linked to another LobeHub user.** | Sign in to that LobeHub account, or connect with a different GitHub account.                                        |
+| **Only workspace members can connect GitHub here.**                | Ask a Workspace owner or admin for a member role, or connect from your personal account.                            |
+| **GitHub did not accept the authorization code.**                  | Click **Connect account** again.                                                                                    |
+| An Agent did not react to a failed check                           | Check that the pull request is linked, is not a draft, and has not used its three wakes, and that the switch is on. |
+
+## Self-hosted deployments
+
+A self-hosted deployment needs its own GitHub App and Redis (`REDIS_URL`), which holds the short-lived connection request; without Redis, **Connect account** fails. Set these environment variables on the server:
+
+| Variable                    | Required | Value                                                   |
+| --------------------------- | -------- | ------------------------------------------------------- |
+| `GITHUB_APP_ID`             | Yes      | Numeric App ID from the GitHub App settings page        |
+| `GITHUB_APP_SLUG`           | Yes      | The app's URL slug (`github.com/apps/<slug>`)           |
+| `GITHUB_APP_PRIVATE_KEY`    | Yes      | The app's private key, as raw PEM or base64-encoded PEM |
+| `GITHUB_APP_WEBHOOK_SECRET` | Yes      | The secret GitHub signs webhook deliveries with         |
+| `GITHUB_APP_CLIENT_ID`      | Yes      | The app's client ID                                     |
+| `GITHUB_APP_CLIENT_SECRET`  | Yes      | The app's client secret                                 |
+
+Set the client ID and secret. LobeHub uses them to confirm that the person connecting can access the installation; without them that check is skipped.
+
+In the GitHub App settings, use these URLs (replace `<APP_URL>` with your LobeHub address):
+
+- **Webhook URL**: `<APP_URL>/api/webhooks/github`
+- **Setup URL**: `<APP_URL>/api/webhooks/github/setup`
+- **Callback URL**: `<APP_URL>/api/webhooks/github/oauth/callback`, with **Request user authorization (OAuth) during installation** enabled
+
+Grant these repository permissions: **Pull requests** (read and write), **Checks** (read), **Commit statuses** (read), **Actions** (read), **Contents** (read). Subscribe to the **Pull request**, **Pull request review**, **Pull request review comment**, **Check run**, and **Status** events.

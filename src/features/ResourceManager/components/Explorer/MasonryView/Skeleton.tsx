@@ -1,5 +1,7 @@
-import { createStaticStyles, keyframes } from 'antd-style';
+import { createStaticStyles, keyframes } from '@lobehub/ui';
 import { memo } from 'react';
+
+import { densityVars } from '@/styles/densityVars';
 
 const pulse = keyframes`
   0%,
@@ -20,8 +22,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   grid: css`
     display: grid;
-    gap: 16px;
-    padding-block: 12px;
+    gap: ${densityVars.sectionGap};
+    padding-block: ${densityVars.contentGap};
     padding-inline: 24px;
   `,
 }));

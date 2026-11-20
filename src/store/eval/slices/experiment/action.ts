@@ -116,7 +116,13 @@ export class ExperimentActionImpl {
   deleteExperiment = async (id: string): Promise<void> => {
     // Optimistic: drop the row from the list (and the detail cache) right away,
     // rolling back if the server rejects it, then converge on the server list.
-    await this.#entity.optimistic(id, 'remove', () => agentEvalService.deleteExperiment(id));
+    await this.#entity.optimistic(id, 'remove', async () => {
+      const result = await agentEvalService.deleteExperiment(id);
+      // The procedure reports a refusal as `{ success: false }` instead of throwing; without
+      // this the row would vanish, then come back on the next refresh.
+      if (result?.success === false) throw new Error(result.error);
+      return result;
+    });
     await this.refreshExperiments();
   };
 

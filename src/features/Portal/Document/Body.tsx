@@ -1,23 +1,31 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, Text, TextArea } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Text,
+  TextArea,
+} from '@lobehub/ui';
 import { CheckIcon, PencilIcon, XIcon } from 'lucide-react';
 import type { ChangeEvent } from 'react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import CodeEditorPane from '@/components/CodeEditorPane';
+import { HtmlDocumentFrame } from '@/components/HtmlPreview';
 import Loading from '@/components/Loading/CircleLoading';
+import CharLimitBanner from '@/features/EditorCanvas/CharLimitBanner';
 import FileNotFound from '@/features/FileNotFound';
 import { FileDocumentPreview } from '@/features/FileViewer/FileDocumentPreview';
+import TableOfContents, { TOC_RAIL_GUTTER } from '@/features/PageEditor/TableOfContents';
 import WideScreenContainer from '@/features/WideScreenContainer';
-import { useClientDataSWR } from '@/libs/swr';
-import { portalKeys } from '@/libs/swr/keys';
-import { documentService } from '@/services/document';
 import { useDocumentStore } from '@/store/document';
+import { densityVars } from '@/styles/densityVars';
 import { getDocumentRenderMode } from '@/utils/documentRenderMode';
 import {
   getSkillMarkdownMetadataError,
@@ -34,12 +42,21 @@ const styles = createStaticStyles(({ css }) => ({
   content: css`
     overflow: auto;
     flex: 1;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
   `,
   contentFull: css`
     /* Width is handled by WideScreenContainer; keep only the scroll host. */
     overflow: auto;
     flex: 1;
+  `,
+  contentWithToc: css`
+    /* The TOC rail is hidden at this width (see TableOfContents). */
+    @media (width > 1024px) {
+      /* The editor bleeds tables past the column, which would run under the rail. */
+      --lobe-table-bleed: 0px;
+
+      padding-inline-end: ${TOC_RAIL_GUTTER}px;
+    }
   `,
   textArea: css`
     font-family: ${cssVar.fontFamilyCode};
@@ -106,7 +123,9 @@ const SkillFrontmatterBlock = memo<SkillFrontmatterBlockProps>(({ documentId, fr
       await performSave(documentId, undefined, { saveSource: 'manual' });
       const latestDocument = useDocumentStore.getState().documents[documentId];
       if (latestDocument?.isDirty) {
-        setError(t('skillFrontmatter.saveFailed'));
+        // A length refusal already has its toast and banner; a second, vaguer
+        // "save failed" line would only repeat it.
+        setError(latestDocument.charLimitError ? undefined : t('skillFrontmatter.saveFailed'));
         return;
       }
 
@@ -170,16 +189,16 @@ interface HighlightEditorProps {
   content: string;
   documentId: string;
   filename: string;
-  onSaved: (newContent: string, updatedAt?: string) => void;
+  onSaveStart: () => (newContent: string, updatedAt?: string) => void;
   updatedAt?: Date;
 }
 
 const HighlightEditor = memo<HighlightEditorProps>(
-  ({ content, documentId, filename, onSaved, updatedAt }) => {
+  ({ content, documentId, filename, onSaveStart, updatedAt }) => {
     const { editingValue, handleChange, handleSave } = useHighlightSave({
       content,
       documentId,
-      onSaved,
+      onSaveStart,
       updatedAt,
     });
 
@@ -226,31 +245,30 @@ const DocumentBody = memo(() => {
       : ['', undefined],
   );
   const isSkillMarkdown = contentFormat === 'skillMarkdown';
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [tocVisible, setTocVisible] = useState(false);
 
+  const useFetchDocumentDetail = useDocumentStore((s) => s.useFetchDocumentDetail);
+  const beginDocumentDetailPatch = useDocumentStore((s) => s.beginDocumentDetailPatch);
   const {
     data: documentMeta,
     error: documentError,
+    isHydrated: documentHydrated,
     isLoading: documentLoading,
     mutate: mutateDocumentMeta,
-  } = useClientDataSWR(documentId ? portalKeys.documentHeader(documentId) : null, () =>
-    documentService.getDocumentById(documentId!),
-  );
+  } = useFetchDocumentDetail(documentId);
   const renderMode = documentMeta
     ? getDocumentRenderMode(documentMeta)
     : { mode: 'editor' as const };
 
-  const handleHighlightSaved = useCallback(
-    (saved: string, updatedAt?: string) => {
-      mutateDocumentMeta(
-        (prev) =>
-          prev
-            ? { ...prev, content: saved, ...(updatedAt ? { updatedAt: new Date(updatedAt) } : {}) }
-            : prev,
-        { revalidate: false },
-      );
-    },
-    [mutateDocumentMeta],
-  );
+  // Captured when the save starts, so a save that settles after an account /
+  // workspace switch never lands in the new identity's replica.
+  const handleHighlightSaveStart = useCallback(() => {
+    if (!documentId) return () => {};
+    const commit = beginDocumentDetailPatch(documentId);
+    return (saved: string, updatedAt?: string) =>
+      commit({ content: saved, ...(updatedAt ? { updatedAt: new Date(updatedAt) } : {}) });
+  }, [documentId, beginDocumentDetailPatch]);
 
   const editorContent = (
     <>
@@ -259,6 +277,11 @@ const DocumentBody = memo(() => {
       )}
       {renderMode.mode === 'file' ? (
         <FileDocumentPreview fileId={documentMeta?.fileId} />
+      ) : renderMode.mode === 'html' ? (
+        <HtmlDocumentFrame
+          content={documentMeta?.content ?? ''}
+          title={documentMeta?.title ?? undefined}
+        />
       ) : renderMode.mode === 'highlight' && documentId ? (
         <HighlightEditor
           content={documentMeta?.content ?? ''}
@@ -266,7 +289,7 @@ const DocumentBody = memo(() => {
           filename={documentMeta?.filename ?? ''}
           key={documentId}
           updatedAt={documentMeta?.updatedAt}
-          onSaved={handleHighlightSaved}
+          onSaveStart={handleHighlightSaveStart}
         />
       ) : (
         <EditorCanvas />
@@ -274,26 +297,49 @@ const DocumentBody = memo(() => {
     </>
   );
 
-  if (documentLoading) return <Loading />;
-  if (documentError)
+  // The persisted row is still being read: paint nothing rather than a spinner
+  // that the cached document replaces a few frames later.
+  if (documentLoading) return documentHydrated ? <Loading /> : null;
+  // The document is a persisted replica (stale-while-revalidate): a transient
+  // refresh failure keeps the cached document on screen. A denial (FORBIDDEN /
+  // UNAUTHORIZED) purges the cached row, so it lands here with no data.
+  if (documentError && !documentMeta)
     return (
       <AsyncError
         error={documentError}
-        variant={'block'}
+        variant={'page'}
         onRetry={() => void mutateDocumentMeta()}
       />
     );
   if (!documentMeta) return <FileNotFound />;
 
   return (
-    <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
-      <div className={fullPage ? styles.contentFull : styles.content}>
+    <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden', position: 'relative' }}>
+      {/* Above the scroll host, so the plan page-size notice stays in view. */}
+      {(renderMode.mode === 'editor' || renderMode.mode === 'highlight') && (
+        <Flexbox paddingInline={16}>
+          <CharLimitBanner documentId={documentId} />
+        </Flexbox>
+      )}
+      <div
+        ref={scrollRef}
+        className={
+          fullPage ? styles.contentFull : cx(styles.content, tocVisible && styles.contentWithToc)
+        }
+      >
         {fullPage && renderMode.mode !== 'file' ? (
           <WideScreenContainer>{editorContent}</WideScreenContainer>
         ) : (
           editorContent
         )}
       </div>
+      {renderMode.mode === 'editor' && (
+        <TableOfContents
+          contentRef={scrollRef}
+          scrollRef={scrollRef}
+          onVisibleChange={setTocVisible}
+        />
+      )}
       {renderMode.mode !== 'file' && <TodoList />}
     </Flexbox>
   );

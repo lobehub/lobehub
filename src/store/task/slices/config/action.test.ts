@@ -10,6 +10,7 @@ import { taskDetailRefreshes } from '../detail/testUtils';
 
 vi.mock('@/services/task', () => ({
   taskService: {
+    find: vi.fn(),
     markBriefRead: vi.fn(),
     resolveBrief: vi.fn(),
     runReview: vi.fn(),
@@ -26,7 +27,7 @@ vi.mock('@/libs/swr', () => ({
   useClientDataSWR: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
@@ -40,8 +41,12 @@ const mockDetail = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(taskService.find).mockImplementation(
+    async (id) => ({ data: { id, identifier: id }, success: true }) as never,
+  );
   useTaskStore.setState({
     activeTaskId: 'T-1',
+    taskRefIndex: {},
     taskDetailMap: { 'T-1': { ...mockDetail } },
   });
 });
@@ -123,7 +128,7 @@ describe('TaskConfigSliceAction', () => {
     });
 
     it('rolls back and marks the save failed when the PUT rejects', async () => {
-      const { toast } = await import('@lobehub/ui/base-ui');
+      const { toast } = await import('@lobehub/ui');
       vi.mocked(taskService.updateCheckpoint).mockRejectedValue(new Error('fail'));
 
       await useTaskStore.getState().updateCheckpoint('T-1', { onAgentRequest: true });
@@ -400,7 +405,7 @@ describe('TaskConfigSliceAction', () => {
     });
 
     it('rolls the optimistic patch back, marks the save failed, and offers a retry', async () => {
-      const { toast } = await import('@lobehub/ui/base-ui');
+      const { toast } = await import('@lobehub/ui');
       useTaskStore.setState({
         taskDetailMap: {
           'T-1': {

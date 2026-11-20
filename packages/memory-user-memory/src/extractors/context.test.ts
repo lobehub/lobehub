@@ -77,4 +77,43 @@ describe('ContextExtractor', () => {
     expect(result).not.toBe('');
     expect(result).toBe(renderPlaceholderTemplate(contextPrompt, expectedProps));
   });
+
+  it('keeps a memory whose type the model made up, filed under other', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    vi.mocked(runtimeMock.generateObject).mockResolvedValue({
+      memories: [
+        {
+          details: '',
+          memoryCategory: 'work',
+          memoryType: 'project',
+          summary: 'Migrating search',
+          tags: [],
+          title: 'Search migration',
+          withContext: {
+            associatedObjects: [],
+            associatedSubjects: [],
+            currentStatus: 'ongoing',
+            description: 'Moving search to Elasticsearch',
+            labels: [],
+            scoreImpact: 0.5,
+            scoreUrgency: 0.5,
+            title: 'Search migration',
+            type: 'project',
+          },
+        },
+      ],
+    });
+
+    const result = await new ContextExtractor(extractorConfig).structuredCall(templateOptions);
+
+    expect(result.memories).toEqual([
+      expect.objectContaining({ memoryType: 'other', title: 'Search migration' }),
+    ]);
+    expect(JSON.parse(info.mock.calls.at(-1)![0])).toMatchObject({
+      agent: 'layer-context',
+      event: 'memory.output.repaired',
+      repairs: ['memories.0.memoryType: other'],
+    });
+    info.mockRestore();
+  });
 });

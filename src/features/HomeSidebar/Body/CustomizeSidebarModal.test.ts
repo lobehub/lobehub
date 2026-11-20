@@ -41,4 +41,22 @@ describe('CustomizeSidebarModal', () => {
       false,
     );
   });
+
+  it('offers Goals only while the goals lab is on', () => {
+    expect(getSortableSidebarItemIds(false).has('goals')).toBe(false);
+    expect(getSortableSidebarItemIds(false, { goalsEnabled: true }).has('goals')).toBe(true);
+    expect(getSortableSidebarItemIds(true, { goalsEnabled: true }).has('goals')).toBe(true);
+  });
+
+  it('offers Channels, hideable, only while Channels are enabled', () => {
+    expect(getSortableSidebarItemIds(false).has('channels')).toBe(false);
+    expect(getSortableSidebarItemIds(false, { channelsEnabled: true }).has('channels')).toBe(true);
+    expect(getSortableSidebarItemIds(true, { channelsEnabled: true }).has('channels')).toBe(true);
+
+    const channels = getAvailableSidebarItems(true, { channelsEnabled: true }).find(
+      (item) => item.id === 'channels',
+    );
+    expect(channels).toMatchObject({ labelKey: 'title', labelNs: 'channel' });
+    expect(channels?.alwaysVisible).toBeUndefined();
+  });
 });

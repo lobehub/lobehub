@@ -98,19 +98,6 @@ describe('LobeLMStudioAI - custom features', () => {
       expect(models).toBeDefined();
     });
 
-    it('should merge abilities from known models', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [{ id: 'gpt-4' }],
-          }),
-        },
-      };
-
-      const models = await params.models!({ client: mockClient as any });
-      expect(models).toBeDefined();
-    });
-
     it('should set enabled to false when not in known models', async () => {
       const mockClient = {
         models: {

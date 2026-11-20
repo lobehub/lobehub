@@ -1,18 +1,23 @@
 import { z } from 'zod';
 
+import {
+  CursorPaginationQuerySchema,
+  legacyOffsetQueryShape,
+  legacyPageQueryShape,
+  resolvePagination,
+} from '../helpers/pagination';
+
 export const EvalIdSchema = z.string().min(1).max(128);
 export const EvalResourceIdSchema = z.object({ id: EvalIdSchema });
 export const EvalDatasetPathSchema = z.object({ datasetId: EvalIdSchema });
+/** `cursor` + `limit`, plus the deprecated `offset` and `page`/`pageSize`. */
 export const EvalPaginationSchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).optional(),
-  offset: z.coerce.number().int().min(0).max(1000000).optional(),
-  page: z.coerce.number().int().min(1).max(1000000).optional(),
-  pageSize: z.coerce.number().int().min(1).max(100).optional(),
+  ...CursorPaginationQuerySchema.shape,
+  ...legacyOffsetQueryShape,
+  ...legacyPageQueryShape,
 });
-export const evalPagination = (query: z.infer<typeof EvalPaginationSchema>) => ({
-  limit: query.limit ?? query.pageSize ?? 20,
-  offset: query.offset ?? ((query.page ?? 1) - 1) * (query.limit ?? query.pageSize ?? 20),
-});
+export const evalPagination = (query: z.infer<typeof EvalPaginationSchema>) =>
+  resolvePagination(query);
 export const EvalModeSchema = z.enum([
   'equals',
   'contains',
@@ -35,7 +40,7 @@ export const EvalModeSchema = z.enum([
 ]);
 const json = z.record(z.string(), z.unknown());
 const name = z.string().trim().min(1).max(255);
-const AnswerExtractorSchema = z.discriminatedUnion('type', [
+export const AnswerExtractorSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('regex'),
@@ -59,6 +64,27 @@ const AnswerExtractorSchema = z.discriminatedUnion('type', [
     })
     .strict(),
 ]);
+/** Evaluator options of one rubric, shared by the request and response schemas. */
+export const RubricConfigSchema = z.union([
+  z.object({ value: z.string(), threshold: z.number().optional() }).strict(),
+  z.object({ value: z.number(), tolerance: z.number().optional() }),
+  z.object({ pattern: z.string() }),
+  z.object({ code: z.string() }),
+  z.object({
+    criteria: z.string(),
+    model: z.string().optional(),
+    provider: z.string().optional(),
+    systemRole: z.string().optional(),
+  }),
+  z.object({ values: z.array(z.string()), caseSensitive: z.boolean().optional() }).strict(),
+  z.object({ schema: json }).strict(),
+  z
+    .object({
+      extractor: AnswerExtractorSchema,
+      innerMatcher: EvalModeSchema.optional(),
+    })
+    .strict(),
+]);
 export const CreateBenchmarkSchema = z
   .object({
     id: EvalIdSchema.optional(),
@@ -77,28 +103,7 @@ export const CreateBenchmarkSchema = z
             weight: z.number().min(0),
             threshold: z.number().optional(),
             extractor: AnswerExtractorSchema.optional(),
-            config: z.union([
-              z.object({ value: z.string(), threshold: z.number().optional() }).strict(),
-              z.object({ value: z.number(), tolerance: z.number().optional() }),
-              z.object({ pattern: z.string() }),
-              z.object({ code: z.string() }),
-              z.object({
-                criteria: z.string(),
-                model: z.string().optional(),
-                provider: z.string().optional(),
-                systemRole: z.string().optional(),
-              }),
-              z
-                .object({ values: z.array(z.string()), caseSensitive: z.boolean().optional() })
-                .strict(),
-              z.object({ schema: json }).strict(),
-              z
-                .object({
-                  extractor: AnswerExtractorSchema,
-                  innerMatcher: EvalModeSchema.optional(),
-                })
-                .strict(),
-            ]),
+            config: RubricConfigSchema,
           })
           .strict(),
       )

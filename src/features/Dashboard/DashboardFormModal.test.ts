@@ -9,7 +9,7 @@ import { openCreateDashboardModal } from './DashboardFormModal';
 
 const modal = vi.hoisted(() => ({ content: undefined as ReactElement | undefined }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   createModal: ({ content }: { content: ReactElement }) => {
     modal.content = content;

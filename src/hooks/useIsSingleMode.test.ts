@@ -10,16 +10,6 @@ vi.mock('@/libs/router/navigation', () => ({
 }));
 
 describe('useIsSingleMode', () => {
-  it('should return false initially (during SSR)', () => {
-    const mockSearchParams = new URLSearchParams('mode=single');
-    mockUseSearchParams.mockReturnValue([mockSearchParams, vi.fn()]);
-
-    const { result } = renderHook(() => useIsSingleMode());
-
-    // In test environment, useEffect runs synchronously, so it will immediately detect single mode
-    expect(result.current).toBe(true);
-  });
-
   it('should return true when mode=single', () => {
     const mockSearchParams = new URLSearchParams('mode=single');
     mockUseSearchParams.mockReturnValue([mockSearchParams, vi.fn()]);

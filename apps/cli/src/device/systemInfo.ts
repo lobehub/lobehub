@@ -1,6 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 
+import { BROWSER_IDENTIFIER } from '@lobechat/device-control/agent-browser';
 import { COMPUTER_USE_IDENTIFIER } from '@lobechat/device-control/computer-use';
 import type { DeviceSystemInfo } from '@lobechat/device-gateway-client';
 import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
@@ -10,6 +11,7 @@ import { getShellInfo } from '@lobechat/local-file-shell';
 
 import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
 import { cliVersion } from '../pkg';
+import type { BrowserDevice } from '../tools/browser';
 import type { ComputerUseDevice } from '../tools/computerUse';
 
 /**
@@ -77,7 +79,8 @@ export async function probeNativeRuntimes(): Promise<string[]> {
 /**
  * The answer to a gateway `system_info_request`: host paths and live native capabilities.
  * `supportedTools` lists the opt-in tools this device can run; the server refuses those
- * tools on a device that does not list them.
+ * tools on a device that does not list them. `supportedToolCallTypes` tells it this
+ * client runs tunneled MCP calls, which older CLIs mis-dispatched by apiName.
  *
  * Use when: a gateway requests this connection's current system information.
  * Expects: local paths and binary resolution belong to this connect process.
@@ -90,7 +93,12 @@ export async function probeNativeRuntimes(): Promise<string[]> {
 export async function collectSystemInfo(
   nativeRuntimes: RuntimeProbeCache,
   computerUse?: ComputerUseDevice,
+  browser?: BrowserDevice,
 ): Promise<DeviceSystemInfo> {
+  const supportedTools = [
+    ...(computerUse ? [COMPUTER_USE_IDENTIFIER] : []),
+    ...(browser ? [BROWSER_IDENTIFIER] : []),
+  ];
   const home = os.homedir();
   const platform = process.platform;
   const videosDir = platform === 'linux' ? 'Videos' : 'Movies';
@@ -106,7 +114,9 @@ export async function collectSystemInfo(
     musicPath: path.join(home, 'Music'),
     picturesPath: path.join(home, 'Pictures'),
     supportedAgentRuntimes: await nativeRuntimes.get(),
-    ...(computerUse && { supportedTools: [COMPUTER_USE_IDENTIFIER] }),
+    // Tunneled MCP calls (stdio / local-network servers) run on this machine.
+    supportedToolCallTypes: ['tool', 'mcp'],
+    ...(supportedTools.length > 0 && { supportedTools }),
     userDataPath: path.join(home, CLI_CONFIG_DIR_NAME),
     videosPath: path.join(home, videosDir),
     workingDirectory: process.cwd(),

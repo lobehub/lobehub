@@ -16,6 +16,8 @@ export interface SubmitGoalReportParams extends Omit<GoalReportMetadata, 'graphC
   goalId: string;
   /** The graph cursor from the skeleton; the newest Goal event when omitted. */
   graphCursor?: string;
+  /** The same report as one self-contained HTML page, shown as the report's page. */
+  html?: string;
 }
 
 const ids = { items: { type: 'string' }, type: 'array' };
@@ -80,6 +82,11 @@ export const GoalReportManifest: BuiltinToolManifest = {
             type: 'string',
           },
           goalId: { type: 'string' },
+          html: {
+            description:
+              'The same report as ONE self-contained HTML page, built from the metadata above. It MUST inline all CSS (<style>) and JS (<script>) and draw every diagram as inline <svg>; no external stylesheets, scripts, fonts, chart libraries or local files; images only as data URIs or public URLs. It is what readers see as the report; content stays its plain-text fallback.',
+            type: 'string',
+          },
           graphCursor: {
             description: 'The graph cursor given in the instruction.',
             type: 'string',

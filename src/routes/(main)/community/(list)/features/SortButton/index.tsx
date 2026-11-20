@@ -1,10 +1,10 @@
 import { type DropdownItem, type DropdownMenuCheckboxItem } from '@lobehub/ui';
-import { DropdownMenu, Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, DropdownMenu, Icon } from '@lobehub/ui';
 import { ArrowDownWideNarrow, ChevronDown } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getMarketplaceSubPath } from '@/features/Marketplace/paths';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { usePathname, useQuery } from '@/libs/router/navigation';
 import {
@@ -17,18 +17,20 @@ import {
   SkillSorts,
 } from '@/types/discover';
 
+import { MARKETPLACE_CONNECTOR_TAB } from '../../../features/useNav';
+
 const SortButton = memo(() => {
   const { t } = useTranslation('discover');
   const pathname = usePathname();
   const { sort } = useQuery();
   const router = useQueryRoute();
-  const activeTab = useMemo(() => pathname.split('community/')[1] as DiscoverTab, [pathname]);
+  const activeTab = useMemo(() => getMarketplaceSubPath(pathname) as DiscoverTab, [pathname]);
   type SortItem = Extract<DropdownItem, { type?: 'item' }> & {
     key: string;
   };
 
   const items = useMemo<SortItem[]>(() => {
-    switch (activeTab) {
+    switch (activeTab as string) {
       case DiscoverTab.Assistants: {
         return [
           {
@@ -109,6 +111,8 @@ const SortButton = memo(() => {
           },
         ];
       }
+      // Connectors' Discover view lists the MCP catalog.
+      case MARKETPLACE_CONNECTOR_TAB:
       case DiscoverTab.Mcp: {
         return [
           {

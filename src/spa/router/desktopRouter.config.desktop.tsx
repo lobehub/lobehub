@@ -38,12 +38,14 @@ export const desktopRoutes: RouteObject[] = createSharedDesktopRoutes({
     { element: null, index: true },
     { element: null, path: '*' },
   ],
-  onboardingRoute: {
-    element: dynamicElement(
-      () => import('@/routes/(desktop)/desktop-onboarding'),
-      'Desktop > Desktop Onboarding',
-    ),
-    errorElement: <ErrorBoundary />,
-    path: '/desktop-onboarding',
-  },
+  platformRoutes: [
+    {
+      element: dynamicElement(
+        () => import('@/routes/(desktop)/desktop-onboarding'),
+        'Desktop > Desktop Onboarding',
+      ),
+      errorElement: <ErrorBoundary />,
+      path: '/desktop-onboarding',
+    },
+  ],
 });

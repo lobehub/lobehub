@@ -54,4 +54,10 @@ describe('acceptanceRouter.ensure subject folding', () => {
 
     expect(acceptance).toMatchObject({ subjectId: taskId, subjectType: 'task' });
   });
+
+  it('refuses to create a site review through the generic acceptance API', async () => {
+    await expect(
+      caller().ensure({ subjectId: 'psite_1', subjectType: 'site' as never }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
 });

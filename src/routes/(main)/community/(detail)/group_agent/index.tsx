@@ -9,6 +9,7 @@ import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
 import { groupAgentSelectors } from '@/store/discover/selectors';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import NotFound from '../components/NotFound';
 import { TocProvider } from '../features/Toc/useToc';
@@ -34,7 +35,9 @@ const GroupAgentDetailPage = memo<GroupAgentDetailPageProps>(({ mobile }) => {
 
   if (data === undefined) {
     if (isLoading) return <RouteLoading />;
-    if (error) return <AsyncError error={error} variant={'page'} onRetry={() => void mutate()} />;
+    if (error && !isTrpcErrorCode(error, 'NOT_FOUND')) {
+      return <AsyncError error={error} variant={'page'} onRetry={() => void mutate()} />;
+    }
     return <NotFound />;
   }
   const status = (data as any)?.group?.status || (data as any)?.status;
@@ -105,5 +108,9 @@ const GroupAgentDetailPage = memo<GroupAgentDetailPageProps>(({ mobile }) => {
     </TocProvider>
   );
 });
+
+export const MobileGroupAgentDetailPage = (_props: { mobile?: boolean }) => {
+  return <GroupAgentDetailPage mobile={true} />;
+};
 
 export default GroupAgentDetailPage;

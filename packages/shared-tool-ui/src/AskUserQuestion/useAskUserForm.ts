@@ -49,6 +49,8 @@ export interface UseAskUserFormParams {
 export interface AskUserFormApi {
   activeQuestion?: AskUserQuestionItem;
   activeTab: string;
+  /** Whether this form can supply fallback answers when the countdown ends. */
+  autoSubmitOnTimeout: boolean;
   /**
    * The timeout fallback has fired for this card. Distinguishes "we answered
    * on your behalf" from "the clock ran out and nothing was sent", which the
@@ -85,6 +87,7 @@ export interface AskUserFormApi {
   setEscapeMode: (next: boolean) => void;
   setQuestionMode: (key: string) => void;
   setSupplementMode: (next: boolean) => void;
+  submissionFailed: boolean;
   submitting: boolean;
   supplementActive: boolean;
   supplementText: string;
@@ -123,6 +126,8 @@ export const useAskUserForm = ({
     () => initial.supplementActive && !initial.escapeActive,
   );
   const [submitting, setSubmitting] = useState(false);
+  const [submissionFailed, setSubmissionFailed] = useState(false);
+  const inFlight = useRef(false);
   const [autoSubmitted, setAutoSubmitted] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(() => {
     // Resume on the first unanswered question rather than always at Q1.
@@ -163,6 +168,7 @@ export const useAskUserForm = ({
   const hasProviderOwnedOptionIds = questions.some((question) =>
     question.options.some((option) => !!option.id),
   );
+  const autoSubmitOnTimeout = countdownEnabled && !hasProviderOwnedOptionIds;
 
   // A resolved `onInteractionAction` means the answer was published, not that
   // the producer consumed it — the card stays disabled until the host settles
@@ -173,7 +179,10 @@ export const useAskUserForm = ({
   useEffect(() => () => clearTimeout(ackTimer.current), []);
   const awaitProducerAck = useCallback(() => {
     clearTimeout(ackTimer.current);
-    ackTimer.current = setTimeout(() => setSubmitting(false), SUBMIT_SETTLE_FALLBACK_MS);
+    ackTimer.current = setTimeout(() => {
+      inFlight.current = false;
+      setSubmitting(false);
+    }, SUBMIT_SETTLE_FALLBACK_MS);
   }, []);
 
   /**
@@ -183,13 +192,17 @@ export const useAskUserForm = ({
    */
   const submitWith = useCallback(
     async (payload: Record<string, string | string[]>) => {
-      if (!onInteractionAction || submitting || disabled) return;
+      if (!onInteractionAction || inFlight.current || disabled) return;
+      inFlight.current = true;
+      setSubmissionFailed(false);
       setSubmitting(true);
       try {
         await onInteractionAction({ payload, type: 'submit' });
         awaitProducerAck();
       } catch (err) {
         console.error('[AskUserQuestion] submit failed:', err);
+        inFlight.current = false;
+        setSubmissionFailed(true);
         setSubmitting(false);
       }
     },
@@ -420,13 +433,17 @@ export const useAskUserForm = ({
   ]);
 
   const handleSkip = useCallback(async () => {
-    if (!onInteractionAction || submitting || disabled) return;
+    if (!onInteractionAction || inFlight.current || disabled) return;
+    inFlight.current = true;
+    setSubmissionFailed(false);
     setSubmitting(true);
     try {
       await onInteractionAction({ type: 'skip' });
       awaitProducerAck();
     } catch (err) {
       console.error('[AskUserQuestion] skip failed:', err);
+      inFlight.current = false;
+      setSubmissionFailed(true);
       setSubmitting(false);
     }
   }, [awaitProducerAck, disabled, onInteractionAction, submitting]);
@@ -453,7 +470,7 @@ export const useAskUserForm = ({
     // A stable id means this is a provider-owned choice (permission/plan or a
     // newer exact-id question). Never infer consent by selecting option one:
     // let the producer timeout/cancel fail closed.
-    if (hasProviderOwnedOptionIds) return;
+    if (!autoSubmitOnTimeout) return;
     setAutoSubmitted(true);
     if (escapeActive && escapeAvailable && escapeText.trim().length > 0) {
       void submitWith({ [FREEFORM_PAYLOAD_KEY]: escapeText.trim() });
@@ -487,7 +504,7 @@ export const useAskUserForm = ({
     custom,
     supplementText,
     submitWith,
-    hasProviderOwnedOptionIds,
+    autoSubmitOnTimeout,
   ]);
 
   const activeQuestion = questions[Number(activeTab)] ?? questions[0];
@@ -503,6 +520,7 @@ export const useAskUserForm = ({
   return {
     activeQuestion,
     activeTab,
+    autoSubmitOnTimeout,
     autoSubmitted,
     custom,
     escapeActive: inEscape,
@@ -523,6 +541,7 @@ export const useAskUserForm = ({
     setQuestionMode,
     setSupplementMode,
     submitting: submitting || disabled,
+    submissionFailed,
     supplementActive: inSupplement,
     supplementText,
   };

@@ -1,4 +1,5 @@
 const AGENT_DOCUMENT_ROUTE = /^\/agent\/[^/]+\/docs\/[^/]+\/?$/;
+// Retired report links; the Workbench redirects them into Acceptance.
 const VERIFY_ROUTE = /^\/verify(?:\/[^/]+)?\/?$/;
 
 const pathOnly = (pathname: string) => pathname.split(/[?#]/, 1)[0]!;

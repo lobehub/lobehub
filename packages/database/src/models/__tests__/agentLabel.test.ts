@@ -240,4 +240,44 @@ describe('AgentLabelModel', () => {
       expect(next).toEqual([]);
     });
   });
+
+  describe('toggleAgentLabel', () => {
+    it('should remove a single label when toggled off, leaving the rest intact', async () => {
+      await createAgent('agt-toggle-off');
+      const a = await personalModel.create({ name: 'Toggle A' });
+      const b = await personalModel.create({ name: 'Toggle B' });
+
+      await personalModel.toggleAgentLabel('agt-toggle-off', a.id, true);
+      await personalModel.toggleAgentLabel('agt-toggle-off', b.id, true);
+
+      const remaining = await personalModel.toggleAgentLabel('agt-toggle-off', a.id, false);
+
+      expect(remaining).toEqual([b.id]);
+      expect(await personalModel.getAgentLabelIds('agt-toggle-off')).toEqual([b.id]);
+    });
+
+    it('should be a no-op when toggling off a label that is not assigned', async () => {
+      await createAgent('agt-toggle-off-missing');
+      const label = await personalModel.create({ name: 'Never Assigned' });
+
+      const ids = await personalModel.toggleAgentLabel('agt-toggle-off-missing', label.id, false);
+
+      expect(ids).toEqual([]);
+    });
+
+    it('should reject applying a label that does not exist in the scope', async () => {
+      await createAgent('agt-toggle-unknown');
+
+      await expect(
+        personalModel.toggleAgentLabel(
+          'agt-toggle-unknown',
+          '00000000-0000-0000-0000-000000000000',
+          true,
+        ),
+      ).rejects.toThrow(/not found in current scope/);
+
+      // the failed toggle writes nothing
+      expect(await personalModel.getAgentLabelIds('agt-toggle-unknown')).toEqual([]);
+    });
+  });
 });

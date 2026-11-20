@@ -6,17 +6,25 @@ import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryEx
  * Shared header guard for the memory webhook receivers.
  *
  * `MEMORY_USER_MEMORY_WEBHOOK_HEADERS` configures a set of static
- * `header: value` pairs that every caller must present. When no headers are
- * configured the guard is a no-op, matching the previous per-route behavior.
+ * `header: value` pairs that every caller must present. Reject requests when
+ * authentication is not configured rather than exposing the memory pipeline.
  */
 export const memoryWebhookAuth = (): MiddlewareHandler => async (c, next) => {
   const { webhook } = parseMemoryExtractionConfig();
 
-  if (webhook.headers && Object.keys(webhook.headers).length > 0) {
-    for (const [key, value] of Object.entries(webhook.headers)) {
-      if (c.req.header(key) !== value) {
-        return c.json({ error: `Unauthorized: Missing or invalid header '${key}'` }, 403);
-      }
+  if (!webhook.headers || Object.keys(webhook.headers).length === 0) {
+    return c.json(
+      {
+        error:
+          'Memory webhook authentication is not configured. Set MEMORY_USER_MEMORY_WEBHOOK_HEADERS.',
+      },
+      503,
+    );
+  }
+
+  for (const [key, value] of Object.entries(webhook.headers)) {
+    if (c.req.header(key) !== value) {
+      return c.json({ error: `Unauthorized: Missing or invalid header '${key}'` }, 403);
     }
   }
 

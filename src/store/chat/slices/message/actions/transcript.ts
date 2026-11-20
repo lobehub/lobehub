@@ -90,6 +90,7 @@ export class MessageTranscriptActionImpl {
   ): Promise<{ error?: unknown; started: boolean }> => {
     const skipped = { started: false };
     if (!context.agentId || !context.topicId) return skipped;
+    if (context.messageReadMode === 'forward') return skipped;
 
     const { slice } = this.#transcript;
     const key = this.#transcript.keyOf(context);
@@ -120,6 +121,29 @@ export class MessageTranscriptActionImpl {
     await slice.loadMore(key, context);
     const error = read()?.loadMoreError;
     if (error) log('[loadEarlierMessages] failed | key=%s | %O', messageMapKey(context), error);
+    return { error: error ?? undefined, started: true };
+  };
+
+  /**
+   * Load the rounds after a forward transcript's loaded pages and append them.
+   * No-ops for a newest-first transcript, while a page is in flight, and once
+   * the topic's end is reached. Never rejects: resolves the failure instead.
+   */
+  loadLaterMessages = async (
+    context: ConversationContext,
+    options?: { onStart?: () => void },
+  ): Promise<{ error?: unknown; started: boolean }> => {
+    const skipped = { started: false };
+    if (context.messageReadMode !== 'forward') return skipped;
+
+    const key = this.#transcript.keyOf(context);
+    const view = this.#transcript.read(key);
+    if (!view?.hasMore || view.isLoadingMore) return skipped;
+
+    options?.onStart?.();
+    await this.#transcript.slice.loadMore(key, context);
+    const error = this.#transcript.read(key)?.loadMoreError;
+    if (error) log('[loadLaterMessages] failed | key=%s | %O', messageMapKey(context), error);
     return { error: error ?? undefined, started: true };
   };
 

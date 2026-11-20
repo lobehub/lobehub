@@ -1,4 +1,6 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
+
+import { densityVars } from '@/styles/densityVars';
 
 export const minimapStyles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -118,7 +120,7 @@ export const previewStyles = createStaticStyles(({ css, cssVar }) => ({
     cursor: pointer;
 
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: 6px;
 
     color: ${cssVar.colorTextSecondary};

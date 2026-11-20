@@ -1,10 +1,9 @@
 'use client';
 
 import { LayersEnum } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Icon, toast } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles } from 'antd-style';
+import * as stylex from '@stylexjs/stylex';
 import type { LucideIcon } from 'lucide-react';
 import { Brain, ClipboardCheck } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
@@ -19,20 +18,20 @@ import { useStableNavigate } from '@/hooks/useStableNavigate';
 import { mutate } from '@/libs/swr';
 import { userMemoryKeys } from '@/libs/swr/keys';
 import { agentSignalService } from '@/services/agentSignal';
+import { agentSignalActions } from '@/store/agentSignal';
 import { useChatStore } from '@/store/chat';
 
 import type { AgentSignalReceiptView } from '../hooks/useAgentSignalReceipts';
 
-const styles = createStaticStyles(({ css }) => ({
-  list: css`
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-
-    width: 100%;
-    margin-block-start: 8px;
-  `,
-}));
+const styles = stylex.create({
+  list: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    width: '100%',
+    marginBlockStart: '8px',
+  },
+});
 
 const RECEIPT_LUCIDE_ICON_BY_KIND = {
   memory: Brain,
@@ -222,6 +221,10 @@ const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(
         onRollbackStatusChange(receipt.id, status);
 
         if (ROLLBACK_SUCCESS_STATUSES.has(status)) {
+          agentSignalActions.markReceiptRolledBack(
+            { agentId: receipt.agentId, topicId: receipt.topicId },
+            receipt.id,
+          );
           // Drop the cached detail so an open Portal / memory page shows the memory is gone.
           if (target?.type === 'memory' && target.memoryLayer && target.id) {
             void mutate(userMemoryKeys.memoryDetail(target.memoryLayer, target.id));
@@ -267,7 +270,9 @@ const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(
     }, [
       canRollback,
       onRollbackStatusChange,
+      receipt.agentId,
       receipt.id,
+      receipt.topicId,
       rollbackAgentDocumentId,
       rollbackDocumentId,
       rollbackHistoryId,
@@ -318,7 +323,7 @@ const AgentSignalReceiptList = memo<AgentSignalReceiptListProps>(({ receipts }) 
 
   // TODO: Migrate this temporary receipt UI into the final Agent Signal feedback surface.
   return (
-    <div className={styles.list}>
+    <div {...stylex.props(styles.list)}>
       {receipts.map((receipt) => (
         <AgentSignalReceiptItem
           key={receipt.id}

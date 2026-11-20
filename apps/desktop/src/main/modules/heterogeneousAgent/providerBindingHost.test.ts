@@ -6,8 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   gcHostedProviderBindingProfiles,
+  type HostedProviderBinding,
   prepareHostedProviderBinding,
   prepareHostedServerDefaultBinding,
+  resolveHostedBindingSession,
 } from './providerBindingHost';
 import type { HeterogeneousAgentDriver } from './types';
 
@@ -308,5 +310,42 @@ describe('gcHostedProviderBindingProfiles', () => {
     const appStoragePath = await mkdtemp(path.join(tmpdir(), 'provider-binding-gc-'));
     roots.push(appStoragePath);
     await expect(gcHostedProviderBindingProfiles(appStoragePath)).resolves.toEqual([]);
+  });
+});
+
+describe('hosted binding session selection', () => {
+  const binding = {
+    bindingKey: 'selected-binding',
+    model: 'custom:model-0',
+  } as HostedProviderBinding;
+  it('selects the managed CLI model and only resumes the matching binding', () => {
+    const params = {
+      agentType: 'droid',
+      binding,
+      initialModel: 'catalog-model',
+      resumeSessionId: 'native-session',
+    };
+    expect(
+      resolveHostedBindingSession({ ...params, resumeBindingKey: 'selected-binding' }),
+    ).toEqual({ model: 'custom:model-0', resumeSessionId: 'native-session' });
+    expect(
+      resolveHostedBindingSession({ ...params, resumeBindingKey: 'previous-binding' }),
+    ).toEqual({ model: 'custom:model-0', resumeSessionId: undefined });
+  });
+  it('preserves subscription resumes and TRAE managed-model selection', () => {
+    expect(
+      resolveHostedBindingSession({
+        agentType: 'droid',
+        initialModel: 'native-model',
+        resumeSessionId: 'native-session',
+      }),
+    ).toEqual({ model: 'native-model', resumeSessionId: 'native-session' });
+    expect(
+      resolveHostedBindingSession({
+        agentType: 'trae',
+        binding: { ...binding, model: undefined },
+        initialModel: 'native-model',
+      }).model,
+    ).toBeUndefined();
   });
 });

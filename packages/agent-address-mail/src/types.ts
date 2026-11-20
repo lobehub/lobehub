@@ -133,5 +133,10 @@ export interface EmailAdapterConfig {
 }
 
 export interface EmailApiError {
-  error?: { code?: string; message?: string };
+  error?: {
+    code?: string;
+    /** Per-field zod failures on a `validation_error` (422). */
+    issues?: { message?: string; path?: string }[];
+    message?: string;
+  };
 }

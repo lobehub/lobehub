@@ -13,6 +13,7 @@
     "workers/**/*.ts",
     "vite.config.ts",
     "vite.config.rr.mts",
+    "vite.config.report.mts",
     "react-router.config.ts",
     "../../src/types/global.d.ts"
   ]

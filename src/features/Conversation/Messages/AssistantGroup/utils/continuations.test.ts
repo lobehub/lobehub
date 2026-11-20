@@ -21,15 +21,14 @@ const message = (input: Partial<UIChatMessage> & { id: string; role: UIChatMessa
   }) as UIChatMessage;
 
 describe('assistant group continuations', () => {
-  it('keeps task completion summaries in continuation chains', () => {
+  it('uses a group continuation’s blocks as its chain', () => {
     const chains = buildContinuationChains(
       [{ groupId: 'group-2', steerUserId: 'steer-1' }],
       [
         message({
-          children: [block('child-1')],
+          children: [block('child-1'), block('task-summary-1')],
           id: 'group-2',
           role: 'assistantGroup',
-          taskCompletions: [block('task-summary-1')],
         }),
       ],
     );

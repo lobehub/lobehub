@@ -1,4 +1,3 @@
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import { type AgentGroupDetail, type AgentGroupMember, type AgentItem } from '@lobechat/types';
 
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG, DEFAULT_CHAT_GROUP_META_CONFIG } from '@/const/settings';
@@ -49,10 +48,11 @@ const groupMembers =
 
 const groupMemberAvatars =
   (groupId: string) =>
-  (s: ChatGroupStore): { avatar: string; background?: string }[] =>
+  (s: ChatGroupStore): { avatar?: string; background?: string; seed: string }[] =>
     groupMembers(groupId)(s).map((agent) => ({
-      avatar: agent.avatar || DEFAULT_AVATAR,
+      avatar: agent.avatar || undefined,
       background: agent.backgroundColor || undefined,
+      seed: agent.id,
     }));
 
 const groupOpeningMessage =

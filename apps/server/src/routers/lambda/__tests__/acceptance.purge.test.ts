@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { acceptances, verifyRuns, workspaceMembers, workspaces } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { acceptanceRouter } from '../acceptance';
@@ -159,6 +159,63 @@ describe('acceptanceRouter purge', () => {
       await expect(
         caller(ownerId).purgePreview({ ids: [personalId, randomUUID()] }),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('caps concurrent per-scope previews while still summing every scope', async () => {
+      const extraWorkspaces = await serverDB
+        .insert(workspaces)
+        .values(
+          Array.from({ length: 6 }, (_, i) => ({
+            name: `ws-${i}`,
+            primaryOwnerId: ownerId,
+            slug: `ws-${randomUUID()}`,
+          })),
+        )
+        .returning();
+      try {
+        const rows = await serverDB
+          .insert(acceptances)
+          .values(
+            extraWorkspaces.map((ws) => ({
+              subjectId: randomUUID(),
+              subjectType: 'standalone' as const,
+              userId: ownerId,
+              visibility: 'private' as const,
+              workspaceId: ws.id,
+            })),
+          )
+          .returning();
+
+        let inFlight = 0;
+        let maxInFlight = 0;
+        purgeMocks.previewAcceptancePurge.mockImplementation(async () => {
+          inFlight += 1;
+          maxInFlight = Math.max(maxInFlight, inFlight);
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          inFlight -= 1;
+          return { bytes: 1, fileCount: 1, files: { images: 1, other: 0, videos: 0 }, rounds: 1 };
+        });
+
+        const res = await caller(ownerId).purgePreview({ ids: rows.map((row) => row.id) });
+
+        expect(res).toEqual({
+          bytes: 6,
+          fileCount: 6,
+          files: { images: 6, other: 0, videos: 0 },
+          rounds: 6,
+        });
+        expect(purgeMocks.previewAcceptancePurge).toHaveBeenCalledTimes(6);
+        expect(maxInFlight).toBeGreaterThan(1);
+        expect(maxInFlight).toBeLessThanOrEqual(4);
+      } finally {
+        purgeMocks.previewAcceptancePurge.mockReset();
+        await serverDB.delete(workspaces).where(
+          inArray(
+            workspaces.id,
+            extraWorkspaces.map((ws) => ws.id),
+          ),
+        );
+      }
     });
   });
 

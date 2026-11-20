@@ -31,9 +31,10 @@ if ! have_compatible_node; then
   install_node
 fi
 
-if ! command -v supervisord >/dev/null 2>&1; then
+# tree-kill uses ps to enumerate child processes on Linux.
+if ! command -v supervisord >/dev/null 2>&1 || ! command -v ps >/dev/null 2>&1; then
   apt-get update
-  DEBIAN_FRONTEND=noninteractive apt-get install -y supervisor
+  DEBIAN_FRONTEND=noninteractive apt-get install -y supervisor procps
 fi
 
 for bin in node npm; do
@@ -61,4 +62,25 @@ test -f /opt/lh-dev/package.json
 test -f /opt/lh-dev/dist/index.js
 /opt/lh-dev/run-lh.sh --version
 {% endif %}
+{% endif %}
+
+{% if not use_system_cli %}
+{% if install_cli %}
+install_runtime=true
+{% else %}
+install_runtime=false
+{% endif %}
+if [[ "$install_runtime" == true || "${1:-}" == --install-runtime ]]; then
+  node --input-type=module <<'LH_DEPENDENCIES'
+import fs from 'node:fs/promises';
+const manifest = JSON.parse(await fs.readFile('/opt/lh-dev/package.json', 'utf8'));
+await fs.writeFile('/opt/lh-dev/package.json', JSON.stringify({
+  name: manifest.name,
+  version: manifest.version,
+  type: manifest.type,
+  dependencies: manifest.dependencies,
+}));
+LH_DEPENDENCIES
+  npm install --prefix /opt/lh-dev --omit=dev --no-audit --no-fund --package-lock=false
+fi
 {% endif %}

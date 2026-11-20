@@ -1,4 +1,5 @@
 import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
+import type { AskUserBridge, AskUserBridgeOptions } from '@lobechat/heterogeneous-agents/askUser';
 import { buildHeterogeneousPrompt } from '@lobechat/heterogeneous-agents/protocol';
 import type { AgentStreamEvent } from '@lobechat/heterogeneous-agents/spawn';
 import {
@@ -59,6 +60,11 @@ interface CodexAppServerHost {
     startedAt: string;
   }) => void;
   resolveSessionCommand: (session: AgentSession) => string;
+  setupAcpInterventionForOp: (
+    operationId: string,
+    sessionId: string,
+    provider: NonNullable<AskUserBridgeOptions['provider']>,
+  ) => { bridge: AskUserBridge; cleanup: () => Promise<void> };
   writeCliTraceFile: (
     trace: CliTraceSession | undefined,
     name: string,
@@ -216,8 +222,14 @@ export async function sendPromptWithCodexAppServer(
     sessionId: session.sessionId,
   });
 
+  const intervention = host.setupAcpInterventionForOp(
+    params.operationId,
+    session.sessionId,
+    'codex',
+  );
   try {
     await appServerSession.run({
+      askUserBridge: intervention.bridge,
       input,
       onRawMessage: (line) => host.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
       operationId: params.operationId,
@@ -290,5 +302,7 @@ export async function sendPromptWithCodexAppServer(
     throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
       cause: error,
     });
+  } finally {
+    await intervention.cleanup();
   }
 }

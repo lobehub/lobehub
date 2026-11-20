@@ -122,10 +122,9 @@ type AssistantTokenBlock =
  *   `editorData`, `extra`, `metadata`
  *   (other than `metadata.usage.totalOutputTokens` shortcut for assistant and
  *   `metadata.instruction` for `task` messages, which ship in the template)
- * Also NOT counted: in-bubble `council` blocks (`AssistantContentBlock.council`)
- * and `taskCompletions` on group wrappers — both are UI-only denormalizations
- * (broadcast member replies / folded subagent completions) that GroupMessageFlatten
- * drops and never reach the provider. Counting them would over-estimate and
+ * Also NOT counted: in-bubble `council` blocks (`AssistantContentBlock.council`) —
+ * a UI-only denormalization (broadcast member replies) that GroupMessageFlatten
+ * drops and never reaches the provider. Counting them would over-estimate and
  * trigger compression too early.
  *
  * **Token estimation accuracy**

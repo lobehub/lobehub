@@ -36,6 +36,12 @@ const run = (patch: Partial<WidgetRunRecord> = {}): WidgetRunRecord => ({
 
 const createService = (): { [K in keyof DashboardToolService]: ReturnType<typeof vi.fn> } => ({
   addToDashboard: vi.fn(async () => ({ title: 'Ops' })),
+  createDashboard: vi.fn(async (title: string, description?: string) => ({
+    description,
+    id: 'd-new',
+    projectId: null,
+    title,
+  })),
   createDashboardWithWidget: vi.fn(async (title: string) => ({ id: 'd-new', title })),
   createWidgetDraft: vi.fn(async () => ({ version: version(), widgetId: 'w1' })),
   dryRun: vi.fn(async () => run()),
@@ -50,6 +56,13 @@ const createService = (): { [K in keyof DashboardToolService]: ReturnType<typeof
     version: version({ status: 'published' }),
   })),
   saveDraft: vi.fn(async () => version({ id: 'v2', version: 2 })),
+  updateDashboard: vi.fn(
+    async (_id: string, patch: { description?: string | null; title?: string }) => ({
+      description: patch.description,
+      projectId: null,
+      title: patch.title ?? 'Ops',
+    }),
+  ),
   updateWidget: vi.fn(async () => undefined),
 });
 
@@ -65,7 +78,12 @@ describe('listDashboards', () => {
   it('lists boards with their widgets and the agent’s own widgets', async () => {
     service.listDashboards.mockResolvedValue([
       { id: 'd0', projectId: 'prj_1', title: 'Launch', widgets: [] },
-      { id: 'd1', title: 'Ops', widgets: [{ id: 'w1', title: 'Stars' }] },
+      {
+        description: 'Repo health',
+        id: 'd1',
+        title: 'Ops',
+        widgets: [{ id: 'w1', title: 'Stars' }],
+      },
     ]);
     service.listWidgets.mockResolvedValue([
       { hasDraft: true, id: 'w2', lastRunStatus: 'failed', published: false, title: 'Bugs' },
@@ -74,8 +92,8 @@ describe('listDashboards', () => {
     const result = await runtime.listDashboards();
 
     expect(result.success).toBe(true);
-    expect(result.content).toContain('"Launch" (d0) [project]: no widgets');
-    expect(result.content).toContain('"Ops" (d1): "Stars" (w1)');
+    expect(result.content).toContain('"Launch" (d0) [project] — no description: no widgets');
+    expect(result.content).toContain('"Ops" (d1) — Repo health: "Stars" (w1)');
     expect(result.content).toContain('"Bugs" (w2): not published, has draft, last run failed');
     expect(result.state.dashboards).toHaveLength(2);
   });
@@ -324,13 +342,47 @@ describe('addWidgetToDashboard', () => {
       newDashboardTitle: ' Team health ',
       widgetId: 'w1',
     });
-    expect(service.createDashboardWithWidget).toHaveBeenCalledWith('Team health', 'w1');
+    expect(service.createDashboardWithWidget).toHaveBeenCalledWith('Team health', 'w1', undefined);
     expect(service.addToDashboard).not.toHaveBeenCalled();
     expect(result.state).toMatchObject({
       createdDashboard: true,
       dashboardId: 'd-new',
       dashboardTitle: 'Team health',
     });
+  });
+
+  it('creates the new board with its description', async () => {
+    await runtime.addWidgetToDashboard({
+      newDashboardDescription: ' Launch monitoring for iBench ',
+      newDashboardTitle: 'iBench launch',
+      widgetId: 'w1',
+    });
+    expect(service.createDashboardWithWidget).toHaveBeenCalledWith(
+      'iBench launch',
+      'w1',
+      'Launch monitoring for iBench',
+    );
+  });
+
+  it('rejects a new-board description beyond the API limit before creating anything', async () => {
+    const result = await runtime.addWidgetToDashboard({
+      newDashboardDescription: 'x'.repeat(2001),
+      newDashboardTitle: 'Ops',
+      widgetId: 'w1',
+    });
+    expect(result).toMatchObject({ success: false });
+    expect(result.content).toContain('newDashboardDescription must be at most 2000 characters');
+    expect(service.createDashboardWithWidget).not.toHaveBeenCalled();
+  });
+
+  it('ignores the new-board description when placing on an existing board', async () => {
+    const result = await runtime.addWidgetToDashboard({
+      dashboardId: 'd1',
+      newDashboardDescription: 'x'.repeat(2001),
+      widgetId: 'w1',
+    });
+    expect(result.success).toBe(true);
+    expect(service.addToDashboard).toHaveBeenCalledWith('d1', 'w1');
   });
 
   it('reports a failed create-and-place without a separate board write', async () => {
@@ -360,6 +412,91 @@ describe('addWidgetToDashboard', () => {
   it('needs a target', async () => {
     const result = await runtime.addWidgetToDashboard({ widgetId: 'w1' });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('createDashboard', () => {
+  it('creates an empty board with its description and returns its id', async () => {
+    const result = await runtime.createDashboard({
+      description: ' Launch monitoring ',
+      title: ' iBench launch ',
+    });
+    expect(service.createDashboard).toHaveBeenCalledWith('iBench launch', 'Launch monitoring');
+    expect(result).toMatchObject({
+      state: { dashboardId: 'd-new', description: 'Launch monitoring', title: 'iBench launch' },
+      success: true,
+    });
+    expect(result.content).toContain('addWidgetToDashboard and dashboardId d-new');
+  });
+
+  it.each([
+    [{ title: ' ' }, 'title is required'],
+    [{ title: 'x'.repeat(201) }, 'title must be at most 200'],
+    [{ description: 'x'.repeat(2001), title: 'Ops' }, 'description must be at most 2000'],
+  ])('refuses %o before creating anything', async (params, message) => {
+    const result = await runtime.createDashboard(params);
+    expect(result.success).toBe(false);
+    expect(result.content).toContain(message);
+    expect(service.createDashboard).not.toHaveBeenCalled();
+  });
+
+  it('reports a refused level', async () => {
+    service.createDashboard.mockRejectedValue(new Error('create the dashboard inside a project'));
+    const result = await runtime.createDashboard({ description: 'x', title: 'Ops' });
+    expect(result).toMatchObject({ success: false });
+    expect(result.content).toContain('inside a project');
+  });
+});
+
+describe('updateDashboard', () => {
+  it('writes the description of an existing board', async () => {
+    const result = await runtime.updateDashboard({
+      dashboardId: 'd1',
+      description: ' Repo health ',
+    });
+    expect(service.updateDashboard).toHaveBeenCalledWith('d1', { description: 'Repo health' });
+    expect(result).toMatchObject({
+      state: { dashboardId: 'd1', description: 'Repo health', title: 'Ops' },
+      success: true,
+    });
+    expect(result.content).toContain('Updated the description of dashboard "Ops" (d1)');
+  });
+
+  it('renames and re-describes in one call', async () => {
+    const result = await runtime.updateDashboard({
+      dashboardId: 'd1',
+      description: 'Launch',
+      title: 'iBench',
+    });
+    expect(service.updateDashboard).toHaveBeenCalledWith('d1', {
+      description: 'Launch',
+      title: 'iBench',
+    });
+    expect(result.content).toContain('title and description');
+  });
+
+  it('clears the description with an empty string', async () => {
+    await runtime.updateDashboard({ dashboardId: 'd1', description: '  ' });
+    expect(service.updateDashboard).toHaveBeenCalledWith('d1', { description: null });
+  });
+
+  it.each([
+    [{ dashboardId: 'd1' }, 'Pass title and/or description'],
+    [{ dashboardId: 'd1', title: ' ' }, 'title cannot be empty'],
+    [{ dashboardId: 'd1', title: 'x'.repeat(201) }, 'title must be at most 200'],
+    [{ dashboardId: 'd1', description: 'x'.repeat(2001) }, 'description must be at most 2000'],
+  ])('refuses %o before writing', async (params, message) => {
+    const result = await runtime.updateDashboard(params);
+    expect(result.success).toBe(false);
+    expect(result.content).toContain(message);
+    expect(service.updateDashboard).not.toHaveBeenCalled();
+  });
+
+  it('reports a board out of reach', async () => {
+    service.updateDashboard.mockRejectedValue(new Error('Dashboard not found or not editable'));
+    const result = await runtime.updateDashboard({ dashboardId: 'd9', description: 'x' });
+    expect(result).toMatchObject({ success: false });
+    expect(result.content).toContain('not editable');
   });
 });
 

@@ -5,7 +5,7 @@ import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { initModelRuntimeForRequest } from '@/server/modules/AgentRuntime/llmRelay/oneShot';
 
 import { resolveSystemAgentModelConfig } from '../systemAgent/modelConfig';
 
@@ -65,13 +65,11 @@ export class TaskReviewService {
       rubrics.length,
     );
 
-    // 2. Initialize ModelRuntime for LLM-based rubrics
-    const modelRuntime = await initModelRuntimeFromDB(
-      this.db,
-      this.userId,
-      provider,
-      this.workspaceId,
-    );
+    // 2. Initialize ModelRuntime for LLM-based rubrics. A judge only the user's
+    // device reaches is relayed to the requesting tab (fails fast without one).
+    const modelRuntime = await initModelRuntimeForRequest(this.db, this.userId, provider, {
+      workspaceId: this.workspaceId,
+    });
 
     // 3. Run evaluate() from @lobechat/eval-rubric
     const result: EvaluateResult = await evaluate(

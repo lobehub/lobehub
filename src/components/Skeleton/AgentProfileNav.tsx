@@ -1,7 +1,8 @@
 'use client';
 
-import { Center, Flexbox } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Center, cssVar, Flexbox } from '@lobehub/ui';
+
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import SkeletonBar from './Bar';
 
@@ -10,7 +11,7 @@ export interface AgentProfileNavSkeletonProps {
   actions?: number;
   /** Extra breadcrumb segments after the agent name (e.g. `Channels › Discord`). */
   breadcrumbItems?: number;
-  /** Whether the centred profile tab switcher is drawn (hidden on nested detail pages). */
+  /** Whether the centred profile tab switcher is drawn (mobile only, and not on nested detail pages). */
   tabs?: boolean;
 }
 
@@ -24,7 +25,7 @@ export interface AgentProfileNavSkeletonProps {
 const AgentProfileNavSkeleton = ({
   actions = 0,
   breadcrumbItems = 0,
-  tabs = true,
+  tabs = isMobileSurface(),
 }: AgentProfileNavSkeletonProps) => (
   <Flexbox
     horizontal

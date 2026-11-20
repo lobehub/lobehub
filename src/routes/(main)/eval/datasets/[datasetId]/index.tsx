@@ -1,8 +1,14 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { ArrowLeft, Database, Pencil, Plus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +16,7 @@ import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
+import { DatasetConnections } from '@/features/AgentEval/ConnectorBindings/DatasetConnections';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { agentEvalService } from '@/services/agentEval';
@@ -17,7 +24,7 @@ import { runSelectors, testCaseSelectors, useEvalStore } from '@/store/eval';
 
 import TestCasePreviewPanel from '../../bench/[benchmarkId]/features/DatasetsTab/TestCasePreviewPanel';
 import TestCaseTable from '../../bench/[benchmarkId]/features/DatasetsTab/TestCaseTable';
-import { createRunCreateModal } from '../../bench/[benchmarkId]/features/RunCreateModal';
+import { useCreateRun } from '../../bench/[benchmarkId]/features/RunCreateModal/useCreateRun';
 import EmptyState from '../../bench/[benchmarkId]/features/RunsTab/EmptyState';
 import RunCard from '../../bench/[benchmarkId]/features/RunsTab/RunCard';
 import { createDatasetEditModal } from '../../features/DatasetEditModal';
@@ -114,6 +121,7 @@ const DatasetDetail = memo(() => {
   const benchmarkId: string | null =
     (dataset as { benchmarkId?: string | null })?.benchmarkId ?? null;
   useFetchDatasetRuns(datasetId);
+  const { createRun, lobeBench } = useCreateRun(benchmarkId ?? undefined);
 
   const sortedRuns = useMemo(
     () =>
@@ -302,6 +310,8 @@ const DatasetDetail = memo(() => {
               )}
             </Flexbox>
 
+            <DatasetConnections datasetId={dataset.id} editable={!!dataset.userId} />
+
             {/* Test Cases */}
             <Flexbox gap={12}>
               <Flexbox horizontal align="center" justify="space-between">
@@ -355,15 +365,11 @@ const DatasetDetail = memo(() => {
                   <Button
                     icon={Plus}
                     size="small"
-                    onClick={() =>
-                      createRunCreateModal({
-                        benchmarkId: benchmarkId!,
-                        datasetId: datasetId!,
-                        datasetName: dataset.name,
-                      })
-                    }
+                    onClick={() => createRun({ id: datasetId!, name: dataset.name })}
                   >
-                    {t('dataset.detail.addRun')}
+                    {lobeBench
+                      ? t('lobeBench.benchmark.newExperiment')
+                      : t('dataset.detail.addRun')}
                   </Button>
                 </Flexbox>
                 {sortedRuns.length > 0 ? (
@@ -374,13 +380,8 @@ const DatasetDetail = memo(() => {
                   </Flexbox>
                 ) : (
                   <EmptyState
-                    onCreate={() =>
-                      createRunCreateModal({
-                        benchmarkId: benchmarkId!,
-                        datasetId: datasetId!,
-                        datasetName: dataset.name,
-                      })
-                    }
+                    createLabel={lobeBench ? t('lobeBench.benchmark.newExperiment') : undefined}
+                    onCreate={() => createRun({ id: datasetId!, name: dataset.name })}
                   />
                 )}
               </Flexbox>

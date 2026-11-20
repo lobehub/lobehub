@@ -1,6 +1,13 @@
-import { Icon, Image, stopPropagation, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx, keyframes } from 'antd-style';
+import {
+  Button,
+  createStaticStyles,
+  cx,
+  Icon,
+  Image,
+  keyframes,
+  stopPropagation,
+  Tooltip,
+} from '@lobehub/ui';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -8,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 import { isChunkingSupported } from '@/libs/document-loaders/loaderType';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
+import { densityVars } from '@/styles/densityVars';
 import { type AsyncTaskStatus, type IAsyncTaskError } from '@/types/asyncTask';
 import { formatSize } from '@/utils/format';
 
@@ -51,7 +59,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
 
     opacity: 0;
     background: ${cssVar.colorBgMask};
@@ -86,7 +94,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     max-width: 100%;
     margin-block-end: 8px;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: ${cssVar.fontWeightStrong};
     color: ${cssVar.colorTextLightSolid};
     text-align: center;
@@ -110,7 +118,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
 
     color: ${cssVar.colorTextQuaternary};
   `,

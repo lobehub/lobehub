@@ -6,9 +6,19 @@ import type {
   HeteroSessionDirPref,
   HeteroSessionImportStatus,
 } from '@lobechat/types';
-import { Flexbox, Icon, ScrollShadow, SearchBar } from '@lobehub/ui';
-import { Button, Checkbox, Progress, Spin, Text, useModalContext } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  Button,
+  Checkbox,
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  Progress,
+  ScrollShadow,
+  SearchBar,
+  Spin,
+  Text,
+  useModalContext,
+} from '@lobehub/ui';
 import { Check, FolderSearch, TriangleAlert, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +26,7 @@ import { useTranslation } from 'react-i18next';
 import { electronHeteroSessionService } from '@/services/electron/heteroSession';
 import { topicService } from '@/services/topic';
 import { useChatStore } from '@/store/chat';
+import { densityVars } from '@/styles/densityVars';
 
 import { SessionRow } from './SessionList';
 import SidebarTree, { type TreeScope } from './SidebarTree';
@@ -23,8 +34,8 @@ import { deriveSessionStatus, dirKeyOf, fmtTokens, type ImportRowState, selectab
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   footer: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));

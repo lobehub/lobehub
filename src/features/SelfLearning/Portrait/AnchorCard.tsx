@@ -1,13 +1,12 @@
 'use client';
 
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Accordion, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Accordion, Block, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { AnchorIcon, CircleCheckIcon, CircleXIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ExpertiseDomainItem } from '@/services/expertise';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   anchorCard: css`
@@ -15,7 +14,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   anchorContent: css`
     padding-block: 8px 16px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
   `,
   anchorHeader: css`
     &:hover {
@@ -28,7 +27,7 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 6px;
 
     min-width: 0;
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 14px;
     border-radius: ${cssVar.borderRadiusLG};
 
@@ -56,7 +55,7 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 4px;
 
     min-width: 0;
-    padding-inline-start: 12px;
+    padding-inline-start: ${densityVars.contentGap};
     border-inline-start: 2px solid ${cssVar.colorBorderSecondary};
   `,
   layerIndex: css`

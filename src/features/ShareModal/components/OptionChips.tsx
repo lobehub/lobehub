@@ -1,7 +1,7 @@
-import { Icon } from '@lobehub/ui';
-import { type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx, type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
 import { CheckIcon, ChevronDownIcon, PlusIcon } from 'lucide-react';
+
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chip: css`
@@ -13,7 +13,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     height: 30px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px dashed ${cssVar.colorBorder};
     border-radius: 15px;
 

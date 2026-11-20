@@ -3,10 +3,8 @@ import path from 'node:path';
 import type { PipelineEntry, RepoMount } from './types';
 
 /**
- * stylelint's CSS-in-JS parser mangles ordinary template literals in files it
- * was never configured for (it corrupted this very script once): the repos
- * scope stylelint to `{src,tests}/**` in their `lint:style` scripts, so apply
- * the same boundary here instead of lint-staged's blanket `*.{ts,tsx}` glob.
+ * The repos scope stylelint to `{src,tests}/**` in their `lint:style` scripts,
+ * so apply the same boundary here instead of lint-staged's blanket CSS glob.
  */
 export const stylelintApplies = (subPath: string) => /^(?:src|tests)\//.test(subPath);
 

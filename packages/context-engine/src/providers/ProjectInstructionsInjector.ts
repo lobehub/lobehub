@@ -13,6 +13,11 @@ const log = debug('context-engine:provider:ProjectInstructionsInjector');
 
 export interface ProjectInstructionFile {
   content: string;
+  /**
+   * Absolute path of the file, telling the model which directory the rules
+   * cover when several levels of a repository contribute one.
+   */
+  path?: string;
   /** Where the file came from, e.g. `AGENTS.md` — surfaced to the model. */
   source: string;
 }
@@ -23,8 +28,8 @@ export interface ProjectInstructionsInjectorConfig {
 }
 
 /**
- * Injects a project's root instruction files (`AGENTS.md` / `CLAUDE.md`) into
- * the system message.
+ * Injects a project's instruction files (`AGENTS.md` / `CLAUDE.md`, from the
+ * working directory up to the repository root) into the system message.
  *
  * Takes the files rather than a rendered block: wrapping them is presentation,
  * which belongs to the pipeline that owns the system message. The server used
@@ -55,8 +60,8 @@ export class ProjectInstructionsInjector extends BaseSystemRoleProvider {
 
     return instructions
       .map(
-        ({ content, source }) =>
-          `<project_instructions source="${source}">\n${content}\n</project_instructions>`,
+        ({ content, path, source }) =>
+          `<project_instructions source="${source}"${path ? ` path="${path}"` : ''}>\n${content}\n</project_instructions>`,
       )
       .join('\n\n');
   }
