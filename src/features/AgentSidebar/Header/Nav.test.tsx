@@ -172,8 +172,6 @@ vi.mock('@/store/user/selectors', () => ({
   labPreferSelectors: {
     enableSelfLearning: (state: { preference: { lab?: { enableSelfLearning?: boolean } } }) =>
       state.preference.lab?.enableSelfLearning ?? false,
-    enableGoals: (state: { preference: { lab?: { enableGoals?: boolean } } }) =>
-      state.preference.lab?.enableGoals ?? false,
   },
 }));
 
@@ -342,39 +340,32 @@ describe('Agent sidebar header nav', () => {
     expect(screen.getByRole('button', { name: 'title' })).toBeInTheDocument();
   });
 
-  it('navigates to the agent goals page', () => {
+  it('opens the combined entry even when a previous Goals preference is false', () => {
+    labMock.enableGoals = false;
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
     render(<Nav />);
-    fireEvent.click(screen.getByRole('button', { name: 'goalList.title' }));
-
-    expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
-    expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/goals');
-  });
-
-  it('navigates to the agent tasks page', () => {
-    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
-
-    render(<Nav />);
-    fireEvent.click(screen.getByRole('button', { name: 'tab.tasks' }));
+    fireEvent.click(screen.getByRole('button', { name: 'tab.goalsAndTasks' }));
 
     expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
     expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/tasks');
   });
 
-  it.each(['/agent/agt_eH4zL98zBx5u/tasks', '/agent/agt_eH4zL98zBx5u/task/task_2FCHvjS7d4CA'])(
-    'keeps the tasks entry active on %s',
-    (pathname) => {
-      usePathnameMock.mockReturnValue(pathname);
+  it.each([
+    '/agent/agt_eH4zL98zBx5u/goals',
+    '/agent/agt_eH4zL98zBx5u/goal/example',
+    '/agent/agt_eH4zL98zBx5u/tasks',
+    '/agent/agt_eH4zL98zBx5u/task/task_2FCHvjS7d4CA',
+  ])('keeps the tasks entry active on %s', (pathname) => {
+    usePathnameMock.mockReturnValue(pathname);
 
-      render(<Nav />);
+    render(<Nav />);
 
-      expect(screen.getByRole('button', { name: 'tab.tasks' })).toHaveAttribute(
-        'data-active',
-        'true',
-      );
-    },
-  );
+    expect(screen.getByRole('button', { name: 'tab.goalsAndTasks' })).toHaveAttribute(
+      'data-active',
+      'true',
+    );
+  });
 
   it('moves self-evolving into the profile group for members who can open it', () => {
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
@@ -429,7 +420,7 @@ describe('Agent sidebar header nav', () => {
     });
   });
 
-  it('places goals above tasks, with profile settings in the header', () => {
+  it('opens tasks from the combined entry, with profile settings in the header', () => {
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
     render(<Nav />);
@@ -439,7 +430,10 @@ describe('Agent sidebar header nav', () => {
     expect(screen.getByRole('banner')).toContainElement(
       screen.getByRole('button', { name: 'tab.profile' }),
     );
-    expect(labels.indexOf('goalList.title')).toBeLessThan(labels.indexOf('tab.tasks'));
+    expect(labels).not.toContain('goalList.title');
+    expect(labels).not.toContain('tab.tasks');
+    fireEvent.click(screen.getByRole('button', { name: 'tab.goalsAndTasks' }));
+    expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/tasks');
   });
 
   // The full topic page is reached from the Topics section header arrow, not a

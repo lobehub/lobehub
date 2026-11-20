@@ -20,7 +20,6 @@ const runningStartTimeMock = vi.hoisted(() => ({ value: undefined as number | un
 const topicUnreadCompletedMock = vi.hoisted(() => ({ value: false }));
 const onlyMineMock = vi.hoisted(() => ({ value: false }));
 const currentUserIdMock = vi.hoisted(() => ({ value: 'user-1' as string | undefined }));
-const goalsEnabledMock = vi.hoisted(() => ({ value: true }));
 const hasDraftMock = vi.hoisted(() => ({ value: false }));
 const isDesktopMock = vi.hoisted(() => ({ value: false }));
 const electronTabMocks = vi.hoisted(() => ({
@@ -150,7 +149,6 @@ vi.mock('@/store/user', () => ({
 vi.mock('@/store/user/selectors', () => ({
   labPreferSelectors: {
     enableBetterCodingExperience: () => false,
-    enableGoals: () => goalsEnabledMock.value,
   },
   userProfileSelectors: { userId: () => currentUserIdMock.value },
 }));
@@ -251,7 +249,6 @@ describe('TopicItem active state', () => {
     topicMetaCardMock.value = undefined;
     onlyMineMock.value = false;
     currentUserIdMock.value = 'user-1';
-    goalsEnabledMock.value = true;
     hasDraftMock.value = false;
     vi.useRealTimers();
   });
@@ -611,14 +608,6 @@ describe('TopicItem active state', () => {
 
     it('keeps the execution status ahead of the goal marker', () => {
       render(<TopicItem hasGoal id="tpc_test" status="failed" title="Topic" />);
-
-      expect(screen.queryByLabelText('metaCard.goal')).not.toBeInTheDocument();
-    });
-
-    it('hides the goal marker while the goals lab is off', () => {
-      goalsEnabledMock.value = false;
-
-      render(<TopicItem hasGoal id="tpc_test" title="Topic" />);
 
       expect(screen.queryByLabelText('metaCard.goal')).not.toBeInTheDocument();
     });
