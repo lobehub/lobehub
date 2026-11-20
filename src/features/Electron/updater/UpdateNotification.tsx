@@ -20,13 +20,12 @@ import { autoUpdateService } from '@/services/electron/autoUpdate';
 import { rendererOtaService } from '@/services/electron/rendererOta';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import { applyCoreUpdate } from './applyCoreUpdate';
 import { formatCoreVersion } from './coreVersion';
 import { selectUpdateInfo } from './selectUpdateInfo';
-import { useAutoDismiss } from './useAutoDismiss';
-
-const APPLIED_TOAST_DURATION = 3000;
+import { useAppliedNotice } from './useAppliedNotice';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   installLaterCloseButton: css`
@@ -67,7 +66,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     max-inline-size: calc(100vw - 32px);
     padding-block: 8px;
-    padding-inline: 12px 8px;
+    padding-inline: ${densityVars.contentGap} 8px;
     border-radius: ${cssVar.borderRadiusLG};
 
     font-size: ${cssVar.fontSizeSM};
@@ -155,7 +154,13 @@ export const UpdateNotification: React.FC = () => {
     'unconfirm' | 'installLater' | 'installNow' | null
   >('unconfirm');
   const [isInstalling, setIsInstalling] = useState(false);
-  const [appliedVersion, setAppliedVersion] = useState<string | null>(null);
+  // The "updated to version" toast only shows when no pending update takes its slot
+  const {
+    appliedVersion,
+    dismiss: dismissAppliedNotice,
+    hoverHandlers: appliedToastHoverHandlers,
+    setAppliedVersion,
+  } = useAppliedNotice(!!updateInfo);
   const receivedUpdateEvent = useRef(false);
   useEffect(() => {
     let active = true;
@@ -178,7 +183,7 @@ export const UpdateNotification: React.FC = () => {
     return () => {
       active = false;
     };
-  }, []);
+  }, [setAppliedVersion]);
   useWatchBroadcast('coreUpdateApplied', (version) => {
     receivedUpdateEvent.current = true;
     setAppliedVersion(version);
@@ -192,13 +197,6 @@ export const UpdateNotification: React.FC = () => {
     toast.info(tElectron('updater.rendererUpdateDeferred'));
   });
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
-
-  // The "updated to version" toast only shows when no pending update takes its slot
-  const appliedToastHoverHandlers = useAutoDismiss(
-    updateInfo ? null : appliedVersion,
-    () => setAppliedVersion(null),
-    APPLIED_TOAST_DURATION,
-  );
 
   useWatchBroadcast('updateReady', (info) => {
     receivedUpdateEvent.current = true;
@@ -269,14 +267,7 @@ export const UpdateNotification: React.FC = () => {
         <span>
           {tElectron('updater.rendererUpdated', { version: formatCoreVersion(appliedVersion) })}
         </span>
-        <BaseButton
-          size={'small'}
-          type={'text'}
-          onClick={() => {
-            setAppliedVersion(null);
-            rendererOtaService.dismissAppliedNotice().catch(console.error);
-          }}
-        >
+        <BaseButton size={'small'} type={'text'} onClick={dismissAppliedNotice}>
           {tElectron('updater.ignore')}
         </BaseButton>
       </div>

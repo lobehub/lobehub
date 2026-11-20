@@ -266,6 +266,7 @@ export class FileUploadActionImpl {
         type: 'updateFile',
         value: {
           ...(dimensions && { dimensions }),
+          fileType,
           fileUrl: data.url,
           id: data.id,
           status: 'success',

@@ -27,6 +27,7 @@ import type {
 import { documentService } from '@/services/document';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
+import { densityVars } from '@/styles/densityVars';
 
 import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
 import { selectors, usePageEditorStore } from '../store';
@@ -56,7 +57,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: baseline;
 
     padding-block: 14px 6px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorSplit};
 
     background: ${cssVar.colorBgContainer};

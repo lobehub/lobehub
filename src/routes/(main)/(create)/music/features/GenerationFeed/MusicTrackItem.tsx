@@ -4,7 +4,7 @@ import type { MusicGenerationAsset } from '@lobechat/types';
 import { ActionIcon, Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { MusicIcon, Trash2Icon } from 'lucide-react';
+import { MusicIcon, Share2Icon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -39,12 +39,14 @@ interface MusicTrackItemProps {
   downloadFileName: string;
   generationId: string;
   onDelete: () => void;
+  /** Opens the share panel; no share button when absent. */
+  onShare?: () => void;
   title: string;
 }
 
 const MusicTrackItem = memo<MusicTrackItemProps>(
-  ({ asset, downloadFileName, generationId, onDelete, title }) => {
-    const { t } = useTranslation('music');
+  ({ asset, downloadFileName, generationId, onDelete, onShare, title }) => {
+    const { t } = useTranslation(['music', 'chat']);
     const duration = formatSongDuration(asset.duration);
 
     return (
@@ -90,6 +92,15 @@ const MusicTrackItem = memo<MusicTrackItemProps>(
             url={asset.url!}
           />
         </Flexbox>
+        {onShare && (
+          <ActionIcon
+            icon={Share2Icon}
+            size={'small'}
+            style={{ flex: 'none' }}
+            title={t('shareModal.generation.entry', { ns: 'chat' })}
+            onClick={onShare}
+          />
+        )}
         <ActionIcon
           icon={Trash2Icon}
           size={'small'}

@@ -1,5 +1,7 @@
-import type { WorkingDirConfig } from '@lobechat/types';
+import type { TopicOpenedBy, WorkingDirConfig } from '@lobechat/types';
 import { normalizeDirectoryPath } from '@lobechat/types';
+
+import type { TopicModel } from '@/database/models/topic';
 
 import type { InternalExecAgentParams } from '../types';
 import { pickSandboxPlacement } from './sandboxPlacement';
@@ -11,6 +13,8 @@ export interface NewTopicMetadataInput {
   /** The bound device was chosen explicitly for this conversation, not auto-picked. */
   deviceBindingPinned?: boolean;
   editingAgentId?: string;
+  /** The topic this one was opened from (a sub-topic); see `resolveTopicOpenedBy`. */
+  openedBy?: TopicOpenedBy;
   /** Working directory the topic is born in; overrides the client-supplied one. */
   projectDirectory?: { path: string };
   taskId?: string;
@@ -49,6 +53,7 @@ export const buildNewTopicMetadata = ({
   cronJobId,
   deviceBindingPinned,
   editingAgentId,
+  openedBy,
   projectDirectory,
   taskId,
   topicBoundDeviceId,
@@ -84,6 +89,7 @@ export const buildNewTopicMetadata = ({
     !initialTopicMeta &&
     !editingGroupId &&
     !editingAgentId &&
+    !openedBy &&
     !webhookThread
   )
     return;
@@ -95,8 +101,13 @@ export const buildNewTopicMetadata = ({
     ...(deviceBindingPinned && { deviceBindingPinned }),
     ...(editingAgentId && { editingAgentId }),
     ...(editingGroupId && { editingGroupId }),
+    ...(openedBy && { openedBy }),
     taskId,
     ...(webhookThread && { webhook: webhookThread }),
+    // Claude Code permission mode the composer chip showed (Better Coding Experience).
+    ...(initialTopicMeta?.heteroPermissionMode && {
+      heteroPermissionMode: initialTopicMeta.heteroPermissionMode,
+    }),
     ...(initialTopicMeta?.repos && { repos: initialTopicMeta.repos }),
     ...pickSandboxPlacement(initialTopicMeta),
     ...(initialTopicMeta?.workingDirectory && {
@@ -105,5 +116,26 @@ export const buildNewTopicMetadata = ({
     ...(initialTopicMeta?.workingDirectoryConfig && {
       workingDirectoryConfig: initialTopicMeta.workingDirectoryConfig,
     }),
+  };
+};
+
+/**
+ * The `metadata.openedBy` link of a topic opened from `openerTopicId`. The
+ * opener is read through the caller's own topic scope, so a stale, foreign or
+ * mistyped id (an env var a long-lived shell kept) records no link rather than
+ * failing a run that is otherwise valid.
+ */
+export const resolveTopicOpenedBy = async (
+  topicModel: Pick<TopicModel, 'findById'>,
+  openerTopicId: string | undefined,
+): Promise<TopicOpenedBy | undefined> => {
+  if (!openerTopicId) return;
+  const opener = await topicModel.findById(openerTopicId).catch(() => undefined);
+  if (!opener) return;
+
+  return {
+    agentId: opener.agentId ?? undefined,
+    at: new Date().toISOString(),
+    topicId: opener.id,
   };
 };

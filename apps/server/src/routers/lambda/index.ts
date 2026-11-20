@@ -26,6 +26,7 @@ import { acceptanceRouter } from './acceptance';
 import { acceptanceCommentRouter } from './acceptanceComment';
 import { agentRouter } from './agent';
 import { agentAccountRouter } from './agentAccount';
+import { agentAvailabilityRouter } from './agentAvailability';
 import { agentBotProviderRouter } from './agentBotProvider';
 import { agentBotWakeRouter } from './agentBotWake';
 import { agentDocumentRouter } from './agentDocument';
@@ -46,6 +47,7 @@ import { aiChatRouter } from './aiChat';
 import { aiModelRouter } from './aiModel';
 import { aiProviderRouter } from './aiProvider';
 import { apiKeyRouter } from './apiKey';
+import { artboardRouter } from './artboard';
 import { asrRouter } from './asr';
 import { authRouter } from './auth';
 import { botMessageRouter } from './botMessage';
@@ -153,6 +155,7 @@ export const lambdaRouter = router({
   agentRunBoard: agentRunBoardRouter,
   agentSignal: agentSignalRouter,
   agentSteerQueue: agentSteerQueueRouter,
+  artboard: artboardRouter,
   canvas: canvasRouter,
   changelog: changelogRouter,
   channel: channelRouter,
@@ -161,6 +164,7 @@ export const lambdaRouter = router({
   aiAgent: aiAgentRouter,
   aiChat: aiChatRouter,
   aiModel: aiModelRouter,
+  agentAvailability: agentAvailabilityRouter,
   agentQuota: agentQuotaRouter,
   agentShare: agentShareRouter,
   aiProvider: aiProviderRouter,

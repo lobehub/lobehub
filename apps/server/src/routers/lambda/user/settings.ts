@@ -2,6 +2,7 @@ import { hasApiKeyScope, isFullAccessApiKey } from '@lobechat/const/apiKeyScope'
 import { MAX_ISLAND_DISMISSALS } from '@lobechat/const/goal';
 import type { UserSettings } from '@lobechat/types';
 import {
+  HETERO_PERMISSION_MODES,
   NotificationSettingsSchema,
   PERSONAL_SYSTEM_AGENT_KEYS,
   UserPreferenceSchema,
@@ -69,6 +70,12 @@ export const settingsRouter = router({
   setWorktreeModeDir: userProcedure
     .input(z.object({ enabled: z.boolean(), key: z.string().min(1).max(4096) }))
     .mutation(async ({ ctx, input }) => ctx.userModel.setWorktreeModeDir(input.key, input.enabled)),
+  /** Personal-mode Claude Code permission mode remembered for one directory. */
+  setHeteroPermissionModeDir: userProcedure
+    .input(z.object({ key: z.string().min(1).max(4096), mode: z.enum(HETERO_PERMISSION_MODES) }))
+    .mutation(async ({ ctx, input }) =>
+      ctx.userModel.setHeteroPermissionModeDir(input.key, input.mode),
+    ),
   /**
    * Personal chat-assist preferences (follow-up chips, input completion). They
    * act on the caller's own chat surface, so — unlike the rest of

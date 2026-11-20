@@ -4,12 +4,13 @@ import { useTranslation } from 'react-i18next';
 
 import { useFileStore } from '@/store/file';
 import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
+import { densityVars } from '@/styles/densityVars';
 
 import { usePageEditorStore } from '../store';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   breadcrumb: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     color: ${cssVar.colorTextSecondary};
   `,
   breadcrumbItem: css`

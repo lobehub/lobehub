@@ -1,10 +1,16 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 export const styles = stylex.create({
   container: {
-    paddingBlock: '12px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     paddingInline: 0,
+  },
+  // Compact density: 6px block padding, 36px tile, 14px title → ~55px two-line rows.
+  containerCompact: {
+    paddingBlock: '6px',
   },
   description: {
     overflow: 'hidden',
@@ -24,6 +30,11 @@ export const styles = stylex.create({
     backgroundColor: cssVar.colorFillTertiary,
     backgroundImage: 'none',
   },
+  iconCompact: {
+    width: '36px',
+    height: '36px',
+    borderRadius: '10px',
+  },
   key: {
     fontFamily: 'monospace',
     fontSize: '12px',
@@ -33,5 +44,8 @@ export const styles = stylex.create({
     fontSize: '15px',
     fontWeight: 500,
     color: cssVar.colorText,
+  },
+  titleCompact: {
+    fontSize: '14px',
   },
 });

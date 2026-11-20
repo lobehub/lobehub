@@ -35,15 +35,17 @@ const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
 
 interface LobehubSkillItemProps {
+  hideConnectedStatus?: boolean;
   isSelected?: boolean;
   onDelete?: () => void;
   onSelect?: () => void;
   provider: LobehubSkillProviderType;
   server?: LobehubSkillServer;
+  showConnectLabel?: boolean;
 }
 
 const LobehubSkillItem = memo<LobehubSkillItemProps>(
-  ({ provider, server, isSelected, onSelect, onDelete }) => {
+  ({ hideConnectedStatus, provider, server, isSelected, onSelect, onDelete, showConnectLabel }) => {
     const { t } = useTranslation('setting');
     const isPage = useSkillListVariant() === 'page';
     const { allowed: canCreate, reason: createReason } = usePermission('create_content');
@@ -323,6 +325,8 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     // Page row: a quiet `+` connects in place; once connected the row's state
     // reads from its position (Installed) and the action becomes the manage menu.
     const renderPageExtra = () => {
+      if (isConnected && showConnectLabel)
+        return <ConnectedStatus label={t('tools.lobehubSkill.connected')} />;
       if (isConnected)
         return (
           <RowMoreMenu
@@ -345,6 +349,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
           disabledReason={!canCreate ? createReason : editReason}
           label={t('connectorMarket.action.connect')}
           loading={isConnecting || isWaitingAuth}
+          showLabel={showConnectLabel}
           onClick={handleConnect}
         />
       );
@@ -356,6 +361,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
         return <Button disabled loading size="small" type="text" />;
       }
       if (isConnected) {
+        if (hideConnectedStatus) return null;
         return (
           <ConnectedStatus
             label={t('tools.lobehubSkill.connected', { defaultValue: 'Connected' })}

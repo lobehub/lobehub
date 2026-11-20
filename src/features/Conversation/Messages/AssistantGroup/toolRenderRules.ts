@@ -55,6 +55,15 @@ export const isImageOutputTool = (tool: ChatToolPayloadWithResult): boolean => {
   );
 };
 
+const deliverableTools = new Set<string>();
+
+export const registerDeliverableTool = (identifier: string) => {
+  deliverableTools.add(identifier);
+};
+
+export const isDeliverableTool = (tool: ChatToolPayloadWithResult): boolean =>
+  isImageOutputTool(tool) || deliverableTools.has(tool.identifier);
+
 /**
  * Any tool whose result carries an image, output or read. Drives the workflow
  * breakout only: a read image still surfaces as its own row once the process is

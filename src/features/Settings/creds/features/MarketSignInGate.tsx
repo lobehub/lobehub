@@ -8,12 +8,13 @@ import { useTranslation } from 'react-i18next';
 
 import { CredsListSkeleton } from '@/components/Skeleton/Settings/tabs/Creds';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   signInPrompt: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
+    gap: densityTokens['--lobe-density-section-gap'],
     alignItems: 'center',
     justifyContent: 'center',
     padding: '48px',

@@ -3,13 +3,30 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
 
-const { mockCreateOperation, mockGetAgentConfig, mockGetUserSettings, mockMessageCreate } =
-  vi.hoisted(() => ({
-    mockCreateOperation: vi.fn(),
-    mockGetAgentConfig: vi.fn(),
-    mockGetUserSettings: vi.fn(),
-    mockMessageCreate: vi.fn(),
-  }));
+const {
+  mockCreateOperation,
+  mockGetAgentConfig,
+  mockGetScopedOnlineDevices,
+  mockGetUserSettings,
+  mockMessageCreate,
+  mockDispatchHeteroAgent,
+  mockReserveShareVisitorTopic,
+} = vi.hoisted(() => ({
+  mockCreateOperation: vi.fn(),
+  mockDispatchHeteroAgent: vi.fn(),
+  mockReserveShareVisitorTopic: vi.fn(),
+  mockGetAgentConfig: vi.fn(),
+  mockGetScopedOnlineDevices: vi.fn(),
+  mockGetUserSettings: vi.fn(),
+  mockMessageCreate: vi.fn(),
+}));
+
+// The share gate runs before dispatch; record what the dispatch is handed.
+vi.mock('../pipeline/heteroDispatch', () => ({ dispatchHeteroAgent: mockDispatchHeteroAgent }));
+
+vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
+  getScopedOnlineDevices: mockGetScopedOnlineDevices,
+}));
 
 vi.mock('@/libs/trusted-client', () => ({
   generateTrustedClientToken: vi.fn().mockReturnValue(undefined),
@@ -142,7 +159,7 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 // The share path's atomic cap reservations open real DB transactions — stub
 // them so the forced-headless test below can drive execAgent with a bare mock db.
 vi.mock('../shareVisitorAbuseGuards', () => ({
-  reserveShareVisitorTopic: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+  reserveShareVisitorTopic: mockReserveShareVisitorTopic,
   reserveShareVisitorTurn: vi.fn().mockResolvedValue({ id: 'msg-1' }),
 }));
 
@@ -160,43 +177,146 @@ vi.mock('model-bank', async (importOriginal) => {
   };
 });
 
+const shareGate = (canUseDevice: boolean) => ({
+  agentId: 'agent-1',
+  canUseDevice,
+  shareConfig: {
+    deviceAccess: canUseDevice ? ('allowlist' as const) : ('none' as const),
+    deviceAllowUserIds: canUseDevice ? ['visitor-1'] : [],
+    toolGrants: [],
+  },
+  shareId: 'share-1',
+  visitorUserId: 'visitor-1',
+});
+
+const agentConfig = (agencyConfig: Record<string, unknown>) => ({
+  agencyConfig,
+  chatConfig: {},
+  id: 'agent-1',
+  model: 'gpt-4',
+  plugins: [],
+  provider: 'openai',
+  systemRole: '',
+});
+
+const run = (canUseDevice: boolean) =>
+  new AiAgentService({} as any, 'creator-1').execAgent({
+    agentId: 'agent-1',
+    prompt: 'Hello',
+    shareGate: shareGate(canUseDevice),
+  });
+
 describe('AiAgentService.execAgent - share visitors and heterogeneous agents', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
+    mockReserveShareVisitorTopic.mockResolvedValue({ id: 'topic-1' });
     mockGetUserSettings.mockResolvedValue({});
-    mockGetAgentConfig.mockResolvedValue({
-      agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
-      chatConfig: {},
-      id: 'agent-1',
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      systemRole: '',
-    });
+    mockGetScopedOnlineDevices.mockResolvedValue([]);
+    mockGetAgentConfig.mockResolvedValue(
+      agentConfig({
+        boundDeviceId: 'device-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      }),
+    );
   });
 
-  // The hetero dispatch path signs its gateway token for the run's user (the
-  // creator) and registers no visitor stream owner, so a share's device grant
-  // must not open it: the visitor would receive creator account access.
-  it('rejects a Claude Code Agent even when the share grants device access', async () => {
-    const service = new AiAgentService({} as any, 'creator-1');
+  it('rejects a Claude Code Agent for a visitor without the device grant', async () => {
+    mockGetScopedOnlineDevices.mockResolvedValue([{ deviceId: 'device-1', online: true }]);
 
-    await expect(
-      service.execAgent({
-        agentId: 'agent-1',
-        prompt: 'Hello',
-        shareGate: {
-          agentId: 'agent-1',
-          canUseDevice: true,
-          shareConfig: { deviceAccess: 'all', toolGrants: [] },
-          shareId: 'share-1',
-          visitorUserId: 'visitor-1',
-        },
-      }),
-    ).rejects.toMatchObject({ message: 'ShareHeterogeneousAgentUnsupported' });
-
+    await expect(run(false)).rejects.toMatchObject({
+      message: 'ShareHeterogeneousAgentUnsupported',
+    });
     expect(mockMessageCreate).not.toHaveBeenCalled();
     expect(mockCreateOperation).not.toHaveBeenCalled();
+  });
+
+  it.each(['openclaw', 'hermes'])(
+    'rejects the remote %s runtime even with the grant',
+    async (type) => {
+      mockGetAgentConfig.mockResolvedValue(
+        agentConfig({ boundDeviceId: 'device-1', heterogeneousProvider: { type } }),
+      );
+      mockGetScopedOnlineDevices.mockResolvedValue([{ deviceId: 'device-1', online: true }]);
+
+      await expect(run(true)).rejects.toMatchObject({
+        message: 'ShareHeterogeneousAgentUnsupported',
+      });
+      expect(mockMessageCreate).not.toHaveBeenCalled();
+    },
+  );
+
+  // No cloud-sandbox fallback: a granted visitor runs on the creator's device
+  // or not at all, and learns it is offline before any row is written.
+  it('fails a granted visitor with a device-offline error when the device is offline', async () => {
+    await expect(run(true)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: 'ShareHeteroDeviceUnavailable',
+    });
+    expect(mockGetScopedOnlineDevices).toHaveBeenCalledWith({}, 'creator-1', undefined);
+    expect(mockMessageCreate).not.toHaveBeenCalled();
+    expect(mockCreateOperation).not.toHaveBeenCalled();
+  });
+
+  it('lets a granted visitor through when the bound device is online', async () => {
+    mockGetScopedOnlineDevices.mockResolvedValue([{ deviceId: 'device-1', online: true }]);
+
+    // The gate passes; whatever later stage this bare mock db stops at, it is
+    // not one of the share gate errors.
+    const error = await run(true).then(
+      () => undefined,
+      (e: unknown) => e as { message?: string },
+    );
+    expect(error?.message).not.toBe('ShareHeterogeneousAgentUnsupported');
+    expect(error?.message).not.toBe('ShareHeteroDeviceUnavailable');
+  });
+
+  // Every runtime that executes on the creator's machine shares the same device
+  // dispatch, so the grant covers it as it covers Claude Code / Codex.
+  it.each(['opencode', 'kimi-code', 'deepseek-harness'])(
+    'lets a granted visitor run the local %s runtime on the bound device',
+    async (type) => {
+      mockGetAgentConfig.mockResolvedValue(
+        agentConfig({
+          boundDeviceId: 'device-1',
+          executionTarget: 'device',
+          heterogeneousProvider: { type },
+        }),
+      );
+      mockGetScopedOnlineDevices.mockResolvedValue([{ deviceId: 'device-1', online: true }]);
+
+      const error = await run(true).then(
+        () => undefined,
+        (e: unknown) => e as { message?: string },
+      );
+      expect(error?.message).not.toBe('ShareHeterogeneousAgentUnsupported');
+      expect(error?.message).not.toBe('ShareHeteroDeviceUnavailable');
+    },
+  );
+
+  it('resolves an auto Agent to its only online device', async () => {
+    mockGetAgentConfig.mockResolvedValue(
+      agentConfig({ executionTarget: 'auto', heterogeneousProvider: { type: 'codex' } }),
+    );
+    mockGetScopedOnlineDevices.mockResolvedValue([{ deviceId: 'device-2', online: true }]);
+
+    const error = await run(true).then(
+      () => undefined,
+      (e: unknown) => e as { message?: string },
+    );
+    expect(error?.message).not.toBe('ShareHeteroDeviceUnavailable');
+    // The dispatch does not look at online devices, so it must be handed the
+    // device the gate picked, or it reports the device as unavailable.
+    expect(mockDispatchHeteroAgent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ requestedDeviceId: 'device-2' }),
+    );
+    // The automatic pick is not an explicit pin: a later turn may go to
+    // whichever device is online then.
+    const [, topicParams] = mockReserveShareVisitorTopic.mock.calls[0];
+    expect(topicParams.metadata?.deviceBindingPinned).not.toBe(true);
+    expect(topicParams.metadata?.boundDeviceId).toBeUndefined();
   });
 });

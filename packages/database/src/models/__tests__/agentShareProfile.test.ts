@@ -148,6 +148,54 @@ describe('AgentShareProfileModel', () => {
     expect(items[1].url).toBe('https://github.com/example/repo/issues/1');
   });
 
+  it('features a collection with its cover and the current version images', async () => {
+    const version = await addWork('collection', {
+      type: 'collection',
+      resourceType: 'collection',
+      resourceId: 'col_1',
+      url: 'https://app.example.com/f/file-2',
+    });
+    await db
+      .update(workVersions)
+      .set({
+        metadata: {
+          collection: {
+            coverFileId: 'file-2',
+            items: [
+              {
+                caption: 'Apple',
+                fileId: 'file-1',
+                mimeType: 'image/png',
+                url: 'https://app.example.com/f/file-1',
+              },
+              { fileId: 'file-2', mimeType: 'image/png', url: 'https://app.example.com/f/file-2' },
+              { fileId: 'file-3', url: 'javascript:alert(1)' },
+            ],
+          },
+        },
+      })
+      .where(eq(workVersions.id, version.id));
+
+    const [featured] = await model.listFeaturedWorks(agent, ['collection']);
+    expect(featured).toMatchObject({ type: 'collection', url: 'https://app.example.com/f/file-2' });
+    // Only http(s) images are exposed.
+    expect(featured.collection).toEqual({
+      coverFileId: 'file-2',
+      items: [
+        {
+          caption: 'Apple',
+          fileId: 'file-1',
+          mimeType: 'image/png',
+          url: 'https://app.example.com/f/file-1',
+        },
+        { fileId: 'file-2', mimeType: 'image/png', url: 'https://app.example.com/f/file-2' },
+      ],
+    });
+
+    const { items } = await model.listEligibleWorks(agent);
+    expect(items.find(({ id }) => id === 'collection')?.collection?.items).toHaveLength(2);
+  });
+
   it('pages creator candidates and keeps selected Works available outside the page', async () => {
     await addWork('newest');
     await addWork('middle');
@@ -344,6 +392,81 @@ describe('AgentShareProfileModel', () => {
       .where(eq(workVersions.workId, 'unsafe-url'));
     expect((await model.getStats(agent)).averageWorkCost).toBeNull();
     expect((await model.listFeaturedWorks(agent, ['unsafe-url']))[0].url).toBeNull();
+  });
+
+  it('measures a Workspace agent from creator rows in that same Workspace', async () => {
+    const workspaceId = 'profile-workspace';
+    await db.insert(workspaces).values({
+      id: 'other-workspace',
+      name: 'Other',
+      slug: 'other-workspace',
+      primaryOwnerId: owner,
+    });
+    await db.update(agents).set({ workspaceId }).where(eq(agents.id, agent));
+    await db.update(topics).set({ workspaceId }).where(eq(topics.id, creatorTopic));
+    await db.update(topics).set({ workspaceId }).where(eq(topics.id, visitorTopic));
+    await db.insert(topics).values([
+      { id: 'personal-topic', userId: owner, agentId: agent },
+      {
+        id: 'other-workspace-topic',
+        userId: owner,
+        agentId: agent,
+        workspaceId: 'other-workspace',
+      },
+    ]);
+
+    await addWork('workspace-work', { workspaceId });
+    const latest = await addVersion('workspace-work', 2, 4, 'operation-2');
+    await addWork('personal-work');
+    await addWork(
+      'other-workspace-work',
+      { originTopicId: 'other-workspace-topic', workspaceId: 'other-workspace' },
+      'other-workspace-topic',
+    );
+    await addWork('visitor-work', { originTopicId: visitorTopic, workspaceId }, visitorTopic);
+    await addWork('mixed-work', { workspaceId });
+    await addVersion('mixed-work', 2, 3, 'personal-operation', 'personal-topic');
+
+    const startedAt = new Date('2026-01-01T00:00:00Z');
+    const operation = (
+      id: string,
+      seconds: number,
+      overrides: Partial<typeof agentOperations.$inferInsert> = {},
+    ) => ({
+      id,
+      userId: owner,
+      agentId: agent,
+      topicId: creatorTopic,
+      workspaceId,
+      status: 'done' as const,
+      startedAt,
+      completedAt: new Date(startedAt.getTime() + seconds * 1000),
+      ...overrides,
+    });
+    await db.insert(agentOperations).values([
+      operation('workspace-first', 10),
+      operation('workspace-second', 30),
+      operation('visitor', 500, { topicId: visitorTopic }),
+      operation('personal', 500, { topicId: 'personal-topic', workspaceId: null }),
+      operation('other-workspace', 500, {
+        topicId: 'other-workspace-topic',
+        workspaceId: 'other-workspace',
+      }),
+    ]);
+
+    expect(await model.getStats(agent)).toEqual({
+      averageOperationDurationSeconds: 20,
+      averageWorkCost: 6,
+      lastDeliveredAt: latest.createdAt,
+      workCount: 1,
+    });
+    expect((await model.listEligibleWorks(agent)).items.map(({ id }) => id)).toEqual([
+      'workspace-work',
+    ]);
+    await expect(model.validateFeaturedWorks(agent, ['workspace-work'])).resolves.toBeUndefined();
+    await expect(model.validateFeaturedWorks(agent, ['personal-work'])).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
   });
 
   it('stops exposing profile data for a trashed agent', async () => {

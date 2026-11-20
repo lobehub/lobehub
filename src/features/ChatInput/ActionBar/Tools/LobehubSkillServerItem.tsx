@@ -1,3 +1,8 @@
+import {
+  getConnectorMode,
+  shouldEnableConnectorOnConnect,
+  upsertConnectorEnabled,
+} from '@lobechat/types';
 import { Checkbox, Flexbox, Icon, Spin, stopPropagation } from '@lobehub/ui';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -153,23 +158,23 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
     );
 
     const pluginId = server ? server.identifier : '';
-    const plugins =
-      useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId))?.plugins || [];
-    const checked = plugins.includes(pluginId);
+    const config = useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId));
+    const plugins = config?.plugins;
+    const checked = getConnectorMode(plugins, pluginId, config?.chatConfig) === 'auto';
     const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
     // Toggle plugin for the effective agent
-    const togglePlugin = useCallback(
-      async (pluginIdToToggle: string) => {
+    const setPluginEnabled = useCallback(
+      async (identifier: string, enabled: boolean) => {
         if (!effectiveAgentId) return;
-        const currentPlugins = plugins;
-        const hasPlugin = currentPlugins.includes(pluginIdToToggle);
-        const newPlugins = hasPlugin
-          ? currentPlugins.filter((id) => id !== pluginIdToToggle)
-          : [...currentPlugins, pluginIdToToggle];
-        await updateAgentConfigById(effectiveAgentId, { plugins: newPlugins });
+        const current = agentSelectors.getAgentConfigById(effectiveAgentId)(
+          useAgentStore.getState(),
+        );
+        await updateAgentConfigById(effectiveAgentId, {
+          plugins: upsertConnectorEnabled(current?.plugins, identifier, enabled),
+        });
       },
-      [effectiveAgentId, plugins, updateAgentConfigById],
+      [effectiveAgentId, updateAgentConfigById],
     );
 
     // Listen for OAuth success message from popup window
@@ -197,13 +202,18 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
             .lobehubSkillServers?.find((s) => s.identifier === provider);
           if (latestServer?.status === LobehubSkillStatus.CONNECTED) {
             const newPluginId = latestServer.identifier;
-            const currentAgentPlugins =
-              agentSelectors.getAgentConfigById(effectiveAgentId)(useAgentStore.getState())
-                ?.plugins || [];
-            const isAlreadyEnabled = currentAgentPlugins.includes(newPluginId);
-            if (canEdit && !isAlreadyEnabled) {
-              console.info('[LobehubSkill] Auto-enabling plugin:', newPluginId);
-              togglePlugin(newPluginId);
+            const currentAgentConfig = agentSelectors.getAgentConfigById(effectiveAgentId)(
+              useAgentStore.getState(),
+            );
+            if (
+              canEdit &&
+              shouldEnableConnectorOnConnect(
+                currentAgentConfig?.plugins,
+                newPluginId,
+                currentAgentConfig?.chatConfig,
+              )
+            ) {
+              await setPluginEnabled(newPluginId, true);
             }
           }
         }
@@ -211,7 +221,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
 
       window.addEventListener('message', handleMessage);
       return () => window.removeEventListener('message', handleMessage);
-    }, [canEdit, provider, cleanup, checkStatus, togglePlugin, effectiveAgentId]);
+    }, [canEdit, provider, cleanup, checkStatus, setPluginEnabled, effectiveAgentId]);
 
     const handleConnect = async () => {
       if (!canCreate || !canEdit) return;
@@ -237,7 +247,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
     const handleToggle = async () => {
       if (!canEdit || !server) return;
       setIsToggling(true);
-      await togglePlugin(pluginId);
+      await setPluginEnabled(pluginId, !checked);
       setIsToggling(false);
     };
 

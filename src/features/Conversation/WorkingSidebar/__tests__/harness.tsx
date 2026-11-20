@@ -130,6 +130,8 @@ const chatStore = vi.hoisted(() => ({
   activeGroupId: undefined as string | undefined,
   activeThreadId: undefined as string | undefined,
   activeTopicId: undefined as string | undefined,
+  // useSandboxPlacement reads the topics a first send is creating
+  creatingTopicIds: [] as string[],
   openTopicComments: vi.fn(),
   // useSandboxPlacement reads an unlisted topic by id and reads it back after a pick
   refreshTopicDetail: vi.fn(),

@@ -9,15 +9,28 @@ import {
 import { and, eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ArtboardModel } from '@/database/models/artboard';
 import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
-import { agents, taskActivities, tasks, users, workspaces } from '@/database/schemas';
+import { WorkModel } from '@/database/models/work';
+import {
+  agents,
+  artboards,
+  projects,
+  taskActivities,
+  tasks,
+  users,
+  workspaces,
+} from '@/database/schemas';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
 import { TaskBatchService } from './batch';
 
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({ after: vi.fn() }));
+
+const { unpublishCanvasSite } = vi.hoisted(() => ({ unpublishCanvasSite: vi.fn() }));
+vi.mock('@/business/server/canvasPublish', () => ({ unpublishCanvasSite }));
 
 const userId = 'task-batch-integration-user';
 const otherUserId = 'task-batch-integration-other';
@@ -374,6 +387,94 @@ describe('TaskBatchService (real PostgreSQL)', () => {
       expect(result.skipped).toEqual([{ id: hidden.id, reason: 'notFound' }]);
       expect(await teammate.findById(shared.id)).toBeNull();
       expect(await teammate.findById(hidden.id)).not.toBeNull();
+    });
+
+    it("takes a deleted task's shared artboard offline and keeps the board for a restore", async () => {
+      unpublishCanvasSite.mockReset();
+      const projectId = 'prj_task_batch_artboard';
+      await db.insert(projects).values({ id: projectId, name: 'Onboarding', userId });
+      const [task] = await createTasks(1, { projectId });
+      const artboard = await new ArtboardModel(db, userId).create({
+        projectId,
+        taskId: task.id,
+        title: 'Onboarding board',
+      });
+      const workModel = new WorkModel(db, userId);
+      await workModel.registerArtboard({
+        artboardId: artboard.id,
+        changeType: 'created',
+        projectId,
+        title: artboard.title,
+        toolIdentifier: 'lobe-artboard',
+        toolName: 'createArtboard',
+      });
+      await workModel.recordArtboardPublish(artboard.id, {
+        deploymentId: 'dep_task_batch',
+        publishedRevision: 1,
+        publisherUserId: userId,
+        snapshotHash: 'hash',
+        url: 'https://onboarding.lobe.page',
+      });
+
+      await service.delete([task.id]);
+
+      expect(unpublishCanvasSite).toHaveBeenCalledWith(
+        expect.objectContaining({ deploymentId: 'dep_task_batch', userId }),
+      );
+      const work = await workModel.findArtboardWork(artboard.id);
+      expect(work?.url).toBeNull();
+      expect(work?.metadata?.artboardPublish).toBeUndefined();
+      expect(await db.select().from(artboards).where(eq(artboards.id, artboard.id))).toHaveLength(
+        1,
+      );
+    });
+
+    it("takes a teammate's share down with a workspace task someone else deletes", async () => {
+      unpublishCanvasSite.mockReset();
+      const workspaceId = 'task-batch-artboard-ws';
+      await db.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Workspace',
+        primaryOwnerId: otherUserId,
+        slug: workspaceId,
+      });
+      const projectId = 'prj_task_batch_ws_artboard';
+      await db
+        .insert(projects)
+        .values({ id: projectId, name: 'Shared', userId: otherUserId, workspaceId });
+      const task = await new TaskModel(db, otherUserId, workspaceId).create({
+        instruction: 'Shared task',
+        projectId,
+        visibility: 'public',
+      });
+      const artboard = await new ArtboardModel(db, otherUserId, workspaceId).create({
+        projectId,
+        taskId: task.id,
+        title: 'Shared board',
+      });
+      const teammateWorks = new WorkModel(db, otherUserId, workspaceId);
+      await teammateWorks.registerArtboard({
+        artboardId: artboard.id,
+        changeType: 'created',
+        projectId,
+        title: artboard.title,
+        toolIdentifier: 'lobe-artboard',
+        toolName: 'createArtboard',
+      });
+      await teammateWorks.recordArtboardPublish(artboard.id, {
+        deploymentId: 'dep_task_batch_ws',
+        publishedRevision: 1,
+        publisherUserId: otherUserId,
+        snapshotHash: 'hash',
+        url: 'https://shared.lobe.page',
+      });
+
+      await new TaskBatchService(db, userId, workspaceId).delete([task.id]);
+
+      expect(unpublishCanvasSite).toHaveBeenCalledWith(
+        expect.objectContaining({ deploymentId: 'dep_task_batch_ws', userId: otherUserId }),
+      );
+      expect((await teammateWorks.findArtboardWork(artboard.id))?.url).toBeNull();
     });
 
     it('deletes idle tasks in one pass and reports missing ones', async () => {

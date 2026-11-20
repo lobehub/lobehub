@@ -680,6 +680,10 @@ describe('events capability synchronization', () => {
               userId: 'owner',
               workspaceId: null,
             }) as any,
+          // A personal row is read in its own scope (here: this model)
+          forRow() {
+            return this;
+          },
           update,
           updateStatus: vi.fn(),
         } as any,

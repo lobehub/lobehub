@@ -17,6 +17,7 @@ import ContentViewer from '@/features/AgentSkillDetail/ContentViewer';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import FileTree from '@/features/FileTree';
 import SkillFrontmatterCard from '@/features/Portal/Document/SkillFrontmatterCard';
+import { densityTokens } from '@/styles/density.stylex';
 import { parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 
 import { shownSkillFile, skillFileTree } from './skillFileTree';
@@ -59,7 +60,7 @@ const styles = stylex.create({
     paddingInlineStart: 8,
   },
   index: {
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
 });
 

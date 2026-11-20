@@ -24,6 +24,7 @@ import { type KeyboardEvent, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { summarizeEditedFilesTotals } from './deriveEditedFiles';
 import { useOpenEditedFile } from './useOpenEditedFile';
@@ -55,7 +56,7 @@ const styles = stylex.create({
   },
   header: {
     paddingBlock: '8px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   headerIcon: {
     flexShrink: 0,
@@ -69,7 +70,7 @@ const styles = stylex.create({
   singleHeader: {
     position: 'relative',
     paddingBlock: '8px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   singleHeaderClickable: {
     cursor: 'pointer',
@@ -78,7 +79,7 @@ const styles = stylex.create({
   },
   singleTitle: {
     minWidth: '0',
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 500,
   },
   /**
@@ -96,7 +97,7 @@ const styles = stylex.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     paddingInlineStart: '56px',
-    paddingInlineEnd: '12px',
+    paddingInlineEnd: densityTokens['--lobe-density-content-gap'],
     pointerEvents: {
       'default': 'none',
       [stylex.when.ancestor(':hover')]: 'auto',
@@ -132,7 +133,7 @@ const styles = stylex.create({
   },
   title: {
     minWidth: '0',
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 500,
   },
   stats: {
@@ -146,7 +147,7 @@ const styles = stylex.create({
   showMore: {
     cursor: 'pointer',
     paddingBlock: '7px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     fontSize: '13px',
     color: cssVar.colorTextSecondary,
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
@@ -155,7 +156,7 @@ const styles = stylex.create({
   row: {
     position: 'relative',
     paddingBlock: '6px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   rowMain: {
     minHeight: '24px',

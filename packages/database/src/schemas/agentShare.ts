@@ -4,7 +4,7 @@ import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle
 import { timestamps } from './_helpers';
 import { agents } from './agent';
 
-export type AgentShareDeviceAccess = 'all' | 'allowlist' | 'none';
+export type AgentShareDeviceAccess = 'allowlist' | 'contacts' | 'none';
 
 export interface AgentShareConfig {
   /**
@@ -18,31 +18,45 @@ export interface AgentShareConfig {
    * a shared conversation. Defaults to `false`.
    */
   allowReadMemory?: boolean;
+  /**
+   * Tool and skill identifiers the creator chose NOT to grant: dismissed from
+   * the "new on this Agent" prompt, or unticked in a picker. Grants nothing and
+   * revokes nothing — the server gate never reads it. It only stops the share
+   * settings from offering these identifiers again as newly added to the Agent.
+   * Absent on shares created before the prompt existed, so their ungranted
+   * Agent tools surface once for review instead of being granted silently.
+   */
+  declinedGrantIds?: string[];
   /** Visitor trial scenarios, maintained independently of agents.openingQuestions. */
   demoCases?: AgentShareDemoCase[];
   /**
    * Which visitors may run on the Agent's configured execution environment
-   * (its bound or auto-selected device), mirroring an IM bot's `devicePolicy`:
+   * (its bound or auto-selected device):
    *
-   * - `none` (default): no visitor reaches a device; device tools are dropped.
-   * - `all`: every signed-in visitor runs on the Agent's device.
-   * - `allowlist`: only visitors whose VERIFIED account email is listed in
-   *   {@link deviceAllowEmails}.
+   * - `none` (default): no visitor reaches a device; device tools are dropped
+   *   and a local CLI (Claude Code, Codex, …) Agent refuses the run.
+   * - `allowlist`: only the people in {@link deviceAllowUserIds} who are
+   *   still in the Agent's address book. They get the device tools and, for a
+   *   heterogeneous Agent, run it on the device.
+   * - `contacts`: everyone currently in the Agent's address book, so a creator
+   *   can prepare the share before someone joins: they can use it as soon as
+   *   they are added, and lose it when removed.
    *
-   * The visitor never picks the device — it always follows the Agent's own
-   * execution-environment setting. Resolved per run by
-   * `resolveShareVisitorDeviceAccess`. Heterogeneous (Claude Code / Codex)
-   * agents stay unavailable to visitors under every value.
+   * There is no "every visitor" value: a stranger never reaches the creator's
+   * machine. The visitor never picks the device — it always follows the
+   * Agent's own execution-environment setting. Resolved per run by
+   * `resolveShareVisitorDeviceAccess`.
    */
   deviceAccess?: AgentShareDeviceAccess;
   /**
-   * Lower-cased account emails allowed to use the device when
-   * {@link deviceAccess} is `allowlist`; ignored otherwise. Stored as emails
-   * rather than user ids so the creator can authorize someone before they sign
-   * up, and so the settings page never needs a user lookup that would reveal
-   * whether an email has a LobeHub account.
+   * User ids allowed to use the device when {@link deviceAccess} is
+   * `allowlist`; ignored otherwise. Each must be in the address book of the
+   * Agent's scope when written (personal contacts for a personal Agent; the
+   * workspace's members and external contacts for a workspace Agent), and is
+   * checked against it again on every run, so removing a contact revokes the
+   * grant without editing the share.
    */
-  deviceAllowEmails?: string[];
+  deviceAllowUserIds?: string[];
   /** Ordered, explicitly selected creator Works for this share's public profile. */
   featuredWorkIds?: string[];
   /**
@@ -52,10 +66,11 @@ export interface AgentShareConfig {
    * visitor attachments off entirely. Enforced by `shareChat.createUploadUrl`.
    */
   maxFileStorage?: number;
-  /** Maximum number of topics each signed-in visitor can create for this share. */
-  maxTopicsPerVisitor?: number;
-  /** Maximum number of message turns allowed in each shared topic. */
-  maxTurnsPerTopic?: number;
+  /**
+   * Messages each signed-in visitor may send to this share in total, across every conversation.
+   * Only the visitor's own messages count; the Agent's replies do not.
+   */
+  maxMessagesPerVisitor?: number;
   /**
    * Per-Agent monthly spend cap for this share, in USD credits.
    *
@@ -70,15 +85,14 @@ export interface AgentShareConfig {
    */
   monthlySpendLimit?: number;
   /**
-   * Whether visitors may see raw run error details (message/stack) instead of
-   * a generic failure notice. Defaults to `false`.
+   * Set only by `AgentShareModel.create` when it inserts a brand-new share:
+   * the creator share settings then grant the Agent's usable tools and skills
+   * once and write `false`. Persisted on the row rather than kept in client
+   * state, so the default lands on exactly the share that was created — never
+   * on an existing share another tab or manager configured, nor on a different
+   * Agent the page navigated to. The server gate never reads it.
    */
-  showErrorDetails?: boolean;
-  /**
-   * Whether visitors may see which model/provider is powering the agent.
-   * Defaults to `false` — the creator's model choice is hidden by default.
-   */
-  showModelInfo?: boolean;
+  seedDefaultGrants?: boolean;
   /**
    * Skills visitors may load, by skill identifier. Deliberately separate from
    * {@link toolGrants}: a skill grant governs BOTH the tool path
@@ -111,12 +125,13 @@ export interface AgentShareConfig {
 }
 
 /**
- * `AgentShareConfig` as returned by `normalizeAgentShareConfig`: the spend cap
- * is guaranteed present, so enforcement paths never have to re-derive a
+ * `AgentShareConfig` as returned by `normalizeAgentShareConfig`: the caps are
+ * guaranteed present, so enforcement paths never have to re-derive a
  * default (and can never mistake a missing cap for "unlimited").
  */
 export type NormalizedAgentShareConfig = AgentShareConfig & {
   maxFileStorage: number;
+  maxMessagesPerVisitor: number;
   monthlySpendLimit: number;
 };
 

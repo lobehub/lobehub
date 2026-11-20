@@ -48,6 +48,8 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'budget',
   // Personal chat-assist preferences, reachable by every member.
   'chat-preference',
+  // Legacy alias: connectors moved to `/marketplace/connector`; the routers keep
+  // a redirect, so prefixed deep-links land on `/:slug/marketplace/connector`.
   'connector',
   'credential',
   // Legacy alias for `credential` — the routers keep a redirect, so prefixed
@@ -71,6 +73,8 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'profile',
   'provider',
   'service-model',
+  // Legacy alias: installed skills moved to `/marketplace/skill/installed`; the
+  // routers keep a redirect from `/:slug/settings/skill`.
   'skill',
   'statistics',
   // Legacy alias for `statistics` — the routers keep a redirect, so prefixed

@@ -6,12 +6,12 @@ import { SquareTerminalIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useTerminalEntry } from '@/features/ChatTerminal/useTerminalEntry';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 
 const TerminalPanelToggle = memo(() => {
   const { t } = useTranslation('chat');
@@ -20,6 +20,7 @@ const TerminalPanelToggle = memo(() => {
     s.toggleTerminalPanel,
   ]);
   const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.ToggleTerminalPanel));
+  const headerActionSmallSize = useHeaderActionSize(true);
 
   // Shown for coding agents only, and only where a shell can run; other agents
   // reach the terminal from the Overview resources (see `useTerminalEntry`).
@@ -31,7 +32,7 @@ const TerminalPanelToggle = memo(() => {
     <ActionIcon
       active={showTerminalPanel}
       icon={SquareTerminalIcon}
-      size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+      size={headerActionSmallSize}
       title={t('terminalPanel.title')}
       tooltipProps={{ hotkey, placement: 'bottom' }}
       onClick={() => toggleTerminalPanel()}

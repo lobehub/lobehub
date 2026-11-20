@@ -13,6 +13,7 @@ import {
   experimentSelectors,
   useEvalStore,
 } from '@/store/eval';
+import { densityVars } from '@/styles/densityVars';
 
 import BenchmarkCard from './features/BenchmarkCard';
 import { createCreateBenchmarkModal } from './features/CreateBenchmarkModal';
@@ -31,11 +32,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   datasetRow: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     padding-block: 14px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 

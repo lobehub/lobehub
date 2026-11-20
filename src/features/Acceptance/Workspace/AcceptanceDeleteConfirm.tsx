@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { useClientDataSWR } from '@/libs/swr';
 import { verifyKeys } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
+import { densityTokens } from '@/styles/density.stylex';
 import { formatSize } from '@/utils/format';
 
 import { frostedModalStyles } from '../Viewer/Review/modals';
@@ -33,7 +34,7 @@ const styles = stylex.create({
     columnGap: '14px',
     margin: 0,
     paddingBlock: '10px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadiusLG,
     fontSize: '13px',
     fontVariantNumeric: 'tabular-nums',

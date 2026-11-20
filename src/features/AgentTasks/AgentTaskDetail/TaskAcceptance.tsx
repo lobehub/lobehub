@@ -50,6 +50,7 @@ import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 import { useVerifyStore } from '@/store/verify';
+import { densityVars } from '@/styles/densityVars';
 
 import GoalRoundTimeline from './GoalRoundTimeline';
 import { resolveTaskAcceptanceRequirement } from './resolveTaskAcceptanceProjection';
@@ -59,7 +60,7 @@ import TaskVerifyConfig from './TaskVerifyConfig';
 const styles = createStaticStyles(({ css }) => ({
   error: css`
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorErrorBg};
   `,
@@ -71,7 +72,7 @@ const styles = createStaticStyles(({ css }) => ({
   groupHeader: css`
     cursor: pointer;
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
   `,
 }));
 

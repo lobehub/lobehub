@@ -93,6 +93,8 @@ export interface ContextFactRequest {
   agentId?: string;
   /** Plugin identifiers the agent explicitly disabled (tri-state entries). */
   disabledPluginIds?: string[];
+  /** Tools offered for activation in the current step. */
+  discoverableTools?: ReadonlyArray<{ identifier: string }>;
   /** Agent being edited in the Profile panel, when the agent builder is active. */
   editingAgentId?: string;
   /** Group being edited in the group Profile panel, when the group builder is active. */
@@ -213,7 +215,14 @@ export interface ContextFactProviders {
    * ephemeral, which is what every run without one gets.
    */
   resolveSandboxPersistence?: () => Promise<
-    { cwd?: string; mode: 'drive' | 'ephemeral' | 'persistent'; workingDir?: string } | undefined
+    | {
+        cwd?: string;
+        mode: 'drive' | 'ephemeral' | 'persistent';
+        /** The repositories the topic's environment checks out, in order. */
+        repositories?: { folder?: string; ref?: string; repository: string }[];
+        workingDir?: string;
+      }
+    | undefined
   >;
 }
 

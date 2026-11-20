@@ -1,13 +1,18 @@
 import type {
   ContactAgentItem,
   ContactAgentProfile,
+  ContactCard,
+  ContactCardInput,
   ContactItem,
   ContactRelation,
   ContactRequestItem,
+  ContactRequestSource,
   ContactSearchResult,
   ContactUserItem,
   ContactUserProfile,
+  ContactWorkspace,
 } from '@lobechat/types';
+import { channelMessageDeletedAt, contactCardOf } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import type { SQLWrapper } from 'drizzle-orm';
 import { and, desc, eq, exists, inArray, isNotNull, isNull, not, or, sql } from 'drizzle-orm';
@@ -16,6 +21,8 @@ import { alias } from 'drizzle-orm/pg-core';
 import {
   agents,
   agentShares,
+  channelMembers,
+  channelMessages,
   userContactRequests,
   userContacts,
   users,
@@ -36,6 +43,7 @@ const userProfileColumns = {
 };
 
 const owners = alias(users, 'contact_agent_owner');
+const referrers = alias(users, 'contact_request_referrer');
 
 /** Who the caller is in the active scope. */
 type ScopeRole = 'personal' | 'member' | 'external';
@@ -348,6 +356,79 @@ export class ContactModel {
     return { hasMore: people.length > options.limit, people: people.slice(0, options.limit) };
   };
 
+  /**
+   * Everyone in this scope's address book except the caller: personal contacts; in a workspace,
+   * its other members and every external contact of it, whoever invited them. Unlike
+   * {@link listPeople} this ignores who the caller is in the scope, because it answers for a
+   * resource the scope owns (an Agent's share), not for the caller's own conversations.
+   */
+  listAddressBookPeople = async (): Promise<ContactUserProfile[]> => {
+    if (!this.workspaceId) {
+      const rows = await this.db
+        .select(userProfileColumns)
+        .from(userContacts)
+        .innerJoin(users, eq(users.id, userContacts.contactUserId))
+        .where(and(this.userEntryWhere(), eq(userContacts.userId, this.userId)))
+        .orderBy(desc(userContacts.createdAt));
+      return rows;
+    }
+
+    const [members, externals] = await Promise.all([
+      this.db
+        .select(userProfileColumns)
+        .from(workspaceMembers)
+        .innerJoin(users, eq(users.id, workspaceMembers.userId))
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, this.workspaceId),
+            isNull(workspaceMembers.deletedAt),
+            not(eq(workspaceMembers.userId, this.userId)),
+          ),
+        )
+        .orderBy(users.fullName, users.username),
+      this.listExternals(),
+    ]);
+    return [...members, ...externals.map((item) => item.user)];
+  };
+
+  /**
+   * The subset of `userIds` that {@link listAddressBookPeople} would list, without loading it:
+   * the check an access grant re-runs on every use, so removing someone from the address book
+   * (or from the workspace) ends what was granted to them.
+   */
+  filterAddressBookPeople = async (userIds: string[]): Promise<string[]> => {
+    const candidates = [...new Set(userIds)].filter((id) => id !== this.userId);
+    if (candidates.length === 0) return [];
+
+    const entries = await this.db
+      .select({ userId: userContacts.contactUserId })
+      .from(userContacts)
+      .where(
+        and(
+          this.userEntryWhere(),
+          inArray(userContacts.contactUserId, candidates),
+          // Personal: my own entries. Workspace: any member's external contact; the paired
+          // member side of the same pair is a member, matched below instead.
+          this.workspaceId ? not(this.contactIsMember()) : eq(userContacts.userId, this.userId),
+        ),
+      );
+    const members = this.workspaceId
+      ? await this.db
+          .select({ userId: workspaceMembers.userId })
+          .from(workspaceMembers)
+          .where(
+            and(
+              eq(workspaceMembers.workspaceId, this.workspaceId),
+              isNull(workspaceMembers.deletedAt),
+              inArray(workspaceMembers.userId, candidates),
+            ),
+          )
+      : [];
+
+    const found = new Set([...entries, ...members].map((row) => row.userId));
+    return candidates.filter((id) => found.has(id));
+  };
+
   relationTo = async (otherUserId: string): Promise<ContactRelation> => {
     if (otherUserId === this.userId) return 'self';
     if ((await this.scopeRole()) === 'member' && (await this.isMember(otherUserId)))
@@ -376,6 +457,7 @@ export class ContactModel {
   sendRequest = async (
     addresseeId: string,
     message?: string,
+    options?: { cardMessageId?: string },
   ): Promise<{ requestId: string; status: 'accepted' | 'pending' }> => {
     if (addresseeId === this.userId)
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'You cannot add yourself' });
@@ -426,12 +508,16 @@ export class ContactModel {
       if (pending && (await this.accept(tx, pending.id, addresseeId, this.workspaceId)))
         return { requestId: pending.id, status: 'accepted' };
 
+      const source = options?.cardMessageId
+        ? await this.cardSource(tx, options.cardMessageId, addresseeId)
+        : undefined;
       const [created] = await tx
         .insert(userContactRequests)
         .values({
           addresseeId,
           message: message?.trim() || null,
           requesterId: this.userId,
+          source: source ?? null,
           workspaceId: this.workspaceId,
         })
         .returning({ id: userContactRequests.id });
@@ -469,7 +555,13 @@ export class ContactModel {
         createdAt: userContactRequests.createdAt,
         id: userContactRequests.id,
         message: userContactRequests.message,
+        // Flat: drizzle drops a nested object of this aliased join.
+        referrerAvatar: referrers.avatar,
+        referrerFullName: referrers.fullName,
+        referrerId: referrers.id,
+        referrerUsername: referrers.username,
         requesterId: userContactRequests.requesterId,
+        source: userContactRequests.source,
         user: userProfileColumns,
         workspaceAvatar: workspaces.avatar,
         workspaceId: workspaces.id,
@@ -481,6 +573,10 @@ export class ContactModel {
         sql`${users.id} = CASE WHEN ${userContactRequests.requesterId} = ${this.userId} THEN ${userContactRequests.addresseeId} ELSE ${userContactRequests.requesterId} END`,
       )
       .leftJoin(workspaces, eq(workspaces.id, userContactRequests.workspaceId))
+      .leftJoin(
+        referrers,
+        eq(referrers.id, sql<string>`${userContactRequests.source} ->> 'referrerId'`),
+      )
       .where(and(eq(userContactRequests.status, 'pending'), scope))
       .orderBy(desc(userContactRequests.createdAt));
 
@@ -489,6 +585,20 @@ export class ContactModel {
       direction: row.requesterId === this.userId ? 'outgoing' : 'incoming',
       id: row.id,
       message: row.message,
+      source:
+        row.source?.type === 'card'
+          ? {
+              referrer: row.referrerId
+                ? {
+                    avatar: row.referrerAvatar,
+                    fullName: row.referrerFullName,
+                    id: row.referrerId,
+                    username: row.referrerUsername,
+                  }
+                : null,
+              type: 'card' as const,
+            }
+          : null,
       user: row.user,
       workspace: row.workspaceId
         ? { avatar: row.workspaceAvatar, id: row.workspaceId, name: row.workspaceName ?? '' }
@@ -638,6 +748,43 @@ export class ContactModel {
     });
   };
 
+  /**
+   * The workspaces I am an external contact of, for the space switcher: paired there with a
+   * member who still is one, and not a member myself. Independent of the active scope.
+   */
+  listExternalWorkspaces = async (): Promise<ContactWorkspace[]> => {
+    const myMembership = alias(workspaceMembers, 'my_membership');
+    return this.db
+      .selectDistinct({ avatar: workspaces.avatar, id: workspaces.id, name: workspaces.name })
+      .from(userContacts)
+      .innerJoin(workspaces, eq(workspaces.id, userContacts.workspaceId))
+      .innerJoin(
+        workspaceMembers,
+        and(
+          eq(workspaceMembers.workspaceId, userContacts.workspaceId),
+          eq(workspaceMembers.userId, userContacts.contactUserId),
+          isNull(workspaceMembers.deletedAt),
+        ),
+      )
+      .leftJoin(
+        myMembership,
+        and(
+          eq(myMembership.workspaceId, userContacts.workspaceId),
+          eq(myMembership.userId, this.userId),
+          isNull(myMembership.deletedAt),
+        ),
+      )
+      .where(
+        and(
+          eq(userContacts.userId, this.userId),
+          eq(userContacts.type, 'user'),
+          isNotNull(userContacts.workspaceId),
+          isNull(myMembership.userId),
+        ),
+      )
+      .orderBy(workspaces.name);
+  };
+
   /** Someone paired with a member here who is not a member themselves. */
   private async isExternal(userId: string) {
     if (await this.isMember(userId)) return false;
@@ -664,6 +811,97 @@ export class ContactModel {
       and(eq(userContacts.userId, otherUserId), eq(userContacts.contactUserId, this.userId)),
     );
   }
+
+  /**
+   * The source of a request sent from a person's card: only when the card message stands in a
+   * Channel I am an active member of and shares exactly the addressee. Anything else is dropped,
+   * not refused: the request itself does not depend on its source.
+   */
+  private cardSource = async (
+    tx: Pick<LobeChatDatabase, 'select'>,
+    messageId: string,
+    addresseeId: string,
+  ): Promise<ContactRequestSource | undefined> => {
+    if (!isUuid(messageId)) return;
+    const [row] = await tx
+      .select({
+        channelId: channelMessages.channelId,
+        metadata: channelMessages.metadata,
+        senderId: channelMessages.userId,
+      })
+      .from(channelMessages)
+      .innerJoin(
+        channelMembers,
+        and(
+          eq(channelMembers.channelId, channelMessages.channelId),
+          eq(channelMembers.userId, this.userId),
+          eq(channelMembers.status, 'active'),
+        ),
+      )
+      .where(eq(channelMessages.id, messageId))
+      .limit(1);
+    const card = contactCardOf(row?.metadata);
+    if (
+      !row ||
+      channelMessageDeletedAt(row.metadata) ||
+      card?.type !== 'user' ||
+      card.userId !== addresseeId
+    )
+      return;
+    return { channelId: row.channelId, messageId, referrerId: row.senderId, type: 'card' };
+  };
+
+  /**
+   * A contact the caller may share as a card, with its snapshot. A person: the caller, one of
+   * their contacts, or a fellow member of the workspace. An Agent: any Agent whose link share is
+   * on, since anyone signed in can add it anyway; the caller's own Agent with sharing off is
+   * refused so sharing it never publishes it by surprise.
+   */
+  resolveCard = async (input: ContactCardInput): Promise<ContactCard> => {
+    if ((await this.scopeRole()) === 'external')
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Only members share contacts here' });
+
+    if (input.type === 'user') {
+      const relation = await this.relationTo(input.userId);
+      if (relation !== 'self' && relation !== 'contact' && relation !== 'member')
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Share only your contacts' });
+      const user = await this.findUser(input.userId);
+      if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });
+      return {
+        avatar: user.avatar,
+        name: user.fullName || user.username,
+        type: 'user',
+        userId: user.id,
+        username: user.username,
+      };
+    }
+
+    const [row] = await this.db
+      .select(agentProfileColumns)
+      .from(agents)
+      .leftJoin(
+        agentShares,
+        and(eq(agentShares.agentId, agents.id), eq(agentShares.visibility, 'link')),
+      )
+      .leftJoin(owners, eq(owners.id, agents.userId))
+      .where(and(eq(agents.id, input.agentId), notTrashed(agents.isDeleted)))
+      .limit(1);
+    if (!row?.shareId) {
+      if (row?.ownerId === this.userId)
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Turn on sharing first' });
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+    }
+    const profile = toAgentProfile({ ...row, shareId: row.shareId });
+    return {
+      agentId: profile.agentId,
+      avatar: profile.avatar,
+      backgroundColor: profile.backgroundColor,
+      name: profile.title,
+      ownerName: profile.owner.fullName || profile.owner.username,
+      shareId: profile.shareId,
+      type: 'agent',
+    };
+  };
 
   // ── Agents ────────────────────────────────────────────────────────────
 

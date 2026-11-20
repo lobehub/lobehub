@@ -4,9 +4,11 @@ export type StatusFilter = 'all' | 'active' | 'running' | 'completed' | 'archive
 
 /**
  * `bot` is an IM bot platform (Discord, Telegram, …); `channel` is a multi-agent Channel, whose
- * conversations are listed as Channels rather than as topics.
+ * conversations are listed as Channels rather than as topics; `share` lists visitors' direct
+ * Channels with the Agent through its share link.
  */
-export type TriggerFilter = 'chat' | 'api' | 'task' | 'eval' | 'bot' | 'channel' | 'webhook';
+export type TriggerFilter =
+  'chat' | 'api' | 'task' | 'eval' | 'bot' | 'channel' | 'share' | 'webhook';
 
 export type TimeRangeFilter = 'all' | 'today' | 'week' | 'month';
 

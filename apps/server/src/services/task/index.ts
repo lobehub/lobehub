@@ -11,6 +11,7 @@ import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { LobeChatDatabase } from '@/database/type';
+import { takeTaskArtboardsOffline } from '@/server/services/artboard/taskCleanup';
 
 import { AiAgentService } from '../aiAgent';
 import { removeByTopics } from '../inboundWebhook/lifecycle';
@@ -442,6 +443,16 @@ export class TaskService {
         message:
           'The task changed while it was being deleted (it may have just started). Try again.',
       });
+    }
+    if (outcome === 'deleted') {
+      try {
+        await takeTaskArtboardsOffline(
+          { db: this.db, userId: this.userId, workspaceId: this.workspaceId },
+          [task.id],
+        );
+      } catch (error) {
+        console.error('[task:delete] Artboard share teardown failed', error);
+      }
     }
     // Remote teardown follows commit: conflicts and rollbacks preserve the live endpoints.
     if (outcome === 'deleted' && removedTopicIds.length > 0) {

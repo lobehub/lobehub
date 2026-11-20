@@ -75,6 +75,9 @@ export class ResponsesResource extends Responses {
         // Closing the stream must not abort a caller-owned signal, and vice versa.
         signal: options.signal ? anySignal([options.signal, signal]) : signal,
         parseAs: 'stream',
+        // The helper reads `{ response }`: a client configured for data-only
+        // results must not change its own internals.
+        responseStyle: 'fields',
         throwOnError: true,
       });
       if (!response.body) throw new Error('The streaming response has no body');
@@ -267,6 +270,9 @@ export function createLobeHub(
       request.headers.set(IDEMPOTENCY_KEY_HEADER, requestOptions.idempotencyKey);
     requestSettings.set(request, {
       maxRetries: requestOptions.maxRetries ?? maxRetries,
+      // `parseAs: 'stream'` asks for the SSE body: keep the transport from
+      // resending a request whose answer cannot be replayed.
+      streaming: requestOptions.parseAs === 'stream',
       timeout: requestOptions.timeout ?? timeout,
     });
     return request;

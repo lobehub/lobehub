@@ -219,13 +219,6 @@ test('workflow limits automatic publication to production inputs and serializes 
   );
   const patterns = workflow.on.push.paths;
   assert.ok(patterns.includes('apps/cli/src/**'));
-  for (const excluded of [
-    '!apps/cli/**/*.test.*',
-    '!apps/cli/**/*.spec.*',
-    '!apps/cli/**/__tests__/**',
-    '!apps/cli/**/*.md',
-  ])
-    assert.ok(patterns.includes(excluded));
   const triggers = (file) =>
     patterns.reduce((included, pattern) => {
       const exclude = pattern.startsWith('!');
@@ -236,6 +229,12 @@ test('workflow limits automatic publication to production inputs and serializes 
     'apps/cli/scripts/copyReportTemplate.ts',
     'apps/cli/package.json',
     'apps/cli/tsdown.config.ts',
+    // Regression: #23141 changed only a shared package, so no CLI was published.
+    'packages/device-control/src/workspace.ts',
+    'packages/device-sandbox/src/index.ts',
+    'packages/business/const/src/index.ts',
+    'packages/device-mcp/package.json',
+    'packages/ssrf-safe-fetch/index.ts',
   ])
     assert.equal(triggers(file), true, file);
   for (const file of [
@@ -247,8 +246,56 @@ test('workflow limits automatic publication to production inputs and serializes 
     'apps/cli/src/fixtures/data.json',
     'apps/cli/src/docs/guide.md',
     'apps/cli/e2e/agent.ts',
+    'packages/device-control/src/workspace.deviceSkills.test.ts',
+    'packages/device-control/src/workspace.spec.ts',
+    'packages/device-control/src/__tests__/integration.ts',
+    'packages/device-control/src/__fixtures__/skill.json',
+    'packages/device-control/src/fixtures/skill.json',
+    'packages/device-control/src/testUtils.ts',
+    'packages/device-control/README.md',
+    'packages/device-control/docs/guide.mdx',
+    'packages/device-control/vitest.config.mts',
+    'packages/file-loaders/test/fixtures/document.pdf',
+    'packages/utils/tests/testSetup.ts',
+    'packages/database/src/models/user.ts',
+    'apps/server/src/services/deviceGateway/workspace.ts',
+    '.agents/skills/example/SKILL.md',
   ])
     assert.equal(triggers(file), false, file);
+  // Follow the actual manifests, not a second hand-maintained package list.
+  // A newly added direct/transitive workspace dependency must update the trigger.
+  const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const workspace = parse(
+    await readFile(path.join(repoRoot, 'apps/cli/pnpm-workspace.yaml'), 'utf8'),
+  );
+  const packages = new Map();
+  for (const member of new Set(workspace.packages)) {
+    const directory = path.posix.normalize(path.posix.join('apps/cli', member));
+    const manifest = JSON.parse(
+      await readFile(path.join(repoRoot, directory, 'package.json'), 'utf8'),
+    );
+    packages.set(manifest.name, { directory, manifest });
+  }
+  const visited = new Set();
+  const visit = (name) => {
+    if (visited.has(name)) return;
+    visited.add(name);
+    const member = packages.get(name);
+    assert.ok(member, `Missing CLI workspace member: ${name}`);
+    const { directory, manifest } = member;
+    for (const file of ['package.json', 'src/index.ts']) {
+      assert.ok(triggers(`${directory}/${file}`), `Release trigger misses ${directory}/${file}`);
+    }
+    for (const [dependency, version] of Object.entries({
+      ...manifest.dependencies,
+      ...manifest.devDependencies,
+      ...manifest.optionalDependencies,
+    })) {
+      if (version.startsWith('workspace:')) visit(dependency);
+    }
+  };
+  visit('@lobehub/cli');
+
   assert.equal(workflow.concurrency.group, 'release-cli');
   assert.equal(workflow.concurrency['cancel-in-progress'], false);
   assert.equal(workflow.jobs.publish.steps[0].with['fetch-depth'], 0);

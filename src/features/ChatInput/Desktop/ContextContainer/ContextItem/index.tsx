@@ -51,7 +51,7 @@ const styles = stylex.create({
 type FileItemProps = UploadFileItem;
 
 const ContextItem = memo<FileItemProps>((props) => {
-  const { errorCode, file, id, status } = props;
+  const { error, errorCode, file, id, status } = props;
   const { t } = useTranslation(['chat', 'common']);
   const contextKey = useChatInputUploadKey();
   const removeChatUploadFile = useFileStore((s) => s.removeChatUploadFile);
@@ -97,7 +97,13 @@ const ContextItem = memo<FileItemProps>((props) => {
               ) : indicator === 'busy' ? (
                 <UploadIndicator label={t('upload.preview.status.uploading')} size={12} />
               ) : (
-                <Icon icon={CircleAlertIcon} size={12} style={{ color: cssVar.colorError }} />
+                <Icon
+                  aria-label={error || t('upload.preview.status.error')}
+                  icon={CircleAlertIcon}
+                  role={'img'}
+                  size={12}
+                  style={{ color: cssVar.colorError }}
+                />
               )}
             </Flexbox>
           )}

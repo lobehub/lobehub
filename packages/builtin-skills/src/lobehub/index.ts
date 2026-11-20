@@ -30,11 +30,14 @@ import model from './references/model';
 import plugin from './references/plugin';
 import project from './references/project';
 import provider from './references/provider';
+import quota from './references/quota';
 import search from './references/search';
 import skill from './references/skill';
+import task from './references/task.md';
 import topic from './references/topic';
 import trace from './references/trace';
 import webhook from './references/webhook';
+import work from './references/work';
 import workspace from './references/workspace';
 
 export { LobeHubIdentifier };
@@ -70,11 +73,14 @@ export const LobeHubSkill: BuiltinSkill = {
     'references/plugin': plugin,
     'references/project': project,
     'references/provider': provider,
+    'references/quota': quota,
     'references/search': search,
     'references/skill': skill,
+    'references/task': task,
     'references/topic': topic,
     'references/trace': trace,
     'references/webhook': webhook,
+    'references/work': work,
     'references/workspace': workspace,
   }),
 };

@@ -271,7 +271,6 @@ describe('createCommonSlice', () => {
       expect(userGeneralSettingsSelectors.config(state)).toEqual(
         expect.objectContaining({
           fontSize: 14,
-          responseLanguage: expect.any(String),
           timezone: 'America/New_York',
         }),
       );
@@ -411,7 +410,7 @@ describe('createCommonSlice', () => {
         expect(state.user?.avatar).toEqual('abc');
         // When settings is null, auto-detect general settings will set them
         expect(state.settings).toEqual({
-          general: { responseLanguage: expect.any(String), timezone: expect.any(String) },
+          general: { timezone: expect.any(String) },
         });
       });
     });

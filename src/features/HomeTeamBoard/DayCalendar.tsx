@@ -5,6 +5,8 @@ import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 
+import { useDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import { buildHourCells, type HourCellItem } from './layout';
@@ -21,8 +23,8 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderWidth: 1,
     minWidth: 0,
-    paddingBlock: 16,
-    paddingInline: 16,
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   cell: {
     backgroundColor: cssVar.colorFillQuaternary,
@@ -33,9 +35,11 @@ const styles = stylex.create({
     paddingBlock: 8,
     paddingInline: 8,
   },
+  cellCompact: { minHeight: 84, paddingBlock: 6, paddingInline: 6 },
   current: { outlineColor: cssVar.colorPrimary, outlineStyle: 'solid', outlineWidth: 1 },
   dot: { borderRadius: 3, flexShrink: 0, height: 6, width: 6 },
   grid: { display: 'grid', gap: 8, gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' },
+  gridCompact: { gap: 6 },
   hour: {
     color: cssVar.colorTextTertiary,
     fontSize: 12,
@@ -93,16 +97,24 @@ const CalendarItem = ({ item }: { item: HourCellItem }) => {
 /** A day reads best as a calendar: 24 hour cells, each listing what started in it. */
 const DayCalendar = ({ board }: { board: AgentRunBoardData }) => {
   const { t } = useTranslation('home');
+  const { compact } = useDensity();
   const cells = buildHourCells(board.lanes, board.generatedAt);
 
   return (
     <div {...stylex.props(styles.card)}>
-      <div {...stylex.props(styles.grid)} data-testid={'team-board-calendar'}>
+      <div
+        {...stylex.props(styles.grid, compact && styles.gridCompact)}
+        data-testid={'team-board-calendar'}
+      >
         {cells.map((cell, index) => (
           <Flexbox
             gap={2}
             key={cell.hour.getTime()}
-            {...stylex.props(styles.cell, index === cells.length - 1 && styles.current)}
+            {...stylex.props(
+              styles.cell,
+              compact && styles.cellCompact,
+              index === cells.length - 1 && styles.current,
+            )}
             data-testid={'team-board-calendar-cell'}
           >
             <span {...stylex.props(styles.hour)}>{dayjs(cell.hour).format('HH:00')}</span>

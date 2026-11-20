@@ -1,4 +1,4 @@
-import type { DeviceClient, DeviceMetricSample } from '@lobechat/types';
+import type { DeviceClient, DeviceMetricSample, HeteroPermissionMode } from '@lobechat/types';
 
 import {
   describeGatewayRequestFailure,
@@ -339,6 +339,8 @@ export class GatewayHttpClient {
     imageList?: Array<{ id?: string; url: string }>;
     jwt: string;
     operationId: string;
+    /** Claude Code permission mode; see `AgentRunRequestMessage.permissionMode`. */
+    permissionMode?: HeteroPermissionMode;
     prompt: string;
     resumeFallbackSystemContext?: string;
     resumeSessionId?: string;

@@ -55,6 +55,9 @@ export async function* paginate<M extends AnyFn>(
       ...base,
       client,
       query: { ...base.query, ...(cursor ? { cursor } : {}) },
+      // The loop reads the envelope's `data`: a client configured for
+      // data-only results must not strip it here.
+      responseStyle: 'fields',
       throwOnError: true,
     });
     const page = (data as { data: PageShape & Record<string, unknown> }).data;

@@ -3,9 +3,16 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, channelJobs, channelMessages, channelThreads } from '../../../schemas';
+import {
+  agents,
+  channelJobs,
+  channelMembers,
+  channelMessages,
+  channelThreads,
+} from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { ChannelExecutionRepository, ChannelRepository } from '..';
+import { readManifestMessages } from '../manifest';
 import { createChannelFixture, jobById, jobsOf, lease } from './testUtils';
 
 const db: LobeChatDatabase = await getTestDB();
@@ -73,6 +80,88 @@ describe('Channel reply opening', () => {
     ]);
     expect(await execution.openingReply(channel.id, job.id)).toBe('Got it, checking the logs.');
     expect((await jobById(db, job.id)).threadId).toBeNull();
+  });
+
+  it('names the acknowledgement on the job, so a failed run shows under it', async () => {
+    const { channel, job } = await mentionAgent();
+    await execution.open(channel.id, job.id, { ack: 'Got it, checking CI.' });
+    const claimed = (await execution.claim(channel.id, job.id, lease))!;
+    await execution.fail(channel.id, claimed.job.id, { message: "You've hit your 5-hour limit" });
+
+    const ack = (await messagesOf(channel.id)).find((row) => row.routingStatus === 'reply');
+    const repository = new ChannelRepository(db, fixture.memberId, fixture.workspaceId);
+    const { jobs } = await repository.detail(channel.id);
+    expect(jobs).toEqual([
+      expect.objectContaining({
+        errorMessage: "You've hit your 5-hour limit",
+        id: job.id,
+        openingMessageId: ack!.id,
+        status: 'failed',
+      }),
+    ]);
+  });
+
+  it('names the device picked for the Agent, and finds its newest finished reply on it', async () => {
+    const { agent, asMember, channel, job } = await mentionAgent();
+    const claimed = (await execution.claim(channel.id, job.id, lease))!;
+    await execution.fail(channel.id, claimed.job.id, { message: "You've hit your 5-hour limit" });
+    // The member runs on a device picked in the Channel; the claim records it on the job.
+    await db.update(channelJobs).set({ deviceId: 'device-a' }).where(eq(channelJobs.id, job.id));
+    await db
+      .update(channelMembers)
+      .set({ config: { deviceId: 'device-a' } })
+      .where(eq(channelMembers.id, agent.id));
+    const next = await asMember.send(channel.id, {
+      content: 'Can you retry now?',
+      mentions: [agent.id],
+      requestKey: 'req-retry',
+      routing: 'decision',
+    });
+    const [nextJob] = await jobsOf(db, next.id);
+    const since = new Date(Date.now() - 60_000);
+
+    expect(await execution.openingCandidate(channel.id, nextJob.id)).toMatchObject({
+      deviceId: 'device-a',
+      memberId: agent.id,
+    });
+    // The queued reply is not finished yet: the failed one is the newest on the device.
+    expect(
+      await execution.lastSettledReplyOnDevice(channel.id, {
+        deviceId: 'device-a',
+        memberId: agent.id,
+        since,
+      }),
+    ).toMatchObject({ error: { message: "You've hit your 5-hour limit" }, status: 'failed' });
+    // Another device has no history of its own.
+    expect(
+      await execution.lastSettledReplyOnDevice(channel.id, {
+        deviceId: 'device-b',
+        memberId: agent.id,
+        since,
+      }),
+    ).toBeUndefined();
+
+    // A newer reply that finished on the device takes over.
+    await db
+      .update(channelJobs)
+      .set({ deviceId: 'device-a', status: 'completed' })
+      .where(eq(channelJobs.id, nextJob.id));
+    expect(
+      await execution.lastSettledReplyOnDevice(channel.id, {
+        deviceId: 'device-a',
+        memberId: agent.id,
+        since,
+      }),
+    ).toMatchObject({ status: 'completed' });
+  });
+
+  it('names no acknowledgement on a job that opened without one', async () => {
+    const { channel, job } = await mentionAgent();
+    await execution.open(channel.id, job.id, {});
+
+    const repository = new ChannelRepository(db, fixture.memberId, fixture.workspaceId);
+    const { jobs } = await repository.detail(channel.id);
+    expect(jobs).toEqual([expect.objectContaining({ id: job.id, openingMessageId: null })]);
   });
 
   it('in a group with several people, opens the Thread under the request and acknowledges inside it', async () => {
@@ -506,5 +595,238 @@ describe('Channel reply opening', () => {
 
     expect(await execution.openingCandidate(channel.id, job.id)).toBeUndefined();
     expect(await execution.open(channel.id, job.id, { ack: 'Late' })).toBe(false);
+  });
+
+  describe('continuing in an open Thread', () => {
+    /** A first request answered in its own Thread, then a follow-up on the main timeline. */
+    const answeredInThread = async () => {
+      const team = await mentionAgent();
+      await execution.open(team.channel.id, team.job.id, {
+        ack: 'On it.',
+        threadTitle: 'Deploy failure',
+      });
+      await execution.claim(team.channel.id, team.job.id, lease);
+      await execution.accepted(team.channel.id, team.job.id);
+      await execution.saveDraft(team.channel.id, team.job.id, 'The token expired.');
+      await execution.publish(team.channel.id, team.job.id);
+      await execution.releaseWriter(team.channel.id, team.job.id);
+      const [thread] = await db
+        .select()
+        .from(channelThreads)
+        .where(eq(channelThreads.channelId, team.channel.id));
+      const followUp = await team.asMember.send(team.channel.id, {
+        content: 'And how do we stop the token expiring again?',
+        mentions: [team.agent.id],
+        requestKey: 'follow-up',
+        routing: 'decision',
+      });
+      const [job] = await jobsOf(db, followUp.id);
+      return { ...team, followUp, followUpJob: job, thread };
+    };
+
+    it('shows the opener the open Threads started before the request', async () => {
+      const { channel, followUpJob, thread } = await answeredInThread();
+
+      const candidate = await execution.openingCandidate(channel.id, followUpJob.id);
+
+      expect(candidate?.threads).toEqual([
+        {
+          id: thread.id,
+          lastMessage: 'The token expired.',
+          root: 'Why did yesterday’s deploy fail?',
+          title: 'Deploy failure',
+        },
+      ]);
+    });
+
+    it('leaves out archived Threads', async () => {
+      const { channel, followUpJob, thread } = await answeredInThread();
+      await db
+        .update(channelThreads)
+        .set({ status: 'archived' })
+        .where(eq(channelThreads.id, thread.id));
+
+      expect((await execution.openingCandidate(channel.id, followUpJob.id))?.threads).toEqual([]);
+    });
+
+    it('acknowledges on the main timeline with the Thread linked and answers inside it', async () => {
+      const { agent, asMember, channel, followUp, followUpJob, member, thread } =
+        await answeredInThread();
+
+      expect(
+        await execution.open(channel.id, followUpJob.id, {
+          ack: 'I will pick this up in the earlier thread.',
+          threadId: thread.id,
+        }),
+      ).toBe(true);
+
+      const [ack] = await db
+        .select()
+        .from(channelMessages)
+        .where(
+          and(
+            eq(channelMessages.channelId, channel.id),
+            eq(channelMessages.requestKey, `opening:${followUpJob.id}`),
+          ),
+        );
+      expect(ack).toMatchObject({
+        content: `I will pick this up in the earlier thread. <#${thread.id}>`,
+        replyToId: followUp.id,
+        threadId: null,
+      });
+      expect((await jobById(db, followUpJob.id)).threadId).toBe(thread.id);
+      const [joined] = await db
+        .select()
+        .from(channelThreads)
+        .where(eq(channelThreads.id, thread.id));
+      expect(joined.followerMemberIds).toEqual(expect.arrayContaining([member.id]));
+
+      // The run reads the Thread and the request, which stays on the main timeline.
+      expect(await execution.claim(channel.id, followUpJob.id, lease)).toBeTruthy();
+      const input = await execution.input(channel.id, followUpJob.id);
+      expect(input.at(-1)?.id).toBe(followUp.id);
+      await execution.accepted(channel.id, followUpJob.id);
+      await execution.saveDraft(channel.id, followUpJob.id, 'Rotate it with the cron.');
+      const replyId = await execution.publish(channel.id, followUpJob.id);
+      const [reply] = await db
+        .select()
+        .from(channelMessages)
+        .where(eq(channelMessages.id, replyId));
+      expect(reply).toMatchObject({ replyToId: followUp.id, threadId: thread.id });
+      const [moved] = await db
+        .select()
+        .from(channelMessages)
+        .where(eq(channelMessages.id, followUp.id));
+      expect(moved.threadId).toBeNull();
+      await execution.releaseWriter(channel.id, followUpJob.id);
+
+      // A later run in the Thread still reads the request that continued there.
+      const later = await asMember.send(channel.id, {
+        content: 'Summarize what was asked here',
+        mentions: [agent.id],
+        requestKey: 'later',
+        routing: 'decision',
+        threadId: thread.id,
+      });
+      const [laterJob] = await jobsOf(db, later.id);
+      expect(await execution.claim(channel.id, laterJob.id, lease)).toBeTruthy();
+      const history = await readManifestMessages(
+        db,
+        channel.id,
+        (await jobById(db, laterJob.id)).manifest!,
+      );
+      expect(history.map(({ id }) => id)).toContain(followUp.id);
+    });
+
+    it('keeps the main-timeline message the request quotes in the continued run', async () => {
+      const team = await mentionAgent();
+      await execution.open(team.channel.id, team.job.id, { threadTitle: 'Deploy failure' });
+      await execution.claim(team.channel.id, team.job.id, lease);
+      await execution.accepted(team.channel.id, team.job.id);
+      await execution.saveDraft(team.channel.id, team.job.id, 'The token expired.');
+      await execution.publish(team.channel.id, team.job.id);
+      await execution.releaseWriter(team.channel.id, team.job.id);
+      const [thread] = await db
+        .select()
+        .from(channelThreads)
+        .where(eq(channelThreads.channelId, team.channel.id));
+      // A note on the main timeline, after the Thread's root, settled without waking anyone.
+      const note = await team.asMember.send(team.channel.id, {
+        content: 'Rotate it with the cron, not by hand.',
+        mentions: [],
+        requestKey: 'note',
+        routing: 'decision',
+      });
+      await db
+        .update(channelMessages)
+        .set({ routingStatus: 'skipped' })
+        .where(eq(channelMessages.id, note.id));
+      const request = await team.asMember.send(team.channel.id, {
+        content: 'Apply this correction',
+        mentions: [team.agent.id],
+        replyToId: note.id,
+        requestKey: 'apply',
+        routing: 'decision',
+      });
+      const [job] = await jobsOf(db, request.id);
+
+      await execution.open(team.channel.id, job.id, { ack: 'On it.', threadId: thread.id });
+      expect(await execution.claim(team.channel.id, job.id, lease)).toBeTruthy();
+
+      expect((await execution.input(team.channel.id, job.id)).map(({ id }) => id)).toEqual([
+        note.id,
+        request.id,
+      ]);
+    });
+
+    it('takes a follow-up deferred behind it into the Thread, where it reads the answer', async () => {
+      const team = await fixture.createTeamChannel();
+      const coder = await fixture.addAgent(team.channel.id, 'Coder');
+      const reviewer = await fixture.addAgent(team.channel.id, 'Reviewer');
+      const first = await team.asMember.send(team.channel.id, {
+        content: 'Why did the deploy fail?',
+        mentions: [coder.id],
+        requestKey: 'first',
+        routing: 'decision',
+      });
+      const [firstJob] = await jobsOf(db, first.id);
+      await execution.open(team.channel.id, firstJob.id, { threadTitle: 'Deploy failure' });
+      await execution.claim(team.channel.id, firstJob.id, lease);
+      await execution.accepted(team.channel.id, firstJob.id);
+      await execution.saveDraft(team.channel.id, firstJob.id, 'The token expired.');
+      await execution.publish(team.channel.id, firstJob.id);
+      await execution.releaseWriter(team.channel.id, firstJob.id);
+      const [thread] = await db
+        .select()
+        .from(channelThreads)
+        .where(eq(channelThreads.channelId, team.channel.id));
+
+      const followUp = await team.asMember.send(team.channel.id, {
+        content: 'How do we stop it expiring again?',
+        mentions: [coder.id, reviewer.id],
+        requestKey: 'second',
+        routing: 'decision',
+      });
+      const jobs = await jobsOf(db, followUp.id);
+      const coderJob = jobs.find((job) => job.memberId === coder.id)!;
+      const reviewerJob = jobs.find((job) => job.memberId === reviewer.id)!;
+      await asFollowup(reviewerJob.id, { afterMemberId: coder.id, reason: 'routing-deferred' });
+
+      await execution.open(team.channel.id, coderJob.id, {
+        ack: 'Picking this up.',
+        threadId: thread.id,
+      });
+
+      expect((await jobById(db, reviewerJob.id)).threadId).toBe(thread.id);
+      const [joined] = await db
+        .select()
+        .from(channelThreads)
+        .where(eq(channelThreads.id, thread.id));
+      expect(joined.followerMemberIds).toEqual(expect.arrayContaining([reviewer.id]));
+
+      await execution.claim(team.channel.id, coderJob.id, lease);
+      await execution.accepted(team.channel.id, coderJob.id);
+      await execution.saveDraft(team.channel.id, coderJob.id, 'Rotate it with the cron.');
+      await execution.publish(team.channel.id, coderJob.id);
+      await execution.releaseWriter(team.channel.id, coderJob.id);
+
+      expect(await execution.claim(team.channel.id, reviewerJob.id, lease)).not.toBeNull();
+      expect(await execution.primaryReply(team.channel.id, reviewerJob.id)).toMatchObject({
+        content: 'Rotate it with the cron.',
+      });
+    });
+
+    it('starts in place when the Thread was not one the opener could pick', async () => {
+      const { channel, followUpJob, thread } = await answeredInThread();
+      await db
+        .update(channelThreads)
+        .set({ status: 'archived' })
+        .where(eq(channelThreads.id, thread.id));
+
+      await execution.open(channel.id, followUpJob.id, { ack: 'Looking.', threadId: thread.id });
+
+      expect((await jobById(db, followUpJob.id)).threadId).toBeNull();
+      expect(await execution.openingReply(channel.id, followUpJob.id)).toBe('Looking.');
+    });
   });
 });

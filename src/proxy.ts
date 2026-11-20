@@ -19,6 +19,7 @@ export const config = {
     '/acceptance(.*)',
     '/apps',
     '/apps(.*)',
+    // Pre-rename Marketplace URLs: the SPA redirects them to `/marketplace`.
     '/community',
     '/community(.*)',
     '/channels',
@@ -26,6 +27,8 @@ export const config = {
     '/dashboard',
     '/dashboard(.*)',
     '/labs',
+    '/marketplace',
+    '/marketplace(.*)',
     '/eval',
     '/eval(.*)',
     /** Shared-agent pages need the same SPA rewrite as the other client routes. */

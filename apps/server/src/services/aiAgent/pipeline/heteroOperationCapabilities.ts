@@ -32,6 +32,11 @@ import type { HeteroOperationCapability } from '@/libs/trpc/utils/internalJwt';
  * the token is the only identity that can reach it. Only a Task run has a
  * round to file into.
  *
+ * `work:write` lets every run register the files and links it produced as Work
+ * cards under its reply (`lh work create|update`). The Work lands in the run's
+ * own topic; a share visitor's run included, whose Works stay fenced to that
+ * visitor topic exactly like the ones its completion scan registers.
+ *
  * Renewal copies the minted claims, so a run never gains either later.
  */
 export const heteroOperationCapabilities = (
@@ -40,21 +45,30 @@ export const heteroOperationCapabilities = (
     channel?: boolean;
     /** The run answers a bot message its owner sent (`botContext.isOwner`). */
     ownerBotTurn?: boolean;
+    /**
+     * A share visitor drives the run. It gets only the run's own callbacks:
+     * a goal or acceptance round it created would belong to the creator.
+     */
+    shareVisitor?: boolean;
     taskId?: string;
     /** The run answers a message the user sent: a chat turn or one they scheduled. */
     userTurn?: boolean;
   } = {},
-): HeteroOperationCapability[] => [
-  'hetero:ingest',
-  ...(options.channel
-    ? (['channel:read', 'channel:message'] as const)
-    : options.ownerBotTurn
-      ? (['channel:message'] as const)
-      : []),
-  'hetero:finish',
-  'hetero:intervention:read',
-  ...(isGoalPrompt(prompt) || (options.userTurn && !options.channel && !options.taskId)
-    ? (['goal:manage'] as const)
-    : []),
-  ...(options.taskId ? (['acceptance:evidence'] as const) : []),
-];
+): HeteroOperationCapability[] =>
+  options.shareVisitor
+    ? ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read', 'work:write']
+    : [
+        'hetero:ingest',
+        ...(options.channel
+          ? (['channel:read', 'channel:message'] as const)
+          : options.ownerBotTurn
+            ? (['channel:message'] as const)
+            : []),
+        'hetero:finish',
+        'hetero:intervention:read',
+        ...(isGoalPrompt(prompt) || (options.userTurn && !options.channel && !options.taskId)
+          ? (['goal:manage'] as const)
+          : []),
+        ...(options.taskId ? (['acceptance:evidence'] as const) : []),
+        'work:write',
+      ];

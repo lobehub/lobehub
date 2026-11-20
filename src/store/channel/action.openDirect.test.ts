@@ -5,7 +5,7 @@ import { channelActions } from './action';
 import { useChannelStore } from './store';
 
 vi.mock('@/services/channel', () => ({
-  channelService: { list: vi.fn(), markRead: vi.fn(), openDirect: vi.fn() },
+  channelService: { list: vi.fn(), markRead: vi.fn(), openDirect: vi.fn(), openShared: vi.fn() },
 }));
 
 const { channelService } = await import('@/services/channel');
@@ -52,6 +52,31 @@ describe('channelActions.openDirect', () => {
     vi.mocked(channelService.openDirect).mockResolvedValue(null);
 
     await expect(channelActions.openDirect('agt_nasa')).resolves.toBeUndefined();
+    expect(channelService.list).not.toHaveBeenCalled();
+  });
+});
+
+describe('channelActions.openShared', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    channelActions.reset();
+    vi.mocked(channelService.list).mockResolvedValue([]);
+  });
+
+  // A listed direct Channel must not skip the server: it re-checks that the share is still live.
+  it('asks the server even when a direct Channel with the Agent is listed', async () => {
+    useChannelStore.setState({ listMap: { all: [direct({})] } });
+    vi.mocked(channelService.openShared).mockResolvedValue('chn_000000000001');
+
+    await expect(channelActions.openShared('nasa')).resolves.toBe('chn_000000000001');
+    expect(channelService.openShared).toHaveBeenCalledExactlyOnceWith({ share: 'nasa' });
+    expect(channelService.list).toHaveBeenCalled();
+  });
+
+  it('rejects when the share is paused or gone', async () => {
+    vi.mocked(channelService.openShared).mockRejectedValue(new Error('Agent not found'));
+
+    await expect(channelActions.openShared('nasa')).rejects.toThrow('Agent not found');
     expect(channelService.list).not.toHaveBeenCalled();
   });
 });

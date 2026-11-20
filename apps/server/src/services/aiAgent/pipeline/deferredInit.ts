@@ -51,11 +51,7 @@ const resolveShareGate = async (
 
   return {
     agentId: share.agentId,
-    canUseDevice: await resolveShareVisitorDeviceAccess(
-      deps.db,
-      share.shareConfig,
-      shareVisitor.visitorUserId,
-    ),
+    canUseDevice: await resolveShareVisitorDeviceAccess(deps.db, share, shareVisitor.visitorUserId),
     shareConfig: share.shareConfig,
     shareId: share.shareId,
     visitorUserId: shareVisitor.visitorUserId,

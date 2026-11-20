@@ -10,8 +10,6 @@ import type {
 import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 import { isPlainRecord } from '@lobechat/utils/object';
 
-import type { VisitorRedactionOptions } from './types';
-
 /**
  * Fields on {@link UIChatMessage} that are safe to forward to an agent-share
  * visitor verbatim: the message's OWN presentational content (text,
@@ -199,10 +197,11 @@ export const redactCreatorPrivateBlob = <T>(value: T): T => {
  * model-runtime change adds.
  */
 const VISITOR_SAFE_ERROR_TYPES = new Set<string>([
-  ChatErrorType.ShareTurnLimitExceeded,
-  ChatErrorType.ShareTopicLimitExceeded,
+  ChatErrorType.ShareMessageLimitExceeded,
   ChatErrorType.ShareSpendLimitExceeded,
+  ChatErrorType.SharePromptTooLong,
   ChatErrorType.ShareHeterogeneousAgentUnsupported,
+  ChatErrorType.ShareHeteroDeviceUnavailable,
   ChatErrorType.AgentShareProviderNotSupported,
 ]);
 
@@ -228,15 +227,14 @@ const VISITOR_PUBLIC_ERROR_TYPE = AgentRuntimeErrorType.AgentRuntimeError;
  * re-derives its localized copy, alert styling, and error-card variant from
  * `type` alone.
  *
- * Bypassed entirely when the share sets `showErrorDetails` — the creator has
- * then explicitly opted into showing visitors the raw failure.
+ * Applied to every visitor-facing error without a share-level opt-out: the raw
+ * payload describes the creator's provider and billing, which a visitor cannot
+ * act on.
  */
 export const sanitizeVisitorError = (
   error: ChatMessageError | null | undefined,
-  options: VisitorRedactionOptions = {},
 ): ChatMessageError | null | undefined => {
   if (!error) return error;
-  if (options.showErrorDetails) return error;
 
   const type = error.type as unknown;
   if (typeof type === 'string' && VISITOR_SAFE_ERROR_TYPES.has(type)) {
@@ -285,104 +283,72 @@ const sanitizeVisitorMetadata = (
  * Project Work summaries for a share visitor. A visitor run executes as the
  * creator, so `userId` / `workspaceId` on every Work are the CREATOR's account
  * and workspace — dropped unconditionally, like the message-level `sender`.
- * The version spend snapshot is the creator's billing figure and follows the
- * `showModelInfo` gate (`stripSpend`).
+ * The version spend snapshot is the creator's billing figure and is cleared too.
  *
  * The identity keys are omitted rather than nulled (`userId` is non-nullable on
  * `WorkItem`); no visitor-facing Work surface reads them.
  */
 const sanitizeVisitorWorks = (
   works: WorkSummaryItem[] | undefined,
-  { stripSpend }: { stripSpend: boolean },
 ): WorkSummaryItem[] | undefined =>
   works?.map((work) => {
     const { userId: _userId, workspaceId: _workspaceId, ...rest } = work;
-    const visible = stripSpend
-      ? {
-          ...rest,
-          event: { ...rest.event, cumulativeCost: null, cumulativeUsage: null },
-          totalCost: null,
-        }
-      : rest;
-    return visible as WorkSummaryItem;
+    return {
+      ...rest,
+      event: { ...rest.event, cumulativeCost: null, cumulativeUsage: null },
+      totalCost: null,
+    } as WorkSummaryItem;
   });
 
 /**
  * Strip creator-only fields from a message row before it reaches an
- * agent-share visitor. Creator account identity never crosses the share
- * boundary; the creator's model/provider/spend choices cross it only when the
- * share sets `showModelInfo`, and raw error payloads only when it sets
- * `showErrorDetails` ({@link VisitorRedactionOptions}).
+ * agent-share visitor. Creator account identity and the creator's
+ * model/provider/spend choices never cross the share boundary, and errors are
+ * projected to a classified type ({@link sanitizeVisitorError}).
  *
  * Built from {@link VISITOR_MESSAGE_ALLOWED_KEYS} plus explicit handling for
  * the fields that need transformation rather than a plain allow/deny.
  */
-export const toVisitorMessage = (
-  message: UIChatMessage,
-  options: VisitorRedactionOptions = {},
-): UIChatMessage => {
-  const stripModelInfo = !options.showModelInfo;
-
+export const toVisitorMessage = (message: UIChatMessage): UIChatMessage => {
   return {
     ...pickAllowedKeys(message),
     // `sender` is the CREATOR's account identity — never gated by any config
     // flag, since no share setting is about exposing whose account runs the
     // agent.
     sender: null,
-    extra: stripModelInfo ? sanitizeVisitorExtra(message.extra) : message.extra,
-    metadata: stripModelInfo ? sanitizeVisitorMetadata(message.metadata) : message.metadata,
+    extra: sanitizeVisitorExtra(message.extra),
+    metadata: sanitizeVisitorMetadata(message.metadata),
     // Unbounded per-tool blobs: a tool runtime controls everything inside
     // them, so a fixed field allowlist can't classify their contents — the
     // creator-identity key set is recursed out instead.
-    pluginError: stripModelInfo
-      ? redactCreatorPrivateBlob(message.pluginError)
-      : message.pluginError,
-    pluginState: stripModelInfo
-      ? redactCreatorPrivateBlob(message.pluginState)
-      : message.pluginState,
+    pluginError: redactCreatorPrivateBlob(message.pluginError),
+    pluginState: redactCreatorPrivateBlob(message.pluginState),
     // Projected, not redacted — see `sanitizeVisitorError`.
-    error: sanitizeVisitorError(message.error, options),
-    ...(stripModelInfo
-      ? {
-          model: undefined,
-          provider: undefined,
-          signalCallbacks: sanitizeVisitorSignalCallbacks(message.signalCallbacks),
-          taskDetail: sanitizeVisitorTaskDetail(message.taskDetail),
-          usage: undefined,
-        }
-      : {
-          model: message.model,
-          provider: message.provider,
-          signalCallbacks: message.signalCallbacks,
-          taskDetail: message.taskDetail,
-          usage: message.usage,
-        }),
+    error: sanitizeVisitorError(message.error),
+    model: undefined,
+    provider: undefined,
+    signalCallbacks: sanitizeVisitorSignalCallbacks(message.signalCallbacks),
+    taskDetail: sanitizeVisitorTaskDetail(message.taskDetail),
+    usage: undefined,
     // Work summaries reach a visitor only when the query ran under their share
     // scope (see `queryForVisitor`), so every item here was registered from
-    // this visitor's own topic. Creator identity is always dropped; spend
-    // follows the `showModelInfo` gate — see `sanitizeVisitorWorks`.
-    works: sanitizeVisitorWorks(message.works, { stripSpend: stripModelInfo }),
+    // this visitor's own topic. Creator identity and spend are always dropped.
+    works: sanitizeVisitorWorks(message.works),
     // A compacted topic nests raw rows under the group node, and group chat
     // nests member messages, so anything less than a full recursive sanitize
     // would leave the creator's identity on everything inside it.
     ...(message.compressedMessages && {
-      compressedMessages: message.compressedMessages.map((nested) =>
-        toVisitorMessage(nested, options),
-      ),
+      compressedMessages: message.compressedMessages.map((nested) => toVisitorMessage(nested)),
     }),
     ...(message.members && {
-      members: message.members.map((nested) => toVisitorMessage(nested, options)),
+      members: message.members.map((nested) => toVisitorMessage(nested)),
     }),
     // `pinnedMessages` is only ever the narrow group-node projection (see
-    // `queryMessageGroupNodes` in the Compression branch). Emit it in both
-    // modes — sanitized when the model snapshot is not shared, otherwise
-    // untouched.
+    // `queryMessageGroupNodes` in the Compression branch).
     ...(message.pinnedMessages && {
-      pinnedMessages: stripModelInfo
-        ? (sanitizeVisitorGroupSnapshots(
-            message.pinnedMessages as unknown as VisitorGroupSnapshotProjection[],
-          ) as unknown as UIChatMessage['pinnedMessages'])
-        : message.pinnedMessages,
+      pinnedMessages: sanitizeVisitorGroupSnapshots(
+        message.pinnedMessages as unknown as VisitorGroupSnapshotProjection[],
+      ) as unknown as UIChatMessage['pinnedMessages'],
     }),
     // `children` is polymorphic: a `compareGroup` node carries the same bare
     // {id, role, model, provider, content, createdAt} snapshot as
@@ -398,13 +364,11 @@ export const toVisitorMessage = (
     ...(message.children && {
       children:
         message.role === 'compareGroup'
-          ? stripModelInfo
-            ? (sanitizeVisitorGroupSnapshots(
-                message.children as unknown as VisitorGroupSnapshotProjection[],
-              ) as unknown as UIChatMessage['children'])
-            : message.children
+          ? (sanitizeVisitorGroupSnapshots(
+              message.children as unknown as VisitorGroupSnapshotProjection[],
+            ) as unknown as UIChatMessage['children'])
           : ((message.children as unknown as UIChatMessage[]).map((child) =>
-              toVisitorMessage(child, options),
+              toVisitorMessage(child),
             ) as unknown as UIChatMessage['children']),
     }),
     // `AssistantContentBlock.council` on a nested assistantGroup child is a
@@ -415,7 +379,7 @@ export const toVisitorMessage = (
     ...((message as unknown as { council?: unknown }).council !== undefined &&
       ({
         council: ((message as unknown as { council?: UIChatMessage[] }).council ?? []).map(
-          (member) => toVisitorMessage(member, options),
+          (member) => toVisitorMessage(member),
         ),
       } as unknown as Partial<UIChatMessage>)),
   } as UIChatMessage;

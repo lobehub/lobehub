@@ -4,6 +4,7 @@ import { createStaticStyles, cx, Flexbox, Text } from '@lobehub/ui';
 import { memo, useEffect, useRef } from 'react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
+import { densityVars } from '@/styles/densityVars';
 
 import type { ApiEntry } from './useDevtoolsEntries';
 
@@ -40,7 +41,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     height: 30px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     color: ${cssVar.colorTextSecondary};
 

@@ -44,12 +44,12 @@ export interface AccessSectionGroup {
  *
  * - identity: who the owner is (their own ID, and the server that is theirs)
  * - conversation: who may talk to the bot, in DMs (and the list they lean on) and in groups
- * - device: who, besides the owner, may use the owner's devices through the bot
+ * - device: who, besides the owner, may use the owner's devices through the bot, and in which channels
  */
 const ACCESS_SECTION_KEYS: Array<[AccessSectionKey, string[]]> = [
   ['identity', ['userId', 'serverId']],
   ['conversation', ['dmPolicy', 'allowFrom', 'guestPolicy', 'groupPolicy', 'groupAllowFrom']],
-  ['device', ['devicePolicy', 'deviceAllowFrom']],
+  ['device', ['devicePolicy', 'deviceAllowFrom', 'deviceChannelPolicy', 'deviceChannelAllowFrom']],
 ];
 
 const ACCESS_KEYS = ACCESS_SECTION_KEYS.flatMap(([, keys]) => keys);

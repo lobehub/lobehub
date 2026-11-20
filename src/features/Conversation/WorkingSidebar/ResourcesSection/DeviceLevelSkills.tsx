@@ -47,9 +47,10 @@ const DeviceLevelSkills = memo<DeviceLevelSkillsProps>(
 
     if (deviceItems.length === 0) {
       if (!error) return null;
-      if (hideHeader) return <SkillSection isEmpty error={error} onRetry={mutate} />;
+      if (hideHeader) return <SkillSection compact isEmpty error={error} onRetry={mutate} />;
       return (
         <SkillSection
+          compact
           isEmpty
           error={error}
           sectionHeader={{ title: t('workingPanel.skills.section.device') }}
@@ -62,6 +63,7 @@ const DeviceLevelSkills = memo<DeviceLevelSkillsProps>(
 
     const list = (
       <SkillsList
+        compact
         items={items}
         onSelectSkill={onSelectSkill}
         onSkillDragStart={handleSkillDragStart}
@@ -72,6 +74,7 @@ const DeviceLevelSkills = memo<DeviceLevelSkillsProps>(
 
     return (
       <SkillSection
+        compact
         sectionHeader={{
           count: items.length,
           title: t('workingPanel.skills.section.device'),

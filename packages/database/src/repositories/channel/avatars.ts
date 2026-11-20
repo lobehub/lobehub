@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm';
 
 import { agents, channelMembers, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { agentAvatarSql, agentTitleSql } from '../../utils/inboxAgent';
 
 /**
  * A list avatar pictures the caller plus this many other members: a full 3×3 grid, the way a
@@ -25,7 +26,7 @@ export const channelAvatarMembers = async (
   const ranked = db
     .select({
       actorType: channelMembers.actorType,
-      avatar: sql<string | null>`coalesce(${agents.avatar}, ${users.avatar})`.as('avatar'),
+      avatar: sql<string | null>`coalesce(${agentAvatarSql()}, ${users.avatar})`.as('avatar'),
       backgroundColor: sql<string | null>`${agents.backgroundColor}`.as('background_color'),
       channelId: channelMembers.channelId,
       id: sql<string>`coalesce(${channelMembers.agentId}, ${channelMembers.userId})`.as(
@@ -33,7 +34,8 @@ export const channelAvatarMembers = async (
       ),
       name: sql<string | null>`coalesce(
         nullif(${channelMembers.name}, ''),
-        nullif(${agents.title}, ''),
+        nullif(${agents.name}, ''),
+        nullif(${agentTitleSql()}, ''),
         nullif(${users.fullName}, ''),
         ${users.username}
       )`.as('name'),

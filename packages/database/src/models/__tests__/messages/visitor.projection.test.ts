@@ -63,8 +63,8 @@ describe('redactCreatorPrivateBlob', () => {
 describe('sanitizeVisitorError', () => {
   it('keeps an allowlisted business code readable', () => {
     const error = {
-      message: 'This share hit its turn cap',
-      type: ChatErrorType.ShareTurnLimitExceeded,
+      message: "You reached this share's message limit",
+      type: ChatErrorType.ShareMessageLimitExceeded,
     };
 
     expect(sanitizeVisitorError(error)).toEqual(error);
@@ -78,12 +78,6 @@ describe('sanitizeVisitorError', () => {
     });
 
     expect(sanitized).toEqual({ type: AgentRuntimeErrorType.AgentRuntimeError });
-  });
-
-  it('passes the raw failure through when the share opted into details', () => {
-    const error = { message: 'raw upstream body', type: 'UpstreamError' as ChatErrorType };
-
-    expect(sanitizeVisitorError(error, { showErrorDetails: true })).toBe(error);
   });
 
   it('returns an absent error as-is', () => {
@@ -122,25 +116,6 @@ describe('toVisitorMessage', () => {
     expect(visitor.pluginError).toEqual({ body: 'x' });
     expect(visitor.pluginState).toEqual({ tool: { name: 'search' } });
     expect(visitor.taskDetail).toEqual({ id: 'td-1', status: 'success' });
-  });
-
-  it('keeps the model snapshot when the share opts in', () => {
-    const visitor = toVisitorMessage(
-      message({
-        metadata: { usage: { totalTokens: 9 }, workingDirectory: '/repo' },
-        model: 'gpt-4o',
-        provider: 'openai',
-        taskDetail: { id: 'td-1', usage: { totalTokens: 3 } },
-        usage: { totalTokens: 9 },
-      }),
-      { showModelInfo: true },
-    );
-
-    expect(visitor.model).toBe('gpt-4o');
-    expect(visitor.provider).toBe('openai');
-    expect(visitor.usage).toEqual({ totalTokens: 9 });
-    expect(visitor.metadata).toEqual({ usage: { totalTokens: 9 }, workingDirectory: '/repo' });
-    expect(visitor.taskDetail).toEqual({ id: 'td-1', usage: { totalTokens: 3 } });
   });
 
   it('strips the per-callback model snapshot from signal callbacks', () => {
@@ -183,12 +158,6 @@ describe('toVisitorMessage', () => {
     expect(hidden).not.toHaveProperty('workspaceId');
     expect(hidden.totalCost).toBeNull();
     expect(hidden.event).toEqual({ cumulativeCost: null, cumulativeUsage: null, status: 'done' });
-
-    const shown = asRecords(
-      toVisitorMessage(message({ works: [work] }), { showModelInfo: true }).works,
-    )[0];
-    expect(shown).not.toHaveProperty('userId');
-    expect(shown.totalCost).toBe(0.8);
   });
 
   it('nulls the model snapshot on group-node projections', () => {
@@ -202,18 +171,6 @@ describe('toVisitorMessage', () => {
 
     expect(asRecords(visitor.children)[0]).toMatchObject({ model: null, provider: null });
     expect(asRecords(visitor.pinnedMessages)[0]).toMatchObject({ model: null, provider: null });
-  });
-
-  it('recurses into a compareGroup that has model info sharing on', () => {
-    const visitor = toVisitorMessage(
-      message({
-        children: [groupSnapshot('child-1', 'first')],
-        role: 'compareGroup',
-      }),
-      { showModelInfo: true },
-    );
-
-    expect(asRecords(visitor.children)[0]).toMatchObject({ model: 'gpt-4o' });
   });
 
   it('recurses into nested assistantGroup children, members and compacted rows', () => {
@@ -259,7 +216,7 @@ describe('toVisitorMessage', () => {
     ]);
   });
 
-  it('projects the error through the share error policy', () => {
+  it('projects the error to a classified type', () => {
     const raw = {
       message: 'OpenAI rejected the creator key',
       type: 'InvalidProviderAPIKey' as ChatErrorType,
@@ -268,6 +225,5 @@ describe('toVisitorMessage', () => {
     expect(toVisitorMessage(message({ error: raw })).error).toEqual({
       type: AgentRuntimeErrorType.AgentRuntimeError,
     });
-    expect(toVisitorMessage(message({ error: raw }), { showErrorDetails: true }).error).toBe(raw);
   });
 });

@@ -91,7 +91,6 @@
   "events.youInvited": "Você convidou {{names}} para o canal",
   "events.youInvitedMembers": "Você convidou <members/> para o canal",
   "failure.locate": "Mostrar mensagem",
-  "failure.messageLabel": "Falha na resposta: {{names}}",
   "failure.title": "Respostas com falha · {{count}}",
   "followers": "Respostas de: {{names}}",
   "invite.directHint": "Convidar aqui inicia um novo canal com {{name}} e os membros que você escolher. Esta conversa com {{name}} permanece como está.",

@@ -39,6 +39,7 @@ import {
 } from './attachments';
 import {
   buildMessageGroupNode,
+  compressedBranchMarkerColumns,
   compressedStateMarkerColumns,
   loadCompressedStateRows,
   planMessageGroupHydration,
@@ -389,7 +390,12 @@ export class MessageByIdsQueries extends MessageScope {
       file: { fileType: string; id?: string | null },
     ) => Promise<string>,
     timing?: ModelTimingContext,
-    options: { allowShareVisitor?: boolean; window?: MessageGroupNodeWindow } = {},
+    options: {
+      allowShareVisitor?: boolean;
+      /** See `QueryMessageParams.skipCompressedMembers`. */
+      skipCompressedMembers?: boolean;
+      window?: MessageGroupNodeWindow;
+    } = {},
   ): Promise<UIChatMessage[]> => {
     // Effective visitor gate — see `queryMessageGroupNodesForPage`. Absent
     // this predicate, a creator's default `query({ topicId })` on a visitor
@@ -450,6 +456,7 @@ export class MessageByIdsQueries extends MessageScope {
             id: messages.id,
             messageGroupId: messages.messageGroupId,
             ...compressedStateMarkerColumns,
+            ...(options.skipCompressedMembers && compressedBranchMarkerColumns),
             role: messages.role,
           })
           .from(messages)
@@ -473,8 +480,13 @@ export class MessageByIdsQueries extends MessageScope {
     });
 
     // A compression group only hydrates its newest members (see
-    // `MAX_COMPRESSED_GROUP_MEMBERS`) plus the pinned ones.
-    const plan = planMessageGroupHydration(groups, groupMessageRecords);
+    // `MAX_COMPRESSED_GROUP_MEMBERS`) plus the pinned ones, or none at all
+    // with `skipCompressedMembers`.
+    const plan = planMessageGroupHydration(
+      groups,
+      groupMessageRecords,
+      options.skipCompressedMembers,
+    );
 
     // 3. Query full message data using queryByIds (reuses all transformation logic),
     // and only the plugin state of omitted members that carry runtime state

@@ -2,6 +2,7 @@ import { isSyncedMcpToolVisibleTo, type McpAppThreadEntry } from '@lobechat/cons
 import { hasMandatoryApproval, mayRequireMandatoryApproval } from '@lobechat/const/plugin';
 import type { LobeToolManifest } from '@lobechat/context-engine';
 import type { BuiltinToolResolveContext, LobeBuiltinTool } from '@lobechat/types';
+import { manifestBaseIdentifier } from '@lobechat/types';
 import debug from 'debug';
 
 import { injectConnectorLinkParam, resolveConnectorLinkParam } from './connectorLinks';
@@ -24,10 +25,18 @@ export interface ConnectorToolFacts {
 }
 
 export interface ConnectorFacts {
+  /** The row: a manifest built from it names it (`manifest.connector`). */
+  id?: string;
   identifier: string;
   isEnabled?: boolean | null;
   links?: { id: string; name: string }[];
   name: string;
+  /**
+   * The row's tool prefix (`connectorToolIdentifier`): the manifest's
+   * identifier. Differs from `identifier` for a private or personal row, which
+   * is a tool set of its own beside the workspace's shared one.
+   */
+  toolIdentifier?: string;
   tools: ConnectorToolFacts[];
 }
 
@@ -139,13 +148,17 @@ export const buildConnectorManifest = (
     };
   });
 
+  const toolIdentifier = connector.toolIdentifier ?? connector.identifier;
+  // The model may see a shared and an own row of one connector side by side
+  const own = toolIdentifier !== connector.identifier ? ' (your own connection)' : '';
   return {
     api,
-    identifier: connector.identifier,
+    ...(connector.id && { connector: { id: connector.id, identifier: connector.identifier } }),
+    identifier: toolIdentifier,
     ...(mcpApps && { mcpAppEntrypoints: entries }),
     meta: {
       avatar: 'MCP_AVATAR',
-      description: `${connector.name} connector with ${api.length} tools`,
+      description: `${connector.name} connector${own} with ${api.length} tools`,
       title: connector.name,
     },
     type: 'mcp',
@@ -217,7 +230,10 @@ export interface AssembleManifestPoolOptions {
 }
 
 export interface ManifestPool {
-  /** Identifiers served by a connector manifest; same-named plugins were dropped. */
+  /**
+   * Base identifiers served by a connector manifest (any row's tool set);
+   * same-named plugins were dropped.
+   */
   connectorIdentifiers: Set<string>;
   /**
    * How many manifests the exclusion actually removed — not the size of the
@@ -241,7 +257,8 @@ export const assembleManifestPool = (
 ): ManifestPool => {
   const { connectorPermissions, manifestContext } = options;
   const connectorManifests = dropInvalidManifests(sources.connectors ?? [], 'connectors');
-  const connectorIdentifiers = new Set(connectorManifests.map((m) => m.identifier));
+  // Base identifiers: every row's tool set of a connector replaces its plugin
+  const connectorIdentifiers = new Set(connectorManifests.map(manifestBaseIdentifier));
 
   const withPermissions = (manifest: LobeToolManifest): LobeToolManifest => {
     const perms = connectorPermissions?.get(manifest.identifier);
@@ -277,7 +294,10 @@ export const assembleManifestPool = (
     ...connectorManifests,
     ...additionalManifests,
   ];
-  const manifests = merged.filter((m) => !excluded.has(m.identifier));
+  // A connector row's tool set is excluded with its connector
+  const manifests = merged.filter(
+    (m) => !excluded.has(m.identifier) && !excluded.has(manifestBaseIdentifier(m)),
+  );
 
   return { connectorIdentifiers, excludedCount: merged.length - manifests.length, manifests };
 };
