@@ -21,6 +21,7 @@ import type {
   ReadKnowledgeArgs,
   RemoveFilesArgs,
   SearchKnowledgeBaseArgs,
+  UpdateDocumentArgs,
   ViewKnowledgeBaseArgs,
 } from '../../types';
 import { KnowledgeBaseApiName, KnowledgeBaseIdentifier } from '../../types';
@@ -102,6 +103,26 @@ class KnowledgeBaseExecutor extends BaseExecutor<typeof KnowledgeBaseApiName> {
       createDocument: async (params) => {
         const doc = await lambdaClient.document.createDocument.mutate(params);
         return { id: doc.id };
+      },
+      getDocumentById: async (id) => {
+        const doc = await lambdaClient.document.getDocumentById.query({ id });
+        if (!doc) return undefined;
+        return {
+          fileType: doc.fileType,
+          id: doc.id,
+          knowledgeBaseId: doc.knowledgeBaseId,
+          title: doc.title,
+        };
+      },
+      updateDocument: async ({ content, id, parentId, title }) => {
+        const result = await lambdaClient.document.updateDocument.mutate({
+          content,
+          id,
+          parentId,
+          saveSource: 'llm_call',
+          title,
+        });
+        return { id: result?.id ?? id };
       },
     },
     {
@@ -208,6 +229,10 @@ class KnowledgeBaseExecutor extends BaseExecutor<typeof KnowledgeBaseApiName> {
 
   createDocument = async (params: CreateDocumentArgs): Promise<BuiltinToolResult> => {
     return this.toResult(await this.runtime.createDocument(params));
+  };
+
+  updateDocument = async (params: UpdateDocumentArgs): Promise<BuiltinToolResult> => {
+    return this.toResult(await this.runtime.updateDocument(params));
   };
 
   addFiles = async (params: AddFilesArgs): Promise<BuiltinToolResult> => {
