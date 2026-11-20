@@ -15,11 +15,13 @@ import { type ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useBusinessModelListGuard } from '@/business/client/hooks/useBusinessModelListGuard';
 import { ModelIcon } from '@/components/LobeIcons';
 import { ModelItemRender, ProviderItemRender, TAG_CLASSNAME } from '@/components/ModelSelect';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { densityVars } from '@/styles/densityVars';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
+import { filterHiddenModels } from '@/utils/filterHiddenModels';
 
 import { resolveEnableTargetProviderId, resolveStaleModelState } from './resolveStaleModelState';
 
@@ -152,6 +154,14 @@ const ModelSelect = memo<ModelSelectProps>(
       const allowedProviderIds = new Set(providerIds);
       return fullEnabledList.filter((provider) => allowedProviderIds.has(provider.id));
     }, [fullEnabledList, providerIds]);
+    // Models a business policy leaves out (e.g. ones a workspace admin has not
+    // opened to this member) are not offered, but a saved selection is still
+    // judged against the full list so it is not mistaken for a removed model.
+    const { isModelHidden } = useBusinessModelListGuard();
+    const selectableList = useMemo(
+      () => (modelType === 'chat' ? filterHiddenModels(enabledList, isModelHidden) : enabledList),
+      [enabledList, isModelHidden, modelType],
+    );
     const builtinAiModelList = useAiInfraStore((s) => s.builtinAiModelList);
     const modelRedirects = useAiInfraStore((s) => s.modelRedirects);
     const enabledAiProviders = useAiInfraStore((s) => s.enabledAiProviders);
@@ -184,13 +194,13 @@ const ModelSelect = memo<ModelSelectProps>(
         }));
       };
 
-      if (enabledList.length === 1) {
-        const provider = enabledList[0];
+      if (selectableList.length === 1) {
+        const provider = selectableList[0];
 
         return getChatModels(provider);
       }
 
-      return enabledList
+      return selectableList
         .map((provider) => {
           const opts = getChatModels(provider);
           if (opts.length === 0) return undefined;
@@ -208,7 +218,7 @@ const ModelSelect = memo<ModelSelectProps>(
           };
         })
         .filter(Boolean) as SelectProps['options'];
-    }, [enabledList, requiredAbilities]);
+    }, [requiredAbilities, selectableList]);
 
     const staleState = useMemo(() => {
       // Before the runtime state hydrates, the store lists are empty and any valid

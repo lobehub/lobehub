@@ -2863,6 +2863,8 @@
   "workspace.auditLog.actions.budget.member_override_created": "Member budget override created",
   "workspace.auditLog.actions.budget.member_override_removed": "Member budget override removed",
   "workspace.auditLog.actions.budget.member_override_updated": "Member budget override updated",
+  "workspace.auditLog.actions.budget.model_policy_removed": "Model access restriction removed",
+  "workspace.auditLog.actions.budget.model_policy_updated": "Model access updated",
   "workspace.auditLog.actions.budget.pool_created": "Dedicated budget created",
   "workspace.auditLog.actions.budget.pool_deleted": "Dedicated budget deleted",
   "workspace.auditLog.actions.budget.pool_updated": "Dedicated budget updated",

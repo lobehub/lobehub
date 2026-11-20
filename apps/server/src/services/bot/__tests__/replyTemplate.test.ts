@@ -417,6 +417,15 @@ describe('replyTemplate', () => {
       expect(zh).not.toContain('Agent 执行失败');
     });
 
+    it('tells the user a workspace admin restricted the model', () => {
+      const output = renderAgentError('WorkspaceModelRestricted', undefined, 'op-restricted');
+      expect(output).toContain('Model restricted by your workspace admin');
+      expect(output).not.toContain('Agent Execution Failed');
+
+      const zh = renderAgentError('WorkspaceModelRestricted', undefined, 'op-restricted', 'zh-CN');
+      expect(zh).toContain('工作区管理员限制了该模型');
+    });
+
     it('classifies a legacy envelope before choosing IM copy', () => {
       const output = renderAgentError('ProviderBizError', 'insufficient quota', 'op-quota');
       expect(output).toContain('Provider quota exhausted');
