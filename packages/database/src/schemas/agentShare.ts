@@ -19,10 +19,22 @@ export interface AgentShareConfig {
    */
   allowReadMemory?: boolean;
   /**
+   * Whether visitors also get every tool and skill the Agent currently turns
+   * on, beyond the explicit {@link toolGrants} / {@link skillGrants}. Resolved
+   * per visitor run from the Agent config (`withShareAutoAgentGrants`), never
+   * persisted as grants, so a tool added to the Agent later is open to
+   * visitors without the creator revisiting the share, and one turned off on
+   * the Agent leaves with it. {@link declinedGrantIds} still keeps an
+   * identifier closed. Absent reads as off.
+   */
+  autoGrantAgentTools?: boolean;
+  /**
    * Tool and skill identifiers the creator chose NOT to grant: dismissed from
    * the "new on this Agent" prompt, or unticked in a picker. Grants nothing and
-   * revokes nothing — the server gate never reads it. It only stops the share
-   * settings from offering these identifiers again as newly added to the Agent.
+   * revokes nothing explicit — the server gate reads it only to keep these
+   * identifiers out of {@link autoGrantAgentTools}. Otherwise it only stops the
+   * share settings from offering these identifiers again as newly added to the
+   * Agent.
    * Absent on shares created before the prompt existed, so their ungranted
    * Agent tools surface once for review instead of being granted silently.
    */

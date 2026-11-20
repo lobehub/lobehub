@@ -1,6 +1,8 @@
+import { MemoryIdentifier } from '@lobechat/builtin-tool-memory';
 import {
   AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
   AGENT_SHARE_DEFAULT_MAX_MESSAGES_PER_VISITOR,
+  DEFAULT_AGENT_CHAT_CONFIG,
 } from '@lobechat/const';
 import {
   type SharedAgentData,
@@ -26,6 +28,8 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { resolveModelMediaCapabilities } from '@/server/modules/AgentRuntime/resolveModelMediaCapabilities';
 import { AgentService } from '@/server/services/agent';
 import { getCachedDeliveryStats } from '@/server/services/agentShare/deliveryStatsCache';
+import { listShareGrantableSkills } from '@/server/services/agentShare/grantableSkills';
+import { applyShareAutoAgentGrants } from '@/server/services/aiAgent/shareGate/autoGrants';
 
 import { assertAgentShareVisitorEnabled } from './_helpers/agentShareFeatureGate';
 import { sharedTopicText } from './_helpers/sharedTopicText';
@@ -220,6 +224,29 @@ export const shareRouter = router({
         })(),
       ]);
 
+      // With `autoGrantAgentTools` on, visitors also get the tools the Agent
+      // turns on; count those the way a visitor run resolves them.
+      const { toolGrants } = share.shareConfig.autoGrantAgentTools
+        ? applyShareAutoAgentGrants(share.shareConfig, {
+            chatConfig: { ...DEFAULT_AGENT_CHAT_CONFIG, ...share.agentChatConfig },
+            plugins: share.agentPlugins ?? [],
+            skillIds: (
+              await listShareGrantableSkills({
+                agentConfig: { chatConfig: share.agentChatConfig, plugins: share.agentPlugins },
+                agentId: share.agentId,
+                db: ctx.serverDB,
+                userId: share.ownerId,
+                workspaceId: share.workspaceId ?? undefined,
+              }).catch((error) => {
+                // Only the advertised count degrades: pinned skills may be
+                // counted as tools. The run resolves its own grants.
+                log('failed to list grantable skills for %s: %O', share.shareId, error);
+                return [];
+              })
+            ).map((skill) => skill.identifier),
+          })
+        : share.shareConfig;
+
       return {
         agentId: share.agentId,
         agentMeta: {
@@ -255,7 +282,13 @@ export const shareRouter = router({
         // advertised (the settings page hides them too).
         toolGrants: share.agentAgencyConfig?.heterogeneousProvider
           ? []
-          : (share.shareConfig.toolGrants ?? []).map((grant) => grant.identifier),
+          : (toolGrants ?? [])
+              .map((grant) => grant.identifier)
+              // A visitor run drops memory without the read permission.
+              .filter(
+                (identifier) =>
+                  identifier !== MemoryIdentifier || !!share.shareConfig.allowReadMemory,
+              ),
         uploadAbility,
         // TODO(cloud budget gate): the spend gate itself is already enforced —
         // `shareChat.execAgent` checks `checkAgentShareSpendAllowance` before

@@ -29,6 +29,7 @@ import type { MarketService } from '@/server/services/market';
 
 import { createRunFacts, type RunFacts } from '../runFacts';
 import { applyShareGateToAgentConfig } from '../shareGate';
+import { resolveShareAutoAgentGrants } from '../shareGate/autoGrants';
 import { assertAgentRelayHop } from '../sourceAttribution';
 import type { ExecRunContext, InternalExecAgentParams } from '../types';
 import type { ApprovalClaimState } from './approvalResume';
@@ -158,7 +159,7 @@ export const execAgentTurn = async (
     approvalSourceOperationId: providedApprovalSourceOperationId,
     selectedSkillIds,
     selectedToolIds,
-    shareGate,
+    shareGate: requestedShareGate,
     mentionedAgents,
     suppressUserMessage,
     ephemeralUserMessage,
@@ -173,7 +174,7 @@ export const execAgentTurn = async (
   // A share caller that sends no config falls back to `manual`, never to
   // this method's `headless` default: `headless` auto-runs `'required'`
   // calls, which would grant a consent nobody gave.
-  const userInterventionConfig: UserInterventionConfig = shareGate
+  const userInterventionConfig: UserInterventionConfig = requestedShareGate
     ? (params.userInterventionConfig ?? { approvalMode: 'manual' })
     : requestedUserInterventionConfig;
 
@@ -289,7 +290,7 @@ export const execAgentTurn = async (
         instructions,
         modelOverride,
         providerOverride,
-        shareVisitorUserId: shareGate?.visitorUserId,
+        shareVisitorUserId: requestedShareGate?.visitorUserId,
         throwIfExecutionAborted,
         toolModeOverride,
       },
@@ -299,7 +300,23 @@ export const execAgentTurn = async (
   // Share-visitor runs must never see the creator's files/knowledge bases.
   // Applied to the resolved config before anything downstream (knowledge
   // flags, tools engine, context snapshot) reads it.
-  if (shareGate) applyShareGateToAgentConfig(agentConfig);
+  if (requestedShareGate) applyShareGateToAgentConfig(agentConfig);
+
+  // Resolve `autoGrantAgentTools` against this run's Agent config before any
+  // stage reads the share's grants.
+  const shareGate = requestedShareGate
+    ? await resolveShareAutoAgentGrants(requestedShareGate, {
+        agent: {
+          autoSkillIds,
+          chatConfig: agentConfig.chatConfig,
+          disabledPluginIds,
+          plugins: agentConfig.plugins,
+        },
+        db: deps.db,
+        userId: deps.userId,
+        workspaceId: deps.workspaceId,
+      })
+    : undefined;
 
   // Before the turn writes any row: a refused send leaves nothing behind.
   await claimRunSlot(runSlot, {

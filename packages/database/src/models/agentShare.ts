@@ -40,6 +40,7 @@ const normalizeAgentShareConfig = (
   allowCreatorViewSessions:
     config?.allowCreatorViewSessions ?? DEFAULT_AGENT_SHARE_CONFIG.allowCreatorViewSessions,
   allowReadMemory: config?.allowReadMemory ?? DEFAULT_AGENT_SHARE_CONFIG.allowReadMemory,
+  autoGrantAgentTools: config?.autoGrantAgentTools,
   /** Left absent like `skillGrants`: absent marks a share whose Agent tools were never reviewed. */
   declinedGrantIds: config?.declinedGrantIds,
   demoCases: config?.demoCases ?? [],
@@ -631,6 +632,9 @@ export class AgentShareModel {
         agentAgencyConfig: agents.agencyConfig,
         agentAvatar: agents.avatar,
         agentBackgroundColor: agents.backgroundColor,
+        // Server-side only: the profile counts the tools `autoGrantAgentTools`
+        // opens from the Agent's own tool settings.
+        agentChatConfig: agents.chatConfig,
         agentDescription: agents.description,
         agentId: agentShares.agentId,
         // Model identity is for a server-side capability lookup only (what
@@ -638,6 +642,7 @@ export class AgentShareModel {
         agentModel: agents.model,
         agentName: agents.name,
         agentOpeningQuestions: agents.openingQuestions,
+        agentPlugins: agents.plugins,
         agentProvider: agents.provider,
         agentSlug: agents.slug,
         agentTags: agents.tags,
