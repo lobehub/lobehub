@@ -1,4 +1,5 @@
-import { readTaskExecutionConfig } from '@lobechat/types';
+import { readTaskExecutionConfig, type TaskExecutionConfig, type TaskItem } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils/object';
 
 import { resolveTaskOrThrow } from '@/server/services/task/utils';
 
@@ -24,6 +25,11 @@ type TaskRunDispatchDeps = Pick<
   | 'taskId'
   | 'taskModel'
 >;
+
+// `TaskItem.config` is untyped jsonb (`unknown`); the reader validates every
+// field itself and degrades malformed shapes to "inherit".
+const taskExecutionOf = (task: TaskItem): TaskExecutionConfig | undefined =>
+  readTaskExecutionConfig(isRecord(task.config) ? (task.config as Record<string, unknown>) : null);
 
 export const runTaskDispatch = async (
   deps: TaskRunDispatchDeps,
@@ -64,8 +70,7 @@ export const runTaskDispatch = async (
     // device and its cwd. A `fixed` agent selection policy still overrides
     // any request at plan resolve. Mirrors the callSubAgent device
     // inheritance in executorHelpers.buildServerVirtualSubAgentRunner.
-    const inheritDevice =
-      !continueTopicId && !!activeDeviceId && !readTaskExecutionConfig(task.config);
+    const inheritDevice = !continueTopicId && !!activeDeviceId && !taskExecutionOf(task);
     const result = await deps.taskCaller.run({
       ...(continueTopicId ? { continueTopicId } : {}),
       // Inherit the dispatching run's device when it executes on one: a task
@@ -122,7 +127,7 @@ export const runTasksDispatch = async (
       // Same inheritance rules as runTask's fresh-topic path (runTasks never
       // continues a topic): inherit only when the task carries no execution
       // pin, so a pin keeps both its device and its working directory.
-      const inheritDevice = !!deps.activeDeviceId && !readTaskExecutionConfig(task.config);
+      const inheritDevice = !!deps.activeDeviceId && !taskExecutionOf(task);
       await deps.taskCaller.run({
         ...(inheritDevice ? { deviceId: deps.activeDeviceId } : {}),
         id: task.id,
