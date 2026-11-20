@@ -38,6 +38,7 @@ const resolveShareGate = async (
   deps: Pick<DeferredOperationInitDeps, 'db' | 'userId' | 'workspaceId'>,
   shareVisitor: NonNullable<NonNullable<AgentState['principal']>['actor']>['shareVisitor'],
   agent: ShareAutoGrantAgent,
+  listLobehubSkillProviderIds: () => Promise<string[]>,
 ): Promise<AgentShareGate | undefined> => {
   if (!shareVisitor) return undefined;
 
@@ -64,7 +65,13 @@ const resolveShareGate = async (
       shareId: share.shareId,
       visitorUserId: shareVisitor.visitorUserId,
     },
-    { agent, db: deps.db, userId: deps.userId, workspaceId: deps.workspaceId },
+    {
+      agent,
+      db: deps.db,
+      listLobehubSkillProviderIds,
+      userId: deps.userId,
+      workspaceId: deps.workspaceId,
+    },
   );
 };
 
@@ -164,12 +171,17 @@ export const runDeferredOperationInit = async (
   }: { operationId: string; request: AgentRunInitRequest; state: AgentState },
 ): Promise<{ context: AgentRuntimeContext; state: Partial<AgentState> }> => {
   const ctx = await restoreRunContext(deps, state, request);
-  ctx.shareGate = await resolveShareGate(deps, state.principal?.actor?.shareVisitor, {
-    autoSkillIds: ctx.autoSkillIds,
-    chatConfig: ctx.agentConfig.chatConfig,
-    disabledPluginIds: ctx.disabledPluginIds,
-    plugins: ctx.agentConfig.plugins,
-  });
+  ctx.shareGate = await resolveShareGate(
+    deps,
+    state.principal?.actor?.shareVisitor,
+    {
+      autoSkillIds: ctx.autoSkillIds,
+      chatConfig: ctx.agentConfig.chatConfig,
+      disabledPluginIds: ctx.disabledPluginIds,
+      plugins: ctx.agentConfig.plugins,
+    },
+    async () => (await deps.getMarketService(ctx.runFacts)).listLobehubSkillProviderIds(),
+  );
 
   const effectiveResume =
     !!request.resume ||

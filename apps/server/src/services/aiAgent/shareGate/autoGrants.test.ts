@@ -7,6 +7,10 @@ import type { AgentShareGate } from './types';
 
 const listShareGrantableSkills = vi.hoisted(() => vi.fn());
 vi.mock('@/server/services/agentShare/grantableSkills', () => ({ listShareGrantableSkills }));
+const listShareActivatableExtensionIds = vi.hoisted(() => vi.fn());
+vi.mock('@/server/services/agentShare/activatableExtensions', () => ({
+  listShareActivatableExtensionIds,
+}));
 
 const agent = {
   chatConfig: { memory: { enabled: true } },
@@ -88,6 +92,27 @@ describe('resolveShareAutoAgentGrants', () => {
   beforeEach(() => {
     listShareGrantableSkills.mockReset();
     listShareGrantableSkills.mockResolvedValue([]);
+    listShareActivatableExtensionIds.mockReset();
+    listShareActivatableExtensionIds.mockResolvedValue([]);
+  });
+
+  it('opens a connected connector the Agent has no entry for, unless it is turned off', async () => {
+    listShareActivatableExtensionIds.mockResolvedValue(['mcp-connected', 'mcp-off']);
+    const listLobehubSkillProviderIds = vi.fn();
+
+    const resolved = await resolveShareAutoAgentGrants(gate({ autoGrantAgentTools: true }), {
+      agent: { ...runAgent, disabledPluginIds: ['mcp-off'] },
+      db: {} as any,
+      listLobehubSkillProviderIds,
+      userId: 'owner',
+    });
+
+    const toolIds = resolved.shareConfig.toolGrants?.map((grant) => grant.identifier);
+    expect(toolIds).toContain('mcp-connected');
+    expect(toolIds).not.toContain('mcp-off');
+    expect(listShareActivatableExtensionIds).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'agent-1', listLobehubSkillProviderIds }),
+    );
   });
 
   it('reads no skills while the switch is off', async () => {
@@ -97,6 +122,7 @@ describe('resolveShareAutoAgentGrants', () => {
       resolveShareAutoAgentGrants(off, { agent: runAgent, db: {} as any, userId: 'owner' }),
     ).resolves.toBe(off);
     expect(listShareGrantableSkills).not.toHaveBeenCalled();
+    expect(listShareActivatableExtensionIds).not.toHaveBeenCalled();
   });
 
   it("opens the Agent's grantable skills for the creator's scope", async () => {

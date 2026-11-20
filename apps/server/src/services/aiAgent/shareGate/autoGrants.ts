@@ -3,10 +3,11 @@ import {
   type ShareAgentToolSource,
 } from '@lobechat/builtin-tools/agentShare';
 import { resolveShareToolGrants } from '@lobechat/const';
-import { type AgentPluginEntry, getActivePluginIds } from '@lobechat/types';
+import { type AgentPluginEntry, getActivePluginIds, getOptedInPluginIds } from '@lobechat/types';
 
 import type { AgentShareConfig } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { listShareActivatableExtensionIds } from '@/server/services/agentShare/activatableExtensions';
 import { listShareGrantableSkills } from '@/server/services/agentShare/grantableSkills';
 
 import type { AgentShareGate } from './types';
@@ -21,7 +22,9 @@ import type { AgentShareGate } from './types';
  */
 export const applyShareAutoAgentGrants = <T extends AgentShareConfig>(
   shareConfig: T,
-  agent: Pick<ShareAgentToolSource, 'chatConfig' | 'plugins'> & { skillIds: string[] },
+  agent: Pick<ShareAgentToolSource, 'activatableExtensionIds' | 'chatConfig' | 'plugins'> & {
+    skillIds: string[];
+  },
 ): T => {
   if (!shareConfig.autoGrantAgentTools) return shareConfig;
 
@@ -93,11 +96,14 @@ export const resolveShareAutoAgentGrants = async (
   {
     agent,
     db,
+    listLobehubSkillProviderIds,
     userId,
     workspaceId,
   }: {
     agent: ShareAutoGrantAgent;
     db: LobeChatDatabase;
+    /** The creator's LobeHub connections, which only the Market knows. */
+    listLobehubSkillProviderIds?: () => Promise<string[]>;
     userId: string;
     workspaceId?: string;
   },
@@ -105,18 +111,30 @@ export const resolveShareAutoAgentGrants = async (
   if (!gate.shareConfig.autoGrantAgentTools) return gate;
 
   const plugins = toPluginEntries(agent);
-  const skills = await listShareGrantableSkills({
-    agentConfig: { chatConfig: agent.chatConfig, plugins },
-    agentId: gate.agentId,
-    canExecuteOnDevice: gate.canUseDevice,
-    db,
-    userId,
-    workspaceId,
-  });
+  const [skills, connectedExtensionIds] = await Promise.all([
+    listShareGrantableSkills({
+      agentConfig: { chatConfig: agent.chatConfig, plugins },
+      agentId: gate.agentId,
+      canExecuteOnDevice: gate.canUseDevice,
+      db,
+      userId,
+      workspaceId,
+    }),
+    listShareActivatableExtensionIds({
+      agentId: gate.agentId,
+      db,
+      listLobehubSkillProviderIds,
+      userId,
+      workspaceId,
+    }),
+  ]);
 
   return {
     ...gate,
     shareConfig: applyShareAutoAgentGrants(gate.shareConfig, {
+      // An opted-in extension still counts when its source was not listed
+      // (say the Market lookup failed); the run's tool set drops a missing one.
+      activatableExtensionIds: [...connectedExtensionIds, ...getOptedInPluginIds(plugins)],
       chatConfig: agent.chatConfig,
       plugins,
       skillIds: skills.map((skill) => skill.identifier),

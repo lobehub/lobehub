@@ -43,11 +43,10 @@ export const runtimeManagedShareCandidateToolIds: string[] = [
 
 export interface ShareAgentToolSource {
   /**
-   * On-demand extensions (MCP servers, connections, installed plugins) the
-   * model could activate. The settings page passes what it loaded, so it only
-   * counts rows it can render. Omitted on the server, where every opted-in
-   * extension counts and the run's real tool set drops one that no longer
-   * exists.
+   * The creator's connected extensions (MCP servers, connections, installed
+   * plugins) the model could activate. In agent mode an extension with no
+   * `plugins` entry is on (`getConnectorMode`), so every listed one counts
+   * unless the Agent turned it off. Omitted, only opted-in extensions count.
    */
   activatableExtensionIds?: string[];
   chatConfig?: Pick<
@@ -95,8 +94,9 @@ export const getShareToolCandidateIds = (pluginIds: string[], skillIds: string[]
  *
  * - Pinned plugins and the runtime-managed builtins always count.
  * - On-demand tools count only in agent mode with automatic activation, the
- *   only mode with an activator: every on-demand builtin is on unless
- *   disabled, and an extension is on when the Agent opted in.
+ *   only mode with an activator: every on-demand builtin and every connected
+ *   extension is on unless disabled. Without the connected list, an
+ *   extension counts only when the Agent opted in.
  * - Everything the Agent turned off ({@link getShareTurnedOffToolIds}) is
  *   subtracted from both groups.
  *
@@ -117,19 +117,17 @@ export const getShareAgentEnabledToolIds = ({
   if (resolveToolMode(chatConfig) === 'agent' && chatConfig?.skillActivateMode !== 'manual') {
     const notOnDemand = new Set<string>([...alwaysOnToolIds, ...defaultToolIds, ...candidates]);
     const skills = new Set(skillIds);
-    const extensions = activatableExtensionIds ? new Set(activatableExtensionIds) : undefined;
 
     onDemand.push(
       ...builtinTools
         .filter((tool) => tool.discoverable !== false)
         .map((tool) => tool.identifier)
         .filter((identifier) => isOnDemandBuiltinTool(identifier) && !notOnDemand.has(identifier)),
-      ...getOptedInPluginIds(plugins).filter(
+      ...(activatableExtensionIds ?? getOptedInPluginIds(plugins)).filter(
         (identifier) =>
           !isBuiltinToolIdentifier(identifier) &&
           !skills.has(identifier) &&
-          !notOnDemand.has(identifier) &&
-          (!extensions || extensions.has(identifier)),
+          !notOnDemand.has(identifier),
       ),
     );
   }

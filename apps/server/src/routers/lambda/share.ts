@@ -5,6 +5,7 @@ import {
   DEFAULT_AGENT_CHAT_CONFIG,
 } from '@lobechat/const';
 import {
+  getOptedInPluginIds,
   type SharedAgentData,
   type SharedAgentDeliveryStats,
   type SharedAgentUploadAbility,
@@ -27,6 +28,7 @@ import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { resolveModelMediaCapabilities } from '@/server/modules/AgentRuntime/resolveModelMediaCapabilities';
 import { AgentService } from '@/server/services/agent';
+import { listShareActivatableExtensionIds } from '@/server/services/agentShare/activatableExtensions';
 import { getCachedDeliveryStats } from '@/server/services/agentShare/deliveryStatsCache';
 import { listShareGrantableSkills } from '@/server/services/agentShare/grantableSkills';
 import { applyShareAutoAgentGrants } from '@/server/services/aiAgent/shareGate/autoGrants';
@@ -228,6 +230,20 @@ export const shareRouter = router({
       // turns on; count those the way a visitor run resolves them.
       const { toolGrants } = share.shareConfig.autoGrantAgentTools
         ? applyShareAutoAgentGrants(share.shareConfig, {
+            // LobeHub connections live in the creator's Market account, which a
+            // visitor request cannot read; only the advertised count leaves them out.
+            activatableExtensionIds: await listShareActivatableExtensionIds({
+              agentId: share.agentId,
+              db: ctx.serverDB,
+              userId: share.ownerId,
+              workspaceId: share.workspaceId ?? undefined,
+            }).then(
+              (ids) => [...ids, ...getOptedInPluginIds(share.agentPlugins ?? [])],
+              (error) => {
+                log('failed to list connected extensions for %s: %O', share.shareId, error);
+                return undefined;
+              },
+            ),
             chatConfig: { ...DEFAULT_AGENT_CHAT_CONFIG, ...share.agentChatConfig },
             plugins: share.agentPlugins ?? [],
             skillIds: (

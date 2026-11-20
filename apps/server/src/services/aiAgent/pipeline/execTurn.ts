@@ -313,6 +313,8 @@ export const execAgentTurn = async (
           plugins: agentConfig.plugins,
         },
         db: deps.db,
+        listLobehubSkillProviderIds: async () =>
+          (await deps.getMarketService()).listLobehubSkillProviderIds(),
         userId: deps.userId,
         workspaceId: deps.workspaceId,
       })

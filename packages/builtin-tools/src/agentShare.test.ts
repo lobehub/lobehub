@@ -56,6 +56,22 @@ describe('getShareAgentEnabledToolIds', () => {
     ).not.toContain('mcp-auto');
   });
 
+  it('counts a connected extension the Agent has no entry for, as its tools page does', () => {
+    const ids = getShareAgentEnabledToolIds({
+      activatableExtensionIds: ['mcp-connected', 'mcp-off'],
+      plugins: [{ identifier: 'mcp-off', mode: 'disabled' }],
+    });
+
+    expect(ids).toContain('mcp-connected');
+    expect(ids).not.toContain('mcp-off');
+    expect(
+      getShareAgentEnabledToolIds({
+        activatableExtensionIds: ['mcp-connected'],
+        chatConfig: { skillActivateMode: 'manual' },
+      }),
+    ).not.toContain('mcp-connected');
+  });
+
   it('drops what the Agent turned off, skills and tools visitors can never use', () => {
     const ids = getShareAgentEnabledToolIds({
       chatConfig: { searchMode: 'off' },

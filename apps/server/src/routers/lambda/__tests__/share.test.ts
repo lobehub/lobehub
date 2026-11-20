@@ -44,6 +44,10 @@ const emptyDeliveryStats = {
 
 const listShareGrantableSkills = vi.hoisted(() => vi.fn());
 vi.mock('@/server/services/agentShare/grantableSkills', () => ({ listShareGrantableSkills }));
+const listShareActivatableExtensionIds = vi.hoisted(() => vi.fn(async () => [] as string[]));
+vi.mock('@/server/services/agentShare/activatableExtensions', () => ({
+  listShareActivatableExtensionIds,
+}));
 
 vi.mock('@/database/models/agentShareProfile', () => ({
   AgentShareProfileModel: class {
@@ -293,6 +297,22 @@ describe('shareRouter', () => {
       expect(result.toolGrants).not.toContain('skill-pinned');
       expect(result.toolGrants).not.toContain('mcp-declined');
       expect(result.toolGrants).not.toContain('lobe-user-memory');
+    });
+
+    it('advertises a connected connector the Agent has no entry for', async () => {
+      listShareGrantableSkills.mockResolvedValue([]);
+      listShareActivatableExtensionIds.mockResolvedValueOnce(['mcp-connected']);
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
+        ...agentShare,
+        agentChatConfig: { toolMode: 'agent' },
+        agentPlugins: [],
+        shareConfig: { ...agentShare.shareConfig, autoGrantAgentTools: true },
+      } as any);
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+
+      const result = await caller.getSharedAgent({ slugOrId: 'shared-agent' });
+
+      expect(result.toolGrants).toContain('mcp-connected');
     });
 
     it('returns independent demos and selected deliveries in the owner scope', async () => {
