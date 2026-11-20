@@ -157,8 +157,8 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
           emptyHint={existing ? undefined : t('create.onlyYou')}
           exclude={existing?.agentIds}
           options={options}
-          people={{ channelId: existing?.id, onChange: setPeople, value: people }}
           value={agents}
+          people={{ channelId: existing?.id, onChange: setPeople, value: people }}
           onChange={setAgents}
         />
       </Flexbox>
