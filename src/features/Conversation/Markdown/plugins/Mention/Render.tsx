@@ -1,6 +1,5 @@
 'use client';
 
-import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
@@ -9,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import MentionProfileTrigger from '@/features/MemberProfileCard/MentionProfileTrigger';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
+import { mentionTokens } from '@/styles/mention.stylex';
 
 import { type MarkdownElementProps } from '../type';
 
@@ -23,13 +23,10 @@ const styles = stylex.create({
     borderRadius: '0.25em',
     fontSize: '0.875em',
     lineHeight: 1,
-    color: cssVar.colorInfo,
+    color: mentionTokens.color,
     wordBreak: 'break-word',
     whiteSpace: 'break-spaces',
-    backgroundColor: {
-      'default': cssVar.colorInfoBg,
-      ':hover': `color-mix(in srgb, ${cssVar.colorInfo} 15%, ${cssVar.colorBgContainer})`,
-    },
+    backgroundColor: { 'default': mentionTokens.bg, ':hover': mentionTokens.bgHover },
     backgroundImage: { 'default': 'none', ':hover': 'none' },
   },
 });
