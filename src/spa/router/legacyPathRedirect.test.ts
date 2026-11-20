@@ -4,7 +4,7 @@ import { createMemoryRouter, RouterProvider, useLocation } from 'react-router';
 import { describe, expect, it } from 'vitest';
 
 import {
-  MARKETPLACE_CONNECTOR_PATH,
+  MARKETPLACE_INSTALLED_CONNECTORS_PATH,
   MARKETPLACE_INSTALLED_SKILLS_PATH,
 } from '@/features/Marketplace/paths';
 
@@ -29,8 +29,8 @@ const renderAt = (url: string) => {
   const legacy = [
     { element: redirectTo(MARKETPLACE_INSTALLED_SKILLS_PATH), path: 'skill' },
     { element: redirectTo(MARKETPLACE_INSTALLED_SKILLS_PATH), path: 'skill/:sub' },
-    { element: redirectTo(MARKETPLACE_CONNECTOR_PATH), path: 'connector' },
-    { element: redirectTo(MARKETPLACE_CONNECTOR_PATH), path: 'connector/:sub' },
+    { element: redirectTo(MARKETPLACE_INSTALLED_CONNECTORS_PATH), path: 'connector' },
+    { element: redirectTo(MARKETPLACE_INSTALLED_CONNECTORS_PATH), path: 'connector/:sub' },
   ];
   // The real legacy table, beside a workspace agent route that competes for
   // `/community/agent/:id` (a lone `community/*` splat lost to it).
@@ -97,17 +97,17 @@ describe('legacy URL redirects', () => {
     ['/settings/skill', '/marketplace/skill/installed'],
     ['/settings/skill?skill=web-search', '/marketplace/skill/installed?skill=web-search'],
     ['/settings/skill/anything', '/marketplace/skill/installed'],
-    ['/settings/connector', '/marketplace/connector'],
+    ['/settings/connector', '/marketplace/connector/installed'],
     [
       '/settings/connector?open=agent-connector%3Arow-own',
-      '/marketplace/connector?open=agent-connector%3Arow-own',
+      '/marketplace/connector/installed?open=agent-connector%3Arow-own',
     ],
-    ['/settings/connector/legacy#section', '/marketplace/connector#section'],
+    ['/settings/connector/legacy#section', '/marketplace/connector/installed#section'],
     // Workspace scope keeps its slug.
     ['/acme/settings/skill', '/acme/marketplace/skill/installed'],
     [
       '/acme/settings/connector?open=mcp-connector%3Amwe',
-      '/acme/marketplace/connector?open=mcp-connector%3Amwe',
+      '/acme/marketplace/connector/installed?open=mcp-connector%3Amwe',
     ],
     // `/community` became `/marketplace`.
     ['/community', '/marketplace'],

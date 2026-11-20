@@ -5,7 +5,7 @@ import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { MARKETPLACE_CONNECTOR_PATH } from '@/features/Marketplace/paths';
+import { MARKETPLACE_INSTALLED_CONNECTORS_PATH } from '@/features/Marketplace/paths';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 const styles = stylex.create({
@@ -39,7 +39,7 @@ const LobeBenchSettings = memo(() => {
           <Flexbox gap={8}>
             <Text weight={600}>{t('connections.title')}</Text>
             <Text type="secondary">{t('connections.settingsHint')}</Text>
-            <WorkspaceLink to={MARKETPLACE_CONNECTOR_PATH}>
+            <WorkspaceLink to={MARKETPLACE_INSTALLED_CONNECTORS_PATH}>
               {t('connections.openManager')}
             </WorkspaceLink>
           </Flexbox>

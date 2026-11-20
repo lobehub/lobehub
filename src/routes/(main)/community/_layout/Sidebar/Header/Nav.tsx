@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { McpIcon, ProviderIcon, SkillsIcon } from '@lobehub/ui/icons';
+import { ProviderIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { Blocks, Bot, Brain, ShapesIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import {
   getMarketplaceSubPath,
   MARKETPLACE_CONNECTOR_PATH,
+  MARKETPLACE_INSTALLED_CONNECTORS_PATH,
   MARKETPLACE_INSTALLED_SKILLS_PATH,
   MARKETPLACE_PATH,
   MARKETPLACE_SKILL_PATH,
@@ -22,7 +23,7 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 import { DiscoverTab } from '@/types/discover';
 import { isModifierClick } from '@/utils/navigation';
 
-/** Connector management moved here from settings; not a Discover catalog tab. */
+/** Connectors: the MCP catalog plus the connector manager moved here from settings. */
 const CONNECTOR_TAB = 'connector';
 
 interface Item {
@@ -36,9 +37,11 @@ interface Item {
 }
 
 // Workspace-aware: `/:slug/marketplace/skill` resolves to `skill` as well.
+// MCP detail pages (`mcp/:slug`) belong to Connectors, which absorbed the MCP list.
 const useActiveTabKey = () => {
   const { pathname } = useActiveLocation();
-  return getMarketplaceSubPath(pathname) || DiscoverTab.Home;
+  const subPath = getMarketplaceSubPath(pathname) || DiscoverTab.Home;
+  return subPath.startsWith(DiscoverTab.Mcp) ? CONNECTOR_TAB : subPath;
 };
 
 const Nav = memo(() => {
@@ -75,14 +78,9 @@ const Nav = memo(() => {
           icon: Blocks,
           key: CONNECTOR_TAB,
           title: t('tab.connector'),
-          url: MARKETPLACE_CONNECTOR_PATH,
-        },
-        {
-          icon: McpIcon,
-          key: DiscoverTab.Mcp,
-          marketOnly: true,
-          title: `MCP`,
-          url: `${MARKETPLACE_PATH}/mcp`,
+          // Connectors merges the MCP catalog (Discover) with the installed
+          // connectors; without the market only the installed view exists.
+          url: showMarket ? MARKETPLACE_CONNECTOR_PATH : MARKETPLACE_INSTALLED_CONNECTORS_PATH,
         },
         {
           icon: Brain,

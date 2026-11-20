@@ -2,8 +2,18 @@
 
 import { ToolSettings } from '@/features/Settings/skill';
 
-/** `/marketplace/connector`: the connector manager (formerly `/settings/connector`). */
-const Connectors = () => <ToolSettings viewMode="connector" />;
+import CatalogViewTabs from './CatalogViewTabs';
+
+/**
+ * `/marketplace/connector/installed`: the connector manager (formerly
+ * `/settings/connector`), the Installed half of the merged Connectors entry.
+ */
+const Connectors = () => (
+  <ToolSettings
+    headerExtra={<CatalogViewTabs inset active={'installed'} kind={'connector'} />}
+    viewMode="connector"
+  />
+);
 
 Connectors.displayName = 'MarketplaceConnectors';
 

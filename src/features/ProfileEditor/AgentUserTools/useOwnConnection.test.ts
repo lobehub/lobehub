@@ -224,7 +224,7 @@ describe('useOwnConnection', () => {
 
     expect(mocks.navigate).toHaveBeenCalledWith(ownConnectionSettingsPath('row-own'));
     expect(ownConnectionSettingsPath('row-own')).toBe(
-      '/marketplace/connector?open=agent-connector%3Arow-own',
+      '/marketplace/connector/installed?open=agent-connector%3Arow-own',
     );
   });
 });

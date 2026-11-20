@@ -335,7 +335,7 @@ export function defineConfig(config: CustomNextConfig) {
         source: '/community/assistants',
       },
       {
-        destination: '/marketplace/mcp',
+        destination: '/marketplace/connector',
         permanent: true,
         source: '/community/plugins',
       },

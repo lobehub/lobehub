@@ -65,12 +65,14 @@ interface SkillListRowProps {
   onClick?: () => void;
   /** What the connector does; only the page row has room for it. */
   summary?: ReactNode;
+  /** `data-testid` of the page row (the catalog rows keep the e2e hooks of the old cards). */
+  testId?: string;
   title: string;
   titleColor?: string;
 }
 
 const SkillListRow = memo<SkillListRowProps>(
-  ({ active, description, extra, icon, onClick, summary, title, titleColor }) => {
+  ({ active, description, extra, icon, onClick, summary, testId, title, titleColor }) => {
     const variant = useSkillListVariant();
     const compact = useInterfaceDensity() === 'compact';
 
@@ -95,6 +97,7 @@ const SkillListRow = memo<SkillListRowProps>(
         align={'center'}
         {...stylex.props(styles.row, compact && styles.rowCompact)}
         clickable={!!onClick}
+        data-testid={testId}
         gap={12}
         // 8px around the 22 + 2 + 22px text stack sits inside the 64px floor,
         // so rows repeat every 68px (64 + the grid's 4px gap) as in Codex.

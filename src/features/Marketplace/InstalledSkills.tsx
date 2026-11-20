@@ -2,11 +2,14 @@
 
 import { ToolSettings } from '@/features/Settings/skill';
 
-import SkillViewTabs from './SkillViewTabs';
+import CatalogViewTabs from './CatalogViewTabs';
 
 /** `/marketplace/skill/installed`: the installed skills manager (formerly `/settings/skill`). */
 const InstalledSkills = () => (
-  <ToolSettings headerExtra={<SkillViewTabs inset active={'installed'} />} viewMode="skill" />
+  <ToolSettings
+    headerExtra={<CatalogViewTabs inset active={'installed'} kind={'skill'} />}
+    viewMode="skill"
+  />
 );
 
 InstalledSkills.displayName = 'MarketplaceInstalledSkills';

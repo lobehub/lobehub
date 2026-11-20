@@ -14,7 +14,9 @@ describe('useMobileNavigation', () => {
     ['/marketplace/skill', true, 'community'],
     // Management pages are second-level pages with a back header, not tab roots.
     ['/marketplace/skill/installed', false, 'community'],
-    ['/marketplace/connector', false, 'community'],
+    // Connectors' Discover view (the former MCP list) is a tab root; Installed is not.
+    ['/marketplace/connector', true, 'community'],
+    ['/marketplace/connector/installed', false, 'community'],
     ['/me', true, 'me'],
     ['/agent/agt_fixture', false, 'agent'],
     ['/acme', true, 'chat'],

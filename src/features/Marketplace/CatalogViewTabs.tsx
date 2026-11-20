@@ -8,14 +8,26 @@ import { useTranslation } from 'react-i18next';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-import { MARKETPLACE_INSTALLED_SKILLS_PATH, MARKETPLACE_SKILL_PATH } from './paths';
+import {
+  MARKETPLACE_CONNECTOR_PATH,
+  MARKETPLACE_INSTALLED_CONNECTORS_PATH,
+  MARKETPLACE_INSTALLED_SKILLS_PATH,
+  MARKETPLACE_SKILL_PATH,
+} from './paths';
 import { pillTabClassNames } from './pillTabs';
 
-export type SkillView = 'discover' | 'installed';
+export type CatalogView = 'discover' | 'installed';
+export type CatalogKind = 'connector' | 'skill';
 
-const SKILL_VIEW_PATHS: Record<SkillView, string> = {
-  discover: MARKETPLACE_SKILL_PATH,
-  installed: MARKETPLACE_INSTALLED_SKILLS_PATH,
+export const CATALOG_VIEW_PATHS: Record<CatalogKind, Record<CatalogView, string>> = {
+  connector: {
+    discover: MARKETPLACE_CONNECTOR_PATH,
+    installed: MARKETPLACE_INSTALLED_CONNECTORS_PATH,
+  },
+  skill: {
+    discover: MARKETPLACE_SKILL_PATH,
+    installed: MARKETPLACE_INSTALLED_SKILLS_PATH,
+  },
 };
 
 const styles = stylex.create({
@@ -25,19 +37,21 @@ const styles = stylex.create({
   inset: { paddingBlockStart: '12px', paddingInline: '12px' },
 });
 
-interface SkillViewTabsProps {
-  active: SkillView;
+interface CatalogViewTabsProps {
+  active: CatalogView;
   /** Indent to the list page header (installed page); the catalog column needs none. */
   inset?: boolean;
+  kind: CatalogKind;
 }
 
 /**
- * Switches the Marketplace Skills entry between the public catalog
- * (`/marketplace/skill`) and the installed skills management page
- * (`/marketplace/skill/installed`, formerly `/settings/skill`).
+ * Switches a Marketplace entry between its public catalog (Discover) and its
+ * management page (Installed): Skills (`/marketplace/skill[/installed]`) and
+ * Connectors, which merges the MCP catalog with the connector manager
+ * (`/marketplace/connector[/installed]`).
  * With the market disabled only the installed view exists, so no tabs render.
  */
-const SkillViewTabs = memo<SkillViewTabsProps>(({ active, inset }) => {
+const CatalogViewTabs = memo<CatalogViewTabsProps>(({ active, inset, kind }) => {
   const { t } = useTranslation('discover');
   const navigate = useWorkspaceAwareNavigate();
   const { showMarket } = useServerConfigStore(featureFlagsSelectors);
@@ -62,13 +76,13 @@ const SkillViewTabs = memo<SkillViewTabsProps>(({ active, inset }) => {
         variant={'rounded'}
         onChange={(key) => {
           if (key === active) return;
-          navigate(SKILL_VIEW_PATHS[key as SkillView]);
+          navigate(CATALOG_VIEW_PATHS[kind][key as CatalogView]);
         }}
       />
     </div>
   );
 });
 
-SkillViewTabs.displayName = 'MarketplaceSkillViewTabs';
+CatalogViewTabs.displayName = 'MarketplaceCatalogViewTabs';
 
-export default SkillViewTabs;
+export default CatalogViewTabs;

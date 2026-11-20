@@ -22,9 +22,9 @@ describe('getMarketplaceSubPath', () => {
 });
 
 describe('getManageLibraryPath', () => {
-  it('sends the skills group to installed skills and tools to connectors', () => {
+  it('sends the skills group to installed skills and tools to installed connectors', () => {
     expect(getManageLibraryPath('skills')).toBe('/marketplace/skill/installed');
-    expect(getManageLibraryPath('tools')).toBe('/marketplace/connector');
-    expect(getManageLibraryPath()).toBe('/marketplace/connector');
+    expect(getManageLibraryPath('tools')).toBe('/marketplace/connector/installed');
+    expect(getManageLibraryPath()).toBe('/marketplace/connector/installed');
   });
 });

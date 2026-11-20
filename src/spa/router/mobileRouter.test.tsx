@@ -127,8 +127,8 @@ describe('mobile Marketplace skill and connector pages', () => {
   it.each([
     ['/marketplace/skill/installed', 'skill/installed'],
     ['/acme/marketplace/skill/installed', 'skill/installed'],
-    ['/marketplace/connector', 'connector'],
-    ['/acme/marketplace/connector', 'connector'],
+    ['/marketplace/connector/installed', 'connector/installed'],
+    ['/acme/marketplace/connector/installed', 'connector/installed'],
   ])('serves %s with the shell back header', (url, leaf) => {
     const route = matchRoutes(mobileRoutes, url)?.at(-1)?.route;
 
@@ -141,10 +141,13 @@ describe('mobile Marketplace skill and connector pages', () => {
   it.each([
     ['/settings/skill', '/marketplace/skill/installed'],
     ['/settings/skill/sub', '/marketplace/skill/installed'],
-    ['/settings/connector', '/marketplace/connector'],
-    ['/settings/connector/sub', '/marketplace/connector'],
+    ['/settings/connector', '/marketplace/connector/installed'],
+    ['/settings/connector/sub', '/marketplace/connector/installed'],
     ['/acme/settings/skill', '/marketplace/skill/installed'],
-    ['/acme/settings/connector', '/marketplace/connector'],
+    ['/acme/settings/connector', '/marketplace/connector/installed'],
+    // The MCP list merged into the Connectors Discover page.
+    ['/marketplace/mcp', '/marketplace/connector'],
+    ['/acme/marketplace/mcp', '/marketplace/connector'],
   ])('redirects %s to %s', (url, to) => {
     const element = matchRoutes(mobileRoutes, url)?.at(-1)?.route.element as
       ReactElement<{ to: string }> | undefined;

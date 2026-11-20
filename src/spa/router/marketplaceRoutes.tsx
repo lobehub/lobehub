@@ -1,6 +1,6 @@
 'use client';
 
-import { ShapesIcon } from 'lucide-react';
+import { Blocks, ShapesIcon } from 'lucide-react';
 import type { RouteObject } from 'react-router';
 
 import CommunityHomeSkeleton from '@/components/Skeleton/CommunityHome';
@@ -9,6 +9,7 @@ import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import {
   LEGACY_COMMUNITY_SEGMENT,
   MARKETPLACE_CONNECTOR_PATH,
+  MARKETPLACE_INSTALLED_CONNECTORS_PATH,
   MARKETPLACE_INSTALLED_SKILLS_PATH,
   MARKETPLACE_SEGMENT,
 } from '@/features/Marketplace/paths';
@@ -45,9 +46,22 @@ export const marketplaceManageRoutes: RouteObject[] = [
       { preloadId: 'community' },
     ),
     handle: { meta: marketplaceConnectorsRouteMeta },
-    path: 'connector',
+    path: 'connector/installed',
   },
 ];
+
+/**
+ * Marks a route that only redirects (it never paints, so it needs no title or
+ * skeleton); the route title and DynamicMeta checks skip it.
+ */
+export const LEGACY_REDIRECT_HANDLE = { legacyRedirect: true } as const;
+
+/** `mcp` (the former MCP list) → the Connectors Discover page, query kept. */
+export const marketplaceMcpListRedirect: RouteObject = {
+  element: <LegacyPathRedirect to={MARKETPLACE_CONNECTOR_PATH} />,
+  handle: LEGACY_REDIRECT_HANDLE,
+  path: 'mcp',
+};
 
 /**
  * `/marketplace/*` (and `/:workspaceSlug/marketplace/*`), formerly `/community`.
@@ -65,6 +79,9 @@ export const marketplaceRoute: RouteObject = {
       path: 'workspace/settings',
     },
     ...marketplaceManageRoutes,
+    // The MCP list merged into Connectors; its URL (with `?category=` / `?q=`)
+    // forwards there. MCP detail pages stay at `mcp/:slug`.
+    marketplaceMcpListRedirect,
     // List routes (with ListLayout)
     {
       children: [
@@ -120,42 +137,24 @@ export const marketplaceRoute: RouteObject = {
           path: 'provider',
         },
         {
-          children: [
-            {
-              element: dynamicElement(
-                () => import('@/routes/(main)/community/(list)/skill'),
-                'Desktop > Discover > List > Skill',
-              ),
-              handle: {
-                meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceSkills' }),
-              },
-              index: true,
-            },
-          ],
           element: dynamicElement(
-            () => import('@/routes/(main)/community/(list)/skill/_layout'),
-            'Desktop > Discover > List > Skill > Layout',
+            () => import('@/routes/(main)/community/(list)/skill'),
+            'Desktop > Discover > List > Skill',
           ),
+          handle: {
+            meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceSkills' }),
+          },
           path: 'skill',
         },
         {
-          children: [
-            {
-              element: dynamicElement(
-                () => import('@/routes/(main)/community/(list)/mcp'),
-                'Desktop > Discover > List > MCP',
-              ),
-              handle: {
-                meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceMcp' }),
-              },
-              index: true,
-            },
-          ],
           element: dynamicElement(
-            () => import('@/routes/(main)/community/(list)/mcp/_layout'),
-            'Desktop > Discover > List > MCP > Layout',
+            () => import('@/routes/(main)/community/(list)/connector'),
+            'Desktop > Discover > List > Connector',
           ),
-          path: 'mcp',
+          handle: {
+            meta: routeMeta({ icon: Blocks, titleKey: 'navigation.marketplaceConnectors' }),
+          },
+          path: 'connector',
         },
         {
           element: dynamicElement(
@@ -298,12 +297,6 @@ const LEGACY_COMMUNITY_SECTIONS = [
  */
 const legacyCommunityElement = <LegacyCommunityRedirect />;
 
-/**
- * Marks a route that only redirects (it never paints, so it needs no title or
- * skeleton); the route title and DynamicMeta checks skip it.
- */
-export const LEGACY_REDIRECT_HANDLE = { legacyRedirect: true } as const;
-
 const legacyCommunityRedirect = (path: string): RouteObject => ({
   element: legacyCommunityElement,
   handle: LEGACY_REDIRECT_HANDLE,
@@ -329,8 +322,8 @@ export const legacyCommunityRoutes: RouteObject[] = [
 export const legacySettingsMarketplaceRedirects: RouteObject[] = [
   ['skill', MARKETPLACE_INSTALLED_SKILLS_PATH],
   ['skill/:sub', MARKETPLACE_INSTALLED_SKILLS_PATH],
-  ['connector', MARKETPLACE_CONNECTOR_PATH],
-  ['connector/:sub', MARKETPLACE_CONNECTOR_PATH],
+  ['connector', MARKETPLACE_INSTALLED_CONNECTORS_PATH],
+  ['connector/:sub', MARKETPLACE_INSTALLED_CONNECTORS_PATH],
 ].map(([path, to]) => ({
   element: <LegacyPathRedirect to={to} />,
   handle: LEGACY_REDIRECT_HANDLE,

@@ -740,8 +740,16 @@ describe('desktop router shared definition', () => {
           'skill/installed',
           'navigation.marketplaceInstalledSkills',
         ],
-        ['/marketplace/connector', 'connector', 'navigation.marketplaceConnectors'],
-        ['/acme/marketplace/connector', 'connector', 'navigation.marketplaceConnectors'],
+        [
+          '/marketplace/connector/installed',
+          'connector/installed',
+          'navigation.marketplaceConnectors',
+        ],
+        [
+          '/acme/marketplace/connector/installed',
+          'connector/installed',
+          'navigation.marketplaceConnectors',
+        ],
       ] as const) {
         const matches = matchRoutes(routes, url);
         const handle = matches?.at(-1)?.route.handle as {
@@ -759,7 +767,30 @@ describe('desktop router shared definition', () => {
       expect(matchRoutes(routes, '/marketplace/skill/some-skill')?.at(-1)?.route.path).toBe(
         'skill/:slug',
       );
-      expect(matchRoutes(routes, '/marketplace/skill')?.at(-2)?.route.path).toBe('skill');
+      // Discover pages: no category column layout, the Codex groups are the page.
+      expect(matchRoutes(routes, '/marketplace/skill')?.at(-1)?.route.path).toBe('skill');
+      const connectorDiscover = matchRoutes(routes, '/marketplace/connector')?.at(-1)?.route;
+      expect(connectorDiscover?.path).toBe('connector');
+      expect(
+        (connectorDiscover?.handle as { meta?: { titleKey?: string } } | undefined)?.meta?.titleKey,
+      ).toBe('navigation.marketplaceConnectors');
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s folds the MCP list into Connectors and keeps MCP detail pages',
+    (_, factory) => {
+      const routes = createMainAreaRoutes(factory);
+
+      for (const url of ['/marketplace/mcp', '/acme/marketplace/mcp']) {
+        const element = matchRoutes(routes, url)?.at(-1)?.route.element as
+          ReactElement<{ to: string }> | undefined;
+
+        expect(element?.type, url).toBe(LegacyPathRedirect);
+        expect(element?.props.to, url).toBe('/marketplace/connector');
+      }
+
+      expect(matchRoutes(routes, '/marketplace/mcp/notion')?.at(-1)?.route.path).toBe('mcp/:slug');
     },
   );
 
@@ -771,10 +802,10 @@ describe('desktop router shared definition', () => {
       for (const [url, to] of [
         ['/settings/skill', '/marketplace/skill/installed'],
         ['/settings/skill/sub', '/marketplace/skill/installed'],
-        ['/settings/connector', '/marketplace/connector'],
-        ['/settings/connector/sub', '/marketplace/connector'],
+        ['/settings/connector', '/marketplace/connector/installed'],
+        ['/settings/connector/sub', '/marketplace/connector/installed'],
         ['/acme/settings/skill', '/marketplace/skill/installed'],
-        ['/acme/settings/connector', '/marketplace/connector'],
+        ['/acme/settings/connector', '/marketplace/connector/installed'],
       ] as const) {
         const element = matchRoutes(routes, url)?.at(-1)?.route.element as
           ReactElement<{ to: string }> | undefined;

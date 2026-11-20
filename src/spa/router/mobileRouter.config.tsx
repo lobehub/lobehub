@@ -1,6 +1,6 @@
 'use client';
 
-import { BotIcon, Download, HomeIcon, Settings, ShapesIcon } from 'lucide-react';
+import { Blocks, BotIcon, Download, HomeIcon, Settings, ShapesIcon } from 'lucide-react';
 import type { RouteObject } from 'react-router';
 
 import {
@@ -23,6 +23,7 @@ import {
   legacyCommunityRoutes,
   legacySettingsMarketplaceRedirects,
   marketplaceManageRoutes,
+  marketplaceMcpListRedirect,
 } from '@/spa/router/marketplaceRoutes';
 import { mobileAgentRoute, mobileGroupRoute } from '@/spa/router/mobileAgentRoutes';
 import { mobileUnsupportedRoutes, mobileWorkspaceRoutes } from '@/spa/router/mobileWorkspaceRoutes';
@@ -119,9 +120,10 @@ export const sharedMainAreaChildren: RouteObject[] = [
       // Installed skills and connectors: second-level pages with the shell's
       // back header (the settings layout drew it before they moved here).
       ...overlayRoutes(marketplaceManageRoutes, {
-        'connector': withHandle({ mobileShellHeader: true }),
+        'connector/installed': withHandle({ mobileShellHeader: true }),
         'skill/installed': withHandle({ mobileShellHeader: true }),
       }),
+      marketplaceMcpListRedirect,
       // List routes (with ListLayout)
       {
         children: [
@@ -173,18 +175,14 @@ export const sharedMainAreaChildren: RouteObject[] = [
             path: 'provider',
           },
           {
-            children: [
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/community/(list)/mcp'),
-                  'Mobile > Discover > List > MCP',
-                ),
-                handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceMcp' }),
-                },
-                path: 'mcp',
-              },
-            ],
+            element: dynamicElement(
+              () => import('@/routes/(main)/community/(list)/connector'),
+              'Mobile > Discover > List > Connector',
+            ),
+            handle: {
+              meta: routeMeta({ icon: Blocks, titleKey: 'navigation.marketplaceConnectors' }),
+            },
+            path: 'connector',
           },
           {
             element: dynamicElement(

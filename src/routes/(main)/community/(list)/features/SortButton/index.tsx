@@ -17,6 +17,8 @@ import {
   SkillSorts,
 } from '@/types/discover';
 
+import { MARKETPLACE_CONNECTOR_TAB } from '../../../features/useNav';
+
 const SortButton = memo(() => {
   const { t } = useTranslation('discover');
   const pathname = usePathname();
@@ -28,7 +30,7 @@ const SortButton = memo(() => {
   };
 
   const items = useMemo<SortItem[]>(() => {
-    switch (activeTab) {
+    switch (activeTab as string) {
       case DiscoverTab.Assistants: {
         return [
           {
@@ -109,6 +111,8 @@ const SortButton = memo(() => {
           },
         ];
       }
+      // Connectors' Discover view lists the MCP catalog.
+      case MARKETPLACE_CONNECTOR_TAB:
       case DiscoverTab.Mcp: {
         return [
           {

@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { MARKETPLACE_CONNECTOR_PATH } from '@/features/Marketplace/paths';
 import { useDetailContext } from '@/features/MCPPluginDetail/DetailProvider';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
@@ -22,7 +23,7 @@ const Related = memo(() => {
           query: {
             category,
           },
-          url: '/marketplace/mcp',
+          url: MARKETPLACE_CONNECTOR_PATH,
         })}
       >
         {t('mcp.details.related.listTitle')}
