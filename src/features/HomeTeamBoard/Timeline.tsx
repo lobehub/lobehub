@@ -115,6 +115,7 @@ const styles = stylex.create({
     borderBlockStartWidth: 1,
     paddingBlock: 6,
   },
+  laneCompact: { paddingBlock: 2 },
   lanes: { position: 'relative' },
   meta: { color: cssVar.colorTextTertiary, fontSize: 12 },
   row: { height: 28 },
@@ -369,7 +370,10 @@ const Lane = ({
   const agentTitle = lane.title || meta?.title || t('team.agent.untitled');
 
   return (
-    <div {...stylex.props(styles.lane)} data-testid={'team-board-lane'}>
+    <div
+      {...stylex.props(styles.lane, compact && styles.laneCompact)}
+      data-testid={'team-board-lane'}
+    >
       <button
         aria-expanded={!collapsed}
         data-testid={'team-board-lane-toggle'}

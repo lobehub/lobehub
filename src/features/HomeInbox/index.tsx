@@ -13,6 +13,7 @@ import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
 import GroupBlock from '@/features/Home/components/GroupBlock';
 import { homeType } from '@/features/Home/components/homeType';
 import RailCard from '@/features/Home/components/RailCard';
+import { useHomeSpacing } from '@/features/Home/homeDensity';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
 // Direct module import, not the feature barrel: home must not pull the whole
 // acceptance workspace into its chunk for one hook.
@@ -25,6 +26,7 @@ import { useGoalStore } from '@/store/goal';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
+import { useDensityTokens } from '@/styles/density';
 
 import GoalsRailCard from './GoalsRailCard';
 import { filterHiddenWidgetSections } from './hiddenWidgets';
@@ -137,6 +139,8 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const isMain = variant === 'main';
   const showRailSections = ownsRailSections({ inlineRail, variant });
   const { t } = useTranslation('home');
+  const { contentGap } = useDensityTokens();
+  const { blockGap } = useHomeSpacing();
   const { t: tCommon } = useTranslation('common');
   const isLogin = useUserStore(authSelectors.isLogin);
   const myId = useUserStore(userProfileSelectors.userId);
@@ -265,7 +269,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   // "Needs you" section that may turn out empty). Recommendations keep their own.
   if (blockState === 'skeleton') {
     return (
-      <Flexbox gap={12}>
+      <Flexbox gap={contentGap}>
         <BriefCardSkeleton />
         <BriefCardSkeleton />
         <Recommendations variant={variant} />
@@ -320,7 +324,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
             label: t('inbox.needsYou.title'),
             loading: briefsRefreshing,
             node: (
-              <Flexbox gap={12}>
+              <Flexbox gap={contentGap}>
                 {needsYou.map((brief) => (
                   <InboxBriefCard brief={brief} key={brief.id} />
                 ))}
@@ -375,7 +379,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
         label: t('inbox.needsYou.title'),
         loading: briefsRefreshing,
         node: (
-          <Flexbox gap={12}>
+          <Flexbox gap={contentGap}>
             {needsYou.map((brief) => (
               <InboxBriefCard brief={brief} key={brief.id} />
             ))}
@@ -491,7 +495,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     if (isRail) {
       if (recommendationsVisible || usageCard)
         return (
-          <Flexbox gap={12}>
+          <Flexbox gap={contentGap}>
             {recommendationsVisible && <Recommendations variant={'rail'} />}
             {usageCard}
           </Flexbox>
@@ -506,7 +510,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
 
       if (!railFeedsSettled)
         return (
-          <Flexbox gap={12}>
+          <Flexbox gap={contentGap}>
             <BriefCardSkeleton />
             <BriefCardSkeleton />
           </Flexbox>
@@ -531,7 +535,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   }
 
   return (
-    <Flexbox gap={isRail ? 12 : 32}>
+    <Flexbox gap={isRail ? contentGap : blockGap}>
       {visibleSections.map(
         ({
           action,

@@ -79,6 +79,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline: ${ROW_PADDING_INLINE}px;
     transition: background ${cssVar.motionDurationFast};
 
+    html[data-density='compact'] & {
+      padding-block: 8px;
+    }
+
     &:hover {
       background: ${cssVar.colorFillQuaternary};
     }
