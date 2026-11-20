@@ -1,0 +1,66 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { listShareGrantableSkills } from './grantableSkills';
+
+const mocks = vi.hoisted(() => ({
+  getAgentVisibility: vi.fn(),
+  listCatalog: vi.fn(),
+  userSkillScope: vi.fn(),
+}));
+
+vi.mock('@lobechat/builtin-skills', () => ({ builtinSkills: [] }));
+vi.mock('@/database/models/agentSkill', () => ({
+  AgentSkillModel: vi.fn(() => ({ findAll: async () => ({ data: [] }) })),
+}));
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn(() => ({ getAgentVisibility: mocks.getAgentVisibility })),
+}));
+vi.mock('@/server/services/agentDocuments', () => ({
+  AgentDocumentsService: vi.fn(() => ({ getAgentSkills: async () => [] })),
+}));
+vi.mock('@/server/services/userSkill', () => ({
+  UserSkillService: vi.fn((...args: unknown[]) => {
+    mocks.userSkillScope(...args);
+    return { listCatalog: mocks.listCatalog };
+  }),
+}));
+
+const librarySkill = {
+  description: 'Summarize weekly notes',
+  identifier: 'user-skills:weekly',
+  name: 'weekly',
+};
+
+describe('listShareGrantableSkills', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.listCatalog.mockResolvedValue([librarySkill]);
+  });
+
+  it("lists the creator's skill library the Agent opted into, as a run does", async () => {
+    const skills = await listShareGrantableSkills({
+      agentConfig: { plugins: [{ identifier: librarySkill.identifier, mode: 'auto' }] },
+      agentId: 'agent-1',
+      db: {} as any,
+      userId: 'owner',
+    });
+
+    expect(skills.map((skill) => skill.identifier)).toContain(librarySkill.identifier);
+    expect(mocks.listCatalog).toHaveBeenCalledWith({ includeGenerated: false });
+  });
+
+  it("scopes a workspace Agent's library by the Agent's visibility", async () => {
+    mocks.getAgentVisibility.mockResolvedValue('public');
+
+    await listShareGrantableSkills({
+      agentConfig: { plugins: [] },
+      agentId: 'agent-1',
+      db: {} as any,
+      userId: 'owner',
+      workspaceId: 'ws-1',
+    });
+
+    expect(mocks.getAgentVisibility).toHaveBeenCalledWith('agent-1');
+    expect(mocks.userSkillScope).toHaveBeenCalledWith({}, 'owner', 'ws-1', 'public');
+  });
+});

@@ -7,9 +7,11 @@ import {
   getDisabledPluginIds,
 } from '@lobechat/types';
 
+import { AgentModel } from '@/database/models/agent';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import type { LobeChatDatabase } from '@/database/type';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { UserSkillService } from '@/server/services/userSkill';
 
 export interface ShareGrantableSkill {
   description: string;
@@ -44,6 +46,9 @@ interface GrantableSkillsInput {
  *   filesystem, and a visitor run never routes a device;
  * - `canExecuteOnDevice: false`, for the same reason.
  *
+ * The user's skill library is listed as a run lists it: its catalog without
+ * generated skills, and none at all for a workspace-public Agent.
+ *
  * Skills are NOT filtered to the agent's pinned set: a skill is on-demand by
  * default, so an unpinned skill is exactly the normal case. `manual` mode is
  * the one exception, and `assembleSkillPool` applies it from
@@ -60,17 +65,26 @@ export const listShareGrantableSkills = async ({
   workspaceId,
 }: GrantableSkillsInput): Promise<ShareGrantableSkill[]> => {
   const plugins = agentConfig?.plugins ?? undefined;
-  const [dbSkills, agentSkills] = await Promise.all([
+  const [dbSkills, agentSkills, userSkills] = await Promise.all([
     new AgentSkillModel(db, userId, workspaceId).findAll().then((result) => result.data),
     // A bundle-less agent is the common case and throws nothing; a genuine
     // failure here must not take the whole list down with it — the DB and
     // builtin skills are still grantable.
     new AgentDocumentsService(db, userId, workspaceId).getAgentSkills(agentId).catch(() => []),
+    (async () =>
+      new UserSkillService(
+        db,
+        userId,
+        workspaceId,
+        workspaceId
+          ? await new AgentModel(db, userId, workspaceId).getAgentVisibility(agentId)
+          : undefined,
+      ).listCatalog({ includeGenerated: false }))(),
   ]);
 
   const { skills } = assembleSkillPool(
     {
-      agentSkills: agentSkills.map((skill) => ({
+      agentSkills: [...agentSkills, ...userSkills].map((skill) => ({
         description: skill.description,
         identifier: skill.identifier,
         name: skill.name,
