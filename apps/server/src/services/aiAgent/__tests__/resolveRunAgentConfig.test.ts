@@ -52,7 +52,7 @@ describe('resolveRunAgentConfig', () => {
     vi.clearAllMocks();
     getPreference.mockResolvedValue({});
     isResourceAuthorOrAdmin.mockResolvedValue(false);
-    getInfoForAIGeneration.mockResolvedValue({ responseLanguage: 'en-US' });
+    getInfoForAIGeneration.mockResolvedValue({ preferredReplyLanguage: 'en-US' });
   });
 
   it('keeps a builtin runtime execution target over a saved member device override', async () => {
@@ -75,7 +75,7 @@ describe('resolveRunAgentConfig', () => {
 
   it('reads the reply language for the share visitor, not the owner, on a shared-agent run', async () => {
     getInfoForAIGeneration.mockImplementation(async (_db: unknown, userId: string) => ({
-      responseLanguage: userId === 'visitor-1' ? 'ja-JP' : 'en-US',
+      preferredReplyLanguage: userId === 'visitor-1' ? 'ja-JP' : 'en-US',
     }));
 
     const { agentConfig } = await resolveRunAgentConfig(
@@ -176,7 +176,7 @@ describe('Codex Task model overrides', () => {
     vi.clearAllMocks();
     getPreference.mockResolvedValue({});
     isResourceAuthorOrAdmin.mockResolvedValue(false);
-    getInfoForAIGeneration.mockResolvedValue({ responseLanguage: 'en-US' });
+    getInfoForAIGeneration.mockResolvedValue({ preferredReplyLanguage: 'en-US' });
   });
 
   it.each(['codex', undefined])(

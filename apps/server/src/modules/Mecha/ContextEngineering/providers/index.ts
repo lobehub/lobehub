@@ -270,7 +270,7 @@ export const createServerContextFactProviders = ({
 
     getUserInfo: async (targetUserId) => {
       const info = await UserModel.getInfoForAIGeneration(db, targetUserId ?? userId);
-      return { language: info.responseLanguage, username: info.userName };
+      return { language: info.preferredReplyLanguage, username: info.userName };
     },
 
     getWorkspaceContext: async (targetWorkspaceId) => {

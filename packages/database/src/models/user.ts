@@ -81,7 +81,10 @@ export type ListUsersForMemoryExtractorOptions = {
 export type ListUsersForHourlyMemoryExtractorOptions = ListUsersForMemoryExtractorOptions;
 
 export interface UserInfoForAIGeneration {
-  responseLanguage?: string;
+  /** Only a saved user choice may become a chat instruction. */
+  preferredReplyLanguage?: string;
+  /** Resolved locale for generators that require a concrete output language. */
+  responseLanguage: string;
   userName: string;
 }
 
@@ -1062,7 +1065,8 @@ export class UserModel {
     const general = user?.general as UserGeneralConfig | undefined;
 
     return {
-      responseLanguage: general?.responseLanguage || undefined,
+      preferredReplyLanguage: general?.responseLanguage || undefined,
+      responseLanguage: general?.responseLanguage || 'en-US',
       userName: user?.fullName || user?.firstName || 'User',
     };
   };

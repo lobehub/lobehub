@@ -308,7 +308,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     mockResolveTask.mockResolvedValue(null);
     mockToolState.enabledToolIds = [];
     mockGetInfoForAIGeneration.mockResolvedValue({
-      responseLanguage: 'en-US',
+      preferredReplyLanguage: 'en-US',
       userName: 'Test User',
     });
     mockGetModelMetadata.mockResolvedValue(undefined);
@@ -471,7 +471,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
 
   it('should pass user response language into web onboarding runtime systemRole', async () => {
     mockGetInfoForAIGeneration.mockResolvedValue({
-      responseLanguage: 'zh-CN',
+      preferredReplyLanguage: 'zh-CN',
       userName: 'Test User',
     });
     mockGetAgentConfig.mockResolvedValue({
