@@ -1,3 +1,4 @@
+import type { WorkspaceUserPreference } from '@lobechat/types';
 import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
@@ -26,6 +27,9 @@ export interface PersonalPinTarget {
   type: 'agent' | 'group';
   visibility?: 'private' | 'public' | null;
 }
+
+const isSameIds = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((id, i) => id === b[i]);
 
 type Setter = StoreSetter<HomeStore>;
 export const createSidebarUISlice = (set: Setter, get: () => HomeStore, _api?: unknown) =>
@@ -102,36 +106,52 @@ export class SidebarUIActionImpl {
   /**
    * Pin / unpin an Agent or chat group for the current member only, in the
    * merged workspace Agents section. The member's pin order lives in their
-   * `sidebarPinnedItemIds` preference (newest first); the shared column on a
-   * public row is the team pin and is left alone. A private row additionally
-   * keeps its own column in sync — only its creator can see it, earlier
-   * clients read it as the pin, and a rollback keeps showing it. Unpinning
-   * clears both places.
+   * `sidebarPinnedItemIds` preference (a new pin goes first); the shared
+   * column on a public row is the team pin and is left alone.
+   *
+   * - A team pin is only a recommendation: unpinning it records it in
+   *   `sidebarUnpinnedTeamItemIds` so it stays unpinned for this member, and
+   *   pinning it again clears that record.
+   * - A private row additionally keeps its own column in sync — only its
+   *   creator can see it, earlier clients read it as the pin, and a rollback
+   *   keeps showing it. Unpinning clears both places.
    */
   pinItemForMe = async (item: PersonalPinTarget, pinned: boolean): Promise<void> => {
     const userStore = getUserStoreState();
-    const current = userStore.workspaceUserPreference.sidebarPinnedItemIds ?? [];
+    const preference = userStore.workspaceUserPreference;
+    const current = preference.sidebarPinnedItemIds ?? [];
+    const currentUnpinnedTeam = preference.sidebarUnpinnedTeamItemIds ?? [];
     const isPrivate = item.visibility === 'private';
+    const isTeamPinned = !isPrivate && !!item.pinned;
     const writeColumn = (value: boolean) =>
       item.type === 'group' ? this.pinAgentGroup(item.id, value) : this.pinAgent(item.id, value);
 
     const nextIds = pinned
       ? [item.id, ...current.filter((id) => id !== item.id)].slice(0, MAX_SIDEBAR_PINNED_ITEMS)
       : current.filter((id) => id !== item.id);
-    const listChanged =
-      nextIds.length !== current.length || nextIds.some((id, i) => id !== current[i]);
+    const withoutItem = currentUnpinnedTeam.filter((id) => id !== item.id);
+    const nextUnpinnedTeam =
+      !pinned && isTeamPinned
+        ? [item.id, ...withoutItem].slice(0, MAX_SIDEBAR_PINNED_ITEMS)
+        : withoutItem;
 
-    if (listChanged) {
-      await userStore.updateWorkspaceUserPreference({ sidebarPinnedItemIds: nextIds });
-    }
+    const patch: Partial<WorkspaceUserPreference> = {};
+    if (!isSameIds(nextIds, current)) patch.sidebarPinnedItemIds = nextIds;
+    if (!isSameIds(nextUnpinnedTeam, currentUnpinnedTeam))
+      patch.sidebarUnpinnedTeamItemIds = nextUnpinnedTeam;
+
+    if (Object.keys(patch).length > 0) await userStore.updateWorkspaceUserPreference(patch);
     if (isPrivate && !!item.pinned !== pinned) await writeColumn(pinned);
   };
 
   /**
-   * Reorder the member's own pins in the merged workspace Agents section.
-   * `ids` is the new order of the rows the sidebar shows; ids in the stored
-   * list that are not shown right now (hidden or dangling) keep their place
-   * after them, so a reorder never unpins anything.
+   * Reorder the member's pinned list in the merged workspace Agents section —
+   * their own pins and the team pins they kept alike, without touching the
+   * team order. `ids` is the new order of the rows the sidebar shows; ids in
+   * the stored list that are not shown right now (hidden or dangling) keep
+   * their place after them, so a reorder never unpins anything. The list is
+   * marked as arranged by the member, so a pin added for the team later is
+   * listed first instead of after their pins.
    */
   reorderMyPinned = async (ids: string[]): Promise<void> => {
     // The server merges each preference write into what it reads, so two quick
@@ -145,16 +165,19 @@ export class SidebarUIActionImpl {
       .then(async () => {
         if (cacheScope.get() !== scope) return;
         const userStore = getUserStoreState();
-        const current = userStore.workspaceUserPreference.sidebarPinnedItemIds ?? [];
+        const preference = userStore.workspaceUserPreference;
+        const current = preference.sidebarPinnedItemIds ?? [];
         const shown = new Set(ids);
         const nextIds = [...ids, ...current.filter((id) => !shown.has(id))].slice(
           0,
           MAX_SIDEBAR_PINNED_ITEMS,
         );
-        if (nextIds.length === current.length && nextIds.every((id, i) => id === current[i]))
-          return;
+        if (isSameIds(nextIds, current) && preference.sidebarPinnedOrderCustomized) return;
 
-        await userStore.updateWorkspaceUserPreference({ sidebarPinnedItemIds: nextIds });
+        await userStore.updateWorkspaceUserPreference({
+          sidebarPinnedItemIds: nextIds,
+          sidebarPinnedOrderCustomized: true,
+        });
       });
     this.#myPinnedQueue = operation;
     await operation;

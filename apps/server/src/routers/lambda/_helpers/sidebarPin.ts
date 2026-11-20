@@ -16,8 +16,8 @@ interface TeamPinCtx {
 }
 
 /**
- * In a workspace, `pinned` on a PUBLIC Agent / chat group is the team pin every
- * member sees in the fixed section of the Agents sidebar, so only roles holding
+ * In a workspace, `pinned` on a PUBLIC Agent / chat group is the team pin
+ * recommended to every member in the Agents sidebar, so only roles holding
  * the all-resource `agent:update` grant (owner, admin) may write it. Members
  * pin for themselves through `workspace_user_settings.sidebarPinnedItemIds`.
  * Personal mode and private rows (only their creator can see them) are not

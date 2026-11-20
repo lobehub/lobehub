@@ -12,11 +12,17 @@ describe('resolveSidebarPinState', () => {
     ).toEqual({ isMyPinned: true, isPrivate: false, isTeamPinned: false, isWorkspace: false });
   });
 
-  it('workspace public row: the column is the team pin, the preference is mine', () => {
+  it('workspace public row: the column is the team pin, pinned for me until I unpin it', () => {
     expect(
       resolveSidebarPinState(
         { id: 'a', pinned: true, visibility: 'public' },
         { isWorkspace: true, myPinnedIds: [] },
+      ),
+    ).toMatchObject({ isMyPinned: true, isTeamPinned: true });
+    expect(
+      resolveSidebarPinState(
+        { id: 'a', pinned: true, visibility: 'public' },
+        { isWorkspace: true, myPinnedIds: [], unpinnedTeamIds: ['a'] },
       ),
     ).toMatchObject({ isMyPinned: false, isTeamPinned: true });
     expect(

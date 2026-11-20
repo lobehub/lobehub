@@ -120,15 +120,23 @@ export interface WorkspaceUserPreference {
    */
   sidebarHiddenGroupIds?: string[];
   /**
-   * Agents / chat groups this member pinned for themselves in the merged
-   * workspace "Agents" section (newest first). Personal: it never changes
-   * another member's sidebar. Team pins — the ones every member sees — stay on
-   * the shared `agents.pinned` / `chat_groups.pinned` columns, which only
-   * workspace owners and admins may write for public rows. A private row's
-   * own `pinned` column is read as this member's pin too, since only its
-   * creator can see it.
+   * Agents / chat groups pinned in this member's merged workspace "Agents"
+   * section, in the member's own order. Personal: it never changes another
+   * member's sidebar. It holds the member's own pins and, once they rearrange
+   * the pinned list (`sidebarPinnedOrderCustomized`), the team pins they kept
+   * as well. Team pins are only a recommendation: the shared
+   * `agents.pinned` / `chat_groups.pinned` columns, which only workspace
+   * owners and admins may write for public rows. A private row's own `pinned`
+   * column is read as this member's pin too, since only its creator can see it.
    */
   sidebarPinnedItemIds?: string[];
+  /**
+   * Whether this member rearranged their pinned list. Until then team pins the
+   * member has not placed follow their own pins in the team order; afterwards
+   * a team pin not in `sidebarPinnedItemIds` is a new recommendation and is
+   * listed first.
+   */
+  sidebarPinnedOrderCustomized?: boolean;
   /**
    * Per-member pins for sidebar items.
    *
@@ -137,6 +145,12 @@ export interface WorkspaceUserPreference {
    *   ignored; nothing reads or writes this map.
    */
   sidebarPinnedOverrides?: Record<string /* itemId */, boolean>;
+  /**
+   * Team pins this member unpinned for themselves. They stay unpinned for
+   * this member, even when an owner/admin unpins and pins them again, until
+   * the member pins them again.
+   */
+  sidebarUnpinnedTeamItemIds?: string[];
   /**
    * Topic sidebars list only the topics this member created.
    *

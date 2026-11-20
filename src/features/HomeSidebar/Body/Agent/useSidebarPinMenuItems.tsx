@@ -25,9 +25,9 @@ const isForbidden = (error: unknown) =>
 /**
  * Workspace pin entries for an Agent / chat group row menu:
  *
- * - "Pin" / "Unpin" — the member's own pin, available to every role. Offered
- *   on a team-pinned row only to undo an earlier personal pin, since the team
- *   section already keeps it on top.
+ * - "Pin" / "Unpin" — the member's own pin, available to every role and on
+ *   every row. A team pin is only a recommendation, so a member can unpin it
+ *   for themselves (and pin it again).
  * - "Pin for team" / "Unpin for team" — writes the shared column every member
  *   sees. Owner/admin only (`manage_settings`, mirrored by the server's
  *   `agent:update:all` check) and never on private rows, which nobody else
@@ -57,10 +57,8 @@ export const useSidebarPinMenuItems = ({
   const menuItems = useMemo<DropdownItem[]>(() => {
     if (!isWorkspace) return [];
 
-    const items: DropdownItem[] = [];
-
-    if (!isTeamPinned || isMyPinned) {
-      items.push({
+    const items: DropdownItem[] = [
+      {
         icon: <Icon icon={isMyPinned ? PinOff : Pin} />,
         key: 'pin',
         label: t(isMyPinned ? 'pinOff' : 'pin'),
@@ -72,8 +70,8 @@ export const useSidebarPinMenuItems = ({
             toast.error(t('operationFailed', { ns: 'common' }));
           }
         },
-      } as DropdownItem);
-    }
+      } as DropdownItem,
+    ];
 
     if (canManageTeamPins && !isPrivate) {
       items.push({
@@ -112,5 +110,5 @@ export const useSidebarPinMenuItems = ({
     visibility,
   ]);
 
-  return { isMyPinned, isTeamPinned, menuItems };
+  return { menuItems };
 };

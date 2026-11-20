@@ -22,6 +22,7 @@ import { useHomeStore } from '@/store/home';
 import { useAgentModal } from '../../ModalProvider';
 import { useSidebarPinState } from '../../useSidebarPinState';
 import Actions from '../Item/Actions';
+import TeamPinIcon from '../TeamPinIcon';
 import { usePreservedAgentUrl } from '../usePreservedAgentUrl';
 import { useAgentDropdownMenu } from './useDropdownMenu';
 
@@ -145,22 +146,22 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
   // In a workspace the row's column is the team pin (public) or the creator's
   // own pin (private); the member's own pins live in their preference.
   const { isMyPinned, isPrivate, isTeamPinned } = useSidebarPinState({ id, pinned, visibility });
-  const showPinIcon = isTeamPinned || isMyPinned;
 
   // Memoize pin icon
-  // The lock sits with the pin in the fixed trailing slot rather than after
+  // The lock and team marks sit with the pin in the fixed trailing slot rather than after
   // the title, where a long name or role tag would truncate it out of view.
   const pinIcon = useMemo(
     () =>
-      showPinIcon || isPrivate ? (
+      isMyPinned || isPrivate || isTeamPinned ? (
         <>
           {isPrivate && <PrivateLockIcon />}
-          {showPinIcon && (
+          {isTeamPinned && <TeamPinIcon />}
+          {isMyPinned && (
             <ActionIcon icon={PinIcon} size={12} style={{ opacity: 0.5, pointerEvents: 'none' }} />
           )}
         </>
       ) : undefined,
-    [isPrivate, showPinIcon],
+    [isMyPinned, isPrivate, isTeamPinned],
   );
 
   // Memoize avatar icon (show loader when updating, running spinner or unread badge at bottom-right)

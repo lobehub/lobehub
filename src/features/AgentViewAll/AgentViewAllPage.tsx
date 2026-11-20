@@ -514,10 +514,10 @@ const AgentViewAllPage = memo(() => {
         key={item.id}
         owner={showAuthor && item.userId ? authorByUserId.get(item.userId) : undefined}
         sidebarHidden={!isListed(item)}
-        onToggleSidebar={workspaceSidebarIds?.fixed.has(item.id) ? undefined : handleToggleSidebar}
+        onToggleSidebar={handleToggleSidebar}
       />
     ),
-    [showAuthor, authorByUserId, handleToggleSidebar, isListed, workspaceSidebarIds],
+    [showAuthor, authorByUserId, handleToggleSidebar, isListed],
   );
 
   const renderRow = useCallback(
@@ -528,10 +528,10 @@ const AgentViewAllPage = memo(() => {
         key={item.id}
         showAuthor={showAuthor}
         sidebarHidden={!isListed(item)}
-        onToggleSidebar={workspaceSidebarIds?.fixed.has(item.id) ? undefined : handleToggleSidebar}
+        onToggleSidebar={handleToggleSidebar}
       />
     ),
-    [showAuthor, authorByUserId, handleToggleSidebar, isListed, workspaceSidebarIds],
+    [showAuthor, authorByUserId, handleToggleSidebar, isListed],
   );
 
   const { allowed: canCreate, reason: createBlockedReason } = usePermission('create_content');
@@ -598,11 +598,7 @@ const AgentViewAllPage = memo(() => {
       >
         {!isInit && !keyword.trim() && <AgentViewAllSidebarSectionSkeleton />}
         {isInit && !keyword.trim() && sidebarItems.length > 0 && (
-          <SidebarAgentsSection
-            fixedIds={workspaceSidebarIds?.fixed}
-            items={sidebarItems}
-            onToggleSidebar={handleToggleSidebar}
-          />
+          <SidebarAgentsSection items={sidebarItems} onToggleSidebar={handleToggleSidebar} />
         )}
         <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
           {/* The workspace/private split only exists inside a workspace;
