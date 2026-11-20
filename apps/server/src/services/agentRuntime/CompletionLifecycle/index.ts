@@ -18,6 +18,7 @@ import {
 } from '@/server/services/verify';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
+import { isSuccessLikeCompletionReason } from '../completionReason';
 import { CriticalHookDeliveryError, hookDispatcher } from '../hooks';
 import {
   markInterruptedTurn,
@@ -42,6 +43,7 @@ import type {
   TopicRunSettledHandler,
 } from './types';
 
+export { isSuccessLikeCompletionReason } from '../completionReason';
 export { CriticalAgentInterventionPersistenceError } from './intervention';
 export {
   extractTextFromMessage,
@@ -58,23 +60,9 @@ export type {
 
 const log = debug('lobe-server:completion-lifecycle');
 
-/**
- * Terminal reasons this lifecycle treats as a successful completion: the run
- * produced a deliverable, even when it was stopped by a step/cost cap rather
- * than finishing naturally. `persistCompletion` stores all three with
- * status='done', and success-side effects (assistant-content recovery,
- * file-Work registration) must cover the capped reasons too — gating them on
- * `reason === 'done'` alone silently drops capped runs' artifacts.
- */
 /** Terminal reasons after which the topic's agent may be woken again. */
 const isTopicRunSettledReason = (reason: string) =>
   reason !== 'interrupted' && reason !== 'waiting_for_human' && reason !== 'waiting_for_async_tool';
-
-export const isSuccessLikeCompletionReason = (reason: string): boolean =>
-  reason === 'done' ||
-  reason === 'max_steps' ||
-  reason === 'cost_limit' ||
-  reason === 'tool_call_repeat_limit';
 
 /**
  * Owns everything that happens once an operation reaches a terminal state:

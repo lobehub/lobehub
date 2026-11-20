@@ -13,6 +13,7 @@ import { recomputeTopicUsage } from '@/database/models/topicUsage';
 import { buildFinalSnapshotKey } from '@/server/modules/AgentTracing';
 
 import { formatErrorForMetadata } from '../AgentRuntimeService/utils';
+import { isCappedCompletionReason } from '../completionReason';
 import type { CompletionLifecycleDeps } from './types';
 
 const log = debug('lobe-server:completion-lifecycle');
@@ -151,9 +152,7 @@ export async function persistCompletion(
 ): Promise<boolean> {
   const completionReason: any = settledAsAbandoned
     ? 'lease_expired'
-    : reason === 'max_steps' ||
-        reason === 'cost_limit' ||
-        reason === 'tool_call_repeat_limit' ||
+    : isCappedCompletionReason(reason) ||
         reason === 'waiting_for_human' ||
         reason === 'waiting_for_async_tool' ||
         reason === 'waiting_for_client'

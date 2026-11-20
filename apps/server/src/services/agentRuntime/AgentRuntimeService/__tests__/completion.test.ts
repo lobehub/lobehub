@@ -169,6 +169,20 @@ describe('AgentRuntimeService', () => {
       ).toBe('interrupted');
     });
 
+    // T-14103: consecutive turns naming tools that do not exist end the run
+    // gracefully as `done`; without its own reason it could not be counted.
+    it('should name a run stopped for calling tools that do not exist', () => {
+      expect(reasonFor({ status: 'done', stepCount: 8, stoppedByUnresolvedToolNames: true })).toBe(
+        'tool_name_unresolved',
+      );
+    });
+
+    it('should let a real failure outrank the unresolved-tool marker', () => {
+      expect(reasonFor({ status: 'error', stepCount: 8, stoppedByUnresolvedToolNames: true })).toBe(
+        'error',
+      );
+    });
+
     it('should ignore a guard that counted repeats without ever stopping', () => {
       expect(
         reasonFor({ status: 'done', stepCount: 3, toolCallRepeatGuard: { counts: { sig: 4 } } }),
