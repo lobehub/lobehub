@@ -16,6 +16,7 @@ import {
   type ToolManifestSettings,
 } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
+import { connectMcpWithRetry, McpEndpointUnreachableError } from '@lobechat/utils/mcpConnectError';
 import { getMcpServerDescription } from '@lobechat/utils/mcpServerDescription';
 import { type DeploymentOption } from '@lobehub/market-sdk';
 import { ProtocolError, SdkError, SdkErrorCode } from '@modelcontextprotocol/client';
@@ -495,12 +496,37 @@ export class MCPService {
     const connection = this.getConnectionLogMetadata(params);
     log(`No cached client found, Initializing new client.`);
     try {
-      const client = new MCPClient(params, { mcpApps, mcpEvents });
-      await client.initialize({
-        onProgress: (progress) => {
-          log(`New client initializing... ${progress.progress}/${progress.total}`);
-        },
-      }); // Initialization logic should be within MCPClient
+      const open = async () => {
+        const client = new MCPClient(params, { mcpApps, mcpEvents });
+        try {
+          await client.initialize({
+            onProgress: (progress) => {
+              log(`New client initializing... ${progress.progress}/${progress.total}`);
+            },
+          }); // Initialization logic should be within MCPClient
+        } catch (error) {
+          // Release the failed session; a cleanup failure must not hide why it failed
+          try {
+            await client.disconnect();
+          } catch {
+            // ignored: the connect error below is the one to report
+          }
+          throw error;
+        }
+        return client;
+      };
+      // An unreachable HTTP endpoint is retried once on a fresh session and
+      // then reported with its cause, endpoint and retryability
+      // (McpEndpointUnreachableError) rather than a bare "fetch failed".
+      const client =
+        params.type === 'http'
+          ? await connectMcpWithRetry(open, {
+              endpoint: params.url,
+              onRetry: (failure, attempt) =>
+                log('MCP server unreachable (%s, attempt %d), retrying', failure.reason, attempt),
+              via: 'the LobeHub server',
+            })
+          : await open();
       this.clients.set(key, client);
       log('New MCP client initialized and cached: %O', connection);
       return client;
@@ -510,6 +536,17 @@ export class MCPService {
 
       // Preserve complete error information, especially detailed stderr output
       const errorMessage = error instanceof Error ? error.message : String(error);
+
+      // Kept as the cause, so tool execution can return its code and details.
+      // Not a 500: like CONNECTION_FAILED / INITIALIZATION_TIMEOUT, the upstream
+      // server is unavailable, not this one (see toMCPConnectionTRPCError).
+      if (McpEndpointUnreachableError.isInstance(error)) {
+        throw new TRPCError({
+          cause: error,
+          code: error.details.reason === 'timeout' ? 'TIMEOUT' : 'SERVICE_UNAVAILABLE',
+          message: errorMessage,
+        });
+      }
 
       if (typeof error === 'object' && !!error && 'data' in error) {
         throw toMCPConnectionTRPCError(error, errorMessage);

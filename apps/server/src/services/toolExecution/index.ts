@@ -1,6 +1,7 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { DEFAULT_TOOL_RESULT_MAX_LENGTH, truncateToolResult } from '@lobechat/prompts/toolResult';
 import { type ChatToolPayload, type DeviceClient } from '@lobechat/types';
+import { findMcpEndpointUnreachableError } from '@lobechat/utils/mcpConnectError';
 import { isDeviceOnlyMcpEndpoint, shouldConnectViaDevice } from '@lobechat/utils/mcpEndpoint';
 import debug from 'debug';
 
@@ -511,6 +512,21 @@ export class ToolExecutionService {
         return {
           content: message,
           error: { code: 'MCP_SSRF_BLOCKED', message },
+          success: false,
+        };
+      }
+      // The server could not reach the endpoint: a network verdict with its own
+      // code, cause, endpoint and retryability (not a routing one such as
+      // MCP_DEVICE_UNAVAILABLE, where no connection was attempted at all).
+      // `kind: 'stop'`: the client already retried once on a fresh session, so
+      // the runtime does not replay the call on its own (a probe timeout would
+      // double the wait); `retryable` and the content tell the model whether a
+      // later retry can help.
+      const unreachable = findMcpEndpointUnreachableError(error);
+      if (unreachable) {
+        return {
+          content: unreachable.message,
+          error: { ...unreachable.details, kind: 'stop', message: unreachable.message },
           success: false,
         };
       }

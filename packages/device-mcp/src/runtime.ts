@@ -4,6 +4,7 @@ import {
   lacksUiResourceMeta,
   withListingUiMeta,
 } from '@lobechat/const/mcpApp';
+import { connectMcpWithRetry } from '@lobechat/utils/mcpConnectError';
 
 import type { MCPClient } from './client';
 import {
@@ -141,13 +142,42 @@ export class DeviceMcpRuntime {
   /** A fresh, unpooled session. The caller owns it and must disconnect it. */
   async createClient(params: MCPClientParams, { mcpApps = false }: McpSessionOptions = {}) {
     const { MCPClient } = await loadMcpClient();
-    const client = new MCPClient(params, {
-      clientName: this.options.clientName,
-      mcpApps,
-      toolTimeoutMs: this.options.toolTimeoutMs,
+    const open = async () => {
+      const client = new MCPClient(params, {
+        clientName: this.options.clientName,
+        mcpApps,
+        toolTimeoutMs: this.options.toolTimeoutMs,
+      });
+      try {
+        await client.initialize();
+      } catch (error) {
+        // Release the failed session; a cleanup failure must not hide why it failed
+        try {
+          await client.disconnect();
+        } catch {
+          // ignored: the connect error below is the one to report
+        }
+        throw error;
+      }
+      return client;
+    };
+    if (params.type !== 'http') return open();
+
+    // An HTTP server this device cannot reach is reported with its cause,
+    // endpoint, probe timeout and retryability instead of the SDK's bare
+    // "Version negotiation probe failed: fetch failed", after one retry on a
+    // fresh session when the cause can clear by itself (refused, timeout, …).
+    // No request reached the server, so the retry cannot repeat a tool call.
+    return connectMcpWithRetry(open, {
+      endpoint: params.url,
+      onRetry: (failure, attempt) =>
+        this.logger.warn('MCP server unreachable, retrying on a fresh session:', {
+          attempt,
+          causeCode: failure.causeCode,
+          reason: failure.reason,
+        }),
+      via: 'this device',
     });
-    await client.initialize();
-    return client;
   }
 
   /**

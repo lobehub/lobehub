@@ -7,6 +7,7 @@ import {
   isMcpToolVisibleTo,
   resolveMcpUiToolMeta,
 } from '@lobechat/const/mcpApp';
+import { mcpVersionNegotiation } from '@lobechat/utils/mcpConnectError';
 import {
   installMcpResultCompat,
   type McpResultCompat,
@@ -422,7 +423,8 @@ export class MCPClient {
           },
         }),
         // Do not add a probe subprocess/timeout to stdio installations or calls.
-        versionNegotiation: { mode: params.type === 'http' ? 'auto' : 'legacy' },
+        // HTTP probes are bounded (MCP_CONNECT_PROBE_TIMEOUT_MS), not the SDK's 60 s default.
+        versionNegotiation: mcpVersionNegotiation(params.type),
         inputRequired: { autoFulfill: false },
       },
     );

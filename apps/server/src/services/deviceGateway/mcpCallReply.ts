@@ -1,5 +1,10 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import type { DeviceToolCallResult } from '@lobechat/device-gateway-client';
+import {
+  MCP_ENDPOINT_UNREACHABLE,
+  mcpEndpointUnreachableMessage,
+  parseMcpEndpointUnreachable,
+} from '@lobechat/utils/mcpConnectError';
 
 /** Code of a tunneled MCP call answered by a device client too old to run MCP calls. */
 export const MCP_DEVICE_CLIENT_OUTDATED = 'MCP_DEVICE_CLIENT_OUTDATED';
@@ -25,11 +30,28 @@ export const mcpDeviceClientOutdatedMessage = (identifier: string, apiName: stri
  * client.
  */
 export const classifyMcpCallReply = (
-  call: { apiName: string; identifier: string },
+  call: { apiName: string; identifier: string; params?: { type?: string; url?: string } },
   result: DeviceToolCallResult,
 ): DeviceToolCallResult => {
   if (result.success) return result;
   const reply = (result.error || result.content || '').trim();
+
+  // The device could not reach the MCP server. A current client says so with
+  // the cause, endpoint and retryability; an older one forwards the SDK's bare
+  // "Version negotiation probe failed: fetch failed", and only this side knows
+  // which endpoint that was.
+  const unreachable = parseMcpEndpointUnreachable(reply, {
+    endpoint: call.params?.type === 'http' ? call.params.url : undefined,
+    via: 'the device',
+  });
+  if (unreachable) {
+    return {
+      content: mcpEndpointUnreachableMessage(unreachable),
+      error: MCP_ENDPOINT_UNREACHABLE,
+      success: false,
+    };
+  }
+
   if (reply !== legacyUnknownToolReply(call.apiName)) return result;
   return {
     content: mcpDeviceClientOutdatedMessage(call.identifier, call.apiName),
@@ -39,7 +61,12 @@ export const classifyMcpCallReply = (
 };
 
 /** The structured error of a failed tunneled MCP call that carries no `errorData`. */
-export const mcpDeviceCallError = (result: DeviceToolCallResult) =>
-  result.error === MCP_DEVICE_CLIENT_OUTDATED
-    ? { code: MCP_DEVICE_CLIENT_OUTDATED, message: result.content }
-    : { code: MCP_DEVICE_EXECUTION_ERROR, message: result.error || result.content };
+export const mcpDeviceCallError = (result: DeviceToolCallResult) => {
+  if (result.error === MCP_DEVICE_CLIENT_OUTDATED)
+    return { code: MCP_DEVICE_CLIENT_OUTDATED, message: result.content };
+  if (result.error === MCP_ENDPOINT_UNREACHABLE) {
+    const details = parseMcpEndpointUnreachable(result.content);
+    if (details) return { ...details, message: result.content };
+  }
+  return { code: MCP_DEVICE_EXECUTION_ERROR, message: result.error || result.content };
+};

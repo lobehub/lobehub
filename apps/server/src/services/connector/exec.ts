@@ -2,6 +2,7 @@ import { hasCallableMcpEndpoint, isMarketplaceInstallRunnable } from '@lobechat/
 import { getMcpServerFingerprint, isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { getDisabledPluginIds, needsConnectorReauthorization } from '@lobechat/types';
+import { findMcpEndpointUnreachableError } from '@lobechat/utils/mcpConnectError';
 import {
   connectorDeviceBinding,
   connectorMcpEndpoint,
@@ -460,6 +461,12 @@ const runConnectorTool = async (
         }),
         'AUTHORIZATION_ERROR',
       );
+    const unreachable = findMcpEndpointUnreachableError(error);
+    if (unreachable)
+      return {
+        ...failedToolResult(unreachable.message, unreachable.details.code),
+        error: { ...unreachable.details, message: unreachable.message },
+      };
     throw error;
   }
 };
