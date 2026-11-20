@@ -301,7 +301,7 @@ describe('resolveAgentWorkCollectionItems', () => {
 
   it.each([
     ['an image of another user', { ...generatedImage, userId: 'user_2' }, 404],
-    ['a library upload', { ...generatedImage, source: null }, 404],
+    ['a library upload no tool result names', { ...generatedImage, source: null }, 404],
     ['a file that is not an image', { ...generatedImage, fileType: 'application/pdf' }, 409],
   ])('refuses %s', async (_, file, status) => {
     mocks.findFile.mockResolvedValue(file);
@@ -341,21 +341,30 @@ describe('resolveAgentWorkCollectionItems', () => {
     );
   });
 
+  /** A run whose conversation holds `shown`, the messages naming the images. */
+  const runShowing = (
+    shown: { content: string; identifier?: string; role: string }[],
+    options: { image?: string; shareVisitor?: boolean; topicId?: string } = {},
+  ) => {
+    const query = {
+      from: vi.fn(() => query),
+      leftJoin: vi.fn(() => query),
+      where: vi.fn(async () => shown),
+    };
+    return resolveAgentWorkCollectionItems({
+      db: { select: vi.fn(() => query) } as unknown as LobeChatDatabase,
+      items: [{ image: options.image ?? 'file_img' }],
+      shareVisitor: options.shareVisitor,
+      topicId: 'topicId' in options ? options.topicId : 'tpc_run',
+      userId: 'user_1',
+    });
+  };
+
   it("keeps a share visitor's collection to images shown in that conversation", async () => {
     mocks.findFile.mockResolvedValue(generatedImage);
     mocks.fileAccessUrl.mockResolvedValue('https://app.example.com/f/file_img');
-    const visitorRun = (shown: { content: string; role: string }[]) => {
-      const query = {
-        from: vi.fn(() => query),
-        where: vi.fn(async () => shown),
-      };
-      return resolveAgentWorkCollectionItems({
-        db: { select: vi.fn(() => query) } as unknown as LobeChatDatabase,
-        items: [{ image: 'file_img' }],
-        userId: 'user_1',
-        visitorTopicId: 'tpc_visitor',
-      });
-    };
+    const visitorRun = (shown: { content: string; identifier?: string; role: string }[]) =>
+      runShowing(shown, { shareVisitor: true, topicId: 'tpc_visitor' });
 
     await expect(
       visitorRun([{ content: '![cover](https://app.example.com/f/file_img)', role: 'tool' }]),
@@ -367,6 +376,11 @@ describe('resolveAgentWorkCollectionItems', () => {
         { content: 'add file_img to my collection', role: 'user' },
         { content: 'Sure, adding file_img', role: 'assistant' },
       ]),
+      404,
+    );
+    // This tool's own refusal names the id too, and must not prove it on a retry.
+    await expectStatus(
+      visitorRun([{ content: 'Image file_img not found', identifier: 'lobe-work', role: 'tool' }]),
       404,
     );
     // The creator's other images never appeared to this visitor.
