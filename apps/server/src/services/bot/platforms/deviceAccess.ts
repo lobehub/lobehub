@@ -6,17 +6,19 @@ import type { FieldSchema } from './types';
  *
  * - `owner` (default): only the sender whose ID equals `settings.userId`.
  * - `allowlist`: the owner, plus the user IDs in `deviceAllowFrom`.
+ * - `channel`: the owner anywhere, plus everyone in the channels listed in
+ *   `deviceChannelAllowFrom`. Only platforms with group chat offer it.
  *
  * Kept apart from `allowFrom`: being allowed to talk to the bot is not being
  * trusted with the owner's machine, so neither list implies the other.
  */
-export type DevicePolicy = 'allowlist' | 'owner';
+export type DevicePolicy = 'allowlist' | 'channel' | 'owner';
 
 export const devicePolicyField: FieldSchema = {
   key: 'devicePolicy',
   default: 'owner',
   description: 'channel.devicePolicyHint',
-  enum: ['owner', 'allowlist'],
+  enum: ['owner', 'allowlist', 'channel'],
   label: 'channel.devicePolicy',
   type: 'string',
 };
@@ -126,12 +128,44 @@ export const extractDeviceAllowlist = (
  * unrestricted, so bots saved before this setting existed keep their behavior.
  * An `allowlist` with no entries restricts every channel (fail-closed, like
  * `groupAllowFrom`).
+ *
+ * Under `devicePolicy: 'channel'` the list grants access instead of limiting
+ * it (`extractDeviceChannelGrantlist`), so no restriction applies.
  */
 export const extractDeviceChannelAllowlist = (
   settings: Record<string, unknown> | null | undefined,
 ): string[] | undefined => {
+  if (settings?.devicePolicy === 'channel') return undefined;
   if (settings?.deviceChannelPolicy !== 'allowlist') return undefined;
   return parseIdList(settings.deviceChannelAllowFrom);
+};
+
+/**
+ * The channel IDs whose members may all use the owner's devices
+ * (`devicePolicy: 'channel'`), or `undefined` under any other policy. An empty
+ * list grants nobody, leaving only the owner.
+ */
+export const extractDeviceChannelGrantlist = (
+  settings: Record<string, unknown> | null | undefined,
+): string[] | undefined => {
+  if (settings?.devicePolicy !== 'channel') return undefined;
+  return parseIdList(settings.deviceChannelAllowFrom);
+};
+
+/**
+ * Whether a conversation sits in one of `channelList`. DMs never match: a DM is
+ * not a channel. `candidateChannelIds` are the same raw IDs the group policy
+ * matches (`extractChatId` plus `extraGroupAllowlistChannels`), so a Discord
+ * reply thread counts as its parent channel.
+ */
+const isInDeviceChannels = (params: {
+  candidateChannelIds: ReadonlyArray<string | undefined>;
+  channelList: string[];
+  isDM: boolean;
+}): boolean => {
+  const { candidateChannelIds, channelList, isDM } = params;
+  if (isDM) return false;
+  return candidateChannelIds.some((id) => !!id && channelList.includes(id));
 };
 
 /**
@@ -150,5 +184,20 @@ export const isDeviceChannelRestricted = (params: {
 }): boolean => {
   const { candidateChannelIds, channelAllowlist, isDM } = params;
   if (!channelAllowlist || isDM) return false;
-  return !candidateChannelIds.some((id) => !!id && channelAllowlist.includes(id));
+  return !isInDeviceChannels({ candidateChannelIds, channelList: channelAllowlist, isDM });
+};
+
+/**
+ * Whether everyone in the conversation may use the owner's devices because it
+ * sits in a channel the owner granted (`devicePolicy: 'channel'`). DMs are
+ * never granted; there only the owner may use the devices.
+ */
+export const isDeviceChannelGranted = (params: {
+  candidateChannelIds: ReadonlyArray<string | undefined>;
+  channelGrantlist: string[] | undefined;
+  isDM: boolean;
+}): boolean => {
+  const { candidateChannelIds, channelGrantlist, isDM } = params;
+  if (!channelGrantlist) return false;
+  return isInDeviceChannels({ candidateChannelIds, channelList: channelGrantlist, isDM });
 };

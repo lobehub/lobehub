@@ -37,6 +37,8 @@ import {
 import {
   extractDeviceAllowlist,
   extractDeviceChannelAllowlist,
+  extractDeviceChannelGrantlist,
+  isDeviceChannelGranted,
   isDeviceChannelRestricted,
 } from '../platforms/deviceAccess';
 import { renderThrownAgentError } from '../renderThrownError';
@@ -185,6 +187,18 @@ export function registerHandlers(
         ...(client.extraGroupAllowlistChannels?.(thread.id) ?? []),
       ],
       channelAllowlist: deviceChannelAllowlist,
+      isDM: thread.isDM === true,
+    });
+  /** Channels whose members may all use the devices (`devicePolicy: 'channel'`). */
+  const deviceChannelGrantlist = extractDeviceChannelGrantlist(info.settings);
+  /** Whether a thread sits in one of those channels; same candidate IDs as above. */
+  const isDeviceChannelGrantedFor = (thread: { id: string; isDM?: boolean }): boolean =>
+    isDeviceChannelGranted({
+      candidateChannelIds: [
+        client.extractChatId(thread.id),
+        ...(client.extraGroupAllowlistChannels?.(thread.id) ?? []),
+      ],
+      channelGrantlist: deviceChannelGrantlist,
       isDM: thread.isDM === true,
     });
   const fallbackReplyLocale: BotReplyLocale = getBotReplyLocale(platform);
@@ -576,6 +590,7 @@ export function registerHandlers(
           applicationId,
           authorUserId: merged.author?.userId,
           deviceAllowlist,
+          deviceChannelGranted: isDeviceChannelGrantedFor(thread),
           deviceChannelRestricted: isDeviceChannelRestrictedFor(thread),
           operatorUserId,
           platform,
@@ -860,6 +875,7 @@ export function registerHandlers(
           applicationId,
           authorUserId: merged.author?.userId,
           deviceAllowlist,
+          deviceChannelGranted: isDeviceChannelGrantedFor(thread),
           deviceChannelRestricted: isDeviceChannelRestrictedFor(thread),
           operatorUserId,
           platform,
@@ -916,6 +932,7 @@ export function registerHandlers(
 
   registerCatchAllHandler(bot, {
     deviceAllowlist,
+    isDeviceChannelGrantedFor,
     isDeviceChannelRestrictedFor,
     agentId,
     applicationId,

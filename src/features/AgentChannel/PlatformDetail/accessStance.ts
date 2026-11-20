@@ -131,7 +131,9 @@ export const dropHiddenIncompleteRows = (
   if (!peopleListShown) prune('allowFrom');
   if (settings.groupPolicy !== 'allowlist') prune('groupAllowFrom');
   if (settings.devicePolicy !== 'allowlist') prune('deviceAllowFrom');
-  if (settings.deviceChannelPolicy !== 'allowlist') prune('deviceChannelAllowFrom');
+  // The channel list shows both to grant channels and to limit device use to them.
+  if (settings.devicePolicy !== 'channel' && settings.deviceChannelPolicy !== 'allowlist')
+    prune('deviceChannelAllowFrom');
 
   return patch;
 };
