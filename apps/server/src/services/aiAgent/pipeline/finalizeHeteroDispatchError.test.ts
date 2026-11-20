@@ -5,12 +5,16 @@ import { finalizeHeteroDispatchError } from './finalizeHeteroDispatchError';
 
 const mocks = vi.hoisted(() => ({
   completeOperation: vi.fn(),
+  lifecycleOptions: vi.fn(),
   publishAgentRuntimeEnd: vi.fn(),
 }));
 
 vi.mock('@/server/services/agentRuntime/CompletionLifecycle', () => ({
   CompletionLifecycle: class {
     completeOperation = mocks.completeOperation;
+    constructor(_db: unknown, _userId: unknown, _workspaceId: unknown, options: unknown) {
+      mocks.lifecycleOptions(options);
+    }
   },
 }));
 
@@ -80,5 +84,25 @@ describe('finalizeHeteroDispatchError', () => {
       message: baseParams.message,
       type: ChatErrorType.ServerAgentRuntimeError,
     });
+  });
+
+  // A cloud sandbox that fails after dispatch returned success finalizes here,
+  // never through a CLI exit: a sub-topic's parent must still hear the turn ended.
+  it("settles the topic's turn, so a failed sub-topic reports to its parent", async () => {
+    const onTopicRunSettled = vi.fn();
+
+    await finalizeHeteroDispatchError({ ...createDeps(), onTopicRunSettled }, baseParams);
+    expect(mocks.lifecycleOptions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ onTopicRunSettled }),
+    );
+
+    // A share visitor's run reports nowhere.
+    await finalizeHeteroDispatchError(
+      { ...createDeps(), includeShareVisitor: true, onTopicRunSettled },
+      baseParams,
+    );
+    expect(mocks.lifecycleOptions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ onTopicRunSettled: undefined }),
+    );
   });
 });

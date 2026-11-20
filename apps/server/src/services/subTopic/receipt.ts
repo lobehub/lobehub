@@ -113,6 +113,8 @@ export type SubTopicReceiptOutcome =
 /**
  * The sub-topic receipts written into `topicId` since `since` — results that
  * landed while one of its runs was going (see `onSubTopicTurnSettled`).
+ * Receipts past the relay bound are left out: they were written so a person
+ * sees them, and must not wake the opener later either.
  */
 export const listReceiptsSince = async (
   db: LobeChatDatabase,
@@ -127,6 +129,7 @@ export const listReceiptsSince = async (
         eq(messages.topicId, topicId),
         like(messages.id, `${SUB_TOPIC_RECEIPT_PREFIX}%`),
         gte(messages.createdAt, since),
+        sql`COALESCE((${messages.metadata} -> 'agentSender' ->> 'hop')::int, 0) <= ${MAX_AGENT_RELAY_HOPS}`,
       ),
     );
   return rows.map((row) => row.id);

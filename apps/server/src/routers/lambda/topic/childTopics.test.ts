@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   archiveUpdate: vi.fn(),
   assertCreator: vi.fn(),
   assertUse: vi.fn(),
-  findOwnLiveRuns: vi.fn(),
+  findOwnLiveRunsInTopic: vi.fn(),
   findTopicsRunByOthers: vi.fn(),
   interruptTask: vi.fn(),
 }));
@@ -18,7 +18,7 @@ vi.mock('@/server/services/aiAgent', () => ({
   }),
 }));
 vi.mock('@/server/services/aiAgent/steerQueue/liveRuns', () => ({
-  findOwnLiveRuns: mocks.findOwnLiveRuns,
+  findOwnLiveRunsInTopic: mocks.findOwnLiveRunsInTopic,
   findTopicsRunByOthers: mocks.findTopicsRunByOthers,
 }));
 vi.mock('@/server/services/topicArchive', () => ({
@@ -67,8 +67,14 @@ describe('retireChildTopics', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.findTopicsRunByOthers.mockResolvedValue([]);
-    mocks.findOwnLiveRuns.mockImplementation(async (_ctx: unknown, scope: { topicId: string }) =>
-      scope.topicId === 'tpc_child' ? ['op_child'] : [],
+    mocks.findOwnLiveRunsInTopic.mockImplementation(
+      async (_ctx: unknown, scope: { topicId: string }) =>
+        scope.topicId === 'tpc_child'
+          ? [
+              { id: 'op_child', threadId: null },
+              { id: 'op_thread', threadId: 'thd_1' },
+            ]
+          : [],
     );
     mocks.interruptTask.mockResolvedValue({ success: true });
   });
@@ -81,6 +87,12 @@ describe('retireChildTopics', () => {
     expect(mocks.assertUse).toHaveBeenCalledWith(expect.anything(), ['tpc_child', 'tpc_grand']);
     expect(mocks.interruptTask).toHaveBeenCalledWith({
       operationId: 'op_child',
+      topicId: 'tpc_child',
+    });
+    // A run inside one of its threads is stopped too.
+    expect(mocks.interruptTask).toHaveBeenCalledWith({
+      operationId: 'op_thread',
+      threadId: 'thd_1',
       topicId: 'tpc_child',
     });
     expect(mocks.archiveUpdate.mock.calls.map(([id]) => id)).toEqual(['tpc_grand', 'tpc_child']);

@@ -106,6 +106,44 @@ describe('prepareParentWorkspace', () => {
     expect(rollback).toBeUndefined();
   });
 
+  it("never hands the parent's device to a run opened by one that may not use devices", async () => {
+    // e.g. `lh topic send --new` from the sandbox of an external bot sender's run.
+    const denied = { ...base, delegatedDeviceAccessDenied: true };
+
+    const inherited = await prepareParentWorkspace(scope, {
+      ...denied,
+      parentWorkspace: 'inherit',
+    });
+    expect(inherited.params.deviceId).toBeUndefined();
+    expect(inherited.params.appContext?.initialTopicMetadata).toBeUndefined();
+
+    const none = await prepareParentWorkspace(scope, {
+      ...denied,
+      deviceId: 'dev_mac',
+      parentWorkspace: 'none',
+    });
+    expect(none.params.deviceId).toBeUndefined();
+
+    await expect(
+      prepareParentWorkspace(scope, { ...denied, parentWorkspace: 'new-worktree' }),
+    ).rejects.toBeInstanceOf(ParentWorkspaceError);
+    expect(mocks.createFirstSendWorktree).not.toHaveBeenCalled();
+
+    // A cloud-sandbox placement is not a device: it still carries over.
+    mocks.findById.mockResolvedValue({
+      id: 'tpc_parent',
+      metadata: { boundDeviceId: 'dev_mac', sandboxInstanceId: 'inst_web' },
+    });
+    const sandboxed = await prepareParentWorkspace(scope, {
+      ...denied,
+      parentWorkspace: 'inherit',
+    });
+    expect(sandboxed.params.deviceId).toBeUndefined();
+    expect(sandboxed.params.appContext?.initialTopicMetadata).toEqual({
+      sandboxInstanceId: 'inst_web',
+    });
+  });
+
   it("carries a cloud-sandbox parent's placement", async () => {
     mocks.findById.mockResolvedValue({
       id: 'tpc_parent',

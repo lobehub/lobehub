@@ -15,7 +15,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { AiAgentService } from '@/server/services/aiAgent';
 import {
-  findOwnLiveRuns,
+  findOwnLiveRunsInTopic,
   findTopicsRunByOthers,
 } from '@/server/services/aiAgent/steerQueue/liveRuns';
 import { TopicArchiveService } from '@/server/services/topicArchive';
@@ -159,18 +159,22 @@ export const onlyViewableChildTopics = async (
   return rows.filter((row) => !hidden.has(row.id));
 };
 
-/** Cancel every live run of `topicIds`; refuse when one cannot be confirmed stopped. */
+/** Cancel every live run of `topicIds`, threads included; refuse when one cannot be confirmed stopped. */
 const interruptAll = async (ctx: ChildTopicsCtx, topicIds: string[]) => {
   const workspaceId = ctx.workspaceId ?? undefined;
   const aiAgentService = new AiAgentService(ctx.serverDB, ctx.userId, { workspaceId });
   let unconfirmed = 0;
   for (const topicId of topicIds) {
-    const runIds = await findOwnLiveRuns(
+    const runs = await findOwnLiveRunsInTopic(
       { db: ctx.serverDB, workspaceId },
-      { threadId: null, topicId, userId: ctx.userId },
+      { topicId, userId: ctx.userId },
     );
-    for (const operationId of runIds) {
-      const result = await aiAgentService.interruptTask({ operationId, topicId });
+    for (const run of runs) {
+      const result = await aiAgentService.interruptTask({
+        operationId: run.id,
+        topicId,
+        ...(run.threadId && { threadId: run.threadId }),
+      });
       if (!result.success) unconfirmed += 1;
     }
   }

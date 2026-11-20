@@ -214,6 +214,8 @@ export const validateOIDCJWT = async (token: string) => {
       tokenData: {
         aud,
         client_id: clientId,
+        // Carried by a sandbox token minted for a run that may not use devices.
+        ...(payload.device_access === 'denied' && { device_access: 'denied' as const }),
         exp: payload.exp,
         iat: payload.iat,
         jti: payload.jti,

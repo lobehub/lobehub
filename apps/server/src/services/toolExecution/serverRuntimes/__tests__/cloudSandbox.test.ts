@@ -96,6 +96,8 @@ describe('cloudSandboxRuntime', () => {
       'ws-42',
       false,
       'op-x',
+      // The run may use devices: its token carries no denial.
+      false,
     );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'runCommand',
@@ -170,6 +172,28 @@ describe('cloudSandboxRuntime', () => {
     expect(result.state).toMatchObject({ success: false });
   });
 
+  // An external bot sender may not use the owner's devices. The token its `lh`
+  // runs with says so, so `lh topic send --new` from here cannot start a
+  // first-party run on the parent's device.
+  it("stamps an external bot sender's lh token as device-denied", async () => {
+    const { cloudSandboxRuntime } = await import('../cloudSandbox');
+    const runtime = await cloudSandboxRuntime.factory(
+      buildContext({
+        botContext: {
+          applicationId: 'app-1',
+          isOwner: false,
+          platform: 'discord',
+          platformThreadId: 'thread-1',
+          senderExternalUserId: 'stranger',
+        },
+      }),
+    );
+
+    await runtime.runCommand({ command: 'lh topic send --new -c hi', description: 'open' });
+
+    expect(mocks.preprocessLhCommand.mock.calls.at(-1)?.[5]).toBe(true);
+  });
+
   // Regression: the refusal used the shim's permissive predicate, so a
   // visitor's harmless command that merely mentions `lh` was rejected outright.
   it('does not refuse a share-visitor command that only mentions lh', async () => {
@@ -187,6 +211,8 @@ describe('cloudSandboxRuntime', () => {
       undefined,
       true,
       undefined,
+      // The run may use devices: its token carries no denial.
+      false,
     );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'runCommand',
@@ -213,6 +239,8 @@ describe('cloudSandboxRuntime', () => {
       undefined,
       true,
       undefined,
+      // The run may use devices: its token carries no denial.
+      false,
     );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'runCommand',

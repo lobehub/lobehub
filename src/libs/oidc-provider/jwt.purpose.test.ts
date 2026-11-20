@@ -107,4 +107,19 @@ describe('validateOIDCJWT token purposes', () => {
       ),
     ).resolves.toMatchObject({ tokenData: { purpose: 'hetero-operation' }, userId: 'user-1' });
   });
+
+  // A sandbox token minted for a run whose sender may not use devices keeps that
+  // denial for whatever the run starts through `lh`: the request context sees it.
+  it("carries a sandbox token's device denial into the validated token", async () => {
+    const { validateOIDCJWT } = await import('./jwt');
+    const { signUserJWT } = await import('@/libs/trpc/utils/internalJwt');
+
+    const denied = await validateOIDCJWT(
+      await signUserJWT('user-1', '4h', { deviceAccessDenied: true }),
+    );
+    expect(denied.tokenData).toMatchObject({ device_access: 'denied', purpose: 'cli-sandbox' });
+
+    const plain = await validateOIDCJWT(await signUserJWT('user-1'));
+    expect(plain.tokenData).not.toHaveProperty('device_access');
+  });
 });

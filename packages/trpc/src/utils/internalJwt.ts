@@ -162,10 +162,22 @@ export const signInternalJWT = async (): Promise<string> => {
 export const signUserJWT = async (
   userId: string,
   expiration: string | number = '5m',
+  options: {
+    /**
+     * The token is for a run that may not use devices (an external bot
+     * sender's or a share visitor's). Stamped as `device_access: 'denied'`, so
+     * whatever that run starts through it (`lh topic send --new`,
+     * `lh agent run`) keeps the denial instead of running as first-party.
+     */
+    deviceAccessDenied?: boolean;
+  } = {},
 ): Promise<string> => {
   const { key, kid } = await getSigningKey();
 
-  return new SignJWT({ purpose: 'cli-sandbox' })
+  return new SignJWT({
+    purpose: 'cli-sandbox',
+    ...(options.deviceAccessDenied && { device_access: 'denied' }),
+  })
     .setProtectedHeader({ alg: 'RS256', kid })
     .setSubject(userId)
     .setIssuedAt()
