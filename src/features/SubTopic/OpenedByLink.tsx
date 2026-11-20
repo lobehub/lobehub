@@ -8,9 +8,8 @@ import { CornerLeftUp } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useUserStore } from '@/store/user';
@@ -65,11 +64,11 @@ const OpenedByLink = memo<{ topicId?: string | null }>(({ topicId }) => {
   const openerTitle = useChatStore((s) =>
     openerId ? topicSelectors.getTopicById(openerId)(s)?.title : undefined,
   );
-  const openerAgentName = useAgentStore((s) => {
-    if (!openedBy?.agentId) return undefined;
-    const meta = agentSelectors.getAgentMetaById(openedBy.agentId)(s);
-    return meta?.title || undefined;
-  });
+  // The agent store only holds agents visited this session; on a reload or a
+  // direct link the opener's agent comes from the eagerly loaded agent list.
+  const openerAgentName = useAgentDisplayMeta(openedBy?.agentId, {
+    fallbackToDefault: false,
+  })?.title;
 
   if (!openerId || !openedBy?.agentId) return null;
   const label = t('subTopic.openedBy', {

@@ -214,4 +214,26 @@ describe('deliverBackgroundSubAgentResults', () => {
       deliverBackgroundSubAgentResults(deps, { topicId: 'topic-1' }),
     ).resolves.toBeUndefined();
   });
+
+  // Regression: "Archive all" on a sub-topic stops its background sub-agent;
+  // the "interrupted" result that lands a second later woke the archived topic
+  // and started a new run inside it.
+  it.each(['completed', 'archived'])(
+    'does not wake a %s topic, keeping its results',
+    async (status) => {
+      const deps = createDeps({ pending: [finished('a', { state: { status: 'error' } })] });
+      deps.topicModel.findById.mockResolvedValue({
+        agentId: 'agent-1',
+        id: 'topic-1',
+        metadata: {},
+        status,
+      });
+
+      await deliverBackgroundSubAgentResults(deps, { topicId: 'topic-1' });
+
+      expect(deps.messageModel.claimBackgroundSubAgentDelivery).not.toHaveBeenCalled();
+      expect(deps.appendResultMessages).not.toHaveBeenCalled();
+      expect(deps.execAgent).not.toHaveBeenCalled();
+    },
+  );
 });
