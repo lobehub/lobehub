@@ -21,6 +21,11 @@ export interface SSRFOptions {
    * callers that read the whole body.
    */
   maxContentLength?: number;
+  /**
+   * Don't log a blocked request. For callers that expect the block and handle the thrown
+   * error themselves (e.g. a validation probe that falls back to another path).
+   */
+  silent?: boolean;
 }
 
 /** Statuses whose Response must have a null body (Fetch standard "null body status"). */
@@ -84,7 +89,7 @@ const toErrorLog = (error: unknown) => {
   };
 };
 
-const toFetchError = (error: unknown): Error => {
+const toFetchError = (error: unknown, silent?: boolean): Error => {
   if (error instanceof SSRFBlockedError) return error;
 
   const errorMessage = error instanceof Error ? error.message : String(error);
@@ -92,7 +97,7 @@ const toFetchError = (error: unknown): Error => {
   const isSSRFBlock = errorMessage.includes('is not allowed');
 
   if (isSSRFBlock) {
-    console.error('SSRF protection blocked request:', toErrorLog(error));
+    if (!silent) console.error('SSRF protection blocked request:', toErrorLog(error));
     return new SSRFBlockedError(
       `${SSRF_BLOCKED_PREFIX}: ${errorMessage}. ` +
         'See: https://lobehub.com/docs/self-hosting/environment-variables/basic#ssrf-allow-private-ip-address',
@@ -230,6 +235,6 @@ export const ssrfSafeFetch = async (
 
     return webResponse;
   } catch (error) {
-    throw toFetchError(error);
+    throw toFetchError(error, ssrfOptions?.silent);
   }
 };
