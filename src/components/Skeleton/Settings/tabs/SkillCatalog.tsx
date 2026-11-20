@@ -37,7 +37,7 @@ export const SkillCatalogListSkeleton = ({ viewMode }: SkillCatalogProps) => {
   const { controlHeight } = useDensityTokens();
   const skills = viewMode === 'skill';
   const sections = skills
-    ? (['skillGroup.builtinSkills', 'skillGroup.communitySkills'] as const)
+    ? (['skillGroup.communitySkills', 'skillGroup.customSkills'] as const)
     : (['connectorMarket.section.installed', 'skillGroup.communityConnectors'] as const);
 
   return (

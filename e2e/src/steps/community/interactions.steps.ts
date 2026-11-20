@@ -205,51 +205,6 @@ When('I wait for the sorted results to load', async function (this: CustomWorld)
   });
 });
 
-When(
-  'I click on the {string} link in the featured assistants section',
-  async function (this: CustomWorld, linkText: string) {
-    await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
-
-    await this.page
-      .getByRole('heading', { name: /featured agents/i })
-      .locator('..')
-      .getByRole('link')
-      .filter({ hasText: linkText })
-      .click();
-  },
-);
-
-When(
-  'I click on the {string} link in the featured MCP tools section',
-  async function (this: CustomWorld, linkText: string) {
-    await this.page
-      .getByRole('heading', { name: /featured skills/i })
-      .locator('..')
-      .getByRole('link')
-      .filter({ hasText: linkText })
-      .click();
-  },
-);
-
-When('I click on the first featured assistant card', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
-
-  const firstCard = this.page.locator('[data-testid="assistant-item"]').first();
-  await firstCard.waitFor({ state: 'visible', timeout: 30_000 });
-
-  // Store the current URL before clicking
-  this.testContext.previousUrl = this.page.url();
-
-  await firstCard.click();
-
-  // Wait for URL to change
-  await this.page.waitForFunction(
-    (previousUrl) => window.location.href !== previousUrl,
-    this.testContext.previousUrl,
-    { timeout: 30_000 },
-  );
-});
-
 // ============================================
 // Then Steps (Assertions)
 // ============================================

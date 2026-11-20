@@ -22,6 +22,7 @@ import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import {
   legacyCommunityRoutes,
   legacySettingsMarketplaceRedirects,
+  marketplaceIndexRoute,
   marketplaceManageRoutes,
   marketplaceMcpListRedirect,
 } from '@/spa/router/marketplaceRoutes';
@@ -123,19 +124,11 @@ export const sharedMainAreaChildren: RouteObject[] = [
         'connector/installed': withHandle({ mobileShellHeader: true }),
         'skill/installed': withHandle({ mobileShellHeader: true }),
       }),
+      marketplaceIndexRoute,
       marketplaceMcpListRedirect,
       // List routes (with ListLayout)
       {
         children: [
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/(home)'),
-              'Mobile > Discover > List > Home',
-              { preloadId: 'mobile-community' },
-            ),
-            handle: { meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplace' }) },
-            index: true,
-          },
           {
             children: [
               {

@@ -29,6 +29,7 @@ import { buildInstalledDetailPath, getInstalledVisibility } from '../InstalledNa
 import { MARKETPLACE_CONNECTOR_PATH, MARKETPLACE_MCP_PATH } from '../paths';
 import CatalogListView from './CatalogListView';
 import CatalogSection, { useSeenOnce } from './CatalogSection';
+import DiscoverCatalogHeader from './DiscoverCatalogHeader';
 import RowAction from './RowAction';
 import {
   buildCatalogListUrl,
@@ -268,6 +269,7 @@ const ConnectorCatalog = memo(() => {
 
   return (
     <>
+      <DiscoverCatalogHeader kind={'connector'} query={query.q} />
       <CatalogViewTabs active={'discover'} kind={'connector'} />
       {isCatalogListView(query) ? <McpCatalogList /> : <McpCatalogGroups />}
     </>

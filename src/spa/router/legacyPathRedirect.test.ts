@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { createElement } from 'react';
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   MARKETPLACE_INSTALLED_CONNECTORS_PATH,
@@ -13,7 +13,16 @@ import {
   buildLegacyRedirectPath,
   LegacyPathRedirect,
 } from './legacyPathRedirect';
-import { legacyCommunityRoutes } from './marketplaceRoutes';
+import { legacyCommunityRoutes, marketplaceIndexRoute } from './marketplaceRoutes';
+
+const config = vi.hoisted(() => ({ featureFlags: { showMarket: true }, serverConfigInit: true }));
+vi.mock('@/store/serverConfig', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useServerConfigStore: (selector: (state: typeof config) => unknown) => selector(config),
+}));
+afterEach(() => {
+  config.featureFlags.showMarket = true;
+});
 
 const CurrentUrl = () => {
   const { hash, pathname, search } = useLocation();
@@ -37,6 +46,7 @@ const renderAt = (url: string) => {
   const shared = [
     ...legacyCommunityRoutes,
     // The real tree has static `marketplace/<section>` routes that outrank the workspace ones.
+    { children: [marketplaceIndexRoute], path: 'marketplace' },
     { element: currentUrl, path: 'marketplace/*' },
     { element: currentUrl, path: 'marketplace/agent' },
     { element: currentUrl, path: 'marketplace/agent/:slug' },
@@ -92,6 +102,11 @@ describe('buildLegacyRedirectPath', () => {
 });
 
 describe('legacy URL redirects', () => {
+  it('lands on installed skills when the market is disabled', () => {
+    config.featureFlags.showMarket = false;
+    expect(renderAt('/acme/community')).toBe('/acme/marketplace/skill/installed');
+  });
+
   it.each([
     // Settings skill / connector moved to the Marketplace (personal scope).
     ['/settings/skill', '/marketplace/skill/installed'],
@@ -110,10 +125,12 @@ describe('legacy URL redirects', () => {
       '/acme/marketplace/connector/installed?open=mcp-connector%3Amwe',
     ],
     // `/community` became `/marketplace`.
-    ['/community', '/marketplace'],
+    ['/marketplace', '/marketplace/agent'],
+    ['/community', '/marketplace/agent'],
     ['/community/skill?category=dev&page=2', '/marketplace/skill?category=dev&page=2'],
     ['/community/mcp/notion', '/marketplace/mcp/notion'],
-    ['/acme/community', '/acme/marketplace'],
+    ['/acme/community', '/acme/marketplace/agent'],
+    ['/acme/marketplace?q=developer#results', '/acme/marketplace/agent?q=developer#results'],
     ['/acme/community/agent/some-agent#top', '/acme/marketplace/agent/some-agent#top'],
     ['/community/agent', '/marketplace/agent'],
     ['/community/agent/some-agent', '/marketplace/agent/some-agent'],

@@ -13,7 +13,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MOBILE_TABBAR_HEIGHT } from '@/const/layoutTokens';
-import { MARKETPLACE_INSTALLED_SKILLS_PATH, MARKETPLACE_PATH } from '@/features/Marketplace/paths';
+import { getMarketplaceEntryPath } from '@/features/Marketplace/paths';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useMobileNavigation } from '@/hooks/useMobileNavigation';
 import { SidebarTabKey } from '@/store/global/initialState';
@@ -79,7 +79,7 @@ const NavBar = memo(() => {
           ),
           key: SidebarTabKey.Community,
           onClick: () => {
-            navigate(showMarket ? MARKETPLACE_PATH : MARKETPLACE_INSTALLED_SKILLS_PATH);
+            navigate(getMarketplaceEntryPath(showMarket));
           },
           title: t('tab.marketplace'),
         },
