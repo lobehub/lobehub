@@ -108,6 +108,7 @@ export const resolveShareAutoAgentGrants = async (
   const skills = await listShareGrantableSkills({
     agentConfig: { chatConfig: agent.chatConfig, plugins },
     agentId: gate.agentId,
+    canExecuteOnDevice: gate.canUseDevice,
     db,
     userId,
     workspaceId,

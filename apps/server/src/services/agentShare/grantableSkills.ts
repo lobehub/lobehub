@@ -28,6 +28,12 @@ interface GrantableSkillsInput {
     | null
     | undefined;
   agentId: string;
+  /**
+   * Whether the run may use the creator's device. Off for the share picker;
+   * a visitor run's automatic grants pass the visitor's device access, so a
+   * device-only skill the Agent turns on is granted to visitors who can run it.
+   */
+  canExecuteOnDevice?: boolean;
   db: LobeChatDatabase;
   userId: string;
   workspaceId?: string;
@@ -43,8 +49,9 @@ interface GrantableSkillsInput {
  *
  * - no `shareAllowedIds` — the whole point is to list what COULD be granted;
  * - no project/device skills — those are discovered on the execution device's
- *   filesystem, and a visitor run never routes a device;
- * - `canExecuteOnDevice: false`, for the same reason.
+ *   filesystem, which this listing never scans;
+ * - `canExecuteOnDevice` off by default; a visitor run passes its own device
+ *   access instead, so device-only builtin skills follow what it may run.
  *
  * The user's skill library is listed as a run lists it: its catalog without
  * generated skills, and none at all for a workspace-public Agent.
@@ -60,6 +67,7 @@ interface GrantableSkillsInput {
 export const listShareGrantableSkills = async ({
   agentConfig,
   agentId,
+  canExecuteOnDevice = false,
   db,
   userId,
   workspaceId,
@@ -102,7 +110,7 @@ export const listShareGrantableSkills = async ({
     },
     {
       autoSkillIds: getAutoPluginIds(plugins),
-      canExecuteOnDevice: false,
+      canExecuteOnDevice,
       disabledIds: getDisabledPluginIds(plugins),
       enabledPluginIds: getActivePluginIds(plugins),
       skillActivateMode: agentConfig?.chatConfig?.skillActivateMode,

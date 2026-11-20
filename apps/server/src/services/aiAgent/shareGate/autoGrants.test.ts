@@ -112,10 +112,26 @@ describe('resolveShareAutoAgentGrants', () => {
     });
 
     expect(listShareGrantableSkills).toHaveBeenCalledWith(
-      expect.objectContaining({ agentId: 'agent-1', userId: 'owner', workspaceId: 'ws-1' }),
+      expect.objectContaining({
+        agentId: 'agent-1',
+        canExecuteOnDevice: false,
+        userId: 'owner',
+        workspaceId: 'ws-1',
+      }),
     );
     expect(resolved.shareConfig.skillGrants).toEqual(['skill-b']);
     expect(resolved.shareId).toBe('share-1');
+  });
+
+  it("resolves the skill pool with the visitor's device access", async () => {
+    await resolveShareAutoAgentGrants(
+      { ...gate({ autoGrantAgentTools: true }), canUseDevice: true },
+      { agent: runAgent, db: {} as any, userId: 'owner' },
+    );
+
+    expect(listShareGrantableSkills).toHaveBeenCalledWith(
+      expect.objectContaining({ canExecuteOnDevice: true }),
+    );
   });
 
   it('honors the auto and disabled entries the pinned-id collapse dropped', async () => {
