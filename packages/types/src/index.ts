@@ -33,6 +33,7 @@ export * from './discover';
 export * from './document';
 export * from './documentComment';
 export * from './documentLike';
+export * from './emoji';
 export * from './entityId';
 export * from './environment';
 export * from './eval';
