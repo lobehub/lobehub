@@ -259,8 +259,10 @@ const ProjectWorkLocationPicker = ({
         !!location.machineDeviceId &&
         (machineFolders.length > 1 || canManage)));
 
-  const repositoryMenu = (
-    <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 260 }}>
+  // The environment is a first-level choice beside the places: what a cloud
+  // sandbox checks out. Picking one from a device moves the run to the sandbox.
+  const environmentSection = (
+    <>
       <div {...stylex.props(styles.header)}>{t('overview.context.location.environments')}</div>
       <div {...stylex.props(styles.list)}>
         {/* Not every conversation needs the checkout: this one starts in an
@@ -268,7 +270,7 @@ const ProjectWorkLocationPicker = ({
         {repositories.length > 0 && (
           <OptionRow
             compact
-            active={onSandbox && withoutEnvironment}
+            active={onSandbox && !driveShown && withoutEnvironment}
             icon={<Icon icon={CircleOffIcon} size={16} />}
             label={t('environment.none')}
             onClick={() => pickRepository(NO_ENVIRONMENT)}
@@ -281,7 +283,7 @@ const ProjectWorkLocationPicker = ({
             key={environment.id}
             label={environment.name}
             onClick={() => pickRepository(environment.id)}
-            active={onSandbox && environment.id === repository?.id}
+            active={onSandbox && !driveShown && environment.id === repository?.id}
             // A name that already is the slug needs no second copy of it.
             hint={
               repositoriesLabel(environment) === environment.name
@@ -296,46 +298,6 @@ const ProjectWorkLocationPicker = ({
           {t('overview.context.location.noEnvironments')}
         </Text>
       )}
-      {drive && (
-        <Popover
-          arrow={false}
-          closeDelay={150}
-          placement={submenuPlacement}
-          styles={SUBMENU_STYLES}
-          trigger={['hover', 'click']}
-          content={
-            <SandboxDriveMenu
-              selectedLabel={drive.label}
-              selectedPath={drive.selectedPath}
-              onBrowse={() => {
-                setOpen(false);
-                drive.onBrowse();
-              }}
-              onOpenStorage={() => {
-                setOpen(false);
-                drive.onOpenStorage();
-              }}
-              onPick={(pick) => {
-                setOpen(false);
-                drive.onPick(pick);
-              }}
-            />
-          }
-        >
-          <div data-testid={'project-location-drive'}>
-            <OptionRow
-              arrow
-              compact
-              active={onSandbox && driveShown}
-              hint={driveShown ? drive.label : undefined}
-              icon={<Icon icon={HardDriveIcon} size={16} />}
-              label={tChat('heteroAgent.executionTarget.persistentSandbox')}
-              // The folder is picked one level down; the row itself only opens it.
-              onClick={() => {}}
-            />
-          </div>
-        </Popover>
-      )}
       {canManage && (
         <OptionRow
           compact
@@ -344,7 +306,49 @@ const ProjectWorkLocationPicker = ({
           onClick={configureEnvironment}
         />
       )}
-    </Flexbox>
+    </>
+  );
+
+  // The persistent sandbox, beside the temporary one: its folder one level down.
+  const driveRow = drive && (
+    <Popover
+      arrow={false}
+      closeDelay={150}
+      placement={submenuPlacement}
+      styles={SUBMENU_STYLES}
+      trigger={['hover', 'click']}
+      content={
+        <SandboxDriveMenu
+          selectedLabel={drive.label}
+          selectedPath={drive.selectedPath}
+          onBrowse={() => {
+            setOpen(false);
+            drive.onBrowse();
+          }}
+          onOpenStorage={() => {
+            setOpen(false);
+            drive.onOpenStorage();
+          }}
+          onPick={(pick) => {
+            setOpen(false);
+            drive.onPick(pick);
+          }}
+        />
+      }
+    >
+      <div data-testid={'project-location-drive'}>
+        <OptionRow
+          arrow
+          compact
+          active={onSandbox && driveShown}
+          hint={driveShown ? drive.label : undefined}
+          icon={<Icon icon={HardDriveIcon} size={16} />}
+          label={tChat('heteroAgent.executionTarget.persistentSandbox')}
+          // The folder is picked one level down; the row itself only opens it.
+          onClick={() => {}}
+        />
+      </div>
+    </Popover>
   );
 
   /** One machine's folders: the second level of its row. */
@@ -408,36 +412,29 @@ const ProjectWorkLocationPicker = ({
 
   const sandboxRow = (
     <OptionRow
-      active={onSandbox}
-      arrow={showRepositories}
+      active={onSandbox && !driveShown}
       disabled={!switchable && !onSandbox}
       icon={<ExecutionTargetIcon target={'sandbox'} />}
       label={tChat('heteroAgent.executionTarget.sandbox')}
       onClick={() => {
-        if (switchable) void select('sandbox');
+        // Off the drive, back to a temporary sandbox in the environment shown.
+        if (driveShown) pickRepository(repositories[0]?.id ?? NO_ENVIRONMENT);
+        else if (switchable) void select('sandbox');
+        else setOpen(false);
       }}
     />
   );
 
   const content = (
     <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 280 }}>
+      {showRepositories && (sandboxAvailable || onSandbox) && environmentSection}
       <div {...stylex.props(styles.header)}>{t('overview.context.location.title')}</div>
-      {(sandboxAvailable || onSandbox) &&
-        (showRepositories ? (
-          <Popover
-            arrow={false}
-            closeDelay={150}
-            content={repositoryMenu}
-            // The second level opens inward rather than off the side of the window.
-            placement={submenuPlacement}
-            styles={SUBMENU_STYLES}
-            trigger={['hover', 'click']}
-          >
-            <div data-testid={'project-location-sandbox'}>{sandboxRow}</div>
-          </Popover>
-        ) : (
-          sandboxRow
-        ))}
+      {(sandboxAvailable || onSandbox) && (
+        <>
+          <div data-testid={'project-location-sandbox'}>{sandboxRow}</div>
+          {showRepositories && driveRow}
+        </>
+      )}
       {(localAvailable || deviceRows.length > 0) && (
         <>
           <div {...stylex.props(styles.header)}>{t('overview.context.location.devices')}</div>
