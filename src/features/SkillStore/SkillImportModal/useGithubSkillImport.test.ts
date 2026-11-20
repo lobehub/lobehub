@@ -74,6 +74,15 @@ describe('useGithubSkillImport', () => {
     expect(result.current.url.trim()).toBe('https://github.com/lobehub/skills');
   });
 
+  it('offers repository access guidance for the unclassified error from older servers', async () => {
+    const details = 'GitHub repository or ref not found';
+    mocks.discoverGitHubSkills.mockRejectedValueOnce(
+      Object.assign(new Error(details), { data: { code: 'INTERNAL_SERVER_ERROR' } }),
+    );
+    const { result } = await scanned();
+    expect(result.current.failure).toEqual({ details, recovery: 'access', stage: 'find' });
+  });
+
   it('records a failed scan with its raw message as details', async () => {
     mocks.discoverGitHubSkills.mockRejectedValue(new Error('[{"code":"invalid_format"}]'));
 

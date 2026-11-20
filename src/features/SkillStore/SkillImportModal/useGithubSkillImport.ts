@@ -19,7 +19,12 @@ const importFailure = (error: unknown, stage: 'find' | 'import'): GithubSkillImp
   const { code } = normalizeAsyncError(error);
   const failure: GithubSkillImportFailure = { details: detailsOf(error), stage };
   if (code === 'PRECONDITION_FAILED') failure.recovery = 'connect';
-  if (code === 'NOT_FOUND') failure.recovery = 'access';
+  // Older discovery endpoints return this GitHub error as an internal error.
+  if (
+    code === 'NOT_FOUND' ||
+    (stage === 'find' && failure.details === 'GitHub repository or ref not found')
+  )
+    failure.recovery = 'access';
   return failure;
 };
 

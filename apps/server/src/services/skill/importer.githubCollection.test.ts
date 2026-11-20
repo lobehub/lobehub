@@ -123,6 +123,18 @@ describe('GitHub skill collection import', () => {
     expect(JSON.stringify({ skill, scan })).not.toContain('token=test');
   });
 
+  it('returns a typed not-found error when GitHub cannot resolve a ref during discovery', async () => {
+    const proxy = vi.fn();
+    vi.mocked(GitHub.prototype.resolveCommit).mockRejectedValue(
+      new GitHubNotFoundError('GitHub repository or ref not found', 422),
+    );
+    const importer = new SkillImporter(db, userId, undefined, { githubProxy: proxy });
+    await expect(importer.discoverGitHubSkills(repo + '/tree/missing')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(proxy).not.toHaveBeenCalled();
+  });
+
   it('coalesces concurrent submissions of the same selection', async () => {
     const scan = await importer.discoverGitHubSkills(repo);
     const batch = { ...scan, gitUrl: repo, selections: [{ path: review, revision: null }] };

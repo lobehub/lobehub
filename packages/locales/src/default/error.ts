@@ -22,7 +22,7 @@ export default {
   'fetchError.detail': 'Error details',
   'fetchError.title': 'Request failed',
   'import.github.access':
-    'Check the repository and branch in the link. Make sure your connected GitHub account has read access to this repository.',
+    'Check the repository URL and branch. For a private repository, make sure your GitHub connector has read access.',
   'import.github.connect':
     'Check the link. If this repository is private, connect a GitHub account that can read it, then try again.',
   'import.importConfigFile.description': 'Error reason: {{reason}}',

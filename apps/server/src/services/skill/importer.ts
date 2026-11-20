@@ -62,6 +62,7 @@ const log = debug('lobe-chat:service:skill-importer');
 /** GitHub and package failures reach the client as import errors, not as a 500. */
 const asImportError = (error: unknown): never => {
   if (error instanceof GitHubNotFoundError) throw new SkillImportError(error.message, 'NOT_FOUND');
+  if (error instanceof GitHubParseError) throw new SkillImportError(error.message, 'INVALID_URL');
   if (
     error instanceof GitHubError ||
     error instanceof SkillParseError ||
@@ -559,7 +560,7 @@ export class SkillImporter {
   }
 
   async discoverGitHubSkills(gitUrl: string): Promise<GitHubSkillDiscovery> {
-    const { commit, directories, info } = await this.gitHubCollection(gitUrl);
+    const { commit, directories, info } = await this.gitHubCollection(gitUrl).catch(asImportError);
     const entries = directories.map(([path, directory]) => {
       const fallbackName = path.split('/').at(-1) || info.repo;
       const source = { ...info, path };
@@ -631,7 +632,9 @@ export class SkillImporter {
   async importGitHubSkills(input: GitHubSkillBatchInput): Promise<GitHubSkillOutcome[]> {
     if (this.importScope !== input.scope)
       throw new SkillImportError('The active library changed. Find skills again.', 'CONFLICT');
-    const { directories, info } = await this.gitHubCollection(input.gitUrl, input.commit);
+    const { directories, info } = await this.gitHubCollection(input.gitUrl, input.commit).catch(
+      asImportError,
+    );
     const available = new Map(directories);
     const results: GitHubSkillOutcome[] = [];
     for (const { path, revision } of input.selections) {
