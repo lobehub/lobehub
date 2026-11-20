@@ -42,6 +42,11 @@ interface ChannelConversationProps {
   channelId: string;
   /** Mounted beside a thread panel that covers it, so keep it out of the tab order. */
   inert?: boolean;
+  /**
+   * Caps the feed and composer column width, centered. A Channel spans the full width by default;
+   * a standalone chat page (an Agent share) caps it like a regular Agent conversation.
+   */
+  maxWidth?: number;
   onOpenThread?: (threadId: string, toggle?: boolean) => void;
   onOpenTopic?: (topic: ReplyTopic) => void;
   onStartThread?: (draft: ChannelThreadDraft) => void;
@@ -53,6 +58,7 @@ interface ChannelConversationProps {
 const Timeline = ({
   channelId,
   inert,
+  maxWidth,
   starter,
   threadId = null,
   onOpenThread,
@@ -189,7 +195,7 @@ const Timeline = ({
               }}
               {...stylex.props(styles.feed)}
             >
-              <WideScreenContainer fullWidth paddingInline={16}>
+              <WideScreenContainer fullWidth paddingInline={16} style={{ maxWidth }}>
                 {(detail.hasMore || before !== undefined) && (
                   <Flexbox horizontal align="center" gap={8} justify="center" paddingBlock={8}>
                     <Button
@@ -302,6 +308,7 @@ const Timeline = ({
                 channel={detail.channel}
                 draftKey={channelDraftKey(channelId, threadId)}
                 key={channelDraftKey(channelId, threadId)}
+                maxWidth={maxWidth}
                 members={activeMembers}
                 replyTarget={reply.target}
                 starter={threadId ? undefined : starter}
