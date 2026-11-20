@@ -112,6 +112,13 @@ export const deliverBackgroundSubAgentResults = async (
   try {
     const topic = await deps.topicModel.findById(topicId);
     if (!topic?.agentId) return;
+    // An archived conversation is not woken: a result that lands after it was
+    // put away — e.g. the "interrupted" of a background sub-agent that
+    // archiving it stopped — stays stored, undelivered, and is not run.
+    if (topic.status === 'completed' || topic.status === 'archived') {
+      log('topic %s is archived; its background results are not delivered', topicId);
+      return;
+    }
     if (await isTopicBusy(deps, topic.metadata?.runningOperation, settledOperationId)) {
       log('topic %s is busy; results wait for its run to settle', topicId);
       return;
