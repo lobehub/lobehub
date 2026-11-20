@@ -61,9 +61,9 @@ function EnabledChannelPage() {
   const pageThread = pageThreadId
     ? detail?.threads.find((entry) => entry.id === pageThreadId)
     : undefined;
-  // A direct conversation's side panel is its Agent's profile; a workspace group's is the roster.
-  const hasMemberPanel =
-    !!directAgent || (!!detail?.channel.workspaceId && !detail.channel.agentId);
+  // A direct conversation's side panel is its Agent's profile; any other Channel's, in a
+  // workspace or the personal space, is the roster.
+  const hasMemberPanel = !!directAgent || (!!detail && !detail.channel.agentId);
   const membersOpen =
     hasMemberPanel && membersChannelId === channelId && !threadId && !threadDraft && !portalOpen;
   const visibleTopic = openTopic(topic, channelId, {

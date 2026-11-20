@@ -49,19 +49,17 @@ export const StatusAvatar = ({ entry, size }: { entry: MemberEntry; size: number
 
 export function useMemberEntries(detail: ChannelDetail) {
   const { t } = useTranslation('channel');
-  const { channel, jobs = [], members: allMembers = [] } = detail;
-  const entries: MemberEntry[] = getVisibleStatusMembers(allMembers, channel.workspaceId).map(
-    (member) => {
-      const job = member.actorType === 'agent' ? memberCurrentJob(jobs, member.id) : undefined;
-      return {
-        // Idle is the default and goes unlabelled; only a reply in progress or needing attention says so.
-        label: member.actorType === 'agent' && job ? t(memberJobStatus(job)) : '',
-        member,
-        name: memberName(member, t('deletedMember')),
-        tone: job ? channelJobTone(job) : 'quiet',
-      };
-    },
-  );
+  const { jobs = [], members: allMembers = [] } = detail;
+  const entries: MemberEntry[] = getVisibleStatusMembers(allMembers).map((member) => {
+    const job = member.actorType === 'agent' ? memberCurrentJob(jobs, member.id) : undefined;
+    return {
+      // Idle is the default and goes unlabelled; only a reply in progress or needing attention says so.
+      label: member.actorType === 'agent' && job ? t(memberJobStatus(job)) : '',
+      member,
+      name: memberName(member, t('deletedMember')),
+      tone: job ? channelJobTone(job) : 'quiet',
+    };
+  });
   return entries;
 }
 
@@ -176,7 +174,7 @@ const MemberRow = ({
 };
 
 /**
- * The same roster and member actions in the personal popover and workspace sidebar.
+ * The roster and member actions of the Channel's member panel.
  * People come first; Agents follow under their own heading when both are present.
  */
 export function MemberList({

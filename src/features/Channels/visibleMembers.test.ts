@@ -30,23 +30,17 @@ describe('Channel header member visibility', () => {
   const inactivePerson = member('removed-person', 'user', 'left');
   const members = [owner, agent, inactiveAgent, inactivePerson];
 
-  it('shows only active Agents in personal channels without changing membership', () => {
-    expect(getVisibleStatusMembers(members, null)).toEqual([agent]);
+  it('lists active people and Agents without changing membership', () => {
+    expect(getVisibleStatusMembers(members)).toEqual([owner, agent]);
     expect(members).toEqual([owner, agent, inactiveAgent, inactivePerson]);
-    expect(owner.status).toBe('active');
   });
 
-  it('keeps the person in workspace channels even when there is only one person', () => {
-    expect(getVisibleStatusMembers(members, 'workspace-1')).toEqual([owner, agent]);
+  it('keeps the sole owner of a Channel with no Agents', () => {
+    expect(getVisibleStatusMembers([owner])).toEqual([owner]);
   });
 
-  it('hides the sole owner of a personal channel with no Agents', () => {
-    expect(getVisibleStatusMembers([owner], null)).toEqual([]);
-  });
-
-  it('handles an empty member list in either scope', () => {
-    expect(getVisibleStatusMembers([], null)).toEqual([]);
-    expect(getVisibleStatusMembers([], 'workspace-1')).toEqual([]);
+  it('handles an empty member list', () => {
+    expect(getVisibleStatusMembers([])).toEqual([]);
   });
 });
 
