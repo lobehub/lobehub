@@ -12,6 +12,8 @@ export const LEGACY_COMMUNITY_SEGMENT = 'community';
 
 export const MARKETPLACE_PATH = `/${MARKETPLACE_SEGMENT}`;
 
+export const MARKETPLACE_AGENT_PATH = `${MARKETPLACE_PATH}/agent`;
+
 /** Skills discovery (the public catalog). */
 export const MARKETPLACE_SKILL_PATH = `${MARKETPLACE_PATH}/skill`;
 
@@ -30,6 +32,9 @@ export const MARKETPLACE_INSTALLED_CONNECTORS_PATH = `${MARKETPLACE_CONNECTOR_PA
 /** MCP server detail pages keep their own path under the merged Connectors entry. */
 export const MARKETPLACE_MCP_PATH = `${MARKETPLACE_PATH}/mcp`;
 
+export const getMarketplaceEntryPath = (showMarket: boolean | undefined): string =>
+  showMarket ? MARKETPLACE_AGENT_PATH : MARKETPLACE_INSTALLED_SKILLS_PATH;
+
 /** Remaining marketplace path after the (optionally workspace-prefixed) marketplace root. */
 export const getMarketplaceSubPath = (pathname: string): string | undefined => {
   const segments = pathname.split('/').filter(Boolean);
@@ -41,6 +46,12 @@ export const getMarketplaceSubPath = (pathname: string): string | undefined => {
   if (index < 0 || index > 1) return undefined;
 
   return segments.slice(index + 1).join('/');
+};
+
+// These two catalog pages render their own search and actions in the content header.
+export const hasCatalogPageHeader = (pathname: string): boolean => {
+  const section = getMarketplaceSubPath(pathname);
+  return section === 'skill' || section === 'connector';
 };
 
 /**

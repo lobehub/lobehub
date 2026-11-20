@@ -86,27 +86,8 @@ Feature: Discover Interactions
     Then I should be navigated to the MCP detail page
     And I should see the MCP detail content
 
-  # ============================================
-  # Home Page Interactions
-  # ============================================
-
   @COMMUNITY-INTERACT-010 @P1
-  Scenario: Navigate from home to assistant list
-    Given I navigate to "/marketplace"
-    When I click on the "more" link in the featured assistants section
-    Then I should be navigated to "/marketplace/agent"
-    And I should see the page body
-
-  @COMMUNITY-INTERACT-011 @P1
-  Scenario: Navigate from home to Connectors Discover
-    Given I navigate to "/marketplace"
-    When I click on the "more" link in the featured MCP tools section
-    Then I should be navigated to "/marketplace/connector"
-    And I should see MCP cards
-
-  @COMMUNITY-INTERACT-012 @P1
-  Scenario: Click featured assistant from home
-    Given I navigate to "/marketplace"
-    When I click on the first featured assistant card
-    Then I should be navigated to the assistant detail page
-    And I should see the assistant detail content
+  Scenario: Open an old marketplace bookmark with a search
+    Given I navigate to "/community?q=developer"
+    Then I should see filtered assistant cards
+    And I should be navigated to "/marketplace/agent?q=developer"

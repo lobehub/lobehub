@@ -650,16 +650,24 @@ export const onDemandBuiltinToolIds = builtinTools
   .map((tool) => tool.identifier);
 const onDemandBuiltinIds = new Set(onDemandBuiltinToolIds);
 
+/** An old library uninstall stays in effect until the agent explicitly chooses the tool. */
+export const getLegacyDisabledBuiltinToolIds = (
+  uninstalled: readonly string[],
+  overrides: readonly string[],
+) => uninstalled.filter((id) => isOnDemandBuiltinTool(id) && !overrides.includes(id));
+
 /** Agent mode discovers installed builtins by default. Other modes keep their configured toolset. */
 export const getUnavailableBuiltinToolIds = (
   available: Iterable<string>,
   chatConfig?: Pick<LobeAgentChatConfig, 'toolMode' | 'enableAgentMode'> | null,
   uninstalled: readonly string[] = [],
+  overrides: readonly string[] = [],
 ) => {
-  if (resolveToolMode(chatConfig) === 'agent') return uninstalled.filter(isOnDemandBuiltinTool);
+  const legacyDisabled = getLegacyDisabledBuiltinToolIds(uninstalled, overrides);
+  if (resolveToolMode(chatConfig) === 'agent') return legacyDisabled;
 
   const allowed = new Set(available);
-  return onDemandBuiltinToolIds.filter((id) => !allowed.has(id));
+  return onDemandBuiltinToolIds.filter((id) => !allowed.has(id) || legacyDisabled.includes(id));
 };
 export const isOnDemandBuiltinTool = (identifier: string) => onDemandBuiltinIds.has(identifier);
 

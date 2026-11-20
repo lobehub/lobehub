@@ -27,6 +27,7 @@ import CatalogViewTabs from '../CatalogViewTabs';
 import { MARKETPLACE_SKILL_PATH } from '../paths';
 import CatalogListView from './CatalogListView';
 import CatalogSection, { useSeenOnce } from './CatalogSection';
+import DiscoverCatalogHeader from './DiscoverCatalogHeader';
 import RowAction from './RowAction';
 import {
   buildCatalogListUrl,
@@ -228,7 +229,7 @@ const SkillCatalog = memo(() => {
 
   return (
     <>
-      {/* Desktop and mobile both mount this page, so the Discover / Installed switch lives here. */}
+      <DiscoverCatalogHeader kind={'skill'} query={query.q} />
       <CatalogViewTabs active={'discover'} kind={'skill'} />
       {isCatalogListView(query) ? <SkillCatalogList /> : <SkillCatalogGroups />}
     </>
