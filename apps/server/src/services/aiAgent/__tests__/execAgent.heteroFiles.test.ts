@@ -2211,17 +2211,31 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
           },
         },
       });
+      // An unconfirmed stop first checks whether the run can be settled as
+      // runnerless. This one reported just now on a device that answered, so it
+      // must stay live for a retry to reach its process.
+      const now = new Date();
+      const findOperationSpy = vi
+        .spyOn(AgentOperationModel.prototype, 'findById')
+        .mockResolvedValue({ createdAt: now, status: 'running', updatedAt: now } as any);
 
-      const result = await service.interruptTask({
-        operationId: 'operation-codex',
-        topicId: 'topic-1',
-      });
+      try {
+        const result = await service.interruptTask({
+          operationId: 'operation-codex',
+          topicId: 'topic-1',
+        });
 
-      expect(result).toMatchObject({
-        deviceCancellationConfirmed: false,
-        operationId: 'operation-codex',
-        success: false,
-      });
+        expect(result).toMatchObject({
+          deviceCancellationConfirmed: false,
+          failureReason: 'runner_unconfirmed',
+          operationId: 'operation-codex',
+          success: false,
+        });
+        expect(findOperationSpy).toHaveBeenCalledWith('operation-codex');
+      } finally {
+        findOperationSpy.mockRestore();
+      }
+      expect(AgentOperationModel.prototype.settleRunning).not.toHaveBeenCalled();
       expect(mockInterruptOperation).not.toHaveBeenCalled();
     });
 

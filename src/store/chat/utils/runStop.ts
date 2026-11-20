@@ -29,10 +29,10 @@ export class RunStopUnconfirmedError extends Error {
 export const readRunStopFailureReason = (error: unknown): RunStopFailureReason | undefined =>
   error instanceof RunStopUnconfirmedError ? error.failureReason : undefined;
 
-const FAILURE_KEYS: Record<RunStopFailureReason, string> = {
+const FAILURE_KEYS = {
   runner_unconfirmed: 'runStop.failed.runnerUnconfirmed',
   runner_unreachable: 'runStop.failed.runnerUnreachable',
-};
+} as const satisfies Record<RunStopFailureReason, string>;
 
 /**
  * Tell the person a stop failed and why. With `onForceStop`, offer to end the
