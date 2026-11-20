@@ -30,6 +30,9 @@ export const canStageDraftOn = (
   isRunnableProjectDirectory(directory) &&
   (fixedDeviceId === undefined || (!!fixedDeviceId && directory.deviceId === fixedDeviceId));
 
+/** How often a surface offering a project "+" refreshes device presence. */
+export const START_DIRECTORY_PRESENCE_INTERVAL_MS = 30_000;
+
 /**
  * The folder a new project conversation starts in: the first one, in the
  * project's device priority (the order its folders are ranked in), that the

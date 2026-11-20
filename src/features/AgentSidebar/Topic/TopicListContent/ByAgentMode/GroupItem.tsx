@@ -30,6 +30,7 @@ import { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTi
 import {
   canStageDraftOn,
   pickStartDirectory,
+  START_DIRECTORY_PRESENCE_INTERVAL_MS,
 } from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
 import { useAgentFixedDeviceId } from '@/features/Projects/WorkingDirectories/useAgentFixedDeviceId';
 import { useStartProjectTopic } from '@/features/Projects/WorkingDirectories/useStartProjectTopic';
@@ -120,9 +121,11 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
     [canAddTopic, directories, fixedDeviceId],
   );
 
-  // Device priority skips offline devices, so their presence has to be loaded
-  // here: no other part of every sidebar layout guarantees it.
-  useDeviceStore((s) => s.useFetchDevices)(true);
+  // Device priority skips offline devices, so their presence is loaded and
+  // kept fresh here: no other part of every sidebar layout guarantees it.
+  useDeviceStore((s) => s.useFetchDevices)(true, {
+    refreshInterval: START_DIRECTORY_PRESENCE_INTERVAL_MS,
+  });
   const devices = useDeviceStore(deviceSelectors.deviceList);
   const startTopic = useStartProjectTopic(scope?.projectId);
   // Same habit as an agent's "+": straight into this agent's conversation, on

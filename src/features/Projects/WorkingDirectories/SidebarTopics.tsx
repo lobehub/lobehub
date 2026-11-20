@@ -41,7 +41,7 @@ import {
 } from '@/store/projectWorkingDirectory';
 import { filterTopics, type TopicListFilter } from '@/utils/client/topic';
 
-import { pickStartDirectory } from './startProjectTopicDraft';
+import { pickStartDirectory, START_DIRECTORY_PRESENCE_INTERVAL_MS } from './startProjectTopicDraft';
 import { useAgentFixedDeviceId } from './useAgentFixedDeviceId';
 import { useProjectTopicReveal } from './useProjectTopicReveal';
 import { useStartProjectTopic } from './useStartProjectTopic';
@@ -98,9 +98,11 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
       filterTopics(scopedTopics, filter, { directories }).length === 0,
     [filter, scopedTopics, directories],
   );
-  // Device priority skips offline devices, so their presence has to be loaded
-  // here: no other part of every sidebar layout guarantees it.
-  useDeviceStore((s) => s.useFetchDevices)(true);
+  // Device priority skips offline devices, so their presence is loaded and
+  // kept fresh here: no other part of every sidebar layout guarantees it.
+  useDeviceStore((s) => s.useFetchDevices)(true, {
+    refreshInterval: START_DIRECTORY_PRESENCE_INTERVAL_MS,
+  });
   const devices = useDeviceStore(deviceSelectors.deviceList);
   const startTopic = useStartProjectTopic(projectId);
   const fixedDeviceId = useAgentFixedDeviceId(coordinatorAgentId);
