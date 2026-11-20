@@ -1,5 +1,6 @@
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -293,8 +294,50 @@ const watchChildExit = (child: ChildProcess, name: 'next' | 'vite') => {
   });
 };
 
+const WORKTREE_DEPENDENCIES_HINT =
+  'Install dependencies inside this worktree with `pnpm install`. Next.js Turbopack rejects a node_modules link that escapes the project root and panics at startup.';
+
+/**
+ * Validate that this workspace can be served by Next/Turbopack.
+ * A linked node_modules (Conductor/Orca-style worktree sharing) points outside the
+ * project root, which Turbopack refuses with an opaque panic before any route loads.
+ * Fail early with the actionable cause instead of starting a dev server that dies.
+ */
+export const getWorkspaceDependencyIssue = (projectRoot: string): string | undefined => {
+  const nodeModulesPath = path.join(projectRoot, 'node_modules');
+  const realProjectRoot = fs.realpathSync(projectRoot);
+
+  try {
+    fs.lstatSync(nodeModulesPath);
+  } catch {
+    return `node_modules is missing at ${nodeModulesPath}. ${WORKTREE_DEPENDENCIES_HINT}`;
+  }
+
+  let realNodeModules: string;
+  try {
+    realNodeModules = fs.realpathSync(nodeModulesPath);
+  } catch {
+    return `node_modules at ${nodeModulesPath} cannot be resolved. ${WORKTREE_DEPENDENCIES_HINT}`;
+  }
+
+  const relative = path.relative(realProjectRoot, realNodeModules);
+  const insideWorktree =
+    relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+
+  return insideWorktree
+    ? undefined
+    : `node_modules resolves to ${realNodeModules}, outside the worktree ${realProjectRoot}. ${WORKTREE_DEPENDENCIES_HINT}`;
+};
+
 const main = async () => {
   loadEnv();
+  const dependencyIssue = getWorkspaceDependencyIssue(process.cwd());
+  if (dependencyIssue) {
+    console.error(`❌ ${dependencyIssue}`);
+    process.exitCode = 1;
+    return;
+  }
+
   // Parsing runs in a prebuilt worker thread file; a stale or missing one would fail every parse.
   await buildFileParseWorker();
   nextPort = await resolveNextPort();
@@ -351,6 +394,7 @@ export const __testing = {
   createPackageScriptProcessConfig,
   createDevProcessHandle,
   findFreePort,
+  getWorkspaceDependencyIssue,
   resolveNextPort,
   resolveVitePortEnv,
   sendSignalToDevProcess,

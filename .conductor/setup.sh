@@ -29,70 +29,73 @@ if [ -f "$CONDUCTOR_ROOT_PATH/.env" ]; then
   ln -sf "$CONDUCTOR_ROOT_PATH/.env" .env
   if [ -L ".env" ]; then
     log "SUCCESS: .env symlinked -> $(readlink .env)"
+  elif cp -f "$CONDUCTOR_ROOT_PATH/.env" .env; then
+    # Windows without symlink privileges: ln -s copies the file but does not create a link.
+    log "SUCCESS: .env copied (this filesystem cannot create symlinks)"
   else
-    log "ERROR: Failed to create .env symlink"
+    log "ERROR: Failed to provide .env"
   fi
 else
   log "WARNING: $CONDUCTOR_ROOT_PATH/.env does not exist, skipping"
 fi
 
+# Docker Compose resolves service env_file relative to its compose file, not the
+# repository root. Seed docker-compose/dev/.env from the source checkout so the
+# database name and password stay aligned with DATABASE_URL.
+COMPOSE_ENV_DIR="$PWD/docker-compose/dev"
+COMPOSE_ENV="$COMPOSE_ENV_DIR/.env"
+COMPOSE_ENV_SOURCE="$CONDUCTOR_ROOT_PATH/docker-compose/dev/.env"
+log "--- Preparing Docker Compose environment ---"
+if [ -f "$COMPOSE_ENV_SOURCE" ] && [ "$COMPOSE_ENV_SOURCE" != "$COMPOSE_ENV" ]; then
+  mkdir -p "$COMPOSE_ENV_DIR"
+  if cp -f "$COMPOSE_ENV_SOURCE" "$COMPOSE_ENV"; then
+    log "SUCCESS: docker-compose/dev/.env copied from source checkout"
+  else
+    log "ERROR: Failed to copy docker-compose/dev/.env"
+  fi
+elif [ ! -f "$COMPOSE_ENV" ] && [ -f "$COMPOSE_ENV_DIR/.env.example" ]; then
+  mkdir -p "$COMPOSE_ENV_DIR"
+  if cp -f "$COMPOSE_ENV_DIR/.env.example" "$COMPOSE_ENV"; then
+    log "SUCCESS: docker-compose/dev/.env seeded from .env.example"
+  else
+    log "ERROR: Failed to seed docker-compose/dev/.env"
+  fi
+else
+  log "docker-compose/dev/.env already available, skipping"
+fi
+
 log ""
-log "--- Finding node_modules directories ---"
+log "--- Ensuring workspace dependencies ---"
 
-# Find all node_modules directories (excluding .pnpm internal and .next build cache)
-# NODE_MODULES_DIRS=$(find "$CONDUCTOR_ROOT_PATH" -maxdepth 3 -name "node_modules" -type d 2>/dev/null | grep -v ".pnpm" | grep -v ".next")
+# node_modules must be installed inside this worktree. Next.js Turbopack refuses a
+# node_modules link that escapes the project root ("Symlink [project]/node_modules
+# is invalid, it points out of the filesystem root") and the dev server panics.
+# Remove escaping links without following them. This makes repeated setup
+# idempotent for worktrees created by the old Conductor symlink strategy.
+if node -e "const fs=require('fs'); try { const s=fs.lstatSync('node_modules'); if (s.isSymbolicLink()) fs.unlinkSync('node_modules'); } catch (error) { if (error.code !== 'ENOENT') throw error; }"; then
+  log "SUCCESS: escaping node_modules link removed (if present)"
+else
+  log "ERROR: Failed to remove node_modules link"
+fi
 
-# log "Found node_modules directories:"
-# echo "$NODE_MODULES_DIRS" >> "$LOG_FILE"
+if [ -d node_modules ]; then
+  log "node_modules already present in this worktree, skipping install"
+elif command -v pnpm >/dev/null 2>&1; then
+  log "Installing dependencies with pnpm install (this can take a few minutes)..."
+  if pnpm install --registry=https://registry.npmjs.org/ >> "$LOG_FILE" 2>&1; then
+    log "SUCCESS: pnpm install finished"
+  else
+    log "ERROR: pnpm install failed; run it manually to see the full error"
+  fi
+else
+  log "ERROR: pnpm not found; install dependencies manually before starting dev"
+fi
 
-# log ""
-# log "--- Creating node_modules symlinks ---"
-
-# # Counter for statistics
-# total=0
-# success=0
-# failed=0
-
-# for dir in $NODE_MODULES_DIRS; do
-#   total=$((total + 1))
-
-#   # Get relative path by removing CONDUCTOR_ROOT_PATH prefix
-#   rel_path="${dir#$CONDUCTOR_ROOT_PATH/}"
-#   parent_dir=$(dirname "$rel_path")
-
-#   log "Processing: $rel_path"
-#   log "  Source: $dir"
-#   log "  Parent dir: $parent_dir"
-
-#   # Create parent directory if needed
-#   if [ "$parent_dir" != "." ]; then
-#     if [ ! -d "$parent_dir" ]; then
-#       mkdir -p "$parent_dir"
-#       log "  Created parent directory: $parent_dir"
-#     fi
-#   fi
-
-#   # Create symlink
-#   ln -sf "$dir" "$rel_path"
-
-#   # Verify symlink was created
-#   if [ -L "$rel_path" ]; then
-#     log "  SUCCESS: $rel_path -> $(readlink "$rel_path")"
-#     success=$((success + 1))
-#   else
-#     log "  ERROR: Failed to create symlink for $rel_path"
-#     failed=$((failed + 1))
-#   fi
-
-#   log ""
-# done
+log ""
 
 log "=========================================="
 log "Setup Complete"
 log "=========================================="
-log "Total node_modules: $total"
-log "Successful symlinks: $success"
-log "Failed symlinks: $failed"
 log ""
 
 # List created symlinks for verification
