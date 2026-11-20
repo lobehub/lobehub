@@ -38,10 +38,7 @@ import { registerGoalObjectiveCommands } from './objective';
 import { goalReads, hasOperationToken } from './reads';
 import { registerGoalReportCommand } from './report';
 import { missingSeedDependencies, parseTaskFile } from './seedTasks';
-
-// Typed rather than inferred: an `as const` map is indexable by a widened
-// `any` node kind, which is how a renamed kind silently printed `undefined`
-// here after the type checker had signed off everywhere else.
+import { registerGoalSwarmCommands } from './swarm';
 
 /** `--variant mechanism=replica,swr` → one axis and its values. */
 const parseVariant = (raw: string) => {
@@ -1215,4 +1212,5 @@ export function registerGoalCommand(program: Command) {
   registerGoalMarkCommands(goal);
   registerGoalMetricCommands(goal);
   registerGoalObjectiveCommands(goal);
+  registerGoalSwarmCommands(goal);
 }

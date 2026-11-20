@@ -493,6 +493,36 @@ export interface GoalObjective {
   title?: string;
 }
 
+/** One lane of a swarm: an experiment container holding one timeboxed Task. */
+export interface GoalSwarmLane {
+  /** The experiment container node; the objective series tags points with it. */
+  containerId: string;
+  /** Short name, also the lane's directory: `<workspace>/.lanes/<key>`. */
+  key: string;
+  /** The lane's Task node. */
+  taskNodeId: string;
+}
+
+/**
+ * A swarm goal: N lanes work on copies of one workspace in parallel, each
+ * grading itself with the goal's objective, until `config.schedule.deadline`.
+ * Then the best lane — the champion — is promoted back into the workspace.
+ */
+export interface GoalSwarm {
+  lanes: GoalSwarmLane[];
+  /** Absolute path of the workspace on the lanes' device. */
+  workspace: string;
+  /** Coordinator-owned wrap-up progress. */
+  wrapUp?: {
+    /** The lane whose work was promoted; absent when no lane ever scored. */
+    championLane?: string;
+    championScore?: number;
+    /** The promotion Task node. */
+    promoteNodeId?: string;
+    startedAt: string;
+  };
+}
+
 export interface GoalConfig {
   acceptance?: GoalAcceptancePolicy;
   /**
@@ -546,6 +576,8 @@ export interface GoalConfig {
   supervision?: GoalSupervisionPolicy;
   /** Durable supervisor topic and bounded incident ledger. */
   supervisorState?: GoalSupervisionState;
+  /** Parallel lanes optimising {@link GoalConfig.objective} until the deadline; see {@link GoalSwarm}. */
+  swarm?: GoalSwarm;
   /**
    * Who executes the Tasks the coordinator creates, when that is not the goal's
    * own agent. The goal's `agentId` supervises and plans; this only routes work.

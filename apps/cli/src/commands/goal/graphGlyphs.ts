@@ -1,6 +1,11 @@
 import type { GoalEdgeKind, GoalNodeKind } from '@lobechat/types';
 
-/** The glyph `lh goal show` prints before each node of the graph. */
+/**
+ * The glyph `lh goal show` prints before each node of the graph. Typed rather
+ * than inferred: an `as const` map is indexable by a widened `any` node kind,
+ * which is how a renamed kind silently printed `undefined` after the type
+ * checker had signed off everywhere else.
+ */
 export const nodeIcon: Record<GoalNodeKind, string> = {
   batch: '▦',
   dead_end: '✕',
