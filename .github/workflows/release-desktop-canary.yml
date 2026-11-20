@@ -556,6 +556,10 @@ jobs:
   # ============================================
   notify-homebrew-tap:
     needs: [publish-release, calculate-version]
+    # force_full skips core-ota, and a skipped ancestor skips every job on the default
+    # success() condition. Mirror publish-release: gate on the direct dependencies
+    # explicitly so a manual canary release still pings the tap.
+    if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.calculate-version.result == 'success' }}
     name: Notify Homebrew Tap
     runs-on: ubuntu-latest
     permissions:
