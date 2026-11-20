@@ -209,6 +209,31 @@ describe('clawifi crawler', () => {
     expect(error.status).toBe(424);
   });
 
+  it.each([408, 429, 503])(
+    'should keep the target status %i so a transient target error stays retryable',
+    async (targetStatus) => {
+      fetchMock.mockResolvedValue(
+        createMockResponse(
+          {
+            error: {
+              code: 'upstream_request_failed',
+              details: { status_code: targetStatus },
+              message: `GET https://example.com failed: HTTP Error ${targetStatus}`,
+              retryable: true,
+            },
+          },
+          { ok: false, status: 424, statusText: 'Failed Dependency' },
+        ),
+      );
+
+      const error = await clawifi('https://example.com', { filterOptions: {} }).catch((e) => e);
+
+      expect(error).toBeInstanceOf(HTTPStatusError);
+      expect(error).not.toBeInstanceOf(PageNotFoundError);
+      expect(error.status).toBe(targetStatus);
+    },
+  );
+
   it('should include the Clawifi error body for other HTTP errors', async () => {
     fetchMock.mockResolvedValue(
       createMockResponse(

@@ -1,5 +1,5 @@
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
-import { PageNotFoundError, toFetchError } from '../utils/errorType';
+import { HTTPStatusError, PageNotFoundError, toFetchError } from '../utils/errorType';
 import { createHTTPStatusError, parseJSONResponse } from '../utils/response';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
 
@@ -31,12 +31,13 @@ interface ClawifiErrorResponse {
  * Clawifi answers 424 when the target page itself answered with an HTTP error,
  * and keeps the target's status in `error.details.status_code`.
  */
-const getTargetNotFoundStatus = async (res: Response): Promise<number | undefined> => {
+// Clawifi answers 424 when the target page itself answered with an HTTP error, with the target's status here
+const getTargetStatus = async (res: Response): Promise<number | undefined> => {
   try {
     const body = (await res.clone().json()) as ClawifiErrorResponse;
     const status = body?.error?.details?.status_code;
 
-    return status === 404 || status === 410 ? status : undefined;
+    return typeof status === 'number' ? status : undefined;
   } catch {
     return undefined;
   }
@@ -70,12 +71,20 @@ export const clawifi: CrawlImpl = async (url) => {
   }
 
   if (!res.ok) {
-    // A target 404/410 is the page's final answer, so keep its status and don't retry
     if (res.status === 424) {
-      const targetStatus = await getTargetNotFoundStatus(res);
+      const targetStatus = await getTargetStatus(res);
 
-      if (targetStatus) {
+      // A target 404/410 is the page's final answer, so keep its status and don't retry
+      if (targetStatus === 404 || targetStatus === 410) {
         throw new PageNotFoundError(targetStatus === 410 ? 'Gone' : 'Not Found', targetStatus);
+      }
+
+      // A target 408/429/5xx is transient, so report the target's status and keep the crawl retryable
+      if (targetStatus && (targetStatus === 408 || targetStatus === 429 || targetStatus >= 500)) {
+        throw new HTTPStatusError(
+          `Clawifi request failed: the target page answered with status ${targetStatus}`,
+          targetStatus,
+        );
       }
     }
 
