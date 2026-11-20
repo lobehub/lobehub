@@ -33,7 +33,7 @@ import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
-import { resolveDeviceAccessPolicy } from '@/server/services/aiAgent/deviceAccessPolicy';
+import { runDeniesDevices } from '@/server/services/aiAgent/deviceAccessPolicy';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
 import { FileService } from '@/server/services/file';
@@ -1049,8 +1049,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       sandboxWorkingDir: sandbox.workingDir,
       serverDB: context.serverDB,
       shareVisitorBlocked: !!shareVisitor,
-      deviceAccessDenied: !resolveDeviceAccessPolicy({ botContext: context.botContext })
-        .canUseDevice,
+      deviceAccessDenied: runDeniesDevices(context),
       skillModel,
       topicId: context.topicId,
       userId: context.userId,

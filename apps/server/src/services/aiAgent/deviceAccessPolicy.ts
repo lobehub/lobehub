@@ -152,3 +152,18 @@ export const resolveDeviceAccessPolicy = (
 
   return { canUseDevice: false, reason: 'bot-external-sender' };
 };
+
+/**
+ * Whether a running agent may NOT use devices — what its tools must carry into
+ * anything they start (a sandbox token, a new run). The run's own decision
+ * (`state.principal.policy.deviceAccess`) wins: it covers every source of a
+ * denial, including a token from a device-denied run that started this one,
+ * which leaves no bot sender behind. The IM sender backs it up for a run that
+ * has no recorded decision.
+ */
+export const runDeniesDevices = (run: {
+  botContext?: ChatTopicBotContext;
+  deviceAccess?: { canUseDevice: boolean };
+}): boolean =>
+  run.deviceAccess?.canUseDevice === false ||
+  (!!run.botContext && !resolveDeviceAccessPolicy({ botContext: run.botContext }).canUseDevice);
