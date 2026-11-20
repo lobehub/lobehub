@@ -19,6 +19,12 @@ import { HumanApprovalAlreadyResolvedError } from '@/database/models/message';
 import type { ThreadModel } from '@/database/models/thread';
 import type { TopicModel } from '@/database/models/topic';
 import type { AgentRuntimeService } from '@/server/services/agentRuntime';
+import { AbandonOperationService } from '@/server/services/agentRuntime/AbandonOperationService';
+import { HETERO_OPERATION_SILENCE_MS } from '@/server/services/agentRuntime/operationLease';
+import {
+  isRunnerGoneCancelResult,
+  RUNNER_DISCONNECT_GRACE_MS,
+} from '@/server/services/agentRuntime/runnerLiveness';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { STOPPED_TOOL_CONTENT } from '../helpers/agentFactory';
@@ -26,10 +32,37 @@ import { releaseHeteroSteers } from '../steerQueue/hetero';
 
 const log = debug('lobe-server:ai-agent-service');
 
+/** How a run with no runner left was settled by a stop. */
+export type RunnerlessSettleReason = 'lease_expired' | 'runner_disconnected';
+
+/**
+ * Why a stop could not end a device-hosted run.
+ * - `runner_unreachable`: the device is offline or no longer holds the process,
+ *   but the run reported recently enough that it may still be running there.
+ * - `runner_unconfirmed`: the device answered but did not confirm the exit.
+ */
+export type InterruptFailureReason = 'runner_unconfirmed' | 'runner_unreachable';
+
+export interface InterruptTaskResult {
+  /** Set when the stop settled a run whose runner was gone, instead of stopping it. */
+  completionReason?: RunnerlessSettleReason;
+  deviceCancellationConfirmed?: boolean;
+  /** Set when `success` is false because the device run could not be ended. */
+  failureReason?: InterruptFailureReason;
+  operationId?: string;
+  success: boolean;
+  threadId?: string;
+}
+
 interface InterventionControllerDeps {
   agentOperationModel: AgentOperationModel;
   agentRuntimeService: AgentRuntimeService;
   db: LobeChatDatabase;
+  /**
+   * Run the abandonment side effects (error on the turn, topic marker cleared,
+   * terminal hooks) for a run this controller already retired. Injected for tests.
+   */
+  finalizeAbandonedRun?: (operationId: string, reason: RunnerlessSettleReason) => Promise<unknown>;
   messageModel: MessageModel;
   resolveDeviceWorkspaceId: (deviceId: string | undefined) => Promise<string | undefined>;
   threadModel: ThreadModel;
@@ -72,6 +105,76 @@ export class InterventionController {
   }
 
   /**
+   * Settle a device-hosted run whose stop could not be confirmed, when its
+   * runner is provably gone. Returns how it was settled, or undefined when the
+   * run must stay live so a retry can still reach its process.
+   *
+   * - `lease_expired`: the run reported nothing for the whole hetero silence
+   *   window; the stale sweep would retire it anyway.
+   * - `runner_disconnected`: the device is offline or no longer holds the
+   *   process, and the run has been silent past a short grace (or the user
+   *   forced the stop). A run that is still reporting keeps a fresh lease and
+   *   is never settled here.
+   *
+   * The claim is the lease compare-and-set the stale sweep uses, so a batch
+   * that lands meanwhile wins and the run stays live.
+   */
+  private async settleRunnerlessRun(
+    operationId: string,
+    { force, runnerGone }: { force: boolean; runnerGone: boolean },
+  ): Promise<RunnerlessSettleReason | undefined> {
+    const operation = await this.deps.agentOperationModel.findById(operationId);
+    if (operation?.status !== 'running') return;
+
+    const now = Date.now();
+    const silentForMs = now - new Date(operation.updatedAt ?? operation.createdAt).getTime();
+
+    let reason: RunnerlessSettleReason;
+    let claimed: boolean;
+    if (silentForMs >= HETERO_OPERATION_SILENCE_MS) {
+      reason = 'lease_expired';
+      claimed = await this.deps.agentOperationModel.settleStaleRunning(
+        operationId,
+        new Date(now - HETERO_OPERATION_SILENCE_MS),
+      );
+    } else if (runnerGone && (force || silentForMs >= RUNNER_DISCONNECT_GRACE_MS)) {
+      reason = 'runner_disconnected';
+      claimed = await this.deps.agentOperationModel.settleDisconnectedRunner(
+        operationId,
+        force ? undefined : new Date(now - RUNNER_DISCONNECT_GRACE_MS),
+      );
+    } else {
+      return;
+    }
+    if (!claimed) return;
+
+    log('interruptTask: settled runnerless run op=%s reason=%s', operationId, reason);
+    const finalize =
+      this.deps.finalizeAbandonedRun ??
+      ((id: string, why: RunnerlessSettleReason) =>
+        new AbandonOperationService(this.deps.db).finalizeAbandoned(id, why, {
+          settledAsAbandoned: true,
+        }));
+    try {
+      await finalize(operationId, reason);
+    } catch (error) {
+      // The row is already terminal; a failed side effect must not turn the
+      // stop the user asked for into an error.
+      console.error('[InterventionController] finalizing a runnerless run failed', {
+        error,
+        operationId,
+        reason,
+      });
+    }
+    // Same reason as the confirmed stop below: nothing else hands back the
+    // follow-ups this run took but never delivered.
+    await releaseHeteroSteers(operationId).catch((error) => {
+      console.error('[InterventionController] releaseHeteroSteers failed', { error, operationId });
+    });
+    return reason;
+  }
+
+  /**
    * Mirrors whether the composer still holds user messages queued behind a
    * run, so the run hands its turn back at the next step boundary.
    *
@@ -105,21 +208,27 @@ export class InterventionController {
    *
    * Expects:
    * - At least one of `threadId` or `operationId` resolves to an owned operation.
+   * - `force` only when a person explicitly chose to end a run the device could
+   *   not confirm stopping.
    *
    * Returns:
    * - Runtime cancellation status and, for local device agents, whether process exit was confirmed.
+   * - `completionReason` when the device run's runner was gone and the stop
+   *   settled the run instead (`runner_disconnected` / `lease_expired`).
+   * - `failureReason` when the device run could not be ended.
    */
   async interruptTask(params: {
+    /**
+     * End the run even when its device cannot confirm the process exited. The
+     * run is settled and its topic released; a process the device still runs
+     * can no longer write to it.
+     */
+    force?: boolean;
     operationId?: string;
     threadId?: string;
     topicId?: string;
-  }): Promise<{
-    deviceCancellationConfirmed?: boolean;
-    operationId?: string;
-    success: boolean;
-    threadId?: string;
-  }> {
-    const { threadId, operationId, topicId } = params;
+  }): Promise<InterruptTaskResult> {
+    const { force = false, threadId, operationId, topicId } = params;
 
     log('interruptTask: threadId=%s, operationId=%s', threadId, operationId);
 
@@ -127,6 +236,8 @@ export class InterventionController {
     let resolvedOperationId = operationId;
     let thread;
     let deviceCancellationConfirmed: boolean | undefined;
+    /** A forced stop the device could not confirm settles like a confirmed one. */
+    let forcedDeviceStop = false;
 
     if (threadId) {
       thread = await this.deps.threadModel.findById(threadId);
@@ -223,14 +334,44 @@ export class InterventionController {
             cancelResult.state,
             cancelResult.error,
           );
-          // Preserve the runtime and topic's device identity until the writer
-          // actually exits, so a retry can still address the same process.
-          return {
-            deviceCancellationConfirmed,
-            operationId: resolvedOperationId,
-            success: false,
-            threadId: thread?.id,
-          };
+          const runnerGone = isRunnerGoneCancelResult(cancelResult);
+          // A runner that is gone cannot confirm anything, so waiting for it
+          // would keep the topic `running` until the stale sweep's hour is up,
+          // with no way out in between. Settle it once that is provable.
+          const settledAs = await this.settleRunnerlessRun(resolvedOperationId, {
+            force,
+            runnerGone,
+          });
+          if (settledAs) {
+            // No exit is confirmed, but the run is over: callers that wait for
+            // a confirmed stop (replacement runs, task cancel, `lh topic stop`)
+            // read an unset confirmation as stopped and may proceed.
+            return {
+              completionReason: settledAs,
+              operationId: resolvedOperationId,
+              success: true,
+              threadId: thread?.id,
+            };
+          }
+
+          if (!force) {
+            // Preserve the runtime and topic's device identity until the writer
+            // actually exits, so a retry can still address the same process.
+            return {
+              deviceCancellationConfirmed,
+              failureReason: runnerGone ? 'runner_unreachable' : 'runner_unconfirmed',
+              operationId: resolvedOperationId,
+              success: false,
+              threadId: thread?.id,
+            };
+          }
+
+          // The person chose to end it anyway: settle it as a stop.
+          log(
+            'interruptTask: forcing the stop of unconfirmed device run op=%s',
+            resolvedOperationId,
+          );
+          forcedDeviceStop = true;
         }
       }
     }
@@ -247,7 +388,7 @@ export class InterventionController {
     // Device CLI runs have no native AgentRuntime state to interrupt. Their
     // acknowledged process exit is authoritative; settle only the owned old
     // operation and its matching marker, preserving any newer run/outcome.
-    if (deviceCancellationConfirmed === true) {
+    if (deviceCancellationConfirmed === true || forcedDeviceStop) {
       const settled = await this.deps.agentOperationModel.settleRunning(
         resolvedOperationId,
         'interrupted',
@@ -279,7 +420,7 @@ export class InterventionController {
       });
     }
 
-    if (!interrupted && deviceCancellationConfirmed !== true) {
+    if (!interrupted && deviceCancellationConfirmed !== true && !forcedDeviceStop) {
       const alreadyCancelled = thread?.status === ThreadStatus.Cancel;
 
       return {

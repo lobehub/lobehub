@@ -299,6 +299,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(AgentOperationModel.prototype, 'settleRunning').mockResolvedValue(true);
+    vi.spyOn(AgentOperationModel.prototype, 'findById').mockResolvedValue(undefined);
     recordStartSpy = vi.spyOn(CompletionLifecycle.prototype, 'recordStart').mockResolvedValue(true);
     topicMock.appendRunningOperationChild.mockResolvedValue(true);
     topicMock.create.mockResolvedValue({ id: 'topic-1', metadata: undefined });
@@ -2390,7 +2391,6 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
 
     afterEach(() => {
       completeOperationSpy.mockRestore();
-      findOperationSpy.mockRestore();
     });
 
     const errorBubbleUpdates = () => mockMessageUpdate.mock.calls.filter((call) => call[1]?.error);

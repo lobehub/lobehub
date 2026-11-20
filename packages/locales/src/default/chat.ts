@@ -1782,6 +1782,14 @@ export default {
   'reasoningEffort.updateFailed': 'Failed to update reasoning effort, please try again',
   'regenerate': 'Regenerate',
   'roleAndArchive': 'Agent Profile & History',
+  'runStop.ended.runnerGone': 'Run ended: the device running it is no longer connected.',
+  'runStop.failed.runnerUnconfirmed':
+    "The device running this agent didn't confirm the run stopped. It may still be running there.",
+  'runStop.failed.runnerUnreachable':
+    'The device running this agent is offline or no longer holds the run, but it reported moments ago.',
+  'runStop.forceEnd': 'Force end',
+  'runStop.forceEndHint':
+    'Force end releases this conversation now; anything the device still sends is discarded.',
   'memory.effort.desc': 'Control how aggressively the AI retrieves and updates memory.',
   'memory.effort.high.title': 'High',
   'memory.effort.low.title': 'Low',

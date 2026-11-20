@@ -149,8 +149,12 @@ export async function persistCompletion(
   reason: string,
   settledAsAbandoned?: boolean,
 ): Promise<boolean> {
+  // An abandoned row was retired by its claimer's own compare-and-set, which
+  // wrote the reason in the same UPDATE (`lease_expired`, or
+  // `runner_disconnected` when the device runner was gone). Leave it alone:
+  // `recordCompletion` skips an undefined field.
   const completionReason: any = settledAsAbandoned
-    ? 'lease_expired'
+    ? undefined
     : reason === 'max_steps' ||
         reason === 'cost_limit' ||
         reason === 'tool_call_repeat_limit' ||

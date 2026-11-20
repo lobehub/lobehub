@@ -27,21 +27,41 @@ export function registerTopicLifecycleCommands(topic: Command) {
   topic
     .command('stop <topicId>')
     .description("Stop the topic's running turn (the ones you started)")
+    .option(
+      '--force',
+      'End the run even if its device cannot confirm the process stopped (it can no longer write to the topic)',
+    )
     .option('--workspace <id|slug>', WORKSPACE_OPTION_HELP)
     .option('--json', 'Output JSON')
-    .action((topicId: string, options: { json?: boolean; workspace?: string }) =>
+    .action((topicId: string, options: { force?: boolean; json?: boolean; workspace?: string }) =>
       run(async () => {
         const client = await getTrpcClient(await resolveWorkspaceRef(options.workspace));
-        const result = (await client.aiAgent.interruptTask.mutate({ topicId })) as {
+        const result = (await client.aiAgent.interruptTask.mutate({
+          ...(options.force ? { force: true } : {}),
+          topicId,
+        })) as {
+          completionReason?: string;
+          failureReason?: 'runner_unconfirmed' | 'runner_unreachable';
           running?: number;
           stopped?: number;
           success: boolean;
         };
         if (options.json) return outputJson(result);
         if (!result.success) {
+          const pending = (result.running ?? 0) - (result.stopped ?? 0);
+          const why =
+            result.failureReason === 'runner_unreachable'
+              ? 'its device is offline or no longer holds the process, but the run reported recently'
+              : 'a device may still be running them';
           throw new Error(
-            `${topicId}: ${(result.running ?? 0) - (result.stopped ?? 0)} run(s) could not be confirmed stopped (a device may still be running them). Try again once the device is reachable.`,
+            `${topicId}: ${pending} run(s) could not be confirmed stopped (${why}). Try again once the device is reachable, or pass --force to end the run anyway.`,
           );
+        }
+        if (result.completionReason) {
+          console.log(
+            `${pc.green('✓')} Ended ${topicId}: its runner was gone (${result.completionReason}).`,
+          );
+          return;
         }
         console.log(
           result.stopped ? `${pc.green('✓')} Stopped ${topicId}.` : `${topicId} was not running.`,

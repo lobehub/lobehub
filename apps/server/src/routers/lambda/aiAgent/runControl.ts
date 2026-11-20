@@ -2,7 +2,12 @@ import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { z } from 'zod';
 
+import type { TopicModel } from '@/database/models/topic';
 import { router } from '@/libs/trpc/lambda';
+import type {
+  InterruptFailureReason,
+  RunnerlessSettleReason,
+} from '@/server/services/aiAgent/intervention/InterventionController';
 import { findOwnLiveRuns } from '@/server/services/aiAgent/steerQueue/liveRuns';
 
 import { assertCanUseAgentRunConversation, assertCanUseOperationAgent } from './guards';
@@ -12,7 +17,11 @@ const log = debug('lobe-server:ai-agent-router');
 
 /** What `interruptTask` answers; `running` / `stopped` are set when it stopped a whole topic. */
 type InterruptTaskResult = {
+  /** Set when the run's runner was gone and the stop settled it instead. */
+  completionReason?: RunnerlessSettleReason;
   deviceCancellationConfirmed?: boolean;
+  /** Why the device run could not be ended, when `success` is false. */
+  failureReason?: InterruptFailureReason;
   operationId?: string;
   /** Live runs found on the topic (topic-only stop). */
   running?: number;
@@ -27,6 +36,12 @@ type InterruptTaskResult = {
  */
 const InterruptTaskSchema = z
   .object({
+    /**
+     * End the run even when its device cannot confirm the process exited (the
+     * person chose "force end" after a stop failed). The run is settled and the
+     * topic released.
+     */
+    force: z.boolean().optional(),
     /** Operation ID */
     operationId: z.string().optional(),
     /** Thread ID */
@@ -60,13 +75,39 @@ const StartExecutionSchema = z.object({
   priority: z.enum(['high', 'normal', 'low']).optional().default('normal'),
 });
 
+/**
+ * Clear a topic's `runningOperation` marker whose run is no longer alive (by
+ * the topic model's own liveness rule), moving the topic back to `active`. A
+ * live marker, or a newer run that took the topic meanwhile, is left alone:
+ * `settleRunningOperation` only clears the operation it is given.
+ */
+const releaseDeadRunningMarker = async (
+  ctx: {
+    serverDB: Parameters<TopicModel['isRunningOperationAlive']>[0];
+    topicModel: TopicModel;
+  },
+  topicId: string,
+) => {
+  const marker = (await ctx.topicModel.findById(topicId))?.metadata?.runningOperation;
+  if (!marker || (await ctx.topicModel.isRunningOperationAlive(ctx.serverDB, marker))) return;
+
+  log('interruptTask: releasing dead marker op=%s on topic %s', marker.operationId, topicId);
+  await ctx.topicModel.settleRunningOperation(topicId, marker.operationId, 'active');
+};
+
 export const runControlRouter = router({
   interruptTask: aiAgentWriteProcedure
     .input(InterruptTaskSchema)
     .mutation(async ({ input, ctx }): Promise<InterruptTaskResult> => {
-      const { threadId, operationId, topicId } = input;
+      const { force, threadId, operationId, topicId } = input;
 
-      log('interruptTask: threadId=%s, operationId=%s, topicId=%s', threadId, operationId, topicId);
+      log(
+        'interruptTask: threadId=%s, operationId=%s, topicId=%s, force=%s',
+        threadId,
+        operationId,
+        topicId,
+        force,
+      );
 
       // A topic alone: stop the caller's own live runs on its main line.
       if (!operationId && !threadId && topicId) {
@@ -80,14 +121,32 @@ export const runControlRouter = router({
           { db: ctx.serverDB, workspaceId: ctx.workspaceId ?? undefined },
           { threadId: null, topicId, userId: ctx.userId },
         );
+        // Nothing live, yet the topic can still carry the marker of a run that
+        // ended without clearing it (its terminal never landed, or it aged
+        // out). Every reader already treats such a marker as dead, but the
+        // topic row keeps showing `running` with nothing left to stop; release
+        // it so the stop the person asked for actually ends the run.
+        if (runIds.length === 0) await releaseDeadRunningMarker(ctx, topicId);
+
         let stopped = 0;
+        let completionReason: RunnerlessSettleReason | undefined;
+        let failureReason: InterruptFailureReason | undefined;
         for (const runId of runIds) {
-          const result = await ctx.aiAgentService.interruptTask({ operationId: runId, topicId });
+          const result = await ctx.aiAgentService.interruptTask({
+            force,
+            operationId: runId,
+            topicId,
+          });
           if (result.success) stopped += 1;
+          completionReason ??= result.completionReason;
+          if (!result.success) failureReason ??= result.failureReason;
         }
         // `success: false` when a run could not be confirmed stopped (a device
-        // process that did not answer): it stays live so the stop can be retried.
+        // process that did not answer): it stays live so the stop can be
+        // retried, or forced.
         return {
+          completionReason,
+          failureReason,
           operationId: runIds[0],
           running: runIds.length,
           stopped,
@@ -96,7 +155,7 @@ export const runControlRouter = router({
       }
 
       try {
-        return await ctx.aiAgentService.interruptTask({ operationId, threadId, topicId });
+        return await ctx.aiAgentService.interruptTask({ force, operationId, threadId, topicId });
       } catch (error: any) {
         if (error.message === 'Thread not found') {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Thread not found' });

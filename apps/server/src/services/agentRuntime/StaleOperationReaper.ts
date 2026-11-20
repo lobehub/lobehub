@@ -9,9 +9,10 @@ import { and, asc, eq, gte, isNotNull, isNull, lt, notInArray, or, sql } from 'd
 import urlJoin from 'url-join';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
-import { agentOperations } from '@/database/schemas';
+import { agentOperations, topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
+import { deviceGateway } from '@/server/services/deviceGateway';
 import { QueueService } from '@/server/services/queue';
 
 import { AbandonOperationService } from './AbandonOperationService';
@@ -20,6 +21,7 @@ import {
   HETERO_OPERATION_SILENCE_MS as HETERO_SILENCE_MS,
   OPERATION_LEASE_STALE_MS as DEFAULT_STALE_AFTER_MS,
 } from './operationLease';
+import { findRunDeviceRoute, RUNNER_DISCONNECTED_SILENCE_MS } from './runnerLiveness';
 
 const log = debug('lobe-server:stale-operation-reaper');
 
@@ -81,8 +83,16 @@ export interface ReapStaleOperationsParams {
   maxRedriveAttempts?: number;
   /** Ignore rows created longer ago than this — see `DEFAULT_MAX_RUN_AGE_MS`. */
   maxRunAgeMs?: number;
+  /** Silence after which a device-hosted run whose device is offline is retired. */
+  runnerSilenceMs?: number;
   staleAfterMs?: number;
 }
+
+/** Which device ids one pool has connected; `undefined` when the gateway could not say. */
+type DevicePresence = (userId: string, workspaceId?: string) => Promise<Set<string> | undefined>;
+
+/** Why a run is retired; decides both the claim's completion reason and the turn's error. */
+type AbandonReason = 'hetero_silent' | 'redrive_exhausted' | 'runner_disconnected';
 
 export interface ReapStaleOperationsResult {
   /** Operations retired with a user-visible error (budget spent, or no context). */
@@ -163,6 +173,10 @@ export class StaleOperationReaper {
     const now = Date.now();
     const staleBefore = new Date(now - staleAfterMs);
     const heteroStaleBefore = new Date(now - (params?.heteroSilenceMs ?? HETERO_SILENCE_MS));
+    const runnerSilentBefore = new Date(
+      now - (params?.runnerSilenceMs ?? RUNNER_DISCONNECTED_SILENCE_MS),
+    );
+    const presence = this.createDevicePresence();
     const notBefore = new Date(now - (params?.lookbackMs ?? DEFAULT_LOOKBACK_MS));
     const createdAfter = new Date(now - (params?.maxRunAgeMs ?? DEFAULT_MAX_RUN_AGE_MS));
 
@@ -179,12 +193,13 @@ export class StaleOperationReaper {
 
     for (const candidate of candidates) {
       try {
-        const outcome = await this.recover(
-          candidate,
-          staleBefore,
+        const outcome = await this.recover(candidate, {
           heteroStaleBefore,
           maxRedriveAttempts,
-        );
+          presence,
+          runnerSilentBefore,
+          staleBefore,
+        });
         result[outcome] += 1;
       } catch (e) {
         // One poisoned row must not abort the rest of the sweep.
@@ -294,6 +309,7 @@ export class StaleOperationReaper {
         .select({
           id: agentOperations.id,
           provider: agentOperations.provider,
+          topicId: agentOperations.topicId,
           updatedAt: agentOperations.updatedAt,
           userId: agentOperations.userId,
           workspaceId: agentOperations.workspaceId,
@@ -320,17 +336,82 @@ export class StaleOperationReaper {
     );
   }
 
+  /**
+   * Device presence for one sweep, read once per pool. Every device-hosted
+   * candidate of one user would otherwise ask the gateway for the same list.
+   */
+  private createDevicePresence(): DevicePresence {
+    const pools = new Map<string, Promise<Set<string> | undefined>>();
+    return (userId, workspaceId) => {
+      const key = `${userId}:${workspaceId ?? ''}`;
+      let pool = pools.get(key);
+      if (!pool) {
+        pool = deviceGateway.queryConnectedDeviceIds(userId, workspaceId).catch(() => undefined);
+        pools.set(key, pool);
+      }
+      return pool;
+    };
+  }
+
+  /**
+   * Whether the device that hosts a run is provably offline.
+   *
+   * The route comes from the topic's `runningOperation` marker, the same one a
+   * Stop reads to reach the process. A marker that names no device (a cloud or
+   * remote run, or a newer run on the topic) proves nothing. A marker written
+   * before routes carried `deviceWorkspaceId` may belong to either the personal
+   * pool or the run's workspace, so both are asked; the device counts as
+   * offline only when every pool answered and none has it. A gateway that
+   * cannot answer is never read as offline.
+   */
+  private async isRunnerDisconnected(
+    candidate: { id: string; topicId: string | null; userId: string; workspaceId: string | null },
+    presence: DevicePresence,
+  ): Promise<boolean> {
+    if (!candidate.topicId) return false;
+
+    const [topic] = await this.db
+      .select({ metadata: topics.metadata })
+      .from(topics)
+      .where(eq(topics.id, candidate.topicId))
+      .limit(1);
+    const route = findRunDeviceRoute(topic?.metadata?.runningOperation, candidate.id);
+    if (!route) return false;
+
+    const ownerId = route.deviceUserId ?? candidate.userId;
+    const pools = route.deviceWorkspaceId
+      ? [route.deviceWorkspaceId]
+      : [...new Set([undefined, candidate.workspaceId ?? undefined])];
+
+    for (const workspaceId of pools) {
+      const connected = await presence(ownerId, workspaceId);
+      if (!connected || connected.has(route.deviceId)) return false;
+    }
+    return true;
+  }
+
   private async recover(
     candidate: {
       id: string;
       provider: string | null;
+      topicId: string | null;
       updatedAt: Date;
       userId: string;
       workspaceId: string | null;
     },
-    staleBefore: Date,
-    heteroStaleBefore: Date,
-    maxRedriveAttempts: number,
+    {
+      heteroStaleBefore,
+      maxRedriveAttempts,
+      presence,
+      runnerSilentBefore,
+      staleBefore,
+    }: {
+      heteroStaleBefore: Date;
+      maxRedriveAttempts: number;
+      presence: DevicePresence;
+      runnerSilentBefore: Date;
+      staleBefore: Date;
+    },
   ): Promise<'abandoned' | 'alive' | 'redriven' | 'skipped'> {
     const operationId = candidate.id;
     const operationModel = new AgentOperationModel(
@@ -366,15 +447,32 @@ export class StaleOperationReaper {
     // `abandonIfStillStale` re-checks the lease inside its UPDATE, so a batch
     // that lands meanwhile keeps the run alive.
     if (!state) {
-      if (
-        isHeterogeneousProvider(candidate.provider) &&
-        new Date(candidate.updatedAt).getTime() < heteroStaleBefore.getTime()
-      ) {
+      if (!isHeterogeneousProvider(candidate.provider)) return 'skipped';
+
+      const silentSince = new Date(candidate.updatedAt).getTime();
+      if (silentSince < heteroStaleBefore.getTime()) {
         return this.abandonIfStillStale(
           operationModel,
           operationId,
           heteroStaleBefore,
           'hetero_silent',
+        );
+      }
+
+      // Inside the silence window a quiet run may just be in a long tool call,
+      // so silence alone proves nothing yet. A device-hosted run whose device
+      // has gone offline is different: the runner that would report it is not
+      // there (the desktop app was closed, the `lh connect` daemon died), so
+      // waiting out the rest of the hour only keeps the topic stuck.
+      if (
+        silentSince < runnerSilentBefore.getTime() &&
+        (await this.isRunnerDisconnected(candidate, presence))
+      ) {
+        return this.abandonIfStillStale(
+          operationModel,
+          operationId,
+          runnerSilentBefore,
+          'runner_disconnected',
         );
       }
 
@@ -551,9 +649,12 @@ export class StaleOperationReaper {
     operationModel: AgentOperationModel,
     operationId: string,
     staleBefore: Date,
-    reason: string,
+    reason: AbandonReason,
   ): Promise<'abandoned' | 'alive'> {
-    const claimed = await operationModel.settleStaleRunning(operationId, staleBefore);
+    const claimed =
+      reason === 'runner_disconnected'
+        ? await operationModel.settleDisconnectedRunner(operationId, staleBefore)
+        : await operationModel.settleStaleRunning(operationId, staleBefore);
     if (!claimed) {
       log('[%s] lease was refreshed before abandon could claim it', operationId);
       return 'alive';
@@ -565,7 +666,7 @@ export class StaleOperationReaper {
     // hook consumers (tasks, bots, parent runs) waiting on a retired operation.
     await new AbandonOperationService(this.db).finalizeAbandoned(
       operationId,
-      `stale_lease_${reason}`,
+      reason === 'runner_disconnected' ? reason : `stale_lease_${reason}`,
       { settledAsAbandoned: true },
     );
     log('[%s] abandoned (reason=%s)', operationId, reason);

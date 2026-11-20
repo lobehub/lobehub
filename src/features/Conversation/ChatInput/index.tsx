@@ -33,6 +33,7 @@ import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors, topicSelectors } from '@/store/chat/selectors';
+import { untrackedServerRunIdSelector } from '@/store/chat/slices/agentRun/actions/entries/topicServerRun';
 import { selectCurrentTurnTodosFromMessages } from '@/store/chat/slices/message/selectors/dbMessage';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { fileChatSelectors, useFileStore } from '@/store/file';
@@ -316,6 +317,22 @@ const ChatInput = memo<ChatInputProps>(
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
     const { placeholderVariant, showSendWhileGenerating, showStopButton } =
       useConversationChatInputUiState({ disableFollowUpVariant, disableQueue, isInputEmpty });
+
+    // The server still runs this topic, but no local operation follows it (the
+    // desktop runner was closed, the stream ended without a terminal frame, the
+    // page reloaded). Stop must not depend on a local stream, or the topic is
+    // stuck `running` with no way to end it.
+    const untrackedServerRunId = useChatStore(untrackedServerRunIdSelector(context));
+    const stopTopicServerRun = useChatStore((s) => s.stopTopicServerRun);
+    const showUntrackedRunStop = !showStopButton && !!untrackedServerRunId;
+    const stoppingUntrackedRunRef = useRef(false);
+    const stopUntrackedRun = useCallback(() => {
+      if (stoppingUntrackedRunRef.current) return;
+      stoppingUntrackedRunRef.current = true;
+      void stopTopicServerRun(context).finally(() => {
+        stoppingUntrackedRunRef.current = false;
+      });
+    }, [context, stopTopicServerRun]);
     // Input stays enabled during agent execution — messages are queued.
     // When disableQueue is set (e.g. onboarding), block sending while loading.
     // disableSend hard-blocks regardless of content (host surface is read-only).
@@ -501,10 +518,12 @@ const ChatInput = memo<ChatInputProps>(
         disabled,
         // While the message is still being created there is no run to stop yet:
         // Send shows as loading, and Stop takes over once the run starts.
-        generating: showStopButton && !isSendDispatchPending,
+        generating: (showStopButton || showUntrackedRunStop) && !isSendDispatchPending,
         loading: isSendDispatchPending,
-        onStop: stopGenerating,
-        showSendWhileGenerating: showSendWhileGenerating && !isSendDispatchPending,
+        onStop: showUntrackedRunStop ? stopUntrackedRun : stopGenerating,
+        showSendWhileGenerating:
+          (showSendWhileGenerating || (showUntrackedRunStop && !isInputEmpty)) &&
+          !isSendDispatchPending,
       },
       customSendButtonProps,
     );

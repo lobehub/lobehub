@@ -254,6 +254,11 @@ export interface GetSubAgentTaskStatusParams {
 }
 
 export interface InterruptTaskParams {
+  /**
+   * End a device-hosted run even when its device cannot confirm the process
+   * exited (the person chose "Force end" after a stop failed).
+   */
+  force?: boolean;
   operationId?: string;
   threadId?: string;
   topicId?: string;

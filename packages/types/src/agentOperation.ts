@@ -53,6 +53,13 @@ export type AgentOperationCompletionReason =
   | 'lease_expired'
   | 'max_steps'
   /**
+   * The device runner that hosted the run (desktop app or `lh connect`) went
+   * away: the device is offline, or answered that it no longer holds the run's
+   * process, and the run had gone quiet. Distinct from `lease_expired`, which
+   * only says the run stopped reporting for the whole silence window.
+   */
+  | 'runner_disconnected'
+  /**
    * The same tool call was requested over and over, or one turn requested more
    * tool calls than the burst limit; a guard cut the run short.
    */

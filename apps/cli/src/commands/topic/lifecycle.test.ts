@@ -70,7 +70,50 @@ describe('topic lifecycle and child topics', () => {
     await run('topic', 'stop', 'tpc-a');
 
     expect(vi.mocked(log.error).mock.calls[0][0]).toMatch(/could not be confirmed stopped/);
+    expect(vi.mocked(log.error).mock.calls[0][0]).toMatch(/--force/);
     expect(exit).toHaveBeenCalledWith(1);
+  });
+
+  it('says why when the device is gone but the run reported recently', async () => {
+    client.aiAgent.interruptTask.mutate.mockResolvedValue({
+      failureReason: 'runner_unreachable',
+      running: 1,
+      stopped: 0,
+      success: false,
+    });
+
+    await run('topic', 'stop', 'tpc-a');
+
+    expect(vi.mocked(log.error).mock.calls[0][0]).toMatch(/device is offline/);
+  });
+
+  it('forces the stop with --force', async () => {
+    client.aiAgent.interruptTask.mutate.mockResolvedValue({
+      running: 1,
+      stopped: 1,
+      success: true,
+    });
+
+    await run('topic', 'stop', 'tpc-a', '--force');
+
+    expect(client.aiAgent.interruptTask.mutate).toHaveBeenCalledWith({
+      force: true,
+      topicId: 'tpc-a',
+    });
+    expect(logged.join('\n')).toMatch(/Stopped tpc-a/);
+  });
+
+  it('reports a run ended because its runner was gone', async () => {
+    client.aiAgent.interruptTask.mutate.mockResolvedValue({
+      completionReason: 'runner_disconnected',
+      running: 1,
+      stopped: 1,
+      success: true,
+    });
+
+    await run('topic', 'stop', 'tpc-a');
+
+    expect(logged.join('\n')).toMatch(/runner was gone \(runner_disconnected\)/);
   });
 
   it('archives and unarchives through topic.updateTopic, like the app', async () => {

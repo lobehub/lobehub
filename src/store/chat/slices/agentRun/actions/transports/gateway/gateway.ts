@@ -1485,7 +1485,7 @@ export class GatewayActionImpl {
     // Closure captures `result.operationId` (the server-side id) so we don't
     // depend on any metadata lookup. The returned promise preserves an
     // unconfirmed device shutdown so Send now can keep its queued message.
-    this.#get().onOperationCancel(gatewayOpId, async () => {
+    this.#get().onOperationCancel(gatewayOpId, async (cancel) => {
       if (agentShareId) {
         await shareChatService
           .interruptTask(agentShareId, result.topicId, result.operationId)
@@ -1493,10 +1493,10 @@ export class GatewayActionImpl {
         return;
       }
 
-      await interruptGatewayTaskOrThrow({
-        operationId: result.operationId,
-        topicId: result.topicId,
-      });
+      await interruptGatewayTaskOrThrow(
+        { operationId: result.operationId, topicId: result.topicId },
+        cancel,
+      );
       await serverSteerQueue.reclaimServerQueuedMessages(
         this.#get,
         messageMapKey(resolvedMessageContext),
@@ -1822,7 +1822,7 @@ export class GatewayActionImpl {
 
     // Forward local-op cancellation to the server-side agent loop via tRPC.
     // See note in executeGatewayAgent for details.
-    this.#get().onOperationCancel(gatewayOpId, async () => {
+    this.#get().onOperationCancel(gatewayOpId, async (cancel) => {
       // Share visitors have no access to the owner-scoped interrupt (and no
       // device runtimes to confirm), so they go through the share mirror —
       // same split as executeGatewayAgent's cancel path.
@@ -1833,7 +1833,7 @@ export class GatewayActionImpl {
         return;
       }
 
-      await interruptGatewayTaskOrThrow({ operationId });
+      await interruptGatewayTaskOrThrow({ operationId }, cancel);
       await serverSteerQueue.reclaimServerQueuedMessages(this.#get, messageMapKey(context));
 
       this.#settleLocalTopicAfterConfirmedStop({
