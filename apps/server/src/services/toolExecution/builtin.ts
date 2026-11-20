@@ -10,11 +10,14 @@ import { detectTruncatedJSON, safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
+import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { isShareBlockedBuiltinDispatch } from '@/server/services/aiAgent/shareGate';
 import { ComposioService } from '@/server/services/composio';
 import { MarketService } from '@/server/services/market';
+import { SkillConnectionErrorCode } from '@/types/skillConnectionError';
 
 import { getServerRuntime, hasServerRuntime } from './serverRuntimes';
+import { resolveContentWorkspaceId } from './serverRuntimes/resolveWorkspaceScope';
 import { type IToolExecutor, type ToolExecutionContext, type ToolExecutionResult } from './types';
 import { resolveBuiltinToolWorkIntent } from './workRegistration';
 
@@ -33,6 +36,35 @@ const MARKET_SERVICE_MAX_AGE_MS = 4 * 60 * 1000;
 
 /** Market's 401 code for a trusted-client token it refuses (expired, skewed, …). */
 const INVALID_TRUST_TOKEN = 'invalid_trust_token';
+
+/** Cache key of the personal-scope MarketService (workspace ones use the workspace id). */
+const PERSONAL_MARKET_SCOPE = '';
+
+const isSkillNotConnected = (result: ToolExecutionResult) =>
+  result.error?.code === SkillConnectionErrorCode.NotConnected;
+
+/**
+ * The result of a LobeHub Skill call that found no connection in any scope the
+ * run may use. Names every scope that was checked, so "not connected" can be
+ * told apart from a connection that exists in a scope this run did not check.
+ */
+const skillNotConnectedResult = (
+  provider: string,
+  apiName: string,
+  workspaceId: string | undefined,
+): ToolExecutionResult => {
+  const checkedScopes = workspaceId ? ['personal', `workspace:${workspaceId}`] : ['personal'];
+  const where = workspaceId ? 'your personal account or this workspace' : 'your personal account';
+  const message =
+    `LobeHub Skill "${provider}" is not connected for ${where}, so "${apiName}" did not run ` +
+    `(checked: ${checkedScopes.join(', ')}). Ask the user to connect ${provider} in ` +
+    `Settings → Skills, then retry.`;
+  return {
+    content: message,
+    error: { checkedScopes, code: SkillConnectionErrorCode.NotConnected, message },
+    success: false,
+  };
+};
 
 /**
  * Declared API names for a builtin tool, read from its manifest — the
@@ -84,20 +116,28 @@ const collectRuntimeApiNames = (runtime: Record<string, any>): string[] => {
 export class BuiltinToolsExecutor implements IToolExecutor {
   private db: LobeChatDatabase;
   private userId: string;
-  private _marketService?: { createdAt: number; service: MarketService };
+  /** Keyed by Market scope: '' for personal, the workspace id for a workspace. */
+  private _marketServices = new Map<string, { createdAt: number; service: MarketService }>();
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.db = db;
     this.userId = userId;
   }
 
-  private async getMarketService({ fresh }: { fresh?: boolean } = {}): Promise<MarketService> {
-    if (
-      !fresh &&
-      this._marketService &&
-      Date.now() - this._marketService.createdAt < MARKET_SERVICE_MAX_AGE_MS
-    )
-      return this._marketService.service;
+  /**
+   * A MarketService acting for the personal account, or — with `workspaceId` —
+   * for that workspace's mirrored Market organization (the scope Settings,
+   * `tools.market.connect*` and the `lobe-creds` status check use inside a
+   * workspace).
+   */
+  private async getMarketService({
+    fresh,
+    workspaceId,
+  }: { fresh?: boolean; workspaceId?: string } = {}): Promise<MarketService> {
+    const scope = workspaceId ?? PERSONAL_MARKET_SCOPE;
+    const cached = this._marketServices.get(scope);
+    if (!fresh && cached && Date.now() - cached.createdAt < MARKET_SERVICE_MAX_AGE_MS)
+      return cached.service;
 
     let accessToken: string | undefined;
     try {
@@ -110,10 +150,39 @@ export class BuiltinToolsExecutor implements IToolExecutor {
 
     const service = new MarketService({
       accessToken,
-      userInfo: { userId: this.userId },
+      userInfo: { userId: this.userId, ...(workspaceId ? { workspaceId } : {}) },
     });
-    this._marketService = { createdAt: Date.now(), service };
+    this._marketServices.set(scope, { createdAt: Date.now(), service });
     return service;
+  }
+
+  /**
+   * The workspace whose Market organization this run may also act as for a
+   * LobeHub Skill call: the run's content workspace, only while the caller is
+   * still a member of it (the `lobe-creds` runtime applies the same check before
+   * using that scope). `undefined` for a personal run, a share visitor's run, or
+   * when the workspace cannot be resolved.
+   */
+  private async resolveSkillWorkspaceId(
+    context: ToolExecutionContext,
+  ): Promise<string | undefined> {
+    if (context.agentShareVisitor) return;
+    try {
+      const workspaceId = await resolveContentWorkspaceId({
+        agentId: context.agentId,
+        serverDB: context.serverDB ?? this.db,
+        workspaceId: context.workspaceId,
+      });
+      if (!workspaceId) return;
+      const member = await new WorkspaceMemberModel(this.db, this.userId).getMember(
+        workspaceId,
+        this.userId,
+      );
+      return member ? workspaceId : undefined;
+    } catch (error) {
+      log('Could not resolve the workspace scope for a LobeHub Skill call: %O', error);
+      return;
+    }
   }
 
   async execute(
@@ -226,13 +295,39 @@ export class BuiltinToolsExecutor implements IToolExecutor {
           toolName: apiName,
         });
 
-      let result = await callSkill(await this.getMarketService());
-
-      // Market refuses the token at its auth middleware, before the skill runs,
-      // so re-minting and retrying once cannot repeat a side effect.
-      if (result.error?.code === INVALID_TRUST_TOKEN) {
+      const callSkillInScope = async (workspaceId?: string) => {
+        const scoped = await callSkill(await this.getMarketService({ workspaceId }));
+        // Market refuses the token at its auth middleware, before the skill runs,
+        // so re-minting and retrying once cannot repeat a side effect.
+        if (scoped.error?.code !== INVALID_TRUST_TOKEN) return scoped;
         log('Trust token rejected for %s:%s, retrying with a fresh token', identifier, apiName);
-        result = await callSkill(await this.getMarketService({ fresh: true }));
+        return callSkill(await this.getMarketService({ fresh: true, workspaceId }));
+      };
+
+      // A provider connection lives either on the personal account or on a
+      // workspace's Market organization. Settings and the `lobe-creds` status
+      // check inside a workspace read the workspace one, while this call used to
+      // read only the personal one — so a skill connected in the workspace
+      // answered NOT_CONNECTED for every tool although the status check said it
+      // was connected. Try the user's own connection first (the one agent-run
+      // discovery lists, and what this call has always used), then the run's
+      // workspace; report NOT_CONNECTED only when neither has one. Market answers
+      // NOT_CONNECTED before the skill runs, so the second call cannot repeat a
+      // side effect.
+      let result = await callSkillInScope();
+      if (isSkillNotConnected(result)) {
+        const workspaceId = await this.resolveSkillWorkspaceId(context);
+        if (workspaceId) {
+          log(
+            'LobeHub Skill %s:%s is not connected for the personal account; trying workspace %s',
+            identifier,
+            apiName,
+            workspaceId,
+          );
+          result = await callSkillInScope(workspaceId);
+        }
+        if (isSkillNotConnected(result))
+          return skillNotConnectedResult(identifier, apiName, workspaceId);
       }
 
       if (result.success && isWorkSkillProvider(identifier)) {
