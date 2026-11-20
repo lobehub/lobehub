@@ -5,6 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
+import { getWorkspaceMemberNickname } from '@/utils/workspaceMemberName';
 
 const AVATAR_SIZE = 16;
 
@@ -51,7 +52,7 @@ const AuthorChip = memo<AuthorChipProps>(({ avatarOnly, userId, trigger }) => {
   const profile = userId ? profiles.get(userId) : undefined;
   if (!profile) return null;
 
-  const name = profile.nickname || profile.fullName || profile.username || '';
+  const name = getWorkspaceMemberNickname(profile) || profile.fullName || profile.username || '';
 
   return (
     <Flexbox horizontal align={'center'} className={styles.chip} gap={4}>

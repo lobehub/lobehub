@@ -15,6 +15,7 @@ import { XIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
 import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
 import AsyncError from '@/components/AsyncError';
 import UserAvatar from '@/components/UserAvatar';
@@ -56,6 +57,8 @@ const CollaboratorList = memo<CollaboratorListProps>(({ resourceId, resourceType
     useResourceCollaborators(resourceType, resourceId);
 
   const levelOptions = useAccessLevelOptions({ isPrivate: false, resourceType });
+  // The roster supplies nicknames; this list may be the only member consumer on the page.
+  useFetchWorkspaceMembers();
   const workspaceMembers = useWorkspaceMembers();
   const nicknames = useMemo(
     () => new Map(workspaceMembers.map((member) => [member.userId, member.nickname])),
