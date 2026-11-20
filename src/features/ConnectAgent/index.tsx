@@ -43,6 +43,10 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import AsyncError from '@/components/AsyncError';
 import CommandLine from '@/components/CommandLine';
 import { DOWNLOAD_URL } from '@/const/url';
+import CreateVisibilityField, {
+  type CreateVisibility,
+  useCreateVisibility,
+} from '@/features/CreateVisibilityField';
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { deviceService } from '@/services/device';
@@ -393,8 +397,18 @@ interface ConnectAgentContentProps {
 }
 
 const ConnectAgentContent = memo<ConnectAgentContentProps>(
-  ({ groupId, initialDevice, onTitleChange, showOpenChat = true, visibility }) => {
+  ({
+    groupId,
+    initialDevice,
+    onTitleChange,
+    showOpenChat = true,
+    visibility: initialVisibility,
+  }) => {
     const { t } = useTranslation('chat');
+    // Same "Private / Workspace" field as the create-agent form; the caller's
+    // value is only where it starts.
+    const visibilityState = useCreateVisibility({ groupId, visibility: initialVisibility });
+    const visibility = visibilityState.value;
     const { close, setCanDismissByClickOutside } = useModalContext();
     const navigate = useWorkspaceAwareNavigate();
     const storeCreateAgent = useAgentStore((s) => s.createAgent);
@@ -513,17 +527,47 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
       [currentDeviceId, profiles, target],
     );
 
+    const defaultSingleName = useCallback(
+      (nextVisibility?: CreateVisibility) => {
+        if (!single) return '';
+        const profile = isRemoteHeterogeneousType(single.type) ? profiles[single.type] : undefined;
+        const productTitle = profile?.title ?? single.title;
+        return (
+          heteroAgentDefaultName({
+            productTitle,
+            visibility: nextVisibility,
+            workspaceId: activeWorkspaceId,
+          }) ?? productTitle
+        );
+      },
+      [activeWorkspaceId, profiles, single],
+    );
+
     const goConfirm = useCallback(() => {
       if (!single) return;
       const profile = isRemoteHeterogeneousType(single.type) ? profiles[single.type] : undefined;
-      const productTitle = profile?.title ?? single.title;
-      setName(
-        heteroAgentDefaultName({ productTitle, visibility, workspaceId: activeWorkspaceId }) ??
-          productTitle,
-      );
+      setName(defaultSingleName(visibility));
       setDescription(profile?.description ?? '');
       setStep(2);
-    }, [activeWorkspaceId, profiles, single, visibility]);
+    }, [defaultSingleName, profiles, single, visibility]);
+
+    // The default name says whose agent a workspace agent is ("Ann's Codex"),
+    // so switching visibility on the confirm step re-derives a name the user
+    // has not edited.
+    const confirmVisibilityState = useMemo(
+      () => ({
+        ...visibilityState,
+        setValue: (next: CreateVisibility) => {
+          setName((current) =>
+            current === defaultSingleName(visibilityState.value)
+              ? defaultSingleName(next)
+              : current,
+          );
+          visibilityState.setValue(next);
+        },
+      }),
+      [defaultSingleName, visibilityState],
+    );
 
     const buildCreateParams = useCallback(
       (provider: ConnectableProvider, overrides?: { description?: string; name?: string }) => {
@@ -888,6 +932,10 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
             </Flexbox>
           )}
 
+          {scanState.status === 'success' && detectedCount > 0 && (
+            <CreateVisibilityField state={visibilityState} />
+          )}
+
           {createError && (
             <Alert
               showIcon
@@ -978,6 +1026,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
               <Icon color={cssVar.colorSuccess} icon={CheckCircle2} size={16} />
             </div>
           </div>
+          <CreateVisibilityField state={confirmVisibilityState} />
           {createError && (
             <Alert
               showIcon

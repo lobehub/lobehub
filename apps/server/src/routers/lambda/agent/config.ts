@@ -110,12 +110,22 @@ export const configRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { agentId } = await resolveAgentReference(
-        input.agentId,
-        ctx.serverDB,
-        ctx.userId,
-        ctx.workspaceId ?? undefined,
-      );
+      let agentId: string;
+      try {
+        ({ agentId } = await resolveAgentReference(
+          input.agentId,
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        ));
+      } catch (error) {
+        // An id outside the caller's scope (deleted, or another member's
+        // private agent) settles as `null`, the same "not found or no access"
+        // answer `protectAgentConfig` gives. The client renders that as a
+        // terminal 404 instead of a retryable load failure.
+        if (error instanceof TRPCError && error.code === 'NOT_FOUND') return null;
+        throw error;
+      }
       const config = await ctx.agentService.getAgentConfigById(agentId);
       return protectAgentConfig(ctx, agentId, config);
     }),

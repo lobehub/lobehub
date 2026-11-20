@@ -449,7 +449,6 @@ export default {
   'more': 'More',
   'navPanel.agent': 'Agents',
   'navPanel.createPrivateFolder': 'New private category',
-  'navPanel.createWorkspaceAgent': 'New workspace agent',
   'navPanel.managePrivateFolders': 'Manage private categories',
   'navPanel.myPinned': 'Pinned',
   'navPanel.newChat': 'New chat',
