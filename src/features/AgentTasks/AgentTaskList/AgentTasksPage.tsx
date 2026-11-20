@@ -8,7 +8,7 @@ import {
   TabsRoot,
   TabsTab,
 } from '@lobehub/ui';
-import { Plus } from 'lucide-react';
+import { ClockIcon, Plus } from 'lucide-react';
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useSearchParams } from 'react-router';
@@ -29,6 +29,7 @@ import { TASK_COLLECTION_PAGE_SIZE } from '@/store/task/slices/list/action';
 import { useHeaderActionSize } from '@/styles/density';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
+import { AgentGoalsAndTasksTabs } from '../AgentGoalsAndTasksTabs';
 import { createTaskModal } from '../CreateTaskModal';
 import { useTaskProjectList } from '../features/useTaskProjectList';
 import Breadcrumb from '../shared/Breadcrumb';
@@ -572,7 +573,10 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   // "Content contains" for the same condition.
   const showFind = !isMobile && (headerVisibility.showViewOptions || hasFilter);
 
-  const headerLeft = (
+  const showGoalsAndTasksTabs = !!agentId || (!projectId && !activeWorkspaceId);
+  const headerLeft = showGoalsAndTasksTabs ? (
+    <AgentGoalsAndTasksTabs agentId={agentId} view={'tasks'} />
+  ) : (
     <Flexbox horizontal align={'center'} gap={8}>
       {headerVisibility.showBreadcrumb && <Breadcrumb />}
       <TabsRoot size={'small'} value={collection} onValueChange={handleCollectionChange}>
@@ -604,8 +608,24 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
       <Flexbox flex={1} height={'100%'}>
         <NavHeader
           left={headerLeft}
+          styles={showGoalsAndTasksTabs ? undefined : { left: { gap: 8, paddingLeft: 4 } }}
           right={
             <Flexbox horizontal align={'center'} gap={4}>
+              {showGoalsAndTasksTabs && (
+                <Button
+                  aria-label={t('taskList.scheduled.title')}
+                  aria-pressed={isScheduledCollection}
+                  icon={ClockIcon}
+                  size={'small'}
+                  title={t('taskList.scheduled.title')}
+                  type={isScheduledCollection ? 'fill' : 'text'}
+                  onClick={() =>
+                    handleCollectionChange(isScheduledCollection ? 'tasks' : 'scheduled')
+                  }
+                >
+                  {isMobile ? undefined : t('taskList.scheduled.title')}
+                </Button>
+              )}
               {showFind && <TaskListFind content={filter?.content} onChange={handleFindChange} />}
               {(headerVisibility.showViewOptions || hasFilter) && (
                 <TaskFilterButton fields={filterFields} filter={filter} setFilter={setFilter} />
@@ -657,12 +677,6 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
               )}
             </Flexbox>
           }
-          styles={{
-            left: {
-              paddingLeft: 4,
-              gap: 8,
-            },
-          }}
         />
         <TaskFilterBar
           fields={filterFields}

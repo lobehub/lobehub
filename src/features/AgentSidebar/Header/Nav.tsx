@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { BotPromptIcon } from '@lobehub/ui/icons';
-import { DnaIcon, ListTodoIcon, MessageSquarePlusIcon, SearchIcon, TargetIcon } from 'lucide-react';
+import { DnaIcon, ListTodoIcon, MessageSquarePlusIcon, SearchIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
@@ -18,8 +18,6 @@ import { topicActionKeys } from '@/libs/swr/keys';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { isAgentProfileRoute } from './isAgentProfileRoute';
@@ -42,7 +40,7 @@ const Nav = ({ onOpenProfile, showProfile }: NavProps) => {
   // 下钻页 /self-evolving/:domainId 也算在这个入口下，否则点进去侧边栏就失焦了
   const isSelfLearningActive = pathname.includes('/self-evolving');
   const isProfileActive = isAgentProfileRoute(pathname) && !isSelfLearningActive;
-  const isGoalsActive = pathname.endsWith('/goals');
+  const isGoalsActive = pathname.endsWith('/goals') || pathname.includes('/goal/');
   const isTasksActive = pathname.endsWith('/tasks') || pathname.includes('/task/');
   const router = useQueryRoute();
   const { allowed: canCreateTopic } = usePermission('create_content');
@@ -50,7 +48,6 @@ const Nav = ({ onOpenProfile, showProfile }: NavProps) => {
   const switchTopic = useChatStore((s) => s.switchTopic);
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
   const isNewTopicSendInFlight = useChatStore(topicSelectors.isNewTopicSendInFlight);
-  const enableGoals = useUserStore(labPreferSelectors.enableGoals);
   const { enabled: enableSelfLearning } = useSelfLearningSurface();
   // Self-evolving lives in the profile group; it stays here only where that group
   // cannot reach it: members with no profile entry, and the mobile Segmented.
@@ -103,21 +100,10 @@ const Nav = ({ onOpenProfile, showProfile }: NavProps) => {
           }}
         />
       )}
-      {enableGoals && (
-        <NavItem
-          active={isGoalsActive}
-          icon={TargetIcon}
-          title={t('goalList.title')}
-          onClick={() => {
-            switchTopic(null, { skipRefreshMessage: true });
-            router.push(urlJoin('/agent', agentId!, 'goals'));
-          }}
-        />
-      )}
       <NavItem
-        active={isTasksActive}
+        active={isTasksActive || isGoalsActive}
         icon={ListTodoIcon}
-        title={t('tab.tasks')}
+        title={t('tab.goalsAndTasks')}
         onClick={() => {
           switchTopic(null, { skipRefreshMessage: true });
           router.push(urlJoin('/agent', agentId!, 'tasks'));
