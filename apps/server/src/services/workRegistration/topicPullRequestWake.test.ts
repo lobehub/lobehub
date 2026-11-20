@@ -6,7 +6,14 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ScmChangeRequestModel } from '@/database/models/scm';
 import { TopicModel } from '@/database/models/topic';
 import { WorkModel } from '@/database/models/work';
-import { scmChangeRequests, topics, users, workspaceMembers, workspaces } from '@/database/schemas';
+import {
+  scmChangeRequests,
+  topics,
+  users,
+  works,
+  workspaceMembers,
+  workspaces,
+} from '@/database/schemas';
 
 import { linkTopicPullRequest, setTopicPullRequestDismissed } from './topicPullRequestLinks';
 import { listTopicPullRequestsWithStatus } from './topicPullRequests';
@@ -52,6 +59,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await serverDB.delete(scmChangeRequests);
+  await serverDB.delete(works);
   await serverDB.delete(topics);
   await serverDB.delete(workspaces);
   await serverDB.delete(users);
@@ -374,6 +382,65 @@ describe('provider events and a link-held conversation', () => {
     expect(row.metadata.topicLink).toBeUndefined();
     // Removing the PR no longer clears it: the next event would resolve it again.
     expect(await removeFrom('tpc-personal')).toBe(false);
+  });
+
+  describe('a Work registered after the link', () => {
+    /** What `WorkModel` does after registering the agent's `gh pr create`. */
+    const registerWork = async (topicId: string) => {
+      await serverDB.insert(works).values({
+        id: 'work-pr-46',
+        resourceId: identifier,
+        resourceType: 'github_pull_request',
+        toolIdentifier: 'github',
+        toolName: 'create_pull_request',
+        type: 'external',
+        userId: author,
+        visibility: 'private',
+      });
+      await ScmChangeRequestModel.attachPullRequestWork(serverDB, {
+        number: pasted.number,
+        repoFullName: pasted.repoFullName,
+        scope: personal,
+        topicId,
+        workId: 'work-pr-46',
+      });
+    };
+
+    it('backs the same conversation, so removing the link no longer clears it', async () => {
+      await trackedRow(personal);
+      await listOn(personal, 'tpc-personal');
+      await bind(personal, 'tpc-personal');
+
+      await registerWork('tpc-personal');
+      const row = await rowNow();
+      expect(row.topicId).toBe('tpc-personal');
+      expect(row.workId).toBe('work-pr-46');
+      expect(row.metadata.topicLink).toBeUndefined();
+
+      expect(await removeFrom('tpc-personal')).toBe(false);
+      expect((await rowNow()).topicId).toBe('tpc-personal');
+    });
+
+    it('takes over a conversation only the link of another topic holds', async () => {
+      await trackedRow(personal);
+      await listOn(personal, 'tpc-personal');
+      await bind(personal, 'tpc-personal');
+
+      await registerWork('tpc-work');
+      const row = await rowNow();
+      expect(row.topicId).toBe('tpc-work');
+      expect(row.metadata.topicLink).toBeUndefined();
+      expect(row.metadata.routedBy).toBe('author');
+    });
+
+    it('leaves a conversation an acceptance or another Work set', async () => {
+      await trackedRow(personal, { topicId: 'tpc-work' });
+
+      await registerWork('tpc-personal');
+      const row = await rowNow();
+      expect(row.topicId).toBe('tpc-work');
+      expect(row.workId).toBe('work-pr-46');
+    });
   });
 
   describe('out of order', () => {

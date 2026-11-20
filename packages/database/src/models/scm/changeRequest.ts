@@ -14,6 +14,12 @@ import { and, desc, eq, inArray, isNull, lt, or, type SQL, sql } from 'drizzle-o
 import type { ScmChangeRequestItem } from '../../schemas';
 import { acceptances, scmChangeRequests, scmInstallations } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import {
+  claimTopicFromLink,
+  releaseTopicFromLink,
+  topicLinkAfterEvent,
+  workTopicValues,
+} from './changeRequestTopicLink';
 
 const ownedByScope = (scope: { userId: string; workspaceId?: string | null }) =>
   scope.workspaceId
@@ -520,21 +526,14 @@ export class ScmChangeRequestModel {
         workId: pick(links.workId, inherited?.workId),
       };
 
-      // A topic link holds the conversation only until something better
-      // names one. The marker stays only while the row still wakes the
-      // linking topic and this event did not resolve that same conversation
-      // itself. Once a resolver source backs it (even a stale delivery
-      // finding the topic's Work), or the conversation changed under it, the
-      // binding is no longer the link's, and removing the PR from that topic
-      // must not clear it. Applied after either metadata composition below:
-      // the stale one re-spreads the stored metadata.
-      const heldByLink = existing?.metadata?.topicLink;
-      const topicLink =
-        heldByLink &&
-        linkValues.topicId === heldByLink.topicId &&
-        links.topicId !== linkValues.topicId
-          ? heldByLink
-          : undefined;
+      // What is left of a topic link's claim (see `topicLinkAfterEvent`).
+      // Applied after either metadata composition below: the stale one
+      // re-spreads the stored metadata.
+      const topicLink = topicLinkAfterEvent(
+        existing?.metadata?.topicLink,
+        links.topicId,
+        linkValues.topicId,
+      );
       snapshot.metadata.topicLink = topicLink;
 
       // Both link sources below are resolved before this transaction opens, so
@@ -684,8 +683,9 @@ export class ScmChangeRequestModel {
    * Provider events re-resolve links on every `pull_request` delivery, so
    * this covers the gap between the last delivery and the next: a review or
    * a failing check in between would otherwise find no conversation to
-   * wake. Fill-only like the event path; a link already set is never
-   * replaced.
+   * wake. Fill-only like the event path: a link already set is never
+   * replaced, except a conversation only a topic link holds, which a Work
+   * takes over like the next event would (see `workTopicValues`).
    */
   static attachPullRequestWork = async (
     db: LobeChatDatabase,
@@ -710,105 +710,29 @@ export class ScmChangeRequestModel {
     // would occupy a fill-only slot the right link can never take. The check
     // rides inside the UPDATE — a row re-routed between our read and write
     // is refused, not written.
-    await ScmChangeRequestModel.attachLinks(
-      db,
-      row.id,
-      {
-        topicId: params.topicId,
-        workId: params.workId,
-      },
-      and(
-        eq(scmChangeRequests.userId, params.scope.userId),
-        params.scope.workspaceId == null
-          ? isNull(scmChangeRequests.workspaceId)
-          : eq(scmChangeRequests.workspaceId, params.scope.workspaceId),
-      ),
-    );
-  };
-
-  /**
-   * Make `topicId` the conversation a topic link wakes: the topic kept this
-   * pull request on its own list (branch match or Link a PR), and the row is
-   * the linking person's own in the scope they linked from. Fill-only: a
-   * conversation already set by an acceptance, a Work, or another topic's
-   * link is never replaced. A slot this topic's own link already holds is
-   * claimed again. Every condition rides inside the UPDATE, so a concurrent
-   * ingest that fills or re-routes the row wins.
-   *
-   * Each claim stamps a fresh generation (`topicLink.claimId`) and returns
-   * it, `null` when the slot was not this link's to take. A release is fenced
-   * by the generation its caller observed (see {@link releaseTopicFromLink}),
-   * so a release decided before a relink cannot undo the relink's claim: the
-   * relink restamps the slot first.
-   */
-  static claimTopicFromLink = async (
-    db: LobeChatDatabase,
-    id: string,
-    scope: { userId: string; workspaceId?: string | null },
-    topicId: string,
-  ): Promise<string | null> => {
-    const claimId = crypto.randomUUID();
-    const marker = sql`${JSON.stringify({
-      topicLink: { at: new Date().toISOString(), claimId, topicId },
-    })}::jsonb`;
-    const [row] = await db
+    await db
       .update(scmChangeRequests)
       .set({
-        metadata: sql`${scmChangeRequests.metadata} || ${marker}`,
-        topicId,
+        ...(params.topicId ? workTopicValues(params.topicId) : {}),
         updatedAt: new Date(),
+        workId: sql`coalesce(${scmChangeRequests.workId}, ${params.workId})`,
       })
       .where(
         and(
-          eq(scmChangeRequests.id, id),
-          or(
-            isNull(scmChangeRequests.topicId),
-            and(
-              eq(scmChangeRequests.topicId, topicId),
-              sql`${scmChangeRequests.metadata} -> 'topicLink' ->> 'topicId' = ${topicId}`,
-            ),
-          ),
-          eq(scmChangeRequests.userId, scope.userId),
-          scope.workspaceId
-            ? eq(scmChangeRequests.workspaceId, scope.workspaceId)
-            : isNull(scmChangeRequests.workspaceId),
+          eq(scmChangeRequests.id, row.id),
+          eq(scmChangeRequests.userId, params.scope.userId),
+          params.scope.workspaceId == null
+            ? isNull(scmChangeRequests.workspaceId)
+            : eq(scmChangeRequests.workspaceId, params.scope.workspaceId),
         ),
-      )
-      .returning({ id: scmChangeRequests.id });
-    return row ? claimId : null;
+      );
   };
 
-  /**
-   * Undo {@link claimTopicFromLink}: clear the conversation, but only while
-   * it is still the one `topicId`'s link wrote, at the generation `claimId`
-   * the caller observed. A conversation an event resolved since (the marker
-   * is dropped then) or a newer claim of the same link is left alone. `true`
-   * when the row was released.
-   */
-  static releaseTopicFromLink = async (
-    db: LobeChatDatabase,
-    id: string,
-    topicId: string,
-    claimId: string,
-  ): Promise<boolean> => {
-    const rows = await db
-      .update(scmChangeRequests)
-      .set({
-        metadata: sql`${scmChangeRequests.metadata} - 'topicLink'`,
-        topicId: null,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(scmChangeRequests.id, id),
-          eq(scmChangeRequests.topicId, topicId),
-          sql`${scmChangeRequests.metadata} -> 'topicLink' ->> 'topicId' = ${topicId}`,
-          sql`${scmChangeRequests.metadata} -> 'topicLink' ->> 'claimId' = ${claimId}`,
-        ),
-      )
-      .returning({ id: scmChangeRequests.id });
-    return rows.length > 0;
-  };
+  /** See {@link claimTopicFromLink}. */
+  static claimTopicFromLink = claimTopicFromLink;
+
+  /** See {@link releaseTopicFromLink}. */
+  static releaseTopicFromLink = releaseTopicFromLink;
 
   /**
    * Point the row at `acceptanceId` unless it already names another one,
