@@ -281,7 +281,6 @@ export const startOperation = async (
             // resolves a model-supplied skill NAME, so a name the pool never
             // offered still reaches the runtime.
             skillGrants: shareGate.shareConfig.skillGrants,
-            showErrorDetails: shareGate.shareConfig.showErrorDetails,
             visitorUserId: shareGate.visitorUserId,
           }
         : undefined,

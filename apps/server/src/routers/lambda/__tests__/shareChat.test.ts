@@ -1377,9 +1377,6 @@ describe('shareChatRouter', () => {
       expect(mockMessageQueryForVisitor).toHaveBeenCalledWith(
         { includeFileWorks: true, topicId: 'tpc_visitor' },
         expect.objectContaining({
-          redaction: {
-            showErrorDetails: undefined,
-          },
           // Pinned to share + topic + VISITOR: the ordinary scope would join
           // the creator's Works, which must never reach a visitor surface.
           workAccessScope: {

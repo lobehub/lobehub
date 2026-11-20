@@ -76,7 +76,6 @@ describe('AgentShareModel', () => {
           allowCreatorViewSessions: false,
           allowReadMemory: false,
           maxMessagesPerVisitor: 100,
-          showErrorDetails: false,
           toolGrants: [],
         },
         userViewCount: 0,
@@ -393,7 +392,6 @@ describe('AgentShareModel', () => {
         maxFileStorage: 512 * 1024 * 1024,
         maxMessagesPerVisitor: 100,
         monthlySpendLimit: 10,
-        showErrorDetails: false,
         slug: undefined,
         toolGrants: [],
       });
@@ -410,7 +408,6 @@ describe('AgentShareModel', () => {
         maxFileStorage: 256 * 1024 * 1024,
         maxMessagesPerVisitor: 40,
         monthlySpendLimit: 25,
-        showErrorDetails: true,
         toolGrants: [{ identifier: 'search' }],
       };
 
@@ -432,14 +429,14 @@ describe('AgentShareModel', () => {
         toolGrants: [{ identifier: 'search' }],
       });
       const updated = await agentShareModel.updateConfig(agentId, {
+        allowCreatorViewSessions: true,
         maxFileStorage: 1024,
-        showErrorDetails: true,
       });
 
       expect(updated?.shareConfig).toMatchObject({
+        allowCreatorViewSessions: true,
         maxFileStorage: 1024,
         maxMessagesPerVisitor: 10,
-        showErrorDetails: true,
         toolGrants: [{ identifier: 'search' }],
       });
     });
@@ -449,15 +446,15 @@ describe('AgentShareModel', () => {
       await agentShareModel.updateConfig(agentId, { monthlySpendLimit: 25 });
 
       const updated = await agentShareModel.updateConfig(agentId, {
+        allowCreatorViewSessions: true,
         monthlySpendLimit: 0,
-        showErrorDetails: true,
         // smuggled past the type on purpose — must be stripped, not persisted
         ...({ slug: 'sneaky-slug' } as object),
       });
 
       // `0` is a real cap ("stop all visitor runs"), never a cleared one.
       expect(updated?.shareConfig.monthlySpendLimit).toBe(0);
-      expect(updated?.shareConfig.showErrorDetails).toBe(true);
+      expect(updated?.shareConfig.allowCreatorViewSessions).toBe(true);
       // The seeded profile slug is untouched; the smuggled one never lands.
       expect(updated?.shareConfig.slug).toBe('shareable-agent');
       expect(await AgentShareModel.findBySlugOrId(serverDB, 'sneaky-slug')).toBeNull();

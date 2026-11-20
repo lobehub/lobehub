@@ -65,17 +65,13 @@ export const conversationRouter = router({
       );
 
       // queryForVisitor strips the creator's `sender` identity and the
-      // spend/model snapshot, and — unless the share opts in via
-      // `showErrorDetails` — the raw error payload too. Share messages persist under the
+      // spend/model snapshot, and projects errors to a classified type. Share messages persist under the
       // CREATOR's account (see the `shareChatProcedure` doc in `procedures.ts`), so the raw `query()` result
       // would otherwise leak the creator's account identity to the visitor.
       return messageModel.queryForVisitor(
         { includeFileWorks: input.includeFileWorks, topicId: input.topicId },
         {
           postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
-          redaction: {
-            showErrorDetails: share.shareConfig.showErrorDetails,
-          },
           // Work summaries are assembled under the visitor's OWN share scope:
           // only Works registered from this share topic resolve, never the
           // creator's ordinary Works (see `workMatchesAccessScope`).

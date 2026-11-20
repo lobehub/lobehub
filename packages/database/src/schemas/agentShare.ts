@@ -4,7 +4,7 @@ import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle
 import { timestamps } from './_helpers';
 import { agents } from './agent';
 
-export type AgentShareDeviceAccess = 'allowlist' | 'none';
+export type AgentShareDeviceAccess = 'allowlist' | 'contacts' | 'none';
 
 export interface AgentShareConfig {
   /**
@@ -29,6 +29,9 @@ export interface AgentShareConfig {
    * - `allowlist`: only the people in {@link deviceAllowUserIds} who are
    *   still in the Agent's address book. They get the device tools and, for a
    *   heterogeneous Agent, run it on the device.
+   * - `contacts`: everyone currently in the Agent's address book, so a creator
+   *   can prepare the share before someone joins: they can use it as soon as
+   *   they are added, and lose it when removed.
    *
    * There is no "every visitor" value: a stranger never reaches the creator's
    * machine. The visitor never picks the device — it always follows the
@@ -72,11 +75,6 @@ export interface AgentShareConfig {
    * the OSS schema only carries the configured value.
    */
   monthlySpendLimit?: number;
-  /**
-   * Whether visitors may see raw run error details (message/stack) instead of
-   * a generic failure notice. Defaults to `false`.
-   */
-  showErrorDetails?: boolean;
   /**
    * Skills visitors may load, by skill identifier. Deliberately separate from
    * {@link toolGrants}: a skill grant governs BOTH the tool path
