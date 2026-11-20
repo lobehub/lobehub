@@ -1,7 +1,12 @@
 import type {
   DesktopLocalDatabaseBatchOperation,
+  DesktopLocalDatabaseCollectionInfo,
   DesktopLocalDatabaseEntry,
   DesktopLocalDatabaseKey,
+  DesktopLocalDatabaseKeyGroup,
+  DesktopLocalDatabaseKeyGroupQuery,
+  DesktopLocalDatabaseKeyPage,
+  DesktopLocalDatabaseKeyQuery,
   DesktopLocalDatabasePrefix,
   DesktopLocalDatabaseSet,
 } from '@lobechat/electron-client-ipc';
@@ -48,6 +53,30 @@ export default class LocalDatabaseController extends ControllerModule {
   @IpcMethod()
   async get({ collection, key }: DesktopLocalDatabaseKey): Promise<string | undefined> {
     return this.service.get(collection, key);
+  }
+
+  @IpcMethod()
+  async keyGroupsByPrefix({
+    collection,
+    delimiter,
+    prefix,
+  }: DesktopLocalDatabaseKeyGroupQuery): Promise<DesktopLocalDatabaseKeyGroup[]> {
+    return this.service.keyGroupsByPrefix(collection, prefix, delimiter);
+  }
+
+  @IpcMethod()
+  async keysByPrefix({
+    collection,
+    limit,
+    prefix,
+    search,
+  }: DesktopLocalDatabaseKeyQuery): Promise<DesktopLocalDatabaseKeyPage> {
+    return this.service.keysByPrefix(collection, prefix, { limit, search });
+  }
+
+  @IpcMethod()
+  async listCollections(): Promise<DesktopLocalDatabaseCollectionInfo[]> {
+    return this.service.listCollections();
   }
 
   @IpcMethod()

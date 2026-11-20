@@ -6,10 +6,13 @@ import {
   type DropdownMenuProps,
   type MenuInfo,
   type MenuItemType,
-  type MenuProps,
   type PopoverTrigger,
 } from '@lobehub/ui';
 import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- global rules for every open menu's submenu parts, which have no slot
+  createGlobalStyle,
+  cssVar as cssVarValue,
+  cx,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
@@ -17,7 +20,8 @@ import {
   DropdownMenuTrigger,
   renderDropdownMenuItems,
 } from '@lobehub/ui';
-import { createGlobalStyle, createStaticStyles, cssVar, cx } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type CSSProperties, type ReactNode } from 'react';
 import {
   isValidElement,
@@ -35,23 +39,16 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 
 import { type MenuOpenChangeDetails, shouldVetoMenuClose } from './menuCloseVeto';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  dropdownMenu: css`
-    .ant-avatar {
-      margin-inline-end: var(--ant-margin-xs);
-    }
-  `,
-  trigger: css`
-    outline: none;
-
-    /* Keyboard users still need a landmark for where Enter will land. */
-    &:focus-visible {
-      border-radius: ${cssVar.borderRadius};
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: 2px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  trigger: {
+    // Keyboard users still need a landmark for where Enter will land.
+    outlineStyle: { 'default': 'none', ':focus-visible': 'solid' },
+    borderRadius: { 'default': null, ':focus-visible': cssVar.borderRadius },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  },
+});
 
 const SubmenuScrollStyle = createGlobalStyle`
   /* base-ui DropdownMenu.Item reserves an indicator slot (empty aria-hidden
@@ -84,13 +81,9 @@ const SubmenuScrollStyle = createGlobalStyle`
     padding-block-end: 4px;
   }
 
-  /* The skill submenu (the one with the search header) has collapsible groups,
-     so shrink-to-fit makes it resize every time a group opens or closes —
-     measured 243px collapsed vs 400px expanded, the jump driven by whichever
-     title happens to be longest. Pin the width so the container stays put and
-     the rows ellipsize into it. */
-  [data-submenu] > [role='menu']:has(.lobe-skill-submenu-search) {
-    width: min(90vw, 400px);
+  /* A stable width keeps switching filters and searching from moving the menu. */
+  [data-submenu] > [role='menu']:has(.lobe-tool-picker-header) {
+    width: min(90vw, 320px);
   }
 
   /* base-ui menu-item internal containers are flex by default but don't set
@@ -104,40 +97,17 @@ const SubmenuScrollStyle = createGlobalStyle`
   /* Align base-ui separator color with the stats-footer's border-block-start
      (colorBorderSecondary) so all dividers in the menu look consistent. */
   [data-submenu] > [role='menu'] [role='separator'] {
-    background: ${cssVar.colorBorderSecondary};
+    background: ${cssVarValue.colorBorderSecondary};
   }
 
-  /* base-ui group label is rendered inside a [role='presentation'] with its
-     own default vertical padding, which stacks with our activationGroupHeader
-     padding and inflates the gap above/below group headers. Reset only the
-     vertical padding for skill activation groups; other groups (e.g. the
-     Knowledge submenu's Libraries/Files headers) keep their default padding. */
-  [data-submenu] > [role='menu'] [role='group']:has([data-skill-activation-group]) > [role='presentation'] {
-    padding-block: 0;
-  }
-
-  /* The skill submenu is the only submenu that uses a header slot (the search
-     bar). renderDropdownMenuItems wraps it in DropdownMenuHeader's default
-     8px/12px padding — which can't be reached via props — leaving the borderless
-     search floating in a tall gap and indented past the rows below. Trim the
-     padding so the search sits snug against the divider and its icon lines up
-     with the 16px icon column shared by the menu rows. */
-  [data-submenu] > [role='menu'] > *:has(.lobe-skill-submenu-search) {
-    padding-block: 4px;
-    padding-inline: 4px;
+  [data-submenu] > [role='menu'] > *:has(> .lobe-tool-picker-header) {
+    padding: 8px;
   }
 
   /* Submenu triggers that opt into a custom trailing chevron (the Plus menu's
      Skills / Web Search / Attachments rows mark their extra icon with .lobe-submenu-chevron)
      render that chevron themselves; hide base-ui's default triangle submenu arrow
      — always the last child of the trigger's content — so the two don't stack. */
-  .lobe-submenu-chevron {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 1;
-  }
-
   [role='menuitem']:has(.lobe-submenu-chevron) > * > *:last-child {
     display: none;
   }
@@ -170,10 +140,10 @@ const MenuItemsHost = memo<MenuItemsHostProps>(({ close, decorate, useItems }) =
 
 MenuItemsHost.displayName = 'ActionDropdownMenuItemsHost';
 
-type ActionDropdownMenu = Omit<
-  Pick<MenuProps<ActionDropdownMenuItem>, 'className' | 'onClick' | 'style'>,
-  'items'
-> & {
+type ActionDropdownMenu = {
+  className?: string;
+  onClick?: (info: MenuInfo) => void;
+  style?: CSSProperties;
   items?: ActionDropdownMenuItems | (() => ActionDropdownMenuItems);
   /**
    * Hook form of `items`, invoked from inside the popup so it only runs while the
@@ -373,9 +343,9 @@ const ActionDropdown = memo<ActionDropdownProps>(
     const resolvedPopupClassName = useMemo<DropdownMenuPopupProps['className']>(() => {
       const popupClassName = popupProps?.className;
       if (typeof popupClassName === 'function') {
-        return (state) => cx(styles.dropdownMenu, menu.className, popupClassName(state));
+        return (state) => cx(menu.className, popupClassName(state));
       }
-      return cx(styles.dropdownMenu, menu.className, popupClassName);
+      return cx(menu.className, popupClassName);
     }, [menu.className, popupProps?.className]);
 
     const resolvedPopupStyle = useMemo<DropdownMenuPopupProps['style']>(() => {
@@ -385,7 +355,7 @@ const ActionDropdown = memo<ActionDropdownProps>(
         minHeight,
         minWidth: isMobile ? undefined : minWidth,
         overflowX: 'hidden',
-        overflowY: 'scroll',
+        overflowY: 'auto',
         width: isMobile ? '100vw' : undefined,
       };
       const popupStyle = popupProps?.style;
@@ -447,7 +417,10 @@ const ActionDropdown = memo<ActionDropdownProps>(
           onOpenChange={handleOpenChange}
           onOpenChangeComplete={handleOpenChangeComplete}
         >
-          <DropdownMenuTrigger className={styles.trigger} {...resolvedTriggerProps}>
+          <DropdownMenuTrigger
+            className={stylex.props(styles.trigger).className}
+            {...resolvedTriggerProps}
+          >
             {children}
           </DropdownMenuTrigger>
           <DropdownMenuPortal container={resolvedPortalContainer} {...restPortalProps}>

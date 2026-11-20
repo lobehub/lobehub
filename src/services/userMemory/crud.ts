@@ -39,6 +39,14 @@ class MemoryCRUDService {
     return lambdaClient.userMemory.getContexts.query();
   };
 
+  getContextStories = async () => {
+    return lambdaClient.userMemory.getContextStories.query();
+  };
+
+  getContextStory = async (id: string) => {
+    return lambdaClient.userMemory.getContextStory.query({ id });
+  };
+
   updateContext = async (
     id: string,
     data: { currentStatus?: string; description?: string; title?: string },

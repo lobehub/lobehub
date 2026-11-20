@@ -254,6 +254,42 @@ vi.mock('@/server/services/heterogeneousAgent/remoteDeviceHeteroContext', () => 
   buildRemoteDeviceHeteroContext: mockBuildRemoteDeviceHeteroContext,
 }));
 
+const deviceClaudeConfig = () => ({
+  boundDeviceId: 'device-1',
+  executionTarget: 'device',
+  heterogeneousProvider: { type: 'claude-code' },
+});
+
+const groupChildInput = () => ({
+  agentId: 'agent-1',
+  appContext: {
+    isolationThread: false,
+    orchestrationRole: 'member',
+    topicId: 'topic-1',
+  },
+  parentOperationId: 'parent-operation',
+  prompt: 'speak as member',
+  topicStartOwnerOperationId: 'parent-operation',
+});
+
+const isolatedChildInput = () => ({
+  agentId: 'agent-1',
+  appContext: { isolationThread: true, topicId: 'topic-1' },
+  parentOperationId: 'parent-operation',
+  prompt: 'do the task as a callAgent child',
+});
+
+const deviceCodexConfig = () => ({
+  boundDeviceId: 'device-1',
+  executionTarget: 'device',
+  heterogeneousProvider: {
+    args: ['--model', 'gpt-5.5'],
+    effort: 'high',
+    speed: 'fast',
+    type: 'codex',
+  },
+});
+
 describe('AiAgentService.execAgent - hetero early-exit file attachments', () => {
   let service: AiAgentService;
   let recordStartSpy: MockInstance<CompletionLifecycle['recordStart']>;
@@ -308,16 +344,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     const taskResolveSpy = vi.spyOn(TaskModel.prototype, 'resolve').mockResolvedValue({
       id: 'task-1',
     } as NonNullable<Awaited<ReturnType<TaskModel['resolve']>>>);
-    Object.assign(heteroAgentConfig.agencyConfig, {
-      boundDeviceId: 'device-1',
-      executionTarget: 'device',
-      heterogeneousProvider: {
-        args: ['--model', 'gpt-5.5'],
-        effort: 'high',
-        speed: 'fast',
-        type: 'codex',
-      },
-    });
+    Object.assign(heteroAgentConfig.agencyConfig, deviceCodexConfig());
     await service.execAgent({
       agentId: 'agent-1',
       model: 'gpt-5.4',
@@ -485,16 +512,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     const taskResolveSpy = vi.spyOn(TaskModel.prototype, 'resolve').mockResolvedValue({
       id: 'task-1',
     } as NonNullable<Awaited<ReturnType<TaskModel['resolve']>>>);
-    Object.assign(heteroAgentConfig.agencyConfig, {
-      boundDeviceId: 'device-1',
-      executionTarget: 'device',
-      heterogeneousProvider: {
-        args: ['--model', 'gpt-5.5'],
-        effort: 'high',
-        speed: 'fast',
-        type: 'codex',
-      },
-    });
+    Object.assign(heteroAgentConfig.agencyConfig, deviceCodexConfig());
     try {
       await service.execAgent({ agentId: 'agent-1', prompt: 'Start', taskId: 'task-1' });
       const first = structuredClone(
@@ -1792,17 +1810,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         },
       });
 
-      await service.execAgent({
-        agentId: 'agent-1',
-        appContext: {
-          isolationThread: false,
-          orchestrationRole: 'member',
-          topicId: 'topic-1',
-        },
-        parentOperationId: 'parent-operation',
-        prompt: 'speak as member',
-        topicStartOwnerOperationId: 'parent-operation',
-      } as any);
+      await service.execAgent(groupChildInput() as any);
 
       expect(topicMock.appendRunningOperationChild).toHaveBeenCalledWith(
         'topic-1',
@@ -1870,17 +1878,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     it('does not dispatch a member after its supervisor marker was cleared', async () => {
       topicMock.appendRunningOperationChild.mockResolvedValue(false);
 
-      const result = await service.execAgent({
-        agentId: 'agent-1',
-        appContext: {
-          isolationThread: false,
-          orchestrationRole: 'member',
-          topicId: 'topic-1',
-        },
-        parentOperationId: 'parent-operation',
-        prompt: 'speak as member',
-        topicStartOwnerOperationId: 'parent-operation',
-      } as any);
+      const result = await service.execAgent(groupChildInput() as any);
 
       expect(result).toMatchObject({ status: 'error', success: false });
       expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
@@ -1929,11 +1927,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     });
 
     it('serializes the onComplete webhook hook onto runningOperation (device dispatch)', async () => {
-      heteroAgentConfig.agencyConfig = {
-        boundDeviceId: 'device-1',
-        executionTarget: 'device',
-        heterogeneousProvider: { type: 'claude-code' },
-      } as any;
+      heteroAgentConfig.agencyConfig = deviceClaudeConfig() as any;
 
       await service.execAgent({
         agentId: 'agent-1',
@@ -1958,11 +1952,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     // instead of a terminal status that clears runningOperation and black-holes
     // the still-running agent's heteroIngest batches.
     it('seeds the gateway runtime init for a device-dispatched local hetero run', async () => {
-      heteroAgentConfig.agencyConfig = {
-        boundDeviceId: 'device-1',
-        executionTarget: 'device',
-        heterogeneousProvider: { type: 'claude-code' },
-      } as any;
+      heteroAgentConfig.agencyConfig = deviceClaudeConfig() as any;
 
       await service.execAgent({
         agentId: 'agent-1',
@@ -1995,11 +1985,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     });
 
     it('forwards the topic workspace as ingestWorkspaceId on device hetero dispatch', async () => {
-      heteroAgentConfig.agencyConfig = {
-        boundDeviceId: 'device-1',
-        executionTarget: 'device',
-        heterogeneousProvider: { type: 'claude-code' },
-      } as any;
+      heteroAgentConfig.agencyConfig = deviceClaudeConfig() as any;
       service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-a' });
 
       await service.execAgent({
@@ -2327,12 +2313,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     // never resumed, and it stays parked until the inactivity watchdog
     // abandons it ~10 minutes later.
     it('persists userId/workspaceId metadata for a callAgent-spawned hetero child', async () => {
-      await service.execAgent({
-        agentId: 'agent-1',
-        appContext: { isolationThread: true, topicId: 'topic-1' },
-        parentOperationId: 'parent-operation',
-        prompt: 'do the task as a callAgent child',
-      } as any);
+      await service.execAgent(isolatedChildInput() as any);
 
       const call = mockCreateOperationMetadata.mock.calls.find(
         ([, data]) => data.userId === 'test-user-id',
@@ -2348,12 +2329,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       // topic.metadata.runningOperation (root or childOperations) — a plain
       // updateMetadata() here would clobber the parent's own root marker
       // instead of nesting under it.
-      await service.execAgent({
-        agentId: 'agent-1',
-        appContext: { isolationThread: true, topicId: 'topic-1' },
-        parentOperationId: 'parent-operation',
-        prompt: 'do the task as a callAgent child',
-      } as any);
+      await service.execAgent(isolatedChildInput() as any);
 
       expect(topicMock.appendRunningOperationChild).toHaveBeenCalledWith(
         'topic-1',
@@ -2365,11 +2341,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     });
 
     it('patches device info onto an isolation child without replacing the parent marker', async () => {
-      heteroAgentConfig.agencyConfig = {
-        boundDeviceId: 'device-1',
-        executionTarget: 'device',
-        heterogeneousProvider: { type: 'claude-code' },
-      } as any;
+      heteroAgentConfig.agencyConfig = deviceClaudeConfig() as any;
 
       await service.execAgent({
         agentId: 'agent-1',
@@ -2390,12 +2362,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     it('falls back to claiming the topic marker when the parent is not the current root (e.g. nested isolation chain)', async () => {
       topicMock.appendRunningOperationChild.mockResolvedValueOnce(false);
 
-      await service.execAgent({
-        agentId: 'agent-1',
-        appContext: { isolationThread: true, topicId: 'topic-1' },
-        parentOperationId: 'parent-operation',
-        prompt: 'do the task as a callAgent child',
-      } as any);
+      await service.execAgent(isolatedChildInput() as any);
 
       // Otherwise this child would never be recognized by
       // heteroIngest/heteroFinish at all.
@@ -2437,7 +2404,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       expect(errorBubbleUpdates()[0][1]).toEqual(
         expect.objectContaining({
           error: expect.objectContaining({
-            body: { detail: 'Gateway Timeout' },
+            body: expect.objectContaining({ detail: 'Gateway Timeout' }),
             message: 'Hetero sandbox spawn failed',
           }),
         }),

@@ -1,5 +1,5 @@
 import type { GoalGraphView } from '../goalGraphViewModel';
-import { type BatchModel, type BatchRound, reopenedRows } from './batchModel';
+import { type BatchModel, type BatchRound, reopenedRows, roundRetro } from './batchModel';
 import type { LayoutBox } from './layout';
 
 /**
@@ -30,6 +30,11 @@ export const BATCH_SQUARE = 12;
 /** Row gap equals column gap, so the waves read as a square grid. */
 export const BATCH_SQUARE_GAP = 10;
 export const BATCH_ROW_LABEL = 44;
+/** Room after a wave's squares for the mark of the retro that read it. */
+export const BATCH_RETRO_MARK = 150;
+/** One layer row of a retro group: experience, then criteria. */
+export const BATCH_RETRO_ROW = 44;
+const BATCH_RETRO_ROW_GAP = 6;
 
 /** A round frame's label row; its side links leave at half this height. */
 export const BATCH_FRAME_HEAD = 38;
@@ -48,8 +53,9 @@ const DECISION_GAP = 16;
  * `experimentProbe`: the cold start — the first round's trials, not a
  * candidate-answer `experiment`. `round`: the frame around one round's nodes.
  * `waves`: the units one round re-opened and the roster waves it owns.
+ * `retro`: what the round's trials taught — experience and criteria — before its gate.
  */
-export type BatchGroupKind = 'experimentProbe' | 'round' | 'waves';
+export type BatchGroupKind = 'experimentProbe' | 'retro' | 'round' | 'waves';
 
 export interface BatchGroupSpec {
   box: LayoutBox;
@@ -93,10 +99,15 @@ const groupHeight = (body: number) => BATCH_GROUP_HEAD + 8 + body + 4 + BATCH_GR
 const stack = (count: number, size: number, gap: number) =>
   count > 0 ? count * size + (count - 1) * gap : 0;
 
-export const wavesWidth = (waveSize: number) =>
+export const wavesWidth = (waveSize: number, retroMarks = false) =>
   Math.max(
     CARD.width,
-    BATCH_GROUP_PAD * 2 + BATCH_ROW_LABEL + 8 + stack(waveSize, BATCH_SQUARE, BATCH_SQUARE_GAP) + 2,
+    BATCH_GROUP_PAD * 2 +
+      BATCH_ROW_LABEL +
+      8 +
+      stack(waveSize, BATCH_SQUARE, BATCH_SQUARE_GAP) +
+      2 +
+      (retroMarks ? BATCH_RETRO_MARK : 0),
   );
 
 /** How many square rows a round's waves draw: its re-opened rows, then its waves. */
@@ -118,7 +129,8 @@ export const layoutBatch = (graph: GoalGraphView, model: BatchModel): BatchLayou
   };
 
   const [first] = rounds;
-  const innerW = Math.max(CARD.width, wavesWidth(model.waveSize));
+  const retroMarks = model.retros.length > 0;
+  const innerW = Math.max(CARD.width, wavesWidth(model.waveSize, retroMarks));
   const frameW = innerW + FRAME_PAD * 2;
   let right = 0;
   let previous: string | undefined;
@@ -147,7 +159,21 @@ export const layoutBatch = (graph: GoalGraphView, model: BatchModel): BatchLayou
       above = id;
       y = box.y + box.height + STACK_GAP;
     };
-    for (const id of [round.templateId, round.assayId]) {
+    // A round starts from the retro that produced its plan and criteria — the
+    // cold start's, or the broken wave's — in the place the plan card stood,
+    // ahead of the gate.
+    const retro = roundRetro(model, round.revision);
+    if (retro) {
+      // Its status sits in the head, so it has no foot row.
+      const box = {
+        height: groupHeight(stack(2, BATCH_RETRO_ROW, BATCH_RETRO_ROW_GAP)) - BATCH_GROUP_FOOT + 8,
+        width: innerW,
+        x: left,
+        y,
+      };
+      place(addGroup('retro', round.revision, box), box);
+    }
+    for (const id of [retro ? undefined : round.templateId, round.assayId]) {
       if (!id) continue;
       nodeIds.add(id);
       place(id, { ...CARD, x: left + (innerW - CARD.width) / 2, y });

@@ -1,9 +1,8 @@
 'use client';
 
 import type { AcceptanceChecklistItem } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { BadgeCheck, Ban, ChevronRight, CircleDashed, PencilLine, RotateCcw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +12,12 @@ import NavItem from '@/features/NavPanel/components/NavItem';
 import { checkFilterState } from '../Checks/checkState';
 import type { AcceptanceCheck } from '../Checks/types';
 import { acceptanceFocusedLayout } from '../layout';
+
+const styles = stylex.create({
+  row: {
+    flexShrink: 0,
+  },
+});
 
 const STATE_ICON = {
   accepted: BadgeCheck,
@@ -56,6 +61,7 @@ export const FocusOutline = memo<FocusOutlineProps>(
           return (
             <NavItem
               active={check.id === focusedCheckId}
+              className={stylex.props(styles.row).className}
               extra={<Icon color={cssVar.colorTextQuaternary} icon={ChevronRight} size={14} />}
               key={check.id}
               paddingBlock={acceptanceFocusedLayout.outlineItemPaddingBlock}
@@ -83,7 +89,7 @@ export const FocusOutline = memo<FocusOutlineProps>(
                       style={{
                         color: cssVar.colorTextQuaternary,
                         fontFamily: cssVar.fontFamilyCode,
-                        fontSize: 11,
+                        fontSize: 12,
                       }}
                     >
                       C{check.seq}
@@ -96,8 +102,8 @@ export const FocusOutline = memo<FocusOutlineProps>(
           );
         })}
         {standingChecks.length > 0 && onEditStandingCheck && (
-          <Flexbox gap={4} paddingBlock={8} paddingInline={8}>
-            <Text fontSize={11} type={'secondary'}>
+          <Flexbox gap={4} paddingBlock={8} paddingInline={8} {...stylex.props(styles.row)}>
+            <Text fontSize={12} type={'secondary'}>
               {t('acceptance.checkCreate.pendingGroup')}
             </Text>
             {standingChecks.map((item) => (

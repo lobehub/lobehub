@@ -7,7 +7,11 @@ export default {
   'codes.ACCOUNT_NOT_FOUND': 'Account not found',
   'codes.CREDENTIAL_ACCOUNT_NOT_FOUND': 'Credential account does not exist',
   'codes.DELETED_ACCOUNT_EMAIL':
-    'This email has been associated with a deleted account and cannot be used for registration',
+    'This email is still in the account deletion cooldown period. You can sign up again 31 days after deletion is complete.',
+  'codes.DELETED_ACCOUNT_EMAIL_WITH_RETRY_AFTER_DAYS_one':
+    'This email is still in the account deletion cooldown period. You can sign up again in about {{count}} day.',
+  'codes.DELETED_ACCOUNT_EMAIL_WITH_RETRY_AFTER_DAYS_other':
+    'This email is still in the account deletion cooldown period. You can sign up again in about {{count}} days.',
   'codes.EMAIL_CAN_NOT_BE_UPDATED': 'Email cannot be updated for this account',
   'codes.EMAIL_NOT_ALLOWED': 'Email not allowed for registration',
   'codes.EMAIL_NOT_FOUND':

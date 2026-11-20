@@ -9,10 +9,14 @@ import {
   getKanbanAssigneeUpdate,
   getKanbanColumnCreateDefaults,
   getKanbanColumnHeaderVariant,
+  getKanbanCreateTaskModalProps,
   getKanbanTaskPatch,
+  getTaskGroupCreateDefaults,
+  getTaskSubGroupCreateDefaults,
   moveTaskBetweenKanbanGroups,
   normalizeKanbanGroupBy,
 } from './kanbanBoardModel';
+import type { TaskGroupMeta } from './listViewOptions';
 
 const task = (
   id: string,
@@ -274,6 +278,32 @@ describe('kanbanBoardModel', () => {
     });
   });
 
+  describe('getKanbanCreateTaskModalProps', () => {
+    it('prefills the column priority in the create task modal', () => {
+      expect(getKanbanCreateTaskModalProps({ priority: 4 }, { projectId: 'project-1' })).toEqual({
+        agentId: undefined,
+        defaultPriority: 4,
+        lockAssignee: false,
+        projectId: 'project-1',
+        showInlineToggle: false,
+      });
+    });
+
+    it('prefills the column assignee over the board agent', () => {
+      expect(
+        getKanbanCreateTaskModalProps({ assigneeAgentId: 'agent-col' }, { agentId: 'agent-board' }),
+      ).toMatchObject({ agentId: 'agent-col', lockAssignee: true });
+    });
+
+    it('falls back to the board agent and locks it on an agent-scoped board', () => {
+      expect(getKanbanCreateTaskModalProps({}, { agentId: 'agent-board' })).toMatchObject({
+        agentId: 'agent-board',
+        defaultPriority: undefined,
+        lockAssignee: true,
+      });
+    });
+  });
+
   describe('getKanbanColumnCreateDefaults', () => {
     it('pins the column priority on tasks created from a priority column', () => {
       const groups = [
@@ -319,6 +349,62 @@ describe('kanbanBoardModel', () => {
 
       expect(getKanbanColumnCreateDefaults('assignee', unassignedColumn)).toBeUndefined();
       expect(getKanbanColumnCreateDefaults('member', memberColumn)).toBeUndefined();
+    });
+  });
+
+  describe('getTaskGroupCreateDefaults', () => {
+    const meta = (overrides: Partial<TaskGroupMeta>): TaskGroupMeta => ({
+      groupBy: 'status',
+      key: 'k',
+      label: 'l',
+      ...overrides,
+    });
+
+    it('offers creation only on the backlog status group', () => {
+      expect(getTaskGroupCreateDefaults(meta({ status: 'backlog' }))).toEqual({});
+      expect(getTaskGroupCreateDefaults(meta({ status: 'running' }))).toBeUndefined();
+      expect(getTaskGroupCreateDefaults(meta({ status: 'completed' }))).toBeUndefined();
+    });
+
+    it('pins the group priority, including "no priority"', () => {
+      expect(getTaskGroupCreateDefaults(meta({ groupBy: 'priority', priority: 2 }))).toEqual({
+        priority: 2,
+      });
+      expect(getTaskGroupCreateDefaults(meta({ groupBy: 'priority', priority: 0 }))).toEqual({
+        priority: 0,
+      });
+    });
+
+    it('pins the group agent and offers nothing on the unassigned group', () => {
+      expect(
+        getTaskGroupCreateDefaults(meta({ assigneeId: 'agent-1', groupBy: 'assignee' })),
+      ).toEqual({ assigneeAgentId: 'agent-1' });
+      expect(getTaskGroupCreateDefaults(meta({ groupBy: 'assignee' }))).toBeUndefined();
+    });
+
+    it('offers nothing on member, automation and ungrouped lists', () => {
+      expect(
+        getTaskGroupCreateDefaults(meta({ assigneeUserId: 'user-1', groupBy: 'member' })),
+      ).toBeUndefined();
+      expect(
+        getTaskGroupCreateDefaults(meta({ automationMode: 'schedule', groupBy: 'automationMode' })),
+      ).toBeUndefined();
+      expect(getTaskGroupCreateDefaults(meta({ groupBy: 'none' }))).toBeUndefined();
+      expect(getTaskGroupCreateDefaults(undefined)).toBeUndefined();
+    });
+
+    it('combines a sub-group with its parent only when both offer an entry', () => {
+      const backlog = meta({ status: 'backlog' });
+      const high = meta({ groupBy: 'priority', priority: 2 });
+      const agent = meta({ assigneeId: 'agent-1', groupBy: 'assignee' });
+
+      expect(getTaskSubGroupCreateDefaults(backlog, high)).toEqual({ priority: 2 });
+      expect(getTaskSubGroupCreateDefaults(high, agent)).toEqual({
+        assigneeAgentId: 'agent-1',
+        priority: 2,
+      });
+      expect(getTaskSubGroupCreateDefaults(meta({ status: 'running' }), high)).toBeUndefined();
+      expect(getTaskSubGroupCreateDefaults(high, meta({ groupBy: 'assignee' }))).toBeUndefined();
     });
   });
 });

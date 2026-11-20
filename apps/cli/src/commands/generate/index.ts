@@ -4,7 +4,9 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../../utils/format';
 import { registerAsrCommand } from './asr';
+import { registerDecideCommand } from './decide';
 import { registerImageCommand } from './image';
+import { registerJsonCommand } from './json';
 import { registerTextCommand } from './text';
 import { registerTtsCommand } from './tts';
 import { registerVideoCommand } from './video';
@@ -71,6 +73,8 @@ export function registerGenerateCommand(program: Command) {
     .description('Generate content (text, image, video, speech)');
 
   registerTextCommand(generate);
+  registerJsonCommand(generate);
+  registerDecideCommand(generate);
   registerImageCommand(generate);
   registerVideoCommand(generate);
   registerTtsCommand(generate);
@@ -201,7 +205,9 @@ export function registerGenerateCommand(program: Command) {
             console.log(
               `${pc.red('✗')} Timed out after ${options.timeout}s. Task still ${result.status}.`,
             );
-            console.log(pc.dim(`Run "lh gen status ${generationId} ${asyncTaskId}" to check later.`));
+            console.log(
+              pc.dim(`Run "lh gen status ${generationId} ${asyncTaskId}" to check later.`),
+            );
             process.exit(1);
           }
 

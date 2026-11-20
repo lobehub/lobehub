@@ -7,9 +7,11 @@ import {
   type GetAgentDetailParams,
   type InstallPluginParams,
   type SearchAgentParams,
+  type SearchMarketToolsParams,
   type UpdateAgentParams,
   type UpdatePromptParams,
 } from '@lobechat/builtin-tool-agent-management';
+import { buildBackgroundSubAgentReceipt } from '@lobechat/builtin-tool-lobe-agent';
 import { searchAgentsResultsPrompt } from '@lobechat/prompts';
 import {
   getPluginMode,
@@ -23,9 +25,16 @@ import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import { PluginModel } from '@/database/models/plugin';
 import { AgentService } from '@/server/services/agent';
+import {
+  installMarketplaceMcpConnector,
+  type MarketMcpManifest,
+  type MarketplaceInstallOptions,
+} from '@/server/services/connector/marketplaceInstall';
 import { DiscoverService } from '@/server/services/discover';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
+import { startBackgroundSubAgent } from './backgroundSubAgent';
+import { searchMarketTools } from './marketToolSearch';
 import {
   NEXT_RUN_NOTE,
   resolveOrInstallMarketPlugin,
@@ -63,6 +72,16 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
     const discoverService = new DiscoverService({
       userInfo: { userId: context.userId, workspaceId: context.workspaceId },
     });
+    const installScope = {
+      serverDB: context.serverDB,
+      userId: context.userId,
+      workspaceId: context.workspaceId,
+    };
+    const installMarketplaceConnector = (
+      identifier: string,
+      manifest: MarketMcpManifest,
+      options?: MarketplaceInstallOptions,
+    ) => installMarketplaceMcpConnector(installScope, identifier, manifest, options);
 
     return {
       callAgent: async (
@@ -98,12 +117,46 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           };
         }
 
-        const { started, error, subOperationId, threadId } = await ctx.subAgent.run({
-          agentId,
-          description: `Call agent ${agentId}`,
-          instruction,
-          timeout: 1_800_000,
-        });
+        const background = params.runInBackground === true;
+
+        // The target's name titles its thread and, for a background call, is who
+        // the reply is delivered as.
+        const targetTitle = (await agentModel.getAgentConfigById(agentId))?.title;
+
+        const runner = ctx.subAgent;
+        const startRun = () =>
+          runner.run({
+            agentId,
+            background,
+            description: targetTitle || `Call agent ${agentId}`,
+            instruction,
+            timeout: 1_800_000,
+          });
+
+        let runResult: Awaited<ReturnType<typeof startRun>>;
+        if (background) {
+          const outcome = await startBackgroundSubAgent({
+            db: context.serverDB!,
+            groupId: ctx.groupId,
+            retryHint: 'Call callAgent again without runInBackground to wait for the reply.',
+            start: startRun,
+            threadId: ctx.threadId,
+            topicId: ctx.topicId,
+            userId: context.userId!,
+            workspaceId: context.workspaceId,
+          });
+          if ('refusal' in outcome) {
+            return {
+              content: outcome.refusal.message,
+              error: { code: outcome.refusal.code, message: outcome.refusal.message },
+              success: false,
+            };
+          }
+          runResult = outcome.result;
+        } else {
+          runResult = await startRun();
+        }
+        const { started, error, subOperationId, threadId, toolMessageId } = runResult;
 
         if (!started) {
           const detail = error ? `: ${error}` : '.';
@@ -113,6 +166,13 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
             error: { code: 'AGENT_CALL_START_FAILED', message },
             success: false,
           };
+        }
+
+        // Detached: the receipt is the whole tool result; the reply arrives later
+        // as a message from the target. It goes into the runner's placeholder,
+        // which anchors the thread.
+        if (background) {
+          return { content: buildBackgroundSubAgentReceipt(), success: true, toolMessageId };
         }
 
         return {
@@ -267,13 +327,13 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
             return { content: `Agent "${agentId}" not found.`, success: false };
           }
 
-          // Pin only an id the runtime can load: a builtin, a connector, or a
-          // plugin whose manifest lists its APIs (fetched from the marketplace
-          // when not installed yet). Registering a bare row here used to report
-          // success for ids that never produced a tool.
+          // Pin only an id the runtime can load: a builtin, a connector, or an
+          // installed plugin whose manifest lists its APIs. A marketplace MCP
+          // not installed yet is installed as a connector first. Registering a
+          // bare row here used to report success for ids that never produced a tool.
           const { installedNow, resolution } = await resolveOrInstallMarketPlugin(
             identifier,
-            { connectorModel, discoverService, pluginModel },
+            { connectorModel, discoverService, installMarketplaceConnector, pluginModel },
             { agentId, source },
           );
           if (resolution.status !== 'loadable')
@@ -398,6 +458,9 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           return handleError(error, 'Failed to search agents');
         }
       },
+
+      searchMarketTools: (params: SearchMarketToolsParams): Promise<ToolExecutionResult> =>
+        searchMarketTools({ connectorModel, discoverService, pluginModel }, params),
 
       updateAgent: async (params: UpdateAgentParams): Promise<ToolExecutionResult> => {
         try {

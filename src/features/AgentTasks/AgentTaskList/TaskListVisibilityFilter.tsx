@@ -1,17 +1,22 @@
 'use client';
 
-import { type DropdownItem, DropdownMenu, Icon, type MenuInfo } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  cssVar,
+  type DropdownItem,
+  DropdownMenu,
+  Icon,
+  type MenuInfo,
+} from '@lobehub/ui';
 import { Globe, LockIcon, UsersIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import type { TaskListVisibilityFilter as Filter } from '@/store/task/slices/list/initialState';
+import { useHeaderActionSize } from '@/styles/density';
 
 import { renderMenuCheck } from '../features/menuExtra';
 
@@ -41,6 +46,7 @@ const FILTER_OPTIONS: Array<{ icon: typeof Globe; key: Filter; labelKey: string 
  */
 const TaskListVisibilityFilter = memo(() => {
   const { t } = useTranslation('chat');
+  const headerActionSmallSize = useHeaderActionSize(true);
   const activeWorkspaceId = useActiveWorkspaceId();
   const visibility = useTaskStore(taskListSelectors.listVisibility);
   const setListVisibility = useTaskStore((s) => s.setListVisibility);
@@ -75,7 +81,7 @@ const TaskListVisibilityFilter = memo(() => {
     <DropdownMenu items={menuItems} open={open} onOpenChange={setOpen}>
       <ActionIcon
         icon={CurrentIcon}
-        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+        size={headerActionSmallSize}
         title={`${t('taskList.visibility.label', { defaultValue: 'Visibility' })}: ${currentLabel}`}
       />
     </DropdownMenu>

@@ -378,7 +378,7 @@ describe('HomeInputActionImpl', () => {
       await action.sendAsWrite({ message: 'write me a doc' });
 
       expect(createDocumentMock).toHaveBeenCalled();
-      expect(navigateMock).toHaveBeenCalledWith('/page/doc-new');
+      expect(navigateMock).toHaveBeenCalledWith('/resource/page/doc-new');
       // The new editor has not mounted yet, so the doc id must travel in context
       // explicitly rather than relying on the page editor runtime singleton.
       expect(sendMessageMock).toHaveBeenCalledWith(

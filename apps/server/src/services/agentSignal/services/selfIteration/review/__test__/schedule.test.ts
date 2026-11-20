@@ -238,6 +238,33 @@ describe('nightlyReviewScheduleService', () => {
       });
     });
 
+    it('filters the bot-retro job to its own 04:00-06:00 local window', async () => {
+      const deps = createDeps();
+      const createdAt = new Date('2026-01-01T00:00:00.000Z');
+      // At 2026-05-03T20:30Z: Shanghai is 04:30 (in), Tokyo is 05:30 (in), Bangkok is 03:30 (out).
+      deps.listEligibleUsers.mockResolvedValue([
+        { createdAt, id: 'shanghai', timezone: 'Asia/Shanghai' },
+        { createdAt, id: 'tokyo', timezone: 'Asia/Tokyo' },
+        { createdAt, id: 'bangkok', timezone: 'Asia/Bangkok' },
+      ]);
+      const service = createSelfReviewScheduleService(deps);
+      const requestedAt = new Date('2026-05-03T20:30:00.000Z');
+
+      const page = await service.listEligibleUsersPage({
+        job: 'bot-retro',
+        limit: 50,
+        requestedAt,
+      });
+
+      expect(deps.listEligibleUsers).toHaveBeenCalledWith({
+        activeSince: new Date('2026-05-02T14:30:00.000Z'),
+        limit: 50,
+        localHourWindow: { at: requestedAt, endHourExclusive: 7, startHour: 3 },
+        requestedAt,
+      });
+      expect(page.users.map((user) => user.id)).toEqual(['shanghai', 'tokyo']);
+    });
+
     /**
      * ROOT CAUSE:
      *

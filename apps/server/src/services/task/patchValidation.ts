@@ -1,6 +1,8 @@
+import type { TaskContext, TaskProjectMoveRefusal } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
 import type { AgentModel } from '@/database/models/agent';
+import { ProjectModel } from '@/database/models/project';
 import type { TaskModel } from '@/database/models/task';
 import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
@@ -8,7 +10,9 @@ import type { EditLockService } from '@/server/services/editLock';
 import type { TaskService } from '@/server/services/task';
 
 import { assertArchivedTaskStaysIdle } from './archiveGuard';
-import { assertResultingScheduleValid } from './scheduleValidation';
+import { assertTaskOriginPatchAllowed } from './originValidation';
+import { assertPreciseScheduleAllowed, assertResultingScheduleValid } from './scheduleValidation';
+import { findTaskOrThrow, resolveTaskOrThrow } from './utils';
 
 /**
  * The invariants a task patch must satisfy, shared by every write boundary: the
@@ -31,8 +35,10 @@ export interface TaskPatchFields {
   assigneeAgentId?: string | null;
   assigneeUserId?: string | null;
   automationMode?: string | null;
+  context?: Record<string, unknown>;
   editorData?: unknown;
   instruction?: string | null;
+  projectId?: string | null;
   schedulePattern?: string | null;
   scheduleTimezone?: string | null;
 }
@@ -50,12 +56,6 @@ export interface TaskPatchInvariantContext {
   >;
   userId: string;
   workspaceId?: string;
-}
-
-async function resolveOrThrow(model: TaskModel, id: string): Promise<ResolvedTask> {
-  const task = await model.resolve(id);
-  if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
-  return task;
 }
 
 export async function assertAssigneeAgentBelongsToUser(
@@ -79,14 +79,75 @@ export async function assertAssigneeAgentBelongsToUser(
   }
 }
 
+/**
+ * A task patch may file the task under any project the caller can read — the
+ * same bar `createTask` applies, and the same NOT_FOUND: another workspace's or
+ * member's private project is indistinguishable from one that does not exist.
+ */
+export async function assertProjectReadable(
+  ctx: Pick<TaskPatchInvariantContext, 'serverDB' | 'userId' | 'workspaceId'>,
+  projectId: string,
+) {
+  const project = await new ProjectModel(ctx.serverDB, ctx.userId, ctx.workspaceId).findById(
+    projectId,
+  );
+  if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+}
+
+/**
+ * A refused project move, carrying the reason as `errorData.projectMoveRefusal`
+ * so the client can name what blocks it.
+ */
+export const projectMoveRefused = (reason: TaskProjectMoveRefusal, message: string) =>
+  new TRPCError({ cause: { data: { projectMoveRefusal: reason } }, code: 'BAD_REQUEST', message });
+
+/**
+ * Moving a task leaves its subtasks and dependencies where they are, and neither
+ * link may cross a project boundary (`createTask`, `addDependency` and reparenting
+ * all enforce that), so a move that would split them is refused rather than
+ * cascaded. A patch that also changes the parent is judged on the new parent by
+ * `resolveSafeParentTaskId` instead.
+ */
+async function assertProjectMoveKeepsLinks(
+  model: TaskModel,
+  task: ResolvedTask,
+  projectId: string | null,
+  parentChanges: boolean,
+) {
+  if (!parentChanges && task.parentTaskId) {
+    const parent = await model.findById(task.parentTaskId);
+    if (parent && parent.projectId !== projectId) {
+      throw projectMoveRefused(
+        'has_parent',
+        'Subtask must belong to the same project as its parent',
+      );
+    }
+  }
+
+  if (await model.hasSubtaskOutsideProject(task.id, projectId)) {
+    throw projectMoveRefused(
+      'split_subtasks',
+      'Task has subtasks in its current project. Move or detach them first',
+    );
+  }
+
+  if (await model.hasDependencyOutsideProject(task.id, projectId)) {
+    throw projectMoveRefused(
+      'external_dependency',
+      'Task dependencies cannot cross project boundaries. Remove them first',
+    );
+  }
+}
+
 async function resolveSafeParentTaskId(
   model: TaskModel,
   taskId: string,
   parentTaskId: string | null,
+  projectId: string | null,
 ): Promise<string | null> {
   if (parentTaskId === null) return null;
 
-  const parent = await resolveOrThrow(model, parentTaskId);
+  const parent = await findTaskOrThrow(model, parentTaskId);
   if (parent.id === taskId) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
@@ -102,8 +163,7 @@ async function resolveSafeParentTaskId(
     });
   }
 
-  const task = await resolveOrThrow(model, taskId);
-  if (task.projectId !== parent.projectId) {
+  if (projectId !== parent.projectId) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
       message: 'Parent task must belong to the same project',
@@ -126,7 +186,8 @@ export async function resolveTaskPatchInvariants<Data extends TaskPatchFields>(
   ctx: TaskPatchInvariantContext,
   params: { data: Data; id: string; parentTaskId?: string | null },
 ): Promise<{ data: Data & { parentTaskId?: string | null }; resolved: ResolvedTask }> {
-  const { data, id, parentTaskId } = params;
+  const { id, parentTaskId } = params;
+  let { data } = params;
 
   await assertAssigneeAgentBelongsToUser(
     ctx.serverDB,
@@ -134,9 +195,25 @@ export async function resolveTaskPatchInvariants<Data extends TaskPatchFields>(
     data.assigneeAgentId,
   );
 
-  const resolved = await resolveOrThrow(ctx.taskModel, id);
+  const resolved = await resolveTaskOrThrow(ctx.taskModel, id);
   assertResultingScheduleValid(resolved, data);
+  await assertPreciseScheduleAllowed(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    resolved.schedulePattern,
+    data.schedulePattern,
+  );
   assertArchivedTaskStaysIdle(resolved, data);
+  // `context` replaces the whole column, origin included: a changed origin
+  // must point at the caller's own conversation like it must at create time.
+  if (data.context !== undefined) {
+    const origin = await assertTaskOriginPatchAllowed(
+      ctx.serverDB,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (resolved.context as TaskContext | null)?.origin,
+      data.context?.origin,
+    );
+    if (origin !== undefined) data = { ...data, context: { ...data.context, origin } };
+  }
 
   // Collaborative edit lock: reject writes to a workspace task another member
   // is actively editing. Inert until a client acquires the lock.
@@ -167,10 +244,32 @@ export async function resolveTaskPatchInvariants<Data extends TaskPatchFields>(
     resolved.createdByUserId,
   );
 
+  // `undefined` means "no change"; `null` takes the task out of its project and
+  // needs no target to check. An empty string is a target and fails as unknown.
+  if (data.projectId !== undefined && data.projectId !== null) {
+    await assertProjectReadable(ctx, data.projectId);
+  }
+  const resultingProjectId = data.projectId === undefined ? resolved.projectId : data.projectId;
+  if (resultingProjectId !== resolved.projectId) {
+    await assertProjectMoveKeepsLinks(
+      ctx.taskModel,
+      resolved,
+      resultingProjectId,
+      parentTaskId !== undefined,
+    );
+  }
+
+  // Judged against the project this patch leaves the task in, so one patch can
+  // move a task and reparent it under a task of the new project together.
   const resolvedParentTaskId =
     parentTaskId === undefined
       ? undefined
-      : await resolveSafeParentTaskId(ctx.taskModel, resolved.id, parentTaskId);
+      : await resolveSafeParentTaskId(
+          ctx.taskModel,
+          resolved.id,
+          parentTaskId === null ? null : (await resolveTaskOrThrow(ctx.taskModel, parentTaskId)).id,
+          resultingProjectId,
+        );
 
   // Reparenting a public task under a private one breaks the parent visibility
   // invariant — a subtask cannot be more public than its parent (otherwise

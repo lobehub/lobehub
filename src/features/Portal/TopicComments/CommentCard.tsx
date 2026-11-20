@@ -1,22 +1,28 @@
 import type { TopicCommentItem } from '@lobechat/types';
-import { Flexbox, Icon, Markdown } from '@lobehub/ui';
-import type { DropdownItem } from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui';
 import {
   ActionIcon,
   Avatar,
   Button,
   confirmModal,
+  cx,
   DropdownMenu,
+  Flexbox,
+  Icon,
+  Markdown,
   Text,
   toast,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { MessageCircle, MoreHorizontal, Pencil, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
 import RichTextMessage from '@/features/Conversation/Messages/User/components/RichTextMessage';
+import MemberProfilePopup from '@/features/MemberProfileCard/MemberProfilePopup';
 import { useTopicCommentMutations } from '@/features/TopicComment/hooks';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { useEnterToSend } from '@/hooks/useEnterToSend';
 
 import AnchorPreview from './AnchorPreview';
 import { createTopicCommentUpdateInput, hasTopicCommentEditorData } from './commentContent';
@@ -28,25 +34,28 @@ import TopicCommentEditor, {
 
 interface CommentCardProps {
   comment: TopicCommentItem;
+  /** A thread in the comment list: separated from its neighbours by a hairline. */
+  divided?: boolean;
   onDeleted?: (mode: 'hard' | 'moderated' | 'soft') => void;
   onMutated?: () => void;
   onOpenThread?: () => void;
   pending?: boolean;
   replyCount?: number;
-  replyStyle?: boolean;
   rootReplyCount?: number;
 }
 
 const CommentContent = memo<Pick<TopicCommentItem, 'content' | 'editorData'>>(
-  ({ content, editorData }) => {
-    return hasTopicCommentEditorData(editorData) ? (
-      <RichTextMessage editorState={editorData} />
-    ) : (
-      <Markdown fontSize={14} variant={'chat'}>
-        {content}
-      </Markdown>
-    );
-  },
+  ({ content, editorData }) => (
+    <div className={styles.content}>
+      {hasTopicCommentEditorData(editorData) ? (
+        <RichTextMessage editorState={editorData} />
+      ) : (
+        <Markdown fontSize={14} variant={'chat'}>
+          {content}
+        </Markdown>
+      )}
+    </div>
+  ),
 );
 
 CommentContent.displayName = 'TopicCommentContent';
@@ -54,15 +63,16 @@ CommentContent.displayName = 'TopicCommentContent';
 const CommentCard = memo<CommentCardProps>(
   ({
     comment,
+    divided,
     onDeleted,
     onMutated,
     onOpenThread,
     pending,
     replyCount,
-    replyStyle,
     rootReplyCount,
   }) => {
-    const { t } = useTranslation('chat');
+    const { t } = useTranslation(['chat', 'common']);
+    const shouldSendOnEnter = useEnterToSend();
 
     const { text: time, title: timeTitle } = useActivityTime(comment.createdAt);
     const { mutatingIds, remove, restore, update } = useTopicCommentMutations();
@@ -75,6 +85,8 @@ const CommentCard = memo<CommentCardProps>(
     const moderated = Boolean(comment.moderatedAt);
     const authorName =
       comment.author.fullName || comment.author.username || t('topicComment.author.deactivated');
+    // The author's member card reads the shared workspace directory.
+    useFetchWorkspaceMembers({ enabled: !!comment.authorUserId });
     const edited = new Date(comment.updatedAt).getTime() > new Date(comment.createdAt).getTime();
 
     const handleUpdate = useCallback(async () => {
@@ -152,15 +164,19 @@ const CommentCard = memo<CommentCardProps>(
 
     return (
       <Flexbox
-        className={`${styles.card} ${replyStyle ? styles.reply : ''}`}
+        className={cx(styles.card, divided && styles.cardDivided)}
         data-topic-comment-id={comment.id}
         gap={8}
       >
         <Flexbox horizontal align={'center'} gap={8}>
-          <Avatar avatar={comment.author.avatar || authorName} size={24} />
-          <Text fontSize={13} weight={500}>
-            {authorName}
-          </Text>
+          <MemberProfilePopup userId={comment.authorUserId}>
+            <Avatar avatar={comment.author.avatar || authorName} size={24} />
+          </MemberProfilePopup>
+          <MemberProfilePopup userId={comment.authorUserId}>
+            <Text fontSize={13} weight={500}>
+              {authorName}
+            </Text>
+          </MemberProfilePopup>
           {comment.author.status === 'former' && (
             <Text fontSize={12} type={'secondary'}>
               {t('topicComment.author.former')}
@@ -229,6 +245,11 @@ const CommentCard = memo<CommentCardProps>(
                   setNextContent(content);
                   setNextEditorData(editorData);
                 }}
+                onPressEnter={(event) => {
+                  if (!shouldSendOnEnter(event)) return;
+                  void handleUpdate();
+                  return true;
+                }}
               />
             </div>
             <Flexbox horizontal gap={8} justify={'flex-end'}>
@@ -245,8 +266,9 @@ const CommentCard = memo<CommentCardProps>(
         )}
 
         {onOpenThread && (
-          <Flexbox horizontal justify={'flex-end'}>
+          <Flexbox horizontal>
             <Button
+              className={styles.cardFooter}
               icon={<Icon icon={MessageCircle} />}
               size={'small'}
               type={'text'}
@@ -262,7 +284,12 @@ const CommentCard = memo<CommentCardProps>(
         {!editing && menuItems.length > 0 && (
           <div className={`${styles.cardActions} topic-comment-actions`}>
             <DropdownMenu items={menuItems}>
-              <ActionIcon icon={MoreHorizontal} loading={mutating} size={'small'} />
+              <ActionIcon
+                icon={MoreHorizontal}
+                loading={mutating}
+                size={'small'}
+                title={t('more', { ns: 'common' })}
+              />
             </DropdownMenu>
           </div>
         )}

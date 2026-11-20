@@ -1,0 +1,102 @@
+---
+title: GitHub 集成
+description: >-
+  连接 LobeHub GitHub App，跟踪 Agent 发起的 Pull Request：合并即验收通过，CI
+  失败和评审意见会回到发起这个 Pull Request 的 Agent。
+tags:
+  - LobeHub
+  - 集成
+  - GitHub
+  - Pull Request
+  - CI
+  - 代码评审
+---
+
+# GitHub 集成
+
+**GitHub 集成把 Agent 发起的 Pull Request 和 GitHub 上发生的事接起来。** 在你的个人账号或组织上安装 LobeHub GitHub App 后，LobeHub 会跟踪 Agent 发起的 Pull Request：
+
+- **合并** → 关联的验收标为已接受，对应任务完成。
+- **检查失败** → 发起这个 Pull Request 的 Agent 收到失败的检查（能获取时附带 job 日志），接着修复。
+- **评审反馈** → 要求修改和评审评论会送到该 Agent 的会话里。
+
+> \[!NOTE]
+>
+> 集成目前是 Alpha 功能。先在 **设置 → 实验室 → 集成** 中开启，设置里才会出现 **集成**。
+
+## 连接 GitHub
+
+1. 打开 **设置 → 集成 → GitHub**。
+2. 点击 **连接账号**，GitHub 会打开 LobeHub 应用的安装页面。
+3. 选择要安装到的个人账号或组织，再选择 **所有仓库** 或只选部分仓库。
+4. 确认安装。GitHub 会带你回到 LobeHub，页面提示 **GitHub 已连接：\<账号>**。
+
+连接后的账号会出现在 **连接** 中，显示状态和仓库范围。要增减仓库或卸载，在账号右侧的菜单中选择 **在 GitHub 上管理**。
+
+如果你是在 github.com 上直接安装的，而不是从 LobeHub 发起，LobeHub 会请你确认这个安装属于哪个账号，点击 **连接** 即可完成。
+
+在工作区中，安装属于该工作区，信息栏会显示是谁启用的。只有具备编辑权限的工作区成员才能连接 GitHub。
+
+## 哪些 Pull Request 会被跟踪
+
+满足下面任一条件，LobeHub 就会把 Pull Request 关联到你的记录：
+
+- 由 Agent 在 LobeHub 会话中发起，例如在沙箱或设备上执行 `gh pr create`。
+- 描述中包含 LobeHub 验收链接（`…/acceptance/<id>`）。
+- 某轮验收记录了这个 Pull Request 的地址。
+
+没有关联的 Pull Request 仍会被记录，但不会触发任何自动化。如果发起 Pull Request 的 GitHub 账号已关联 LobeHub 用户，LobeHub 会以该用户身份处理，此用户需要有工作区的写权限，否则自动化会被跳过。如果账号未关联，或 Pull Request 由机器人发起，LobeHub 会改用安装应用的账号。
+
+## 自动化
+
+这些开关决定 GitHub 上有动静时 LobeHub 自动做什么，三个开关默认都开启。
+
+| 开关              | 效果                                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **合并即验收通过**     | 关联的 Pull Request 被合并时，验收标为已接受，任务完成。堆叠的 Pull Request 需要所有关联且未关闭的 Pull Request 都已合并或关闭。                                     |
+| **CI 失败时通知智能体** | 检查失败时，带着失败的检查（GitHub Actions job 在能获取时附带日志末尾）唤醒发起这个 Pull Request 的 Agent。每个 Pull Request 最多三次；草稿 Pull Request 不会唤醒 Agent。 |
+| **评审反馈时通知智能体**  | 评审者要求修改或留下评论时，把意见送到该 Agent。                                                                                               |
+
+只有仓库的 owner、member、collaborator，以及 Codex 代码评审机器人（`chatgpt-codex-connector[bot]`）的反馈会唤醒 Agent。其他人的评论只留在 GitHub 上，不会变成给 Agent 的指令。Pull Request 作者自己的评论会被忽略。
+
+## 在 GitHub 上评论
+
+LobeHub 可以在关联的 Pull Request 下留一条评论，附上对应验收和会话的链接，并随进展更新。
+
+- **私有仓库**：默认开启。
+- **公开仓库**：默认关闭，公开讨论区不适合放指向你工作区的链接。
+
+**自动化** 和 **在 GitHub 上评论** 中的开关以安装应用的账号的设置为准。
+
+## 常见问题
+
+| 提示                                   | 处理方式                                        |
+| ------------------------------------ | ------------------------------------------- |
+| **当前部署未配置**                          | 服务端没有配置 GitHub App，见 [自托管部署](#自托管部署)。       |
+| **这个 GitHub 账号已经关联到另一个 LobeHub 用户。** | 登录那个 LobeHub 账号，或换一个 GitHub 账号连接。           |
+| **只有工作区成员才能在这里连接 GitHub。**           | 请工作区所有者或管理员给你成员角色，或在个人账号下连接。                |
+| **GitHub 没有接受授权码，请重新连接。**            | 再次点击 **连接账号**。                              |
+| CI 失败后 Agent 没有反应                    | 确认 Pull Request 已关联、不是草稿、三次唤醒还没用完，且对应开关已开启。 |
+
+## 自托管部署
+
+自托管部署需要创建自己的 GitHub App，并配置 Redis（`REDIS_URL`）来保存短期的连接请求；没有 Redis 时 **连接账号** 会失败。在服务端设置以下环境变量：
+
+| 变量                          | 必填 | 说明                                     |
+| --------------------------- | -- | -------------------------------------- |
+| `GITHUB_APP_ID`             | 是  | GitHub App 设置页中的数字 App ID              |
+| `GITHUB_APP_SLUG`           | 是  | 应用的 URL slug（`github.com/apps/<slug>`） |
+| `GITHUB_APP_PRIVATE_KEY`    | 是  | 应用私钥，原始 PEM 或 base64 编码后的 PEM          |
+| `GITHUB_APP_WEBHOOK_SECRET` | 是  | GitHub 签名 Webhook 时使用的密钥               |
+| `GITHUB_APP_CLIENT_ID`      | 是  | 应用的 Client ID                          |
+| `GITHUB_APP_CLIENT_SECRET`  | 是  | 应用的 Client Secret                      |
+
+请务必设置 Client ID 和 Secret。LobeHub 用它们确认发起连接的人确实能访问这个安装；不设置时会跳过这一校验。
+
+在 GitHub App 设置中填写以下地址（把 `<APP_URL>` 换成你的 LobeHub 地址）：
+
+- **Webhook URL**：`<APP_URL>/api/webhooks/github`
+- **Setup URL**：`<APP_URL>/api/webhooks/github/setup`
+- **Callback URL**：`<APP_URL>/api/webhooks/github/oauth/callback`，并开启 **Request user authorization (OAuth) during installation**
+
+授予以下仓库权限：**Pull requests**（读写）、**Checks**（只读）、**Commit statuses**（只读）、**Actions**（只读）、**Contents**（只读）。订阅 **Pull request**、**Pull request review**、**Pull request review comment**、**Check run** 和 **Status** 事件。

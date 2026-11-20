@@ -1,17 +1,20 @@
 import type { TaskAutomationMode } from '@lobechat/types';
-import { Flexbox, Icon, Popover } from '@lobehub/ui';
 import {
   ActionIcon,
   Avatar,
   Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
   InputNumber,
+  Popover,
   Select,
   Switch,
   Tabs,
   Text,
   toast,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { CalendarClockIcon, CalendarDays, Clock, RefreshCw, TimerIcon, Zap } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -21,6 +24,7 @@ import { useTranslation } from 'react-i18next';
 import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import {
   formatIntervalLabel,
@@ -46,8 +50,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   preview: css`
-    padding-block: 12px;
-    padding-inline: 14px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-radius: 12px;
     background: ${cssVar.colorFillQuaternary};
   `,

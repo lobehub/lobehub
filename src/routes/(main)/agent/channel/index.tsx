@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router';
 
@@ -77,9 +76,6 @@ const ChannelContent = memo(() => {
         platformId={platform}
         platformsLoading={platformsLoading}
         providers={providers}
-        runtimeStatus={
-          activePlatformDef ? platformRuntimeStatuses.get(activePlatformDef.id) : undefined
-        }
       />
       <Flexbox flex={1} style={{ overflow: 'hidden' }}>
         <AsyncBoundary

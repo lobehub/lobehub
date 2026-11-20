@@ -1,4 +1,4 @@
-import type { WidgetManifest, WidgetRunStatus } from '@lobechat/types';
+import type { WidgetRunStatus } from '@lobechat/types';
 import debug from 'debug';
 import pMap from 'p-map';
 
@@ -6,31 +6,22 @@ import { WidgetModel } from '@/database/models/widget';
 import type { WidgetRow, WidgetRunRow, WidgetVersionRow } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
-import { executeWidgetRun, type ExecuteWidgetRunDeps } from './executeRun';
-import { clampSandboxTimeout, WIDGET_SANDBOX_REQUEST_OVERHEAD_MS } from './sandbox/types';
+import { GoalSubscriptionService } from '../goal/subscriptions';
+import { type ExecuteWidgetRunDeps, executeWidgetRunDetailed } from './executeRun';
+import { widgetRunLeaseMs } from './lease';
 import { nextScheduleOccurrence } from './schedule';
 
 const log = debug('lobe-server:widget:scheduler');
+let subscriptionAfter: string | undefined;
 
 const DEFAULT_TICK_LIMIT = 50;
 const DEFAULT_INLINE_CONCURRENCY = 4;
 const DEFAULT_DISPATCH_CONCURRENCY = 10;
 
-/** Slack on top of the sandbox bounds before a reserved run counts as abandoned. */
-export const WIDGET_RUN_LEASE_MARGIN_MS = 60_000;
+export { WIDGET_RUN_LEASE_MARGIN_MS, widgetRunLeaseMs } from './lease';
+
 /** Reservations older than this are no longer resumed — that occurrence is long gone. */
 const RESUME_HORIZON_MS = 24 * 60 * 60 * 1000;
-
-/**
- * How long a worker may hold a reserved scheduled run before another worker
- * may take it over: the version's (clamped) script timeout, plus what the
- * sandbox request may add on top, plus a margin for credential resolution
- * and closing the run.
- */
-export const widgetRunLeaseMs = (manifest?: Pick<WidgetManifest, 'timeoutMs'> | null) =>
-  clampSandboxTimeout(manifest?.timeoutMs) +
-  WIDGET_SANDBOX_REQUEST_OVERHEAD_MS +
-  WIDGET_RUN_LEASE_MARGIN_MS;
 
 /** The shortest lease any version can have — the coarse cut for the stale query. */
 const MIN_LEASE_MS = widgetRunLeaseMs({ timeoutMs: 1 });
@@ -76,7 +67,14 @@ export interface WidgetTickResult {
   claimed: number;
   dispatched: number;
   due: number;
-  results: { error?: string; runId?: string; status?: WidgetRunStatus; widgetId: string }[];
+  results: {
+    /** The sandbox was busy; the run stays reserved and is resumed after its lease. */
+    deferred?: true;
+    error?: string;
+    runId?: string;
+    status?: WidgetRunStatus;
+    widgetId: string;
+  }[];
   /** Stale reservations taken over (inline) or handed to a worker to resume (queue mode). */
   resumed: number;
 }
@@ -132,6 +130,8 @@ const takeOver = async (
 
 export type DispatchedWidgetResult =
   | {
+      /** The sandbox was busy: the run stays reserved and is resumed after its lease. */
+      deferred?: true;
       /** The run was a stale reservation taken over rather than a fresh claim. */
       resumed?: boolean;
       run: WidgetRunRow | undefined;
@@ -167,7 +167,7 @@ export const runDispatchedWidget = async (
     widgetId: live.widget.id,
   });
   if (reserved) {
-    return { run: await executeWidgetRun(db, { ...live, run: reserved }, deps) };
+    return executeWidgetRunDetailed(db, { ...live, run: reserved }, deps);
   }
 
   const [stale] = await findStaleRuns(db, now, { limit: 1, widgetId: target.widgetId });
@@ -177,7 +177,7 @@ export const runDispatchedWidget = async (
     return { skipped: 'already-claimed' };
   }
 
-  return { resumed: true, run: await executeWidgetRun(db, resumed, deps) };
+  return { resumed: true, ...(await executeWidgetRunDetailed(db, resumed, deps)) };
 };
 
 /**
@@ -199,7 +199,7 @@ export const resumeDispatchedRun = async (
   const resumed = stale && (await takeOver(db, stale));
   if (!resumed) return { skipped: 'not-resumable' };
 
-  return { resumed: true, run: await executeWidgetRun(db, resumed, deps) };
+  return { resumed: true, ...(await executeWidgetRunDetailed(db, resumed, deps)) };
 };
 
 /**
@@ -213,7 +213,9 @@ export const resumeDispatchedRun = async (
  * concurrency.
  *
  * Stale reservations: scheduled runs left `running` past their lease because
- * their worker died. Each tick resumes a bounded batch — handed to a worker
+ * their worker died, or because the sandbox was busy for the widget owner's
+ * account and the run was deferred (see `executeWidgetRunDetailed`) — the
+ * lease doubles as the backoff. Each tick resumes a bounded batch — handed to a worker
  * in queue mode (deduplicated per lease), taken over and executed inline
  * otherwise.
  *
@@ -234,6 +236,7 @@ export const runWidgetSchedulerTick = async (
     return { claimed: 0, dispatched: 0, due: due.length, resumed: 0, results: [] };
   }
 
+  subscriptionAfter = await GoalSubscriptionService.reconcile(db, subscriptionAfter);
   const stale = await findStaleRuns(db, now, { limit });
   let dispatched = 0;
   let resumed = 0;
@@ -294,9 +297,14 @@ export const runWidgetSchedulerTick = async (
     runnable,
     async (target): Promise<WidgetTickResult['results'][number]> => {
       try {
-        const run = await executeWidgetRun(db, target, deps);
+        const { deferred, run } = await executeWidgetRunDetailed(db, target, deps);
         dispatched += 1;
-        return { runId: target.run.id, status: run?.status, widgetId: target.widget.id };
+        return {
+          ...(deferred && { deferred }),
+          runId: target.run.id,
+          status: run?.status,
+          widgetId: target.widget.id,
+        };
       } catch (error) {
         // The reservation stays `running`; a later tick resumes it once its lease expires.
         console.error('[widget:tick] run failed widget=%s', target.widget.id, error);

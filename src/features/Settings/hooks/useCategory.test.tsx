@@ -58,45 +58,57 @@ afterEach(() => {
 });
 
 describe('settings useCategory', () => {
-  // Account-level settings (profile / appearance / hotkeys) form their own
-  // group so the workspace sidebar can mirror exactly this set; the General
-  // group keeps the personal-scoped data pages.
-  it('splits account-level tabs into a leading Account group', () => {
+  it('orders business groups with account, connection and resource contents', () => {
     const { result } = renderHook(() => useCategory(), {
-      wrapper: createWrapper(true),
+      wrapper: createWrapper(true, true),
     });
-    const accountGroup = result.current.find((group) => group.key === SettingsGroupKey.Account);
-    const generalGroup = result.current.find((group) => group.key === SettingsGroupKey.General);
 
-    expect(result.current[0]?.key).toBe(SettingsGroupKey.Account);
-    expect(accountGroup?.items.map((item) => item.key)).toEqual([
+    const groupKeys = (key: SettingsGroupKey) =>
+      result.current.find((group) => group.key === key)?.items.map((item) => item.key);
+
+    expect(result.current.map((group) => group.key)).toEqual([
+      SettingsGroupKey.Account,
+      SettingsGroupKey.Subscription,
+      SettingsGroupKey.Agent,
+      SettingsGroupKey.Connection,
+      SettingsGroupKey.Resource,
+      SettingsGroupKey.System,
+    ]);
+
+    expect(groupKeys(SettingsGroupKey.Account)).toEqual([
       SettingsTabs.Profile,
       SettingsTabs.Appearance,
       SettingsTabs.Hotkey,
-    ]);
-    expect(generalGroup?.items.map((item) => item.key)).toEqual([
+      SettingsTabs.Notification,
       SettingsTabs.Stats,
-      SettingsTabs.Devices,
     ]);
-    expect(
-      result.current.find((group) => group.key === SettingsGroupKey.Agent)?.items.map((i) => i.key),
-    ).not.toContain(SettingsTabs.Messenger);
+
+    expect(groupKeys(SettingsGroupKey.Connection)).toEqual([
+      SettingsTabs.Messenger,
+      SettingsTabs.Integrations,
+    ]);
+    // Skills and connectors moved to the Marketplace.
+    expect(getItemKeys()).not.toContain(SettingsTabs.Skill);
+    expect(getItemKeys()).not.toContain(SettingsTabs.Connector);
+
+    // The sandbox drives moved to Docs → Sandbox Storage; settings keep only the
+    // environment definitions.
+    const keys = groupKeys(SettingsGroupKey.Resource);
+    expect(keys).toContain(SettingsTabs.Environments);
+    // Credentials share the Environments page: one entry for what a run starts
+    // from and the secrets it reads.
+    expect(keys).not.toContain(SettingsTabs.Creds);
+    expect(keys).not.toContain('drive');
   });
 
   // Messenger bots are LobeHub-operated and only configurable from the cloud
   // admin, so the tab is a dead end on self-hosted deployments.
-  it('shows Messenger in the Account group only with business features on', () => {
-    expect(getItemKeys()).not.toContain(SettingsTabs.Messenger);
+  it('keeps Provider and hides Messenger and OAuth Apps by default', () => {
+    const keys = getItemKeys();
 
-    const { result } = renderHook(() => useCategory(), {
-      wrapper: createWrapper(true, true),
-    });
-    const accountGroup = result.current.find((group) => group.key === SettingsGroupKey.Account);
-    expect(accountGroup?.items.map((item) => item.key)).toContain(SettingsTabs.Messenger);
-  });
-
-  it('keeps Provider visible when provider settings are enabled', () => {
-    expect(getItemKeys()).toContain(SettingsTabs.Provider);
+    expect(keys).not.toContain(SettingsTabs.Messenger);
+    expect(keys).toContain(SettingsTabs.Provider);
+    expect(keys).not.toContain(SettingsTabs.OAuthApps);
   });
 
   it('hides Provider when provider settings are disabled', () => {
@@ -109,22 +121,31 @@ describe('settings useCategory', () => {
     expect(keys).not.toContain(SettingsTabs.Provider);
   });
 
-  it('hides OAuth Apps by default', () => {
-    expect(getItemKeys()).not.toContain(SettingsTabs.OAuthApps);
-  });
-
-  it('hides Integrations by default and shows it in the Account group once the Labs flag is on', () => {
-    expect(getItemKeys()).not.toContain(SettingsTabs.Integrations);
-
+  it('lists API Key once when both of its flags are on', () => {
     useUserStore.setState({
       preference: {
         ...initialUserStoreState.preference,
-        lab: { ...initialUserStoreState.preference.lab, enableIntegrations: true },
+        general: { ...initialUserStoreState.preference.general, isDevMode: true },
       },
     });
-    const { result } = renderHook(() => useCategory(), { wrapper: createWrapper(true) });
-    const accountGroup = result.current.find((group) => group.key === SettingsGroupKey.Account);
-    expect(accountGroup?.items.map((item) => item.key)).toContain(SettingsTabs.Integrations);
+
+    const { result } = renderHook(() => useCategory(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <Provider
+          createStore={() =>
+            initServerConfigStore({
+              featureFlags: { ...mapFeatureFlagsEnvToState({}), showApiKeyManage: true },
+              serverConfig: { aiProvider: {}, telemetry: {} },
+            })
+          }
+        >
+          {children}
+        </Provider>
+      ),
+    });
+    const keys = result.current.flatMap((group) => group.items.map((item) => item.key));
+
+    expect(keys.filter((key) => key === SettingsTabs.APIKey)).toHaveLength(1);
   });
 
   it('shows OAuth Apps when the Labs preference is enabled', () => {
@@ -138,10 +159,44 @@ describe('settings useCategory', () => {
     const { result } = renderHook(() => useCategory(), {
       wrapper: createWrapper(true),
     });
-    const developerGroup = result.current.find((group) => group.key === SettingsGroupKey.Developer);
     const systemGroup = result.current.find((group) => group.key === SettingsGroupKey.System);
 
-    expect(developerGroup?.items.map((item) => item.key)).toContain(SettingsTabs.OAuthApps);
-    expect(systemGroup?.items.map((item) => item.key)).not.toContain(SettingsTabs.OAuthApps);
+    expect(systemGroup?.items.map((item) => item.key)).toContain(SettingsTabs.OAuthApps);
+  });
+});
+
+describe('settings useCategory automations', () => {
+  const connectionKeys = (enableWebhook: boolean) => {
+    const Wrapper = ({ children }: { children: ReactNode }) => (
+      <Provider
+        createStore={() =>
+          initServerConfigStore({
+            featureFlags: { ...mapFeatureFlagsEnvToState({}), enableWebhook },
+            serverConfig: { aiProvider: {}, telemetry: {} },
+          })
+        }
+      >
+        {children}
+      </Provider>
+    );
+    const { result } = renderHook(() => useCategory(), { wrapper: Wrapper });
+
+    return result.current
+      .find((group) => group.key === SettingsGroupKey.Connection)
+      ?.items.map((item) => item.key);
+  };
+
+  // Unreleased: the tab follows the `webhook` flag (LOBE-UX-015).
+  it('hides Automations while MCP Events is off', () => {
+    expect(connectionKeys(false)).not.toContain(SettingsTabs.Automations);
+  });
+
+  it('lists Automations right after Integrations now that connectors live in the Marketplace', () => {
+    const keys = connectionKeys(true) ?? [];
+
+    expect(keys).not.toContain(SettingsTabs.Connector);
+    expect(keys.indexOf(SettingsTabs.Automations)).toBe(
+      keys.indexOf(SettingsTabs.Integrations) + 1,
+    );
   });
 });

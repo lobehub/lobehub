@@ -7,6 +7,14 @@ import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
 import * as debugStreamModule from '../../utils/debugStream';
 import { LobeCloudflareAI } from './index';
 
+const createTextStream = (textEncoder: TextEncoder) =>
+  new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(textEncoder.encode('data: {"response": "Hello, world!"}\n\n'));
+      controller.close();
+    },
+  });
+
 const provider = 'cloudflare';
 
 const bizErrorType = 'ProviderBizError';
@@ -57,16 +65,7 @@ describe('LobeCloudflareAI', () => {
       });
 
       // Mock fetch
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        new Response(
-          new ReadableStream<Uint8Array>({
-            start(controller) {
-              controller.enqueue(textEncoder.encode('data: {"response": "Hello, world!"}\n\n'));
-              controller.close();
-            },
-          }),
-        ),
-      );
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(createTextStream(textEncoder)));
     });
 
     it('should return a Response on successful API call', async () => {
@@ -104,14 +103,7 @@ describe('LobeCloudflareAI', () => {
     it('should handle text messages correctly', async () => {
       // Arrange
       const textEncoder = new TextEncoder();
-      const mockResponse = new Response(
-        new ReadableStream<Uint8Array>({
-          start(controller) {
-            controller.enqueue(textEncoder.encode('data: {"response": "Hello, world!"}\n\n'));
-            controller.close();
-          },
-        }),
-      );
+      const mockResponse = new Response(createTextStream(textEncoder));
       (globalThis.fetch as Mock).mockResolvedValue(mockResponse);
 
       // Act
@@ -153,14 +145,7 @@ describe('LobeCloudflareAI', () => {
     it('should handle system prompt correctly', async () => {
       // Arrange
       const textEncoder = new TextEncoder();
-      const mockResponse = new Response(
-        new ReadableStream<Uint8Array>({
-          start(controller) {
-            controller.enqueue(textEncoder.encode('data: {"response": "Hello, world!"}\n\n'));
-            controller.close();
-          },
-        }),
-      );
+      const mockResponse = new Response(createTextStream(textEncoder));
       (globalThis.fetch as Mock).mockResolvedValue(mockResponse);
 
       // Act
@@ -205,14 +190,7 @@ describe('LobeCloudflareAI', () => {
 
     it('should call Cloudflare API with supported options', async () => {
       // Arrange
-      const mockResponse = new Response(
-        new ReadableStream<Uint8Array>({
-          start(controller) {
-            controller.enqueue(textEncoder.encode('data: {"response": "Hello, world!"}\n\n'));
-            controller.close();
-          },
-        }),
-      );
+      const mockResponse = new Response(createTextStream(textEncoder));
       (globalThis.fetch as Mock).mockResolvedValue(mockResponse);
 
       // Act

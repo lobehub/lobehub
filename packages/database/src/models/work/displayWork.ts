@@ -50,7 +50,7 @@ export const registerExternalWork = async (
       visibility: 'private',
     },
     params,
-    () => ({ display, patchFields: params.patchFields }),
+    () => ({ display, metadata: params.metadata, patchFields: params.patchFields }),
   );
 };
 

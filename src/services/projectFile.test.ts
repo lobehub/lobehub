@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { localFileKeys } from '@/libs/swr/keys';
+import { isTerminalLocalFileError } from '@/services/electron/localFileService';
 
 import { projectFileService, refreshProjectFiles } from './projectFile';
 
@@ -54,7 +55,8 @@ vi.mock('@/libs/trpc/client', () => ({
   },
 }));
 
-vi.mock('@/services/electron/localFileService', () => ({
+vi.mock('@/services/electron/localFileService', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   localFileService: mockLocalFileService,
 }));
 
@@ -66,6 +68,33 @@ describe('projectFileService', () => {
   afterEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it('keeps a remote device’s terminal failure code (deleted / denied file)', async () => {
+    mockDeviceClient.getLocalFilePreview.query.mockResolvedValue({
+      code: 'not_found',
+      error: 'ENOENT: no such file or directory',
+      success: false,
+    });
+
+    const error = await projectFileService
+      .getLocalFilePreview({
+        deviceId: 'device-1',
+        path: '/repo/gone.md',
+        workingDirectory: '/repo',
+      })
+      .catch((reason: unknown) => reason);
+    expect(isTerminalLocalFileError(error)).toBe(true);
+
+    // A gateway / disconnect failure carries no code and stays transient.
+    mockDeviceClient.getLocalFilePreview.query.mockResolvedValue({
+      error: 'Device offline',
+      success: false,
+    });
+    const transient = await projectFileService
+      .getLocalFilePreview({ deviceId: 'device-1', path: '/repo/a.md', workingDirectory: '/repo' })
+      .catch((reason: unknown) => reason);
+    expect(isTerminalLocalFileError(transient)).toBe(false);
   });
 
   it('gets remote local-file preview through device RPC', async () => {

@@ -1,28 +1,38 @@
-import type { taskRouter } from '@/server/routers/lambda/task';
+import { resolveTaskOrThrow } from '@/server/services/task/utils';
+
+import type { TaskRuntimeDeps } from './task';
+import { taskResult, taskResultLabel } from './taskResults';
 
 // Stage functions for the runTask / runTasks dispatch (source-layout §4: a
 // stage function takes an explicit deps object). Extracted from task.ts so
-// the legacy runtime file — already over the 800-line limit — does not grow
-// (AGENTS.md Code Style).
+// the legacy runtime file — already near the 1200-line limit — does not grow
+// (AGENTS.md Code Style). Reads `deps` lazily: the runtime factory swaps its
+// models and callers in after the first call resolves the owning scope.
 
-interface TaskRunDispatchDeps {
+type TaskRunDispatchDeps = Pick<
+  TaskRuntimeDeps,
   // The dispatching run's device. When the calling session executes on a
   // device (local-system reads/writes working), a task topic spawned from it
   // must reach the same machine — its engagement/workspace paths live there —
   // instead of falling back to the assignee agent's stored target or the
   // cloud sandbox.
-  activeDeviceId?: string;
-  taskCaller: ReturnType<typeof taskRouter.createCaller>;
+  | 'activeDeviceId'
+  | 'taskCaller'
   // Default task when the caller omits the identifier (current task context).
-  taskId?: string;
-}
-
-type TaskDispatchResult = { content: string; success: boolean };
+  | 'taskId'
+  | 'taskModel'
+>;
 
 export const runTaskDispatch = async (
   deps: TaskRunDispatchDeps,
-  args: { continueTopicId?: string; identifier?: string; prompt?: string },
-): Promise<TaskDispatchResult> => {
+  args: {
+    continueTopicId?: string;
+    identifier?: string;
+    model?: string;
+    prompt?: string;
+    provider?: string;
+  },
+) => {
   const { activeDeviceId, taskId } = deps;
   const id = args.identifier?.trim() || taskId;
   if (!id) {
@@ -33,6 +43,7 @@ export const runTaskDispatch = async (
   }
 
   try {
+    const task = await resolveTaskOrThrow(deps.taskModel, id);
     // A continuation keeps the topic it continues on: turnSetup restores the
     // existing topic's metadata.boundDeviceId only when no device was
     // requested (execAgent: "routing topic %s to its bound device"), and an
@@ -47,24 +58,26 @@ export const runTaskDispatch = async (
     const inheritDevice = !continueTopicId && !!activeDeviceId;
     const result = await deps.taskCaller.run({
       ...(continueTopicId ? { continueTopicId } : {}),
-      // Inherit the dispatching run's device when it executes on one: a
-      // task topic spawned from a device-routed session must reach the
-      // same machine (its engagement/workspace paths live there), not
-      // fall back to the assignee agent's stored target or the cloud
-      // sandbox. Mirrors the callSubAgent device inheritance in
+      // Inherit the dispatching run's device when it executes on one: a task
+      // topic spawned from a device-routed session must reach the same
+      // machine (its engagement/workspace paths live there), not fall back to
+      // the assignee agent's stored target or the cloud sandbox. Mirrors the
+      // callSubAgent device inheritance in
       // executorHelpers.buildServerVirtualSubAgentRunner.
       ...(inheritDevice ? { deviceId: activeDeviceId } : {}),
-      id,
+      id: task.id,
+      model: args.model,
       prompt: args.prompt,
+      provider: args.provider,
     });
 
     const topicId = (result as { topicId?: string } | undefined)?.topicId;
     const operationId = (result as { operationId?: string } | undefined)?.operationId;
-    const lines = [`Task ${id} started.`];
+    const lines = [`Task ${taskResultLabel(task)} started.`];
     if (topicId) lines.push(`  Topic: ${topicId}`);
     if (operationId) lines.push(`  Operation: ${operationId}`);
 
-    return { content: lines.join('\n'), success: true };
+    return taskResult(task, lines.join('\n'), { topicId, operationId });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to run task';
     return { content: `Failed to run task ${id}: ${message}`, success: false };
@@ -73,45 +86,63 @@ export const runTaskDispatch = async (
 
 export const runTasksDispatch = async (
   deps: TaskRunDispatchDeps,
-  args: { identifiers: string[] },
-): Promise<TaskDispatchResult> => {
+  args: { identifiers: string[]; model?: string; provider?: string },
+) => {
   const identifiers = Array.isArray(args.identifiers)
-    ? args.identifiers.map((value) => value?.trim()).filter((value): value is string => !!value)
+    ? args.identifiers.filter(
+        (value): value is string => typeof value === 'string' && !!value.trim(),
+      )
     : [];
 
   if (identifiers.length === 0) {
     return { content: 'No task identifiers provided.', success: false };
   }
 
-  const lines: string[] = [];
-  let succeeded = 0;
-  let failed = 0;
-
-  for (const [index, identifier] of identifiers.entries()) {
+  const resolved = await deps.taskModel.resolveRefs(identifiers);
+  if (resolved.ambiguous.length)
+    throw new Error(`Ambiguous task references: ${resolved.ambiguous.join(', ')}`);
+  const results: {
+    taskId?: string;
+    identifier?: string;
+    refs: string[];
+    success: boolean;
+    error?: string;
+  }[] = [];
+  for (const task of resolved.tasks) {
+    const refs = identifiers.filter((ref) => resolved.byRef.get(ref)?.id === task.id);
     try {
       // Same device inheritance as runTask's fresh-topic path (runTasks never
       // continues a topic, so the continuation carve-out does not apply).
-      const result = await deps.taskCaller.run({
+      await deps.taskCaller.run({
         ...(deps.activeDeviceId ? { deviceId: deps.activeDeviceId } : {}),
-        id: identifier,
+        id: task.id,
+        model: args.model,
+        provider: args.provider,
       });
-      const topicId = (result as { topicId?: string } | undefined)?.topicId;
-      succeeded += 1;
-      lines.push(`${index + 1}. ${identifier} — started${topicId ? ` (topic ${topicId})` : ''}`);
+      results.push({ taskId: task.id, identifier: task.identifier, refs, success: true });
     } catch (error) {
-      failed += 1;
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      lines.push(`${index + 1}. ${identifier} — failed: ${message}`);
+      results.push({
+        taskId: task.id,
+        identifier: task.identifier,
+        refs,
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
   }
-
-  const header =
-    failed === 0
-      ? `Started ${succeeded} task${succeeded === 1 ? '' : 's'}:`
-      : `Started ${succeeded}/${identifiers.length} tasks (${failed} failed):`;
-
+  for (const ref of resolved.missing)
+    results.push({ refs: [ref], success: false, error: `Task not found: ${ref}` });
+  const succeeded = results.filter((result) => result.success).length;
+  const failed = results.length - succeeded;
   return {
-    content: [header, ...lines].join('\n'),
+    content: [
+      `Started ${succeeded}/${results.length} tasks (${failed} failed):`,
+      ...results.map(
+        (result) =>
+          `${result.identifier ?? result.refs[0]}${result.taskId ? ` (id: ${result.taskId})` : ''} — ${result.success ? 'started' : `failed: ${result.error}`}`,
+      ),
+    ].join('\n'),
+    state: { results, succeeded, failed },
     success: failed === 0,
   };
 };

@@ -1,6 +1,7 @@
-import { Flexbox } from '@lobehub/ui';
-import { Divider, Text } from '@lobehub/ui/base-ui';
+import { Divider, Flexbox, Text } from '@lobehub/ui';
 import { type FC, type ReactNode } from 'react';
+
+import { useInterfaceDensity } from '@/styles/density';
 
 interface SettingHeaderProps {
   description?: ReactNode;
@@ -9,11 +10,13 @@ interface SettingHeaderProps {
 }
 
 const SettingHeader: FC<SettingHeaderProps> = ({ title, description, extra }) => {
+  const compact = useInterfaceDensity() === 'compact';
+
   return (
-    <Flexbox gap={24} style={{ paddingTop: 12 }}>
+    <Flexbox gap={compact ? 16 : 24} style={{ paddingTop: 12 }}>
       <Flexbox horizontal align={'center'} justify={'space-between'}>
         <Flexbox gap={4}>
-          <Text strong fontSize={24}>
+          <Text strong fontSize={compact ? 20 : 24}>
             {title}
           </Text>
           {description && <Text type={'secondary'}>{description}</Text>}

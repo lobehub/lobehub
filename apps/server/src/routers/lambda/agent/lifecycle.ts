@@ -1,0 +1,418 @@
+import { type AgentDeleteImpact, CreateAgentSchema } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
+import { eq } from 'drizzle-orm';
+import { z } from 'zod';
+
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { AGENT_COPY_IN_PROGRESS } from '@/database/models/agentCopyJob';
+import { AGENT_TRANSFER_IN_PROGRESS } from '@/database/models/agentTransferJob';
+import { ResourcePermissionModel } from '@/database/models/resourcePermission';
+import { ResourceTransferRequestModel } from '@/database/models/resourceTransferRequest';
+import { DEFAULT_RESOURCE_ACCESS_LEVELS, users } from '@/database/schemas';
+import { router } from '@/libs/trpc/lambda';
+import { createAgentDirectChannel } from '@/server/services/channel/defaultChannel';
+import {
+  assertCanPerformResourceAction,
+  canPerformResourceAction,
+  getResourceMeta,
+} from '@/server/services/resourcePermission';
+import { TrashService } from '@/server/services/trash';
+import { TransferErrorCode } from '@/types/transferError';
+
+import { isWorkspaceNonOwner } from '../_helpers/assertWorkspaceRowManageable';
+import { assertCanWriteTeamPin } from '../_helpers/sidebarPin';
+import { agentProcedure } from './procedures';
+
+interface AgentDeleteCtx {
+  serverDB: Parameters<typeof getResourceMeta>[0];
+  userId: string;
+  workspaceId: string;
+  workspaceRole?: string;
+}
+
+/**
+ * Who may delete a workspace agent, and on what terms.
+ *
+ * - The resource `delete` rule: the agent's author, or the workspace Owner.
+ * - A workspace Admin may also delete another member's (non-private) agent —
+ *   the same agents `manage` already lets them curate — but only as an
+ *   *override*: the caller must have shown the strong warning (someone else
+ *   created it, and what of other members' goes with it) and passed the
+ *   acknowledgments back. CLI, agent tools and older clients never do, so they
+ *   keep the old `:owner`-scoped rule; the RBAC matrix itself is unchanged.
+ */
+const resolveAgentDeleteAuthority = async (ctx: AgentDeleteCtx, agentId: string) => {
+  const meta = await getResourceMeta(ctx.serverDB, 'agent', agentId);
+  if (!meta || meta.workspaceId !== ctx.workspaceId) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Resource not found' });
+  }
+  const params = {
+    db: ctx.serverDB,
+    meta,
+    resourceId: agentId,
+    resourceType: 'agent' as const,
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  };
+  if (await canPerformResourceAction({ ...params, action: 'delete' })) {
+    return { adminOverride: false, meta };
+  }
+  if (
+    ctx.workspaceRole === 'admin' &&
+    meta.userId !== ctx.userId &&
+    (await canPerformResourceAction({ ...params, action: 'manage' }))
+  ) {
+    return { adminOverride: true, meta };
+  }
+  throw new TRPCError({
+    code: 'FORBIDDEN',
+    message: 'You do not have permission to delete this resource',
+  });
+};
+
+const getCreatorName = async (
+  db: AgentDeleteCtx['serverDB'],
+  creatorId: string | null | undefined,
+): Promise<string | null> => {
+  if (!creatorId) return null;
+  const [row] = await db
+    .select({ fullName: users.fullName, username: users.username })
+    .from(users)
+    .where(eq(users.id, creatorId))
+    .limit(1);
+  return row?.fullName || row?.username || null;
+};
+
+export const lifecycleRouter = router({
+  /**
+   * Check if an agent with the given marketIdentifier already exists
+   */
+  checkByMarketIdentifier: agentProcedure
+    .input(
+      z.object({
+        marketIdentifier: z.string(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      return ctx.agentModel.checkByMarketIdentifier(input.marketIdentifier);
+    }),
+  /**
+   * Count the agents matching the conditions of queryAgents — other virtual
+   * rows excluded, and the inbox (Lobe AI) counted only when the caller passes
+   * `includeInbox: true`. Lets paginated callers report real totals.
+   */
+  countAgents: agentProcedure
+    .input(
+      z
+        .object({
+          endDate: z.string().optional(),
+          includeInbox: z.boolean().optional(),
+          keyword: z.string().optional(),
+          range: z.tuple([z.string(), z.string()]).optional(),
+          startDate: z.string().optional(),
+          tag: z.string().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ input, ctx }) => {
+      return ctx.agentModel.countAgents(input);
+    }),
+  /**
+   * Create a standalone agent, with the creator's direct Channel to it while Channels are on
+   * (none for a hidden `virtual` agent).
+   * Returns the created agent ID.
+   */
+  createAgent: agentProcedure
+    .use(withScopedPermission('agent:create'))
+    .input(
+      z.object({
+        config: CreateAgentSchema.optional(),
+        groupId: z.string().optional(),
+        visibility: z.enum(['private', 'public']).optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const result = await ctx.agentService.createAgent(input);
+      // A hidden (virtual) copy, such as a Market agent run from an @ mention, is
+      // never a conversation of its own, so it gets no direct Channel.
+      if (input.config?.virtual) return result;
+      await createAgentDirectChannel({
+        agentId: result.agentId,
+        db: ctx.serverDB,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      return result;
+    }),
+  /**
+   * Create an agent without session.
+   * Used for Group Agent Builder to create agents for groups.
+   * Returns only the agent ID.
+   */
+  createAgentOnly: agentProcedure
+    .use(withScopedPermission('agent:create'))
+    .input(
+      z.object({
+        config: z.object({}).passthrough().optional(),
+        groupId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      // Mutating the group's roster is a group edit — same ACL as
+      // `agentGroup.addAgentsToGroup`. Check before creating the agent so a
+      // denied call doesn't leave an orphan agent behind.
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'edit',
+          db: ctx.serverDB,
+          resourceId: input.groupId,
+          resourceType: 'agentGroup',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
+
+      // Create the agent entity only (no session)
+      const agent = await ctx.agentModel.create(input.config ?? {});
+
+      // Add the agent to the group
+      await ctx.chatGroupModel.addAgentToGroup(input.groupId, agent.id);
+
+      if (ctx.workspaceId && agent.visibility !== 'private') {
+        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).setAccessLevel(
+          'agent',
+          agent.id,
+          DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
+          ctx.userId,
+        );
+      }
+
+      return { agentId: agent.id };
+    }),
+  /**
+   * Duplicate an agent and its associated session.
+   * Returns the new agent ID and session ID.
+   */
+  duplicateAgent: agentProcedure
+    .use(withScopedPermission('agent:fork'))
+    .input(
+      z.object({
+        agentId: z.string(),
+        newTitle: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      // Forking creates a caller-owned Agent and is governed by `agent:fork`,
+      // independently of the source Agent's collaborative-edit permission.
+      const result = await ctx.agentModel.duplicate(input.agentId, input.newTitle);
+      if (ctx.workspaceId && result) {
+        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).setAccessLevel(
+          'agent',
+          result.agentId,
+          DEFAULT_RESOURCE_ACCESS_LEVELS.agent,
+          ctx.userId,
+        );
+      }
+      return result;
+    }),
+  /**
+   * Get an agent by forkedFromIdentifier stored in params
+   * @returns agent id if exists, null otherwise
+   */
+  getAgentByForkedFromIdentifier: agentProcedure
+    .input(
+      z.object({
+        forkedFromIdentifier: z.string(),
+        virtual: z.boolean().optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      return ctx.agentModel.getAgentByForkedFromIdentifier(input.forkedFromIdentifier, {
+        virtual: input.virtual,
+      });
+    }),
+  /**
+   * What deleting the agent would take down besides the caller's own work —
+   * feeds the delete confirmation, so it is gated like the delete itself.
+   * Personal scope has no other members, so it reports nothing foreign.
+   */
+  getAgentDeleteImpact: agentProcedure
+    .input(z.object({ agentId: z.string() }))
+    .query(async ({ input, ctx }): Promise<AgentDeleteImpact> => {
+      if (!ctx.workspaceId)
+        return {
+          createdByOther: false,
+          creatorName: null,
+          foreignTopicCount: 0,
+          hasForeignContent: false,
+        };
+
+      const { meta } = await resolveAgentDeleteAuthority(
+        { ...ctx, workspaceId: ctx.workspaceId },
+        input.agentId,
+      );
+      const createdByOther = !!meta.userId && meta.userId !== ctx.userId;
+      const [impact, creatorName] = await Promise.all([
+        ctx.agentModel.getDeleteImpact(input.agentId),
+        createdByOther ? getCreatorName(ctx.serverDB, meta.userId) : null,
+      ]);
+      return { ...impact, createdByOther, creatorName };
+    }),
+  /**
+   * Get an agent by marketIdentifier
+   * @returns agent id if exists, null otherwise
+   */
+  getAgentByMarketIdentifier: agentProcedure
+    .input(
+      z.object({
+        marketIdentifier: z.string(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      return ctx.agentModel.getAgentByMarketIdentifier(input.marketIdentifier);
+    }),
+  /**
+   * Query the user's agents with optional keyword filter — other virtual rows
+   * excluded, and the inbox (Lobe AI) included and flagged with `isInbox` only
+   * when the caller passes `includeInbox: true`; `tag` keeps only agents
+   * carrying that tag.
+   * Returns agents with minimal info (id, name, title, description, avatar,
+   * backgroundColor).
+   * Used by AddGroupMemberModal and group-management tool to search/select agents.
+   */
+  queryAgents: agentProcedure
+    .input(
+      z
+        .object({
+          includeInbox: z.boolean().optional(),
+          keyword: z.string().optional(),
+          limit: z.number().max(100).optional(),
+          offset: z.number().optional(),
+          tag: z.string().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ input, ctx }) => {
+      return ctx.agentModel.queryAgents(input);
+    }),
+  rankAgents: agentProcedure.input(z.number().max(50).optional()).query(async ({ ctx, input }) => {
+    return ctx.agentModel.rank(input);
+  }),
+  /**
+   * Remove an agent and its associated session
+   */
+  removeAgent: agentProcedure
+    .use(withScopedPermission('agent:delete'))
+    .input(
+      z.object({
+        /**
+         * The caller showed the delete impact (`getAgentDeleteImpact`) and the
+         * user confirmed taking other members' content down with the agent.
+         * Only then may the agent's author delete an agent carrying it.
+         */
+        acknowledgeForeignContent: z.boolean().optional(),
+        /**
+         * The caller warned that someone else created this agent and the user
+         * confirmed anyway. Required for a workspace Admin's override delete.
+         */
+        acknowledgeOtherCreator: z.boolean().optional(),
+        agentId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.workspaceId) {
+        const { adminOverride, meta } = await resolveAgentDeleteAuthority(
+          { ...ctx, workspaceId: ctx.workspaceId },
+          input.agentId,
+        );
+        if (adminOverride && input.acknowledgeOtherCreator !== true) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.OwnerOnly } },
+            code: 'FORBIDDEN',
+            message: "Deleting another member's agent needs the confirmation that warns about it",
+          });
+        }
+        // The delete cascade trashes the agent's topics and messages, so the
+        // guard asks what it would actually take (`getDeleteImpact`; sessions
+        // and tasks stay). The agent's author, or an Admin overriding, may
+        // still delete it once the caller acknowledges that other members'
+        // content goes with it; callers that never disclosed the impact (CLI,
+        // agent tools, older clients) keep the guard.
+        const acknowledged =
+          (adminOverride || meta.userId === ctx.userId) && input.acknowledgeForeignContent === true;
+        if (
+          isWorkspaceNonOwner(ctx) &&
+          !acknowledged &&
+          (await ctx.agentModel.getDeleteImpact(input.agentId)).hasForeignContent
+        ) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.OwnerOnly } },
+            code: 'FORBIDDEN',
+            message: "Only workspace owners can delete an agent carrying others' conversations",
+          });
+        }
+      }
+      let result;
+      try {
+        // Recycle bin: the agent, its session shells and every topic under it
+        // are stamped, not dropped — the FK cascade only runs at purge time.
+        result = await new TrashService(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        ).trashAgent(input.agentId);
+      } catch (error) {
+        if (error instanceof Error && error.message === AGENT_COPY_IN_PROGRESS) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.CopyInProgress } },
+            code: 'CONFLICT',
+            message: 'A previous copy of this agent is still duplicating its history',
+          });
+        }
+        // A backfill still maps this agent's message rows — deleting it now
+        // would strand the job on a dangling `messages.agent_id`.
+        if (error instanceof Error && error.message === AGENT_TRANSFER_IN_PROGRESS) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.TransferInProgress } },
+            code: 'CONFLICT',
+            message: "A previous transfer of this agent's history is still migrating",
+          });
+        }
+        throw error;
+      }
+      // Sharing grants are left in place while the agent sits in the bin (the
+      // row is invisible anyway) so a restore brings them back; the purge
+      // handler removes them for good. A pending handover is different: the
+      // agent is invisible to the recipient too, so an acceptance would move
+      // ownership of trashed content — void it now, as the hard delete did.
+      if (ctx.workspaceId) {
+        await new ResourceTransferRequestModel(
+          ctx.serverDB,
+          ctx.workspaceId,
+        ).invalidateForResources('agent', [input.agentId]);
+      }
+      return result;
+    }),
+  /**
+   * Pin or unpin an agent
+   */
+  updateAgentPinned: agentProcedure
+    .use(withScopedPermission('agent:update'))
+    .input(
+      z.object({
+        id: z.string(),
+        pinned: z.boolean(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      // A public workspace row's pin is the team pin every member sees, so it
+      // is owner/admin-only. A private row is visible to its creator alone, so
+      // its pin stays personal and any role that can update it may write it.
+      if (ctx.workspaceId) {
+        const meta = await ctx.agentModel.getAgentVisibilityMeta(input.id);
+        if (!meta) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+        if (meta.visibility !== 'private') await assertCanWriteTeamPin(ctx);
+      }
+      return ctx.agentModel.update(input.id, { pinned: input.pinned });
+    }),
+});

@@ -1,6 +1,5 @@
 import type { HeterogeneousRuntimeConfigField } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Button, Popover, Tag, Text } from '@lobehub/ui/base-ui';
+import { Button, Flexbox, Popover, Tag, Text } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 /** The assignee and resource-scoped pin whose effective configuration is being inspected. */

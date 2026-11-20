@@ -69,8 +69,11 @@ vi.mock('@/store/chat', () => ({
   useChatStore: { getState: () => chatStore },
 }));
 
+const { mockActiveWorkspaceId } = vi.hoisted(() => ({
+  mockActiveWorkspaceId: vi.fn((): string | null => 'ws-1'),
+}));
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
-  getActiveWorkspaceId: () => 'ws-1',
+  getActiveWorkspaceId: () => mockActiveWorkspaceId(),
 }));
 
 vi.mock('@/store/user', () => ({ getUserStoreState: () => ({}) }));
@@ -105,6 +108,7 @@ const messages = [
 describe('recoverInterruptedHeteroRuns', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveWorkspaceId.mockReturnValue('ws-1');
     agentState.agentMap = {};
     mockListInterruptedRuns.mockResolvedValue([run]);
     mockGetTopicDetail.mockResolvedValue(topic);
@@ -140,6 +144,25 @@ describe('recoverInterruptedHeteroRuns', () => {
       userId: 'user-1',
       workspaceId: 'ws-1',
     });
+  });
+
+  it('replays and resumes in the workspace the ledger was read for, not the one navigated to', async () => {
+    // The user switches workspace while recovery awaits; the run still belongs to ws-1.
+    mockListInterruptedRuns.mockImplementation(async () => {
+      mockActiveWorkspaceId.mockReturnValue('ws-2');
+      return [run];
+    });
+    mockRunHetero
+      .mockResolvedValueOnce({ assistantMessageId: 'a-new', replayComplete: false })
+      .mockResolvedValueOnce({ assistantMessageId: 'a-cont' });
+
+    await recoverInterruptedHeteroRuns();
+
+    expect(mockRunHetero).toHaveBeenCalledTimes(2);
+    expect(mockRunHetero.mock.calls.map(([, params]) => params.workspaceId)).toEqual([
+      'ws-1',
+      'ws-1',
+    ]);
   });
 
   it('does nothing when the ledger is empty', async () => {

@@ -1,3 +1,8 @@
+import {
+  DashboardApiName,
+  DashboardIdentifier,
+  LegacyDashboardIdentifier,
+} from '@lobechat/builtin-tool-dashboard';
 import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 import {
   WebOnboardingApiName,
@@ -40,6 +45,16 @@ describe('builtin executor registry', () => {
     expect(getRegisteredIdentifiers()).toEqual([]);
   });
 
+  it('runs dashboard calls under the current and the pre-rename identifier', async () => {
+    await registerBuiltinToolExecutors();
+
+    for (const identifier of [DashboardIdentifier, LegacyDashboardIdentifier]) {
+      await expect(hasExecutor(identifier, DashboardApiName.createDashboard)).resolves.toBe(true);
+      await expect(hasExecutor(identifier, DashboardApiName.updateDashboard)).resolves.toBe(true);
+    }
+    // First test to load every builtin executor; the cold import alone can pass 5s on CI.
+  }, 30_000);
+
   it('registers web onboarding executor APIs explicitly', async () => {
     await registerBuiltinToolExecutors();
 
@@ -62,13 +77,20 @@ describe('builtin executor registry', () => {
     );
   }, 30_000);
 
-  it('registers the hook-only Grok Build executor without exposing invokable APIs', async () => {
-    await registerBuiltinToolExecutors();
+  it.each([
+    ['antigravity', 'run_command'],
+    ['grok-build', 'execute'],
+  ])(
+    'registers the hook-only %s executor without exposing invokable APIs',
+    async (identifier, apiName) => {
+      await registerBuiltinToolExecutors();
 
-    expect(getRegisteredIdentifiers()).toContain('grok-build');
-    await expect(hasExecutor('grok-build', 'execute')).resolves.toBe(false);
-    expect(getApiNamesForIdentifier('grok-build')).toEqual([]);
-  }, 30_000);
+      expect(getRegisteredIdentifiers()).toContain(identifier);
+      await expect(hasExecutor(identifier, apiName)).resolves.toBe(false);
+      expect(getApiNamesForIdentifier(identifier)).toEqual([]);
+    },
+    30_000,
+  );
 
   it('rejects nested sub-agent execution', async () => {
     const subAgentRun = vi.fn();

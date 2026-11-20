@@ -1,6 +1,7 @@
 import { encode } from 'gpt-tokenizer';
 
 import type { ExecutionSnapshot, StepSnapshot } from '../types';
+import { resolveContextEngineSteps } from '../utils/contextEngine';
 import { analyzeToolResult } from './toolFeedback';
 
 /**
@@ -121,18 +122,18 @@ export function contentText(m: PayloadMessage): string {
 }
 
 /**
- * Resolve the messages array the model saw at each `call_llm` step.
- * `contextEngine.output` uses a changed-fields delta: reuse the last seen value when a
- * step's CE entry omits it.
+ * Resolve the messages array the model saw at each `call_llm` step from the resolved
+ * `contextEngine.output`, carrying the last one forward past steps that did not run the CE.
  */
 export function resolvePayloads(snapshot: ExecutionSnapshot): {
   payloadSource: ContextLintFeatures['payloadSource'];
   payloads: Array<{ messages: PayloadMessage[]; stepIndex: number }>;
 } {
+  const resolvedCe = resolveContextEngineSteps(snapshot.steps);
   let current: PayloadMessage[] | undefined;
   const payloads: Array<{ messages: PayloadMessage[]; stepIndex: number }> = [];
   for (const step of snapshot.steps) {
-    const out = step.contextEngine?.output;
+    const out = resolvedCe.get(step)?.output;
     if (Array.isArray(out)) current = out as PayloadMessage[];
     if (step.stepType === 'call_llm' && current)
       payloads.push({ messages: current, stepIndex: step.stepIndex });

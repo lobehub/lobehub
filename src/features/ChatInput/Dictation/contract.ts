@@ -19,6 +19,18 @@ export const REALTIME_ASR_LIMITS = {
   tokenTtlMs: 30_000,
 } as const;
 
+export const REALTIME_ASR_DEFERRED_LIMITS = {
+  acceptedIdleTimeoutMs: 600_000,
+  maxPrerollFrames: 25,
+  provisionalAudioMs: 2000,
+} as const;
+
+export interface RealtimeAsrClientTimings {
+  pressToFirstPartialMs?: number;
+  pressToMicMs?: number;
+  pressToStartSentMs?: number;
+}
+
 export type RealtimeAsrErrorCode =
   | 'AUDIO_FORMAT_INVALID'
   | 'AUTH_FAILED'
@@ -61,6 +73,14 @@ interface ServerEventBase {
   sessionId: string;
 }
 
+export interface RealtimeAsrAcceptedEvent extends ServerEventBase {
+  audio: typeof REALTIME_ASR_AUDIO;
+  deferredLimits: typeof REALTIME_ASR_DEFERRED_LIMITS;
+  limits: typeof REALTIME_ASR_LIMITS;
+  protocolVersion: typeof REALTIME_ASR_PROTOCOL_VERSION;
+  type: 'session.accepted';
+}
+
 export interface RealtimeAsrReadyEvent extends ServerEventBase {
   audio: typeof REALTIME_ASR_AUDIO;
   limits: typeof REALTIME_ASR_LIMITS;
@@ -91,6 +111,7 @@ export interface RealtimeAsrErrorEvent extends ServerEventBase {
 }
 
 export type RealtimeAsrServerEvent =
+  | RealtimeAsrAcceptedEvent
   | RealtimeAsrCancelledEvent
   | RealtimeAsrCompletedEvent
   | RealtimeAsrErrorEvent
@@ -197,6 +218,11 @@ const isExactLimits = (value: unknown): value is typeof REALTIME_ASR_LIMITS =>
   hasExactKeys(value, Object.keys(REALTIME_ASR_LIMITS)) &&
   Object.entries(REALTIME_ASR_LIMITS).every(([key, expected]) => value[key] === expected);
 
+const isExactDeferredLimits = (value: unknown): value is typeof REALTIME_ASR_DEFERRED_LIMITS =>
+  isRecord(value) &&
+  hasExactKeys(value, Object.keys(REALTIME_ASR_DEFERRED_LIMITS)) &&
+  Object.entries(REALTIME_ASR_DEFERRED_LIMITS).every(([key, expected]) => value[key] === expected);
+
 const hasValidEnvelope = (
   value: Record<string, unknown>,
 ): value is Record<string, unknown> & ServerEventBase =>
@@ -250,6 +276,17 @@ export const parseRealtimeAsrServerEvent = (raw: unknown): RealtimeAsrServerEven
   }
 
   switch (value.type) {
+    case 'session.accepted': {
+      if (
+        value.protocolVersion !== REALTIME_ASR_PROTOCOL_VERSION ||
+        !isExactAudio(value.audio) ||
+        !isExactLimits(value.limits) ||
+        !isExactDeferredLimits(value.deferredLimits)
+      ) {
+        break;
+      }
+      return value as unknown as RealtimeAsrAcceptedEvent;
+    }
     case 'session.ready': {
       if (
         value.protocolVersion !== REALTIME_ASR_PROTOCOL_VERSION ||

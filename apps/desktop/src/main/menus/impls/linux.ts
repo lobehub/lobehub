@@ -79,6 +79,16 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
             },
             label: t('file.newTab'),
           },
+          {
+            accelerator: 'Ctrl+Shift+N',
+            click: (_item, targetWindow) => this.openNewWindow(targetWindow),
+            label: t('file.newWindow'),
+          },
+          {
+            accelerator: 'Ctrl+Shift+T',
+            click: (_item, targetWindow) => this.reopenClosedTab(targetWindow),
+            label: t('file.reopenClosedTab'),
+          },
           { type: 'separator' },
           {
             accelerator: 'Alt+Ctrl+A',
@@ -280,7 +290,14 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
    * downloaded update could not be installed from the menu bar at all.
    */
   private getUpdateMenuItem(t: (key: string, opts?: any) => string): MenuItemConstructorOptions {
-    const { stage } = this.app.updaterManager.getUpdaterState();
+    const { stage: shellStage } = this.app.updaterManager.getUpdaterState();
+    // The shell updater only knows full releases; with a core OTA update already
+    // staged, offer the check again (it re-announces the staged update) instead
+    // of claiming the latest version.
+    const stage =
+      shellStage === 'latest' && this.app.coreUpdateManager.getStatus().staged
+        ? 'idle'
+        : shellStage;
 
     switch (stage) {
       case 'checking': {
@@ -356,6 +373,7 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
         },
         label: t('context.saveImage'),
       });
+      template.push(this.buildCopyImageMenuItem(t('context.copyImage'), data!));
       template.push({
         click: () => {
           clipboard.writeText(data!.srcURL!);
@@ -431,6 +449,7 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
         },
         label: t('context.saveImage'),
       });
+      template.push(this.buildCopyImageMenuItem(t('context.copyImage'), data!));
       template.push({
         click: () => {
           clipboard.writeText(data!.srcURL!);

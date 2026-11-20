@@ -1,5 +1,7 @@
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { memo } from 'react';
+
+import { densityVars } from '@/styles/densityVars';
 
 import { homeType } from './homeType';
 
@@ -9,8 +11,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    min-width: 20px;
-    height: 18px;
+    min-width: ${densityVars.badgeMinWidth};
+    height: ${densityVars.badgeHeight};
     padding-inline: 5px;
     border-radius: 5px;
 

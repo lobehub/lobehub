@@ -1,4 +1,4 @@
-import { parseToolNameMaxLength } from '@lobechat/const/plugin';
+import { parseToolNameMaxLength } from '../../../const/plugin';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { getToolNameMaxLength, setToolNameMaxLength, ToolNameResolver } from '../ToolNameResolver';

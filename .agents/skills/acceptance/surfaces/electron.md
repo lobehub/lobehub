@@ -69,7 +69,7 @@ agent-browser --cdp 9222 eval "JSON.stringify(window.__ERRORS__)" # → text evi
   ```bash
   DT_ID=$(curl -s http://localhost:9222/json/list | python3 -c "import json,sys; ts=json.load(sys.stdin); print(next(t['id'] for t in ts if t['type']=='page' and t['url'].startswith('devtools://')))")
   curl -s "http://localhost:9222/json/close/$DT_ID" > /dev/null
-  agent-browser close --all && agent-browser --cdp 9222 get url
+  agent-browser --session <name> close && agent-browser --session <name> --cdp 9222 get url
   ```
 
 - **Clean up all processes when done.** `pkill -f "Electron"` only kills the main

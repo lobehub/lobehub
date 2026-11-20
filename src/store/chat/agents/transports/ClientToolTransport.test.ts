@@ -20,74 +20,84 @@ beforeEach(() => {
 });
 
 describe('ClientToolTransport', () => {
-  it('preserves an explicit unsuccessful tool result without an error', async () => {
-    const completeOperation = vi.fn();
-    const failOperation = vi.fn();
-    let operationIndex = 0;
-    const store = {
-      completeOperation,
-      dbMessagesMap: {
-        'message-key': [{ id: 'assistant-message', parentId: 'user-message', role: 'assistant' }],
-      },
-      failOperation,
-      internal_invokeDifferentTypePlugin: vi.fn().mockResolvedValue({
+  it.each([false, true])(
+    'preserves an unsuccessful result when reusing a placeholder: %s',
+    async (reuseExistingMessage) => {
+      const completeOperation = vi.fn();
+      const failOperation = vi.fn();
+      let operationIndex = 0;
+      const store = {
+        completeOperation,
+        dbMessagesMap: {
+          'message-key': [{ id: 'assistant-message', parentId: 'user-message', role: 'assistant' }],
+        },
+        failOperation,
+        internal_invokeDifferentTypePlugin: vi.fn().mockResolvedValue({
+          content: 'Tool reported a handled failure',
+          success: false,
+        }),
+        onOperationCancel: vi.fn(),
+        operations: {
+          'root-operation': {
+            context: { agentId: 'agent-1', messageId: 'assistant-message' },
+          },
+        },
+        optimisticCreateMessage: vi.fn().mockResolvedValue({ id: 'tool-message' }),
+        startOperation: vi.fn(() => ({ operationId: `child-operation-${++operationIndex}` })),
+        updateOperationMetadata: vi.fn(),
+      } as unknown as ChatStore;
+      const createToolMessageForOperation = vi.fn().mockResolvedValue({ id: 'tool-message' });
+      const messages = { createToolMessageForOperation } as unknown as ClientMessageTransport;
+      const transport = new ClientToolTransport(
+        () => store,
+        'message-key',
+        'root-operation',
+        messages,
+      );
+      const call: ChatToolPayload = {
+        apiName: 'run',
+        arguments: '{}',
+        id: 'tool-call',
+        identifier: 'client-tool',
+        type: 'default',
+      };
+      const context = {
+        callIndex: 1,
+        effectiveManifestMap: {},
+        mode: 'single',
+        operationId: 'root-operation',
+        parentMessageId: 'assistant-message',
+        parsedArgs: {},
+        reuseExistingMessage,
+        toolMessageId: reuseExistingMessage ? 'tool-message' : undefined,
+        state: {},
+        stepIndex: 0,
+        toolName: 'client-tool/run',
+      } as ToolRunContext;
+
+      const execution = await transport.run(call, context);
+
+      expect(execution.result).toMatchObject({
         content: 'Tool reported a handled failure',
         success: false,
-      }),
-      onOperationCancel: vi.fn(),
-      operations: {
-        'root-operation': {
-          context: { agentId: 'agent-1', messageId: 'assistant-message' },
-        },
-      },
-      optimisticCreateMessage: vi.fn().mockResolvedValue({ id: 'tool-message' }),
-      startOperation: vi.fn(() => ({ operationId: `child-operation-${++operationIndex}` })),
-      updateOperationMetadata: vi.fn(),
-    } as unknown as ChatStore;
-    const createToolMessageForOperation = vi.fn().mockResolvedValue({ id: 'tool-message' });
-    const messages = { createToolMessageForOperation } as unknown as ClientMessageTransport;
-    const transport = new ClientToolTransport(
-      () => store,
-      'message-key',
-      'root-operation',
-      messages,
-    );
-    const call: ChatToolPayload = {
-      apiName: 'run',
-      arguments: '{}',
-      id: 'tool-call',
-      identifier: 'client-tool',
-      type: 'default',
-    };
-    const context = {
-      callIndex: 1,
-      effectiveManifestMap: {},
-      mode: 'single',
-      operationId: 'root-operation',
-      parentMessageId: 'assistant-message',
-      parsedArgs: {},
-      state: {},
-      stepIndex: 0,
-      toolName: 'client-tool/run',
-    } as ToolRunContext;
-
-    const execution = await transport.run(call, context);
-
-    expect(execution.result).toMatchObject({
-      content: 'Tool reported a handled failure',
-      success: false,
-    });
-    expect(failOperation).toHaveBeenCalledWith('child-operation-1', {
-      message: 'Tool execution failed',
-      type: 'ToolExecutionError',
-    });
-    expect(completeOperation).not.toHaveBeenCalledWith('child-operation-1');
-    expect(createToolMessageForOperation).toHaveBeenCalledWith(
-      expect.objectContaining({ role: 'tool', tool_call_id: 'tool-call' }),
-      'child-operation-2',
-    );
-    expect(store.optimisticCreateMessage).not.toHaveBeenCalled();
-  });
+      });
+      expect(failOperation).toHaveBeenCalledWith('child-operation-1', {
+        message: 'Tool execution failed',
+        type: 'ToolExecutionError',
+      });
+      expect(completeOperation).not.toHaveBeenCalledWith('child-operation-1');
+      if (reuseExistingMessage) {
+        expect(createToolMessageForOperation).not.toHaveBeenCalled();
+        expect(execution.toolMessageId).toBe('tool-message');
+      } else {
+        expect(createToolMessageForOperation).toHaveBeenCalledWith(
+          expect.objectContaining({ role: 'tool', tool_call_id: 'tool-call' }),
+          'child-operation-2',
+        );
+      }
+      expect(store.optimisticCreateMessage).not.toHaveBeenCalled();
+    },
+  );
 
   it('always drains the stashed Work intent even when the tool invoke throws', async () => {
     const failOperation = vi.fn();

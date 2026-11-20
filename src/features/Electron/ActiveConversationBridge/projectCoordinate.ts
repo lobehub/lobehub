@@ -1,8 +1,27 @@
 import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
+import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import { type ActiveConversationCoordinate } from './coordinate';
+
+const resolveProjectTopicAgentId = (
+  projectId: string,
+  topicId: string | null,
+): string | undefined => {
+  if (!topicId) return undefined;
+
+  const projectTopics = useProjectDirectoryStore.getState().projectTopicsMap[projectId];
+  const agentId = projectTopics?.find((topic) => topic.id === topicId)?.agentId;
+  if (agentId) return agentId;
+
+  // The project topic list can still be hydrating; fall back to whichever chat
+  // topic bucket already holds this topic (`agent_<agentId>` keys).
+  const containerKey = topicSelectors.getTopicContainerKeyById(topicId)(useChatStore.getState());
+  return containerKey?.startsWith('agent_') ? containerKey.slice('agent_'.length) : undefined;
+};
 
 export const projectActiveConversationCoordinate = (
   coordinate: ActiveConversationCoordinate,
@@ -48,7 +67,7 @@ export const projectActiveConversationCoordinate = (
             ? { activeThreadId: coordinate.threadId!, activeTopicId: coordinate.topicId! }
             : groupChanged
               ? { activeThreadId: undefined, activeTopicId: null! }
-            : {}),
+              : {}),
         },
         false,
         'ActiveConversationBridge/syncGroupRoute',
@@ -65,12 +84,56 @@ export const projectActiveConversationCoordinate = (
     );
   }
 
-  if (!coordinate.routeAgentId) {
-    if (useAgentStore.getState().activeAgentId !== undefined) {
+  if (coordinate.projectId) {
+    const chatState = useChatStore.getState();
+    const agentId = resolveProjectTopicAgentId(coordinate.projectId, coordinate.topicId);
+
+    if (agentId !== undefined && useAgentStore.getState().activeAgentId !== agentId) {
       useAgentStore.setState(
-        { activeAgentId: undefined },
+        { activeAgentId: agentId },
         false,
-        'ActiveConversationBridge/leaveAgent',
+        'ActiveConversationBridge/syncProjectAgent',
+      );
+    }
+
+    const agentChanged = agentId !== undefined && chatState.activeAgentId !== agentId;
+    const agentSwitched =
+      agentId !== undefined && currentAgentId !== undefined && currentAgentId !== agentId;
+
+    if (agentSwitched) useChatStore.getState().clearPortalStack();
+
+    if (
+      agentChanged ||
+      chatState.activeGroupId !== undefined ||
+      chatState.activeThreadId !== coordinate.threadId ||
+      chatState.activeTopicId !== coordinate.topicId
+    ) {
+      useChatStore.setState(
+        {
+          ...(agentId !== undefined ? { activeAgentId: agentId } : {}),
+          activeGroupId: undefined,
+          activeThreadId: coordinate.threadId!,
+          activeTopicId: coordinate.topicId!,
+        },
+        false,
+        'ActiveConversationBridge/syncProjectConversation',
+      );
+    }
+    return;
+  }
+
+  if (!coordinate.routeAgentId) {
+    // Home works against the inbox agent; every other route-less page has none.
+    const routeLessAgentId = coordinate.isHome
+      ? builtinAgentSelectors.inboxAgentId(useAgentStore.getState())
+      : undefined;
+    if (useAgentStore.getState().activeAgentId !== routeLessAgentId) {
+      useAgentStore.setState(
+        { activeAgentId: routeLessAgentId },
+        false,
+        coordinate.isHome
+          ? 'ActiveConversationBridge/syncHomeAgent'
+          : 'ActiveConversationBridge/leaveAgent',
       );
     }
     if (

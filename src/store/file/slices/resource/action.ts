@@ -120,7 +120,7 @@ export const createResourceSlice = (set: Setter, get: () => FileStore, api?: unk
 export class ResourceActionImpl {
   readonly #get: () => FileStore;
   /**
-   * The explorer list is a `@lobechat/replica` paged resource: the persisted
+   * The explorer list is a `local-replica` paged resource: the persisted
    * head page paints before the network answers, and "load more" appends further
    * pages through the engine instead of a hand-rolled `offset` accumulator.
    */
@@ -340,6 +340,26 @@ export class ResourceActionImpl {
   /** The list on screen: replica scope + requested storage row. */
   #currentListIdentity = (): string =>
     `${resourceListResource.scope.get()}\u0000${this.#requestedListStorageKey ?? ''}`;
+
+  /** Query-scoped overlay: navigation cannot roll an old order onto a new folder. */
+  reorderCurrentResources = (orderedIds: string[]) => {
+    const order = new Map(orderedIds.map((id, index) => [id, (index + 1) * 1000]));
+    const apply = (data: ResourceListValue): ResourceListValue => ({
+      ...data,
+      items: data.items
+        .map((item) =>
+          order.has(item.id)
+            ? { ...item, metadata: { ...item.metadata, sortOrder: order.get(item.id)! } }
+            : item,
+        )
+        .sort((a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity)),
+    });
+    const token = this.#beginListOptimistic(apply);
+    return {
+      commit: () => this.#commitListOptimistic(token, 'reorder', apply),
+      rollback: () => token.rollback(),
+    };
+  };
 
   #revalidateList = async (): Promise<void> => {
     await this.#resourceList.revalidate();

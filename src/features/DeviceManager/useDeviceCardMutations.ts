@@ -1,5 +1,5 @@
 import type { DeviceListItem } from '@lobechat/types';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 
 import { lambdaQuery } from '@/libs/trpc/client';
 

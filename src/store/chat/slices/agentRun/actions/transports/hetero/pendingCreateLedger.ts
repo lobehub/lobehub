@@ -19,27 +19,49 @@ export const createPendingCreateLedger = (deps: {
   flush: (reason: string) => Promise<void>;
 }) => {
   const pending = new Map<string, CreateMessageRow>();
+  /** Rows replayed at least once; `retryNew` skips them so a row that fails deterministically is not re-sent before every batch. */
+  const retried = new Set<string>();
+  /**
+   * Replays run one at a time: the batcher's pre-batch retry and a subagent's
+   * `ensureParentPersisted` can overlap, and two passes over the same row would
+   * create it twice (`messages_pkey`).
+   */
+  let replayChain: Promise<void> = Promise.resolve();
+
+  const replay = (skipRetried: boolean) => {
+    replayChain = replayChain.then(async () => {
+      for (const [messageId, message] of pending) {
+        if (skipRetried && retried.has(messageId)) continue;
+        retried.add(messageId);
+        try {
+          await deps.createMessage(message);
+          pending.delete(messageId);
+        } catch (err) {
+          console.error('[HeterogeneousAgent] Failed to replay message create:', err);
+        }
+      }
+    });
+    return replayChain;
+  };
 
   /**
    * Replay the ledger in insertion order (= FK dependency order). Best-effort: a
    * row that fails again stays in the ledger, so callers that need a specific row
    * to exist must re-check afterwards rather than trust this to have emptied it.
    */
-  const drain = async () => {
-    for (const [messageId, message] of pending) {
-      try {
-        await deps.createMessage(message);
-        pending.delete(messageId);
-      } catch (err) {
-        console.error('[HeterogeneousAgent] Failed to replay message create:', err);
-      }
-    }
-  };
+  const drain = () => replay(false);
 
   return {
     add: (messageId: string, message: CreateMessageRow) => pending.set(messageId, message),
 
     drain,
+
+    /**
+     * Replay only rows that have not been retried yet. Wired to the write batcher's
+     * `beforeBatch`, so a create that failed (a rejected request, a network error)
+     * lands before the next batch sends the children that FK to it.
+     */
+    retryNew: () => (pending.size > 0 ? replay(true) : Promise.resolve()),
 
     /**
      * Gate a straight-through write on its FK parent actually existing in the DB.

@@ -6,6 +6,7 @@ import { DOCUMENT_FOLDER_TYPE } from '@/database/schemas';
 import { TransferErrorCode } from '@/types/transferError';
 
 const mocks = vi.hoisted(() => ({
+  dropPageRooms: vi.fn(),
   assertContentsNotInRestrictedKnowledgeBase: vi.fn(),
   assertCanEditResource: vi.fn(),
   assertCanPerformResourceAction: vi.fn(),
@@ -32,6 +33,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/business/server/document-mention/notifyActivity', () => ({
   notifyDocumentMention: mocks.notifyDocumentMention,
 }));
+vi.mock('@/server/services/pageCollab/notify', () => ({ dropPageRooms: mocks.dropPageRooms }));
+
 vi.mock('@/database/models/rbac', () => ({
   RbacModel: { getWorkspaceUsersPermissions: mocks.getWorkspaceUsersPermissions },
 }));
@@ -150,6 +153,20 @@ describe('documentRouter transferDocument', () => {
     expect(mocks.transferTo).toHaveBeenCalledWith('doc-1', null, 'member-1', undefined, {
       forbidForeignRows: true,
     });
+  });
+
+  it('drops the rooms of pages moved out of the workspace', async () => {
+    mocks.transferTo.mockResolvedValueOnce({ documentIds: ['doc-1', 'doc-2'], fileIds: [] });
+    const caller = documentRouter.createCaller({
+      serverDB: {},
+      userId: 'member-1',
+      workspaceId: 'ws-1',
+      workspaceRole: 'owner',
+    } as any);
+
+    await caller.transferDocument({ documentId: 'doc-1', targetWorkspaceId: null });
+
+    expect(mocks.dropPageRooms).toHaveBeenCalledWith(['doc-1', 'doc-2']);
   });
 
   it("lets a member move another creator's visible document between visible parents", async () => {
@@ -525,5 +542,49 @@ describe('documentRouter updateDocument mention notifications', () => {
     await flushAfterWork();
 
     expect(mocks.notifyDocumentMention).not.toHaveBeenCalled();
+  });
+});
+
+describe('documentRouter getFolderBreadcrumb', () => {
+  const caller = () =>
+    documentRouter.createCaller({
+      serverDB: {},
+      userId: 'member-1',
+      workspaceId: 'ws-1',
+      workspaceRole: 'member',
+    } as any);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // Folder URLs moved from `/<folderSlug>` to `folder/<folderId>`, so the chain
+  // must resolve from an id as well as from a legacy slug.
+  it('resolves the chain from a folder id', async () => {
+    mocks.findBySlug.mockResolvedValue(undefined);
+    mocks.findById.mockImplementation(async (id: string) =>
+      id === 'docs_child'
+        ? { id: 'docs_child', parentId: 'docs_root', slug: 'child', title: 'Child' }
+        : { id: 'docs_root', parentId: null, slug: 'root', title: 'Root' },
+    );
+
+    await expect(caller().getFolderBreadcrumb({ slug: 'docs_child' })).resolves.toEqual([
+      { id: 'docs_root', name: 'Root', slug: 'root' },
+      { id: 'docs_child', name: 'Child', slug: 'child' },
+    ]);
+  });
+
+  it('still resolves a legacy slug', async () => {
+    mocks.findBySlug.mockResolvedValue({
+      id: 'docs_root',
+      parentId: null,
+      slug: 'root',
+      title: 'Root',
+    });
+
+    await expect(caller().getFolderBreadcrumb({ slug: 'root' })).resolves.toEqual([
+      { id: 'docs_root', name: 'Root', slug: 'root' },
+    ]);
+    expect(mocks.findById).not.toHaveBeenCalled();
   });
 });

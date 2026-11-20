@@ -2,7 +2,7 @@
 
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
 import type { ChatInputActionsProps, Editor, EditorProps } from '@lobehub/editor/react';
-import { type CSSProperties } from 'react';
+import { type CSSProperties, type ReactNode } from 'react';
 import { memo } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
@@ -52,7 +52,9 @@ export interface EditorCanvasProps {
   /**
    * Keep the caret out of Lexical's root node around block images by pushing
    * an empty paragraph next to the image (otherwise a horizontal root-level
-   * caret shows above / below it). Off by default; comment editors opt in.
+   * caret shows above / below it), and let a click in an image's row or
+   * typing with the image selected continue on the line after it. Off by
+   * default; comment editors and the create-task modal opt in.
    */
   blockImageCaretGuard?: boolean;
 
@@ -60,6 +62,12 @@ export interface EditorCanvasProps {
    * Class name applied to the editor wrapper, e.g. to restyle inline chips.
    */
   className?: string;
+
+  /**
+   * The body comes from a live collaboration room instead of the fetched row
+   * (documentId mode only).
+   */
+  collab?: boolean;
 
   /**
    * Reload an already-mounted editor when an authoritative external content
@@ -143,6 +151,12 @@ export interface EditorCanvasProps {
   onPressEnter?: (props: { editor: IEditor; event: KeyboardEvent }) => boolean | void;
 
   /**
+   * Shown in place of the editor while the body is not in it yet (a room still
+   * syncing); the editor stays mounted behind it (documentId mode only).
+   */
+  pendingBody?: ReactNode;
+
+  /**
    * Placeholder text for empty editor
    */
   placeholder?: string;
@@ -217,12 +231,12 @@ export interface EditorCanvasWithEditorProps extends EditorCanvasProps {
  * - AutoSave hint display (documentId mode)
  */
 export const EditorCanvas = memo<EditorCanvasWithEditorProps>(
-  ({ editor, documentId, editorData, entityId, ...props }) => {
+  ({ editor, documentId, editorData, entityId, collab, ...props }) => {
     // documentId mode - fetch and render with loading/error states
     if (documentId) {
       return (
         <SafeBoundary alertTitle="Editor Error" variant="alert">
-          <DocumentIdMode documentId={documentId} editor={editor} {...props} />
+          <DocumentIdMode collab={collab} documentId={documentId} editor={editor} {...props} />
         </SafeBoundary>
       );
     }

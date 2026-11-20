@@ -198,6 +198,13 @@ export class GenerationBatchModel {
               config.endImageUrl = await this.fileService.getFullFileUrl(config.endImageUrl);
             }
 
+            // Handle referenceAudioUrl (music cover reference track)
+            if (config.referenceAudioUrl) {
+              config.referenceAudioUrl = await this.fileService.getFullFileUrl(
+                config.referenceAudioUrl,
+              );
+            }
+
             // Handle imageUrls array
             if (Array.isArray(config.imageUrls)) {
               config.imageUrls = await Promise.all(
@@ -268,14 +275,12 @@ export class GenerationBatchModel {
 
     // 2. Collect asset file URLs that need to be deleted (video, cover, thumbnail)
     const filesToDelete: string[] = [];
-    if (batchWithGenerations.generations) {
-      for (const gen of batchWithGenerations.generations) {
-        const asset = gen.asset as ImageGenerationAsset | VideoGenerationAsset | null;
-        if (asset?.url) filesToDelete.push(asset.url);
-        if (asset?.thumbnailUrl) filesToDelete.push(asset.thumbnailUrl);
-        if (asset && 'coverUrl' in asset && asset.coverUrl) {
-          filesToDelete.push(asset.coverUrl);
-        }
+    for (const gen of batchWithGenerations.generations) {
+      const asset = gen.asset as ImageGenerationAsset | VideoGenerationAsset | null;
+      if (asset?.url) filesToDelete.push(asset.url);
+      if (asset?.thumbnailUrl) filesToDelete.push(asset.thumbnailUrl);
+      if (asset && 'coverUrl' in asset && asset.coverUrl) {
+        filesToDelete.push(asset.coverUrl);
       }
     }
 

@@ -80,6 +80,14 @@ afterEach(async () => {
   await serverDB.delete(agentHistoryJobs);
 });
 
+const compiledGraph = () => ({
+  edges: [{ from: '__root__', instruction: 'Complete the task.', to: 'work' }],
+  fields: {},
+  name: 'compiled-graph',
+  nodes: { work: { type: 'agent' } },
+  terminal: 'work',
+});
+
 describe('AgentModel', () => {
   describe('existsOwnedById', () => {
     it('is true only for the agent creator (edit-rights gate), not merely visibility', async () => {
@@ -3292,9 +3300,9 @@ describe('AgentModel', () => {
         .values({ systemRole: 'OLD PROMPT', userId })
         .returning();
 
-      const original = (agentModel as any).assertWorkspaceDeviceBinding.bind(agentModel);
+      const original = (agentModel as any).ctx.assertWorkspaceDeviceBinding;
       const spy = vi
-        .spyOn(agentModel as any, 'assertWorkspaceDeviceBinding')
+        .spyOn((agentModel as any).ctx, 'assertWorkspaceDeviceBinding')
         .mockImplementationOnce(async (...args: unknown[]) => {
           await agentModel.update(agent.id, { editorData: null, systemRole: 'NEW PROMPT' });
           return original(...args);
@@ -3386,13 +3394,7 @@ describe('AgentModel', () => {
         states: { legacy: {} },
         terminal: 'legacy',
       };
-      const graph = {
-        edges: [{ from: '__root__', instruction: 'Complete the task.', to: 'work' }],
-        fields: {},
-        name: 'compiled-graph',
-        nodes: { work: { type: 'agent' } },
-        terminal: 'work',
-      };
+      const graph = compiledGraph();
       const [agent] = await serverDB
         .insert(agents)
         .values({
@@ -3410,13 +3412,7 @@ describe('AgentModel', () => {
     });
 
     it('should migrate a legacy chatConfig graph to agencyConfig on write', async () => {
-      const graph = {
-        edges: [{ from: '__root__', instruction: 'Complete the task.', to: 'work' }],
-        fields: {},
-        name: 'compiled-graph',
-        nodes: { work: { type: 'agent' } },
-        terminal: 'work',
-      };
+      const graph = compiledGraph();
       const [agent] = await serverDB
         .insert(agents)
         .values({
@@ -3440,13 +3436,7 @@ describe('AgentModel', () => {
     });
 
     it('should let an explicit null agency graph clear a legacy chatConfig graph', async () => {
-      const graph = {
-        edges: [{ from: '__root__', instruction: 'Complete the task.', to: 'work' }],
-        fields: {},
-        name: 'compiled-graph',
-        nodes: { work: { type: 'agent' } },
-        terminal: 'work',
-      };
+      const graph = compiledGraph();
       const [agent] = await serverDB
         .insert(agents)
         .values({

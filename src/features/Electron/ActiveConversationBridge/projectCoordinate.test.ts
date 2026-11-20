@@ -1,3 +1,4 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import { type AgentGroupDetail } from '@lobechat/types';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -7,6 +8,7 @@ import { initialChatGroupState } from '@/store/agentGroup/initialState';
 import { useAgentGroupStore } from '@/store/agentGroup/store';
 import { initialState as initialChatState } from '@/store/chat/initialState';
 import { useChatStore } from '@/store/chat/store';
+import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import { resolveActiveConversationCoordinate } from './coordinate';
 import { projectActiveConversationCoordinate } from './projectCoordinate';
@@ -25,6 +27,7 @@ describe('active conversation projection', () => {
       },
       false,
     );
+    useProjectDirectoryStore.setState({ projectTopicsMap: {} }, false);
   });
 
   it('projects the active tab route into both global stores as one conversation coordinate', () => {
@@ -231,6 +234,109 @@ describe('active conversation projection', () => {
       activeAgentId: 'agent-new',
       activeThreadId: undefined,
       activeTopicId: null,
+    });
+  });
+
+  it('projects a project conversation route instead of clearing the active conversation', () => {
+    useProjectDirectoryStore.setState(
+      { projectTopicsMap: { prj_1: [{ agentId: 'agent-new', id: 'tpc_1' } as any] } },
+      false,
+    );
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { projectId: 'prj_1', topicId: 'tpc_1' },
+      url: '/project/prj_1/topic/tpc_1?thread=thread-new',
+    });
+
+    projectActiveConversationCoordinate(coordinate);
+
+    expect(useAgentStore.getState().activeAgentId).toBe('agent-new');
+    expect(useChatStore.getState()).toMatchObject({
+      activeAgentId: 'agent-new',
+      activeGroupId: undefined,
+      activeThreadId: 'thread-new',
+      activeTopicId: 'tpc_1',
+    });
+  });
+
+  it('resolves the project agent from the chat topic bucket while project topics hydrate', () => {
+    useChatStore.setState(
+      {
+        topicDataMap: {
+          agent_agent_fallback: {
+            currentPage: 0,
+            hasMore: false,
+            items: [{ createdAt: 0, id: 'tpc_1', title: 'Topic', updatedAt: 0 }],
+            pageSize: 20,
+            total: 1,
+          },
+        },
+      },
+      false,
+    );
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { projectId: 'prj_1', topicId: 'tpc_1' },
+      url: '/project/prj_1/topic/tpc_1',
+    });
+
+    projectActiveConversationCoordinate(coordinate);
+
+    expect(useAgentStore.getState().activeAgentId).toBe('agent_fallback');
+    expect(useChatStore.getState()).toMatchObject({
+      activeAgentId: 'agent_fallback',
+      activeTopicId: 'tpc_1',
+    });
+  });
+
+  it('keeps the active agent on a project conversation route without a topic id', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { projectId: 'prj_1' },
+      url: '/project/prj_1/topic',
+    });
+
+    projectActiveConversationCoordinate(coordinate);
+
+    expect(useAgentStore.getState().activeAgentId).toBe('agent-old');
+    expect(useChatStore.getState()).toMatchObject({
+      activeAgentId: 'agent-old',
+      activeGroupId: undefined,
+      activeThreadId: null,
+      activeTopicId: null,
+    });
+  });
+
+  describe('route-less pages', () => {
+    beforeEach(() => {
+      useAgentStore.setState({ builtinAgentIdMap: { [INBOX_SESSION_ID]: 'agent-inbox' } }, false);
+    });
+
+    it.each([
+      ['personal Home', '/', null],
+      ['workspace Home', '/acme', 'acme'],
+      ['workspace Home with a trailing slash', '/acme/', 'acme'],
+    ])('projects the inbox agent on %s', (_label, url, workspaceSlug) => {
+      projectActiveConversationCoordinate(
+        resolveActiveConversationCoordinate({ params: {}, url, workspaceSlug }),
+      );
+
+      expect(useAgentStore.getState().activeAgentId).toBe('agent-inbox');
+      expect(useChatStore.getState()).toMatchObject({
+        activeAgentId: undefined,
+        activeTopicId: undefined,
+      });
+    });
+
+    it('clears the active agent on a route-less page other than Home', () => {
+      useAgentStore.setState({ activeAgentId: 'agent-inbox' }, false);
+
+      projectActiveConversationCoordinate(
+        resolveActiveConversationCoordinate({
+          params: {},
+          url: '/settings',
+          workspaceSlug: 'acme',
+        }),
+      );
+
+      expect(useAgentStore.getState().activeAgentId).toBeUndefined();
     });
   });
 });

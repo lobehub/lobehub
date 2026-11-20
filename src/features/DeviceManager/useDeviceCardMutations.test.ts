@@ -1,4 +1,4 @@
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,7 +22,7 @@ vi.mock('@/libs/trpc/client', () => ({
     },
   },
 }));
-vi.mock('@lobehub/ui/base-ui', () => ({ toast: { error: vi.fn() } }));
+vi.mock('@lobehub/ui', () => ({ toast: { error: vi.fn() } }));
 vi.mock('i18next', () => ({
   t: (key: string, options?: { ns?: string }) => `${options?.ns}:${key}`,
 }));

@@ -52,7 +52,7 @@ describe('resolveRunAgentConfig', () => {
     vi.clearAllMocks();
     getPreference.mockResolvedValue({});
     isResourceAuthorOrAdmin.mockResolvedValue(false);
-    getInfoForAIGeneration.mockResolvedValue({ responseLanguage: 'en-US' });
+    getInfoForAIGeneration.mockResolvedValue({ preferredReplyLanguage: 'en-US' });
   });
 
   it('keeps a builtin runtime execution target over a saved member device override', async () => {
@@ -75,7 +75,7 @@ describe('resolveRunAgentConfig', () => {
 
   it('reads the reply language for the share visitor, not the owner, on a shared-agent run', async () => {
     getInfoForAIGeneration.mockImplementation(async (_db: unknown, userId: string) => ({
-      responseLanguage: userId === 'visitor-1' ? 'ja-JP' : 'en-US',
+      preferredReplyLanguage: userId === 'visitor-1' ? 'ja-JP' : 'en-US',
     }));
 
     const { agentConfig } = await resolveRunAgentConfig(
@@ -127,6 +127,48 @@ describe('resolveRunAgentConfig', () => {
     expect(memberDeviceOverride).toEqual({ boundDeviceId: 'dev-1', executionTarget: 'local' });
     expect(agentConfig.agencyConfig?.executionTarget).toBe('local');
   });
+
+  // A Channel run with no device picked follows the requester's own device for the Agent, as
+  // their ordinary conversation would; the frozen snapshot still decides the model.
+  describe('a dispatcher snapshot', () => {
+    const regular = () =>
+      ({ ...(webOnboardingRow() as object), id: 'agent-regular', slug: null }) as never;
+    const run = (snapshotFollowsCallerDevice?: boolean) =>
+      resolveRunAgentConfig(
+        { ...deps, resolveAgentConfigOrThrow: async () => regular() },
+        {
+          agentConfigSnapshot: { model: 'gpt-5', provider: 'openai' } as never,
+          identifier: 'agent-regular',
+          snapshotFollowsCallerDevice,
+          throwIfExecutionAborted: async () => {},
+        },
+      );
+
+    beforeEach(() => {
+      getPreference.mockResolvedValue({
+        agentDeviceOverrides: {
+          'agent-regular': { boundDeviceId: 'dev-1', executionTarget: 'local' },
+        },
+        agentModelOverrides: { 'agent-regular': { model: 'claude', provider: 'anthropic' } },
+      });
+    });
+
+    it("layers the caller's device override when it follows the caller's device", async () => {
+      const { agentConfig, memberDeviceOverride } = await run(true);
+
+      expect(memberDeviceOverride).toEqual({ boundDeviceId: 'dev-1', executionTarget: 'local' });
+      expect(agentConfig.agencyConfig?.executionTarget).toBe('local');
+      expect(agentConfig.model).toBe('gpt-5');
+    });
+
+    it('applies no member override otherwise', async () => {
+      const { agentConfig, memberDeviceOverride } = await run();
+
+      expect(memberDeviceOverride).toBeUndefined();
+      expect(agentConfig.agencyConfig?.executionTarget).not.toBe('local');
+      expect(getPreference).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('Codex Task model overrides', () => {
@@ -134,7 +176,7 @@ describe('Codex Task model overrides', () => {
     vi.clearAllMocks();
     getPreference.mockResolvedValue({});
     isResourceAuthorOrAdmin.mockResolvedValue(false);
-    getInfoForAIGeneration.mockResolvedValue({ responseLanguage: 'en-US' });
+    getInfoForAIGeneration.mockResolvedValue({ preferredReplyLanguage: 'en-US' });
   });
 
   it.each(['codex', undefined])(

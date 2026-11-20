@@ -68,6 +68,17 @@ export const getHeterogeneousAgentConfigOrThrow = (
   return config;
 };
 
+const SESSION_INITIAL_MODEL_TYPES = new Set<string>([
+  'copilot',
+  'deepseek-harness',
+  'devin',
+  'droid',
+  'trae',
+]);
+
+export const usesHeterogeneousSessionInitialModel = (type: string): boolean =>
+  SESSION_INITIAL_MODEL_TYPES.has(type);
+
 export const resolveHeterogeneousAgentCommand = (type: string, command?: string): string => {
   const configuredCommand = command?.trim();
   return configuredCommand || getHeterogeneousAgentConfigOrThrow(type).defaultCommand;
@@ -147,6 +158,7 @@ const ampDescriptor = getHeterogeneousAgentConfigOrThrow('amp');
 const claudeCodeDescriptor = getHeterogeneousAgentConfigOrThrow('claude-code');
 const codeBuddyDescriptor = getHeterogeneousAgentConfigOrThrow('codebuddy');
 const codexDescriptor = getHeterogeneousAgentConfigOrThrow('codex');
+const copilotDescriptor = getHeterogeneousAgentConfigOrThrow('copilot');
 const cursorDescriptor = getHeterogeneousAgentConfigOrThrow('cursor');
 const droidDescriptor = getHeterogeneousAgentConfigOrThrow('droid');
 const grokBuildDescriptor = getHeterogeneousAgentConfigOrThrow('grok-build');
@@ -162,6 +174,8 @@ export const CODEBUDDY_CLI_INSTALL_COMMANDS = codeBuddyDescriptor.install.comman
 export const CODEBUDDY_CLI_INSTALL_DOCS_URL = codeBuddyDescriptor.install.docsUrl;
 export const CODEX_CLI_INSTALL_COMMANDS = codexDescriptor.install.commands;
 export const CODEX_CLI_INSTALL_DOCS_URL = codexDescriptor.install.docsUrl;
+export const COPILOT_CLI_INSTALL_COMMANDS = copilotDescriptor.install.commands;
+export const COPILOT_CLI_INSTALL_DOCS_URL = copilotDescriptor.install.docsUrl;
 export const CURSOR_CLI_INSTALL_COMMANDS = cursorDescriptor.install.commands;
 export const CURSOR_CLI_INSTALL_DOCS_URL = cursorDescriptor.install.docsUrl;
 export const DROID_CLI_INSTALL_COMMANDS = droidDescriptor.install.commands;

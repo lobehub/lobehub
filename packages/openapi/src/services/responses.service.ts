@@ -15,12 +15,14 @@ import type {
   FunctionCallOutputItem,
   InputItem,
   OutputItem,
+  ResponseError,
   ResponseObject,
   ResponseStreamEvent,
   ResponseUsage,
   Tool,
 } from '../types/responses.type';
 import {
+  ClientToolResumeError,
   executeResponseRun,
   parkedOnToolsReason,
   pendingFunctionCallItems,
@@ -278,6 +280,12 @@ export class ResponsesService extends BaseService {
     const functionCallOutputs = this.extractFunctionCallOutputs(params.input);
     const isResumeFlow = functionCallOutputs.length > 0 && !!previousTopicId;
 
+    if (params.strict_tool_resume && !isResumeFlow) {
+      throw new ClientToolResumeError(
+        'Strict tool resume requires previous_response_id and function_call_output items.',
+      );
+    }
+
     if (isResumeFlow) {
       const resumed = await resumeParkedClientTools({
         agentRuntimeService: options.agentRuntimeService,
@@ -288,6 +296,11 @@ export class ResponsesService extends BaseService {
         workspaceId: this.workspaceId,
       });
       if (resumed) return { ...resumed, resumed: true, topicId: previousTopicId };
+      if (params.strict_tool_resume) {
+        throw new ClientToolResumeError(
+          'The response is no longer waiting for these tool outputs.',
+        );
+      }
     }
 
     const instructions = this.buildInstructions(params);
@@ -314,6 +327,7 @@ export class ResponsesService extends BaseService {
       agentId: params.model,
       appContext: previousTopicId ? { topicId: previousTopicId } : undefined,
       autoStart: false,
+      exclusivePluginIds: params.tools_mode === 'exclusive' ? additionalPluginIds : undefined,
       functionTools: functionTools.length > 0 ? functionTools : undefined,
       instructions,
       prompt,
@@ -379,7 +393,7 @@ export class ResponsesService extends BaseService {
       return this.buildResponseObject({
         createdAt,
         error: {
-          code: 'server_error',
+          code: error instanceof ClientToolResumeError ? 'invalid_request_error' : 'server_error',
           message: error instanceof Error ? error.message : 'Unknown error',
         },
         id: errorResponseId,
@@ -839,7 +853,7 @@ export class ResponsesService extends BaseService {
       const errorResponse = this.buildResponseObject({
         createdAt,
         error: {
-          code: 'server_error',
+          code: error instanceof ClientToolResumeError ? 'invalid_request_error' : 'server_error',
           message: error instanceof Error ? error.message : 'Unknown error',
         },
         id: errorResponseId,
@@ -889,7 +903,7 @@ export class ResponsesService extends BaseService {
   private buildResponseObject(opts: {
     completedAt?: number | null;
     createdAt: number;
-    error?: { code: 'server_error'; message: string };
+    error?: ResponseError;
     id: string;
     incompleteDetails?: { reason: string };
     output: OutputItem[];

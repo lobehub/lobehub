@@ -7,6 +7,16 @@ import { TopicModel } from '@/database/models/topic';
 import { AbandonOperationService } from '../AbandonOperationService';
 import { CompletionLifecycle } from '../CompletionLifecycle';
 
+const abandonDeps = (
+  coordinator: NonNullable<ConstructorParameters<typeof AbandonOperationService>[1]>['coordinator'],
+  snapshotStore: NonNullable<
+    ConstructorParameters<typeof AbandonOperationService>[1]
+  >['snapshotStore'],
+) => ({
+  coordinator,
+  snapshotStore,
+});
+
 const buildStore = () => ({
   get: vi.fn(),
   getLatest: vi.fn(),
@@ -45,10 +55,16 @@ vi.mock('@/database/models/message', () => ({
 const findOperationMock = vi.fn().mockResolvedValue(null);
 const recordCompletionMock = vi.fn().mockResolvedValue(undefined);
 const settleLiveMock = vi.fn().mockResolvedValue(true);
+const claimForAbandonmentMock = vi.fn().mockResolvedValue(true);
+const markAbandonmentFinalizedMock = vi.fn().mockResolvedValue(undefined);
+const markAbandonmentHandoffPendingMock = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn().mockImplementation(function () {
     return {
+      claimForAbandonment: claimForAbandonmentMock,
       findById: findOperationMock,
+      markAbandonmentFinalized: markAbandonmentFinalizedMock,
+      markAbandonmentHandoffPending: markAbandonmentHandoffPendingMock,
       recordCompletion: recordCompletionMock,
       settleLive: settleLiveMock,
     };
@@ -127,6 +143,9 @@ describe('AbandonOperationService', () => {
     recordCompletionMock.mockClear();
     findThreadMock.mockReset().mockResolvedValue(null);
     settleLiveMock.mockReset().mockResolvedValue(true);
+    claimForAbandonmentMock.mockReset().mockResolvedValue(true);
+    markAbandonmentFinalizedMock.mockReset().mockResolvedValue(undefined);
+    markAbandonmentHandoffPendingMock.mockReset().mockResolvedValue(undefined);
     latestSpineMessageIdMock.mockReset().mockResolvedValue(undefined);
     messageCreateMock.mockReset().mockResolvedValue({ id: 'msg_new_failure' });
     topicSettleRunningOperationMock
@@ -137,10 +156,7 @@ describe('AbandonOperationService', () => {
   it('returns found:false when coordinator has no state', async () => {
     const coord = buildCoordinator({ loadAgentState: vi.fn().mockResolvedValue(null) });
     const store = buildStore();
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_missing', 'inactivity_5m');
 
@@ -173,10 +189,7 @@ describe('AbandonOperationService', () => {
       status: 'settled',
     });
 
-    const svc = new AbandonOperationService(db, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService(db, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_x', 'inactivity_watchdog');
 
@@ -203,6 +216,55 @@ describe('AbandonOperationService', () => {
         type: 'AgentRuntimeError',
       }),
     });
+  });
+
+  it('preserves the counters a resumed claim already recorded', async () => {
+    // Regression: `CompletionLifecycle` persists the run's usage before the
+    // finalise mark lands, so a retry that entered the no-state branch used to
+    // rewrite `llmCalls` / `stepCount` / `toolCalls` / `totalTokens` with zeros
+    // and silently erase the run's statistics.
+    const coord = buildCoordinator({ loadAgentState: vi.fn().mockResolvedValue(null) });
+    const db = buildDb({
+      operationRow: {
+        agentId: 'agt_x',
+        id: 'op_x',
+        llmCalls: 7,
+        metadata: {
+          abandonment: {
+            at: '2026-11-03T00:00:00.000Z',
+            phase: 'claimed',
+            reason: 'inactivity_watchdog',
+          },
+        },
+        startedAt: new Date('2026-06-30T11:51:14.745Z'),
+        status: 'error',
+        stepCount: 3,
+        toolCalls: 2,
+        topicId: 'tpc_x',
+        totalTokens: 900,
+        userId: 'user_x',
+        workspaceId: 'ws_x',
+      },
+    });
+
+    const svc = new AbandonOperationService(db, {
+      coordinator: coord as any,
+      snapshotStore: buildStore() as any,
+    });
+
+    await svc.finalizeAbandoned('op_x', 'inactivity_watchdog');
+
+    expect(recordCompletionMock).toHaveBeenCalledWith(
+      'op_x',
+      expect.objectContaining({
+        completionReason: 'error',
+        llmCalls: 7,
+        status: 'error',
+        stepCount: 3,
+        toolCalls: 2,
+        totalTokens: 900,
+      }),
+    );
   });
 
   describe('no-state lifecycle hooks', () => {
@@ -394,7 +456,9 @@ describe('AbandonOperationService', () => {
     it('leaves an abandoned row alone without the pre-claim flag', async () => {
       const result = await abandon();
 
-      expect(result.abandoned).toBeUndefined();
+      // A settled row is not a real abandonment, and the explicit `false` is
+      // what lets the gateway reconcile its silence as a phantom timeout.
+      expect(result.abandoned).toBe(false);
       expect(topicSettleRunningOperationMock).not.toHaveBeenCalled();
       expect(messageUpdateMock).not.toHaveBeenCalled();
     });
@@ -411,16 +475,358 @@ describe('AbandonOperationService', () => {
       },
     });
 
-    const svc = new AbandonOperationService(db, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService(db, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_done', 'inactivity_watchdog');
 
-    expect(result.abandoned).toBeUndefined();
+    // The row guard now settles this even earlier than the no-state path did:
+    // `abandoned: false` is what tells the gateway watchdog to reconcile the
+    // silence as a phantom instead of recording an error.
+    expect(result.abandoned).toBe(false);
     expect(recordCompletionMock).not.toHaveBeenCalled();
     expect(messageUpdateMock).not.toHaveBeenCalled();
+  });
+
+  describe('row guard for an operation that already settled', () => {
+    // Regression: the inactivity watchdog fires on stream *silence*, and a run
+    // that finished normally is silent too once its terminal event never
+    // reached the gateway. The real case this covers had 21 completed steps and
+    // a `done` row, yet the abandon still created an error bubble on the
+    // conversation and reported a real death to the gateway — the partial the
+    // finished run left behind made `found && finalized` look exactly like one.
+    const settledRow = (status: string) => ({
+      agentId: 'agt_x',
+      id: 'op_x',
+      startedAt: new Date('2026-10-01T15:32:22.480Z'),
+      status,
+      topicId: 'tpc_x',
+      userId: 'user_x',
+      workspaceId: null,
+    });
+
+    const abandonWithRow = async (status: string, options?: { settledAsAbandoned?: boolean }) => {
+      const coord = buildCoordinator({
+        loadAgentState: vi.fn().mockResolvedValue(stateWith()),
+      });
+      const store = buildStore();
+      // A partial left behind by a finished run is precisely what used to make
+      // this read as a genuine mid-flight death.
+      store.loadPartial.mockResolvedValue({ steps: [{ stepIndex: 0 }] });
+
+      const result = await new AbandonOperationService(
+        buildDb({ operationRow: settledRow(status) }),
+        abandonDeps(coord as any, store as any),
+      ).finalizeAbandoned('op_x', 'inactivity_watchdog', options);
+
+      return { coord, result, store };
+    };
+
+    it.each(['done', 'error', 'interrupted', 'abandoned'])(
+      'leaves a %s operation and its conversation alone',
+      async (status) => {
+        const { coord, result, store } = await abandonWithRow(status);
+
+        expect(result).toEqual({
+          abandoned: false,
+          assistantMessageUpdated: false,
+          finalized: false,
+          found: false,
+        });
+        // No Redis read, no snapshot finalise, nothing the user can see — and
+        // `abandoned: false` is what lets the gateway reconcile the silence as a
+        // phantom timeout instead of recording an error.
+        expect(coord.loadAgentState).not.toHaveBeenCalled();
+        expect(store.save).not.toHaveBeenCalled();
+        expect(store.removePartial).not.toHaveBeenCalled();
+        expect(dispatchHooksMock).not.toHaveBeenCalled();
+        expect(messageUpdateMock).not.toHaveBeenCalled();
+        expect(messageCreateMock).not.toHaveBeenCalled();
+      },
+    );
+
+    it('still runs the side effects for a row the caller already claimed', async () => {
+      // StaleOperationReaper CASes the row to `abandoned` before calling in, so
+      // that status is its own claim and must not read as a settled run.
+      const { coord, result } = await abandonWithRow('abandoned', { settledAsAbandoned: true });
+
+      expect(coord.loadAgentState).toHaveBeenCalled();
+      expect(result.assistantMessageUpdated).toBe(true);
+      expect(messageUpdateMock).toHaveBeenCalledWith('msg_assist_1', {
+        error: expect.objectContaining({
+          message: expect.stringContaining('inactivity_watchdog'),
+        }),
+      });
+    });
+
+    it('still abandons a live operation', async () => {
+      const { coord, result } = await abandonWithRow('running');
+
+      expect(coord.loadAgentState).toHaveBeenCalled();
+      expect(result.found).toBe(true);
+      expect(messageUpdateMock).toHaveBeenCalled();
+      // The claim is what decides, so it has to land before the irreversible
+      // write rather than after it: the trailing `settleLive` cannot undo a
+      // message error.
+      expect(claimForAbandonmentMock).toHaveBeenCalledWith('op_x', 'inactivity_watchdog');
+      expect(claimForAbandonmentMock.mock.invocationCallOrder[0]).toBeLessThan(
+        messageUpdateMock.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('resumes a claim whose finalisation was cut off', async () => {
+      // Regression: the claim retires the row *before* the side effects the
+      // conversation needs. A host recycled in that window — or a throwing
+      // `loadAgentState` — left a terminal row with no error bubble, no topic
+      // cleanup, no hooks and no parent resume. The second invocation read that
+      // row as "already settled" and reported a phantom, and
+      // `StaleOperationReaper` only scans live rows, so nothing else would ever
+      // finish the job.
+      const coord = buildCoordinator({
+        loadAgentState: vi.fn().mockResolvedValue(stateWith()),
+      });
+      const store = buildStore();
+      store.loadPartial.mockResolvedValue({ steps: [{ stepIndex: 0 }] });
+
+      const result = await new AbandonOperationService(
+        buildDb({
+          operationRow: {
+            ...settledRow('error'),
+            metadata: {
+              abandonment: {
+                at: '2026-11-03T00:00:00.000Z',
+                phase: 'claimed',
+                reason: 'inactivity_watchdog',
+              },
+            },
+          },
+        }),
+        { coordinator: coord as any, snapshotStore: store as any },
+      ).finalizeAbandoned('op_x', 'inactivity_watchdog');
+
+      expect(result.found).toBe(true);
+      expect(result.assistantMessageUpdated).toBe(true);
+      expect(messageUpdateMock).toHaveBeenCalledWith('msg_assist_1', {
+        error: expect.objectContaining({
+          message: expect.stringContaining('inactivity_watchdog'),
+        }),
+      });
+      // The mark already says this run is ours, so no second claim is attempted…
+      expect(claimForAbandonmentMock).not.toHaveBeenCalled();
+      // …and the hooks still persist onto the `error` status the claim wrote.
+      expect(dispatchHooksMock).toHaveBeenCalledWith(
+        'op_x',
+        expect.anything(),
+        'error',
+        expect.objectContaining({ settledAsAbandoned: false }),
+      );
+      // Only once everything landed does the claim stop being resumable.
+      expect(markAbandonmentFinalizedMock).toHaveBeenCalledWith('op_x');
+    });
+
+    it('replays only the parent-resume hand-off when the finalisation already landed', async () => {
+      // Regression: the finalized mark used to be written before the caller
+      // handed the parent over to a resume. A host recycled in that gap left a
+      // child that read as finalized, so no later invocation returned the
+      // linkage and the parent stayed parked in `waiting_for_async_tool`.
+      // `handoff_pending` keeps exactly that step replayable — and only it.
+      const coord = buildCoordinator({ loadAgentState: vi.fn() });
+
+      const result = await new AbandonOperationService(
+        buildDb({
+          operationRow: {
+            ...settledRow('error'),
+            metadata: {
+              abandonment: {
+                at: '2026-11-03T00:00:00.000Z',
+                handoff: {
+                  resume: {
+                    errorMessage: 'Operation abandoned: inactivity_watchdog',
+                    parentOperationId: 'op_parent',
+                    threadId: 'thread_1',
+                    toolMessageId: 'msg_tool',
+                    userId: 'user_x',
+                  },
+                },
+                phase: 'handoff_pending',
+              },
+            },
+          },
+        }),
+        { coordinator: coord as any, snapshotStore: buildStore() as any },
+      ).finalizeAbandoned('op_x', 'inactivity_watchdog');
+
+      expect(result).toEqual({
+        abandoned: true,
+        assistantMessageUpdated: false,
+        finalized: true,
+        found: true,
+        subAgentResume: {
+          errorMessage: 'Operation abandoned: inactivity_watchdog',
+          parentOperationId: 'op_parent',
+          threadId: 'thread_1',
+          toolMessageId: 'msg_tool',
+          userId: 'user_x',
+        },
+      });
+      // Nothing is redone: no second claim, no second Redis read, no duplicate
+      // error bubble and no duplicate hooks.
+      expect(coord.loadAgentState).not.toHaveBeenCalled();
+      expect(claimForAbandonmentMock).not.toHaveBeenCalled();
+      expect(messageUpdateMock).not.toHaveBeenCalled();
+      expect(dispatchHooksMock).not.toHaveBeenCalled();
+      expect(markAbandonmentFinalizedMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps the claim resumable until the parent hand-off is delivered', async () => {
+      // The sub-agent's parent is resumed by the *caller*, after this method
+      // returns. Retiring the mark here would make a crash in that window
+      // unrecoverable.
+      findOperationMock.mockResolvedValue({
+        parentOperationId: 'op_parent',
+        threadId: 'thread_1',
+        userId: 'user_x',
+        workspaceId: null,
+      });
+      findThreadMock.mockResolvedValue({ sourceMessageId: 'msg_tool' });
+
+      const coord = buildCoordinator({
+        loadAgentState: vi.fn().mockResolvedValue(
+          stateWith({
+            metadata: { assistantMessageId: 'msg_assist_1' },
+            origin: {
+              threadId: 'thread_1',
+              userId: 'user_x',
+              lineage: { isSubAgent: true },
+            },
+          }),
+        ),
+      });
+
+      const svc = new AbandonOperationService(
+        buildDb({
+          operationRow: {
+            agentId: 'agt_x',
+            id: 'op_child',
+            startedAt: new Date('2026-10-01T15:32:22.480Z'),
+            status: 'running',
+            topicId: 'tpc_x',
+            userId: 'user_x',
+            workspaceId: null,
+          },
+        }),
+        abandonDeps(coord as any, buildPartiallessStore() as any),
+      );
+
+      const result = await svc.finalizeAbandoned('op_child', 'inactivity_watchdog');
+
+      expect(result.subAgentResume).toBeDefined();
+      expect(markAbandonmentHandoffPendingMock).toHaveBeenCalledWith('op_child', {
+        resume: expect.objectContaining({ parentOperationId: 'op_parent' }),
+      });
+      expect(markAbandonmentFinalizedMock).not.toHaveBeenCalled();
+
+      // Once the caller confirms the resume landed, the claim is retired.
+      await svc.completeAbandonmentHandoff('op_child');
+      expect(markAbandonmentFinalizedMock).toHaveBeenCalledWith('op_child');
+    });
+
+    it('leaves a finalised abandonment alone', async () => {
+      // The other half of the mark: a retry after a *completed* finalisation
+      // must not re-fire hooks or re-resume the same parent.
+      const coord = buildCoordinator({
+        loadAgentState: vi.fn().mockResolvedValue(stateWith()),
+      });
+
+      const result = await new AbandonOperationService(
+        buildDb({
+          operationRow: {
+            ...settledRow('error'),
+            metadata: { abandonment: { phase: 'finalized' } },
+          },
+        }),
+        { coordinator: coord as any, snapshotStore: buildStore() as any },
+      ).finalizeAbandoned('op_x', 'inactivity_watchdog');
+
+      expect(result).toEqual({
+        abandoned: false,
+        assistantMessageUpdated: false,
+        finalized: false,
+        found: false,
+      });
+      expect(coord.loadAgentState).not.toHaveBeenCalled();
+      expect(dispatchHooksMock).not.toHaveBeenCalled();
+      expect(markAbandonmentFinalizedMock).not.toHaveBeenCalled();
+    });
+
+    it('fires the hooks onto the error status its own claim wrote', async () => {
+      // Regression: the local claim moves the row to `error`, but the hooks
+      // were told the row had been settled as `abandoned`. `recordCompletion`
+      // refuses to move one terminal status to another, so the persist was
+      // rejected and `onComplete` / `onError` (task / bot hooks) never fired.
+      await abandonWithRow('running');
+
+      expect(dispatchHooksMock).toHaveBeenCalledWith(
+        'op_x',
+        expect.anything(),
+        'error',
+        expect.objectContaining({ settledAsAbandoned: false }),
+      );
+    });
+
+    it('fires the no-state hooks onto the error status its own claim wrote', async () => {
+      // Same mismatch on the no-state path (hetero / device runs): the row now
+      // reads `error` after the claim, and the lifecycle must persist `error`.
+      const hooks = [{ id: 'h1', type: 'onComplete', webhook: { url: '/hook' } }];
+      const row = { ...settledRow('running'), metadata: { _hooks: hooks } };
+      const findFirst = vi
+        .fn()
+        .mockResolvedValueOnce(row)
+        .mockResolvedValue({ ...row, status: 'error' });
+      topicSettleRunningOperationMock.mockResolvedValue({
+        assistantMessageId: 'msg_assist_1',
+        status: 'settled',
+      });
+
+      const result = await new AbandonOperationService(
+        { query: { agentOperations: { findFirst }, messages: { findFirst: vi.fn() } } } as any,
+        {
+          coordinator: buildCoordinator({ loadAgentState: vi.fn().mockResolvedValue(null) }) as any,
+          snapshotStore: buildStore() as any,
+        },
+      ).finalizeAbandoned('op_x', 'inactivity_watchdog');
+
+      expect(result.abandoned).toBe(true);
+      // The error detail still lands on the row: `error` → `error` is accepted.
+      expect(recordCompletionMock).toHaveBeenCalledWith(
+        'op_x',
+        expect.objectContaining({ status: 'error' }),
+      );
+      expect(completeOperationMock).toHaveBeenCalledWith(expect.anything(), 'error', {
+        skipErrorMessageWrite: true,
+      });
+    });
+
+    it('leaves the turn alone when the run settles before the claim lands', async () => {
+      // Interleaving: the read still saw `running`, but the executor committed
+      // `done` before the CAS — so not one abandonment side effect may run.
+      claimForAbandonmentMock.mockResolvedValueOnce(false);
+
+      const { coord, result, store } = await abandonWithRow('running');
+
+      expect(claimForAbandonmentMock).toHaveBeenCalledWith('op_x', 'inactivity_watchdog');
+      expect(result).toEqual({
+        abandoned: false,
+        assistantMessageUpdated: false,
+        finalized: false,
+        found: false,
+      });
+      expect(coord.loadAgentState).not.toHaveBeenCalled();
+      expect(dispatchHooksMock).not.toHaveBeenCalled();
+      expect(messageUpdateMock).not.toHaveBeenCalled();
+      expect(messageCreateMock).not.toHaveBeenCalled();
+      expect(store.save).not.toHaveBeenCalled();
+      expect(store.removePartial).not.toHaveBeenCalled();
+    });
   });
 
   it('does not touch a newer runningOperation when abandoning an old no-state op', async () => {
@@ -438,10 +844,7 @@ describe('AbandonOperationService', () => {
         userId: 'user_x',
       },
     });
-    const svc = new AbandonOperationService(db, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService(db, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_old', 'inactivity_watchdog');
 
@@ -467,10 +870,7 @@ describe('AbandonOperationService', () => {
         workspaceId: 'ws_x',
       },
     });
-    const svc = new AbandonOperationService(db, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService(db, abandonDeps(coord as any, store as any));
 
     await svc.finalizeAbandoned('op_x', 'inactivity_watchdog');
 
@@ -522,10 +922,7 @@ describe('AbandonOperationService', () => {
         { stepIndex: 1, stepType: 'call_tool' },
       ],
     });
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_x', 'inactivity_5m');
 
@@ -567,7 +964,9 @@ describe('AbandonOperationService', () => {
         status: 'error',
       }),
       'error',
-      { skipErrorMessageWrite: true },
+      // No operation row was readable here, so nothing was claimed and the
+      // lifecycle decides for itself.
+      { settledAsAbandoned: false, skipErrorMessageWrite: true },
     );
 
     // Coordinator state cleaned
@@ -579,10 +978,10 @@ describe('AbandonOperationService', () => {
       loadAgentState: vi.fn().mockResolvedValue(stateWith()),
     });
 
-    await new AbandonOperationService(buildDb(), {
-      coordinator: coord as any,
-      snapshotStore: buildPartiallessStore() as any,
-    }).finalizeAbandoned('op_x', 'stale_lease_redrive_exhausted', { settledAsAbandoned: true });
+    await new AbandonOperationService(
+      buildDb(),
+      abandonDeps(coord as any, buildPartiallessStore() as any),
+    ).finalizeAbandoned('op_x', 'stale_lease_redrive_exhausted', { settledAsAbandoned: true });
 
     expect(dispatchHooksMock).toHaveBeenCalledWith(
       'op_x',
@@ -600,10 +999,7 @@ describe('AbandonOperationService', () => {
       });
       const store = buildStore();
       store.loadPartial.mockResolvedValue(null);
-      const svc = new AbandonOperationService({} as any, {
-        coordinator: coord as any,
-        snapshotStore: store as any,
-      });
+      const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
       const result = await svc.finalizeAbandoned('op_x', 'inactivity_5m');
 
@@ -620,10 +1016,7 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue(null);
 
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_x', 'inactivity_5m');
 
@@ -641,10 +1034,7 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue({ steps: [], startedAt: 1 });
 
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     await svc.finalizeAbandoned('op_x', 'reason');
 
@@ -662,10 +1052,7 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue({ steps: [{ stepIndex: 0 }], startedAt: 1 });
 
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_x', 'reason');
 
@@ -684,10 +1071,7 @@ describe('AbandonOperationService', () => {
     store.loadPartial.mockResolvedValue({ steps: [{ stepIndex: 0 }], startedAt: 1 });
     messageUpdateMock.mockRejectedValueOnce(new Error('db down'));
 
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     // Should not throw — both failure paths are caught & logged
     const result = await svc.finalizeAbandoned('op_x', 'reason');
@@ -722,10 +1106,7 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue(null);
 
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_child', 'inactivity_watchdog');
 
@@ -775,10 +1156,7 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue(null);
 
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_child', 'inactivity_watchdog');
 
@@ -811,10 +1189,7 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue(null);
 
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_member', 'inactivity_watchdog');
 
@@ -856,10 +1231,10 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue(null);
 
-    await new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    }).finalizeAbandoned('op_visitor', 'inactivity_5m');
+    await new AbandonOperationService(
+      {} as any,
+      abandonDeps(coord as any, store as any),
+    ).finalizeAbandoned('op_visitor', 'inactivity_5m');
 
     expect(MessageModel).toHaveBeenCalledWith(expect.anything(), 'user_owner', 'ws_1', undefined, {
       includeShareVisitor: true,
@@ -883,10 +1258,10 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue(null);
 
-    await new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    }).finalizeAbandoned('op_x', 'inactivity_5m');
+    await new AbandonOperationService(
+      {} as any,
+      abandonDeps(coord as any, store as any),
+    ).finalizeAbandoned('op_x', 'inactivity_5m');
 
     expect(MessageModel).toHaveBeenCalledWith(expect.anything(), 'user_x', undefined, undefined, {
       includeShareVisitor: false,
@@ -926,10 +1301,10 @@ describe('AbandonOperationService', () => {
       status: 'settled',
     });
 
-    await new AbandonOperationService(db, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    }).finalizeAbandoned('op_ns', 'inactivity_watchdog');
+    await new AbandonOperationService(
+      db,
+      abandonDeps(coord as any, store as any),
+    ).finalizeAbandoned('op_ns', 'inactivity_watchdog');
 
     expect(TopicModel).toHaveBeenCalledWith(expect.anything(), 'user_x', 'ws_1', undefined, {
       includeShareVisitor: true,
@@ -949,10 +1324,10 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue({ startedAt: 1, steps: [{ stepIndex: 0 }] });
 
-    await new AbandonOperationService(buildDb(), {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    }).finalizeAbandoned('op_x', 'inactivity_watchdog');
+    await new AbandonOperationService(
+      buildDb(),
+      abandonDeps(coord as any, store as any),
+    ).finalizeAbandoned('op_x', 'inactivity_watchdog');
 
     expect(settleLiveMock).toHaveBeenCalledWith('op_x', 'error');
   });
@@ -965,10 +1340,10 @@ describe('AbandonOperationService', () => {
       loadAgentState: vi.fn().mockResolvedValue(stateWith({ status: 'idle' })),
     });
 
-    await new AbandonOperationService(buildDb(), {
-      coordinator: coord as any,
-      snapshotStore: buildPartiallessStore() as any,
-    }).finalizeAbandoned('op_idle', 'stale_lease');
+    await new AbandonOperationService(
+      buildDb(),
+      abandonDeps(coord as any, buildPartiallessStore() as any),
+    ).finalizeAbandoned('op_idle', 'stale_lease');
 
     expect(dispatchHooksMock).not.toHaveBeenCalled();
     expect(settleLiveMock).toHaveBeenCalledWith('op_idle', 'error');
@@ -987,10 +1362,10 @@ describe('AbandonOperationService', () => {
       ),
     });
 
-    await new AbandonOperationService(buildDb(), {
-      coordinator: coord as any,
-      snapshotStore: buildPartiallessStore() as any,
-    }).finalizeAbandoned('op_parked_child', 'inactivity_watchdog');
+    await new AbandonOperationService(
+      buildDb(),
+      abandonDeps(coord as any, buildPartiallessStore() as any),
+    ).finalizeAbandoned('op_parked_child', 'inactivity_watchdog');
 
     expect(dispatchHooksMock).not.toHaveBeenCalled();
     expect(settleLiveMock).toHaveBeenCalledWith('op_parked_child', 'error');
@@ -1010,10 +1385,10 @@ describe('AbandonOperationService', () => {
       ),
     });
 
-    const result = await new AbandonOperationService(buildDb(), {
-      coordinator: coord as any,
-      snapshotStore: buildPartiallessStore() as any,
-    }).finalizeAbandoned('op_no_placeholder', 'stale_lease');
+    const result = await new AbandonOperationService(
+      buildDb(),
+      abandonDeps(coord as any, buildPartiallessStore() as any),
+    ).finalizeAbandoned('op_no_placeholder', 'stale_lease');
 
     // Anchored to the tail, but written as a NEW assistant row: the tail is
     // either the user's own turn — whose renderer never passes `error` to
@@ -1066,10 +1441,10 @@ describe('AbandonOperationService', () => {
       loadAgentState: vi.fn().mockResolvedValue(stateWith()),
     });
 
-    await new AbandonOperationService(buildDb(), {
-      coordinator: coord as any,
-      snapshotStore: buildPartiallessStore() as any,
-    }).finalizeAbandoned('op_x', 'stale_lease');
+    await new AbandonOperationService(
+      buildDb(),
+      abandonDeps(coord as any, buildPartiallessStore() as any),
+    ).finalizeAbandoned('op_x', 'stale_lease');
 
     expect(latestSpineMessageIdMock).not.toHaveBeenCalled();
     expect(messageCreateMock).not.toHaveBeenCalled();
@@ -1092,10 +1467,10 @@ describe('AbandonOperationService', () => {
       ),
     });
 
-    await new AbandonOperationService(buildDb(), {
-      coordinator: coord as any,
-      snapshotStore: buildPartiallessStore() as any,
-    }).finalizeAbandoned('op_thread', 'stale_lease');
+    await new AbandonOperationService(
+      buildDb(),
+      abandonDeps(coord as any, buildPartiallessStore() as any),
+    ).finalizeAbandoned('op_thread', 'stale_lease');
 
     expect(latestSpineMessageIdMock).toHaveBeenCalledWith({
       threadId: 'thr_x',
@@ -1110,10 +1485,7 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue(null);
 
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_x', 'reason');
 

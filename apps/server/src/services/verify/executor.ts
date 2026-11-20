@@ -30,12 +30,14 @@ import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
 
 import { settledCarriedItemIds } from './carryForward';
-import { runEvidenceGaps } from './evidenceCoverage';
+import { resolveCheckInstruction } from './checkInstruction';
+import { executionGapTypes, runEvidenceGaps, runEvidenceSpecs } from './evidenceCoverage';
 import { planEvidenceVerification } from './evidencePlanner';
 import { GIF_FRAME_SHEET_NOTE, isGifFrameSheet, resolveModelReadableFrameUrl } from './modelFrames';
 import { planItemToPendingResult } from './resultSnapshot';
 import { BatchVerdictSchema, type SingleVerdict, SingleVerdictSchema } from './schema';
 import { VerifyStatusService } from './statusService';
+import { describeThrownError } from './verifierError';
 
 const log = debug('lobe-server:verify-executor');
 
@@ -90,6 +92,7 @@ const toToulmin = (v: SingleVerdict): ToulminVerdict => ({
 export class VerifyExecutorService {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
+  private readonly workspaceId?: string;
   private readonly runModel: VerifyRunModel;
   private readonly resultModel: VerifyCheckResultModel;
   private readonly statusService: VerifyStatusService;
@@ -102,6 +105,7 @@ export class VerifyExecutorService {
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
     this.runModel = new VerifyRunModel(db, userId, workspaceId);
     this.resultModel = new VerifyCheckResultModel(db, userId, workspaceId);
     this.statusService = new VerifyStatusService(db, userId, workspaceId);
@@ -112,16 +116,9 @@ export class VerifyExecutorService {
     this.aiModelModel = new AiModelModel(db, userId, workspaceId);
   }
 
-  /**
-   * Resolve a check item's detailed judging instruction — the criterion's rule
-   * body lives in its linked document (the single source of truth).
-   */
-  private async resolveInstruction(item: VerifyCheckItem): Promise<string | undefined> {
-    if (item.definition || item.resourceSnapshot)
-      return JSON.stringify({ definition: item.definition, resources: item.resourceSnapshot });
-    if (!item.documentId) return undefined;
-    const doc = await this.documentModel.findById(item.documentId);
-    return doc?.content ?? undefined;
+  /** The check item's detailed judging instruction; see {@link resolveCheckInstruction}. */
+  private resolveInstruction(item: VerifyCheckItem): Promise<string | undefined> {
+    return resolveCheckInstruction(this.documentModel, item);
   }
 
   /**
@@ -242,6 +239,7 @@ export class VerifyExecutorService {
         description: row.description,
         documentId: row.documentId,
         fileId: row.fileId,
+        metadata: row.metadata,
         type: row.type,
       });
       byItem.set(row.checkItemId, list);
@@ -296,16 +294,29 @@ export class VerifyExecutorService {
       if (gaps.length === 0) continue;
 
       gapIds.add(item.id);
-      const missing = gaps.join(', ');
+      const executionGaps = executionGapTypes(runEvidenceSpecs(item.verifierConfig), gaps);
+      const fileGaps = gaps.filter((type) => !executionGaps.includes(type));
+      const missing = [
+        ...fileGaps,
+        ...executionGaps.map((type) => `${type} from a real command execution`),
+      ].join(', ');
+      // The repair that acts on this suggestion runs as a new operation with a
+      // round of its own, so the command targets the caller's operation, not
+      // this run: naming this (settled) run sent every repair's evidence one
+      // round behind the round its gate checks.
+      const suggestions = [
+        fileGaps.length > 0 &&
+          `Capture and upload the missing evidence (${fileGaps.join(', ')}) to your current run via \`lh acceptance run result submit --operation "$LOBEHUB_OPERATION_ID" --item ${item.id} --type ${fileGaps.length === 1 ? fileGaps[0] : `<${fileGaps.join('|')}>`} --file <path>${fileGaps.includes('video') ? ' --chapters <file>' : ''}\`.`,
+        // Format alone never covers an execution requirement: an authored
+        // example or a bare log carries no execution provenance.
+        executionGaps.length > 0 &&
+          'Run the command for real and publish it as terminal evidence (captured or imported, not authored).',
+      ].filter(Boolean);
       await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
         completedAt: new Date(),
         confidence: 0,
         status: 'failed',
-        // The repair that acts on this suggestion runs as a new operation with a
-        // round of its own, so the command targets the caller's operation, not
-        // this run: naming this (settled) run sent every repair's evidence one
-        // round behind the round its gate checks.
-        suggestion: `Capture and upload the missing evidence (${missing}) to your current run via \`lh acceptance run result submit --operation "$LOBEHUB_OPERATION_ID" --item ${item.id} --type ${gaps.length === 1 ? gaps[0] : `<${gaps.join('|')}>`} --file <path>\`.`,
+        suggestion: suggestions.join(' '),
         toulmin: { limitation: `Required evidence not provided: ${missing}.` },
         verdict: 'uncertain',
       });
@@ -365,7 +376,7 @@ export class VerifyExecutorService {
       await this.markUnfinishedErrored(
         verifyRunId,
         items,
-        `LLM judge failed: ${error instanceof Error ? error.message : String(error)}`,
+        `LLM judge failed: ${describeThrownError(error)}`,
       );
     }
   }
@@ -466,7 +477,7 @@ export class VerifyExecutorService {
       mode: 'batch',
     });
 
-    const ai = new AiGenerationService(this.db, this.userId);
+    const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
     const raw = await ai.generateObject(
       {
         ...chain,
@@ -544,7 +555,7 @@ export class VerifyExecutorService {
       mode: 'single',
     });
 
-    const ai = new AiGenerationService(this.db, this.userId);
+    const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
     const raw = await ai.generateObject(
       {
         ...chain,

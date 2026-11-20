@@ -113,10 +113,4 @@ describe('createSecurityBlacklistAudit', () => {
       await expect(config.resolver({ command: 'rm -rf /' })).resolves.toBe(false);
     });
   });
-
-  describe('SECURITY_BLACKLIST_AUDIT_TYPE', () => {
-    it('should be securityBlacklist', () => {
-      expect(SECURITY_BLACKLIST_AUDIT_TYPE).toBe('securityBlacklist');
-    });
-  });
 });

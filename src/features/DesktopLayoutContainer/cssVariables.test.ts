@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getDarwinMajorVersion, isMacOSWithLargeWindowBorders } from '@/utils/platform';
 
-import { getInnerCssVariables, getOuterCssVariables } from './cssVariables';
+import { getContainerTopInset, getInnerCssVariables, getOuterCssVariables } from './cssVariables';
 
 vi.mock('@/utils/platform', () => ({
   getDarwinMajorVersion: vi.fn(() => 0),
@@ -24,13 +24,23 @@ describe('getOuterCssVariables', () => {
   });
 });
 
+describe('getContainerTopInset', () => {
+  it('adds the 1px card border to the 8px web top padding', () => {
+    expect(getContainerTopInset(false)).toBe(9);
+  });
+
+  it('is only the card border on desktop, where the container has no top padding', () => {
+    expect(getContainerTopInset(true)).toBe(1);
+  });
+});
+
 describe('getInnerCssVariables', () => {
   it('uses the token radius below darwin 25', () => {
     mockDarwin.mockReturnValue(24);
     const vars = getInnerCssVariables({ isDark: false });
 
-    expect(vars['--container-border-radius']).toBe('var(--ant-border-radius)');
-    expect(vars['--container-border-bottom-right-radius']).toBe('var(--ant-border-radius)');
+    expect(vars['--container-border-radius']).toBe('var(--lobe-border-radius)');
+    expect(vars['--container-border-bottom-right-radius']).toBe('var(--lobe-border-radius)');
   });
 
   it('switches to 12px from darwin 25, and rounds the bottom-right too from darwin 26', () => {
@@ -56,10 +66,10 @@ describe('getInnerCssVariables', () => {
 
   it('softens the border color in dark mode', () => {
     expect(getInnerCssVariables({ isDark: true })['--container-border-color']).toBe(
-      'var(--ant-color-border-secondary)',
+      'var(--lobe-color-border-secondary)',
     );
     expect(getInnerCssVariables({ isDark: false })['--container-border-color']).toBe(
-      'var(--ant-color-border)',
+      'var(--lobe-color-border)',
     );
   });
 });

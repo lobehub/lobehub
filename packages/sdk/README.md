@@ -57,6 +57,42 @@ for await (const chunk of response.body!) {
 
 (First-class typed SSE methods will come with the spec's response schemas.)
 
+### Signing in with OAuth (native apps)
+
+Public clients registered in LobeHub's OIDC provider (`lobehub-mobile`, `toby`, …) sign in with authorization code + PKCE. Open the authorize URL in the system browser session (`ASWebAuthenticationSession`, Custom Tabs), then exchange the callback:
+
+```ts
+import {
+  createAuthorizationUrl,
+  createLobeHub,
+  createPkcePair,
+  exchangeAuthorizationCode,
+  parseAuthorizationCallback,
+  refreshAccessToken,
+} from '@lobehub/sdk';
+
+const client = { clientId: 'toby', redirectUri: 'https://app.lobehub.com/oidc/callback/toby' };
+const pkce = await createPkcePair(); // or create it natively where crypto.subtle is missing
+const url = createAuthorizationUrl({ ...client, codeChallenge: pkce.challenge, state });
+
+const code = parseAuthorizationCallback(callbackUrl, state);
+let tokens = await exchangeAuthorizationCode({ ...client, code, codeVerifier: pkce.verifier });
+
+const lobehub = createLobeHub({
+  accessToken: async () => {
+    if (tokens.expiresAt - Date.now() < 60_000) {
+      tokens = await refreshAccessToken({
+        clientId: client.clientId,
+        refreshToken: tokens.refreshToken!,
+      });
+    }
+    return tokens.accessToken;
+  },
+});
+```
+
+Refresh tokens rotate, so persist the one returned by every refresh. A `LobeHubOAuthError` with `code: 'invalid_grant'` means the user has to sign in again.
+
 ## Development
 
 - `bun generate` — regenerate `src/generated/` from `../openapi/openapi.yml` (run after the spec changes; naming rules live in `openapi-ts.config.ts`)

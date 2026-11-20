@@ -49,7 +49,7 @@ export const generationTopicRouter = router({
       z
         .object({
           title: z.string().trim().min(1).max(100).optional(),
-          type: z.enum(['image', 'video']).optional(),
+          type: z.enum(['image', 'music', 'video']).optional(),
           visibility: z.enum(['private', 'public']).optional(),
         })
         .optional(),
@@ -97,7 +97,7 @@ export const generationTopicRouter = router({
       return deletedTopic;
     }),
   getAllGenerationTopics: generationTopicProcedure
-    .input(z.object({ type: z.enum(['image', 'video']).optional() }).optional())
+    .input(z.object({ type: z.enum(['image', 'music', 'video']).optional() }).optional())
     .query(async ({ ctx, input }) => {
       return ctx.generationTopicModel.queryAll(input?.type);
     }),

@@ -1,17 +1,26 @@
 'use client';
 
-import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Button, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, responsive, useResponsive } from 'antd-style';
+import {
+  Avatar,
+  Button,
+  confirmModal,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Text,
+  useResponsive,
+} from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { media } from '@lobehub/ui/stylex/media.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckCircle2, CheckIcon, ChevronDown, Trash2 } from 'lucide-react';
-import { memo, type ReactNode, useCallback, useState } from 'react';
+import { memo, type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PublishedTime from '@/components/PublishedTime';
 import Rate from '@/components/RatingOverview/Rate';
 import { usePermission } from '@/hooks/usePermission';
 import { useSkillCategoryItem } from '@/hooks/useSkillCategory';
-import { agentSkillService } from '@/services/skill';
 import { useDiscoverStore } from '@/store/discover';
 import { skillSelectors } from '@/store/discover/selectors';
 import { useToolStore } from '@/store/tool';
@@ -20,86 +29,71 @@ import { formatShortenNumber } from '@/utils/format';
 
 import { FIRST_COMMENTS_PAGE_QUERY } from './const';
 import { useDetailContext } from './DetailProvider';
+import { useMarketSkillInstall } from './useMarketSkillInstall';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  author: css`
-    font-weight: 500;
-    color: ${cssVar.colorInfo};
-  `,
-  metaDivider: css`
-    flex: none;
+const styles = stylex.create({
+  author: { fontWeight: 500, color: cssVar.colorInfo },
+  metaDivider: {
+    flex: 'none',
+    width: '1px',
+    height: '12px',
+    marginInline: '3px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  ratingValue: {
+    fontSize: '26px',
+    fontWeight: 700,
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1,
+    color: cssVar.colorText,
+  },
+  statBlock: {
+    transition: 'background 0.2s ease',
+    backgroundColor: {
+      'default': null,
+      ':hover': `color-mix(in srgb, ${cssVar.colorFillQuaternary} 74%, transparent)`,
+    },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  statCaption: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '14px',
+    fontSize: '11px',
+    fontWeight: 500,
+    lineHeight: 1.1,
+    color: cssVar.colorTextDescription,
+  },
+  statLabel: { fontSize: '11px', fontWeight: 600, color: cssVar.colorTextDescription },
+  statValue: {
+    fontSize: '24px',
+    fontWeight: 700,
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1,
+    color: cssVar.colorText,
+  },
+  statsBar: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: `color-mix(in srgb, ${cssVar.colorBorderSecondary} 88%, transparent)`,
+    borderRadius: '16px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  statsGrid: {
+    display: 'grid',
+    gridTemplateColumns: {
+      default: 'repeat(3, minmax(0, 1fr))',
+      [media.sm]: 'repeat(2, minmax(0, 1fr))',
+    },
+  },
+  time: { fontSize: '12px', color: cssVar.colorTextDescription },
+});
 
-    width: 1px;
-    height: 12px;
-    margin-inline: 3px;
-
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  ratingCount: css`
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 1.1;
-    color: ${cssVar.colorTextDescription};
-  `,
-  ratingValue: css`
-    font-size: 26px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-    color: ${cssVar.colorText};
-  `,
-  statBlock: css`
-    transition: background 0.2s ease;
-
-    &:hover {
-      background: color-mix(in srgb, ${cssVar.colorFillQuaternary} 74%, transparent);
-    }
-  `,
-  statCaption: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    min-height: 14px;
-
-    font-size: 11px;
-    font-weight: 500;
-    line-height: 1.1;
-    color: ${cssVar.colorTextDescription};
-  `,
-  statLabel: css`
-    font-size: 11px;
-    font-weight: 600;
-    color: ${cssVar.colorTextDescription};
-  `,
-  statValue: css`
-    font-size: 24px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-    color: ${cssVar.colorText};
-  `,
-  statsBar: css`
-    overflow: hidden;
-    border: 1px solid color-mix(in srgb, ${cssVar.colorBorderSecondary} 88%, transparent);
-    border-radius: 16px;
-    background: ${cssVar.colorBgContainer};
-  `,
-  statsGrid: css`
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-
-    ${responsive.sm} {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  `,
-  time: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-  `,
-}));
-
-const MetaDivider = () => <span aria-hidden className={styles.metaDivider} />;
+const MetaDivider = () => <span aria-hidden {...stylex.props(styles.metaDivider)} />;
 
 const StatBlock = memo<{
   bordered?: boolean;
@@ -110,7 +104,7 @@ const StatBlock = memo<{
   return (
     <Flexbox
       align={'center'}
-      className={styles.statBlock}
+      className={stylex.props(styles.statBlock).className}
       flex={1}
       gap={5}
       justify={'center'}
@@ -121,9 +115,9 @@ const StatBlock = memo<{
         textAlign: 'center',
       }}
     >
-      <div className={styles.statLabel}>{label}</div>
-      <div className={styles.statValue}>{value}</div>
-      <div aria-hidden={!caption} className={styles.statCaption}>
+      <div {...stylex.props(styles.statLabel)}>{label}</div>
+      <div {...stylex.props(styles.statValue)}>{value}</div>
+      <div aria-hidden={!caption} {...stylex.props(styles.statCaption)}>
         {caption}
       </div>
     </Flexbox>
@@ -134,8 +128,6 @@ const InstallButton = memo<{ identifier?: string; name?: string }>(({ identifier
   const { t } = useTranslation('plugin');
   const { t: tc } = useTranslation('common');
   const { t: td } = useTranslation('discover');
-  const [installing, setInstalling] = useState(false);
-  const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
 
   // Ensure agent skills are fetched so the install state is real on a direct
@@ -143,28 +135,16 @@ const InstallButton = memo<{ identifier?: string; name?: string }>(({ identifier
   const useFetchAgentSkills = useToolStore((s) => s.useFetchAgentSkills);
   useFetchAgentSkills(true);
 
-  const installed = useToolStore(agentSkillsSelectors.isAgentSkill(identifier || ''));
+  const {
+    canCreate,
+    install: handleInstall,
+    installed,
+    installing,
+  } = useMarketSkillInstall(identifier, name);
   const installedSkill = useToolStore(
     agentSkillsSelectors.getAgentSkillByIdentifier(identifier || ''),
   );
-  const [refreshAgentSkills, deleteAgentSkill] = useToolStore((s) => [
-    s.refreshAgentSkills,
-    s.deleteAgentSkill,
-  ]);
-
-  const handleInstall = useCallback(async () => {
-    if (!identifier || !canCreate || installing || installed) return;
-    setInstalling(true);
-    try {
-      await agentSkillService.importFromMarket(identifier);
-      await refreshAgentSkills();
-    } catch {
-      // The button falls back to Install (clicking again retries) — say why
-      toast.error(t('error.installError', { name: name || identifier }));
-    } finally {
-      setInstalling(false);
-    }
-  }, [canCreate, identifier, installing, installed, name, refreshAgentSkills, t]);
+  const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
 
   const handleUninstall = useCallback(() => {
     if (!canEdit || !installedSkill) return;
@@ -258,7 +238,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               })
             : t('skills.details.header.stats.rating'),
           statKey: 'rating',
-          value: <div className={styles.ratingValue}>{displayRatingAverage.toFixed(1)}</div>,
+          value: <div {...stylex.props(styles.ratingValue)}>{displayRatingAverage.toFixed(1)}</div>,
         }
       : undefined,
     github?.stars
@@ -333,7 +313,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
           >
             {author?.url ? (
               <a
-                className={styles.author}
+                {...stylex.props(styles.author)}
                 href={author.url}
                 rel={'noopener noreferrer'}
                 target={'_blank'}
@@ -341,7 +321,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
                 {author.name}
               </a>
             ) : (
-              <span className={styles.author}>{author?.name}</span>
+              <span {...stylex.props(styles.author)}>{author?.name}</span>
             )}
             {isValidated && (
               <Icon
@@ -363,9 +343,9 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               <>
                 <MetaDivider />
                 <PublishedTime
-                  className={styles.time}
                   date={(updatedAt || createdAt) as string}
                   template={'MMM DD, YYYY'}
+                  xstyle={styles.time}
                 />
               </>
             )}
@@ -374,9 +354,9 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
         <InstallButton identifier={identifier} name={name} />
       </Flexbox>
       {stats.length > 0 && (
-        <div className={styles.statsBar} style={{ width: '100%' }}>
+        <div className={stylex.props(styles.statsBar).className} style={{ width: '100%' }}>
           <div
-            className={styles.statsGrid}
+            className={stylex.props(styles.statsGrid).className}
             style={{
               gridTemplateColumns: mobile ? undefined : `repeat(${stats.length}, minmax(0, 1fr))`,
             }}

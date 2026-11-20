@@ -1,13 +1,13 @@
-import { DEFAULT_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Block, Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Target } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
+import { openGateReportModal } from '@/features/Acceptance/Viewer/Gate';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import BriefCardActions from '@/features/DailyBrief/BriefCardActions';
 import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
@@ -20,6 +20,7 @@ import { useSelfReviewBriefView } from '@/features/DailyBrief/useSelfReviewBrief
 import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useDensity } from '@/styles/density';
 
 import StatusGlyph from './StatusGlyph';
 
@@ -51,6 +52,7 @@ interface InboxBriefCardProps {
  */
 const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
   const { t } = useTranslation('common');
+  const { compact } = useDensity();
   const navigate = useWorkspaceAwareNavigate();
 
   const agent = brief.agent;
@@ -82,7 +84,13 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
 
   const openTask = () => {
     if (!brief.taskId) return;
-    navigate(taskDetailPath(brief.taskId, brief.agentId ?? undefined, brief.taskName));
+    navigate(
+      taskDetailPath(
+        brief.taskIdentifier ?? brief.taskId,
+        brief.agentId ?? undefined,
+        brief.taskName,
+      ),
+    );
   };
 
   const content = (
@@ -129,11 +137,12 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
 
       <Flexbox horizontal align={'flex-start'} gap={10}>
         {agent && (
-          <Avatar
-            avatar={agent.avatar || (isInbox ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR)}
+          <AgentAvatar
+            agentId={agent.id}
+            avatar={isInbox ? agent.avatar || DEFAULT_INBOX_AVATAR : agent.avatar}
             background={agent.backgroundColor || cssVar.colorBgContainer}
             shape={'circle'}
-            size={28}
+            size={compact ? 24 : 28}
             style={{ flex: 'none' }}
             title={agentName}
           />
@@ -157,7 +166,10 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
           ) : (
             <BriefCardSummary summary={brief.summary} />
           )}
-          <BriefCardArtifacts artifacts={brief.artifacts} />
+          <BriefCardArtifacts
+            agentId={brief.agentId ?? brief.agent?.id}
+            artifacts={brief.artifacts}
+          />
         </Flexbox>
       </Flexbox>
 
@@ -170,9 +182,21 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
         recommendedActionKey={goal?.recommendedAction}
         resolvedAction={brief.resolvedAction}
         taskId={brief.taskId}
+        taskIdentifier={brief.taskIdentifier}
         taskStatus={brief.taskStatus}
         topicId={brief.topicId}
         topicTitle={brief.taskName}
+        trailingAction={
+          // A held batch release is decided in its report, opened right here.
+          goal?.reviewAcceptanceId && (
+            <Button
+              type={'primary'}
+              onClick={() => openGateReportModal({ acceptanceId: goal.reviewAcceptanceId! })}
+            >
+              {t('goalProcess.gate.openReview', { ns: 'chat' })}
+            </Button>
+          )
+        }
       />
     </>
   );

@@ -1,7 +1,7 @@
 'use client';
 
 import { DOWNLOAD_URL, isDesktop } from '@lobechat/const';
-import { Button, Tag, Text } from '@lobehub/ui/base-ui';
+import { Button, Tag, Text } from '@lobehub/ui';
 import { ArrowUpRight, Check, Copy } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

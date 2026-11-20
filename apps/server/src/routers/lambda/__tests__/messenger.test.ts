@@ -1,4 +1,5 @@
 // @vitest-environment node
+import type * as BusinessConst from '@lobechat/business-const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getMessengerTelegramConfig } from '@/config/messenger';
@@ -27,7 +28,7 @@ const {
   mockGetBuiltinAgent,
   mockGetAgentRuntimeRedisClient,
   mockGetServerDB,
-  mockGetServerFeatureFlagsStateFromRuntimeConfig,
+  mockBusinessConst,
   mockHasAnyPermission,
   mockInitWithEnvKey,
   mockInvalidateMessengerBot,
@@ -65,7 +66,7 @@ const {
   mockGetBuiltinAgent: vi.fn(),
   mockGetAgentRuntimeRedisClient: vi.fn(),
   mockGetServerDB: vi.fn(),
-  mockGetServerFeatureFlagsStateFromRuntimeConfig: vi.fn(),
+  mockBusinessConst: { ENABLE_BUSINESS_FEATURES: true },
   mockHasAnyPermission: vi.fn(),
   mockInitWithEnvKey: vi.fn(),
   mockInvalidateMessengerBot: vi.fn(),
@@ -163,9 +164,16 @@ vi.mock('@/server/modules/AgentRuntime/redis', () => ({
   getAgentRuntimeRedisClient: mockGetAgentRuntimeRedisClient,
 }));
 
-vi.mock('@/server/featureFlags', () => ({
-  getServerFeatureFlagsStateFromRuntimeConfig: mockGetServerFeatureFlagsStateFromRuntimeConfig,
-}));
+vi.mock('@lobechat/business-const', async (importOriginal) => {
+  const actual = await importOriginal<typeof BusinessConst>();
+  return {
+    ...actual,
+    // A getter so per-test mutation is observed by the already-imported router.
+    get ENABLE_BUSINESS_FEATURES() {
+      return mockBusinessConst.ENABLE_BUSINESS_FEATURES;
+    },
+  };
+});
 
 vi.mock('@/server/services/messenger', () => ({
   acquireWechatQrFinalizeLock: mockAcquireWechatQrFinalizeLock,
@@ -287,6 +295,10 @@ const createAgentListBuilder = <T>(result: T) => {
 
   return builder;
 };
+
+beforeEach(() => {
+  mockBusinessConst.ENABLE_BUSINESS_FEATURES = true;
+});
 
 describe('messengerRouter.listMyInstallations', () => {
   const serverDB = { kind: 'server-db' };
@@ -694,7 +706,7 @@ describe('messengerRouter.peekLinkToken', () => {
 describe('messengerRouter.confirmLink', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetServerFeatureFlagsStateFromRuntimeConfig.mockResolvedValue({ enableWorkspace: true });
+    mockBusinessConst.ENABLE_BUSINESS_FEATURES = true;
     mockInitWithEnvKey.mockResolvedValue(undefined);
   });
 
@@ -864,7 +876,7 @@ describe('messengerRouter.confirmLink', () => {
     };
 
     mockGetServerDB.mockResolvedValue(serverDB);
-    mockGetServerFeatureFlagsStateFromRuntimeConfig.mockResolvedValue({ enableWorkspace: false });
+    mockBusinessConst.ENABLE_BUSINESS_FEATURES = false;
     mockPeekLinkToken.mockResolvedValue(linkPayload);
     mockFindByPlatformUser.mockResolvedValue(undefined);
     mockFindByPlatform.mockResolvedValue(undefined);
@@ -877,7 +889,7 @@ describe('messengerRouter.confirmLink', () => {
       caller.confirmLink({ initialAgentId: 'agent-1', randomId: 'rand-1234' }),
     ).rejects.toMatchObject({
       code: 'FORBIDDEN',
-      message: 'Workspace feature is not enabled for this user',
+      message: 'Workspace feature is not enabled on this deployment',
     });
 
     expect(mockConsumeLinkToken).not.toHaveBeenCalled();
@@ -892,7 +904,7 @@ describe('messengerRouter.listBindingScopes', () => {
   });
 
   it('returns no workspace scopes when workspace feature is disabled', async () => {
-    mockGetServerFeatureFlagsStateFromRuntimeConfig.mockResolvedValue({ enableWorkspace: false });
+    mockBusinessConst.ENABLE_BUSINESS_FEATURES = false;
     mockListUserWorkspaces.mockResolvedValue([{ id: 'workspace-1', name: 'Workspace 1' }]);
 
     const caller = createCaller(await createContextInner({ userId: 'user-1' }));
@@ -918,7 +930,7 @@ describe('messengerRouter.listAgentsForBinding', () => {
     };
 
     mockGetServerDB.mockResolvedValue(serverDB);
-    mockGetServerFeatureFlagsStateFromRuntimeConfig.mockResolvedValue({ enableWorkspace: false });
+    mockBusinessConst.ENABLE_BUSINESS_FEATURES = false;
     mockListUserWorkspaces.mockResolvedValue([{ id: 'workspace-1', name: 'Workspace 1' }]);
 
     const caller = createCaller(await createContextInner({ userId: 'user-1' }));
@@ -926,7 +938,7 @@ describe('messengerRouter.listAgentsForBinding', () => {
     await expect(caller.listAgentsForBinding({ workspaceId: 'workspace-1' })).rejects.toMatchObject(
       {
         code: 'FORBIDDEN',
-        message: 'Workspace feature is not enabled for this user',
+        message: 'Workspace feature is not enabled on this deployment',
       },
     );
 

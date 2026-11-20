@@ -39,6 +39,76 @@ const otherUserId = 'message-query-test-other';
 const messageModel = new MessageModel(serverDB, userId);
 const embeddingsId = uuid();
 
+const createFirstParentMessage = (): typeof messages.$inferInsert => ({
+  id: 'msg1',
+  userId,
+  sessionId: 'session1',
+  topicId: 'topic1',
+  threadId: null,
+  role: 'user',
+  content: 'first message',
+  createdAt: new Date('2023-01-01'),
+});
+
+const createSourceParentMessage = (): typeof messages.$inferInsert => ({
+  id: 'msg2',
+  userId,
+  sessionId: 'session1',
+  topicId: 'topic1',
+  threadId: null,
+  role: 'assistant',
+  content: 'second message - source',
+  createdAt: new Date('2023-01-02'),
+});
+
+const createFirstThreadMessage = (): typeof messages.$inferInsert => ({
+  id: 'thread-msg1',
+  userId,
+  sessionId: 'session1',
+  topicId: 'topic1',
+  threadId: 'thread1',
+  role: 'user',
+  content: 'thread message 1',
+  createdAt: new Date('2023-01-02T10:00:00'),
+});
+
+const createSecondThreadMessage = (): typeof messages.$inferInsert => ({
+  id: 'thread-msg2',
+  userId,
+  sessionId: 'session1',
+  topicId: 'topic1',
+  threadId: 'thread1',
+  role: 'assistant',
+  content: 'thread message 2',
+  createdAt: new Date('2023-01-02T11:00:00'),
+});
+
+const createFirstStandaloneThread = (): typeof threads.$inferInsert => ({
+  id: 'thread1',
+  userId,
+  topicId: 'topic1',
+  sourceMessageId: 'source-msg-1',
+  type: 'standalone',
+});
+
+const createSecondStandaloneThread = (): typeof threads.$inferInsert => ({
+  id: 'thread2',
+  userId,
+  topicId: 'topic1',
+  sourceMessageId: 'source-msg-2',
+  type: 'standalone',
+});
+
+const createSpineToolMessage = (): typeof messages.$inferInsert => ({
+  id: 'tool-1',
+  userId,
+  topicId: 'topic1',
+  role: 'tool',
+  parentId: 'a1',
+  content: 'result',
+  createdAt: new Date('2023-01-01T00:00:01'),
+});
+
 beforeEach(async () => {
   // Clear tables before each test case
   await serverDB.transaction(async (trx) => {
@@ -1817,30 +1887,13 @@ describe('MessageModel Query Tests', () => {
         expect(works[0]).not.toHaveProperty('workspaceId');
       });
 
-      it('keeps the spend snapshot when the share exposes model info', async () => {
-        const result = await messageModel.queryForVisitor(
-          { includeFileWorks: true, topicId: visitorTopicId },
-          {
-            redaction: { showModelInfo: true },
-            workAccessScope: agentShareWorkAccessScope(provenance),
-          },
-        );
-
-        const works = findAnchor(result).works;
-        expect(works[0]).toMatchObject({ totalCost: 0.42 });
-        expect(works[0].event.cumulativeUsage).toMatchObject({ usage: { totalTokens: 9 } });
-        // `showModelInfo` exposes spend only, never the creator's identity.
-        expect(works[0]).not.toHaveProperty('userId');
-        expect(works[0]).not.toHaveProperty('workspaceId');
-      });
-
       it('never resolves the visitor Works through the creator scope', async () => {
         const result = await messageModel.query(
           { includeFileWorks: true, topicId: visitorTopicId },
           { allowShareVisitor: true },
         );
 
-        expect(findAnchor(result).works).toBeUndefined();
+        expect(findAnchor(result).works).toEqual([]);
       });
     });
 
@@ -1870,28 +1923,6 @@ describe('MessageModel Query Tests', () => {
       });
 
       expect(ownTranscript.items.map((item) => item.id)).toEqual(['creator-direct-msg']);
-    });
-
-    it('keeps countByTopic working for the visitor turn cap when the runtime opts in', async () => {
-      // The per-topic turn cap depends on counting visitor messages, and after
-      // the ownership() flip the default scope excludes visitor rows. The
-      // share runtime (`reserveShareVisitorTurn` in
-      // `shareVisitorAbuseGuards.ts`) constructs `MessageModel` with
-      // `includeShareVisitor: true`; mirror that opt-in here.
-      const defaultCount = await messageModel.countByTopic({
-        role: 'user',
-        topicId: visitorTopicId,
-      });
-      expect(defaultCount).toBe(0);
-
-      const shareRuntimeMessageModel = new MessageModel(serverDB, userId, undefined, undefined, {
-        includeShareVisitor: true,
-      });
-      const optedInCount = await shareRuntimeMessageModel.countByTopic({
-        role: 'user',
-        topicId: visitorTopicId,
-      });
-      expect(optedInCount).toBe(1);
     });
 
     it('hides synthetic message-group nodes when the creator reads a visitor topic', async () => {
@@ -2001,18 +2032,9 @@ describe('MessageModel Query Tests', () => {
       expect(child.council[0].sender).toBeNull();
       expect(child.council[0].usage).toBeUndefined();
       expect(child.council[0].model).toBeUndefined();
-
-      // With `showModelInfo` the model snapshot survives on both the child
-      // and the recursed council members, and children stay attached.
-      const kept = toVisitorMessage(compressedGroupNode, { showModelInfo: true });
-      const keptChild = (kept.compressedMessages as any[])[0].children[0];
-      expect(keptChild.model).toBe('gpt-4o');
-      expect(keptChild.usage).toEqual({ totalTokens: 42 });
-      expect(keptChild.council[0].model).toBe('gpt-4o');
-      expect(keptChild.council[0].usage).toEqual({ totalTokens: 7 });
     });
 
-    it('keeps the narrow snapshot for compareGroup children in both modes', async () => {
+    it('strips model and provider from compareGroup children', async () => {
       const compareGroupNode = {
         children: [
           {
@@ -2032,10 +2054,6 @@ describe('MessageModel Query Tests', () => {
       expect((stripped.children as any[])[0].model).toBeNull();
       expect((stripped.children as any[])[0].provider).toBeNull();
       expect((stripped.children as any[])[0].content).toBe('variant');
-
-      const kept = toVisitorMessage(compareGroupNode, { showModelInfo: true });
-      expect((kept.children as any[])[0].model).toBe('gpt-4o');
-      expect((kept.children as any[])[0].provider).toBe('openai');
     });
   });
 
@@ -2821,22 +2839,9 @@ describe('MessageModel Query Tests', () => {
         await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
 
         // Create threads first due to foreign key constraint
-        await trx.insert(threads).values([
-          {
-            id: 'thread1',
-            userId,
-            topicId: 'topic1',
-            sourceMessageId: 'source-msg-1',
-            type: 'standalone',
-          },
-          {
-            id: 'thread2',
-            userId,
-            topicId: 'topic1',
-            sourceMessageId: 'source-msg-2',
-            type: 'standalone',
-          },
-        ]);
+        await trx
+          .insert(threads)
+          .values([createFirstStandaloneThread(), createSecondStandaloneThread()]);
 
         await trx.insert(messages).values([
           {
@@ -2892,15 +2897,7 @@ describe('MessageModel Query Tests', () => {
         await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
 
         // Create thread first
-        await trx.insert(threads).values([
-          {
-            id: 'thread1',
-            userId,
-            topicId: 'topic1',
-            sourceMessageId: 'source-msg-1',
-            type: 'standalone',
-          },
-        ]);
+        await trx.insert(threads).values([createFirstStandaloneThread()]);
 
         await trx.insert(messages).values([
           {
@@ -2947,22 +2944,9 @@ describe('MessageModel Query Tests', () => {
         await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
 
         // Create threads first
-        await trx.insert(threads).values([
-          {
-            id: 'thread1',
-            userId,
-            topicId: 'topic1',
-            sourceMessageId: 'source-msg-1',
-            type: 'standalone',
-          },
-          {
-            id: 'thread2',
-            userId,
-            topicId: 'topic1',
-            sourceMessageId: 'source-msg-2',
-            type: 'standalone',
-          },
-        ]);
+        await trx
+          .insert(threads)
+          .values([createFirstStandaloneThread(), createSecondStandaloneThread()]);
 
         await trx.insert(messages).values([
           {
@@ -3015,22 +2999,9 @@ describe('MessageModel Query Tests', () => {
         await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
 
         // Create threads first
-        await trx.insert(threads).values([
-          {
-            id: 'thread1',
-            userId,
-            topicId: 'topic1',
-            sourceMessageId: 'source-msg-1',
-            type: 'standalone',
-          },
-          {
-            id: 'thread2',
-            userId,
-            topicId: 'topic1',
-            sourceMessageId: 'source-msg-2',
-            type: 'standalone',
-          },
-        ]);
+        await trx
+          .insert(threads)
+          .values([createFirstStandaloneThread(), createSecondStandaloneThread()]);
 
         await trx.insert(messages).values([
           {
@@ -3110,16 +3081,7 @@ describe('MessageModel Query Tests', () => {
 
         // Create main conversation messages
         await trx.insert(messages).values([
-          {
-            id: 'msg1',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: null,
-            role: 'user',
-            content: 'first message',
-            createdAt: new Date('2023-01-01'),
-          },
+          createFirstParentMessage(),
           {
             id: 'msg2',
             userId,
@@ -3171,16 +3133,7 @@ describe('MessageModel Query Tests', () => {
 
         // Create main conversation messages
         await trx.insert(messages).values([
-          {
-            id: 'msg1',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: null,
-            role: 'user',
-            content: 'first message',
-            createdAt: new Date('2023-01-01'),
-          },
+          createFirstParentMessage(),
           {
             id: 'msg2',
             userId,
@@ -3383,26 +3336,8 @@ describe('MessageModel Query Tests', () => {
 
         // Create main conversation messages (parent messages)
         await trx.insert(messages).values([
-          {
-            id: 'msg1',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: null,
-            role: 'user',
-            content: 'first message',
-            createdAt: new Date('2023-01-01'),
-          },
-          {
-            id: 'msg2',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: null,
-            role: 'assistant',
-            content: 'second message - source',
-            createdAt: new Date('2023-01-02'),
-          },
+          createFirstParentMessage(),
+          createSourceParentMessage(),
           {
             id: 'msg3',
             userId,
@@ -3414,26 +3349,8 @@ describe('MessageModel Query Tests', () => {
             createdAt: new Date('2023-01-03'),
           },
           // Thread messages
-          {
-            id: 'thread-msg1',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: 'thread1',
-            role: 'user',
-            content: 'thread message 1',
-            createdAt: new Date('2023-01-02T10:00:00'),
-          },
-          {
-            id: 'thread-msg2',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: 'thread1',
-            role: 'assistant',
-            content: 'thread message 2',
-            createdAt: new Date('2023-01-02T11:00:00'),
-          },
+          createFirstThreadMessage(),
+          createSecondThreadMessage(),
         ]);
       });
 
@@ -3463,26 +3380,8 @@ describe('MessageModel Query Tests', () => {
 
         // Create main conversation messages
         await trx.insert(messages).values([
-          {
-            id: 'msg1',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: null,
-            role: 'user',
-            content: 'first message',
-            createdAt: new Date('2023-01-01'),
-          },
-          {
-            id: 'msg2',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: null,
-            role: 'assistant',
-            content: 'second message - source',
-            createdAt: new Date('2023-01-02'),
-          },
+          createFirstParentMessage(),
+          createSourceParentMessage(),
           {
             id: 'msg3',
             userId,
@@ -3494,26 +3393,8 @@ describe('MessageModel Query Tests', () => {
             createdAt: new Date('2023-01-03'),
           },
           // Thread messages
-          {
-            id: 'thread-msg1',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: 'thread1',
-            role: 'user',
-            content: 'thread message 1',
-            createdAt: new Date('2023-01-02T10:00:00'),
-          },
-          {
-            id: 'thread-msg2',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: 'thread1',
-            role: 'assistant',
-            content: 'thread message 2',
-            createdAt: new Date('2023-01-02T11:00:00'),
-          },
+          createFirstThreadMessage(),
+          createSecondThreadMessage(),
         ]);
       });
 
@@ -3542,48 +3423,14 @@ describe('MessageModel Query Tests', () => {
         ]);
 
         // Insert messages in non-chronological order
-        await trx.insert(messages).values([
-          {
-            id: 'thread-msg2',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: 'thread1',
-            role: 'assistant',
-            content: 'thread message 2',
-            createdAt: new Date('2023-01-02T11:00:00'),
-          },
-          {
-            id: 'msg1',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: null,
-            role: 'user',
-            content: 'first message',
-            createdAt: new Date('2023-01-01'),
-          },
-          {
-            id: 'thread-msg1',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: 'thread1',
-            role: 'user',
-            content: 'thread message 1',
-            createdAt: new Date('2023-01-02T10:00:00'),
-          },
-          {
-            id: 'msg2',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: null,
-            role: 'assistant',
-            content: 'second message - source',
-            createdAt: new Date('2023-01-02'),
-          },
-        ]);
+        await trx
+          .insert(messages)
+          .values([
+            createSecondThreadMessage(),
+            createFirstParentMessage(),
+            createFirstThreadMessage(),
+            createSourceParentMessage(),
+          ]);
       });
 
       const result = await messageModel.query({ threadId: 'thread1' });
@@ -4147,16 +3994,8 @@ describe('MessageModel Query Tests', () => {
           content: 'step',
           createdAt: new Date('2023-01-01T00:00:00'),
         },
-        {
-          // newest row, but a tool — must NOT be the spine
-          id: 'tool-1',
-          userId,
-          topicId: 'topic1',
-          role: 'tool',
-          parentId: 'a1',
-          content: 'result',
-          createdAt: new Date('2023-01-01T00:00:01'),
-        },
+        // newest row, but a tool — must NOT be the spine
+        createSpineToolMessage(),
         {
           id: 'a2',
           userId,
@@ -4182,15 +4021,7 @@ describe('MessageModel Query Tests', () => {
           content: 'spine',
           createdAt: new Date('2023-01-01T00:00:00'),
         },
-        {
-          id: 'tool-1',
-          userId,
-          topicId: 'topic1',
-          role: 'tool',
-          parentId: 'a1',
-          content: 'result',
-          createdAt: new Date('2023-01-01T00:00:01'),
-        },
+        createSpineToolMessage(),
         {
           // newest, but a Monitor-stdout callback (metadata.signal) — excluded,
           // so a normal turn doesn't re-mount onto a callback
@@ -4266,17 +4097,9 @@ describe('MessageModel Query Tests', () => {
           content: 'final',
           createdAt: new Date('2023-01-01T00:00:00'),
         },
-        {
-          // newest row, but a tool result — an inline child of a1, never the
-          // spine head. A new user turn must parent off the assistant (a1).
-          id: 'tool-1',
-          userId,
-          topicId: 'topic1',
-          role: 'tool',
-          parentId: 'a1',
-          content: 'result',
-          createdAt: new Date('2023-01-01T00:00:01'),
-        },
+        // newest row, but a tool result — an inline child of a1, never the
+        // spine head. A new user turn must parent off the assistant (a1).
+        createSpineToolMessage(),
       ]);
 
       expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('a1');

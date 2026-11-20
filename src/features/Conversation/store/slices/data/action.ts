@@ -4,6 +4,8 @@ import debug from 'debug';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { useChatStore } from '@/store/chat';
+import { messageStateSelectors } from '@/store/chat/slices/message/selectors/messageState';
+import { type ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { type Store as ConversationStore } from '../../action';
@@ -16,6 +18,28 @@ import { stabilizeReferences } from './stabilizeReferences';
 
 const log = debug('lobe-render:features:Conversation');
 
+type PageSide = 'earlier' | 'later';
+
+const PAGE_SIDES = {
+  earlier: {
+    error: 'earlierMessagesError',
+    load: (...args) => useChatStore.getState().loadEarlierMessages(...args),
+    loading: 'isLoadingEarlierMessages',
+  },
+  later: {
+    error: 'laterMessagesError',
+    load: (...args) => useChatStore.getState().loadLaterMessages(...args),
+    loading: 'isLoadingLaterMessages',
+  },
+} satisfies Record<
+  PageSide,
+  {
+    error: keyof State;
+    load: ChatStore['loadEarlierMessages'];
+    loading: keyof State;
+  }
+>;
+
 /**
  * The conversation's rows as the chat store holds them: `dbMessages` is the
  * bucket itself, `displayMessages` its parsed list pinned to the previous
@@ -25,7 +49,7 @@ export const chatTranscriptState = (
   context: ConversationContext,
   skipFetch: boolean | undefined,
   previousDisplayMessages: UIChatMessage[],
-): Pick<State, 'dbMessages' | 'displayMessages' | 'messagesInit'> => {
+): Pick<State, 'dbMessages' | 'displayMessages' | 'hasLaterMessages' | 'messagesInit'> => {
   const chat = useChatStore.getState();
   const bucket = messageMapKey(context);
   const rows = chat.dbMessagesMap[bucket];
@@ -36,6 +60,7 @@ export const chatTranscriptState = (
   return {
     dbMessages: rows ?? [],
     displayMessages: stabilizeReferences(previousDisplayMessages, parsed ?? []),
+    hasLaterMessages: messageStateSelectors.hasLaterMessages(context)(chat),
     // An absent bucket is "not loaded yet"; `[]` is a loaded, empty transcript.
     // A conversation that never syncs has nothing to wait for.
     messagesInit: !!rows || !!skipFetch,
@@ -56,7 +81,10 @@ export interface DataAction {
    * Dispatch message updates for optimistic UI updates
    * This method updates the frontend state without persisting to database
    */
-  internal_dispatchMessage: (payload: MessageDispatch) => void;
+  internal_dispatchMessage: (
+    payload: MessageDispatch,
+    options?: { creationOrigin?: 'client' | 'server' },
+  ) => void;
 
   /** Mirror the chat store bucket of the current context into this store. */
   internal_syncChatTranscript: () => void;
@@ -73,6 +101,13 @@ export interface DataAction {
    * explicit Retry action to try again.
    */
   loadEarlierMessages: (options?: { retry?: boolean }) => Promise<void>;
+
+  /**
+   * Load the rounds after a forward transcript's loaded pages and append them.
+   * Same contract as `loadEarlierMessages`, with its failure kept in
+   * `laterMessagesError`.
+   */
+  loadLaterMessages: (options?: { retry?: boolean }) => Promise<void>;
 
   /**
    * Replace all messages with new data
@@ -117,8 +152,28 @@ export const dataSlice: StateCreator<
       action,
     );
 
+  const loadPage = async (side: PageSide, options?: { retry?: boolean }) => {
+    const { context, transcriptSource } = get();
+    if (transcriptSource !== 'chat') return;
+    const { error: errorKey, load, loading } = PAGE_SIDES[side];
+    if (get()[errorKey] !== undefined && !options?.retry) return;
+
+    const { error, started } = await load(context, {
+      onStart: () =>
+        set({ [errorKey]: undefined, [loading]: true }, false, `${side}Messages/start`),
+    });
+    if (!started) return;
+    get().internal_syncChatTranscript();
+
+    // The flag is conversation-wide state: after a context switch it belongs
+    // to the new conversation (reset by createEphemeralResetState), so a
+    // late settle from the previous one must not clear it.
+    if (!isSameConversationContext(context, get().context)) return;
+    set({ [errorKey]: error ?? undefined, [loading]: false }, false, `${side}Messages/end`);
+  };
+
   return {
-    internal_dispatchMessage: (payload) => {
+    internal_dispatchMessage: (payload, options) => {
       const { context, transcriptSource } = get();
 
       log(
@@ -149,7 +204,9 @@ export const dataSlice: StateCreator<
       }
 
       if (transcriptSource === 'chat') {
-        useChatStore.getState().internal_dispatchMessage(payload, { conversationContext: context });
+        useChatStore
+          .getState()
+          .internal_dispatchMessage(payload, { conversationContext: context }, options);
         // Read the write back now, whether or not a mounted mirror subscribes.
         get().internal_syncChatTranscript();
         return;
@@ -169,38 +226,16 @@ export const dataSlice: StateCreator<
       if (
         next.dbMessages === state.dbMessages &&
         next.displayMessages === state.displayMessages &&
+        next.hasLaterMessages === state.hasLaterMessages &&
         next.messagesInit === state.messagesInit
       )
         return;
       set(next, false, 'syncChatTranscript');
     },
 
-    loadEarlierMessages: async (options) => {
-      const { context, transcriptSource } = get();
-      if (transcriptSource !== 'chat') return;
-      if (get().earlierMessagesError !== undefined && !options?.retry) return;
+    loadEarlierMessages: (options) => loadPage('earlier', options),
 
-      const { error, started } = await useChatStore.getState().loadEarlierMessages(context, {
-        onStart: () =>
-          set(
-            { earlierMessagesError: undefined, isLoadingEarlierMessages: true },
-            false,
-            'loadEarlierMessages/start',
-          ),
-      });
-      if (!started) return;
-      get().internal_syncChatTranscript();
-
-      // The flag is conversation-wide state: after a context switch it belongs
-      // to the new conversation (reset by createEphemeralResetState), so a
-      // late settle from the previous one must not clear it.
-      if (!isSameConversationContext(context, get().context)) return;
-      set(
-        { earlierMessagesError: error ?? undefined, isLoadingEarlierMessages: false },
-        false,
-        'loadEarlierMessages/end',
-      );
-    },
+    loadLaterMessages: (options) => loadPage('later', options),
 
     replaceMessages: (messages, options) => {
       const { context, transcriptSource } = get();

@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { localFileService } from './localFileService';
+import {
+  isTerminalLocalFileError,
+  LocalFileResponseError,
+  localFileService,
+} from './localFileService';
 
 const mockLocalSystem = vi.hoisted(() => ({
   getExternalAssetForPublishUrl: vi.fn(),
@@ -54,6 +58,45 @@ describe('localFileService', () => {
       resourceBaseUrl: undefined,
       type: 'text',
     });
+  });
+
+  it('reports the preview protocol status so a deleted / denied file is terminal', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/gone.md',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () => ({ headers: { get: vi.fn() }, ok: false, status: 404 }) as unknown as Response,
+      ),
+    );
+
+    const error = await localFileService
+      .getLocalFilePreview({ path: '/repo/gone.md', workingDirectory: '/repo' })
+      .catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(LocalFileResponseError);
+    expect((error as LocalFileResponseError).status).toBe(404);
+    expect(isTerminalLocalFileError(error)).toBe(true);
+    expect(isTerminalLocalFileError(new LocalFileResponseError(403))).toBe(true);
+    expect(isTerminalLocalFileError(new LocalFileResponseError(500))).toBe(false);
+    expect(isTerminalLocalFileError(new Error('Failed to load local file: 404'))).toBe(false);
+  });
+
+  it('treats a file that vanished before its preview URL exists as terminal', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      code: 'not_found',
+      error: 'ENOENT: no such file or directory',
+      success: false,
+    });
+
+    const error = await localFileService
+      .getLocalFilePreview({ path: '/repo/gone.md', workingDirectory: '/repo' })
+      .catch((reason: unknown) => reason);
+
+    expect(isTerminalLocalFileError(error)).toBe(true);
+    expect((error as LocalFileResponseError).status).toBe(404);
   });
 
   it('returns the entry directory as the HTML workspace resource base URL', async () => {

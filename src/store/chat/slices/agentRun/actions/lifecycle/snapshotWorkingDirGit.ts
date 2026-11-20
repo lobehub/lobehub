@@ -11,6 +11,8 @@ import {
   toWorkingDirGithubState,
 } from '@/store/chat/utils/topicWorkingDirGit';
 import { deviceSelectors, getDeviceStoreState } from '@/store/device';
+import { getUserStoreState } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import { topicSelectors } from '../../../topic/selectors';
 
@@ -83,9 +85,15 @@ export const snapshotTopicWorkingDirGit = async (
   // No branch ref to query (unprobed / detached HEAD) → leave the prior snapshot.
   if (!branch || detached) return;
 
-  const prData = await gitService.getLinkedPullRequest({ branch, deviceId, path });
+  // Better Coding Experience links PRs only through the agent's own commands
+  // (server Work rows), so the send records the branch and its remote ref but
+  // no longer asks `gh` which PR the branch has.
+  const betterCoding = labPreferSelectors.enableBetterCodingExperience(getUserStoreState());
+  const prData = betterCoding
+    ? undefined
+    : await gitService.getLinkedPullRequest({ branch, deviceId, path });
   const github = toWorkingDirGithubState(prData);
-  if (!github) return;
+  if (!github && !betterCoding) return;
 
   const nextConfig = mergeWorkingDirGithubState({
     branch,

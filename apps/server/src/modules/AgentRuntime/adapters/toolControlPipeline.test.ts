@@ -112,6 +112,7 @@ function setup(hooks: AgentHook[], signal?: AbortSignal, restore = false) {
           return { ...row, id: `row-${rows.length}` };
         }),
         query: vi.fn(async () => rows),
+        getToolMessage: vi.fn(),
         updateToolMessage: vi.fn(),
         updateToolIntervention: vi.fn(),
         update: vi.fn(),
@@ -307,6 +308,13 @@ describe('beforeToolCall control pipeline', () => {
       const reason = 'Approval does not override this policy.';
       fetchHook.mockImplementation(async () => response('deny', reason));
       const fixture = setup([control()]);
+      vi.mocked(fixture.host.transports.messages.getToolMessage).mockResolvedValue({
+        id: 'pending-row',
+        role: 'tool',
+        content: '',
+        tool_call_id: call().id,
+        pluginIntervention: { status: 'pending' },
+      });
       await fixture.runtime.step(fixture.state, {
         phase: 'human_approved_tool',
         payload:
@@ -908,6 +916,13 @@ describe('beforeToolCall control pipeline', () => {
   });
   it('settles an already-approved row when the refreshed control denies it', async () => {
     const fixture = setup([control()]);
+    vi.mocked(fixture.host.transports.messages.getToolMessage).mockResolvedValue({
+      id: 'pending-tool-row',
+      role: 'tool',
+      content: '',
+      tool_call_id: call().id,
+      pluginIntervention: { status: 'pending' },
+    });
     fetchHook.mockImplementation(async () => response('deny'));
     const result = await fixture.runtime.step(fixture.state, {
       phase: 'human_approved_tool',

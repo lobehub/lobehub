@@ -44,7 +44,6 @@ export const extractMarkdownH1Title = (content: string): { content: string; titl
   if (!headingMatch) return { content };
 
   const title = headingMatch[1].trim();
-  if (!title) return { content };
 
   let j = i + 1;
   while (j < lines.length && lines[j].trim() === '') j += 1;

@@ -1,8 +1,8 @@
 'use client';
 
 import { isMaskedBotCredential } from '@lobechat/const';
-import { Button, toast } from '@lobehub/ui/base-ui';
-import { useFormInstance, useWatch } from '@lobehub/ui/base-ui/form';
+import { Button, toast } from '@lobehub/ui';
+import { useFormInstance, useWatch } from '@lobehub/ui/form';
 import { Download } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -56,7 +56,7 @@ const CredentialExtras = memo<PlatformCredentialExtrasProps>(({ disabled }) => {
       icon={<Download size={14} />}
       loading={loading}
       size="small"
-      style={{ alignSelf: 'flex-start', marginBlockStart: 4 }}
+      style={{ alignSelf: 'flex-start', marginBlockEnd: 12 }}
       type="default"
       disabled={
         disabled || !channelAccessToken?.trim() || isMaskedBotCredential(channelAccessToken)

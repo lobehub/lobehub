@@ -1,5 +1,11 @@
 'use client';
 
-import { Skeleton } from '@lobehub/ui/base-ui';
+import { Skeleton } from '@lobehub/ui';
 
-export const SkeletonInput = () => <Skeleton height={36} />;
+import { useInterfaceDensity } from '@/styles/density';
+
+export const SkeletonInput = () => {
+  const compact = useInterfaceDensity() === 'compact';
+
+  return <Skeleton height={compact ? 28 : 36} />;
+};

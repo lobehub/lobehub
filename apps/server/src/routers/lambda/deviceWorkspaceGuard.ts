@@ -36,23 +36,137 @@ export const assertWorkspaceDeviceEditable = (
 };
 
 /**
- * In-memory cache of device-scoped skill preview roots, populated by
- * `listProjectSkills` and consumed by `assertWorkspaceRootApproved` to
- * authorize read-only file previews without persisting skill paths into
- * the DB (which would leak into the UI's working-directory list).
+ * In-memory cache of skill preview roots outside a project's working
+ * directory, populated by `listProjectSkills` and consumed by
+ * `assertWorkspaceRootApproved` to authorize read-only file previews without
+ * persisting skill paths into the DB (which would leak into the UI's
+ * working-directory list).
+ *
+ * Two kinds of grant: device skill directories (`~/.agents/skills`, …) hold
+ * unconditionally; project skill directories found in a parent of the scanned
+ * project carry that project and hold only while it is still approved, like
+ * the memory grants below. Accumulates per device so scanning project B does
+ * not revoke project A's grants, oldest evicted past the cap.
  */
-const deviceSkillRoots = new Map<string, Set<string>>();
+const MAX_SKILL_ROOTS_PER_DEVICE = 50;
 
-export const registerDeviceSkillRoots = (deviceId: string, roots: string[]) => {
-  if (roots.length === 0) return;
-  deviceSkillRoots.set(deviceId, new Set(roots));
+export interface DeviceSkillRootGrant {
+  /** The project the skill directory was found above; absent for device skills. */
+  projectRoot?: string;
+  root: string;
+}
+
+const deviceSkillRoots = new Map<string, Map<string, DeviceSkillRootGrant>>();
+
+export const registerDeviceSkillRoots = (deviceId: string, grants: DeviceSkillRootGrant[]) => {
+  if (grants.length === 0) return;
+
+  const current = deviceSkillRoots.get(deviceId) ?? new Map<string, DeviceSkillRootGrant>();
+  for (const grant of grants) {
+    if (!grant.root) continue;
+    const key = JSON.stringify([grant.projectRoot ?? null, grant.root]);
+    current.delete(key);
+    current.set(key, grant);
+  }
+  while (current.size > MAX_SKILL_ROOTS_PER_DEVICE) current.delete(current.keys().next().value!);
+  deviceSkillRoots.set(deviceId, current);
 };
 
-const isWithinSkillRoots = (deviceId: string, workingDirectory: string): boolean => {
-  const roots = deviceSkillRoots.get(deviceId);
-  if (!roots) return false;
-  return [...roots].some((root) => isPathWithinRoot(root, workingDirectory));
+/**
+ * Claude Code auto-memory directories (`~/.claude/projects/<key>/memory`),
+ * registered by `listClaudeCodeMemory` once the caller proved the project
+ * itself is an approved root, so the Memory tab can preview and save them.
+ * Each grant keeps the project it was derived from and holds only while that
+ * project is still approved: removing the project from the device's working
+ * directories revokes its memory too. Accumulates per device (one per project
+ * and memory directory), oldest evicted past the cap.
+ */
+const MAX_MEMORY_ROOTS_PER_DEVICE = 50;
+
+interface DeviceMemoryRootGrant {
+  memoryDir: string;
+  /** The approved working directory the memory was listed for. */
+  projectRoot: string;
+}
+
+const deviceMemoryRoots = new Map<string, Map<string, DeviceMemoryRootGrant>>();
+
+export const registerDeviceMemoryRoot = (deviceId: string, grant: DeviceMemoryRootGrant) => {
+  const { memoryDir, projectRoot } = grant;
+  // A memory directory that covers its own project (a repository setting
+  // pointing `autoMemoryDirectory` at `~` or `/`) would widen the project's
+  // grant to the whole tree.
+  if (!memoryDir || !projectRoot || isPathWithinRoot(memoryDir, projectRoot)) return;
+
+  const grants = deviceMemoryRoots.get(deviceId) ?? new Map<string, DeviceMemoryRootGrant>();
+  const key = JSON.stringify([projectRoot, memoryDir]);
+  grants.delete(key);
+  grants.set(key, { memoryDir, projectRoot });
+  if (grants.size > MAX_MEMORY_ROOTS_PER_DEVICE) grants.delete(grants.keys().next().value!);
+  deviceMemoryRoots.set(deviceId, grants);
 };
+
+const isWithinSkillRoots = (
+  deviceId: string,
+  workingDirectory: string,
+  isProjectApproved: (projectRoot: string) => boolean,
+): boolean =>
+  [...(deviceSkillRoots.get(deviceId)?.values() ?? [])].some(
+    ({ projectRoot, root }) =>
+      isPathWithinRoot(root, workingDirectory) && (!projectRoot || isProjectApproved(projectRoot)),
+  );
+
+const isWithinMemoryGrant = (
+  deviceId: string,
+  workingDirectory: string,
+  isProjectApproved: (projectRoot: string) => boolean,
+): boolean =>
+  [...(deviceMemoryRoots.get(deviceId)?.values() ?? [])].some(
+    ({ memoryDir, projectRoot }) =>
+      isPathWithinRoot(memoryDir, workingDirectory) && isProjectApproved(projectRoot),
+  );
+
+/**
+ * Claude Code writes each background task's output to
+ * `<tmp>/claude-<uid>/<project key>/<session id>/tasks/<task id>.output`, the
+ * project key being the session's working directory with every
+ * non-alphanumeric character replaced by `-`. The directory sits outside the
+ * project, so a task's output is readable only through this derived grant: the
+ * requested root must be exactly such a `tasks` directory whose project key
+ * belongs to an approved root. Nothing is stored; the grant is re-derived from
+ * the same server-owned roots on every read.
+ */
+const CLAUDE_CODE_TASK_OUTPUT_DIR =
+  /^\/(?:[^/]+\/)*claude-\d+\/([^/]+)\/[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}\/tasks\/?$/i;
+
+export const claudeCodeProjectKey = (cwd: string): string => cwd.replaceAll(/[^\da-z]/gi, '-');
+
+/** macOS resolves `/tmp` and `/var` through `/private`; Claude Code keys the resolved path. */
+const projectKeysOf = (root: string): string[] => {
+  const trimmed = root.replace(/\/+$/, '');
+  const aliases = [trimmed];
+  if (/^\/(?:tmp|var)(?:\/|$)/.test(trimmed)) aliases.push(`/private${trimmed}`);
+  if (/^\/private\/(?:tmp|var)(?:\/|$)/.test(trimmed))
+    aliases.push(trimmed.slice('/private'.length));
+  return aliases.map(claudeCodeProjectKey);
+};
+
+export const isClaudeCodeTaskOutputDir = (
+  workingDirectory: string,
+  approvedRoots: readonly string[],
+): boolean => {
+  if (workingDirectory.split('/').some((segment) => segment === '.' || segment === '..')) {
+    return false;
+  }
+  const projectKey = CLAUDE_CODE_TASK_OUTPUT_DIR.exec(workingDirectory)?.[1];
+  if (!projectKey) return false;
+  return approvedRoots.some((root) => projectKeysOf(root).includes(projectKey));
+};
+
+const findWorkspaceDevice = (deviceModel: DeviceModel, deviceId: string, workspaceId?: string) =>
+  workspaceId
+    ? deviceModel.findWorkspaceDeviceById(deviceId)
+    : deviceModel.findByDeviceId(deviceId);
 
 /**
  * Validate that a client-supplied workspace root is actually one the user has
@@ -90,18 +204,20 @@ export const assertWorkspaceRootApproved = async (
     });
   }
 
-  const device = workspaceId
-    ? await deviceModel.findWorkspaceDeviceById(deviceId)
-    : await deviceModel.findByDeviceId(deviceId);
+  const device = await findWorkspaceDevice(deviceModel, deviceId, workspaceId);
 
   const approvedRoots = (device?.workingDirs ?? [])
     .flatMap((dir) => [dir.path, dir.git?.activeWorktree])
     .concat(device?.defaultCwd ? [device.defaultCwd] : [])
     .filter((root): root is string => Boolean(root));
 
+  const isApprovedRoot = (target: string) =>
+    approvedRoots.some((root) => isPathWithinRoot(root, target));
   const approved =
-    approvedRoots.some((root) => isPathWithinRoot(root, workingDirectory)) ||
-    isWithinSkillRoots(deviceId, workingDirectory);
+    isApprovedRoot(workingDirectory) ||
+    isWithinSkillRoots(deviceId, workingDirectory, isApprovedRoot) ||
+    isWithinMemoryGrant(deviceId, workingDirectory, isApprovedRoot) ||
+    isClaudeCodeTaskOutputDir(workingDirectory, approvedRoots);
 
   if (!approved) {
     throw new TRPCError({
@@ -109,6 +225,21 @@ export const assertWorkspaceRootApproved = async (
       message: 'Working directory is not an approved workspace for this device',
     });
   }
+};
+
+/** A topic worktree inherits access only from a registered source directory. */
+export const findRegisteredWorkspaceRoot = async (
+  deviceModel: DeviceModel,
+  deviceId: string,
+  sourcePath: string,
+  workspaceId?: string,
+): Promise<string | undefined> => {
+  const device = await findWorkspaceDevice(deviceModel, deviceId, workspaceId);
+  const roots = [...(device?.workingDirs ?? []).map(({ path }) => path), device?.defaultCwd];
+  return roots.reduce<string | undefined>((approved, root) => {
+    if (!root || !isPathWithinRoot(root, sourcePath)) return approved;
+    return !approved || isPathWithinRoot(root, approved) ? root : approved;
+  }, undefined);
 };
 
 /**

@@ -10,7 +10,9 @@ import {
   type ReplicaSyncResult,
 } from '@/libs/replica';
 import { lambdaClient, toolsClient } from '@/libs/trpc/client';
+import { refreshConnectorManagePolicy } from '@/services/connectorManagePolicy';
 import { type StoreSetter } from '@/store/types';
+import { type ConnectorActionError, toConnectorActionError } from '@/utils/connectorActionError';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
@@ -148,7 +150,7 @@ export class ComposioStoreActionImpl {
   }
 
   callComposioTool = async (params: CallComposioToolParams): Promise<CallComposioToolResult> => {
-    const { identifier, toolSlug, toolArgs } = params;
+    const { agentId, identifier, toolSlug, toolArgs, topicId } = params;
 
     const toolId = `${identifier}:${toolSlug}`;
 
@@ -162,9 +164,11 @@ export class ComposioStoreActionImpl {
 
     try {
       const response = await toolsClient.composio.executeAction.mutate({
+        agentId,
         identifier,
         toolArgs,
         toolSlug,
+        topicId,
       });
 
       this.#set(
@@ -201,7 +205,7 @@ export class ComposioStoreActionImpl {
   createComposioConnection = async (
     params: CreateComposioServerParams,
   ): Promise<ComposioServer | undefined> => {
-    const { appSlug, identifier, label, agentId } = params;
+    const { appSlug, identifier, label, agentId, replacesConnectedAccountId } = params;
     // The completion is bound to the identity that started it: the server may
     // answer after the user switched scope (see the guard below).
     const scope = cacheScope.get();
@@ -209,6 +213,7 @@ export class ComposioStoreActionImpl {
     this.#set(
       produce((draft: ComposioStoreState) => {
         draft.loadingComposioServerIds.add(identifier);
+        delete draft.composioServerErrors[identifier];
       }),
       false,
       n('createComposioConnection/start'),
@@ -220,6 +225,7 @@ export class ComposioStoreActionImpl {
         appSlug,
         identifier,
         label,
+        replacesConnectedAccountId,
       });
 
       // The user may have switched identity while the server answered. Writing
@@ -276,9 +282,16 @@ export class ComposioStoreActionImpl {
     } catch (error) {
       console.error('[Composio] Failed to create connection:', error);
 
+      const actionError = toConnectorActionError('connect', error);
+      // A permission rejection is not a failure to explain: the row switches to
+      // its disabled state once the refetched policy arrives.
+      const rejected = this.#settlePermissionRejection(actionError);
       this.#set(
         produce((draft: ComposioStoreState) => {
           draft.loadingComposioServerIds.delete(identifier);
+          // Kept on the row, so the failure stays visible after any toast is gone.
+          if (cacheScope.get() === scope && !rejected)
+            draft.composioServerErrors[identifier] = { ...actionError, scope };
         }),
         false,
         n('createComposioConnection/error'),
@@ -368,6 +381,7 @@ export class ComposioStoreActionImpl {
       this.#markLocalWrite(scope);
 
       clearLoading('refreshComposioConnectionStatus/success');
+      this.setComposioServerError(identifier, undefined);
 
       try {
         await lambdaClient.composio.updateComposioPlugin.mutate({
@@ -412,49 +426,46 @@ export class ComposioStoreActionImpl {
     const { composioServers } = this.#get();
     const existing = composioServers.find((s) => s.identifier === identifier);
     if (!existing) return undefined;
-    // Bound to the identity that started it, like `createComposioConnection`,
-    // whose own guard only captures the scope once it starts — after the cleanup
-    // below has already awaited.
-    const scope = cacheScope.get();
 
-    // Clean up the stale connection on Composio's side (the prior link likely
-    // expired). Best-effort — if it's already gone we still mint a fresh one.
-    try {
-      await lambdaClient.composio.deleteConnection.mutate({
-        connectedAccountId: existing.connectedAccountId,
-        identifier,
-      });
-    } catch (error) {
-      console.error('[Composio] Failed to clean up stale connection:', error);
-    }
-
-    // Identity switched during the cleanup: minting now would create (and
-    // persist) this scope's connection under the other identity.
-    if (cacheScope.get() !== scope) return undefined;
-
-    // Mint a fresh link; createComposioConnection replaces the record in place
-    // (by identifier), so the UI keeps showing the same row with a new redirectUrl.
+    // One server write re-authorizes the connection in place: it drops the stale
+    // account (the prior link likely expired) and links a fresh one on the same
+    // connector row. Removing the row first and creating a new one would lose
+    // its scope: a private connection would come back shared — or land on a
+    // shared sibling — and the new account would run for workspace agents.
+    // createComposioConnection replaces the record in place (by identifier), so
+    // the UI keeps showing the same row with a new redirectUrl.
     return this.#get().createComposioConnection({
+      agentId: existing.agentId,
       appSlug: existing.appSlug,
       identifier,
       label: existing.label,
+      replacesConnectedAccountId: existing.connectedAccountId,
     });
+  };
+
+  /**
+   * Drop a connection from the local list after it was removed on the server
+   * by another path (e.g. uninstalling it from the connector detail panel), so
+   * its row stops showing as connected. Recording the removal also cancels a
+   * pending add of the same identifier: the row was created but never echoed,
+   * so leaving it in `added` would re-append it the moment a response clears
+   * `removed`, resurrecting the deleted row for the rest of the session.
+   */
+  forgetComposioConnection = (identifier: string): void => {
+    this.setComposioServerError(identifier, undefined);
+    this.#localIntent().added.delete(identifier);
+    this.#localIntent().removed.add(identifier);
+    this.#servers.remove(identifier);
+    this.#markLocalWrite();
   };
 
   removeComposioConnection = async (identifier: string): Promise<void> => {
     const { composioServers } = this.#get();
     const server = composioServers.find((s) => s.identifier === identifier);
+    const scope = cacheScope.get();
 
-    // Drop the row locally first — the server delete stays best-effort, so a
-    // failure never resurrects the row the user just deleted. Recording the
-    // removal also cancels a pending add of the same identifier: the row was
-    // created but never echoed, so leaving it in `added` would re-append it the
-    // moment a response clears `removed`, resurrecting the deleted row for the
-    // rest of the session.
-    this.#localIntent().added.delete(identifier);
-    this.#localIntent().removed.add(identifier);
-    this.#servers.remove(identifier);
-    this.#markLocalWrite();
+    // Drop the row locally first so the delete shows at once.
+    this.forgetComposioConnection(identifier);
 
     if (server) {
       try {
@@ -464,8 +475,48 @@ export class ComposioStoreActionImpl {
         });
       } catch (error) {
         console.error('[Composio] Failed to delete connection:', error);
+        // The server already tolerates a missing remote account, so a rejected
+        // call (permission, network) means the connection still exists. Put the
+        // row back with the reason, so the user sees it failed and can retry.
+        if (cacheScope.get() !== scope) return;
+        this.#localIntent().removed.delete(identifier);
+        this.#connections.update(COMPOSIO_SERVERS_KEY, (servers) => {
+          const list = servers ?? [];
+          return list.some((s) => s.identifier === identifier) ? list : [...list, server];
+        });
+        this.#markLocalWrite();
+        const actionError = toConnectorActionError('remove', error);
+        if (!this.#settlePermissionRejection(actionError))
+          this.setComposioServerError(identifier, actionError);
       }
     }
+  };
+
+  /**
+   * A 403 means the cached connector policy is stale (an admin restricted
+   * connectors after the page loaded). Refetch it so the row turns into the
+   * disabled state with its hover reason, instead of a red "only admins can
+   * change this" under a button that looked clickable. Returns whether the
+   * error was such a rejection.
+   */
+  #settlePermissionRejection = (error: ConnectorActionError): boolean => {
+    if (error.code !== 'FORBIDDEN') return false;
+    void refreshConnectorManagePolicy();
+    return true;
+  };
+
+  /** Record (or clear, with `undefined`) the last failed write of a connection row. */
+  setComposioServerError = (identifier: string, error: ConnectorActionError | undefined): void => {
+    if (!error && !this.#get().composioServerErrors[identifier]) return;
+
+    this.#set(
+      produce((draft: ComposioStoreState) => {
+        if (error) draft.composioServerErrors[identifier] = { ...error, scope: cacheScope.get() };
+        else delete draft.composioServerErrors[identifier];
+      }),
+      false,
+      n('setComposioServerError'),
+    );
   };
 
   /**

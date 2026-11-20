@@ -1,13 +1,13 @@
+import type {
+  UserPersonaDocument,
+  UserPersonaDocumentHistory,
+  UserPersonaDocumentHistoryInsert,
+  UserPersonaDocumentInsert,
+} from '@lobechat/types';
 import { isPlainRecord } from '@lobechat/utils/object';
 import { and, desc, eq } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
-import type {
-  NewUserPersonaDocument,
-  NewUserPersonaDocumentHistoriesItem,
-  UserPersonaDocument,
-  UserPersonaDocumentHistoriesItem,
-} from '../../schemas';
 import { userPersonaDocumentHistories, userPersonaDocuments, users } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 
@@ -68,7 +68,10 @@ export const upsertUserPersonaInTransaction = async (
   tx: Transaction,
   userId: string,
   params: UpsertUserPersonaParams,
-): Promise<{ diff?: UserPersonaDocumentHistoriesItem; document: UserPersonaDocument }> => {
+): Promise<{
+  diff?: UserPersonaDocumentHistory;
+  document: UserPersonaDocument;
+}> => {
   await lockUserPersonaOwner(tx, userId);
 
   const nextProfile = params.profile ?? 'default';
@@ -83,7 +86,7 @@ export const upsertUserPersonaInTransaction = async (
   const nextSourceIds = params.sourceIds ?? existing?.sourceIds ?? undefined;
   const nextTagline = params.tagline === undefined ? existing?.tagline : params.tagline;
 
-  const baseDocument: Omit<NewUserPersonaDocument, 'id' | 'userId'> = {
+  const baseDocument: Omit<UserPersonaDocumentInsert, 'id' | 'userId'> = {
     capturedAt: params.capturedAt,
     memoryIds: nextMemoryIds,
     metadata: nextMetadata,
@@ -141,7 +144,7 @@ export const upsertUserPersonaInTransaction = async (
       .returning();
   }
 
-  let diff: UserPersonaDocumentHistoriesItem | undefined;
+  let diff: UserPersonaDocumentHistory | undefined;
   const hasDiff =
     params.diffPersona ||
     params.diffTagline ||
@@ -235,8 +238,10 @@ export class UserPersonaModel {
   };
 
   appendDiff = async (
-    params: Omit<NewUserPersonaDocumentHistoriesItem, 'id' | 'userId'> & { personaId: string },
-  ): Promise<UserPersonaDocumentHistoriesItem> => {
+    params: Omit<UserPersonaDocumentHistoryInsert, 'id' | 'userId'> & {
+      personaId: string;
+    },
+  ): Promise<UserPersonaDocumentHistory> => {
     const [result] = await this.db
       .insert(userPersonaDocumentHistories)
       .values({ ...params, userId: this.userId })
@@ -261,7 +266,10 @@ export class UserPersonaModel {
 
   upsertPersona = async (
     params: UpsertUserPersonaParams,
-  ): Promise<{ diff?: UserPersonaDocumentHistoriesItem; document: UserPersonaDocument }> => {
+  ): Promise<{
+    diff?: UserPersonaDocumentHistory;
+    document: UserPersonaDocument;
+  }> => {
     return this.db.transaction((tx) => upsertUserPersonaInTransaction(tx, this.userId, params));
   };
 

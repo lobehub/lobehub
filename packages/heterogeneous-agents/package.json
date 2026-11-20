@@ -7,6 +7,8 @@
     ".": "./src/index.ts",
     "./askUser": "./src/askUser/index.ts",
     "./builtinMcp": "./src/builtinMcp/index.ts",
+    "./claudeCodePermission": "./src/claudeCodePermission/index.ts",
+    "./claudeCodePermission/shared": "./src/claudeCodePermission/shared.ts",
     "./errors": "./src/errors/index.ts",
     "./client": "./src/client/index.ts",
     "./codexAppServerParams": "./src/codex/appServerParams.ts",
@@ -34,10 +36,14 @@
     "@lobechat/agent-gateway-client": "workspace:*",
     "@lobechat/types": "workspace:*",
     "@lobechat/utils": "workspace:*",
-    "@lobehub/icons": "^5.15.0",
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@lobehub/icons": "^6.0.0",
+    "@modelcontextprotocol/node": "~2.1.2",
+    "@modelcontextprotocol/server": "~2.4.0",
     "diff": "^8.0.4",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "~2.4.0"
   },
   "peerDependencies": {
     "react": "^19.0.0"

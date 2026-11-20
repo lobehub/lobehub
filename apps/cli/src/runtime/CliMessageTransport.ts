@@ -4,6 +4,7 @@ import type {
   QueryMessagesInput,
   QueryMessagesOptions,
   RuntimeMessageRef,
+  RuntimeToolMessage,
   UpdateToolMessageInput,
 } from '@lobechat/agent-runtime';
 import type { CreateMessageParams, UIChatMessage, UpdateMessageParams } from '@lobechat/types';
@@ -96,6 +97,11 @@ export class CliMessageTransport implements MessageTransport {
   async findById(id: string): Promise<RuntimeMessageRef | undefined> {
     const message = this.store.get(id);
     return message ? toRef(message) : undefined;
+  }
+
+  async getToolMessage(id: string): Promise<RuntimeToolMessage | undefined> {
+    const message = this.store.get(id);
+    return message?.role === 'tool' ? message : undefined;
   }
 
   async findToolMessageIdByToolCallId(

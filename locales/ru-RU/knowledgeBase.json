@@ -9,6 +9,7 @@
   "addToKnowledgeBase.title": "Добавить в библиотеку",
   "addToKnowledgeBase.totalFiles": "Выбрано файлов: {{count}}",
   "createNew.confirm": "Создать",
+  "createNew.cover.label": "Обложка",
   "createNew.description.label": "Описание библиотеки (необязательно)",
   "createNew.description.placeholder": "Описание помогает LLM лучше понять вашу библиотеку",
   "createNew.edit.confirm": "Сохранить изменения",

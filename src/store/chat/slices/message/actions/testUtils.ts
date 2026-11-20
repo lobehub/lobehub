@@ -1,7 +1,8 @@
 import type { ConversationContext, UIChatMessage } from '@lobechat/types';
 import { renderHook } from '@testing-library/react';
 
-import { createReplicaState } from '@/libs/replica';
+import { cacheScope, createReplicaState, replicaKeys } from '@/libs/replica';
+import { conversationMessagesKey, conversationMessagesResource } from '@/services/message/replica';
 import { useChatStore } from '@/store/chat';
 import { type ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -29,3 +30,13 @@ export const rowsOf = (context: ConversationContext) =>
 /** `useFetchMessages` is a hook: run it inside a component. */
 export const syncMessages = (...args: Parameters<ChatStore['useFetchMessages']>) =>
   renderHook(() => useChatStore.getState().useFetchMessages(...args)).result.current;
+
+/** The `replica:sync` query key a mounted transcript sync of `context` runs under. */
+export const transcriptSyncKey = (context: ConversationContext) =>
+  replicaKeys.sync(
+    conversationMessagesResource.name,
+    conversationMessagesResource.version,
+    cacheScope.get(),
+    conversationMessagesKey(context),
+    context,
+  );

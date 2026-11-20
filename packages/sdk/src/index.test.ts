@@ -19,12 +19,44 @@ describe('createLobeHub', () => {
     const { fetch, requests } = captureFetch();
     const lobehub = createLobeHub({ apiKey: 'sk-lh-test', fetch });
 
-    const { data, response } = await lobehub.health.check();
+    const { data, response } = await lobehub.users.me();
 
-    expect(requests[0].url).toBe(`${DEFAULT_BASE_URL}/api/v1/health`);
+    expect(requests[0].url).toBe(`${DEFAULT_BASE_URL}/api/v1/users/me`);
     expect(requests[0].headers.get('authorization')).toBe('Bearer sk-lh-test');
     expect(response?.status).toBe(200);
     expect(data).toEqual({ status: 'ok' });
+  });
+
+  it('sends no credentials to the public health check', async () => {
+    const { fetch, requests } = captureFetch();
+    const lobehub = createLobeHub({ apiKey: 'sk-lh-test', fetch });
+
+    await lobehub.health.check();
+
+    expect(requests[0].url).toBe(`${DEFAULT_BASE_URL}/api/v1/health`);
+    expect(requests[0].headers.get('authorization')).toBeNull();
+  });
+
+  it('asks the accessToken provider before every request', async () => {
+    const { fetch, requests } = captureFetch();
+    let issued = 0;
+    const lobehub = createLobeHub({
+      accessToken: async () => `jwt-${++issued}`,
+      apiKey: 'sk-lh-ignored',
+      fetch,
+    });
+
+    await lobehub.users.me();
+    await lobehub.users.me();
+
+    expect(requests.map((request) => request.headers.get('authorization'))).toEqual([
+      'Bearer jwt-1',
+      'Bearer jwt-2',
+    ]);
+  });
+
+  it('requires an apiKey or an accessToken provider', () => {
+    expect(() => createLobeHub({})).toThrow('apiKey or an accessToken');
   });
 
   it('honors a custom baseURL and extra headers', async () => {

@@ -6,10 +6,14 @@ import type { IEditor } from '@lobehub/editor';
 // failure as an empty composer — persisting that emptiness deletes the draft.
 export const canSerialize = (editor?: IEditor) => !!editor?.getLexicalEditor();
 
-export const readDocument = (editor: IEditor | undefined, type: string): unknown => {
+export const readDocument = (
+  editor: IEditor | undefined,
+  type: string,
+  options?: Parameters<IEditor['getDocument']>[1],
+): unknown => {
   if (!canSerialize(editor)) return undefined;
   try {
-    return editor!.getDocument(type);
+    return editor!.getDocument(type, options);
   } catch {
     return undefined;
   }

@@ -8,14 +8,14 @@ import { useUserStore } from '@/store/user';
  * Open the per-user gateway socket on app entry instead of on the first send,
  * so the session's first run never pays the WebSocket handshake on its critical
  * path. Waits for the signed-in user state so the mux can mint its token, and
- * re-runs when the rollout flag arrives with the server config.
+ * re-runs when the gateway protocol arrives with the server config.
  *
- * `warmupGatewayMux` re-checks the deployment capability and the flag itself —
- * this only decides when to ask.
+ * `warmupGatewayMux` re-checks the deployment capability itself — this only
+ * decides when to ask.
  */
 export const useGatewayMuxWarmup = (): void => {
   const isReady = useUserStore((s) => s.isUserStateInit && !!s.isSignedIn);
-  const enabled = useServerConfigStore((s) => !!s.featureFlags.enableGatewayMux);
+  const enabled = useServerConfigStore((s) => s.serverConfig.agentGatewayProtocol === 2);
   const warmupGatewayMux = useChatStore((s) => s.warmupGatewayMux);
 
   useEffect(() => {

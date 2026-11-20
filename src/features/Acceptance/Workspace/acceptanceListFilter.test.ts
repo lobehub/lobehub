@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   acceptanceListEmptyVariant,
   acceptanceProjectScopeKey,
+  DEFAULT_ACCEPTANCE_LIST_FACETS,
   effectiveAcceptanceListFacets,
   isAcceptanceListFacetsNarrowed,
   normalizeAcceptanceListFacets,
@@ -56,12 +57,12 @@ describe('normalizeAcceptanceListFacets', () => {
     expect(normalizeAcceptanceListFacets(null)).toEqual({
       projectId: undefined,
       projectScope: 'personal',
-      scope: 'all',
+      scope: 'created',
       source: 'all',
     });
     expect(
       normalizeAcceptanceListFacets({ projectId: 3, scope: 'mine', source: 'document' }),
-    ).toEqual({ projectId: undefined, projectScope: 'personal', scope: 'all', source: 'all' });
+    ).toEqual({ projectId: undefined, projectScope: 'personal', scope: 'created', source: 'all' });
   });
 
   it('drops a project choice made in another workspace but keeps scope and source', () => {
@@ -82,6 +83,25 @@ describe('normalizeAcceptanceListFacets', () => {
     expect(normalizeAcceptanceListFacets(stored, acceptanceProjectScopeKey(null)).projectId).toBe(
       undefined,
     );
+  });
+});
+
+describe('default facets', () => {
+  it('opens on the caller own acceptances', () => {
+    expect(DEFAULT_ACCEPTANCE_LIST_FACETS.scope).toBe('created');
+    expect(normalizeAcceptanceListFacets(undefined).scope).toBe('created');
+  });
+
+  it('keeps a stored all scope', () => {
+    expect(normalizeAcceptanceListFacets({ scope: 'all', source: 'all' }).scope).toBe('all');
+  });
+
+  it('resets "show all" past the default to the whole scope', () => {
+    expect(resetAcceptanceListFacets(DEFAULT_ACCEPTANCE_LIST_FACETS)).toEqual({
+      scope: 'all',
+      source: 'all',
+    });
+    expect(isAcceptanceListFacetsNarrowed(DEFAULT_ACCEPTANCE_LIST_FACETS)).toBe(true);
   });
 });
 

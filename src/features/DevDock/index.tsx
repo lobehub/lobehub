@@ -10,6 +10,7 @@ import PanelHost from './PanelHost';
 import ReactScanController from './ReactScanController';
 import { registerBuiltinDevDockItems } from './registerBuiltinItems';
 import { useDevDockStore } from './store';
+import { installStyleSnapshot } from './styleSnapshot';
 
 const Mesurer = lazy(() => import('mesurer').then((module) => ({ default: module.Mesurer })));
 
@@ -33,6 +34,7 @@ const MesurerPortal = () => {
 
 registerBuiltinDevDockItems();
 registerBusinessDevDockItems();
+installStyleSnapshot();
 
 const DevDock = () => {
   const mesurer = useDevDockStore((state) => state.mesurer);

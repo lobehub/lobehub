@@ -1,6 +1,6 @@
 // Fixture: schema constants and the hetero root entry are browser-safe.
 import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
-import { Select } from '@lobehub/ui/base-ui';
+import { Select } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { ConnectorToolPermission } from '@/database/schemas';

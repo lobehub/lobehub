@@ -187,7 +187,10 @@ export interface TaskDetail {
   totalCost?: number;
   /** Total messages created during execution */
   totalMessages?: number;
-  /** Total execution steps */
+  /**
+   * Total LLM calls made during execution — the user-facing step metric.
+   * Tool-only runtime iterations are not counted here.
+   */
   totalSteps?: number;
   /** Total tokens consumed */
   totalTokens?: number;
@@ -223,6 +226,19 @@ export interface UIChatMessage {
    * Used for rendering expanded view with conversation-flow parsing
    */
   compressedMessages?: UIChatMessage[];
+  /**
+   * Ids of the group's oldest members that `compressedMessages` leaves out. A
+   * compression group can hold thousands of messages; the read path only
+   * hydrates the newest ones (see `MAX_COMPRESSED_GROUP_MEMBERS`) but keeps
+   * every member addressable, e.g. by a `#<message-id>` deep link.
+   */
+  compressedOmittedIds?: string[];
+  /**
+   * Conversation turns (mainline `user` messages) across the WHOLE group, set
+   * when `compressedOmittedIds` is: `compressedMessages` then holds only the
+   * newest members and undercounts the history it folded away.
+   */
+  compressedTurnCount?: number;
   content: string;
   /**
    * Character length of the STORED tool result body, kept when the read path
@@ -329,19 +345,6 @@ export interface UIChatMessage {
    * target member ID for DM messages in group chat
    */
   targetId?: string | null;
-  /**
-   * Post-task summary blocks (). Set on virtual assistantGroup
-   * messages by FlatListBuilder when the chain contains toolless
-   * assistants tagged with `signal.type === 'task-completion'` — the
-   * final-summary turn the LLM emits after CC delivers
-   * `system task_notification` for a long-running tool (Monitor, etc.).
-   *
-   * Rendered after `<SignalCallbacks>` so the natural narrative inside
-   * the same AssistantGroup reads: initial reply → callback accordion →
-   * summary. Multiple entries are possible (rare) if several tools
-   * completed within one LLM run.
-   */
-  taskCompletions?: AssistantContentBlock[];
   /**
    * Task execution details for role='task' messages
    * Retrieved from the associated Thread via sourceMessageId

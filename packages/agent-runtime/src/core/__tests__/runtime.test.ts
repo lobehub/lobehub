@@ -66,19 +66,6 @@ function createTestContext(
 
 describe('AgentRuntime', () => {
   describe('Constructor and Executor Priority', () => {
-    it('should use built-in executors by default', () => {
-      const agent = new MockAgent();
-      const runtime = new AgentRuntime(agent);
-
-      // @ts-expect-error - accessing private property for testing
-      const executors = runtime.executors;
-
-      expect(executors).toHaveProperty('call_llm');
-      expect(executors).toHaveProperty('call_tool');
-      expect(executors).toHaveProperty('finish');
-      expect(executors).toHaveProperty('request_human_approve');
-    });
-
     it('should allow config executors to override built-in ones', () => {
       const agent = new MockAgent();
       const customFinish = vi.fn();

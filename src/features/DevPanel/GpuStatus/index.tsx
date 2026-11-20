@@ -1,12 +1,12 @@
 'use client';
 
 import type { GpuStatus } from '@lobechat/electron-client-ipc';
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
 import { Fragment, memo, useEffect, useState } from 'react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
 import { electronDevtoolsService } from '@/services/electron/devtools';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   device: css`
@@ -16,7 +16,7 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 4px 8px;
 
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     font-family: ${cssVar.fontFamilyCode};
@@ -39,7 +39,7 @@ const styles = createStaticStyles(({ css }) => ({
     flex-shrink: 0;
 
     padding-block: 8px 12px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 10px;
@@ -64,7 +64,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     padding-block: 5px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     font-family: ${cssVar.fontFamilyCode};

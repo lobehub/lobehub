@@ -1,21 +1,49 @@
 import type { InstallMarketplaceAgentSummary } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
+import type { DiscoverAssistantDetail } from '@lobechat/types';
 import { customAlphabet } from 'nanoid/non-secure';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { lambdaClient } from '@/libs/trpc/client';
 import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
+import { ensureAgentMarketSkillsAndWarn } from '@/services/ensureAgentMarketSkills';
 import { marketApiService } from '@/services/marketApi';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
 
 export type { InstallMarketplaceAgentSummary };
 
-const generateMarketIdentifier = () => {
+export const generateMarketIdentifier = () => {
   const alphabet = '0123456789abcdefghijklmnopqrstuvwxyz';
   const generate = customAlphabet(alphabet, 8);
   return generate();
 };
+
+/** Local agent config for the Market agent `sourceId`. */
+export const buildMarketAgentConfig = (detail: DiscoverAssistantDetail, sourceId: string) => ({
+  ...detail.config,
+  avatar: detail.avatar,
+  backgroundColor: detail.backgroundColor,
+  description: detail.description,
+  editorData: detail.editorData,
+  params: {
+    ...detail.config.params,
+    forkedFromIdentifier: sourceId,
+  },
+  tags: detail.tags,
+  title: detail.title,
+});
+
+/** Local agent config for a Market fork of `sourceId`, as every install entry builds it. */
+export const buildForkedAgentConfig = (
+  detail: DiscoverAssistantDetail,
+  fork: { identifier: string; name: string },
+  sourceId: string,
+) => ({
+  ...buildMarketAgentConfig(detail, sourceId),
+  marketIdentifier: fork.identifier,
+  title: fork.name,
+});
 
 const getSourcePath = () => {
   if (typeof location === 'undefined') return 'onboarding/agent-marketplace';
@@ -102,7 +130,7 @@ export const installMarketplaceAgents = async (
 
   // 3. Build batch fork input only for items with valid detail
   type Prepared = {
-    detail: NonNullable<Awaited<ReturnType<typeof discoverService.getAssistantDetail>>>;
+    detail: DiscoverAssistantDetail;
     newIdentifier: string;
     sourceId: string;
   };
@@ -149,20 +177,7 @@ export const installMarketplaceAgents = async (
       }
       const fork = outcome.data;
       const result = await createAgent({
-        config: {
-          ...detail.config,
-          avatar: detail.avatar,
-          backgroundColor: detail.backgroundColor,
-          description: detail.description,
-          editorData: detail.editorData,
-          marketIdentifier: fork.agent.identifier,
-          params: {
-            ...detail.config.params,
-            forkedFromIdentifier: sourceId,
-          },
-          tags: detail.tags,
-          title: fork.agent.name,
-        },
+        config: buildForkedAgentConfig(detail, fork.agent, sourceId),
         visibility,
       });
 
@@ -208,6 +223,14 @@ export const installMarketplaceAgents = async (
   const installedAgentIds = Array.from(installedBySource.values());
 
   if (installedAgentIds.length > 0) {
+    // Once every createAgent has settled, install the Market skills the created
+    // agents reference in one pass. Already non-throwing, and the agents exist
+    // either way, so nothing here may change the result below.
+    await ensureAgentMarketSkillsAndWarn(
+      prepared
+        .filter((p) => installedBySource.has(p.sourceId))
+        .map((p) => p.detail.config.plugins ?? []),
+    );
     await refreshAgentList();
   }
 

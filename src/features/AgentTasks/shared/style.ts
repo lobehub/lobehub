@@ -1,4 +1,6 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
+
+import { densityVars } from '@/styles/densityVars';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   breadcrumb: css`
@@ -57,7 +59,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
      * faces in the cards sit on one vertical line, the cards just run wider.
      */
     padding-block: 5px;
-    padding-inline-start: 12px;
+    padding-inline-start: ${densityVars.contentGap};
 
     &::before {
       content: '';
@@ -141,7 +143,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     inset-inline-end: 8px;
   `,
 
-  agentAuthorName: css`
+  profileAuthorName: css`
     cursor: pointer;
     transition: color 0.15s ease;
 

@@ -11,6 +11,7 @@ import { useDocumentStore } from '@/store/document';
 import { documentDetailResource } from '@/store/document/slices/document/projection';
 import { editorSelectors } from '@/store/document/slices/editor';
 
+import { isRoomLockOwner, ROOM_LOCK_OWNER_PREFIX } from './collab/roomLock';
 import { usePageEditorStore } from './store';
 import { usePageLockedByOther } from './usePageLockedByOther';
 
@@ -21,13 +22,13 @@ const documentLockClient: EditLockClient = {
   release: (id, ownerId) => documentService.releaseDocumentLock(id, ownerId),
 };
 
-const createLockOwnerId = (documentId: string) => {
+const createLockOwnerId = (documentId: string, inRoom: boolean) => {
   const randomId =
     typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-  return `page:${documentId}:${randomId}`;
+  return `${inRoom ? ROOM_LOCK_OWNER_PREFIX : 'page:'}${documentId}:${randomId}`;
 };
 
 /**
@@ -72,10 +73,12 @@ export const useDocumentLock = () => {
     'document',
     isWorkspacePage && documentId ? documentId : undefined,
   );
+  const inRoom = usePageEditorStore((s) => !!s.collab);
+  const editedInRoom = usePageEditorStore((s) => !!s.collab?.edited);
   const workspacePage = Boolean(documentId && canEdit && canEditResource && isWorkspacePage);
   const ownerId = useMemo(
-    () => (documentId ? createLockOwnerId(documentId) : undefined),
-    [documentId],
+    () => (documentId ? createLockOwnerId(documentId, inRoom) : undefined),
+    [documentId, inRoom],
   );
 
   useEffect(() => {
@@ -103,7 +106,7 @@ export const useDocumentLock = () => {
   const lock = useEditLock({
     client: documentLockClient,
     enabled: workspacePage,
-    isDirty,
+    isDirty: inRoom ? editedInRoom : isDirty,
     ownerId,
     pollWhileViewing: false,
     resourceId: documentId,
@@ -119,9 +122,12 @@ export const useDocumentLock = () => {
     setLockPending(lock.pending);
   }, [lock.pending, setLockPending]);
 
+  // Another room member holding the lock is the room holding it, not a lost lease.
+  const health =
+    inRoom && lock.lockedByOther && isRoomLockOwner(lock.ownerId) ? 'healthy' : lock.health;
   useEffect(() => {
-    setLockHealth(lock.health);
-  }, [lock.health, setLockHealth]);
+    setLockHealth(health);
+  }, [health, setLockHealth]);
 
   // After recovering from a lost lease, refresh the document so we don't paint
   // over edits another member made while we were disconnected. The existing
@@ -132,10 +138,10 @@ export const useDocumentLock = () => {
   useEffect(() => {
     const recovered = prevHealthRef.current === 'lost' && lock.health === 'healthy';
     prevHealthRef.current = lock.health;
-    if (recovered && documentId) {
+    if (recovered && documentId && !inRoom) {
       void revalidateReplica(documentDetailResource, documentId);
     }
-  }, [lock.health, documentId]);
+  }, [lock.health, documentId, inRoom]);
 
   // Re-hydrate content whenever the lock flips — on open if already held, or when
   // another member takes/releases it (events land in the store via the bridge or
@@ -143,7 +149,8 @@ export const useDocumentLock = () => {
   // version is newer). Prevents a stale snapshot from clobbering their edits.
   const wasLockedByOtherRef = useRef(false);
   useEffect(() => {
-    if (!workspacePage || !documentId) {
+    // The room streams the body, so there is no stored copy to refresh.
+    if (!workspacePage || !documentId || inRoom) {
       wasLockedByOtherRef.current = false;
       return;
     }
@@ -152,7 +159,7 @@ export const useDocumentLock = () => {
     if (isLockedByOther || tookOver || saveBlockedByLock) {
       void revalidateReplica(documentDetailResource, documentId);
     }
-  }, [workspacePage, documentId, isLockedByOther, saveBlockedByLock]);
+  }, [workspacePage, documentId, inRoom, isLockedByOther, saveBlockedByLock]);
 
   // Recovery: once the lock has resolved and the server confirms we can write
   // again, drop any stale save-block from an earlier CONFLICT. Without this the

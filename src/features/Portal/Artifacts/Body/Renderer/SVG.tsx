@@ -1,8 +1,6 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { copyImageToClipboard } from '@lobechat/utils/client';
-import { DropdownMenu, Flexbox, Tooltip } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
-import { css, cx } from 'antd-style';
+import { Button, css, cx, DropdownMenu, Flexbox, toast, Tooltip } from '@lobehub/ui';
 import { CopyIcon, DownloadIcon } from 'lucide-react';
 import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';

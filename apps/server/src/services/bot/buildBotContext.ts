@@ -5,6 +5,21 @@ export interface BuildBotContextParams {
   /** Platform-assigned ID of the inbound message author (e.g. Discord/Slack `user.id`). */
   authorUserId: string | undefined;
   /**
+   * User IDs, besides the owner, the owner trusts with their devices
+   * (`extractDeviceAllowlist(settings)`). Omitted or empty: owner only.
+   */
+  deviceAllowlist?: string[];
+  /**
+   * Whether this conversation sits in a channel whose members may all use the
+   * owner's devices (`isDeviceChannelGranted`). Omitted: no channel grant.
+   */
+  deviceChannelGranted?: boolean;
+  /**
+   * Whether this conversation is outside the channels the owner limited device
+   * use to (`isDeviceChannelRestricted`). Omitted: no channel restriction.
+   */
+  deviceChannelRestricted?: boolean;
+  /**
    * Configured owner ID for this bot install (e.g. `agent_bot_providers.settings.userId`
    * or messenger link's `platformUserId`). Owner identity is decided by
    * exact equality with `authorUserId` — never inferred, never defaulted.
@@ -31,9 +46,17 @@ export interface BuildBotContextParams {
 export const buildBotContext = (params: BuildBotContextParams): ChatTopicBotContext => {
   const senderExternalUserId = params.authorUserId ?? '';
   const isOwner = !!params.operatorUserId && senderExternalUserId === params.operatorUserId;
+  // Same fail-closed rule as `isOwner`: an unknown sender is never trusted.
+  const isDeviceTrusted =
+    !isOwner && !!senderExternalUserId && !!params.deviceAllowlist?.includes(senderExternalUserId);
+  const isDeviceChannelGranted =
+    !isOwner && !!senderExternalUserId && params.deviceChannelGranted === true;
   return {
     applicationId: params.applicationId,
     isOwner,
+    ...(isDeviceChannelGranted && { isDeviceChannelGranted }),
+    ...(params.deviceChannelRestricted && { isDeviceChannelRestricted: true }),
+    ...(isDeviceTrusted && { isDeviceTrusted }),
     platform: params.platform,
     platformThreadId: params.platformThreadId,
     senderExternalUserId,

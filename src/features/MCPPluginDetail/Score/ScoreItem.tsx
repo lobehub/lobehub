@@ -1,5 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { BanIcon, CircleCheckBigIcon, CircleDashedIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo } from 'react';

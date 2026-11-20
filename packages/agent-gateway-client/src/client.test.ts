@@ -3,6 +3,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentStreamClient } from './client';
 import type { ConnectionStatus } from './types';
 
+const createTerminalMessage = (
+  data: Record<string, unknown>,
+  operationId: string,
+  stepIndex: number,
+  timestamp: number,
+) => ({
+  event: {
+    data,
+    operationId,
+    stepIndex,
+    timestamp,
+    type: 'agent_runtime_end',
+  },
+  type: 'agent_event',
+});
+
 // ─── Mock WebSocket ───
 
 class MockWebSocket {
@@ -363,16 +379,7 @@ describe('AgentStreamClient', () => {
       });
       expect(client.connectionStatus).toBe('connected');
 
-      ws.simulateMessage({
-        event: {
-          data: {},
-          operationId: 'op-123',
-          stepIndex: 1,
-          timestamp: 2,
-          type: 'agent_runtime_end',
-        },
-        type: 'agent_event',
-      });
+      ws.simulateMessage(createTerminalMessage({}, 'op-123', 1, 2));
       expect(client.connectionStatus).toBe('disconnected');
     });
 
@@ -386,16 +393,7 @@ describe('AgentStreamClient', () => {
       client.on('agent_event', (e) => events.push(e));
 
       const ws = await connectAndAuth(client);
-      ws.simulateMessage({
-        event: {
-          data: { reason: 'done' },
-          operationId: 'op-member-456',
-          stepIndex: 0,
-          timestamp: 1,
-          type: 'agent_runtime_end',
-        },
-        type: 'agent_event',
-      });
+      ws.simulateMessage(createTerminalMessage({ reason: 'done' }, 'op-member-456', 0, 1));
 
       expect(events).toHaveLength(1);
       expect(events[0].operationId).toBe('op-member-456');
@@ -403,16 +401,7 @@ describe('AgentStreamClient', () => {
       expect(client.connectionStatus).toBe('connected');
 
       // The owner op's own terminal still ends the session.
-      ws.simulateMessage({
-        event: {
-          data: {},
-          operationId: 'op-123',
-          stepIndex: 1,
-          timestamp: 2,
-          type: 'agent_runtime_end',
-        },
-        type: 'agent_event',
-      });
+      ws.simulateMessage(createTerminalMessage({}, 'op-123', 1, 2));
       expect(client.connectionStatus).toBe('disconnected');
     });
 
@@ -425,16 +414,7 @@ describe('AgentStreamClient', () => {
       client.on('session_complete', onComplete);
 
       const ws = await connectAndAuth(client);
-      ws.simulateMessage({
-        event: {
-          data: { reason: 'done' },
-          operationId: 'op-member-456',
-          stepIndex: 0,
-          timestamp: 1,
-          type: 'agent_runtime_end',
-        },
-        type: 'agent_event',
-      });
+      ws.simulateMessage(createTerminalMessage({ reason: 'done' }, 'op-member-456', 0, 1));
       ws.simulateMessage({ type: 'session_complete' });
 
       expect(onComplete).not.toHaveBeenCalled();
@@ -467,16 +447,7 @@ describe('AgentStreamClient', () => {
       client.on('session_complete', onComplete);
 
       const ws = await connectAndAuth(client);
-      ws.simulateMessage({
-        event: {
-          data: { reason: 'done' },
-          operationId: 'op-member-456',
-          stepIndex: 0,
-          timestamp: 1,
-          type: 'agent_runtime_end',
-        },
-        type: 'agent_event',
-      });
+      ws.simulateMessage(createTerminalMessage({ reason: 'done' }, 'op-member-456', 0, 1));
       await vi.advanceTimersByTimeAsync(30_000); // renderer suspended
       ws.simulateMessage({ type: 'session_complete' });
       expect(onComplete).not.toHaveBeenCalled();

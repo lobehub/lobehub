@@ -3,12 +3,27 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { getTestDB } from '@/database/core/getTestDB';
 import { users, workspaces } from '@/database/schemas';
 
+import { DeletedResourceSchema } from '../types/common.type';
 import {
   CreateBenchmarkSchema,
   CreateTestCaseSchema,
   EvalPaginationSchema,
 } from '../types/eval-resource.type';
+import {
+  EvalBenchmarkListSchema,
+  EvalBenchmarkSchema,
+  EvalDatasetListSchema,
+  EvalDatasetSchema,
+  EvalTestCaseListSchema,
+  EvalTestCaseSchema,
+} from '../types/eval-response.type';
 import { EvalResourceService } from './eval-resource.service';
+
+// Services return the page's rows and total; the controller adds `hasMore`/`nextCursor`.
+const SERVICE_PAGE_FIELDS = { hasMore: true, nextCursor: true } as const;
+
+/** What the client receives: `c.json` serializes Dates and drops undefined keys. */
+const toJson = (value: unknown) => JSON.parse(JSON.stringify(value));
 
 const db = await getTestDB();
 const owner = new EvalResourceService(db, 'eval-api-owner', 'eval-api-workspace');
@@ -84,10 +99,29 @@ describe('public eval resources', () => {
       expected: 'Updated',
       messages: content.messages,
     });
-    await member.deleteTestCase(testCase.id);
+    const [benchmarks, datasetList, testCases] = await Promise.all([
+      owner.listBenchmarks({}),
+      owner.listDatasets({}),
+      owner.listTestCases(dataset.id, {}),
+    ]);
+    expect(() => EvalBenchmarkSchema.parse(toJson(benchmark))).not.toThrow();
+    expect(() =>
+      EvalBenchmarkListSchema.omit(SERVICE_PAGE_FIELDS).parse(toJson(benchmarks)),
+    ).not.toThrow();
+    expect(() => EvalDatasetSchema.parse(toJson(dataset))).not.toThrow();
+    expect(() =>
+      EvalDatasetListSchema.omit(SERVICE_PAGE_FIELDS).parse(toJson(datasetList)),
+    ).not.toThrow();
+    expect(() => EvalTestCaseSchema.parse(toJson(testCase))).not.toThrow();
+    expect(() =>
+      EvalTestCaseListSchema.omit(SERVICE_PAGE_FIELDS).parse(toJson(testCases)),
+    ).not.toThrow();
+    const deletedCase = await member.deleteTestCase(testCase.id);
+    expect(deletedCase).toEqual({ deleted: true, id: testCase.id });
+    expect(() => DeletedResourceSchema.parse(deletedCase)).not.toThrow();
     await expect(owner.getTestCase(testCase.id)).rejects.toMatchObject({ name: 'NotFoundError' });
-    await owner.deleteDataset(dataset.id);
-    await owner.deleteBenchmark(benchmark.id);
+    expect(await owner.deleteDataset(dataset.id)).toEqual({ deleted: true, id: dataset.id });
+    expect(await owner.deleteBenchmark(benchmark.id)).toEqual({ deleted: true, id: benchmark.id });
   });
   it('rejects paths in messages and unbounded pagination', () => {
     expect(

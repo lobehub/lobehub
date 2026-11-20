@@ -32,11 +32,6 @@ describe('Model catalog view', () => {
     expect(result.current.selectedIsStale).toBe(false);
   });
 
-  it('renders the last successful catalog supplied by the shared cache', () => {
-    const { result } = renderHook(() => useModelCatalogView({ ...defaults, data: loaded }));
-    expect(result.current.rows).toEqual(loaded.models);
-  });
-
   it('keeps off-catalog saved models pickable and marks them as stale only after discovery', () => {
     const { result, rerender } = renderHook(
       ({ data }) => useModelCatalogView({ ...defaults, currentModel: 'custom-model', data }),

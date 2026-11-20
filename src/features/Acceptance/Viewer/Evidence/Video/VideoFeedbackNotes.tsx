@@ -1,9 +1,7 @@
 'use client';
 
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Flag, Repeat } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -32,10 +30,10 @@ export const VideoFeedbackNotes = ({ notes }: { notes: AcceptanceReviewAnnotatio
                 color: cssVar.colorErrorText,
                 flex: 'none',
                 fontFamily: cssVar.fontFamilyCode,
-                fontSize: 11,
+                fontSize: 12,
               }}
             >
-              <Icon icon={note.time?.end === undefined ? Flag : Repeat} size={11} />
+              <Icon icon={note.time?.end === undefined ? Flag : Repeat} size={12} />
               {note.time
                 ? note.time.end === undefined
                   ? formatVideoTime(note.time.start)

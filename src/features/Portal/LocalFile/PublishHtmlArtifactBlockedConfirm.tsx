@@ -1,15 +1,15 @@
 import { workspaceHtmlArtifactIdentifierForFile } from '@lobechat/html-artifact';
-import { Flexbox } from '@lobehub/ui';
 import {
   Accordion,
   Button,
   Checkbox,
   createModal,
+  cssVar,
+  Flexbox,
   ScrollArea,
   Text,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import { t } from 'i18next';
 import { useTranslation } from 'react-i18next';
 

@@ -18,7 +18,10 @@ const {
   mockUpdateConfig,
   mockFindById,
   mockCreatePlugin,
+  mockGetMcpList,
   mockGetMcpManifest,
+  mockInstallMarketplaceConnector,
+  mockQueryConnectorsByIdentifiers,
   mockQueryPlugins,
   mockResolveConnectors,
   mockUpdatePlugin,
@@ -26,7 +29,10 @@ const {
   mockCountAgents: vi.fn(),
   mockCreatePlugin: vi.fn(),
   mockFindById: vi.fn(),
+  mockGetMcpList: vi.fn(),
   mockGetMcpManifest: vi.fn(),
+  mockInstallMarketplaceConnector: vi.fn(),
+  mockQueryConnectorsByIdentifiers: vi.fn(),
   mockQueryPlugins: vi.fn(),
   mockResolveConnectors: vi.fn(),
   mockUpdatePlugin: vi.fn(),
@@ -72,8 +78,16 @@ vi.mock('@/database/models/plugin', () => ({
 
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn(function () {
-    return { resolveAll: mockResolveConnectors };
+    return {
+      queryAvailableForAgent: mockResolveConnectors,
+      queryByIdentifiers: mockQueryConnectorsByIdentifiers,
+      resolveAll: mockResolveConnectors,
+    };
   }),
+}));
+
+vi.mock('@/server/services/connector/marketplaceInstall', () => ({
+  installMarketplaceMcpConnector: mockInstallMarketplaceConnector,
 }));
 
 vi.mock('@/server/services/discover', () => ({
@@ -81,6 +95,9 @@ vi.mock('@/server/services/discover', () => ({
     return {
       getAssistantDetail: mockGetAssistantDetail,
       getAssistantList: mockGetAssistantList,
+      // The market's detail of an MCP it does not host
+      getMcpDetail: async () => ({}),
+      getMcpList: mockGetMcpList,
       getMcpManifest: mockGetMcpManifest,
     };
   }),
@@ -116,8 +133,10 @@ describe('agentManagementRuntime', () => {
     mockExistsById.mockResolvedValue(true);
     mockServiceUpdateConfig.mockImplementation((...args) => mockUpdateConfig(...args));
     mockResolveConnectors.mockResolvedValue([]);
+    mockQueryConnectorsByIdentifiers.mockResolvedValue([]);
     mockQueryPlugins.mockResolvedValue([]);
     mockGetMcpManifest.mockRejectedValue(new Error('not in marketplace'));
+    mockInstallMarketplaceConnector.mockResolvedValue({ status: 'installed' });
   });
 
   it('does not persist a model change rejected by the shared-agent policy', async () => {
@@ -242,6 +261,7 @@ describe('agentManagementRuntime', () => {
 
       expect(run).toHaveBeenCalledWith({
         agentId: 'agent-target',
+        background: false,
         description: 'Call agent agent-target',
         instruction: 'Do delegated work',
         timeout: 1_800_000,
@@ -515,14 +535,111 @@ describe('agentManagementRuntime', () => {
     });
   });
 
+  // Agent Management could install a market plugin but had no way to find
+  // one, so the model either guessed an identifier or gave up.
+  describe('searchMarketTools', () => {
+    it('searches the MCP marketplace and marks installed plugins', async () => {
+      mockGetMcpList.mockResolvedValue({
+        items: [
+          { author: 'tavily', description: 'Web search', identifier: 'tavily', name: 'Tavily' },
+          { description: 'Repos', identifier: 'github', name: 'GitHub' },
+        ],
+        totalCount: 2,
+      });
+      mockQueryPlugins.mockResolvedValue([{ identifier: 'github' }]);
+
+      const result = await createRuntime().searchMarketTools({
+        category: 'web-search',
+        query: 'search',
+      });
+
+      expect(mockGetMcpList).toHaveBeenCalledWith({
+        category: 'web-search',
+        pageSize: 10,
+        q: 'search',
+      });
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('- Tavily (tavily): Web search');
+      expect(result.content).toContain('- GitHub (github) [installed]: Repos');
+      expect(result.state.tools.map((t: any) => [t.identifier, t.installed])).toEqual([
+        ['tavily', false],
+        ['github', true],
+      ]);
+    });
+
+    it('marks marketplace MCPs installed as connectors, once their install finished', async () => {
+      mockGetMcpList.mockResolvedValue({
+        items: [
+          { identifier: 'fetch-mcp', name: 'Fetch' },
+          { identifier: 'half-mcp', name: 'Half' },
+          { identifier: 'custom-mcp', name: 'Custom' },
+        ],
+        totalCount: 3,
+      });
+      const connector = {
+        mcpConnectionType: 'cloud',
+        metadata: { marketplaceInstalled: true },
+        sourceType: 'marketplace',
+      };
+      mockQueryConnectorsByIdentifiers.mockResolvedValue([
+        { ...connector, identifier: 'fetch-mcp' },
+        // An install still running (or interrupted) is not one yet
+        { ...connector, identifier: 'half-mcp', metadata: {} },
+        // A custom connector is not this marketplace MCP
+        { ...connector, identifier: 'custom-mcp', sourceType: 'custom' },
+      ]);
+
+      const result = await createRuntime().searchMarketTools({ query: 'mcp' });
+
+      expect(mockQueryConnectorsByIdentifiers).toHaveBeenCalledWith([
+        'fetch-mcp',
+        'half-mcp',
+        'custom-mcp',
+      ]);
+      expect(result.content).toContain('- Fetch (fetch-mcp) [installed]');
+      expect(result.state.tools.map((t: any) => [t.identifier, t.installed])).toEqual([
+        ['fetch-mcp', true],
+        ['half-mcp', false],
+        ['custom-mcp', false],
+      ]);
+    });
+
+    it('caps the page size at the advertised max', async () => {
+      mockGetMcpList.mockResolvedValue({ items: [], totalCount: 0 });
+
+      const result = await createRuntime().searchMarketTools({ pageSize: 100 });
+
+      expect(mockGetMcpList).toHaveBeenCalledWith(expect.objectContaining({ pageSize: 20 }));
+      expect(result).toMatchObject({
+        content: 'Found 0 tool(s) in the marketplace.',
+        success: true,
+      });
+    });
+
+    it('reports a marketplace failure as a failed tool call', async () => {
+      mockGetMcpList.mockRejectedValue(new Error('unauthorized'));
+
+      const result = await createRuntime().searchMarketTools({ query: 'x' });
+
+      expect(result).toEqual({
+        content: 'Failed to search market tools: unauthorized',
+        success: false,
+      });
+    });
+  });
+
   describe('installPlugin', () => {
-    it('installs a marketplace plugin with its manifest and pins it', async () => {
-      const manifest = { api: [{ name: 'run' }], identifier: 'plugin-b' };
+    it('installs a marketplace MCP as a connector, not a plugin row, and pins it', async () => {
+      const manifest = { identifier: 'plugin-b', tools: [{ name: 'run' }] };
       mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: ['plugin-a'] });
       mockFindById.mockResolvedValue(undefined);
       mockGetMcpManifest.mockResolvedValue(manifest);
+      // The connector the install wrote, as the agent's runs resolve it
+      mockResolveConnectors.mockResolvedValue([
+        { identifier: 'plugin-b', isEnabled: true, status: 'connected' },
+      ]);
 
-      const runtime = createRuntime();
+      const runtime = createWorkspaceRuntime();
       const result = await runtime.installPlugin({
         agentId: 'agent-1',
         identifier: 'plugin-b',
@@ -531,14 +648,37 @@ describe('agentManagementRuntime', () => {
 
       expect(result.success).toBe(true);
       expect(result.content).toContain('next run');
-      expect(mockCreatePlugin).toHaveBeenCalledWith({
-        identifier: 'plugin-b',
+      expect(mockInstallMarketplaceConnector).toHaveBeenCalledWith(
+        { serverDB: {}, userId: 'user-1', workspaceId: 'workspace-1' },
+        'plugin-b',
         manifest,
-        type: 'plugin',
-      });
+        { readHostedEndpoint: expect.any(Function) },
+      );
+      expect(mockCreatePlugin).not.toHaveBeenCalled();
+      expect(mockUpdatePlugin).not.toHaveBeenCalled();
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
         plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'pinned' }],
       });
+    });
+
+    it('refuses a marketplace MCP the server cannot install and pins nothing', async () => {
+      mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
+      mockFindById.mockResolvedValue(undefined);
+      mockGetMcpManifest.mockResolvedValue({ identifier: 'local-mcp' });
+      mockInstallMarketplaceConnector.mockResolvedValue({
+        blocker: 'local-only',
+        status: 'blocked',
+      });
+
+      const result = await createRuntime().installPlugin({
+        agentId: 'agent-1',
+        identifier: 'local-mcp',
+        source: 'market',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ type: 'PluginNeedsDesktop' });
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
     });
 
     // Vent msg_f46kelJyavbcB2Xkz9: `adkit` was a custom MCP behind OAuth whose
@@ -576,6 +716,7 @@ describe('agentManagementRuntime', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toMatchObject({ type: 'PluginNotFound' });
+      expect(mockInstallMarketplaceConnector).not.toHaveBeenCalled();
       expect(mockCreatePlugin).not.toHaveBeenCalled();
       expect(mockUpdateConfig).not.toHaveBeenCalled();
     });

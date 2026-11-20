@@ -1,5 +1,9 @@
 import type { IconType } from '@icons-pack/react-simple-icons';
-import { SiGithub, SiLinear, SiPosthog, SiVercel, SiX } from '@icons-pack/react-simple-icons';
+import SiGithub from '@icons-pack/react-simple-icons/icons/SiGithub';
+import SiLinear from '@icons-pack/react-simple-icons/icons/SiLinear';
+import SiPosthog from '@icons-pack/react-simple-icons/icons/SiPosthog';
+import SiVercel from '@icons-pack/react-simple-icons/icons/SiVercel';
+import SiX from '@icons-pack/react-simple-icons/icons/SiX';
 
 import { OFFICIAL_SITE } from './url';
 

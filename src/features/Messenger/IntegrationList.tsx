@@ -1,13 +1,12 @@
 'use client';
 
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Block, createStaticStyles, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { ChevronRightIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { SerializedMessengerPlatformDefinition } from '@/server/services/messenger/platforms/types';
+import { densityVars } from '@/styles/densityVars';
 
 import { type MessengerPlatform, PlatformAvatar } from './constants';
 
@@ -17,7 +16,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   // both), rounded a step larger so it reads as the same surface as 消息频道.
   card: css`
     cursor: pointer;
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border-radius: ${cssVar.borderRadiusLG};
     transition: border-color 0.2s ease;
 
@@ -28,7 +27,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   grid: css`
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    gap: ${densityVars.contentGap};
 
     @media (width <= 720px) {
       grid-template-columns: 1fr;

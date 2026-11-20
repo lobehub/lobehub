@@ -1,3 +1,7 @@
+import { type ConversationContext } from '@lobechat/types';
+
+import { conversationMessagesKey } from '@/services/message/replica';
+
 import { type ChatStoreState } from '../../../initialState';
 import { operationSelectors } from '../../operation/selectors';
 import { getDbMessageByToolCallId } from './dbMessage';
@@ -62,7 +66,13 @@ const isToolApiNameShining =
 
 const isCreatingMessage = (s: ChatStoreState) => s.isCreatingMessage;
 
+/** A forward transcript has rounds after its loaded pages. */
+const hasLaterMessages = (context: ConversationContext) => (s: ChatStoreState) =>
+  context.messageReadMode === 'forward' &&
+  !!s.messagePagingMap[conversationMessagesKey(context)]?.hasMore;
+
 export const messageStateSelectors = {
+  hasLaterMessages,
   isCreatingMessage,
   isInToolsCalling,
   isMessageCollapsed,

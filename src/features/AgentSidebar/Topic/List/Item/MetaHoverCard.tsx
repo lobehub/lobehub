@@ -1,6 +1,5 @@
 import type { ChatTopicMetadata } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Icon } from '@lobehub/ui';
 import type { Clock } from 'lucide-react';
 import { GitBranchIcon, GitForkIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -9,6 +8,9 @@ import { useTranslation } from 'react-i18next';
 
 import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { useChatStore } from '@/store/chat';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import {
   getCiVisual,
@@ -28,7 +30,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   header: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: baseline;
     justify-content: space-between;
   `,
@@ -40,7 +42,7 @@ const styles = createStaticStyles(({ css }) => ({
   headerTitle: css`
     overflow: hidden;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     font-weight: 500;
     line-height: 20px;
     color: ${cssVar.colorText};
@@ -134,7 +136,8 @@ const MetaHoverCard = memo<MetaHoverCardProps>(({ metadata, title, time, topicId
   const useFetchTopicLinkedPullRequest = useChatStore((s) => s.useFetchTopicLinkedPullRequest);
   useFetchTopicLinkedPullRequest(topicId, metadata);
 
-  const card = getTopicMetaCard(metadata);
+  const betterCoding = useUserStore(labPreferSelectors.enableBetterCodingExperience);
+  const card = getTopicMetaCard(metadata, { hideRecordedPullRequest: betterCoding });
   if (!card) return null;
 
   const { repoName, repoType, branch, detached, worktreeName, pullRequest } = card;

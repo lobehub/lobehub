@@ -120,7 +120,8 @@ export class TaskLifecycleSliceActionImpl {
     options?: { actorAgentId?: string; error?: string },
   ): Promise<string> => {
     const { actorAgentId, error } = options ?? {};
-    const resolvedId = id ?? this.#get().activeTaskId;
+    const ref = id ?? this.#get().activeTaskId;
+    const resolvedId = ref ? (this.#get().taskRefIndex[ref] ?? ref) : undefined;
 
     if (!resolvedId) {
       throw new Error('No task identifier provided and no current task context.');

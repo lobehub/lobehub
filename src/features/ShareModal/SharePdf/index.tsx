@@ -1,10 +1,10 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { Center, Flexbox } from '@lobehub/ui';
-import { Button, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Button, Center, createStaticStyles, Flexbox, Text, toast } from '@lobehub/ui';
 import { DownloadIcon, RotateCwIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { densityVars } from '@/styles/densityVars';
 
 import ExportLayout from '../components/ExportLayout';
 import TextOptions from '../ShareText/TextOptions';
@@ -34,7 +34,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     height: 32px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: 16px;
 
     font-size: 12px;

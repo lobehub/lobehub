@@ -21,6 +21,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
 import { VERIFY_PLAN_MODEL_CONFIG } from './modelConfig';
+import { resolveVerifyResponseLanguage } from './responseLanguage';
 import { RawGeneratedCriteriaSchema } from './schema';
 
 const log = debug('lobe-server:verify-plan-generator');
@@ -133,6 +134,7 @@ const criterionToCheckItem = (
 export class VerifyPlanGeneratorService {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
+  private readonly workspaceId?: string;
   private readonly criterionModel: VerifyCriterionModel;
   private readonly rubricModel: VerifyRubricModel;
   private readonly runModel: VerifyRunModel;
@@ -153,6 +155,7 @@ export class VerifyPlanGeneratorService {
   ) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
     this.callerAgentVisibility = callerAgentVisibility;
     this.criterionModel = new VerifyCriterionModel(db, userId, workspaceId);
     this.rubricModel = new VerifyRubricModel(db, userId, workspaceId);
@@ -173,11 +176,16 @@ export class VerifyPlanGeneratorService {
     maxCriteria?: number;
   }): Promise<CriterionDraft[]> {
     const maxCriteria = params.maxCriteria ?? DEFAULT_MAX_AI_CRITERIA;
-    const raw = await new AiGenerationService(this.db, this.userId).generateObject(
+    const raw = await new AiGenerationService(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).generateObject(
       {
         ...chainVerifyPlan({
           context: params.context,
           goal: params.goal,
+          language: await resolveVerifyResponseLanguage(this.db, this.userId),
           maxCriteria,
         }),
         ...VERIFY_PLAN_MODEL_CONFIG,
@@ -327,10 +335,11 @@ export class VerifyPlanGeneratorService {
       context: params.context,
       existingTitles: params.existingTitles,
       goal: params.goal,
+      language: await resolveVerifyResponseLanguage(this.db, this.userId),
       maxCriteria: params.maxCriteria,
     });
 
-    const ai = new AiGenerationService(this.db, this.userId);
+    const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
     const raw = await ai.generateObject(
       {
         ...chain,

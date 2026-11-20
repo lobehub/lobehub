@@ -14,6 +14,7 @@ import {
   acceptances,
   agentOperations,
   agents,
+  documents,
   goalEdges,
   goalEvents,
   goalNodeDecisions,
@@ -29,6 +30,7 @@ import {
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { GoalService } from './index';
 import { GoalReportStore } from './reportStore';
@@ -324,6 +326,59 @@ describe('GoalService wrap-up branch', () => {
     expect(reportTaskRuns()).toHaveLength(0);
   });
 
+  it('assigns the wrap-up Task to the Goal creator', async () => {
+    const service = new GoalService(serverDB, userId);
+    const { acceptanceTaskId, goalId, taskModel } = await runToAcceptance(service);
+    await taskModel.updateStatus(acceptanceTaskId, 'completed');
+    await service.tick(goalId);
+    await service.tick(goalId);
+
+    const [{ taskId }] = reportTaskRuns().map(([params]: any) => params);
+    const task = await taskModel.findById(taskId);
+    expect(task?.assigneeUserId).toBe(userId);
+  });
+
+  /**
+   * Regression: the result is claimed before the Task is created and never
+   * retried, so a creator who stops being assignable between resolving the owner
+   * and `createTask`'s own check must not cost the Goal its report.
+   */
+  it('still writes the report, unassigned, when the creator stops being assignable mid-dispatch', async () => {
+    const service = new GoalService(serverDB, userId);
+    const { acceptanceTaskId, goalId, taskModel } = await runToAcceptance(service);
+    await taskModel.updateStatus(acceptanceTaskId, 'completed');
+    // Assignable when the owner is resolved, gone by the time `createTask` checks.
+    let ownerChecks = 0;
+    vi.spyOn(TaskService.prototype, 'assertAssigneeUserAssignable').mockImplementation(
+      async (assigneeUserId) => {
+        if (assigneeUserId && ++ownerChecks > 1) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Assignee user not found' });
+        }
+      },
+    );
+    await service.tick(goalId);
+    await service.tick(goalId);
+
+    const [{ taskId }] = reportTaskRuns().map(([params]: any) => params);
+    const task = await taskModel.findById(taskId);
+    expect(task?.assigneeUserId).toBeNull();
+    expect((await service.graph(goalId)).report?.dispatch.error).toBeUndefined();
+  });
+
+  it('does not retry away a wrap-up failure the owner did not cause', async () => {
+    const service = new GoalService(serverDB, userId);
+    const { acceptanceTaskId, goalId, taskModel } = await runToAcceptance(service);
+    await taskModel.updateStatus(acceptanceTaskId, 'completed');
+    const createTask = vi
+      .spyOn(TaskService.prototype, 'createTask')
+      .mockRejectedValue(new Error('database unavailable'));
+    await service.tick(goalId);
+    await service.tick(goalId);
+
+    expect(createTask).toHaveBeenCalledTimes(1);
+    expect((await service.graph(goalId)).report?.dispatch.error).toBe('database unavailable');
+  });
+
   /**
    * Regression: a heterogeneous wrap-up agent never receives server tools, so an
    * instruction naming only the report tool could never be followed.
@@ -569,6 +624,42 @@ describe('GoalReportStore.submit', () => {
     ).toMatchObject({
       items: expect.not.arrayContaining([expect.objectContaining({ type: 'goal_report' })]),
     });
+  });
+
+  it('stores the report as one HTML page per Goal, rewritten by later versions', async () => {
+    const { goalId, metadata, service, topicId } = await setup();
+    const reports = new GoalReportStore(serverDB, userId);
+    const page = (n: number) => `<!doctype html><html><body><h1>Report v${n}</h1></body></html>`;
+
+    await reports.submit(goalId, { content: '# Report v1', html: page(1), metadata }, { topicId });
+    const first = (await service.graph(goalId)).report?.latest;
+    expect(first?.pageDocumentId).toBeDefined();
+
+    await reports.submit(goalId, { content: '# Report v2', html: page(2), metadata }, { topicId });
+    const second = (await service.graph(goalId)).report?.latest;
+    // The same page, now holding the newer report; the markdown stays the fallback.
+    expect(second).toMatchObject({ content: '# Report v2', pageDocumentId: first?.pageDocumentId });
+
+    const [stored] = await serverDB
+      .select()
+      .from(documents)
+      .where(eq(documents.id, first!.pageDocumentId!));
+    expect(stored).toMatchObject({ content: page(2), editorData: null, fileType: 'custom/html' });
+  });
+
+  it('writes no page for a report without HTML', async () => {
+    const { goalId, metadata, service, topicId } = await setup();
+
+    await new GoalReportStore(serverDB, userId).submit(
+      goalId,
+      { content: '# Report', metadata },
+      { topicId },
+    );
+
+    expect((await service.graph(goalId)).report?.latest?.pageDocumentId).toBeUndefined();
+    expect(
+      await serverDB.select().from(documents).where(eq(documents.fileType, 'custom/html')),
+    ).toHaveLength(0);
   });
 
   /**

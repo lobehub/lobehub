@@ -1,10 +1,10 @@
+import type { UserMemoryIdentityInsert } from '@lobechat/types';
 // @vitest-environment node
 import { RelationshipEnum } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import type { NewUserMemoryIdentity } from '../../../schemas';
 import { userMemories, userMemoriesIdentities, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { UserMemoryIdentityModel } from '../identity';
@@ -29,7 +29,7 @@ beforeEach(async () => {
 describe('UserMemoryIdentityModel', () => {
   describe('create', () => {
     it('should create a new identity', async () => {
-      const identityData: Omit<NewUserMemoryIdentity, 'userId'> = {
+      const identityData: Omit<UserMemoryIdentityInsert, 'userId'> = {
         type: 'personal',
         description: 'Software developer',
         role: 'developer',
@@ -84,17 +84,13 @@ describe('UserMemoryIdentityModel', () => {
       ]);
     });
 
-    it('should return identities for current user only', async () => {
+    it('returns current user identities by descending capture time', async () => {
       const result = await identityModel.query();
 
       expect(result).toHaveLength(2);
       expect(result.every((i) => i.userId === userId)).toBe(true);
-    });
 
-    it('should order by capturedAt desc', async () => {
-      const result = await identityModel.query();
-
-      expect(result[0].id).toBe('identity-2'); // Most recent first
+      expect(result[0].id).toBe('identity-2');
       expect(result[1].id).toBe('identity-1');
     });
 
@@ -103,13 +99,6 @@ describe('UserMemoryIdentityModel', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('identity-2');
-    });
-
-    it('should not return other users identities', async () => {
-      const result = await identityModel.query();
-
-      const otherIdentity = result.find((i) => i.id === 'other-identity');
-      expect(otherIdentity).toBeUndefined();
     });
   });
 
@@ -407,13 +396,16 @@ describe('UserMemoryIdentityModel', () => {
       expect(result.total).toBe(2);
     });
 
-    it('should return all relationships when specified', async () => {
+    it('returns requested identity relationships within the user scope', async () => {
       const result = await identityModel.queryList({
         relationships: [RelationshipEnum.Self, RelationshipEnum.Friend],
       });
 
       expect(result.items).toHaveLength(3);
       expect(result.total).toBe(3);
+
+      const otherIdentity = result.items.find((i) => i.id === 'other-list-id');
+      expect(otherIdentity).toBeUndefined();
     });
 
     it('should return correct page and pageSize', async () => {
@@ -560,15 +552,6 @@ describe('UserMemoryIdentityModel', () => {
       expect(result.items[1].type).toBe('professional');
     });
 
-    it('should not return other users identities', async () => {
-      const result = await identityModel.queryList({
-        relationships: [RelationshipEnum.Self, RelationshipEnum.Friend],
-      });
-
-      const otherIdentity = result.items.find((i) => i.id === 'other-list-id');
-      expect(otherIdentity).toBeUndefined();
-    });
-
     it('should return correct fields structure', async () => {
       const result = await identityModel.queryList({ pageSize: 1 });
 
@@ -634,7 +617,7 @@ describe('UserMemoryIdentityModel', () => {
       ]);
     });
 
-    it('should only return self and null relationship identities', async () => {
+    it('returns ordered self and unassigned identities with injection fields', async () => {
       const result = await identityModel.queryForInjection();
 
       expect(result).toHaveLength(2);
@@ -643,31 +626,9 @@ describe('UserMemoryIdentityModel', () => {
       expect(ids).toContain('self-identity');
       expect(ids).toContain('null-relationship-identity');
       expect(ids).not.toContain('friend-identity');
-    });
 
-    it('should order by capturedAt desc', async () => {
-      const result = await identityModel.queryForInjection();
-
-      expect(result[0].id).toBe('self-identity'); // Most recent capturedAt
-      expect(result[1].id).toBe('null-relationship-identity');
-    });
-
-    it('should respect limit parameter', async () => {
-      const result = await identityModel.queryForInjection(1);
-
-      expect(result).toHaveLength(1);
       expect(result[0].id).toBe('self-identity');
-    });
-
-    it('should not return other users identities', async () => {
-      const result = await identityModel.queryForInjection();
-
-      const otherUserIdentity = result.find((i) => i.id === 'other-user-self');
-      expect(otherUserIdentity).toBeUndefined();
-    });
-
-    it('should return correct fields for injection', async () => {
-      const result = await identityModel.queryForInjection();
+      expect(result[1].id).toBe('null-relationship-identity');
 
       expect(result[0]).toHaveProperty('id');
       expect(result[0]).toHaveProperty('type');
@@ -676,6 +637,13 @@ describe('UserMemoryIdentityModel', () => {
       expect(result[0]).toHaveProperty('capturedAt');
       expect(result[0]).toHaveProperty('createdAt');
       expect(result[0]).toHaveProperty('updatedAt');
+    });
+
+    it('should respect limit parameter', async () => {
+      const result = await identityModel.queryForInjection(1);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('self-identity');
     });
 
     it('does not inject an identity whose base memory is in the recycle bin', async () => {

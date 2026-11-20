@@ -18,7 +18,7 @@ describe('workspaceContextPrompt', () => {
       'MUST start with the workspace slug prefix "https://app.lobehub.com/lobehub/"',
     );
     expect(result).toContain(
-      'agent task detail: https://app.lobehub.com/lobehub/agent/<agentId>/task/<T-123>',
+      'agent task detail: https://app.lobehub.com/lobehub/agent/<agentId>/task/<taskIdentifier>',
     );
     expect(result).toContain(
       'knowledge base: https://app.lobehub.com/lobehub/resource/library/<knowledgeBaseId>',
@@ -45,7 +45,7 @@ describe('workspaceContextPrompt', () => {
     expect(result).toContain('<workspace_slug>acme</workspace_slug>');
     expect(result).not.toContain('<app_url>');
     expect(result).toContain('<link_base>/acme</link_base>');
-    expect(result).toContain('page (workspace document): /acme/page/<documentId>');
+    expect(result).toContain('page (workspace document): /acme/resource/page/<documentId>');
   });
 
   it('describes the personal scope when there is no workspace', () => {

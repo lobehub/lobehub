@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { GoalListItem } from '@/services/goal';
 
-import { isGoalRequestGenerating, MAX_LINKED_GOALS, selectLinkedGoals } from './linkedGoals';
+import {
+  isGoalRequestGenerating,
+  linkedGoalConfirmState,
+  MAX_LINKED_GOALS,
+  selectLinkedGoals,
+} from './linkedGoals';
 
 const goal = (id: string) => ({ goal: { id } }) as unknown as GoalListItem;
 
@@ -18,7 +23,7 @@ const createGoalTurn = (goalId: string) =>
             apiName: 'createGoal',
             arguments: '{}',
             id: `call-${goalId}`,
-            identifier: 'lobe-goal',
+            identifier: 'builtin-goal',
             result: { content: 'started', id: 'tool-1', state: { goalId, success: true } },
             type: 'builtin',
           },
@@ -103,5 +108,21 @@ describe('isGoalRequestGenerating', () => {
 
   it('stays off once nothing is generating', () => {
     expect(isGoalRequestGenerating([userMessage('/goal ship the report')], false)).toBe(false);
+  });
+});
+
+describe('linkedGoalConfirmState', () => {
+  it("reports the server answer once the rows are the server's", () => {
+    expect(linkedGoalConfirmState(true, undefined)).toBe('confirmed');
+  });
+
+  it('holds a neutral state while the first read is in flight', () => {
+    expect(linkedGoalConfirmState(false, undefined)).toBe('checking');
+  });
+
+  it('reports a failed confirmation instead of checking forever', () => {
+    // A settled goal with no run behind it stops polling, so nothing else would
+    // ever replace the "checking" state once the first read failed.
+    expect(linkedGoalConfirmState(false, new Error('offline'))).toBe('failed');
   });
 });

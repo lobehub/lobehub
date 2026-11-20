@@ -1,13 +1,12 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Button, createStaticStyles, cssVar, cx, Icon } from '@lobehub/ui';
 import { BotIcon, ClipboardCheckIcon, FileSearchIcon, PlusIcon, ScaleIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   actions: css`
@@ -64,7 +63,7 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 14px;
     align-items: center;
 
-    padding-block: 16px;
+    padding-block: ${densityVars.cardPadding};
     padding-inline: 20px;
 
     & + & {

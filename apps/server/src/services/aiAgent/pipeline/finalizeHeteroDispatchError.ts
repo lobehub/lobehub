@@ -1,5 +1,9 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { DeviceUnavailableErrorData, ErrorType } from '@lobechat/types';
+import type {
+  ChatErrorDispatchContext,
+  DeviceUnavailableErrorData,
+  ErrorType,
+} from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 import debug from 'debug';
 
@@ -16,6 +20,11 @@ const log = debug('lobe-server:ai-agent-service');
 /** The part of `HeteroDispatchDeps` that settling a dispatch failure needs. */
 export interface HeteroDispatchErrorDeps {
   db: LobeChatDatabase;
+  /**
+   * A share visitor run: its topic and messages are visitor rows, which the
+   * models hide unless opted in, so settling the run must opt in too.
+   */
+  includeShareVisitor?: boolean;
   messageModel: MessageModel;
   topicModel: TopicModel;
   userId: string;
@@ -52,6 +61,12 @@ export const finalizeHeteroDispatchError = async (
     agentId?: string;
     assistantMessageId: string;
     detail: string;
+    /**
+     * Allowlisted cause of the dispatch failure. Unlike `detail`, it also rides
+     * on the lifecycle error, so completion hooks (the IM bot reply) can name
+     * the cause without receiving the free-form text.
+     */
+    dispatch?: ChatErrorDispatchContext;
     /** The device this dispatch was routed to, when it was a device dispatch. */
     deviceRoute?: DeviceDispatchRoute;
     errorData?: DeviceUnavailableErrorData;
@@ -71,6 +86,7 @@ export const finalizeHeteroDispatchError = async (
     assistantMessageId,
     detail,
     deviceRoute,
+    dispatch,
     errorData,
     errorType = ChatErrorType.ServerAgentRuntimeError,
     message,
@@ -82,7 +98,11 @@ export const finalizeHeteroDispatchError = async (
   //    end event below re-reads a message that already carries the error.
   await deps.messageModel.update(assistantMessageId, {
     content: '',
-    error: { body: { detail, ...errorData }, message, type: errorType },
+    error: {
+      body: { detail, ...errorData, ...(dispatch && { dispatch }) },
+      message,
+      type: errorType,
+    },
   });
 
   // 1b. Finalize the run through CompletionLifecycle's single entry — the SAME
@@ -97,11 +117,18 @@ export const finalizeHeteroDispatchError = async (
   //     hooks, so asking afterwards can no longer tell "delivered" from "never
   //     had one".
   const terminalReported = hookDispatcher.canDeliver(operationId, 'onComplete');
-  await new CompletionLifecycle(deps.db, deps.userId, deps.workspaceId).completeOperation(
+  await new CompletionLifecycle(deps.db, deps.userId, deps.workspaceId, {
+    includeShareVisitor: deps.includeShareVisitor,
+  }).completeOperation(
     {
       agentId,
       assistantMessageId,
-      error: { message, type: errorType, ...(deviceRoute && { deviceRoute }) },
+      error: {
+        message,
+        type: errorType,
+        ...(deviceRoute && { deviceRoute }),
+        ...(dispatch && { body: { dispatch } }),
+      },
       operationId,
       serializedHooks: hookDispatcher.getSerializedHooks(operationId),
       topicId,

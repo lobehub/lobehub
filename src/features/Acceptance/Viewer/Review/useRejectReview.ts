@@ -2,7 +2,7 @@
 
 import { FULL_FRAME_RECT } from '@lobechat/const/verify';
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
-import { useModalContext } from '@lobehub/ui/base-ui';
+import { useModalContext } from '@lobehub/ui';
 import { useEffect, useState } from 'react';
 
 import type { PendingAttachment } from '../Evidence/attachments';

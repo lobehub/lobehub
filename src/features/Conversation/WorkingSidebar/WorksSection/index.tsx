@@ -1,20 +1,21 @@
 import type { WorkListItem } from '@lobechat/types';
-import { Center, Empty, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Spin } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, Center, Empty, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { ClipboardListIcon, HistoryIcon, ListIcon } from 'lucide-react';
-import { memo, useEffect, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
+import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
 import { getAllWorkSummaries } from '@/features/Conversation/store/slices/data/workSummaries';
 import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
-import { useClientDataSWR } from '@/libs/swr';
-import { workKeys } from '@/libs/swr/keys';
 import { workService } from '@/services/work';
 import { useChatStore } from '@/store/chat';
 import { dbMessageSelectors, operationSelectors } from '@/store/chat/selectors';
+import { useWorkStore, workActions, workSelectors } from '@/store/work';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import WorkVersionHistoryCard from './WorkVersionHistoryCard';
 
@@ -22,23 +23,24 @@ type WorksViewMode = 'history' | 'summary';
 
 const WORKS_VIEW_MODE_STORAGE_KEY = 'lobechat-working-panel-works-view-mode';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    min-height: 0;
-    padding-block: 8px;
-    padding-inline: 8px 12px;
-  `,
-  modeToolbar: css`
-    flex-shrink: 0;
-    align-self: flex-end;
-  `,
-  workCard: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const EMPTY_HISTORY: WorkListItem[] = [];
+
+const styles = stylex.create({
+  container: { minHeight: '0' },
+  list: {
+    minHeight: '0',
+    paddingBlockStart: sidebarRow.paneBlockStart,
+    paddingBlockEnd: sidebarRow.paneBlockEnd,
+    paddingInline: sidebarRow.paneInline,
+  },
+  modeToolbar: {
+    flexShrink: 0,
+    justifyContent: 'flex-end',
+    height: sidebarRow.toolbarHeight,
+    paddingInlineStart: sidebarRow.toolbarPaddingInlineStart,
+    paddingInlineEnd: sidebarRow.toolbarPaddingInlineEnd,
+  },
+});
 
 const WorksModeToolbar = memo<{
   mode: WorksViewMode;
@@ -47,7 +49,12 @@ const WorksModeToolbar = memo<{
   const { t } = useTranslation('chat');
 
   return (
-    <Flexbox horizontal className={styles.modeToolbar} gap={4}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.modeToolbar).className}
+      gap={4}
+    >
       <ActionIcon
         active={mode === 'summary'}
         icon={ListIcon}
@@ -135,62 +142,62 @@ const WorksSection = memo<WorksSectionProps>(({ active = true }) => {
   }, [summaryData, isRunning, topicId, threadId]);
 
   // History (version timeline) is heavier and genuinely on-demand — keep it on
-  // its own lazy fetch, gated so a collapsed / inactive sidebar never pulls it.
-  const {
-    data: historyData = [],
-    error: historyError,
-    isLoading: isHistoryLoading,
-  } = useClientDataSWR<WorkListItem[]>(
-    mode === 'history' && topicId && active
-      ? workKeys.conversation(topicId, threadId ?? null)
-      : null,
-    () => workService.listByConversation({ threadId, topicId }),
-    {
-      fallbackData: [],
-      revalidateOnFocus: false,
-    },
+  // its own lazy sync, gated so a collapsed / inactive sidebar never pulls it.
+  // It is a replica: a revisit or reload paints the last history first.
+  const historyParams = useMemo(
+    () => (mode === 'history' && topicId && active ? { threadId, topicId } : null),
+    [active, mode, threadId, topicId],
   );
+  const historySync = workActions.useFetchConversationWorks(historyParams, {
+    revalidateOnFocus: false,
+  });
+  const storedHistory = useWorkStore(workSelectors.conversationWorks(historyParams));
+  const historyData = storedHistory ?? EMPTY_HISTORY;
+  const historyPending = !!historyParams && storedHistory === undefined;
 
-  const isLoading = mode === 'history' ? isHistoryLoading : false;
-  const error = mode === 'history' ? historyError : undefined;
+  // Settled history stays on screen when a background refresh fails.
+  const error = historyPending ? historySync.error : undefined;
+  // Before the stored copy is read, paint nothing rather than a spinner the
+  // cached history replaces a frame later.
+  const isHydrating = historyPending && !historySync.isHydrated;
+  const isLoading = historyPending && !error && !isHydrating;
   const data = mode === 'summary' ? summaryData : historyData;
 
   const content = (() => {
-    if (isLoading) {
-      return (
-        <Center flex={1}>
-          <Spin size="middle" />
-        </Center>
-      );
-    }
+    if (isHydrating) return null;
+
+    if (isLoading) return <SkeletonList compact rows={4} />;
 
     if (error) {
       return (
-        <Center flex={1}>
-          <Empty description={t('workingPanel.works.error')} icon={ClipboardListIcon} />
-        </Center>
+        <AsyncError
+          align={'start'}
+          error={error}
+          title={t('workingPanel.works.error')}
+          variant={'inline'}
+        />
       );
     }
 
     if (data.length === 0) {
       return (
-        <Center flex={1}>
+        <Center flex={1} paddingBlock={24}>
           <Empty description={t('workingPanel.works.empty')} icon={ClipboardListIcon} />
         </Center>
       );
     }
 
     return mode === 'summary'
-      ? summaryData.map((work) => (
-          <WorkSummaryCard className={styles.workCard} item={work} key={work.id} />
-        ))
+      ? summaryData.map((work) => <WorkSummaryCard item={work} key={work.id} variant={'row'} />)
       : historyData.map((work) => <WorkVersionHistoryCard key={work.id} work={work} />);
   })();
 
   return (
-    <Flexbox className={styles.container} flex={1} gap={12}>
+    <Flexbox className={stylex.props(styles.container).className} flex={1}>
       <WorksModeToolbar mode={mode} setMode={setMode} />
-      {content}
+      <Flexbox className={stylex.props(styles.list).className} flex={1} gap={1}>
+        {content}
+      </Flexbox>
     </Flexbox>
   );
 });

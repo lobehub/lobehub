@@ -32,7 +32,7 @@ const runtimeSchema = {
 
 const outputTypeSchema = {
   description:
-    'Shape of the JSON the script prints: stat (one number), list (items), series (time series), table (columns + rows).',
+    'Shape of the JSON the script prints: stat (one number), list (items), series (time series), table (columns + rows), data (free-form JSON drawn by view.layout — for rich cards such as weather).',
   enum: [...WIDGET_OUTPUT_TYPES],
   type: 'string',
 };
@@ -43,7 +43,7 @@ const manifestSchema = {
   properties: {
     env: {
       description:
-        'Secrets / variables the script reads from its environment. Each is injected from a connected account (connector) at run time and redacted from logs.',
+        'Secrets / variables the script reads from its environment. Each is injected from a connected account (connector) at run time and redacted from logs. For a LobeHub Market connector the value is a placeholder that only works sent as the configured header (default Authorization: Bearer) to the provider API host, which must be in network.allow.',
       items: {
         additionalProperties: false,
         properties: {
@@ -56,6 +56,24 @@ const manifestSchema = {
             description:
               'For a connector holding several headers: which header to inject, e.g. "X-Api-Key" (case-insensitive). Required then; ignored for single-secret connectors.',
             type: 'string',
+          },
+          inject: {
+            additionalProperties: false,
+            description:
+              'LobeHub Market connectors only (github, linear, notion, vercel, …): their variable holds a placeholder and the sandbox sets the real token as `header` on requests to `host`. Defaults per provider (github → Authorization: Bearer on api.github.com); set it only for another host or header. Every host must be in network.allow.',
+            properties: {
+              header: { description: 'Defaults to "Authorization".', type: 'string' },
+              host: {
+                description: 'API host (or list), exact or "*.domain".',
+                oneOf: [{ type: 'string' }, { items: { type: 'string' }, type: 'array' }],
+              },
+              prefix: {
+                description: 'Prepended to the token; defaults to "Bearer " for Authorization.',
+                type: 'string',
+              },
+            },
+            required: ['host'],
+            type: 'object',
           },
           name: { description: 'Variable name, e.g. GITHUB_TOKEN.', type: 'string' },
           required: { type: 'boolean' },
@@ -85,6 +103,38 @@ const manifestSchema = {
       required: ['allow'],
       type: 'object',
     },
+    params: {
+      description:
+        'Settings a person fills in (city, target date, repository) that the script reads from its environment as text. Never secrets — credentials go in env. Set value for this widget; default is the fallback.',
+      items: {
+        additionalProperties: false,
+        properties: {
+          default: { type: ['string', 'number', 'boolean'] },
+          description: { type: 'string' },
+          label: { description: 'Human label, e.g. "City".', type: 'string' },
+          name: { description: 'UPPER_SNAKE_CASE env name, e.g. CITY.', type: 'string' },
+          options: {
+            description: 'Choices of a select param.',
+            items: {
+              additionalProperties: false,
+              properties: { label: { type: 'string' }, value: { type: 'string' } },
+              required: ['value'],
+              type: 'object',
+            },
+            type: 'array',
+          },
+          required: { type: 'boolean' },
+          type: { enum: ['string', 'number', 'boolean', 'date', 'select'], type: 'string' },
+          value: {
+            description: "This widget's value (a date as YYYY-MM-DD).",
+            type: ['string', 'number', 'boolean'],
+          },
+        },
+        required: ['name', 'type'],
+        type: 'object',
+      },
+      type: 'array',
+    },
     schedule: {
       additionalProperties: false,
       description:
@@ -106,7 +156,7 @@ const manifestSchema = {
 
 const viewSchema = {
   additionalProperties: false,
-  description: 'Rendering hints for the card.',
+  description: 'How the card looks.',
   properties: {
     chart: { enum: ['line', 'bar', 'area'], type: 'string' },
     columns: {
@@ -114,7 +164,22 @@ const viewSchema = {
       items: { type: 'string' },
       type: 'array',
     },
+    html: {
+      description:
+        'A self-contained HTML document (inline CSS / JS / SVG / canvas) that draws the whole card in a sandboxed frame — for visuals the layout nodes cannot express, such as an illustrated scene or an animation. It reads the output from window.widgetData and cannot load anything from the network. Takes precedence over layout. See <card_html>.',
+      type: 'string',
+    },
+    layout: {
+      description:
+        'Declarative card template (a tree of stack / grid / text / icon / image / progress / ring / dots / sparkline / badge / divider / spacer / repeat nodes) whose values bind to the output by path. Required for outputType data; replaces the default rendering for the other types. See <card_layout>.',
+      type: 'object',
+    },
     limit: { description: 'Maximum list / table rows on the card.', type: 'number' },
+    surface: {
+      description:
+        'Card background: a surface name (default, sky, cloudy, rain, storm, snow, night, sunset, forest, ocean, sand, rose, slate) or a binding {"bind":"data.x","map":{…}} that picks one from the data.',
+      type: ['string', 'object'],
+    },
   },
   type: 'object',
 };
@@ -133,11 +198,58 @@ export const DashboardManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Create a monitoring widget and save its first draft. Nothing runs and nothing goes live; call dryRunWidget next. The widget is owned by the current agent (and project, in a project conversation).',
+        'Ready-made widgets (weather, countdown, year progress, GitHub repository, Hacker News, …) with their settings. Check it before writing a widget from scratch: install a match with createWidgetDraft({presetId, params}).',
+      name: DashboardApiName.listWidgetPresets,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          category: {
+            description: 'Only presets of this category.',
+            enum: ['time', 'weather', 'dev', 'life', 'finance', 'content', 'business'],
+            type: 'string',
+          },
+        },
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Create an empty dashboard (in a project conversation it belongs to the project) and return its id. Check listDashboards first so you do not duplicate an existing board; to create a board for one widget, addWidgetToDashboard with newDashboardTitle does both in one step.',
+      name: DashboardApiName.createDashboard,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          description: {
+            description:
+              'What the dashboard monitors and why, shown under its title, e.g. "Launch monitoring for iBench 0.1: hourly engagement of the announcement post and daily GitHub stars since open-sourcing on 2026-10-29." At most 2000 characters.',
+            type: 'string',
+          },
+          title: {
+            description: 'Dashboard title, e.g. "iBench launch". At most 200 characters.',
+            type: 'string',
+          },
+        },
+        required: ['title', 'description'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Create a monitoring widget and save its first draft. Nothing runs and nothing goes live; call dryRunWidget next. The widget is owned by the current agent (and project, in a project conversation). Pass presetId to install a preset from listWidgetPresets: its script, manifest and view are used, params fills its settings, and any other field you pass overrides the preset.',
       name: DashboardApiName.createWidgetDraft,
       parameters: {
         additionalProperties: false,
         properties: {
+          params: {
+            additionalProperties: { type: ['string', 'number', 'boolean'] },
+            description:
+              'With presetId: values for the preset\'s params by name, e.g. {"CITY":"Hangzhou"}.',
+            type: 'object',
+          },
+          presetId: {
+            description: 'Id of a preset from listWidgetPresets to install.',
+            type: 'string',
+          },
           description: {
             description:
               'Metric definition (口径) shown on the card: data source, filters, time window and unit.',
@@ -150,7 +262,7 @@ export const DashboardManifest: BuiltinToolManifest = {
           title: { description: 'Short card title, e.g. "Open bug issues".', type: 'string' },
           view: viewSchema,
         },
-        required: ['title', 'description', 'script', 'runtime', 'outputType'],
+        required: [],
         type: 'object',
       },
     },
@@ -221,12 +333,17 @@ export const DashboardManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Place a widget on a dashboard. Pass dashboardId from listDashboards, or newDashboardTitle to create a dashboard first (in a project conversation it belongs to the project). Placing an unpublished widget is allowed.',
+        'Place a widget on a dashboard. Pass dashboardId from listDashboards, or newDashboardTitle (with newDashboardDescription) to create a dashboard first (in a project conversation it belongs to the project). Placing an unpublished widget is allowed.',
       name: DashboardApiName.addWidgetToDashboard,
       parameters: {
         additionalProperties: false,
         properties: {
           dashboardId: { description: 'Existing dashboard id (uuid).', type: 'string' },
+          newDashboardDescription: {
+            description:
+              'Description of the new dashboard, shown under its title: what it monitors and why, e.g. "Launch monitoring for iBench 0.1: hourly engagement of the announcement post and daily GitHub stars since open-sourcing on 2026-10-29." Only used with newDashboardTitle. At most 2000 characters.',
+            type: 'string',
+          },
           newDashboardTitle: {
             description:
               'Create a new dashboard with this name and place the widget on it. Titles over 200 characters are rejected.',
@@ -235,6 +352,31 @@ export const DashboardManifest: BuiltinToolManifest = {
           widgetId: widgetIdSchema,
         },
         required: ['widgetId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Rename a dashboard or rewrite its description. Pass only what changes; an empty description clears it. Only dashboards listDashboards shows are editable.',
+      name: DashboardApiName.updateDashboard,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          dashboardId: {
+            description: 'Dashboard id (uuid) from listDashboards or addWidgetToDashboard.',
+            type: 'string',
+          },
+          description: {
+            description:
+              'New dashboard description: what the board monitors and why. At most 2000 characters.',
+            type: 'string',
+          },
+          title: {
+            description: 'New dashboard title. At most 200 characters.',
+            type: 'string',
+          },
+        },
+        required: ['dashboardId'],
         type: 'object',
       },
     },

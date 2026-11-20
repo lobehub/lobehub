@@ -2,10 +2,18 @@
 
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { GroupedTopic } from '@lobechat/types';
-import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Checkbox, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { FolderIcon, MoreHorizontal, Star } from 'lucide-react';
+import {
+  ActionIcon,
+  Checkbox,
+  createStaticStyles,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+} from '@lobehub/ui';
+import { FolderIcon, MoreHorizontal, Pin } from 'lucide-react';
 import { Fragment, memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,6 +21,7 @@ import { getPlatformIcon } from '@/features/AgentChannel/const';
 import { useTopicItemDropdownMenu } from '@/features/AgentSidebar/Topic/List/Item/useDropdownMenu';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { densityVars } from '@/styles/densityVars';
 import type { ChatTopic } from '@/types/topic';
 
 import StatusDot from './StatusDot';
@@ -20,7 +29,7 @@ import { useTopicsViewStore } from './store';
 import type { GroupBy, TriggerFilter } from './types';
 import { getProjectGroupTitle, getProjectLabel, getTimeGroupTitle } from './utils';
 
-const KNOWN_TRIGGERS: readonly TriggerFilter[] = ['chat', 'api', 'task', 'eval'];
+const KNOWN_TRIGGERS: readonly TriggerFilter[] = ['chat', 'bot', 'webhook', 'api', 'task', 'eval'];
 
 const styles = createStaticStyles(({ css }) => ({
   cell: css`
@@ -36,7 +45,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: baseline;
 
     padding-block: 8px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorSplit};
 
     font-size: 12px;
@@ -57,11 +66,11 @@ const styles = createStaticStyles(({ css }) => ({
 
     display: grid;
     grid-template-columns: 24px minmax(0, 1fr) 120px 100px 80px 100px 32px;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     padding-block: 10px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorSplit};
 
     font-size: 12px;
@@ -89,11 +98,11 @@ const styles = createStaticStyles(({ css }) => ({
 
     display: grid;
     grid-template-columns: 24px minmax(0, 1fr) 120px 100px 80px 100px 32px;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     padding-block: 10px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorSplit};
 
     transition: background 0.12s;
@@ -199,7 +208,7 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
       <div className={styles.cell}>
         <Flexbox horizontal align={'center'} gap={6}>
           {topic.favorite && (
-            <Icon icon={Star} size={12} style={{ color: cssVar.colorWarning, flexShrink: 0 }} />
+            <Icon icon={Pin} size={12} style={{ color: cssVar.colorTextTertiary, flexShrink: 0 }} />
           )}
           {BotPlatformIcon && (
             <BotPlatformIcon

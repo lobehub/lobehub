@@ -1,4 +1,6 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
+
+import { densityVars } from '@/styles/densityVars';
 
 /**
  * Page chrome shared by the dashboard pages (board list, one board, a
@@ -18,9 +20,9 @@ export const dashboardPageStyles = createStaticStyles(({ css, cssVar, responsive
     padding-inline: 32px;
 
     ${responsive.sm} {
-      gap: 16px;
-      padding-block: 16px 32px;
-      padding-inline: 16px;
+      gap: ${densityVars.sectionGap};
+      padding-block: ${densityVars.cardPadding} 32px;
+      padding-inline: ${densityVars.cardPadding};
     }
   `,
   description: css`

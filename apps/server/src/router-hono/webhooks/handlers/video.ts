@@ -352,6 +352,7 @@ export const videoWebhook = async (c: Context<BlankEnv, '/video/:provider'>) => 
         model: resolvedModelId,
         prechargeResult: metadata?.precharge as any,
         provider,
+        route: metadata?.route,
         usage: result.usage ?? measureVideoOutputUsage(resolvedModelId, processResult),
         userId: asyncTask.userId,
         workspaceId: asyncTask.workspaceId ?? undefined,

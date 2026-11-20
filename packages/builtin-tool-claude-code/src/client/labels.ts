@@ -3,7 +3,7 @@
 //
 // The workflow summary (`toolDisplayNames.ts`) turns wire tool names into
 // human labels outside of React, so this entry must stay free of React /
-// antd-style / lucide imports — pulling `client/index.ts` instead would drag
+// @lobehub/ui / lucide imports — pulling `client/index.ts` instead would drag
 // the inspector components (and their `keyframes`-using style modules) in
 // transitively.
 

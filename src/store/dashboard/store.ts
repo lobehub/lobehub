@@ -16,9 +16,11 @@ import {
   type CreateDashboardParams,
   type DashboardLayoutPatch,
   dashboardService,
+  type DashboardSettingsPatch,
 } from '@/services/dashboard';
 import { createDevtools } from '@/store/middleware/createDevtools';
 import { expose } from '@/store/middleware/expose';
+import { useUserStore } from '@/store/user';
 
 import { dashboardLevelKey, type DashboardState, initialState } from './initialState';
 import {
@@ -26,6 +28,7 @@ import {
   dashboardDetailResource,
   type DashboardListItem,
   dashboardListResource,
+  type DashboardProjectWidgetItem,
   type DashboardTrendSeries,
   type DashboardWidgetDetail,
   type DashboardWidgetItem,
@@ -98,6 +101,12 @@ const toRequest = <TData>(
 export interface DashboardAction {
   addWidgetToDashboard: (dashboardId: string, widgetId: string) => Promise<unknown>;
   createDashboard: (params: CreateDashboardParams) => Promise<DashboardListItem>;
+  /**
+   * Record a standing dry-run grant for this version's access, then reload
+   * the user's settings so the client-side audit of the very next dry run
+   * already sees it.
+   */
+  grantDryRunAccess: (widgetId: string, versionId: string) => Promise<void>;
   publishWidgetVersion: (
     widgetId: string,
     versionId: string,
@@ -109,14 +118,35 @@ export interface DashboardAction {
   /** The agent placed a widget server-side: revalidate everything that shows it. */
   refreshWidgetPlacement: (widgetId: string, dashboardId?: string) => Promise<unknown>;
   removeWidgetFromDashboard: (dashboardId: string, itemId: string) => Promise<void>;
-  renameDashboard: (dashboardId: string, title: string, level?: WidgetLevelFilter) => Promise<void>;
   runWidget: (widgetId: string) => Promise<DashboardWidgetRunItem | undefined>;
   saveDashboardLayout: (
     dashboardId: string,
     layouts: Record<string, DashboardItemLayout>,
     order: string[],
   ) => Promise<void>;
+  /**
+   * Set the cadence of several widgets at once (a board's settings). Each
+   * widget saves on its own; resolves with how many the server refused.
+   */
+  setWidgetsSchedule: (
+    widgetIds: string[],
+    schedule: { pattern: string | null; timezone?: string | null },
+  ) => Promise<{ failed: number }>;
   trashDashboard: (dashboardId: string, level?: WidgetLevelFilter) => Promise<void>;
+  /** Save a board's settings; resolves with the saved row (visibility may be kept private). */
+  updateDashboard: (
+    dashboardId: string,
+    value: DashboardSettingsPatch,
+    level?: WidgetLevelFilter,
+  ) => Promise<DashboardListItem | undefined>;
+  /**
+   * Save a widget's own title / metric definition, then refresh every board,
+   * list and drill-down that shows it.
+   */
+  updateWidget: (
+    widgetId: string,
+    patch: { description?: string | null; title?: string },
+  ) => Promise<void>;
   /** Fetch orchestration only; read the board with `dashboardSelectors.dashboardDetail`. */
   useFetchDashboardDetail: (dashboardId?: string) => DashboardRequest<DashboardDetail>;
   useFetchDashboards: (
@@ -124,7 +154,7 @@ export interface DashboardAction {
     enabled?: boolean,
   ) => DashboardRequest<DashboardListItem[]>;
   useFetchProjectDashboards: (projectId?: string) => DashboardRequest<DashboardListItem[]>;
-  useFetchProjectWidgets: (projectId?: string) => DashboardRequest<DashboardWidgetItem[]>;
+  useFetchProjectWidgets: (projectId?: string) => DashboardRequest<DashboardProjectWidgetItem[]>;
   useFetchWidgetDetail: (widgetId?: string) => DashboardRequest<DashboardWidgetDetail>;
   useFetchWidgetRun: (
     widgetId?: string,
@@ -163,11 +193,11 @@ export const useDashboardStore = createWithEqualityFn<DashboardStore>()(
     });
     const projectWidgets = createReplicaSlice(projectWidgetListResource, {
       actionPrefix: 'dashboard/projectWidgets',
-      entity: arrayEntity<DashboardWidgetItem>((widget) => widget.id),
+      entity: arrayEntity<DashboardProjectWidgetItem>((widget) => widget.id),
       get,
       set,
       stateKey: 'projectWidgetsReplica',
-      view: recordLens<DashboardStore, DashboardWidgetItem[]>('projectWidgetsMap'),
+      view: recordLens<DashboardStore, DashboardProjectWidgetItem[]>('projectWidgetsMap'),
     });
     const detail = createReplicaSlice(dashboardDetailResource, {
       actionPrefix: 'dashboard/detail',
@@ -362,12 +392,17 @@ export const useDashboardStore = createWithEqualityFn<DashboardStore>()(
         }
       },
 
-      renameDashboard: async (dashboardId, title, level) => {
-        await dashboardService.rename(dashboardId, title);
+      updateDashboard: async (dashboardId, value, level) => {
+        const saved = await dashboardService.update(dashboardId, value);
         // The linked board entity updates the level list, the project list and
         // the detail page in one commit; revalidating picks up server fields.
-        board.update(dashboardId, (current) => ({ ...current, title }));
+        board.update(dashboardId, (current) => ({
+          ...current,
+          ...value,
+          ...(saved ? { visibility: saved.visibility } : {}),
+        }));
         await Promise.all([detail.revalidate(dashboardId), refreshDashboards(level)]);
+        return saved as DashboardListItem | undefined;
       },
 
       trashDashboard: async (dashboardId, level) => {
@@ -485,6 +520,34 @@ export const useDashboardStore = createWithEqualityFn<DashboardStore>()(
             'dashboard/publish/end',
           );
         }
+      },
+
+      grantDryRunAccess: async (widgetId, versionId) => {
+        await dashboardService.grantDryRunAccess(widgetId, versionId);
+        await useUserStore.getState().refreshUserState();
+      },
+
+      updateWidget: async (widgetId, patch) => {
+        await dashboardService.updateWidget(widgetId, patch);
+        await Promise.all([
+          detail.revalidate(),
+          projectWidgets.revalidate(),
+          widgetDetail.revalidate(widgetId),
+        ]);
+      },
+
+      setWidgetsSchedule: async (widgetIds, { pattern, timezone }) => {
+        const results = await Promise.allSettled(
+          widgetIds.map((widgetId) =>
+            dashboardService.setWidgetSchedule(widgetId, pattern, timezone),
+          ),
+        );
+        await Promise.all([
+          detail.revalidate(),
+          projectWidgets.revalidate(),
+          ...widgetIds.map((widgetId) => widgetDetail.revalidate(widgetId)),
+        ]);
+        return { failed: results.filter((result) => result.status === 'rejected').length };
       },
 
       addWidgetToDashboard: async (dashboardId, widgetId) => {

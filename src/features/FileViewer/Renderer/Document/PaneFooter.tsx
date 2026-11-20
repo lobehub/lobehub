@@ -1,6 +1,7 @@
-import { Tabs } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Tabs } from '@lobehub/ui';
 import { type ReactNode, useEffect, useState } from 'react';
+
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
@@ -21,7 +22,7 @@ const styles = createStaticStyles(({ css }) => ({
     flex: none;
 
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 12px;
@@ -33,7 +34,7 @@ const styles = createStaticStyles(({ css }) => ({
     flex: none;
 
     padding-block: 4px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: none;
     border-radius: 6px;
 

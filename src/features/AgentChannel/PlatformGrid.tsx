@@ -1,15 +1,15 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar } from '@lobehub/ui/base-ui';
-import { createStaticStyles, responsive } from 'antd-style';
+import { createStaticStyles, responsive } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
-import { DEFAULT_AVATAR } from '@/const/meta';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
+import { densityVars } from '@/styles/densityVars';
 import { type BotRuntimeStatus } from '@/types/botRuntimeStatus';
 
 import { type ChannelPlatformDefinition } from './const';
@@ -19,7 +19,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   grid: css`
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
+    gap: ${densityVars.contentGap};
 
     width: 100%;
     min-width: 0;
@@ -89,8 +89,9 @@ const PlatformGrid = memo<PlatformGridProps>(
               components={{
                 avatar: (
                   <span className={styles.titleAvatar}>
-                    <Avatar
-                      avatar={meta.avatar || DEFAULT_AVATAR}
+                    <AgentAvatar
+                      agentId={agentId}
+                      avatar={meta.avatar}
                       background={meta.backgroundColor}
                       shape={'square'}
                       size={28}

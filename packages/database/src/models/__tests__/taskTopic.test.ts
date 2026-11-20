@@ -206,6 +206,8 @@ describe('TaskTopicModel', () => {
 
       const outside = await topicModel.findByTaskId(taskOutside.id);
       expect(outside[0]!.status).toBe('running');
+      // The set-based topic write only touches the canceled runs' topics.
+      expect((await getTopic('tpc_bulk_outside')).completedAt).toBeNull();
     });
 
     it('returns an empty list for an empty id set', async () => {
@@ -610,7 +612,7 @@ describe('TaskTopicModel', () => {
       await serverDB
         .insert(topics)
         .values([
-          { id: 'tpc_d1', title: 'First', userId },
+          { agentId: null, id: 'tpc_d1', title: 'First', userId },
           { id: 'tpc_d2', title: 'Second', userId },
         ])
         .onConflictDoNothing();
@@ -633,6 +635,9 @@ describe('TaskTopicModel', () => {
 
       const d1 = rows.find((r) => r.id === 'tpc_d1')!;
       expect(d1.title).toBe('First');
+      // The CLI links a task topic through the conversation that owns it.
+      expect(d1).toHaveProperty('agentId', null);
+      expect(d1).toHaveProperty('groupId', null);
       expect(d1.operationId).toBe('op_d1');
       expect(d1.status).toBe('completed');
       expect(d1.reviewIteration).toBe(2);

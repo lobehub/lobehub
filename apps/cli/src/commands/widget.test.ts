@@ -1,3 +1,7 @@
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -122,6 +126,22 @@ describe('widget command', () => {
       view: null,
       widgetId: 'w-1',
     });
+  });
+
+  it('reads view.html from --html-file and keeps the other view fields', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lh-widget-html-'));
+    const file = path.join(dir, 'card.html');
+    await writeFile(file, '<svg></svg>');
+    mockClient.widget.detail.query.mockResolvedValue({
+      data: { draftVersion: { ...draftVersion, view: { size: 'lg' } }, publishedVersion: null },
+    });
+    mockClient.widget.saveDraft.mutate.mockResolvedValue({ data: { id: 'ver-2', version: 2 } });
+
+    await run('widget', 'draft', 'w-1', '--html-file', file);
+
+    expect(mockClient.widget.saveDraft.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ view: { html: '<svg></svg>', size: 'lg' } }),
+    );
   });
 
   it('refuses a first draft without a script, runtime and output type', async () => {

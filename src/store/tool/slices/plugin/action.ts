@@ -1,11 +1,14 @@
 import { type Schema, type ValidationResult } from '@cfworker/json-schema';
 import { type LobeTool } from '@lobechat/types';
+import { type ReadResourceResult } from '@modelcontextprotocol/client';
 import { type SWRResponse } from 'swr';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { createReplicaSlice, type ReplicaLens, type ReplicaSyncResult } from '@/libs/replica';
 import { subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
 import { useClientDataSWR } from '@/libs/swr';
+import { mcpAppKeys } from '@/libs/swr/keys';
+import { mcpService } from '@/services/mcp';
 import { pluginService } from '@/services/plugin';
 import { type StoreSetter } from '@/store/types';
 import { type PluginInstallError } from '@/types/tool/plugin';
@@ -95,10 +98,6 @@ export class PluginActionImpl {
       throw new Error('The installed plugins have not been loaded from the server');
   };
 
-  checkPluginsIsInstalled = async (_plugins: string[]): Promise<void> => {
-    // Old plugin system has been deprecated, skip auto-installation
-  };
-
   /**
    * Fetch the installed plugins and confirm the replica with them. The painted
    * list stays on screen while the network answers.
@@ -125,10 +124,13 @@ export class PluginActionImpl {
    * plugin again.
    */
   uninstallPlugin = async (identifier: string): Promise<void> => {
+    await this.removeInstalledPluginRecord(identifier);
+    await this.#get().refreshPlugins();
+  };
+
+  removeInstalledPluginRecord = async (identifier: string): Promise<void> => {
     await pluginService.uninstallPlugin(identifier);
     this.#installedPlugins.removeEntity(identifier);
-
-    await this.#get().refreshPlugins();
   };
 
   updateInstallLoadingState = (id: string, loading: boolean | undefined): void => {
@@ -216,9 +218,53 @@ export class PluginActionImpl {
   useFetchInstalledPlugins = (enable: boolean): ReplicaSyncResult =>
     this.#installedPlugins.useSync(INSTALLED_PLUGINS_PARAMS, { enabled: enable });
 
-  useCheckPluginsIsInstalled = (enable: boolean, plugins: string[]): SWRResponse => {
-    return useClientDataSWR(enable ? plugins : null, this.#get().checkPluginsIsInstalled);
-  };
+  /**
+   * The `ui://` resource (HTML view) an MCP App tool result renders with, read
+   * from `server`, the one the tool ran on, as `agentId`'s runs resolve it, and
+   * where it ran (`onThisDevice`). `toolArguments` carry the account the tool
+   * ran as when its connector holds several. The HTML is only the view's: it
+   * stays in this request's cache, not in the store.
+   */
+  useFetchMcpAppResource = (
+    identifier: string,
+    resourceUri: string,
+    {
+      agentId,
+      linkId,
+      onThisDevice = false,
+      server,
+      toolArguments,
+      topicId,
+    }: {
+      agentId?: string;
+      /** The account the view acts as, when its arguments cannot name one. */
+      linkId?: string;
+      onThisDevice?: boolean;
+      server?: string;
+      toolArguments?: string;
+      topicId?: string;
+    },
+  ): SWRResponse<ReadResourceResult | undefined> =>
+    useClientDataSWR(
+      mcpAppKeys.resource(identifier, resourceUri, {
+        agentId,
+        linkId,
+        onThisDevice,
+        server,
+        toolArguments,
+        topicId,
+      }),
+      () =>
+        mcpService.readMcpAppResource(identifier, resourceUri, {
+          agentId,
+          linkId,
+          onThisDevice,
+          server,
+          toolArguments,
+          topicId,
+        }),
+      { revalidateOnFocus: false, revalidateOnReconnect: false },
+    );
 
   validatePluginSettings = async (identifier: string): Promise<ValidationResult | undefined> => {
     // Validate the full record: the display projection has no settings, so it

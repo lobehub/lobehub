@@ -2,6 +2,7 @@ import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
+import { ForeignLiveRunError } from '../topicStartReservation';
 
 const {
   mockFindOperationById,
@@ -194,6 +195,13 @@ vi.mock('model-bank', async (importOriginal) => {
   };
 });
 
+const createInteractiveParams = (prompt = 'please hurry') => ({
+  agentId: 'agent-1',
+  appContext: { topicId: 'topic-1' },
+  interactiveStart: true,
+  prompt,
+});
+
 const topicWithMarker = (operationId: string) => ({
   id: 'topic-1',
   metadata: { runningOperation: { assistantMessageId: 'asst-old', operationId } },
@@ -223,6 +231,7 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
     mockFindOperationById.mockImplementation(async (id: string) => ({
       id,
       status: 'running',
+      userId: 'test-user-id',
       topicId: 'topic-1',
       trigger: 'chat',
     }));
@@ -248,7 +257,9 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
 
   it('ignores a replaced operation that is not on this topic', async () => {
     mockFindOperationById.mockImplementation(async (id: string) =>
-      id === 'op-foreign' ? null : { id, status: 'running', topicId: 'topic-1', trigger: 'chat' },
+      id === 'op-foreign'
+        ? null
+        : { id, status: 'running', topicId: 'topic-1', trigger: 'chat', userId: 'test-user-id' },
     );
 
     await service.execAgent({
@@ -285,12 +296,7 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
   });
 
   it('interrupts the live marker holder when the client sent no replacement', async () => {
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-1' },
-      interactiveStart: true,
-      prompt: 'please hurry',
-    });
+    await service.execAgent(createInteractiveParams());
 
     expect(interruptTask).toHaveBeenCalledTimes(1);
     expect(interruptTask).toHaveBeenCalledWith({ operationId: 'op-live', topicId: 'topic-1' });
@@ -313,35 +319,27 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
       id: 'op-live',
       status: 'running',
       trigger: 'onboarding',
+      userId: 'test-user-id',
     });
 
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-1' },
-      interactiveStart: true,
-      prompt: 'please hurry',
-    });
+    await service.execAgent(createInteractiveParams());
 
     expect(interruptTask).toHaveBeenCalledWith({ operationId: 'op-live', topicId: 'topic-1' });
   });
 
-  // A task-result wakeup runs on the main spine with `agent_signal`. The client
+  // A task-result wakeup runs on the main spine with `task_callback`. The client
   // never started it, so it cannot queue the send behind it; leaving both live
   // forked the conversation and hid the user's message on the losing branch.
-  it('interrupts a running agent_signal holder on the main spine', async () => {
+  it('interrupts a running task_callback holder on the main spine', async () => {
     mockFindOperationById.mockResolvedValue({
       id: 'op-live',
       status: 'running',
       topicId: 'topic-1',
-      trigger: 'agent_signal',
+      trigger: 'task_callback',
+      userId: 'test-user-id',
     });
 
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-1' },
-      interactiveStart: true,
-      prompt: 'please hurry',
-    });
+    await service.execAgent(createInteractiveParams());
 
     expect(interruptTask).toHaveBeenCalledWith({ operationId: 'op-live', topicId: 'topic-1' });
     expect(mockMergeMetadata).toHaveBeenCalledWith(
@@ -360,12 +358,99 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
       },
     });
 
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-1' },
-      interactiveStart: true,
-      prompt: 'please hurry',
+    await service.execAgent(createInteractiveParams());
+
+    expect(interruptTask).not.toHaveBeenCalled();
+  });
+
+  // Workspace topics are shared: a teammate's send used to interrupt the run
+  // its starter was driving, because the holder was retired regardless of owner.
+  it("refuses the send instead of interrupting another member's running holder", async () => {
+    mockFindOperationById.mockResolvedValue({
+      id: 'op-live',
+      status: 'running',
+      topicId: 'topic-1',
+      trigger: 'chat',
+      updatedAt: new Date(),
+      userId: 'teammate-id',
     });
+
+    await expect(service.execAgent(createInteractiveParams('keep going'))).rejects.toBeInstanceOf(
+      ForeignLiveRunError,
+    );
+
+    expect(interruptTask).not.toHaveBeenCalled();
+    expect(mockMessageCreate).not.toHaveBeenCalled();
+    expect(mockReleaseReservation).toHaveBeenCalled();
+  });
+
+  it("does not interrupt another member's run named as the replaced operation", async () => {
+    mockFindOperationById.mockResolvedValue({
+      id: 'op-live',
+      status: 'running',
+      topicId: 'topic-1',
+      trigger: 'chat',
+      updatedAt: new Date(),
+      userId: 'teammate-id',
+    });
+
+    await expect(
+      service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-1' },
+        interactiveStart: true,
+        prompt: 'keep going',
+        replacesOperationId: 'op-live',
+      }),
+    ).rejects.toBeInstanceOf(ForeignLiveRunError);
+
+    expect(interruptTask).not.toHaveBeenCalled();
+  });
+
+  it("retires another member's run whose lease froze, which nothing would otherwise settle", async () => {
+    mockFindOperationById.mockResolvedValue({
+      id: 'op-live',
+      status: 'running',
+      topicId: 'topic-1',
+      trigger: 'chat',
+      updatedAt: new Date(Date.now() - 10 * 60_000),
+      userId: 'teammate-id',
+    });
+
+    await service.execAgent(createInteractiveParams('keep going'));
+
+    expect(interruptTask).toHaveBeenCalledWith({ operationId: 'op-live', topicId: 'topic-1' });
+  });
+
+  it("refuses the send next to another member's live device-hosted run", async () => {
+    mockFindTopicById.mockResolvedValue({
+      id: 'topic-1',
+      metadata: {
+        runningOperation: {
+          assistantMessageId: 'asst-old',
+          heteroType: 'claude-code',
+          operationId: 'op-live',
+        },
+      },
+    });
+    mockFindOperationById.mockResolvedValue({
+      id: 'op-live',
+      status: 'running',
+      topicId: 'topic-1',
+      trigger: 'chat',
+      updatedAt: new Date(Date.now() - 20 * 60_000),
+      userId: 'teammate-id',
+    });
+
+    await expect(
+      service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-1' },
+        interactiveStart: true,
+        prompt: 'keep going',
+        replacesOperationId: 'op-live',
+      }),
+    ).rejects.toBeInstanceOf(ForeignLiveRunError);
 
     expect(interruptTask).not.toHaveBeenCalled();
   });
@@ -378,12 +463,7 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
   ])('leaves %s alone', async (_, operation) => {
     mockFindOperationById.mockResolvedValue({ id: 'op-live', ...operation });
 
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-1' },
-      interactiveStart: true,
-      prompt: 'please hurry',
-    });
+    await service.execAgent(createInteractiveParams());
 
     expect(interruptTask).not.toHaveBeenCalled();
   });
@@ -422,12 +502,7 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     mockIsOperationInterrupted.mockResolvedValue(true);
 
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-1' },
-      interactiveStart: true,
-      prompt: 'please hurry',
-    });
+    await service.execAgent(createInteractiveParams());
 
     expect(mockMergeMetadata).toHaveBeenCalledWith(expect.any(String), {
       supersede: expect.objectContaining({ kind: 'already_stopping' }),
@@ -444,12 +519,7 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     mockMergeMetadata.mockRejectedValue(new Error('db down'));
 
-    const result = await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-1' },
-      interactiveStart: true,
-      prompt: 'please hurry',
-    });
+    const result = await service.execAgent(createInteractiveParams());
 
     expect(result.success).toBe(true);
     error.mockRestore();
@@ -459,12 +529,7 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockIsOperationInterrupted.mockRejectedValue(new Error('redis down'));
 
-    const result = await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-1' },
-      interactiveStart: true,
-      prompt: 'please hurry',
-    });
+    const result = await service.execAgent(createInteractiveParams());
 
     expect(result.success).toBe(true);
     expect(interruptTask).toHaveBeenCalledWith({ operationId: 'op-live', topicId: 'topic-1' });
@@ -478,12 +543,7 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     interruptTask.mockResolvedValue({ success: false });
 
-    const result = await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-1' },
-      interactiveStart: true,
-      prompt: 'please hurry',
-    });
+    const result = await service.execAgent(createInteractiveParams());
 
     expect(result.success).toBe(true);
     expect(warn).toHaveBeenCalledWith('[execAgent] supersede of %s was not confirmed', 'op-live', {
@@ -495,12 +555,7 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
   it('records nothing when no run was superseded', async () => {
     mockFindOperationById.mockResolvedValue({ id: 'op-live', status: 'done', trigger: 'chat' });
 
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-1' },
-      interactiveStart: true,
-      prompt: 'please hurry',
-    });
+    await service.execAgent(createInteractiveParams());
 
     expect(mockMergeMetadata).not.toHaveBeenCalled();
   });

@@ -1,4 +1,4 @@
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
 
 import { isDesktop } from '@/const/version';
 import { MAC_VIBRANCY_BACKGROUND } from '@/features/Electron/system/macWindowFullscreen';

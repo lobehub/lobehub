@@ -2,7 +2,7 @@
 // builtin MCP server (`mcp__lobe_cc__browser_*`, mounted by
 // `apps/desktop/.../browserMcpTools.ts`).
 //
-// Kept free of React / antd-style / lucide imports — same reason as
+// Kept free of React / @lobehub/ui / lucide imports — same reason as
 // `linearMcpLabels`: the workflow-summary path (`toolDisplayNames.ts`) pulls
 // `formatBrowserMcpShortLabel` and must not drag the inspector component in.
 
@@ -22,6 +22,7 @@ const TOOL_TO_API = {
   browser_read_page: 'readPage',
   browser_screenshot: 'screenshot',
   browser_scroll: 'scroll',
+  browser_set_viewport: 'setViewport',
   browser_snapshot: 'snapshot',
 } as const;
 
@@ -61,6 +62,7 @@ const API_LABELS: Record<BrowserMcpApi, string> = {
   readPage: 'Read page text',
   screenshot: 'Captured screenshot',
   scroll: 'Scrolled page',
+  setViewport: 'Set viewport',
   snapshot: 'Read page elements',
 };
 

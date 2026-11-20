@@ -110,6 +110,13 @@ const APP_TOOLS_STORAGE_KEY = composioAppToolsResource.storageKey('gmail');
 /** Identifiers of the connections the store currently shows. */
 const connectionIds = () => useToolStore.getState().composioServers.map((s) => s.identifier);
 
+const slackConnectionResponse = () => ({
+  authConfigId: 'ac_slack',
+  connectedAccountId: 'ca_slack',
+  identifier: 'slack',
+  redirectUrl: 'https://composio.dev/redirect',
+});
+
 describe('composio connections replica', () => {
   const scopes = new Set<string>();
   let scope = '';
@@ -220,12 +227,7 @@ describe('composio connections replica', () => {
     renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), { wrapper });
     await waitFor(() => expect(useToolStore.getState().composioServers).toHaveLength(1));
 
-    mocks.createConnection.mockResolvedValue({
-      authConfigId: 'ac_slack',
-      connectedAccountId: 'ca_slack',
-      identifier: 'slack',
-      redirectUrl: 'https://composio.dev/redirect',
-    });
+    mocks.createConnection.mockResolvedValue(slackConnectionResponse());
 
     await act(async () => {
       await useToolStore
@@ -308,12 +310,7 @@ describe('composio connections replica', () => {
     });
     await waitFor(() => expect(useToolStore.getState().isComposioServersInit).toBe(true));
 
-    mocks.createConnection.mockResolvedValue({
-      authConfigId: 'ac_slack',
-      connectedAccountId: 'ca_slack',
-      identifier: 'slack',
-      redirectUrl: 'https://composio.dev/redirect',
-    });
+    mocks.createConnection.mockResolvedValue(slackConnectionResponse());
     await act(async () => {
       await useToolStore
         .getState()
@@ -398,12 +395,7 @@ describe('composio connections replica', () => {
     });
     await waitFor(() => expect(useToolStore.getState().isComposioServersInit).toBe(true));
 
-    mocks.createConnection.mockResolvedValue({
-      authConfigId: 'ac_slack',
-      connectedAccountId: 'ca_slack',
-      identifier: 'slack',
-      redirectUrl: 'https://composio.dev/redirect',
-    });
+    mocks.createConnection.mockResolvedValue(slackConnectionResponse());
     await act(async () => {
       await useToolStore
         .getState()
@@ -443,12 +435,7 @@ describe('composio connections replica', () => {
     renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), { wrapper });
     await waitFor(() => expect(mocks.getComposioPlugins).toHaveBeenCalledTimes(1));
 
-    mocks.createConnection.mockResolvedValue({
-      authConfigId: 'ac_slack',
-      connectedAccountId: 'ca_slack',
-      identifier: 'slack',
-      redirectUrl: 'https://composio.dev/redirect',
-    });
+    mocks.createConnection.mockResolvedValue(slackConnectionResponse());
     await act(async () => {
       await useToolStore
         .getState()
@@ -505,12 +492,7 @@ describe('composio connections replica', () => {
     });
     await waitFor(() => expect(useToolStore.getState().isComposioServersInit).toBe(true));
 
-    mocks.createConnection.mockResolvedValue({
-      authConfigId: 'ac_slack',
-      connectedAccountId: 'ca_slack',
-      identifier: 'slack',
-      redirectUrl: 'https://composio.dev/redirect',
-    });
+    mocks.createConnection.mockResolvedValue(slackConnectionResponse());
     await act(async () => {
       await useToolStore
         .getState()
@@ -647,12 +629,7 @@ describe('composio connections replica', () => {
     await act(async () => {});
 
     await act(async () => {
-      resolveCreate({
-        authConfigId: 'ac_slack',
-        connectedAccountId: 'ca_slack',
-        identifier: 'slack',
-        redirectUrl: 'https://composio.dev/redirect',
-      });
+      resolveCreate(slackConnectionResponse());
       await created;
     });
 
@@ -666,44 +643,42 @@ describe('composio connections replica', () => {
     expect((persisted?.data ?? []).some((s) => s.connectedAccountId === 'ca_slack')).toBe(false);
   });
 
-  it('does not mint a reauthorized connection into the scope switched to during cleanup', async () => {
+  it('does not persist a reauthorized connection into the scope switched to while it ran', async () => {
     mocks.getComposioPlugins.mockResolvedValue([composioPlugin('slack', { status: 'FAILED' })]);
     renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), { wrapper });
     await waitFor(() => expect(connectionIds()).toEqual(['slack']));
 
-    let resolveDelete!: (value: unknown) => void;
-    mocks.deleteConnection.mockReturnValueOnce(
+    let resolveCreate!: (value: unknown) => void;
+    mocks.createConnection.mockReturnValueOnce(
       new Promise((resolve) => {
-        resolveDelete = resolve;
+        resolveCreate = resolve;
       }),
     );
-    mocks.createConnection.mockResolvedValue({
-      authConfigId: 'ac_slack',
-      connectedAccountId: 'ca_slack_new',
-      identifier: 'slack',
-      redirectUrl: 'https://composio.dev/redirect',
-    });
 
     let reauthorized!: Promise<unknown>;
     await act(async () => {
       reauthorized = useToolStore.getState().reauthorizeComposioConnection('slack');
     });
-    await waitFor(() => expect(mocks.deleteConnection).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.createConnection).toHaveBeenCalledTimes(1));
 
-    // The user switches identity while the stale connection is being cleaned up.
+    // The user switches identity while the server re-authorizes the connection.
     const nextScope = `composio-user-${randomUUID()}:personal`;
     mocks.getComposioPlugins.mockResolvedValue([]);
     useScope(nextScope);
     await act(async () => {});
 
     await act(async () => {
-      resolveDelete({ success: true });
+      resolveCreate({
+        authConfigId: 'ac_slack',
+        connectedAccountId: 'ca_slack_new',
+        identifier: 'slack',
+        redirectUrl: 'https://composio.dev/redirect',
+      });
       await reauthorized;
     });
 
-    // The reauthorization belongs to the scope that started it: no fresh link is
-    // minted for — nor persisted into — the switched-to identity.
-    expect(mocks.createConnection).not.toHaveBeenCalled();
+    // The reauthorization belongs to the scope that started it: its fresh link
+    // is not persisted into the switched-to identity.
     const persisted = await composioServersResource.storage!.get({
       queryKey: SERVERS_STORAGE_KEY,
       scope: nextScope,

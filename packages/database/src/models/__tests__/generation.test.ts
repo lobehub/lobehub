@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import type { NewGeneration } from '../../schemas';
+import type { GenerationWithAsyncTask, NewGeneration } from '../../schemas';
 import {
   asyncTasks,
   files,
@@ -171,12 +171,6 @@ describe('GenerationModel', () => {
         ...testGeneration,
         userId,
       });
-    });
-
-    it('should automatically set userId when creating generation', async () => {
-      const result = await generationModel.create(testGeneration);
-
-      expect(result.userId).toBe(userId);
     });
 
     it('should create generation with minimal data', async () => {
@@ -1140,5 +1134,43 @@ describe('GenerationModel', () => {
         generationModel.findByAsyncTaskId(workspaceAsyncTaskId),
       ).resolves.toBeUndefined();
     });
+  });
+});
+
+describe('GenerationModel guards', () => {
+  it('deletes inside the caller transaction when one is passed', async () => {
+    const created = await generationModel.create({ ...testGeneration, asyncTaskId: null });
+    const transaction = vi.spyOn(serverDB, 'transaction');
+
+    const deleted = await serverDB.transaction((trx) => generationModel.delete(created.id, trx));
+
+    expect(deleted?.id).toBe(created.id);
+    // Only the caller's own transaction; the model did not open a second one.
+    expect(transaction).toHaveBeenCalledTimes(1);
+    transaction.mockRestore();
+    const row = await serverDB.query.generations.findFirst({
+      where: eq(generations.id, created.id),
+    });
+    expect(row).toBeUndefined();
+  });
+
+  it('carries previousGenerationId from the async task metadata', async () => {
+    const result = await generationModel.transformGeneration({
+      asset: null,
+      asyncTask: {
+        error: null,
+        id: testAsyncTask.id,
+        metadata: { previousGenerationId: 'gen-before' },
+        status: AsyncTaskStatus.Success,
+      },
+      asyncTaskId: testAsyncTask.id,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      fileId: null,
+      id: 'gen-current',
+      seed: 1,
+    } as unknown as GenerationWithAsyncTask);
+
+    expect(result.previousGenerationId).toBe('gen-before');
+    expect(result.id).toBe('gen-current');
   });
 });

@@ -1,8 +1,16 @@
 'use client';
 
-import { Flexbox, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { ActionIcon, Avatar, Button, Skeleton, Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Avatar,
+  Button,
+  cssVar,
+  Flexbox,
+  Skeleton,
+  Text,
+  Tooltip,
+  TooltipGroup,
+} from '@lobehub/ui';
 import { ExternalLink, Globe, Settings } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +24,7 @@ const normalizeUrl = (input?: string | null) => {
   return input;
 };
 
-const getWorkspacePublicProfileUrl = (username: string) => `/community/org/${username}`;
+const getWorkspacePublicProfileUrl = (username: string) => `/marketplace/org/${username}`;
 
 const WorkspaceHeader = memo(() => {
   const { t } = useTranslation('discover');

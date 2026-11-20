@@ -1,4 +1,8 @@
-import { GOAL_BATCH_ASSAY_TITLE, GOAL_BATCH_TEMPLATE_TITLE } from '@lobechat/const/goal';
+import {
+  GOAL_BATCH_ASSAY_TITLE,
+  GOAL_BATCH_RELEASE_TITLE,
+  GOAL_BATCH_TEMPLATE_TITLE,
+} from '@lobechat/const/goal';
 import type {
   GoalGraphDecision,
   GoalGraphEdge,
@@ -10,12 +14,14 @@ import { describe, expect, it } from 'vitest';
 
 import { buildGoalGraphView } from '../goalGraphViewModel';
 import { batchGroupId, layoutBatch } from './batchLayout';
+import type { BatchCellState } from './batchModel';
 import {
   batchPlanTitleKey,
   buildBatchModel,
   findBatchGate,
   findBatchPlan,
   reopenedRows,
+  unitsPhase,
   verdictChecks,
 } from './batchModel';
 import {
@@ -146,6 +152,7 @@ const batchSnapshot = ({
       title: 'Batch',
       updatedAt: T0,
       userId: 'user-1',
+      visibility: 'public',
       workspaceId: null,
     },
     nodes,
@@ -187,6 +194,75 @@ describe('buildBatchModel', () => {
     expect(model.waves[1].every((cell) => cell.state === 'backlog' && !cell.nodeId)).toBe(true);
   });
 
+  it('puts a held release on the round gate, not among the batch decisions', () => {
+    const graph = buildGoalGraphView(
+      batchSnapshot({
+        extraNodes: [
+          node('r0', 'decision', 6, { status: 'resolved', title: GOAL_BATCH_RELEASE_TITLE }),
+          node('r1', 'decision', 7, { status: 'waiting', title: GOAL_BATCH_RELEASE_TITLE }),
+        ],
+        state: { phase: 'release_review', releaseReviewNodeId: 'r1' },
+      }),
+      NOW,
+    );
+    const model = buildBatchModel(graph, 'batch');
+
+    expect(model.rounds[0].gate).toBe('human');
+    expect(model.rounds[0].releaseId).toBe('r1');
+    expect(model.decisionIds).toEqual([]);
+  });
+
+  it('reads a round whose held release the owner sent back as sent back, not passed', () => {
+    const graph = buildGoalGraphView(
+      batchSnapshot({
+        decisions: [humanAnswer('r0')],
+        extraNodes: [
+          node('r0', 'decision', 10, { status: 'resolved', title: GOAL_BATCH_RELEASE_TITLE }),
+          node('t2', 'finding', 20, { title: GOAL_BATCH_TEMPLATE_TITLE }),
+          node('a2', 'decision', 21, { title: GOAL_BATCH_ASSAY_TITLE }),
+        ],
+        state: { assayNodeId: 'a2', phase: 'probe', templateNodeId: 't2', templateRevision: 2 },
+      }),
+      NOW,
+    );
+    const model = buildBatchModel(graph, 'batch');
+
+    expect(model.rounds).toHaveLength(2);
+    expect(model.rounds[0].gate).toBe('rejected');
+  });
+
+  // Sending the plan back re-runs the trials inside their round, under the
+  // same gate: the trials stage shows each unit once, as its latest run, in
+  // its original place — not a superseded square next to a second round.
+  it('keeps a trial re-run inside its round as one numbered unit', () => {
+    const graph = buildGoalGraphView(
+      batchSnapshot({
+        decisions: [humanAnswer('r0')],
+        extraEdges: [edge('p1r', 'p1', 'derived_from'), edge('a1', 'p1r', 'depends_on')],
+        extraNodes: [
+          node('r0', 'decision', 10, { status: 'resolved', title: GOAL_BATCH_RELEASE_TITLE }),
+          node('p1r', 'task', 20, { status: 'active', title: 'U1', updatedAt: at(59) }),
+        ],
+        state: { planVersions: { '1': 2 }, probeNodeIds: ['p1r', 'p2'] },
+      }),
+      NOW,
+    );
+    const model = buildBatchModel(graph, 'batch');
+
+    expect(model.rounds).toHaveLength(1);
+    expect(model.rounds[0]).toMatchObject({ planVersion: 2, revision: 1 });
+    expect(model.rounds[0].probes).toEqual([
+      expect.objectContaining({ attempt: 2, nodeId: 'p1r', state: 'running', title: 'U1' }),
+      expect.objectContaining({ nodeId: 'p2', state: 'done', title: 'U2' }),
+    ]);
+    expect(model.rounds[0].probes[1].attempt).toBeUndefined();
+    // Its first run stays readable, as it ended — for the switch back to run 1.
+    expect(model.rounds[0].probes[0].runs).toEqual([
+      { nodeId: 'p1', state: 'done' },
+      { nodeId: 'p1r', state: 'running' },
+    ]);
+  });
+
   it('keeps the gate locked until every probe settled', () => {
     const snapshot = batchSnapshot({ state: {} });
     snapshot.nodes = snapshot.nodes.map((n) =>
@@ -196,6 +272,13 @@ describe('buildBatchModel', () => {
 
     expect(model.rounds[0].gate).toBe('locked');
     expect(model.rounds[0].probes.map((probe) => probe.state)).toEqual(['done', 'running']);
+  });
+
+  it('names the plan skill version a round runs on, past its number once rewritten in place', () => {
+    const graph = buildGoalGraphView(batchSnapshot({ state: { planVersions: { '1': 3 } } }), NOW);
+    const model = buildBatchModel(graph, 'batch');
+
+    expect(model.rounds[0]).toMatchObject({ planVersion: 3, revision: 1 });
   });
 
   it('opens a v2 round for a unit re-opened after a person sent the gate back', () => {
@@ -611,6 +694,39 @@ describe('buildBatchModel roster', () => {
   });
 });
 
+describe('buildBatchModel acceptance', () => {
+  it('marks a done unit whose acceptance was signed off, and only that one', () => {
+    const graph = buildGoalGraphView(
+      {
+        ...batchSnapshot({
+          extraNodes: [
+            node('m3', 'task', 10, { status: 'resolved', title: 'U3' }),
+            node('m4', 'task', 11, { status: 'resolved', title: 'U4' }),
+            node('m5', 'task', 12, { status: 'active', title: 'U5' }),
+          ],
+          state: { massNodeIds: ['m3', 'm4', 'm5'] },
+        }),
+        acceptances: {
+          m3: { id: 'acc-3', status: 'accepted' },
+          m4: { id: 'acc-4', status: 'passed' },
+          m5: { id: 'acc-5', status: 'accepted' },
+          p1: { id: 'acc-p1', status: 'accepted' },
+        },
+      },
+      NOW,
+    );
+    const model = buildBatchModel(graph, 'batch');
+
+    expect(model.waves[0][0]).toMatchObject({ accepted: true, state: 'done', title: 'U3' });
+    expect(model.waves[0][1]).not.toHaveProperty('accepted');
+    // Signed off ahead of its run settling is not a finished square.
+    expect(model.waves[0][2]).not.toHaveProperty('accepted');
+    expect(model.rounds[0].probes.find((probe) => probe.nodeId === 'p1')).toMatchObject({
+      accepted: true,
+    });
+  });
+});
+
 describe('batchPlanTitleKey', () => {
   const round = { forked: false, revision: 2 } as any;
 
@@ -710,5 +826,21 @@ describe('batchStages', () => {
       revision: 2,
     });
     expect(parseBatchStageId('batch-1')).toBeUndefined();
+  });
+});
+
+describe('unitsPhase', () => {
+  const cells = (...states: BatchCellState[]) => states.map((state) => ({ state }));
+
+  it('reads a round its gate holds for a person as waiting, not in progress', () => {
+    const roster = cells('done', 'backlog', 'backlog', 'backlog');
+    expect(unitsPhase(roster, true)).toBe('running');
+    expect(unitsPhase(roster, true, true)).toBe('held');
+  });
+
+  it('keeps live work, units needing a person and finished rounds ahead of the hold', () => {
+    expect(unitsPhase(cells('done', 'running', 'backlog'), true, true)).toBe('running');
+    expect(unitsPhase(cells('human', 'backlog'), true, true)).toBe('human');
+    expect(unitsPhase(cells('done', 'done'), true, true)).toBe('done');
   });
 });

@@ -99,7 +99,9 @@ export class MessageOptimisticUpdateActionImpl {
     // use optimistic update to avoid the slow waiting
     // use pre-generated tempMessageId if provided, otherwise generate a new one
     const tempId = context?.tempMessageId || 'tmp_' + nanoid();
-    internal_dispatchMessage({ id: tempId, type: 'createMessage', value: message }, context);
+    internal_dispatchMessage({ id: tempId, type: 'createMessage', value: message }, context, {
+      creationOrigin: 'client',
+    });
 
     return tempId;
   };

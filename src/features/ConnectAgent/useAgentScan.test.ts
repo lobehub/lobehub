@@ -1,13 +1,24 @@
+import type { DeviceListItem } from '@lobechat/types';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import type { PropsWithChildren } from 'react';
+import { createElement } from 'react';
+import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { deviceService } from '@/services/device';
 
 import {
   buildConnectAgentConfig,
   buildPlatformAgencyConfig,
   getConnectableProvider,
 } from './providers';
-import { scanLocal } from './useAgentScan';
+import { scanLocal, useAgentScan } from './useAgentScan';
 
 const detectHeterogeneousAgentCommand = vi.hoisted(() => vi.fn());
+
+vi.mock('@/services/device', () => ({
+  deviceService: { scanAgents: vi.fn() },
+}));
 
 vi.mock('@/services/electron/binary', () => ({
   binaryService: { detectHeterogeneousAgentCommand },
@@ -148,5 +159,87 @@ describe('buildConnectAgentConfig', () => {
         target: { deviceId: 'device-1', kind: 'device' },
       }),
     ).toMatchObject({ provider: 'claude-code' });
+  });
+});
+
+describe('useAgentScan', () => {
+  const device = { deviceId: 'dev_1' } as DeviceListItem;
+  const scanAgents = vi.mocked(deviceService.scanAgents);
+  const wrapper = ({ children }: PropsWithChildren) =>
+    createElement(SWRConfig, { value: { provider: () => new Map() } }, children);
+
+  beforeEach(() => {
+    scanAgents.mockReset();
+  });
+
+  it('stays idle without a target', () => {
+    const { result } = renderHook(() => useAgentScan(null), { wrapper });
+
+    expect(result.current.state).toEqual({ agents: null, status: 'idle' });
+    expect(scanAgents).not.toHaveBeenCalled();
+  });
+
+  it('scans the target device as soon as it is given', async () => {
+    const agents = { 'claude-code': { available: true, version: '1.0.0' } };
+    scanAgents.mockResolvedValue({ agents } as any);
+
+    const { result } = renderHook(() => useAgentScan({ device, kind: 'device' }), { wrapper });
+
+    expect(result.current.state.status).toBe('scanning');
+    await waitFor(() => expect(result.current.state).toEqual({ agents, status: 'success' }));
+    expect(scanAgents).toHaveBeenCalledWith({ deviceId: 'dev_1' });
+  });
+
+  it('reports a device-side scan failure and re-probes on rescan', async () => {
+    scanAgents.mockResolvedValueOnce({ agents: null, error: 'device offline' } as any);
+
+    const { result } = renderHook(() => useAgentScan({ device, kind: 'device' }), { wrapper });
+
+    await waitFor(() =>
+      expect(result.current.state).toEqual({
+        agents: null,
+        error: 'device offline',
+        status: 'error',
+      }),
+    );
+
+    const agents = { codex: { available: true } };
+    scanAgents.mockResolvedValueOnce({ agents } as any);
+    act(() => result.current.rescan());
+
+    await waitFor(() => expect(result.current.state).toEqual({ agents, status: 'success' }));
+    expect(scanAgents).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not re-probe on its own when the connection comes back', async () => {
+    scanAgents.mockResolvedValue({ agents: {} } as any);
+    let reconnect: (() => void) | undefined;
+    const reconnectWrapper = ({ children }: PropsWithChildren) =>
+      createElement(
+        SWRConfig,
+        {
+          value: {
+            initReconnect: (callback: () => void) => {
+              reconnect = callback;
+            },
+            provider: () => new Map(),
+          },
+        },
+        children,
+      );
+
+    const { result } = renderHook(() => useAgentScan({ device, kind: 'device' }), {
+      wrapper: reconnectWrapper,
+    });
+    await waitFor(() => expect(result.current.state.status).toBe('success'));
+
+    expect(reconnect).toBeDefined();
+    await act(async () => {
+      reconnect!();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(result.current.state.status).toBe('success');
+    expect(scanAgents).toHaveBeenCalledTimes(1);
   });
 });

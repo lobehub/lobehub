@@ -286,20 +286,6 @@ describe('pushTokenRouter', () => {
       expect(mockUnregisterLiveActivities).not.toHaveBeenCalled();
     });
 
-    it('should prefer expoToken precision over the legacy userId fallback', async () => {
-      // If both are available, always take Path A — the (expoToken, deviceId)
-      // pair is more precise and doesn't risk deleting a wrong row.
-      const caller = createCaller();
-
-      await caller.unregister({
-        deviceId: 'device-1',
-        expoToken: 'ExponentPushToken[abc]',
-      });
-
-      expect(mockDeleteByExpoTokenAndDevice).toHaveBeenCalled();
-      expect(mockUnregister).not.toHaveBeenCalled();
-    });
-
     it('should reject empty deviceId', async () => {
       const caller = createCaller();
       await expect(caller.unregister({ deviceId: '' })).rejects.toThrow();

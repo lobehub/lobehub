@@ -61,6 +61,30 @@ vi.mock('@/server/services/verify/planGenerator', () => ({
   VerifyPlanGeneratorService: vi.fn(),
 }));
 
+// runTask / runTasks resolve refs to stable task ids before dispatching.
+const createTaskModel = () => {
+  const rows = new Map([
+    ['T-1', { id: 'task_1', identifier: 'T-1' }],
+    ['T-A', { id: 'task_a', identifier: 'T-A' }],
+    ['T-B', { id: 'task_b', identifier: 'T-B' }],
+  ]);
+  const resolveRefs = async (refs: string[]) => {
+    const byRef = new Map(
+      refs.flatMap((ref) => (rows.has(ref) ? [[ref, rows.get(ref)!] as const] : [])),
+    );
+    return {
+      ambiguous: [],
+      byRef,
+      missing: refs.filter((ref) => !rows.has(ref)),
+      tasks: [...new Set(byRef.values())],
+    };
+  };
+  return {
+    resolve: async (ref: string) => (await resolveRefs([ref])).byRef.get(ref) ?? null,
+    resolveRefs,
+  } as any;
+};
+
 describe('runTask / runTasks device inheritance', () => {
   it('inherits the dispatching run device via deviceId for a fresh topic when the runtime context carries one', async () => {
     const taskCaller = {
@@ -70,14 +94,14 @@ describe('runTask / runTasks device inheritance', () => {
       activeDeviceId: 'device-parent',
       agentModel: { existsById: vi.fn() } as any,
       taskCaller: taskCaller as any,
-      taskModel: {} as any,
+      taskModel: createTaskModel(),
       taskService: {} as any,
     });
 
     await runtime.runTask({ identifier: 'T-1' });
 
     expect(taskCaller.run).toHaveBeenCalledWith(
-      expect.objectContaining({ deviceId: 'device-parent', id: 'T-1' }),
+      expect.objectContaining({ deviceId: 'device-parent', id: 'task_1' }),
     );
   });
 
@@ -89,7 +113,7 @@ describe('runTask / runTasks device inheritance', () => {
       activeDeviceId: 'device-parent',
       agentModel: { existsById: vi.fn() } as any,
       taskCaller: taskCaller as any,
-      taskModel: {} as any,
+      taskModel: createTaskModel(),
       taskService: {} as any,
     });
 
@@ -107,7 +131,7 @@ describe('runTask / runTasks device inheritance', () => {
     const runtime = createTaskRuntime({
       agentModel: { existsById: vi.fn() } as any,
       taskCaller: taskCaller as any,
-      taskModel: {} as any,
+      taskModel: createTaskModel(),
       taskService: {} as any,
     });
 
@@ -125,7 +149,7 @@ describe('runTask / runTasks device inheritance', () => {
       activeDeviceId: 'device-parent',
       agentModel: { existsById: vi.fn() } as any,
       taskCaller: taskCaller as any,
-      taskModel: {} as any,
+      taskModel: createTaskModel(),
       taskService: {} as any,
     });
 

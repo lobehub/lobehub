@@ -15,6 +15,7 @@ import {
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { INSERT_BATCH_SIZE } from '../../utils/batchInsert';
 import { ChunkModel } from '../chunk';
 import { codeEmbedding, designThinkingQuery, designThinkingQuery2 } from './fixtures/embedding';
 
@@ -103,6 +104,54 @@ describe('ChunkModel', () => {
         where: eq(chunks.userId, userId),
       });
       expect(createdChunks).toHaveLength(0);
+    });
+
+    it('should insert past one statement batch, keeping order and file links', async () => {
+      const total = INSERT_BATCH_SIZE * 2 + 7;
+      const params = Array.from({ length: total }, (_, i) => ({
+        index: i,
+        text: `Chunk ${i}`,
+        userId,
+      }));
+
+      const result = await chunkModel.bulkCreate(params, '1');
+
+      expect(result.map((c) => c.index)).toEqual(params.map((p) => p.index));
+      const links = await serverDB.query.fileChunks.findMany({ where: eq(fileChunks.fileId, '1') });
+      expect(new Set(links.map((l) => l.chunkId))).toEqual(new Set(result.map((c) => c.id)));
+    });
+
+    // 50,000 rows is a real spreadsheet (one chunk per row); a single INSERT of that many rows
+    // overflows the call stack inside Drizzle's query builder.
+    it('should insert a 50,000-row file in one transaction', async () => {
+      const params = Array.from({ length: 50_000 }, (_, i) => ({
+        index: i,
+        text: `Chunk ${i}`,
+        userId,
+      }));
+
+      const result = await chunkModel.bulkCreate(params, '1');
+
+      expect(result).toHaveLength(50_000);
+      expect(result.at(-1)?.index).toBe(49_999);
+    }, 60_000);
+
+    it('should roll back every batch when a later batch fails', async () => {
+      const params = Array.from({ length: INSERT_BATCH_SIZE + 2 }, (_, i) => ({
+        index: i,
+        text: `Chunk ${i}`,
+        userId,
+      })) as any[];
+      params[INSERT_BATCH_SIZE + 1] = { index: 'abc', userId };
+
+      await expect(chunkModel.bulkCreate(params, '1')).rejects.toThrow();
+
+      expect(
+        await serverDB.query.chunks.findMany({ where: eq(chunks.userId, userId) }),
+      ).toHaveLength(0);
+      expect(
+        await serverDB.query.fileChunks.findMany({ where: eq(fileChunks.fileId, '1') }),
+      ).toHaveLength(0);
     });
   });
 

@@ -1,3 +1,5 @@
+import type { ScheduleDraft } from '../CreateTaskModal/scheduleDraft';
+
 /**
  * The composer's in-progress draft as stored in the browser. Every field is
  * optional because the value is a browser string that a previous release (or
@@ -5,10 +7,15 @@
  */
 export interface TaskCreateDraft {
   assigneeAgentId?: string;
-  assigneeUserId?: string;
+  assigneeUserId?: string | null;
   execution?: unknown;
+  /** Picked labels, by id; resolved against the scope's registry on restore. */
+  labelIds?: unknown;
   markdown?: string;
   priority?: number;
+  /** `null` is an explicit "no project"; a missing key follows the scope's default. */
+  projectId?: string | null;
+  schedule?: ScheduleDraft;
   visibility?: 'private' | 'public';
 }
 

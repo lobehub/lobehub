@@ -15,7 +15,7 @@ import { getServerConfigStoreState } from '@/store/serverConfig';
  * @returns true if the tool should be enabled, false otherwise
  */
 export const shouldEnableTool = (toolId: string): boolean => {
-  // Feature-flagged tools (e.g. lobe-dashboard) are not listed or offered while off.
+  // Feature-flagged tools (e.g. builtin-dashboard) are not listed or offered while off.
   if (!isToolEnabledByFeatureFlags(toolId, getServerConfigStoreState()?.featureFlags)) return false;
 
   // These executors call Electron IPC and cannot run in a plain web client.

@@ -25,7 +25,9 @@ import {
   runtimeEnvironmentBinaries,
 } from '@/modules/binaries';
 import { generateCliWrapper, getCliWrapperDir } from '@/modules/cliEmbedding';
+import { syncDebugLogging } from '@/modules/debugLogging';
 import { PermissionGuide } from '@/modules/permissionGuide/PermissionGuide';
+import { applyRemoteDebuggingSwitch } from '@/modules/remoteDebugging';
 import { ScreenCaptureManager } from '@/modules/screenCapture/ScreenCaptureManager';
 import { BUILD_CHANNEL, UPDATE_SERVER_URL } from '@/modules/updater/configs';
 import type { IServiceModule, ServiceLifecycle, ServiceModule } from '@/services';
@@ -128,6 +130,7 @@ export class App {
     logger.debug('Initializing App');
     // Initialize store manager
     this.storeManager = new StoreManager(this);
+    syncDebugLogging(this.storeManager);
 
     this.rendererUrlManager = new RendererUrlManager();
     // Wire the backend reverse-proxy as an `app://` interceptor: keeps
@@ -266,7 +269,14 @@ export class App {
     const isSingle = app.requestSingleInstanceLock();
     if (!isSingle) {
       logger.info('Another instance is already running, exiting');
+      // `app.exit(0)` only *initiates* shutdown — without returning, the rest
+      // of this async bootstrap kept running: the duplicate instance went on
+      // to start the IPC server, gateway connection and shell services, so a
+      // machine could briefly run two live device processes for one user and
+      // both answered gateway tool calls (observed as the same runCommand
+      // executing twice with two independent process trees). Stop here.
       app.exit(0);
+      return;
     }
 
     this.initDevBranding();
@@ -313,9 +323,10 @@ export class App {
 
     app.on('activate', this.onActivate);
 
-    // Deep links should be actionable as soon as the main window exists.
-    void this.protocolManager.processPendingUrls().catch((error) => {
-      logger.error('Failed to process pending protocol URLs:', error);
+    // Deep links and launch directories should be actionable as soon as the
+    // main window exists.
+    void this.protocolManager.processPendingTargets().catch((error) => {
+      logger.error('Failed to process pending launch targets:', error);
     });
 
     // Work that can trigger disk, network, native permission, or UI setup is
@@ -498,6 +509,7 @@ export class App {
 
     app.commandLine.appendSwitch('enable-precise-memory-info');
     app.commandLine.appendSwitch('enable-features', this.chromeFlags.join(','));
+    applyRemoteDebuggingSwitch(this.storeManager.get('remoteDebuggingEnabled', false));
 
     logger.debug('Waiting for app to be ready');
     await app.whenReady();

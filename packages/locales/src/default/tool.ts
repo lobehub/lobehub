@@ -1,9 +1,6 @@
 export default {
   'askUserQuestion.submitting': 'Submitting your response…',
   'askUserQuestion.checking': 'Checking submission status…',
-  'askUserQuestion.uncertain':
-    'We couldn’t confirm whether your response was received. Check its status before trying again.',
-  'askUserQuestion.checkStatus': 'Check submission status',
   'askUserQuestion.submitFailed':
     'Your response hasn’t been confirmed. Your answers are saved; please try again.',
 
@@ -70,12 +67,44 @@ export default {
   'claudeCode.askUserQuestion.multiSelectTag': '(multi-select)',
   'claudeCode.askUserQuestion.recommendedTag': 'Recommended',
   'claudeCode.askUserQuestion.skip': 'Skip',
+  'claudeCode.permission.tool.title': 'Claude wants to use {{tool}}',
+  'claudeCode.permission.tool.reason': 'Why it asks',
+  'claudeCode.permission.tool.blockedPath': 'Outside the allowed directories: {{path}}',
+  'claudeCode.permission.enterPlan.title': 'Claude wants to enter plan mode',
+  'claudeCode.permission.enterPlan.desc':
+    'It will read and plan only, and ask you to approve the plan before changing anything.',
+  'claudeCode.permission.exitPlan.title': 'Claude’s plan is ready',
+  'claudeCode.permission.exitPlan.allowedPrompts': 'Approving also lets Claude run:',
+  'claudeCode.permission.inspector.permission': 'Permission request',
+  'claudeCode.permission.inspector.plan': 'Plan approval',
+  'claudeCode.permission.option.allow': 'Allow',
+  'claudeCode.permission.option.allow_session': 'Always allow in this session',
+  'claudeCode.permission.option.deny': 'Deny',
+  'claudeCode.permission.option.approve_bypass': 'Approve, don’t ask again',
+  'claudeCode.permission.option.approve_accept_edits': 'Approve, accept edits',
+  'claudeCode.permission.option.approve_default': 'Approve, ask before each edit',
+  'claudeCode.permission.option.keep_planning': 'Keep planning',
+  'claudeCode.permission.denyNote.placeholder': 'Tell Claude what to do instead (optional)',
+  'claudeCode.permission.planNote.placeholder': 'What should change in the plan? (optional)',
+  'claudeCode.permission.waiting': 'Claude is waiting for your answer',
+  'claudeCode.permission.resolving': 'Sending your answer…',
+  'claudeCode.permission.result.allow': 'Allowed',
+  'claudeCode.permission.result.allow_session': 'Always allowed in this session',
+  'claudeCode.permission.result.deny': 'Denied',
+  'claudeCode.permission.result.approve_bypass': 'Plan approved, won’t ask again',
+  'claudeCode.permission.result.approve_accept_edits': 'Plan approved, accepting edits',
+  'claudeCode.permission.result.approve_default': 'Plan approved, asking before each edit',
+  'claudeCode.permission.result.keep_planning': 'Asked Claude to keep planning',
+  'claudeCode.permission.result.cancelled': 'Not answered: the run stopped',
+  'claudeCode.permission.result.note': 'Your note: {{note}}',
   'claudeCode.askUserQuestion.submit': 'Submit',
   'claudeCode.askUserQuestion.timeExpired': 'Time expired — using option 1 of each question.',
   'claudeCode.askUserQuestion.timeExpiredNoAnswer':
     'Time expired — this question can no longer be answered.',
   'claudeCode.askUserQuestion.timeRemaining':
     'Time remaining: {{time}} · unanswered questions default to option 1 on timeout.',
+  'claudeCode.askUserQuestion.timeRemainingNoAnswer':
+    'Time remaining: {{time}} · this question closes without an answer on timeout.',
   'codeInterpreter-legacy.error': 'Execution Error',
   'codeInterpreter-legacy.executing': 'Executing...',
   'codeInterpreter-legacy.files': 'Files:',
@@ -86,7 +115,62 @@ export default {
   'codeInterpreter.files': 'Files:',
   'codeInterpreter.output': 'Output:',
   'codeInterpreter.returnValue': 'Return Value:',
+  'connector.account.alreadyConnected': '“{{name}}” is already connected',
+  'connector.account.alreadyConnectedDesc':
+    'No account was added. To connect a different one, sign in to the provider with that account and try again.',
+  'connector.account.alreadyConnectedUnnamed': 'This account is already connected',
+  'connector.account.authorizedBy': 'Authorized by {{name}}',
+  'connector.account.connect': 'Connect account',
+  'connector.account.connectAnother': 'Connect another account',
+  'connector.account.connectFailed': "Couldn't connect the account. {{reason}}",
+  'connector.account.connected': 'Connected “{{name}}”',
+  'connector.account.editDropsAccount':
+    'Changing the server URL or OAuth client removes the connected account. Saving will authorize again.',
+  'connector.account.editDropsAccounts':
+    'Changing the server URL or OAuth client removes all {{count}} connected accounts. Saving authorizes one of them again; reconnect the others under Accounts afterwards.',
+  'connector.account.editKeepsAccounts':
+    "Saving keeps the connected accounts. To re-authorize one or connect another, go to Accounts on the connector's page.",
+  'connector.account.empty':
+    "No account connected yet. Connect one so the AI can use this connector's tools.",
+  'connector.account.error.authFailed':
+    "Authorization didn't complete. Try again, or check this connector's OAuth settings.",
+  'connector.account.error.retry': 'Try again.',
+  'connector.account.error.timeout': 'Authorization timed out. Try again.',
+  'connector.account.more': 'More actions',
+  'connector.account.namingHint':
+    'The AI picks an account by its name, so give each one a name that tells them apart.',
+  'connector.account.needsReauth_one': '{{count}} account needs re-authorization',
+  'connector.account.needsReauth_other': '{{count}} accounts need re-authorization',
+  'connector.account.reauthorize': 'Re-authorize',
+  'connector.account.reauthorizeFailed': "Couldn't re-authorize “{{name}}”. {{reason}}",
+  'connector.account.reauthorizeMismatch': "“{{name}}” wasn't updated",
+  'connector.account.reauthorizeMismatchDesc':
+    'You signed in as “{{matched}}”, which is connected separately, so its authorization was refreshed instead. To re-authorize “{{name}}”, sign in with that account.',
+  'connector.account.reauthorized': 'Re-authorized “{{name}}”',
+  'connector.account.remove': 'Remove',
+  'connector.account.removeConfirmContent':
+    'The AI will no longer use this account. You can connect it again later.',
+  'connector.account.removeConfirmOk': 'Remove account',
+  'connector.account.removeConfirmTitle': 'Remove “{{name}}”?',
+  'connector.account.removeFailed': "Couldn't remove “{{name}}”; it's still connected. {{reason}}",
+  'connector.account.removeLastConfirmContent':
+    "This is the only connected account. Once it's removed, this connector's tools stop working until you connect an account again.",
+  'connector.account.rename': 'Rename',
+  'connector.account.renameConflict':
+    'This connector already has an account named “{{name}}”. Choose another name.',
+  'connector.account.renameDesc':
+    'The AI sees this name when choosing an account. Up to 64 characters, unique within this connector.',
+  'connector.account.renameFailed': "Couldn't rename the account. {{reason}}",
+  'connector.account.renameTitle': 'Rename account',
+  'connector.account.switchHint':
+    "Connecting uses the account you're signed in to on the provider's site in this browser. To connect a different one, switch accounts there first.",
+  'connector.account.title': 'Accounts',
+  'connector.account.usingAccount': 'Account: {{name}}',
   'connector.actionFailed': 'Operation failed, please try again',
+  'connector.error.network':
+    'The network connection was interrupted. Check your connection and try again.',
+  'connector.error.stdioDesktopOnly':
+    'Stdio connectors can only sync in the desktop app. Open LobeHub Desktop to sync this connector.',
   'connector.add.advanced': 'Advanced settings',
   'connector.add.authError': 'Authorization failed: {{reason}}',
   'connector.add.authFailed':
@@ -107,6 +191,7 @@ export default {
   'connector.add.unknownError': 'unknown error',
   'connector.add.update': 'Save',
   'connector.add.url': 'Remote MCP server URL',
+  'connector.authError': 'Authorization error',
   'connector.connected': 'Connected',
   'connector.createTools': 'Create tools',
   'connector.delete': 'Delete',
@@ -119,9 +204,20 @@ export default {
   'connector.disconnect': 'Disconnect',
   'connector.edit': 'Edit',
   'connector.edit.success': 'Connector updated',
+  'connector.enabled': 'Enabled',
+  'connector.kind.agent': 'Agent connector',
+  'connector.kind.builtin': 'Built-in tool',
+  'connector.kind.community': 'Marketplace tool',
+  'connector.kind.custom': 'Custom connector',
+  'connector.kind.oauth': 'OAuth connector',
   'connector.manageOnlyCreator': 'Only the creator or a workspace owner can manage this connector',
   'connector.noTools': 'No tool permissions to configure.',
   'connector.notConnected': 'Not connected',
+  'connector.overview.about': 'About',
+  'connector.overview.authorizedBy': 'Authorized by',
+  'connector.overview.connection': 'Connection',
+  'connector.overview.status': 'Status',
+  'connector.overview.type': 'Type',
   'connector.permission.approvalAll': 'Needs approval all',
   'connector.permission.auto': 'Auto — AI calls directly',
   'connector.permission.autoAll': 'Auto all',
@@ -133,8 +229,14 @@ export default {
   'connector.refresh': 'Refresh',
   'connector.resetPermissions': 'Reset permissions',
   'connector.sync': 'Sync',
+  'connector.tab.overview': 'Overview',
+  'connector.tab.tools': 'Tools',
   'connector.thisAgent': 'this agent',
   'connector.title': 'Connectors',
+  'connector.toolCount_one': '{{count}} tool',
+  'connector.toolCount_other': '{{count}} tools',
+  'connector.toolsHint':
+    'Choose for each tool whether the AI calls it directly, asks for approval first, or never sees it.',
   'connector.uninstall': 'Uninstall',
   'connector.uninstallConfirm': 'Uninstall this tool?',
   'connector.updateTools': 'Update tools',
@@ -153,6 +255,9 @@ export default {
   'credsInput.notice.workspace':
     "Saved encrypted to this workspace's credentials. The values go directly to storage and are never shown to the AI.",
   'credsInput.placeholder': 'Enter {{field}}',
+  'credsInput.proseConfirm': 'Save anyway',
+  'credsInput.proseWarning':
+    'The value for “{{fields}}” looks like a sentence rather than a secret (it contains CJK text or a whole phrase). If it was pasted by mistake, fix it before saving; otherwise confirm with “Save anyway”.',
   'credsInput.saveFailed': "Couldn't save the credential. Please try again.",
   'credsInput.skip': 'Skip',
   'credsInput.submit': 'Save',

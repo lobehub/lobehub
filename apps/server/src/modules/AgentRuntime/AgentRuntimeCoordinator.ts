@@ -4,6 +4,7 @@ import debug from 'debug';
 
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
 import { createAgentStateManager, createStreamEventManager } from './factory';
+import type { GatewayInitMeta } from './GatewayStreamNotifier';
 import { type IAgentStateManager, type IStreamEventManager } from './types';
 import { hasVisibleOutputEndPublished } from './visibleOutputEnd';
 
@@ -97,13 +98,18 @@ export class AgentRuntimeCoordinator {
     data: {
       acceptsMemberRuntimeEnd?: boolean;
       agentConfig?: any;
-      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
       streamOwnerUserId?: string;
       userId?: string;
       workspaceId?: string;
     },
+    /**
+     * Routing facts (topicId, agentId, …) sent with the gateway `init` but not
+     * persisted: the hub's `op_lifecycle` carries them to every socket of the
+     * user, so a client that did not start the run can tell where it belongs.
+     */
+    initMeta?: GatewayInitMeta,
   ): Promise<void> {
     try {
       // Create operation metadata
@@ -114,7 +120,10 @@ export class AgentRuntimeCoordinator {
 
       if (metadata) {
         // Send agent runtime init event
-        await this.streamEventManager.publishAgentRuntimeInit(operationId, metadata);
+        await this.streamEventManager.publishAgentRuntimeInit(operationId, {
+          ...metadata,
+          ...initMeta,
+        });
         log('[%s] Agent operation created and initialized', operationId);
       }
     } catch (error) {
@@ -189,14 +198,21 @@ export class AgentRuntimeCoordinator {
    */
   async saveAgentState(operationId: string, state: AgentState): Promise<void> {
     try {
-      const previousState = await this.stateManager.loadAgentState(operationId);
+      // Only the status is compared, so read it without the state blob. A
+      // state saved without `stepCount` still takes the step index from the
+      // previous blob; that rare case is the only one that downloads it.
+      const previousStatus = await this.stateManager.loadAgentStatus(operationId);
+      const previousStepCount =
+        state.stepCount === undefined
+          ? (await this.stateManager.loadAgentState(operationId))?.stepCount
+          : undefined;
 
       // Save state
       await this.stateManager.saveAgentState(operationId, state);
 
       // Send a terminal event once the operation first enters a terminal state.
-      if (hasEnteredStreamEndState(previousState?.status, state.status)) {
-        const stepIndex = state.stepCount ?? previousState?.stepCount ?? 0;
+      if (hasEnteredStreamEndState(previousStatus ?? undefined, state.status)) {
+        const stepIndex = state.stepCount ?? previousStepCount ?? 0;
         const messagePatchMode = this.resolveMessagePatchMode(state);
         if (!hasVisibleOutputEndPublished(state)) {
           await this.publishVisibleOutputEnd(operationId, state, stepIndex);
@@ -222,19 +238,18 @@ export class AgentRuntimeCoordinator {
    */
   async saveStepResult(operationId: string, stepResult: StepResult): Promise<void> {
     try {
-      // Get previous state for detecting state changes
-      const previousState = await this.stateManager.loadAgentState(operationId);
+      // Only the previous status is needed to detect the terminal transition.
+      const previousStatus = await this.stateManager.loadAgentStatus(operationId);
 
       // Save step result
       await this.stateManager.saveStepResult(operationId, stepResult);
 
       // This ensures agent_runtime_end is sent after all step events.
-      if (hasEnteredStreamEndState(previousState?.status, stepResult.newState.status)) {
+      if (hasEnteredStreamEndState(previousStatus ?? undefined, stepResult.newState.status)) {
         // Example: call_llm step 3 can early-publish visible_output_end, then
         // finish step 4 enters done. Keep terminal stepIndex for end payloads,
         // but suppress visible_output_end once the operation marker exists.
-        const stepIndex =
-          stepResult.stepIndex ?? stepResult.newState.stepCount ?? previousState?.stepCount ?? 0;
+        const stepIndex = stepResult.stepIndex ?? stepResult.newState.stepCount ?? 0;
         const messagePatchMode = this.resolveMessagePatchMode(stepResult.newState);
         if (!hasVisibleOutputEndPublished(stepResult.newState)) {
           await this.publishVisibleOutputEnd(operationId, stepResult.newState, stepIndex);
@@ -264,6 +279,13 @@ export class AgentRuntimeCoordinator {
    */
   async loadAgentState(operationId: string): Promise<AgentState | null> {
     return this.stateManager.loadAgentState(operationId);
+  }
+
+  /**
+   * Get only the persisted status, without loading the state blob.
+   */
+  async loadAgentStatus(operationId: string): Promise<AgentState['status'] | null> {
+    return this.stateManager.loadAgentStatus(operationId);
   }
 
   /**

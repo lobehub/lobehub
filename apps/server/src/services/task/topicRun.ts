@@ -1,6 +1,11 @@
+import { isAgentOperationInFlight } from '@lobechat/types';
+
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
+import { isComposerSupersedableTrigger } from '@/server/services/agentRuntime/foregroundOperation';
 
 export interface TopicRunLink {
   /**
@@ -14,6 +19,11 @@ export interface TopicRunLink {
   ownerUserId: string;
   /** The run row's status, as the Task side last wrote it. */
   runStatus: string;
+  /**
+   * Set when the row is still `running` under an operation this send replaces:
+   * the send takes the row over from it instead of reopening a settled one.
+   */
+  takeOverOperationId?: string;
   taskId: string;
   taskIdentifier: string;
   /**
@@ -23,6 +33,27 @@ export interface TopicRunLink {
    * is settled by the orphaned-run reconciliation like any other lost run.
    */
   topicId: string;
+}
+
+/** What the send knows about the run it may replace. */
+export interface TopicRunSendContext {
+  /**
+   * Whether someone already asked this run to stop (its interrupt sentinel is
+   * set). Such a run ends `interrupted` and never settles its row itself.
+   */
+  isStopRequested?: (operationId: string) => Promise<boolean>;
+  /** The run the client asked this send to replace (`replacesOperationId`). */
+  replacesOperationId?: string;
+  /**
+   * Whether this start retires a live foreground run on the topic, as a person
+   * at the composer does. A server-started follow-up waits instead.
+   */
+  supersedeLiveRun?: boolean;
+  /**
+   * Set for a send into a thread. A thread start neither replaces nor retires
+   * the topic's main run, so it can never take a `running` row over.
+   */
+  threadId?: string | null;
 }
 
 /** What reopening a run did, so the caller can tell a no-op from a refusal. */
@@ -71,16 +102,33 @@ export class TopicRunService {
    *   keep honest, and settling one would resurrect it — a default-config Task
    *   can be moved out of `canceled` by a completion. The message still sends,
    *   as an ordinary turn in the conversation.
-   * - **the row is already `running`**: a live run owns it, and a second send is
-   *   not a second Task run. Reopening would steal the `operationId` that
-   *   cancellation interrupts, and attaching a completion hook would let this
-   *   send settle the row while that run is still going.
+   * - **the row is `running` under a run this send leaves alone**: that run
+   *   still owns it, and a second send is not a second Task run. Taking it over
+   *   would steal the `operationId` that cancellation interrupts, and attaching
+   *   a completion hook would let this send settle the row while that run is
+   *   still going.
+   *
+   * A `running` row is taken over when this send ends the run behind it (see
+   * {@link resolveTakeOver}). That is the common shape of a follow-up: the user
+   * answers within seconds of the last reply, before the run has settled, and
+   * the composer supersedes it. The superseded run ends `interrupted`, which
+   * never settles the row — so unless this send takes it over, the Task stays
+   * `running` with nothing behind it.
    */
-  async resolveOwnableRun(topicId: string): Promise<TopicRunLink | undefined> {
+  async resolveOwnableRun(
+    topicId: string,
+    send: TopicRunSendContext = {},
+  ): Promise<TopicRunLink | undefined> {
     const run = await new TaskTopicModel(this.db, this.userId, this.workspaceId).findByTopicId(
       topicId,
     );
-    if (!run?.topicId || run.status === 'running') return undefined;
+    if (!run?.topicId) return undefined;
+
+    let takeOverOperationId: string | undefined;
+    if (run.status === 'running') {
+      takeOverOperationId = await this.resolveTakeOver(topicId, run.operationId, send);
+      if (!takeOverOperationId) return undefined;
+    }
 
     const task = await new TaskModel(this.db, this.userId, this.workspaceId).findById(run.taskId);
     // An archived task is hidden from every list; its topic stays a plain chat.
@@ -89,10 +137,86 @@ export class TopicRunService {
     return {
       ownerUserId: task.createdByUserId ?? this.userId,
       runStatus: run.status,
+      ...(takeOverOperationId && { takeOverOperationId }),
       taskId: run.taskId,
       taskIdentifier: task.identifier,
       topicId,
     };
+  }
+
+  /**
+   * The operation a `running` row can be taken over from, if this send ends it
+   * — or it has already ended. A thread send ends nothing on the main spine,
+   * and is never granted one:
+   *
+   * - **it is no longer in flight**: interrupted, or ended with its report still
+   *   in transit. Nothing will run under it again; its late report, if any, is
+   *   ignored once a newer run owns the row (`onTopicComplete`).
+   * - **it was already asked to stop**: a queued follow-up sent "now" stops the
+   *   run and clears the topic marker before starting, so neither of the two
+   *   rules below can see it.
+   * - **it is the run this send replaces** (`replacesOperationId`): the start
+   *   interrupts it before dispatching. Honored only for the caller's own run on
+   *   this topic, the same check the start applies before stopping it.
+   * - **it is the topic's live foreground run**, which an interactive send
+   *   retires before starting (`supersedeRunningForegroundOperation`): same
+   *   conditions — the marker holder, `running`, a supersedable trigger, the
+   *   caller's own, and not a device-hosted run.
+   *
+   * Anything else is a run that keeps going next to this send.
+   */
+  private async resolveTakeOver(
+    topicId: string,
+    operationId: string | null,
+    send: TopicRunSendContext,
+  ): Promise<string | undefined> {
+    if (!operationId || send.threadId) return undefined;
+
+    const operation = await new AgentOperationModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).findById(operationId);
+    // A missing row proves nothing: a run executed on the client never writes
+    // one, and its report could not be told apart from the new run's.
+    if (!operation) return undefined;
+    if (!isAgentOperationInFlight(operation.status)) return operationId;
+
+    if (operation.topicId !== topicId) return undefined;
+
+    // Already asked to stop — most often by this very send: a queued follow-up
+    // sent "now" interrupts the run and clears the topic marker before it
+    // starts, so the run still reads `running` but is on its way out.
+    if (await this.isStopRequested(send, operationId)) return operationId;
+
+    // Workspace reads are member-wide: a teammate's live run is never ours to end.
+    if (operation.userId !== this.userId) return undefined;
+
+    if (send.replacesOperationId === operationId) return operationId;
+
+    if (send.supersedeLiveRun === false || operation.status !== 'running') return undefined;
+    if (!isComposerSupersedableTrigger(operation.trigger)) return undefined;
+
+    const topic = await new TopicModel(this.db, this.userId, this.workspaceId).findById(topicId);
+    const marker = topic?.metadata?.runningOperation;
+    if (marker?.operationId !== operationId || marker.heteroType) return undefined;
+
+    return operationId;
+  }
+
+  /** Fails closed: an unreadable sentinel leaves the run with its owner. */
+  private async isStopRequested(send: TopicRunSendContext, operationId: string) {
+    if (!send.isStopRequested) return false;
+    try {
+      return await send.isStopRequested(operationId);
+    } catch (error) {
+      console.error(
+        '[TopicRunService] failed to read the interrupt state of %s:',
+        operationId,
+        error,
+      );
+      return false;
+    }
   }
 
   /**
@@ -129,7 +253,13 @@ export class TopicRunService {
       const task = await taskModel.findById(link.taskId);
       if (!task || task.status === 'canceled' || task.archivedAt) return 'refused';
 
-      if (!(await taskTopicModel.reopenSettledRun(topicId, operationId))) return 'already-running';
+      // Take the row over from the run this send replaced; if that run settled
+      // in the meantime, the row is reopened like any settled one.
+      const tookOver =
+        !!link.takeOverOperationId &&
+        (await taskTopicModel.takeOverRunningRun(topicId, link.takeOverOperationId, operationId));
+      if (!tookOver && !(await taskTopicModel.reopenSettledRun(topicId, operationId)))
+        return 'already-running';
 
       await taskTopicModel.clearTopicEnded(topicId);
 

@@ -2,10 +2,14 @@ import type { AgentStreamClientFeature } from '@lobechat/agent-gateway-client';
 import { CLIENT_PROTOCOL_VERSION } from '@lobechat/agent-gateway-client';
 import type {
   ClientLlmWaitItem,
+  ComposerUserMessage,
+  ContextSelection,
   ExecAgentAppContext,
   ExecAgentClientIds,
   ExecAgentLlmExecutor,
   ExecAgentResult,
+  HeteroPermissionMode,
+  PageSelection,
   ResumeClientLlmWaitResult,
   RuntimeMentionedAgent,
   ScheduleAgentRunParams,
@@ -14,13 +18,19 @@ import type {
 } from '@lobechat/types';
 
 import { canUseGatewayProtocolV2 } from '@/helpers/gatewayProtocol';
-import { lambdaClient } from '@/libs/trpc/client';
+import { createWorkspaceLambdaClient, lambdaClient } from '@/libs/trpc/client';
 import { buildLlmExecutorDeclaration } from '@/services/llmRelay';
+
+import { workTypeOptIn } from './workTypeOptIn';
 
 export type { ExecAgentResult, ScheduleAgentRunParams, ScheduleAgentRunResult };
 
 /** Gateway stream features every run started from this client handles. */
-const STREAM_FEATURES: AgentStreamClientFeature[] = ['file_works', 'member_runtime_end'];
+const streamFeatures = (): AgentStreamClientFeature[] => [
+  'file_works',
+  'member_runtime_end',
+  ...(workTypeOptIn().includeArtboardWorks ? ['artboard_works' as const] : []),
+];
 
 /** An older server's strict input schema rejected the `streamFeatures` key. */
 const isUnknownStreamFeaturesError = (error: unknown): boolean => {
@@ -146,6 +156,8 @@ export interface ExecAgentTaskParams {
    * live, to tell whether the client never saw it or its stop never landed.
    */
   clientOperations?: ClientOperationSnapshot[];
+  /** @deprecated Mirror of `userMessage.metadata.contextSelections` for servers that predate it. */
+  contextSelections?: ContextSelection[];
   deviceId?: string;
   existingMessageIds?: string[];
   /** File IDs of already-uploaded attachments to attach to the new user message */
@@ -157,6 +169,8 @@ export interface ExecAgentTaskParams {
    * context so the supervisor run delegates to them instead of answering itself.
    */
   mentionedAgents?: RuntimeMentionedAgent[];
+  /** @deprecated Mirror of `userMessage.metadata.pageSelections` for servers that predate it. */
+  pageSelections?: PageSelection[];
   /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
   parentMessageId?: string;
   prompt: string;
@@ -186,6 +200,31 @@ export interface ExecAgentTaskParams {
    */
   trigger?: string;
   userInterventionConfig?: UserInterventionConfig;
+  /** The composer-authored part of the new user message; see `ExecAgentParams.userMessage`. */
+  userMessage?: ComposerUserMessage;
+}
+
+/**
+ * A composer send queued behind the running turn on the server: the
+ * fresh-send part of {@link ExecAgentTaskParams}.
+ */
+export type QueuedFollowUpRequest = Omit<
+  ExecAgentTaskParams,
+  | 'autoStart'
+  | 'clientIds'
+  | 'clientOperations'
+  | 'existingMessageIds'
+  | 'parentMessageId'
+  | 'replacesOperationId'
+  | 'resumeApproval'
+  | 'resumeApprovals'
+  | 'resumeToolResult'
+  | 'steer'
+>;
+
+export interface QueuedFollowUpSurface {
+  threadId?: string | null;
+  topicId: string;
 }
 
 /**
@@ -264,6 +303,7 @@ export interface UpdateClientTaskThreadStatusParams {
   error?: string;
   metadata?: {
     totalCost?: number;
+    totalLlmCalls?: number;
     totalMessages?: number;
     totalSteps?: number;
     totalTokens?: number;
@@ -276,6 +316,26 @@ export interface UpdateClientTaskThreadStatusParams {
 class AiAgentService {
   async getServerDefaultHeterogeneousCapability() {
     return await lambdaClient.aiAgent.getServerDefaultHeterogeneousCapability.query();
+  }
+
+  /** Holds the run fee of an external agent this desktop spawns itself. */
+  async beginLocalHeteroRunFee(
+    params: { topicId?: string },
+    options: { signal?: AbortSignal; workspaceId: string | null },
+  ) {
+    return await createWorkspaceLambdaClient(
+      options.workspaceId,
+    ).aiAgent.beginLocalHeteroRunFee.mutate(params, { signal: options.signal });
+  }
+
+  /** Charges or gives back that fee once the run ends, in the scope it was held in. */
+  async finishLocalHeteroRunFee(
+    params: { durationMs?: number; feeId: string; reason: 'done' | 'error' | 'interrupted' },
+    options: { signal?: AbortSignal; workspaceId: string | null },
+  ) {
+    return await createWorkspaceLambdaClient(
+      options.workspaceId,
+    ).aiAgent.finishLocalHeteroRunFee.mutate(params, { signal: options.signal });
   }
 
   /**
@@ -302,16 +362,66 @@ class AiAgentService {
         clientProtocol,
         ...(llmExecutor && { llmExecutor }),
         ...params,
-        streamFeatures: STREAM_FEATURES,
+        streamFeatures: streamFeatures(),
       },
       options,
     );
   }
 
   /**
-   * Defer an agent run to a future time. Creates an empty `scheduled` topic that
-   * the backend cron fires once `runAt` passes; nothing runs now.
+   * Queue a follow-up behind the surface's running turn on the server. It
+   * carries the same run declarations as {@link execAgentTask}, so the run can
+   * tell whether the follow-up can join it. `queued: false` means nothing was
+   * stored and this client must send it itself.
    */
+  async appendQueuedFollowUp(params: {
+    /** Composer state to keep with it, so a reloaded page can show and resend it as typed. */
+    composer?: { editorData?: Record<string, any>; filesPreview?: Record<string, any>[] };
+    id: string;
+    request: QueuedFollowUpRequest;
+  }) {
+    const clientProtocol = canUseGatewayProtocolV2() ? CLIENT_PROTOCOL_VERSION : undefined;
+    const llmExecutor = buildLlmExecutorDeclaration();
+
+    return await lambdaClient.agentSteerQueue.append.mutate({
+      ...(params.composer && { composer: params.composer }),
+      id: params.id,
+      request: {
+        clientProtocol,
+        ...(llmExecutor && { llmExecutor }),
+        ...params.request,
+        streamFeatures: streamFeatures(),
+      },
+    });
+  }
+
+  /** This user's follow-ups still waiting on the server, oldest first. */
+  async listQueuedFollowUps(surface: QueuedFollowUpSurface) {
+    return await lambdaClient.agentSteerQueue.list.query(surface);
+  }
+
+  /** `removed: false` means the follow-up already left the queue to be delivered. */
+  async removeQueuedFollowUp(params: QueuedFollowUpSurface & { id: string }) {
+    return await lambdaClient.agentSteerQueue.remove.mutate(params);
+  }
+
+  /** Persist a first send before the device checkout starts. */
+  async submitWorktreeTurn(
+    params: Parameters<typeof lambdaClient.aiAgent.submitWorktreeTurn.mutate>[0],
+    workspaceId: string | null,
+  ) {
+    return createWorkspaceLambdaClient(workspaceId).aiAgent.submitWorktreeTurn.mutate(params);
+  }
+
+  async cancelWorktreeTurn(topicId: string) {
+    return lambdaClient.aiAgent.cancelWorktreeTurn.mutate({ topicId });
+  }
+
+  async retryWorktreeTurn(topicId: string) {
+    return lambdaClient.aiAgent.retryWorktreeTurn.mutate({ topicId });
+  }
+
+  /** Persist a scheduled turn for the backend to dispatch at the selected time. */
   async scheduleAgentRun(params: ScheduleAgentRunParams): Promise<ScheduleAgentRunResult> {
     return await lambdaClient.aiAgent.scheduleAgentRun.mutate(params);
   }
@@ -369,6 +479,23 @@ class AiAgentService {
    */
   async getOperationStatus(params: { operationId: string }) {
     return await lambdaClient.aiAgent.getOperationStatus.query(params);
+  }
+
+  /**
+   * Stop one Claude Code background task of a run hosted by `lh hetero exec`.
+   * `accepted` only means Claude Code took the request; the task's `stopped`
+   * snapshot arrives through the run's own stream.
+   */
+  async stopHeteroBackgroundTask(params: { operationId: string; taskId: string }) {
+    return await lambdaClient.aiAgent.stopHeteroBackgroundTask.mutate(params);
+  }
+
+  /**
+   * Switch the Claude Code permission mode of a run hosted by `lh hetero exec`
+   * (the composer's mode chip, mid-run). `accepted` means Claude Code confirmed.
+   */
+  async setHeteroPermissionMode(params: { mode: HeteroPermissionMode; operationId: string }) {
+    return await lambdaClient.aiAgent.setHeteroPermissionMode.mutate(params);
   }
 
   /**
@@ -430,7 +557,7 @@ class AiAgentService {
     let result: Awaited<ReturnType<typeof mutate>>;
     try {
       // This client subscribes to the continuation it starts.
-      result = await mutate({ ...params, streamFeatures: STREAM_FEATURES });
+      result = await mutate({ ...params, streamFeatures: streamFeatures() });
     } catch (error) {
       // A server from before `streamFeatures` validates this input strictly and
       // rejects the unknown key before claiming anything, so resending the same

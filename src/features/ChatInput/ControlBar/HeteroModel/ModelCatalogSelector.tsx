@@ -3,7 +3,6 @@
 import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
 import type { ListHeterogeneousAgentModelsParams } from '@lobechat/types';
 import { HETEROGENEOUS_AGENT_DEFAULT_SELECTION } from '@lobechat/types';
-import { Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
@@ -25,9 +24,12 @@ import {
   DropdownMenuSubmenuRoot,
   DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
+  Icon,
   Input,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+  Tooltip,
+} from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -39,104 +41,65 @@ import {
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { isDesktop } from '@/const/version';
-import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
-import { resolveExecutionTarget } from '@/helpers/executionTarget';
-import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
-import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
-import { useDeviceStore } from '@/store/device';
-import { useElectronStore } from '@/store/electron';
-import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/selectors';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
-import { useTopicId } from '../../hooks/useTopicId';
 import { useMenuContentLifecycle } from '../useMenuContentLifecycle';
-import { useModelCatalog } from './useModelCatalog';
+import { getModelLabel, getModelOptionDescription } from './labels';
 import { useModelCatalogView } from './useModelCatalogView';
+import { useTargetModelCatalog } from './useTargetModelCatalog';
 
-const styles = createStaticStyles(({ css }) => ({
-  check: css`
-    flex: none;
-    color: ${cssVar.colorPrimary};
-  `,
-  empty: css`
-    padding-block: 24px;
-    padding-inline: 16px;
+const spin = stylex.keyframes({ to: { transform: 'rotate(360deg)' } });
 
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
-  groupLabel: css`
-    text-transform: none;
-    letter-spacing: normal;
-  `,
-  item: css`
-    min-height: 42px;
-  `,
-  popup: css`
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    width: 340px;
-    max-height: 430px;
-  `,
-  search: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    padding-block: 10px;
-  `,
-  spinning: css`
-    animation: heterogeneous-agent-model-spin 0.8s linear infinite;
-
-    @keyframes heterogeneous-agent-model-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-  `,
-  stale: css`
-    color: ${cssVar.colorWarning};
-  `,
-  submenuMeta: css`
-    overflow: hidden;
-
-    max-width: 150px;
-
-    font-family: inherit;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  trigger: css`
-    cursor: pointer;
-
-    display: flex;
-    flex: none;
-    gap: 6px;
-    align-items: center;
-
-    height: 28px;
-    padding-inline: 8px;
-    border-radius: 6px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  triggerDisabled: css`
-    cursor: not-allowed;
-    opacity: 0.5;
-  `,
-  triggerLabel: css`
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  check: { flex: 'none', color: cssVar.colorPrimary },
+  empty: {
+    paddingBlock: '24px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    textAlign: 'center',
+  },
+  groupLabel: { textTransform: 'none', letterSpacing: 'normal' },
+  item: { minHeight: sidebarRow.listRowHeight },
+  popup: {
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    width: '340px',
+    maxHeight: '430px',
+  },
+  search: { display: 'flex', gap: '8px', alignItems: 'center', paddingBlock: '6px' },
+  spinning: {
+    animationName: spin,
+    animationDuration: '0.8s',
+    animationTimingFunction: 'linear',
+    animationIterationCount: 'infinite',
+  },
+  stale: { color: cssVar.colorWarning },
+  submenuMeta: {
+    overflow: 'hidden',
+    maxWidth: '150px',
+    fontFamily: 'inherit',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  trigger: {
+    cursor: 'pointer',
+    display: 'flex',
+    flex: 'none',
+    gap: '6px',
+    alignItems: 'center',
+    height: '28px',
+    paddingInline: '8px',
+    borderRadius: '6px',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  triggerDisabled: { cursor: 'not-allowed', opacity: 0.5 },
+  triggerLabel: { whiteSpace: 'nowrap' },
+});
 
 const getCatalogErrorKey = (name: string) => {
   switch (name) {
@@ -193,42 +156,13 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
       handleOpenChangeComplete: completeOpenChange,
       open,
     } = useMenuContentLifecycle(onSelect);
-    const topicId = useTopicId();
-    const { agencyConfig, isPreferenceLoading, workspaceScoped } = useEffectiveAgencyConfig(
-      agentId,
-      { topicId },
-    );
-    const isLogin = useUserStore(authSelectors.isLogin);
-    const { isLoading: isDeviceListLoading } = useDeviceStore((s) => s.useFetchDevices)(
-      isLogin || isDesktop,
-    );
-    const cwd = useEffectiveWorkingDirectory(agentId, { topicId });
-    const provider = agencyConfig?.heterogeneousProvider;
-    useElectronStore((s) => s.useFetchGatewayDeviceInfo)();
-    const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-    const executionTarget = resolveExecutionTarget(agencyConfig, {
-      clientExecutionAvailable: isDesktop,
-      isHetero: true,
-      workspaceScoped,
-    });
-    const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
-      workspaceScoped,
-    });
-    const useLocalIpc = isDesktop && executionTarget === 'local';
-    const rpcDeviceId = useLocalIpc ? undefined : targetDeviceId;
-    const targetReady = useLocalIpc || (executionTarget === 'device' && !!rpcDeviceId);
     const currentModel =
       model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
         ? model
         : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
-    const { data, error, isLoading, isValidating, mutate } = useModelCatalog({
-      cwd,
-      deviceId: rpcDeviceId,
-      isDeviceListLoading,
-      isPreferenceLoading,
+    const { data, error, isLoading, isValidating, mutate, targetReady } = useTargetModelCatalog({
+      agentId,
       open,
-      provider,
-      targetReady,
       type,
     });
 
@@ -238,6 +172,14 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
       savedLabel: t('heteroAgent.cliModel.saved'),
       search,
     });
+
+    // The persisted id can be an opaque tuple (DeepSeek Harness). Show the
+    // catalog label when it is loaded, otherwise derive a readable name.
+    const triggerModelLabel =
+      currentModel === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
+        ? t('heteroAgent.modelSelector.default')
+        : (data?.models.find((item) => item.id === currentModel)?.label ??
+          getModelLabel(currentModel, t('heteroAgent.modelSelector.default')));
 
     const handleOpenChangeComplete = useCallback(
       (nextOpen: boolean) => {
@@ -249,20 +191,13 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
 
     const trigger = (
       <div
-        className={cx(styles.trigger, disabled && styles.triggerDisabled)}
+        {...stylex.props(styles.trigger, disabled && styles.triggerDisabled)}
         aria-label={t('heteroAgent.cliModel.ariaLabel', {
           name: agentName,
-          model:
-            currentModel === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
-              ? t('heteroAgent.modelSelector.default')
-              : currentModel,
+          model: triggerModelLabel,
         })}
       >
-        <span className={styles.triggerLabel}>
-          {currentModel === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
-            ? t('heteroAgent.modelSelector.default')
-            : currentModel}
-        </span>
+        <span {...stylex.props(styles.triggerLabel)}>{triggerModelLabel}</span>
         <Icon icon={ChevronDownIcon} size={12} />
       </div>
     );
@@ -279,7 +214,7 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
     const closeOnSelect = variant !== 'submenu';
     const menu = (
       <>
-        <DropdownMenuHeader className={styles.search}>
+        <DropdownMenuHeader className={stylex.props(styles.search).className}>
           <Input
             autoFocus
             placeholder={t('heteroAgent.cliModel.search')}
@@ -292,7 +227,7 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
           />
           <ActionIcon
             aria-label={t('heteroAgent.cliModel.reload')}
-            className={cx(isValidating && styles.spinning)}
+            className={isValidating ? stylex.props(styles.spinning).className : undefined}
             disabled={!targetReady || isValidating}
             icon={isValidating ? LoaderCircleIcon : RefreshCwIcon}
             size="small"
@@ -302,7 +237,7 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
         </DropdownMenuHeader>
         <DropdownMenuScrollViewport>
           <DropdownMenuItem
-            className={styles.item}
+            className={stylex.props(styles.item).className}
             closeOnClick={closeOnSelect}
             onClick={() => handleModelSelect(HETEROGENEOUS_AGENT_DEFAULT_SELECTION)}
           >
@@ -316,7 +251,7 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
                 </DropdownMenuItemDesc>
               </DropdownMenuItemLabelGroup>
               {currentModel === HETEROGENEOUS_AGENT_DEFAULT_SELECTION && (
-                <DropdownMenuItemExtra className={styles.check}>
+                <DropdownMenuItemExtra className={stylex.props(styles.check).className}>
                   <Icon icon={CheckIcon} size={14} />
                 </DropdownMenuItemExtra>
               )}
@@ -324,15 +259,15 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
           </DropdownMenuItem>
 
           {isLoading && !data && (
-            <div className={styles.empty}>
+            <div {...stylex.props(styles.empty)}>
               {t('heteroAgent.cliModel.loading', { name: agentName })}
             </div>
           )}
           {!targetReady && (
-            <div className={styles.empty}>{t('heteroAgent.cliModel.targetUnavailable')}</div>
+            <div {...stylex.props(styles.empty)}>{t('heteroAgent.cliModel.targetUnavailable')}</div>
           )}
           {error && (
-            <div className={styles.empty}>
+            <div {...stylex.props(styles.empty)}>
               {t(getCatalogErrorKey(error.name))}
               <br />
               <Button size="small" type="text" onClick={() => void mutate()}>
@@ -341,7 +276,7 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
             </div>
           )}
           {data && !error && rows.length === 0 && (
-            <div className={styles.empty}>
+            <div {...stylex.props(styles.empty)}>
               {search.trim()
                 ? t('heteroAgent.cliModel.noMatch')
                 : t('heteroAgent.cliModel.empty', { name: agentName })}
@@ -349,7 +284,7 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
           )}
           {Object.entries(groups).map(([providerId, models]) => (
             <DropdownMenuGroup key={providerId}>
-              <DropdownMenuGroupLabel className={styles.groupLabel}>
+              <DropdownMenuGroupLabel className={stylex.props(styles.groupLabel).className}>
                 {getHeterogeneousTypeLabel(providerId) ?? providerId}
               </DropdownMenuGroupLabel>
               {models.map((item) => {
@@ -357,7 +292,7 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
 
                 return (
                   <DropdownMenuItem
-                    className={styles.item}
+                    className={stylex.props(styles.item).className}
                     closeOnClick={closeOnSelect}
                     key={item.id}
                     onClick={() => handleModelSelect(item.id)}
@@ -365,13 +300,15 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
                     <DropdownMenuItemContent>
                       <DropdownMenuItemLabelGroup>
                         <DropdownMenuItemLabel>{item.label ?? item.modelId}</DropdownMenuItemLabel>
-                        <DropdownMenuItemDesc className={cx(isStale && styles.stale)}>
-                          {item.id}
+                        <DropdownMenuItemDesc
+                          className={isStale ? stylex.props(styles.stale).className : undefined}
+                        >
+                          {getModelOptionDescription(item.id)}
                           {isStale ? ` · ${t('heteroAgent.cliModel.stale')}` : ''}
                         </DropdownMenuItemDesc>
                       </DropdownMenuItemLabelGroup>
                       {item.id === currentModel && (
-                        <DropdownMenuItemExtra className={styles.check}>
+                        <DropdownMenuItemExtra className={stylex.props(styles.check).className}>
                           <Icon icon={CheckIcon} size={14} />
                         </DropdownMenuItemExtra>
                       )}
@@ -409,7 +346,7 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
                   {t('heteroAgent.modelSelector.model')}
                 </DropdownMenuItemLabel>
               )}
-              <DropdownMenuItemExtra className={styles.submenuMeta}>
+              <DropdownMenuItemExtra className={stylex.props(styles.submenuMeta).className}>
                 {currentModel === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
                   ? t('heteroAgent.modelSelector.default')
                   : currentModel}
@@ -421,7 +358,10 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
           </DropdownMenuSubmenuTrigger>
           <DropdownMenuPortal>
             <DropdownMenuPositioner alignOffset={-4} anchor={null} placement="right" sideOffset={8}>
-              <DropdownMenuPopup className={styles.popup} data-has-header="">
+              <DropdownMenuPopup
+                className={stylex.props(styles.popup).className}
+                data-has-header=""
+              >
                 {menu}
               </DropdownMenuPopup>
             </DropdownMenuPositioner>
@@ -439,7 +379,7 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
         <DropdownMenuTrigger nativeButton={false}>{trigger}</DropdownMenuTrigger>
         <DropdownMenuPortal>
           <DropdownMenuPositioner placement="topLeft" sideOffset={8}>
-            <DropdownMenuPopup className={styles.popup} data-has-header="">
+            <DropdownMenuPopup className={stylex.props(styles.popup).className} data-has-header="">
               {menu}
             </DropdownMenuPopup>
           </DropdownMenuPositioner>

@@ -69,7 +69,10 @@ const Render = memo<RenderProps>(
       return <RejectedResponse timedOut apiName={apiName} />;
     }
 
-    if (intervention?.status === 'rejected') {
+    // The producer gave up because its session ended (the run stopped): no one
+    // rejected anything, and the raw reason is not copy.
+    const sessionEnded = intervention?.rejectedReason === 'session_ended';
+    if (intervention?.status === 'rejected' && !sessionEnded) {
       return (
         <RejectedResponse
           apiName={apiName}
@@ -79,8 +82,8 @@ const Render = memo<RenderProps>(
       );
     }
 
-    if (intervention?.status === 'aborted') {
-      return <AbortResponse />;
+    if (intervention?.status === 'aborted' || intervention?.status === 'rejected') {
+      return <AbortResponse sessionEnded={sessionEnded} />;
     }
 
     // Handle arguments streaming state

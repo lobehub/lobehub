@@ -15,12 +15,11 @@ vi.mock('@/business/server/agent-run/notifyAgentRunCompleted', () => ({
 vi.mock('@/server/services/workRegistration', () => ({ registerWorksForOperation: vi.fn() }));
 
 /**
- * Regression: the completion-time verify gate used to be launched with a bare
- * `void`. Nobody held that promise, so on the serverless path the instance was
- * free to stop scheduling it as soon as the step response returned — and since
- * entering `verifying` is a durable write, a run cut off mid-judge stayed
- * `verifying` forever (acceptance and goal card stuck with it). It must be
- * handed to the host as post-response work instead.
+ * Regression: the completion-time verify gate used to run as post-response work
+ * of the completing request. A heterogeneous `heteroFinish` past the 120 s edge
+ * timeout took the gate down with it after it had claimed `verifying`, so the
+ * round was never judged. The gate is handed to `scheduleVerifyOnCompletion`,
+ * which runs it in its own QStash delivery.
  */
 describe('CompletionLifecycle — verify gate scheduling', () => {
   afterEach(() => vi.restoreAllMocks());
@@ -28,15 +27,16 @@ describe('CompletionLifecycle — verify gate scheduling', () => {
     after.mockReset();
   });
 
-  it('schedules the verify gate as post-response work, not a detached promise', async () => {
+  it('hands the verify gate to its own delivery instead of this request', async () => {
     const lifecycle = new CompletionLifecycle({} as any, 'user-1');
     vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
     vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
-    const runVerify = vi
-      .spyOn(verifyServices, 'runVerifyOnCompletion')
+    const schedule = vi
+      .spyOn(verifyServices, 'scheduleVerifyOnCompletion')
       .mockResolvedValue(undefined);
+    const runVerify = vi.spyOn(verifyServices, 'runVerifyOnCompletion');
 
     await lifecycle.dispatchHooks(
       'op-1',
@@ -44,14 +44,11 @@ describe('CompletionLifecycle — verify gate scheduling', () => {
       'done',
     );
 
-    // Handed over, and not started behind the scheduler's back.
-    expect(after).toHaveBeenCalledTimes(1);
+    expect(schedule).toHaveBeenCalledTimes(1);
+    expect(schedule.mock.calls[0][2]).toMatchObject({ operationId: 'op-1' });
+    // Not judged on this request, nor queued behind its response.
     expect(runVerify).not.toHaveBeenCalled();
-
-    // What was handed over is the gate itself.
-    await after.mock.calls[0][0]();
-    expect(runVerify).toHaveBeenCalledTimes(1);
-    expect(runVerify.mock.calls[0][2]).toMatchObject({ operationId: 'op-1' });
+    expect(after).not.toHaveBeenCalled();
   });
   it.each(['error', 'interrupted'])(
     'does not wait for unfinished plan generation on %s',
@@ -88,6 +85,7 @@ describe('CompletionLifecycle — verify gate scheduling', () => {
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
     const settle = vi.spyOn(verifyServices, 'settleFailedRepair').mockResolvedValue(false);
+    vi.spyOn(verifyServices, 'releaseUndeliveredRound').mockResolvedValue(false);
 
     await lifecycle.dispatchHooks(
       'repair-op',
@@ -96,5 +94,23 @@ describe('CompletionLifecycle — verify gate scheduling', () => {
     );
     await Promise.all(after.mock.calls.map(([callback]) => callback()));
     expect(settle).toHaveBeenCalledWith(expect.anything(), 'user-1', 'repair-op', undefined);
+  });
+
+  it('releases the round of a task run that ended in error', async () => {
+    vi.spyOn(verifyServices, 'settleFailedRepair').mockResolvedValue(false);
+    const release = vi.spyOn(verifyServices, 'releaseUndeliveredRound').mockResolvedValue(true);
+    const lifecycle = new CompletionLifecycle({} as any, 'user-1');
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+
+    await lifecycle.dispatchHooks(
+      'task-op',
+      { host: { hooks: [] }, origin: {}, status: 'error' },
+      'error',
+    );
+    await Promise.all(after.mock.calls.map(([callback]) => callback()));
+
+    expect(release).toHaveBeenCalledWith(expect.anything(), 'user-1', 'task-op', undefined);
   });
 });

@@ -1,7 +1,9 @@
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
 
 import type { AgentSignalExecutionContext } from '../emitter';
-import { enqueueAgentSignalSourceEvent } from '../emitter';
+// Leaf import on purpose: pulling this from `emitter` closes
+// `procedure -> emitter -> orchestrator -> policies -> procedure`.
+import { enqueueAgentSignalSourceEvent } from '../enqueue';
 import type { AgentSignalPolicyStateStore } from '../store/types';
 import { appendProcedureAccumulatorRecord } from './accumulators/procedure';
 import { createProcedureKey } from './keys';

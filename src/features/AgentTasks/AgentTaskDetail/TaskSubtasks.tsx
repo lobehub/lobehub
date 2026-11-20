@@ -1,8 +1,17 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import type { TreeDataNode } from '@lobehub/ui/base-ui';
-import { ActionIcon, Collapsible, confirmModal, Text, toast, Tree } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import type { TreeDataNode } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  Collapsible,
+  confirmModal,
+  cssVar,
+  Flexbox,
+  Icon,
+  Text,
+  toast,
+  Tree,
+} from '@lobehub/ui';
 import { ArchiveIcon, ListTodoIcon, PlayCircle, Plus } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -31,6 +40,7 @@ import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 import { shouldShowMemberAssignee } from '../shared/memberAssigneeMode';
 import { styles } from '../shared/style';
 import { taskDetailPath } from '../shared/taskDetailPath';
+import { useTaskListOriginState } from '../shared/taskListOrigin';
 import RunSubtasksPreview from './RunSubtasksPreview';
 import TopicStatusIcon from './TopicStatusIcon';
 
@@ -78,13 +88,13 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
         style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <TaskPriorityTag priority={task.priority} size={14} taskIdentifier={task.identifier} />
+        <TaskPriorityTag priority={task.priority} size={14} taskIdentifier={task.id} />
       </span>
       <span
         style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <TaskStatusTag size={14} status={status} taskIdentifier={task.identifier}>
+        <TaskStatusTag size={14} status={status} taskIdentifier={task.id}>
           {hasRunningTopic ? <TopicStatusIcon size={14} status="running" /> : undefined}
         </TaskStatusTag>
       </span>
@@ -114,15 +124,14 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
         {shouldShowMemberAssignee(activeWorkspaceId, task.assigneeUserId) && (
           <AssigneeMemberSelector
             currentUserId={task.assigneeUserId ?? null}
-            disabled={isRunning}
             taskCreatorId={task.createdByUserId}
-            taskIdentifier={task.identifier}
+            taskIdentifier={task.id}
             taskVisibility={task.visibility}
           >
             <span
               style={{
                 alignItems: 'center',
-                cursor: isRunning ? 'not-allowed' : 'pointer',
+                cursor: 'pointer',
                 display: 'inline-flex',
                 flex: 'none',
               }}
@@ -138,7 +147,8 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
         <AssigneeAgentSelector
           currentAgentId={task.assignee?.id ?? null}
           disabled={isRunning}
-          taskIdentifier={task.identifier}
+          taskCreatorId={task.createdByUserId}
+          taskIdentifier={task.id}
           taskVisibility={task.visibility}
         >
           <span
@@ -160,7 +170,7 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
 const toTreeData = (tree: TaskTreeNode[]): TreeDataNode[] => {
   return tree.map((node) => ({
     children: toTreeData(node.children),
-    key: node.task.identifier,
+    key: node.task.id!,
     title: <SubtaskTitle task={node.task} />,
   }));
 };
@@ -169,6 +179,7 @@ const TaskSubtasks = memo(() => {
   const { t } = useTranslation('chat');
 
   const navigate = useWorkspaceAwareNavigate();
+  const taskListOriginState = useTaskListOriginState();
   const { allowed: canEditTask, reason } = usePermission('create_content');
   const agentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   // Subtask composers inherit the parent's visibility as their default — a
@@ -189,7 +200,7 @@ const TaskSubtasks = memo(() => {
     const map = new Map<string, TaskDetailSubtask>();
     const walk = (items: TaskDetailSubtask[]) => {
       for (const item of items) {
-        map.set(item.identifier, item);
+        if (item.id) map.set(item.id, item);
         if (item.children?.length) walk(item.children);
       }
     };
@@ -198,11 +209,15 @@ const TaskSubtasks = memo(() => {
   }, [subtasks]);
 
   const handleNavigate = useCallback(
-    (identifier: string) => {
-      const subtask = subtaskMap.get(identifier);
-      navigate(taskDetailPath(identifier, subtask?.assignee?.id ?? undefined, subtask?.name));
+    (id: string) => {
+      const subtask = subtaskMap.get(id);
+      if (!subtask?.id) return;
+      navigate(
+        taskDetailPath(subtask.identifier, subtask?.assignee?.id ?? undefined, subtask?.name),
+        { state: taskListOriginState },
+      );
     },
-    [navigate, subtaskMap],
+    [navigate, subtaskMap, taskListOriginState],
   );
 
   const treeData = useMemo(() => {
@@ -218,11 +233,11 @@ const TaskSubtasks = memo(() => {
       event.preventDefault();
       showContextMenu(
         buildItems({
+          id: subtask.id!,
           archivedAt: subtask.archivedAt ?? null,
           assigneeAgentId: subtask.assignee?.id,
           assigneeUserId: subtask.assigneeUserId,
           automationMode: subtask.automationMode,
-          createdByUserId: subtask.createdByUserId,
           heartbeatInterval: subtask.heartbeat?.interval,
           identifier: subtask.identifier,
           priority: subtask.priority,
@@ -231,11 +246,11 @@ const TaskSubtasks = memo(() => {
         }),
       );
       installKeyboardHandlers({
+        id: subtask.id!,
         archivedAt: subtask.archivedAt ?? null,
         assigneeAgentId: subtask.assignee?.id,
         assigneeUserId: subtask.assigneeUserId,
         automationMode: subtask.automationMode,
-        createdByUserId: subtask.createdByUserId,
         heartbeatInterval: subtask.heartbeat?.interval,
         identifier: subtask.identifier,
         priority: subtask.priority,
@@ -321,7 +336,7 @@ const TaskSubtasks = memo(() => {
                 gap={8}
                 paddingBlock={4}
                 paddingInline={8}
-                style={{ cursor: 'pointer', width: 'fit-content' }}
+                style={{ cursor: 'pointer', marginInlineStart: -8, width: 'fit-content' }}
                 variant="borderless"
                 onClick={() => setIsExpanded((prev) => !prev)}
               >
@@ -395,7 +410,7 @@ const TaskSubtasks = memo(() => {
             gap={8}
             paddingBlock={4}
             paddingInline={8}
-            style={{ width: 'fit-content' }}
+            style={{ marginInlineStart: -8, width: 'fit-content' }}
             title={canEditTask ? undefined : reason}
             variant="borderless"
             onClick={toggleCreating}

@@ -1,6 +1,10 @@
 export const LOCAL_FILE_PROTOCOL_SCHEME = 'localfile';
 export const LOCAL_FILE_PROTOCOL_HOST = 'file';
 
+/** Where the renderer is served from (`app://renderer`), in dev and prod alike. */
+export const RENDERER_PROTOCOL_SCHEME = 'app';
+export const RENDERER_PROTOCOL_HOST = 'renderer';
+
 /**
  * Renderer pathnames that must be proxied to the remote LobeHub backend
  * instead of being served as static assets. Covers tRPC, webapi, NextAuth,
@@ -20,5 +24,11 @@ export const BACKEND_PATH_PREFIXES = [
   '/market',
 ];
 
-export const isBackendPath = (pathname: string) =>
-  BACKEND_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+const matchesPrefix = (pathname: string, prefixes: string[]) =>
+  prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+
+export const isBackendPath = (pathname: string) => matchesPrefix(pathname, BACKEND_PATH_PREFIXES);
+
+// Canvas previews run in an opaque-origin sandbox (Origin: null); the proxy would otherwise
+// attach the user's access token to whatever backend path their scripts fetch.
+export const isSandboxedBackendRequestAllowed = (origin: string | null) => origin !== 'null';

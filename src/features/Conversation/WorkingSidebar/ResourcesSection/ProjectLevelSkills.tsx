@@ -1,14 +1,17 @@
 import type React from 'react';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import {
+  filterSkillItems,
   type SkillListItem,
   SkillSection,
   SkillsList,
   useProjectSkills,
 } from '@/features/SkillsList';
+
+import { useSelectSkill } from './useSelectSkill';
 
 // Project skills are resolved by the underlying CLI agent itself, so
 // we serialize them as a literal `/skill-name` (projectSkill chip).
@@ -28,22 +31,30 @@ interface ProjectLevelSkillsProps {
    * collapsed to a single visible source and wants the list rendered flat.
    */
   hideHeader?: boolean;
+  /** Only render skills matching this query. */
+  searchQuery?: string;
   workingDirectory: string;
 }
 
 const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(
-  ({ deviceId, hideHeader, workingDirectory }) => {
+  ({ deviceId, hideHeader, searchQuery = '', workingDirectory }) => {
     const { t } = useTranslation('chat');
-    const { error, getRowActions, mutate, onOpenFile, onOpenSkill, projectItems } =
-      useProjectSkills(workingDirectory, deviceId);
+    const onSelectSkill = useSelectSkill('projectSkill');
+    const { error, mutate, projectItems } = useProjectSkills(workingDirectory, deviceId);
+
+    const items = useMemo(
+      () => filterSkillItems(projectItems, searchQuery),
+      [projectItems, searchQuery],
+    );
 
     // A failed scan must surface an error + Retry, not silently vanish (ux Read
     // §1.1). Only genuinely-empty (no error) keeps the "hide the section" behavior.
     if (projectItems.length === 0) {
       if (!error) return null;
-      if (hideHeader) return <SkillSection isEmpty error={error} onRetry={mutate} />;
+      if (hideHeader) return <SkillSection compact isEmpty error={error} onRetry={mutate} />;
       return (
         <SkillSection
+          compact
           isEmpty
           error={error}
           sectionHeader={{ title: t('workingPanel.skills.section.project') }}
@@ -52,12 +63,13 @@ const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(
       );
     }
 
+    if (items.length === 0) return null;
+
     const list = (
       <SkillsList
-        getRowActions={getRowActions}
-        items={projectItems}
-        onOpenFile={onOpenFile}
-        onOpenSkill={onOpenSkill}
+        compact
+        items={items}
+        onSelectSkill={onSelectSkill}
         onSkillDragStart={handleSkillDragStart}
       />
     );
@@ -66,8 +78,9 @@ const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(
 
     return (
       <SkillSection
+        compact
         sectionHeader={{
-          count: projectItems.length,
+          count: items.length,
           title: t('workingPanel.skills.section.project'),
         }}
       >

@@ -6,7 +6,7 @@ import { GoalContent } from './GoalModal';
 const mocks = vi.hoisted(() => ({ close: vi.fn() }));
 
 vi.mock('i18next', () => ({ t: (key: string) => key }));
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   useModalContext: () => ({ close: mocks.close }),
 }));

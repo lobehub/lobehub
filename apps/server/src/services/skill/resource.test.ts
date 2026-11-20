@@ -162,6 +162,52 @@ describe('SkillResourceService', () => {
       expect(result['lib/utils.ts'].fileHash).toHaveLength(64);
     });
 
+    it('uploads resources concurrently, with a bounded number in flight', async () => {
+      // A Market skill can carry hundreds of files; one upload at a time made a
+      // 847-file skill take ~26s to install while the @mention send waited.
+      let inFlight = 0;
+      let peak = 0;
+      mockUploadBuffer.mockImplementation(async () => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight -= 1;
+        return { key: 'mock-key' };
+      });
+      const service = new SkillResourceService({} as any, 'user-1');
+      const resources = new Map(
+        Array.from({ length: 40 }, (_, i) => [`file-${i}.md`, Buffer.from(`# ${i}`)] as const),
+      );
+
+      const result = await service.storeResources('zip-many', resources);
+
+      expect(Object.keys(result)).toHaveLength(40);
+      expect(result['file-39.md'].size).toBe(4);
+      expect(peak).toBeGreaterThan(1);
+      expect(peak).toBeLessThanOrEqual(16);
+      mockUploadBuffer.mockResolvedValue({ key: 'mock-key' });
+    });
+
+    it('registers each distinct content once, even when several paths share it', async () => {
+      // Concurrent workers registering one hash race on the global file insert
+      // (check-then-insert on its primary key), failing the whole install.
+      const service = new SkillResourceService({} as any, 'user-1');
+      const resources = new Map([
+        ['pkg/__init__.py', Buffer.from('')],
+        ['pkg/sub/__init__.py', Buffer.from('')],
+        ['pkg/main.py', Buffer.from('print(1)')],
+      ]);
+
+      const result = await service.storeResources('zip-dup', resources);
+
+      const registered = mockCreateGlobalFile.mock.calls.map(([file]) => file.fileHash);
+      expect(registered).toHaveLength(2);
+      expect(new Set(registered).size).toBe(2);
+      expect(result['pkg/__init__.py'].fileHash).toBe(result['pkg/sub/__init__.py'].fileHash);
+      expect(result['pkg/sub/__init__.py'].size).toBe(0);
+      expect(result['pkg/main.py'].fileHash).not.toBe(result['pkg/__init__.py'].fileHash);
+    });
+
     it('should pass correct metadata to createGlobalFile', async () => {
       const service = new SkillResourceService({} as any, 'user-1');
       const resources = new Map([['docs/guide.md', Buffer.from('# Guide')]]);

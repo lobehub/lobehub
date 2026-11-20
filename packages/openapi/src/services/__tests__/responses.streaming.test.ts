@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { InMemoryStreamEventManager } from '@/server/modules/AgentRuntime/InMemoryStreamEventManager';
 
+import { ResponseObjectSchema } from '../../types/responses.type';
 import type * as ResumeModule from '../client-tool-resume.responses';
 import { ResponsesService } from '../responses.service';
 
@@ -178,6 +179,7 @@ describe('ResponsesService function call outputs', () => {
       topicId: 'tpc_1',
     });
     expect(response).toMatchObject({ id: 'tpc_1', status: 'completed' });
+    expect(() => ResponseObjectSchema.parse(response)).not.toThrow();
   });
 
   it('streams the resumed run on the same response id', async () => {
@@ -216,6 +218,7 @@ describe('ResponsesService function call outputs', () => {
       output: [{ call_id: 'call_9', name: 'get_weather', type: 'function_call' }],
       status: 'incomplete',
     });
+    expect(() => ResponseObjectSchema.parse(response)).not.toThrow();
   });
 
   it('falls back to a new turn when nothing is parked on the topic', async () => {
@@ -230,5 +233,103 @@ describe('ResponsesService function call outputs', () => {
         prompt: 'Tool call call_1 returned: sunny',
       }),
     );
+  });
+
+  it.each([false, true])(
+    'rejects a stale strict resume without starting a run (stream=%s)',
+    async (stream) => {
+      resumeParkedClientToolsMock.mockResolvedValue(undefined);
+      const params = { ...toolOutputRequest, strict_tool_resume: true };
+      const service = buildService();
+      let response;
+      if (stream) {
+        const events = [];
+        for await (const event of service.createStreamingResponse(params)) events.push(event);
+        expect(events.at(-1)?.type).toBe('response.failed');
+        response = events.at(-1)?.response;
+      } else {
+        response = await service.createResponse(params);
+      }
+      expect(response).toMatchObject({
+        status: 'failed',
+        error: { code: 'invalid_request_error' },
+      });
+      expect(() => ResponseObjectSchema.parse(response)).not.toThrow();
+      expect(execAgentMock).not.toHaveBeenCalled();
+      expect(executeResponseRunMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('requires both a previous response and tool outputs for strict resume', async () => {
+    for (const params of [
+      { input: 'hello', model: 'agt_1', previous_response_id: 'tpc_1' },
+      { input: toolOutputRequest.input, model: 'agt_1' },
+    ]) {
+      const response = await buildService().createResponse({ ...params, strict_tool_resume: true });
+      expect(response).toMatchObject({
+        status: 'failed',
+        error: { code: 'invalid_request_error' },
+      });
+    }
+    expect(execAgentMock).not.toHaveBeenCalled();
+  });
+
+  it('limits hosted discovery to the explicitly declared tools in exclusive mode', async () => {
+    const response = await buildService().createResponse({
+      input: 'Read the document',
+      model: 'agt_1',
+      tools: [
+        { type: 'lobe-agent-documents' },
+        { type: 'function', name: 'read_page', parameters: { type: 'object' } },
+      ],
+      tools_mode: 'exclusive',
+    });
+    expect(response.status).toBe('completed');
+    expect(() => ResponseObjectSchema.parse(response)).not.toThrow();
+    expect(execAgentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exclusivePluginIds: ['lobe-agent-documents'],
+        functionTools: [{ name: 'read_page', parameters: { type: 'object' } }],
+      }),
+    );
+  });
+});
+
+describe('ResponsesService non-streaming response object', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    execAgentMock.mockResolvedValue({ operationId: 'op_1', success: true, topicId: 'tpc_9' });
+  });
+
+  it('matches the documented OpenResponses object for every output item kind', async () => {
+    executeResponseRunMock.mockResolvedValue({
+      messages: [
+        {
+          content: 'Checking.',
+          role: 'assistant',
+          tool_calls: [{ function: { arguments: '{}', name: 'search____query' }, id: 'call_1' }],
+        },
+        { content: 'result', role: 'tool', tool_call_id: 'call_1' },
+        { content: 'Done.', role: 'assistant' },
+      ],
+      status: 'done',
+      usage: { llm: { tokens: { input: 5, output: 7, total: 12 } } },
+    });
+
+    const response = await buildService().createResponse({
+      input: 'hi',
+      metadata: { source: 'test' },
+      model: 'agt_1',
+      tool_choice: { name: 'lookup', type: 'function' },
+    });
+
+    expect(response.output.map((item: { type: string }) => item.type)).toEqual([
+      'message',
+      'function_call',
+      'function_call_output',
+      'message',
+    ]);
+    expect(response.usage).toMatchObject({ input_tokens: 5, output_tokens: 7, total_tokens: 12 });
+    expect(() => ResponseObjectSchema.parse(response)).not.toThrow();
   });
 });

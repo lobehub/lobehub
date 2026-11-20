@@ -24,6 +24,7 @@ const log = debug('lobe-server:goal-trace');
  * feature's. `0x676f_616c` is ASCII `goal`, and fits int4.
  */
 const GOAL_TRACE_LOCK_NAMESPACE = 0x67_6f_61_6c;
+const GOAL_TRACE_LOCK_TIMEOUT = '10s';
 
 /**
  * Collects one advance's ticks and writes them into the goal's trajectory.
@@ -100,6 +101,11 @@ export class GoalAdvanceRecorder {
    */
   private async serializedPerGoal<T>(run: (tx: LobeChatDatabase) => Promise<T>): Promise<T> {
     return this.db.transaction(async (tx) => {
+      // Bounded: a trajectory write is best-effort, and an advance queued behind
+      // a stuck holder must give up rather than wait out the function timeout.
+      // Unbounded waits piled hundreds of advances onto one goal's lock, each
+      // killed at 300s with its transaction still open, holding the queue shut.
+      await tx.execute(sql.raw(`SET LOCAL lock_timeout = '${GOAL_TRACE_LOCK_TIMEOUT}'`));
       await tx.execute(
         sql`SELECT pg_advisory_xact_lock(${GOAL_TRACE_LOCK_NAMESPACE}, hashtext(${this.goalId}))`,
       );

@@ -342,7 +342,7 @@ depends on the scenario:
   API/Cron triggers. The loop runs on the server,
   streaming events to the client via SSE, entry point is
   `AgentRuntimeService.executeStep()`
-  (`apps/server/src/services/agentRuntime/AgentRuntimeService.ts`),
+  (`apps/server/src/services/agentRuntime/AgentRuntimeService/executeStep/index.ts`),
   tRPC route at `apps/server/src/routers/lambda/aiAgent.ts`
 
 ## Model Runtime
@@ -397,8 +397,8 @@ export interface LobeRuntimeAI {
 ```
 
 **Adapter Architecture**: Through two factory functions —
-`openaiCompatibleFactory` and
-`anthropicCompatibleFactory` — most providers can be
+`createOpenAICompatibleRuntime` and
+`createAnthropicCompatibleRuntime` — most providers can be
 integrated with minimal configuration. Currently supports
 over 40 model providers (OpenAI, Anthropic, Google,
 Azure, Bedrock, Ollama, etc.), with implementations

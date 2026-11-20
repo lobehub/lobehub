@@ -88,12 +88,6 @@ describe('MenuManager', () => {
 
       expect(mockBuildAndSetAppMenu).toHaveBeenCalledWith(options);
     });
-
-    it('should call buildAndSetAppMenu on platform implementation', () => {
-      menuManager.initialize();
-
-      expect(mockBuildAndSetAppMenu).toHaveBeenCalled();
-    });
   });
 
   describe('showContextMenu', () => {
@@ -106,6 +100,14 @@ describe('MenuManager', () => {
       expect(mockBuildContextMenu).toHaveBeenCalledWith(type, data);
       expect(mockMenu.popup).toHaveBeenCalled();
       expect(result).toEqual({ success: true });
+    });
+
+    it('binds the popup to the originating window when given', () => {
+      const window = { id: 2 } as any;
+
+      menuManager.showContextMenu('default', { mediaType: 'image' }, window);
+
+      expect(mockMenu.popup).toHaveBeenCalledWith({ window });
     });
 
     it('should build context menu without data', () => {
@@ -169,13 +171,6 @@ describe('MenuManager', () => {
       expect(mockBuildTrayMenu).toHaveBeenCalled();
       expect(result).toBe(mockMenu);
     });
-
-    it('should return Menu instance', () => {
-      const result = menuManager.buildTrayMenu();
-
-      expect(result).toBeDefined();
-      expect(result).toBe(mockMenu);
-    });
   });
 
   describe('refreshMenus', () => {
@@ -194,12 +189,6 @@ describe('MenuManager', () => {
       expect(mockRefresh).toHaveBeenCalledWith(options);
       expect(result).toEqual({ success: true });
     });
-
-    it('should call refresh on platform implementation', () => {
-      menuManager.refreshMenus();
-
-      expect(mockRefresh).toHaveBeenCalled();
-    });
   });
 
   describe('rebuildAppMenu', () => {
@@ -217,12 +206,6 @@ describe('MenuManager', () => {
 
       expect(mockBuildAndSetAppMenu).toHaveBeenCalledWith(options);
       expect(result).toEqual({ success: true });
-    });
-
-    it('should call buildAndSetAppMenu on platform implementation', () => {
-      menuManager.rebuildAppMenu();
-
-      expect(mockBuildAndSetAppMenu).toHaveBeenCalled();
     });
   });
 

@@ -38,10 +38,12 @@ export class MenuManager {
   /**
    * Build and show context menu
    */
-  showContextMenu(type: string, data?: any) {
+  showContextMenu(type: string, data?: any, window?: BrowserWindow) {
     logger.debug(`Showing context menu of type: ${type}`);
     const menu = this.platformImpl.buildContextMenu(type, data);
-    menu.popup(); // popup must be called in main process
+    // Bind to the originating window so item clicks (e.g. Copy Image at x/y) act on it,
+    // not on whichever window happens to be focused. Must be called in main process.
+    menu.popup(window ? { window } : undefined);
     return { success: true };
   }
 

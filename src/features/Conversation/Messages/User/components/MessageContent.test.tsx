@@ -65,14 +65,40 @@ describe('User MessageContent', () => {
       <MessageContent
         content={'markdown-content'}
         createdAt={Date.now()}
-        editorData={{ root: { children: [], type: 'root', version: 1 } }}
         id={'msg-1'}
+        role={'user'}
+        updatedAt={Date.now()}
+        editorData={{
+          root: {
+            children: [{ children: [{ text: 'rich', type: 'text' }], type: 'paragraph' }],
+            type: 'root',
+            version: 1,
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('rich-message')).toBeInTheDocument();
+    expect(screen.queryByTestId('markdown-message')).not.toBeInTheDocument();
+  });
+
+  /**
+   * Regression: an image-only message persists the composer's empty paragraph,
+   * which rendered a blank line above the images.
+   */
+  it('should not render a text body for an empty editor paragraph', () => {
+    render(
+      <MessageContent
+        content={''}
+        createdAt={Date.now()}
+        editorData={{ root: { children: [{ children: [], type: 'paragraph' }], type: 'root' } }}
+        id={'msg-image-only'}
         role={'user'}
         updatedAt={Date.now()}
       />,
     );
 
-    expect(screen.getByTestId('rich-message')).toBeInTheDocument();
+    expect(screen.queryByTestId('rich-message')).not.toBeInTheDocument();
     expect(screen.queryByTestId('markdown-message')).not.toBeInTheDocument();
   });
 

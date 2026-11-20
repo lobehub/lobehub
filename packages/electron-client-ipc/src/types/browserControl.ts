@@ -34,8 +34,25 @@ export interface BrowserControlFillParams extends BrowserControlParams {
 }
 
 export interface BrowserControlPressParams extends BrowserControlParams {
-  /** KeyboardEvent.key value, e.g. `Enter`, `Tab`, `Escape`, `ArrowDown`. */
+  /** A key or `+`-joined combination, e.g. `Enter`, `ArrowDown`, `Control+a`, `Shift+Tab`. */
   key: string;
+}
+
+/** Size of the panel the session's page is shown in, in CSS pixels. */
+export interface BrowserControlPanelSizeParams extends BrowserControlParams {
+  height: number;
+  width: number;
+}
+
+export interface BrowserControlSetViewportParams extends BrowserControlParams {
+  /** CSS pixels; omit both width and height to go back to the panel's own size. */
+  height?: number;
+  width?: number;
+}
+
+export interface BrowserControlSetViewportResult extends BrowserControlResult {
+  /** How far the panel shrinks the viewport to fit it (1 = shown at full size). */
+  scale?: number;
 }
 
 export interface BrowserControlScrollParams extends BrowserControlParams {

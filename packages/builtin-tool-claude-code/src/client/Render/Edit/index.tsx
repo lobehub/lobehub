@@ -2,7 +2,7 @@
 
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { CodeDiff, Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
+import { Skeleton } from '@lobehub/ui';
 import path from 'path-browserify-esm';
 import { memo } from 'react';
 

@@ -1,5 +1,5 @@
-import { type SWRHook } from 'swr';
 import useSWR from 'swr';
+import { type SWRHook } from 'swr';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 

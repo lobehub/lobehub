@@ -1,11 +1,9 @@
-import {
-  SiBrave,
-  SiFirefox,
-  SiGooglechrome,
-  SiOpera,
-  SiSafari,
-  SiSamsung,
-} from '@icons-pack/react-simple-icons';
+import SiBrave from '@icons-pack/react-simple-icons/icons/SiBrave';
+import SiFirefox from '@icons-pack/react-simple-icons/icons/SiFirefox';
+import SiGooglechrome from '@icons-pack/react-simple-icons/icons/SiGooglechrome';
+import SiOpera from '@icons-pack/react-simple-icons/icons/SiOpera';
+import SiSafari from '@icons-pack/react-simple-icons/icons/SiSafari';
+import SiSamsung from '@icons-pack/react-simple-icons/icons/SiSamsung';
 import React, { memo } from 'react';
 
 const lastVersion = {

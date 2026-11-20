@@ -10,14 +10,14 @@
   },
   "main": "./src/index.ts",
   "dependencies": {
+    "@lobechat/heterogeneous-agents": "workspace:*",
     "@lobechat/shared-tool-ui": "workspace:*"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "@lobehub/ui": "^5",
-    "antd-style": "*",
+    "@lobehub/ui": "^6.0.4",
     "lucide-react": "*",
     "path-browserify-esm": "*",
     "react": "*"

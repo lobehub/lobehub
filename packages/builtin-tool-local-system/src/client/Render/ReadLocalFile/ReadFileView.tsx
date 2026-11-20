@@ -1,8 +1,8 @@
 import { useToolRenderCapabilities } from '@lobechat/shared-tool-ui';
 import type { ReadFileState } from '@lobechat/tool-runtime';
 import { Flexbox, Image, Markdown, PreviewGroup, SyntaxHighlighter } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, Text } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { ExternalLink, FolderOpen, SquareArrowOutUpRight } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import React, { memo, useMemo } from 'react';

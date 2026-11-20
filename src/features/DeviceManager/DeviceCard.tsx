@@ -1,11 +1,20 @@
 'use client';
 
 import type { DeviceListItem } from '@lobechat/types';
-import { DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Avatar, confirmModal, Tag, Text } from '@lobehub/ui/base-ui';
+import { isManagedCloudDevice } from '@lobechat/types';
+import {
+  ActionIcon,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { useInViewport } from 'ahooks';
-import { createStaticStyles, cssVar } from 'antd-style';
-import dayjs from 'dayjs';
 import {
   EyeOffIcon,
   GlobeIcon,
@@ -17,17 +26,24 @@ import {
 import { memo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import PrivateLockIcon from '@/components/PrivateLockIcon';
+import UserAvatar from '@/components/UserAvatar';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import { DeviceRunningSummaryValue } from './DeviceActivity/RunningUsers';
+import { canOfferDeviceShare, removeConfirmDescKey } from './deviceCardActions';
 import { useDeviceMetricSeries } from './DeviceHealth/shared';
 import UsageMeter, { UsageMeterGroup, UsageMeterSkeleton } from './DeviceHealth/UsageMeter';
 import { latestUsageView } from './DeviceHealth/viewState';
 import { getDeviceIcon, getPlatformLabel } from './getDeviceIcon';
+import ManagedDeviceBadge from './ManagedDeviceBadge';
+import { getManagedDeviceStatus, presenceDotColor } from './managedDeviceStatus';
 import { openShareDeviceModal } from './ShareDeviceModal';
 import { useCanEditDevice } from './useCanEditDevice';
+import { useDeviceActivityText } from './useDeviceActivityText';
 import { useDeviceCardMutations } from './useDeviceCardMutations';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -75,7 +91,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   footer: css`
     margin-block-start: auto;
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 20px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
@@ -98,7 +114,7 @@ const styles = createStaticStyles(({ css }) => ({
   infoGrid: css`
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
   `,
   // Presence dot leading the footer's status text, so "online" reads as one
   // unit in the corner rather than a badge on the icon plus a label below.
@@ -121,7 +137,7 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
   // Cards are not virtualized; only cards on screen keep their usage meters polling.
   const cardRef = useRef<HTMLDivElement>(null);
   const [inViewport] = useInViewport(cardRef);
-  const { data, error } = useDeviceMetricSeries(device.deviceId, !!inViewport);
+  const { data, error } = useDeviceMetricSeries(device.deviceId, device.scope, !!inViewport);
   const { t } = useTranslation('setting');
   const { t: tCommon } = useTranslation('common');
   const canEdit = useCanEditDevice()(device);
@@ -131,36 +147,15 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
 
   const displayName = device.friendlyName || device.hostname || device.deviceId;
   const isFallback = device.identitySource === 'fallback';
+  const isManaged = isManagedCloudDevice(device);
+  const managedStatus = getManagedDeviceStatus(device);
   // Online when the device has at least one live connection in `device.channels`.
   const channels = device.channels ?? [];
   const online = channels.length > 0;
   // Rendered inline (not as a dot tooltip): "when was this machine last
   // reachable" is the answer needed to pick between rows, and hover can't
   // answer it for a whole list at once — nor at all on touch.
-  //
-  // Online reads the gateway's live `connectedAt` from `channels[0]` — the
-  // newest connection, since the pool is sorted newest-first in
-  // `deviceGateway.queryDeviceList`. That is the same channel
-  // `sortDevicesByActivity` ranks this row by, so the label always explains
-  // the row's position.
-  //
-  // Offline can only report `lastSeen`, which is stamped on register — and
-  // every client registers right before opening its WS
-  // (`gatewayConnectionSrv`, CLI `registerDevice`) — so it means "last
-  // CONNECTED", not "last active". The copy says exactly that; it becomes a
-  // true last-active once a writer stamps liveness.
-  //
-  // A single connection drops the "1 connection" count — it is the common
-  // case and would truncate the footer on a three-up grid.
-  const activityText = online
-    ? `${
-        channels.length > 1
-          ? t('devices.status.onlineConnections', { count: channels.length })
-          : t('devices.status.online')
-      } · ${t('devices.channel.connected', {
-        time: dayjs(channels[0]?.connectedAt ?? device.lastSeen).fromNow(),
-      })}`
-    : t('devices.lastSeen', { time: dayjs(device.lastSeen).fromNow() });
+  const activityText = useDeviceActivityText(device);
 
   // Publish / make-private for workspace enrollments. Reuses the
   // shared visibility-confirm body so the consequences copy matches agents /
@@ -217,25 +212,24 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
   // Share-to-workspace entry for personal enrollments. The share
   // handshake needs a live connection to mint the workspace identity, so the
   // item stays disabled (with an explanatory desc) while the device is offline.
-  const shareItems =
-    device.scope === 'personal' && device.registered
-      ? [
-          {
-            desc: online ? undefined : t('devices.share.offlineDesc'),
-            disabled: !online,
-            icon: <Icon icon={Share2Icon} />,
-            key: 'share',
-            label: t('devices.share.menu'),
-            onClick: () => openShareDeviceModal(device),
-          },
-        ]
-      : [];
+  const shareItems = canOfferDeviceShare(device)
+    ? [
+        {
+          desc: online ? undefined : t('devices.share.offlineDesc'),
+          disabled: !online,
+          icon: <Icon icon={Share2Icon} />,
+          key: 'share',
+          label: t('devices.share.menu'),
+          onClick: () => openShareDeviceModal(device),
+        },
+      ]
+    : [];
 
   const handleRemove = () =>
     confirmModal({
       content: isCurrent
-        ? `${t('devices.remove.confirmDesc')}\n\n${t('devices.remove.currentSessionWarning')}`
-        : t('devices.remove.confirmDesc'),
+        ? `${t(removeConfirmDescKey(device))}\n\n${t('devices.remove.currentSessionWarning')}`
+        : t(removeConfirmDescKey(device)),
       okButtonProps: { danger: true },
       okText: t('devices.actions.remove'),
       onOk: async () => {
@@ -272,15 +266,21 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
           <div className={styles.iconTile}>{getDeviceIcon(device.platform, 22)}</div>
 
           <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
-            <Text ellipsis fontSize={16} weight={600}>
-              {displayName}
-            </Text>
+            <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
+              <Text ellipsis fontSize={16} weight={600}>
+                {displayName}
+              </Text>
+              {device.scope === 'workspace' && device.visibility === 'private' && (
+                <PrivateLockIcon />
+              )}
+            </Flexbox>
             <Flexbox horizontal align={'center'} gap={6} wrap={'wrap'}>
               {platformLabel && (
                 <Text fontSize={13} type={'secondary'}>
                   {platformLabel}
                 </Text>
               )}
+              {isManaged && <ManagedDeviceBadge />}
               {isCurrent && <Tag size={'small'}>{t('devices.currentBadge')}</Tag>}
               {device.scope === 'workspace' && device.sharedFromPersonal && (
                 // Member-shared machine (vs directly enrolled infra) — mirrors the
@@ -316,7 +316,7 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
               // shared workspace pools. Hidden in personal scope (always the
               // caller) and for ghost rows (no row yet).
               <Tooltip title={t('workspaceSetting.devices.enrolledBy', { name: enrollerName })}>
-                <Avatar avatar={device.enroller.avatar ?? undefined} size={20} />
+                <UserAvatar avatar={device.enroller.avatar} name={enrollerName} size={20} />
               </Tooltip>
             )}
             {canEdit && (
@@ -366,6 +366,9 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
           <UsageMeterGroup>
             <UsageMeter label={t('devices.card.cpuUsage')} value={usage.latest?.cpuPercent} />
             <UsageMeter label={t('devices.card.memoryUsage')} value={usage.latest?.memoryPercent} />
+            {usage.reportsDisk && (
+              <UsageMeter label={t('devices.card.diskUsage')} value={usage.latest?.diskPercent} />
+            )}
           </UsageMeterGroup>
         )}
       </Flexbox>
@@ -374,9 +377,14 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
         <span
           aria-hidden
           className={styles.presence}
-          style={{ background: online ? cssVar.colorSuccess : cssVar.colorTextQuaternary }}
+          style={{ background: presenceDotColor(managedStatus, online) }}
         />
-        <Text ellipsis fontSize={13} style={{ minWidth: 0 }} type={'secondary'}>
+        <Text
+          ellipsis
+          fontSize={13}
+          style={{ minWidth: 0 }}
+          type={managedStatus === 'failed' ? 'danger' : 'secondary'}
+        >
           {activityText}
         </Text>
       </Flexbox>

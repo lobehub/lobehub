@@ -5,7 +5,7 @@ import {
   GOAL_EXPLORE_JSON_SCHEMA,
   GOAL_EXPLORE_PROMPT_VERSION,
 } from '@lobechat/prompts';
-import { RequestTrigger } from '@lobechat/types';
+import { type GoalConfig, RequestTrigger } from '@lobechat/types';
 import { z } from 'zod';
 
 import type { LobeChatDatabase } from '@/database/type';
@@ -50,8 +50,11 @@ export class GoalExplorationPlanner {
     private readonly workspaceId?: string,
   ) {}
 
-  async plan(input: GoalExploreInput): Promise<GoalExplorationPlan> {
-    const model = await resolveGoalModelConfig(this.db, this.userId);
+  async plan(
+    input: GoalExploreInput,
+    goalConfig?: GoalConfig | null,
+  ): Promise<GoalExplorationPlan> {
+    const model = await resolveGoalModelConfig(this.db, this.userId, goalConfig);
     const result = await new AiGenerationService(
       this.db,
       this.userId,

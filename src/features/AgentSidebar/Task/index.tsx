@@ -1,6 +1,5 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
@@ -9,57 +8,33 @@ import {
   accordionStyles,
   AccordionTrigger,
   ActionIcon,
+  cx,
+  Flexbox,
   Text,
-} from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+} from '@lobehub/ui';
 import { ArrowRight } from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useClientDataSWR } from '@/libs/swr';
-import { taskKeys } from '@/libs/swr/keys';
-import { taskService } from '@/services/task';
 import { useAgentStore } from '@/store/agent';
-import type { TaskGroupItem } from '@/store/task/slices/list/initialState';
 
 import StatusGroup from './StatusGroup';
-
-const SIDEBAR_GROUPS = [
-  { key: 'needsInput', statuses: ['paused', 'failed'] },
-  { key: 'backlog', statuses: ['backlog'] },
-  { key: 'running', statuses: ['running', 'scheduled'] },
-];
-const STATUS_ORDER = SIDEBAR_GROUPS.map((g) => g.key);
+import { useSidebarTaskGroups } from './useSidebarTaskGroups';
 
 interface TaskListProps {
   itemKey: string;
 }
 
 const TaskList = memo<TaskListProps>(({ itemKey }) => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
   const agentId = useAgentStore((s) => s.activeAgentId);
 
-  const enabled = !!agentId;
-  const { data, isLoading } = useClientDataSWR<{ data: TaskGroupItem[]; success: boolean }>(
-    enabled ? taskKeys.sidebarGroups(agentId) : null,
-    async ([, id]: [string, string]) =>
-      taskService.groupList({ assigneeAgentId: id, groups: SIDEBAR_GROUPS }),
-    {
-      fallbackData: { data: [], success: true },
-      revalidateOnFocus: false,
-    },
-  );
-  const taskGroups = useMemo(() => data?.data ?? [], [data?.data]);
-
-  const orderedGroups = useMemo(() => {
-    const map = new Map(taskGroups.map((g) => [g.key, g]));
-    return STATUS_ORDER.map((key) => map.get(key)).filter(
-      (g): g is NonNullable<typeof g> => !!g && g.tasks.length > 0,
-    );
-  }, [taskGroups]);
+  const { groups: orderedGroups, isLoading } = useSidebarTaskGroups(agentId);
 
   const totalTasks = useMemo(
     () => orderedGroups.reduce((acc, g) => acc + g.tasks.length, 0),
@@ -77,9 +52,7 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
 
   const titleNode = (
     <Flexbox horizontal align="center" gap={4}>
-      <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-        {t('tab.tasks')}
-      </Text>
+      <SectionTitle>{t('tab.tasks')}</SectionTitle>
       {totalTasks > 0 && (
         <Text fontSize={11} type="secondary">
           {totalTasks}
@@ -99,9 +72,7 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
 
   const header = (
     <AccordionHeader>
-      <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
-        {titleNode}
-      </AccordionTrigger>
+      <AccordionTrigger style={sectionTriggerStyle}>{titleNode}</AccordionTrigger>
       <div
         className={cx('accordion-action', accordionStyles.action, accordionStyles.actionBorderless)}
       >
@@ -110,7 +81,7 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
     </AccordionHeader>
   );
 
-  if (isLoading && taskGroups.length === 0) {
+  if (isLoading && orderedGroups.length === 0) {
     return (
       <AccordionItem value={itemKey}>
         {header}

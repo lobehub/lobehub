@@ -1,6 +1,18 @@
-import { defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
+import { onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
+import {
+  getImplicitBuiltinSkillIds,
+  getLegacyDisabledBuiltinSkillIds,
+  legacyBuiltinSkillIds,
+  type SkillDiscoveryChatConfig,
+} from '@lobechat/mecha/builtinSkillGate';
+import type { AgentPluginEntry } from '@lobechat/types';
+import { getBuiltinOverrides } from '@lobechat/types';
 
 import { defineReplica } from '@/libs/replica';
+
+import type { BuiltinToolState } from './initialState';
+
+export { resolveUninstalledBuiltinTools } from '@lobechat/builtin-tools';
 
 /**
  * The uninstalled-builtin list is one entry: the active identity
@@ -36,33 +48,41 @@ export const uninstalledBuiltinToolsResource = defineReplica<
   version: 1,
 });
 
-/**
- * Minimal view of `settings.tool` covering just the builtin-tool install slots.
- * Typed locally so the helpers accept the loosened shape returned by
- * `getUserState()` while still spreading the rest of `tool` through at runtime.
- */
-export interface UninstalledBuiltinToolsScope {
-  uninstalledBuiltinTools?: string[];
-  uninstalledBuiltinToolsByWorkspace?: Record<string, string[] | undefined>;
-}
-
-/**
- * Resolve the uninstalled-builtin-tools list for the active scope.
- *
- * - Personal context (`workspaceId == null`) → the user's personal list.
- * - Workspace context → the per-workspace list; a workspace with no stored
- *   entry falls back to the default seed (a clean default state), never the
- *   user's personal customization.
- *
- * `undefined` (never configured) maps to the default seed in both scopes.
- */
-export const resolveUninstalledBuiltinTools = (
-  tool: UninstalledBuiltinToolsScope | undefined,
-  workspaceId: string | null,
-): string[] => {
-  const stored = workspaceId
-    ? tool?.uninstalledBuiltinToolsByWorkspace?.[workspaceId]
-    : tool?.uninstalledBuiltinTools;
-
-  return stored === undefined ? defaultUninstalledBuiltinTools : stored;
+/** A persisted or previous scope's projection may paint the UI before this scope is confirmed. */
+export const confirmedUninstalledBuiltinTools = (state: BuiltinToolState) => {
+  if (!state.isUninstalledBuiltinToolsInit) return undefined;
+  const replica = state.uninstalledBuiltinToolsReplica;
+  const entry = replica.entries[UNINSTALLED_BUILTIN_TOOLS_KEY];
+  if (entry?.source !== 'server' || replica.scope !== uninstalledBuiltinToolsResource.scope.get()) {
+    return undefined;
+  }
+  // Apply an uninstall immediately, but keep an installation unavailable until its write commits.
+  return entry.base
+    ? [...new Set([...entry.base, ...state.uninstalledBuiltinTools])]
+    : state.uninstalledBuiltinTools;
 };
+
+export const runtimeUninstalledBuiltinTools = (state: BuiltinToolState) =>
+  confirmedUninstalledBuiltinTools(state) ?? onDemandBuiltinToolIds;
+
+/** A client run confirms the scoped uninstall list before preparing its tools. */
+export const installedImplicitBuiltinSkillIds = (
+  state: BuiltinToolState,
+  createdAt: Date | string | undefined,
+  chatConfig: SkillDiscoveryChatConfig | null | undefined,
+) => {
+  const implicit = getImplicitBuiltinSkillIds(createdAt, chatConfig);
+  if (!implicit.length) return implicit;
+  const uninstalled = confirmedUninstalledBuiltinTools(state);
+  return uninstalled ? implicit.filter((id) => !uninstalled.includes(id)) : [];
+};
+
+/** A legacy uninstall remains off until this agent explicitly chooses the bundled skill. */
+export const legacyDisabledBuiltinSkillsForRun = (
+  state: BuiltinToolState,
+  plugins: AgentPluginEntry[] | undefined,
+) =>
+  getLegacyDisabledBuiltinSkillIds(
+    confirmedUninstalledBuiltinTools(state) ?? legacyBuiltinSkillIds,
+    getBuiltinOverrides(plugins),
+  );

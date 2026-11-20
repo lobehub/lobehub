@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resolvePrecreatedTopicSnapshot } from '../pipeline/precreatedTopic';
+import { createGroupAgentTopic, resolvePrecreatedTopicSnapshot } from '../pipeline/precreatedTopic';
 
 const { getInfoForAIGeneration, getPreference, isResourceAuthorOrAdmin } = vi.hoisted(() => ({
   getInfoForAIGeneration: vi.fn(),
@@ -52,12 +52,60 @@ describe('resolvePrecreatedTopicSnapshot', () => {
     vi.clearAllMocks();
     getPreference.mockResolvedValue({});
     isResourceAuthorOrAdmin.mockResolvedValue(false);
-    getInfoForAIGeneration.mockResolvedValue({ responseLanguage: 'en-US' });
+    getInfoForAIGeneration.mockResolvedValue({ preferredReplyLanguage: 'en-US' });
   });
 
   it('pins the agent model and provider for the pre-created topic', async () => {
     const { snapshot } = await resolvePrecreatedTopicSnapshot(deps(), 'agent-a');
 
     expect(snapshot).toMatchObject({ model: 'gpt-4o', provider: 'openai' });
+  });
+});
+
+describe('createGroupAgentTopic', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getPreference.mockResolvedValue({});
+    isResourceAuthorOrAdmin.mockResolvedValue(false);
+    getInfoForAIGeneration.mockResolvedValue({ preferredReplyLanguage: 'en-US' });
+  });
+
+  // Re-parenting `topicMessageIds` is a cross-aggregate write: it must go
+  // through the repository, since TopicModel.create refuses a messages list.
+  it('creates the topic through the repository with the adopted messages', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'topic-new' });
+
+    const topicId = await createGroupAgentTopic(
+      { ...deps(), topicRepo: { create } as never },
+      {
+        agentId: 'agent-a',
+        groupId: 'group-1',
+        message: 'hello group',
+        newTopic: { title: 'Group topic', topicMessageIds: ['msg-1', 'msg-2'] },
+      },
+    );
+
+    expect(topicId).toBe('topic-new');
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'agent-a',
+        groupId: 'group-1',
+        messages: ['msg-1', 'msg-2'],
+        title: 'Group topic',
+      }),
+    );
+  });
+
+  // Regression: a message sent as "[Image #1] [Image #2] dup test" was titled
+  // "Image #1 dup test".
+  it('leaves inline image references out of the fallback title', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'topic-new' });
+
+    await createGroupAgentTopic(
+      { ...deps(), topicRepo: { create } as never },
+      { agentId: 'agent-a', groupId: 'group-1', message: '[Image #1] [Image #2] dup test' },
+    );
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ title: 'dup test' }));
   });
 });

@@ -1,4 +1,5 @@
-import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
+import SiApple from '@icons-pack/react-simple-icons/icons/SiApple';
+import SiLinux from '@icons-pack/react-simple-icons/icons/SiLinux';
 import { Microsoft } from '@lobehub/icons';
 import { Icon } from '@lobehub/ui';
 import { MonitorIcon } from 'lucide-react';

@@ -10,6 +10,9 @@
 #
 # Instance pool (concurrent isolated instances — e.g. one git worktree each):
 #   ./electron-dev.sh start <id>   # CDP 9222+id, Vite 5173+id, own userData + IPC id
+#   ./electron-dev.sh start <id> -- <app args>
+#                                  # …and hand <app args> to the app itself, e.g.
+#                                  #   start 11 -- /Users/me/code/repo   (cold start)
 #   ./electron-dev.sh stop <id>    # stop ONLY instance <id> (never touches siblings)
 #   ./electron-dev.sh stop --all   # stop every pool instance
 #   ./electron-dev.sh status <id>
@@ -19,7 +22,11 @@
 #   CDP port   = CDP_BASE + id   (9222 + id)
 #   Vite port  = VITE_BASE + id  (5173 + id)   → needs LOBE_DESKTOP_VITE_PORT support
 #   userData   = $POOL_DIR/ud-<id> (login state seeded from the saved snapshot)
-#   IPC id     = lobehub-desktop-dev-<id>       → needs LOBE_IPC_ID support
+#   IPC id     = lobehub-desktop-dev-<cdp port> → needs LOBE_IPC_ID support
+#   label      = checkout name + #<id>, shown on every window (dev builds only)
+# Ports, profile env, renderer readiness and login state come from the shared
+# module apps/desktop/scripts/devInstance.mts (via devInstanceCli.mts), which
+# other multi-checkout launchers import too — fix them there, not here.
 # Drive each with a DISTINCT agent-browser session, else the daemon reuses one
 # connection across ports:  agent-browser --session s<port> --cdp <port> ...
 #
@@ -28,8 +35,9 @@
 #   wipes the userData, and `start` seeds new instances from that snapshot. The
 #   app's OAuth refresh token ROTATES on every boot, so only the instance that
 #   booted last holds a usable one — the snapshot must be re-taken each run, which
-#   is exactly what `stop` does. The golden profile is only a fallback for the very
-#   first run, and is never written to (it belongs to the user's own dev app).
+#   is exactly what `stop` does. On macOS pool instances encrypt the login with
+#   Chromium's mock keychain (no keychain prompt per checkout), so they cannot
+#   read the user's own dev profile: the first run signs in once inside the app.
 #     ./electron-dev.sh login-status      # where the login comes from + expiry
 #     ./electron-dev.sh save-login <id>   # snapshot a live instance without stopping
 #   If an instance is killed instead of stopped (crash, command timeout), its
@@ -43,12 +51,19 @@
 #   POOL_DIR          — pool state dir (default: /tmp/lobe-electron-pool)
 #   LOBE_LOGIN_STATE_DIR — persistent login snapshot, survives /tmp cleanup
 #                       (default: ~/.lobehub/agent-testing/electron-login)
-#   LOBE_GOLDEN_PROFILE — userData to seed from when no snapshot exists yet
-#                       (default: ~/Library/Application Support/lobehub-desktop-dev)
 #   KEEP_DATA=1       — on `stop <id>`, keep the instance's userData dir
 #   SKIP_LOGIN_SAVE=1 — on `stop <id>`, do not snapshot the login state
 #   ELECTRON_WAIT_S   — max seconds to wait for CDP (default: 90)
 #   RENDERER_WAIT_S   — max seconds to wait for the SPA (default: 60)
+#   SERVER_URL        — `start-local` target server (default: http://localhost:3010)
+#
+# Local server (no OAuth, no manual sign-in):
+#   ./electron-dev.sh start-local [<id>]   # pool instance (default id 1) signed in to the
+#                                          # local dev server as the seeded user
+#   Mints an access token with the local server's own JWKS_KEY
+#   (mint-desktop-login.mjs, env from the repo-root .env) and hands it to the
+#   dev build through LOBE_DESKTOP_DEV_REMOTE_LOGIN. Its login is never saved
+#   into the shared snapshot, which belongs to the cloud sign-in.
 #
 set -euo pipefail
 
@@ -59,6 +74,15 @@ ENV_ELECTRON_LOG="${ELECTRON_LOG:-}"
 CMD="${1:-help}"
 INSTANCE="${2:-}" # empty = legacy single instance; integer = pool member
 
+# Everything after `start <id> --` reaches the Electron app itself: `pnpm dev`
+# forwards args following `--` to the app, which is how a launch with a real
+# directory argument (cold start) is exercised without a packaged build.
+APP_ARGS=()
+if [ "${3:-}" = "--" ]; then
+  shift 3
+  APP_ARGS=("$@")
+fi
+
 CDP_BASE="${CDP_BASE:-9222}"
 VITE_BASE="${VITE_BASE:-5173}"
 ELECTRON_WAIT_S="${ELECTRON_WAIT_S:-90}"
@@ -66,9 +90,13 @@ RENDERER_WAIT_S="${RENDERER_WAIT_S:-60}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 POOL_DIR="${POOL_DIR:-/tmp/lobe-electron-pool}"
-GOLDEN_PROFILE="${LOBE_GOLDEN_PROFILE:-$HOME/Library/Application Support/lobehub-desktop-dev}"
 # Persistent across runs AND across /tmp cleanup — the pool dir is not.
 LOGIN_STATE_DIR="${LOBE_LOGIN_STATE_DIR:-$HOME/.lobehub/agent-testing/electron-login}"
+DEV_INSTANCE_CLI="$PROJECT_ROOT/apps/desktop/scripts/devInstanceCli.mts"
+
+dev_instance() {
+  node "$DEV_INSTANCE_CLI" "$@"
+}
 
 # Project-scoped electron path prefix used for pgrep matching in LEGACY mode only
 # (pool mode never uses it — it would cross instances). Any Electron binary from
@@ -81,18 +109,22 @@ CDP_PORT=""
 VITE_PORT=""
 USER_DATA_DIR=""
 IPC_ID=""
+INSTANCE_LABEL=""
+INSTANCE_ENV=()
 ELECTRON_LOG=""
 PIDFILE=""
 
 # Resolve the target instance's ports/paths from its id (empty id = legacy).
 derive_instance() {
   local id="$1"
+  LOCAL_LOGIN_FILE=""
   if [ -z "$id" ]; then
     POOL_MODE=0
     CDP_PORT="${ENV_CDP_PORT:-$CDP_BASE}"
     VITE_PORT="" # legacy: no override, config default applies
     USER_DATA_DIR="" # legacy: default userData
     IPC_ID="" # legacy: default IPC id
+    INSTANCE_LABEL="$(dev_instance checkout-label "$PROJECT_ROOT" 2>/dev/null || true)"
     ELECTRON_LOG="${ENV_ELECTRON_LOG:-/tmp/electron-dev.log}"
     PIDFILE="/tmp/electron-dev-cdp-${CDP_PORT}.pid"
   else
@@ -104,9 +136,17 @@ derive_instance() {
     CDP_PORT=$((CDP_BASE + id))
     VITE_PORT=$((VITE_BASE + id))
     USER_DATA_DIR="$POOL_DIR/ud-$id"
-    IPC_ID="lobehub-desktop-dev-$id"
+    INSTANCE_LABEL="$(dev_instance checkout-label "$PROJECT_ROOT" 2>/dev/null || true) #$id"
+    INSTANCE_ENV=()
+    local line
+    while IFS= read -r line; do
+      [ -n "$line" ] && INSTANCE_ENV+=("$line")
+      case "$line" in LOBE_IPC_ID=*) IPC_ID="${line#LOBE_IPC_ID=}" ;; esac
+    done < <(dev_instance env --cdp-port "$CDP_PORT" --renderer-port "$VITE_PORT" \
+      --user-data "$USER_DATA_DIR" --label "$INSTANCE_LABEL")
     ELECTRON_LOG="$POOL_DIR/instance-$id.log"
     PIDFILE="$POOL_DIR/instance-$id.pid"
+    LOCAL_LOGIN_FILE="$POOL_DIR/instance-$id.local-login.json"
   fi
 }
 
@@ -190,120 +230,20 @@ wait_for_cdp() {
 }
 
 wait_for_renderer() {
-  local deadline=$(($(date +%s) + RENDERER_WAIT_S))
-  echo "[electron-dev] Waiting for SPA to load (up to ${RENDERER_WAIT_S}s)..."
-  while [ "$(date +%s)" -lt "$deadline" ]; do
-    local snap
-    snap=$(agent-browser --session "edev$CDP_PORT" --cdp "$CDP_PORT" snapshot -i 2>&1 || true)
-    if echo "$snap" | grep -qE '\b(link|button)\b'; then
-      echo "[electron-dev] Renderer ready."
-      return 0
-    fi
-    sleep 2
-  done
-  echo "[electron-dev] WARNING: Renderer not interactive within ${RENDERER_WAIT_S}s — proceeding anyway."
-  return 0
+  # Never fatal: a slow first Vite load should not tear down a reachable app.
+  dev_instance wait-renderer --cdp-port "$CDP_PORT" --timeout-s "$RENDERER_WAIT_S" || true
 }
 
 # ── Login state ──────────────────────────────────────────────────────
 #
-# The login-bearing subset of a userData dir (skips the multi-GB caches). The
-# OAuth tokens themselves live in lobehub-settings.json → encryptedTokens.
-LOGIN_ITEMS=(
-  "lobehub-settings.json" "Local State" "Preferences"
-  "Cookies" "Cookies-journal" "Local Storage" "IndexedDB"
-  "Session Storage" "Network Persistent State" "lobehub-storage"
-)
-
-copy_login_items() {
-  local src="$1" dst="$2" f
-  mkdir -p "$dst"
-  for f in "${LOGIN_ITEMS[@]}"; do
-    [ -e "$src/$f" ] && cp -R "$src/$f" "$dst/" 2>/dev/null || true
-  done
-}
-
-# Reads lobehub-settings.json → encryptedTokens and prints
-#   "<hasRefreshToken:0|1> <msUntilAccessTokenExpiry|?>"
-#
-# `expiresAt` is `Date.now() + data.expires_in * 1000` (RemoteServerConfigCtr.saveTokens),
-# i.e. the ACCESS token's lifetime — NOT the refresh token's. It is routinely in the
-# past on a perfectly refreshable login, so it must never gate whether we keep a
-# profile. What does gate it: the app deletes the whole `encryptedTokens` key
-# (clearTokens) the moment a refresh fails non-retryably (`invalid_grant` &co), and
-# keeps it on transient failures. So a present refreshToken means "can still re-auth".
-read_token_state() {
-  python3 - "$1/lobehub-settings.json" 2>/dev/null <<'PY' || echo "0 ?"
-import json, pathlib, sys, time
-
-path = pathlib.Path(sys.argv[1])
-if not path.is_file():
-    print("0 ?")
-    sys.exit(0)
-try:
-    tokens = (json.loads(path.read_text()) or {}).get('encryptedTokens') or {}
-except Exception:
-    print("0 ?")
-    sys.exit(0)
-
-has_refresh = 1 if tokens.get('refreshToken') else 0
-expires_at = tokens.get('expiresAt')
-if not expires_at:
-    print(f"{has_refresh} ?")
-    sys.exit(0)
-# The field has been seen in both seconds and milliseconds.
-if expires_at < 1e11:
-    expires_at *= 1000
-print(f"{has_refresh} {int(expires_at - time.time() * 1000)}")
-PY
-}
-
-# True when the profile still carries a refresh token, i.e. the app can mint a new
-# session from it on the next boot. An expired ACCESS token says nothing here.
-profile_can_reauth() {
-  local state
-  state=$(read_token_state "$1")
-  [ "${state%% *}" = "1" ]
-}
-
-describe_login() {
-  local label="$1" profile="$2" state ms access
-  if [ ! -d "$profile" ]; then
-    echo "  $label: (absent) — $profile"
-    return
-  fi
-  state=$(read_token_state "$profile")
-  ms="${state##* }"
-  if [[ "$ms" =~ ^-?[0-9]+$ ]]; then
-    [ "$ms" -gt 0 ] &&
-      access="access token fresh for $((ms / 3600000))h" ||
-      access="access token stale $(( -ms / 3600000 ))h (harmless — it gets refreshed)"
-  else
-    access="no access-token expiry recorded"
-  fi
-  if [ "${state%% *}" = "1" ]; then
-    echo "  $label: refresh token PRESENT — $access — $profile"
-  else
-    echo "  $label: refresh token GONE (app cleared it after a failed refresh) — $profile"
-  fi
-}
+# The login-bearing subset of a userData dir, the refresh-token check and the
+# install-scoped settings a copy must drop live in devInstance.mts.
 
 # 1 when the running renderer reports a signed-in user. The OAuth refresh token
 # is not the only way the app holds a session (a better-auth cookie outlives it),
 # so an expired token does NOT mean the instance is signed out — ask the app.
 probe_renderer_authed() {
-  if ! curl -sf --max-time 2 "http://localhost:${CDP_PORT}/json/version" >/dev/null 2>&1; then
-    echo 0
-    return
-  fi
-  local out
-  out=$(agent-browser --session "edev$CDP_PORT" --cdp "$CDP_PORT" eval \
-    '(function(){try{var u=window.__LOBE_STORES.user();return (u.user&&u.user.id)?"AUTHED":"ANON";}catch(e){return "ERR";}})()' \
-    2>/dev/null | tail -1 || true)
-  case "$out" in
-    *AUTHED*) echo 1 ;;
-    *) echo 0 ;;
-  esac
+  dev_instance signed-in --cdp-port "$CDP_PORT" 2>/dev/null || echo 0
 }
 
 # Persist an instance's login into the snapshot so the NEXT run starts signed in.
@@ -313,50 +253,13 @@ probe_renderer_authed() {
 # overrides the token check, which cannot see a cookie-only session.
 save_login_state() {
   local src="$1" authed_hint="${2:-0}"
-  [ -d "$src" ] || return 0
-  if [ "$authed_hint" != "1" ] && ! profile_can_reauth "$src"; then
-    echo "[electron-dev] Not saving login state: $src is signed out (the app cleared its refresh token) — kept the previous snapshot."
-    return 0
-  fi
-  local staging="${LOGIN_STATE_DIR}.staging.$$"
-  rm -rf "$staging"
-  mkdir -p "$(dirname "$LOGIN_STATE_DIR")"
-  copy_login_items "$src" "$staging"
-  rm -rf "$LOGIN_STATE_DIR"
-  mv "$staging" "$LOGIN_STATE_DIR"
-  if profile_can_reauth "$LOGIN_STATE_DIR"; then
-    echo "[electron-dev] Saved login state → $LOGIN_STATE_DIR (refresh token captured)"
-  else
-    echo "[electron-dev] Saved login state → $LOGIN_STATE_DIR (cookie session only — no refresh token on disk)"
-  fi
+  dev_instance save-login --user-data "$src" --snapshot "$LOGIN_STATE_DIR" --signed-in "$authed_hint"
 }
 
-# Seed a fresh userData dir: prefer the snapshot we saved on the last stop, and
-# fall back to the user's own dev profile for the very first run. No-op if the
-# dir already exists.
+# Seed a fresh userData dir from the snapshot saved on the last stop. No-op if
+# the dir already exists.
 seed_userdata() {
-  local dst="$1"
-  [ -d "$dst" ] && return 0
-
-  # The snapshot only exists because a `stop`/`save-login` found that instance
-  # signed in, so prefer it unconditionally over the golden profile.
-  local src="" label=""
-  if [ -d "$LOGIN_STATE_DIR" ]; then
-    src="$LOGIN_STATE_DIR"
-    label="saved login state"
-  elif [ -d "$GOLDEN_PROFILE" ]; then
-    src="$GOLDEN_PROFILE"
-    label="golden profile (first run)"
-  else
-    echo "[electron-dev] WARNING: no login state at $LOGIN_STATE_DIR or $GOLDEN_PROFILE — instance will start signed out."
-    mkdir -p "$dst"
-    return 0
-  fi
-
-  echo "[electron-dev] Seeding userData from $label → $dst"
-  profile_can_reauth "$src" ||
-    echo "[electron-dev]   note: no refresh token on disk — a cookie session may still carry it; otherwise sign in once and 'stop' will capture it."
-  copy_login_items "$src" "$dst"
+  dev_instance seed-login --user-data "$1" --snapshot "$LOGIN_STATE_DIR"
 }
 
 # ── Commands ─────────────────────────────────────────────────────────
@@ -369,7 +272,10 @@ do_stop() {
   # Ask the still-running app whether it is signed in — after the kill there is
   # nothing left to ask, and the on-disk token alone can't see a cookie session.
   local authed=0
-  if [ "$POOL_MODE" = "1" ] && [ "${SKIP_LOGIN_SAVE:-0}" != "1" ]; then
+  # A start-local instance holds a minted local-server login; never snapshot it.
+  local skip_save="${SKIP_LOGIN_SAVE:-0}"
+  [ "$POOL_MODE" = "1" ] && [ -f "$LOCAL_LOGIN_FILE" ] && skip_save=1
+  if [ "$POOL_MODE" = "1" ] && [ "$skip_save" != "1" ]; then
     authed=$(probe_renderer_authed)
   fi
 
@@ -432,19 +338,20 @@ do_stop() {
     fi
   fi
 
-  agent-browser --session "edev$CDP_PORT" --cdp "$CDP_PORT" close --all 2>/dev/null || true
+  agent-browser --session "edev$CDP_PORT" --cdp "$CDP_PORT" close 2>/dev/null || true
   rm -f "$PIDFILE"
 
   # Pool mode: capture the (freshly rotated) login before touching the userData,
   # then wipe it unless asked to keep it.
   if [ "$POOL_MODE" = "1" ] && [ -n "$USER_DATA_DIR" ]; then
-    [ "${SKIP_LOGIN_SAVE:-0}" = "1" ] || save_login_state "$USER_DATA_DIR" "$authed"
+    [ "$skip_save" = "1" ] || save_login_state "$USER_DATA_DIR" "$authed"
     if [ "${KEEP_DATA:-0}" = "1" ]; then
       echo "[electron-dev] Keeping userData: $USER_DATA_DIR"
     else
       rm -rf "$USER_DATA_DIR"
       echo "[electron-dev] Removed userData: $USER_DATA_DIR"
     fi
+    rm -f "$LOCAL_LOGIN_FILE"
   fi
 
   echo "[electron-dev] Stopped ($label)."
@@ -483,11 +390,22 @@ do_start() {
   done
 
   # Env prefix + userData seeding for pool instances.
-  local env_assignments=""
+  local env_assignments=()
   if [ "$POOL_MODE" = "1" ]; then
     mkdir -p "$POOL_DIR"
     seed_userdata "$USER_DATA_DIR"
-    env_assignments="LOBE_DESKTOP_USER_DATA_DIR='$USER_DATA_DIR' LOBE_DESKTOP_VITE_PORT=$VITE_PORT LOBE_IPC_ID='$IPC_ID'"
+    env_assignments=("${INSTANCE_ENV[@]}")
+    # Minted here, after the pre-start stop has cleared any previous instance's files.
+    if [ "${START_LOCAL:-0}" = "1" ]; then
+      local env_file=()
+      [ -f "$PROJECT_ROOT/.env" ] && env_file=(--env-file="$PROJECT_ROOT/.env")
+      node "${env_file[@]}" "$SCRIPT_DIR/mint-desktop-login.mjs" \
+        --out "$LOCAL_LOGIN_FILE" --server "${SERVER_URL:-http://localhost:3010}"
+      env_assignments+=("LOBE_DESKTOP_DEV_REMOTE_LOGIN=$LOCAL_LOGIN_FILE")
+    fi
+  else
+    env_assignments=("LOBE_DESKTOP_CDP_PORT=$CDP_PORT")
+    [ -n "$INSTANCE_LABEL" ] && env_assignments+=("LOBE_DESKTOP_INSTANCE_LABEL=$INSTANCE_LABEL")
   fi
 
   echo "[electron-dev] Starting Electron dev..."
@@ -496,19 +414,27 @@ do_start() {
   [ -n "$VITE_PORT" ] && echo "[electron-dev]   Vite port: $VITE_PORT"
   [ -n "$USER_DATA_DIR" ] && echo "[electron-dev]   userData:  $USER_DATA_DIR"
   [ -n "$IPC_ID" ] && echo "[electron-dev]   IPC id:    $IPC_ID"
+  [ -n "$INSTANCE_LABEL" ] && echo "[electron-dev]   Label:     $INSTANCE_LABEL"
   echo "[electron-dev]   Log:       $ELECTRON_LOG"
 
   mkdir -p "$(dirname "$ELECTRON_LOG")"
   : >"$ELECTRON_LOG"
 
-  local launch_cmd="
-    cd '$PROJECT_ROOT/apps/desktop'
-    exec env $env_assignments LOBE_DESKTOP_CDP_PORT=$CDP_PORT pnpm dev
-  "
+  # Values reach `env` as separate argv entries, so labels and paths with spaces
+  # or quotes survive without shell re-parsing. Anything after `--` is the app's
+  # own argv (`pnpm dev -- …` forwards it), which lets a launch be exercised
+  # with a real directory argument.
+  # shellcheck disable=SC2016 # expanded by the inner bash, not here
+  local launch_cmd='cd "$1" && shift && env_args=(); while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do env_args+=("$1"); shift; done; if [ "$#" -gt 0 ]; then shift; fi; exec env "${env_args[@]}" pnpm dev -- "$@"'
+  local app_argv=()
+  [ ${#APP_ARGS[@]} -gt 0 ] && app_argv=("--" "${APP_ARGS[@]}")
+
   if command -v setsid >/dev/null 2>&1; then
-    setsid bash -c "$launch_cmd" >>"$ELECTRON_LOG" 2>&1 </dev/null &
+    setsid bash -c "$launch_cmd" electron-dev "$PROJECT_ROOT/apps/desktop" "${env_assignments[@]}" \
+      ${app_argv[@]+"${app_argv[@]}"} >>"$ELECTRON_LOG" 2>&1 </dev/null &
   else
-    bash -c "$launch_cmd" >>"$ELECTRON_LOG" 2>&1 </dev/null &
+    bash -c "$launch_cmd" electron-dev "$PROJECT_ROOT/apps/desktop" "${env_assignments[@]}" \
+      ${app_argv[@]+"${app_argv[@]}"} >>"$ELECTRON_LOG" 2>&1 </dev/null &
   fi
   local launcher_pid=$!
   echo "$launcher_pid" >"$PIDFILE"
@@ -565,17 +491,7 @@ do_list() {
 }
 
 do_login_status() {
-  echo "[electron-dev] Login sources (the snapshot wins when present):"
-  describe_login "saved snapshot" "$LOGIN_STATE_DIR"
-  describe_login "golden profile" "$GOLDEN_PROFILE"
-  if [ ! -d "$LOGIN_STATE_DIR" ] && [ ! -d "$GOLDEN_PROFILE" ]; then
-    echo "[electron-dev] Nothing to seed from: sign in once inside the app, then 'save-login <id>' (or just 'stop <id>')."
-    return 2
-  fi
-  echo "[electron-dev] Note: 'expiresAt' in the profile is the ACCESS token's lifetime, not the"
-  echo "[electron-dev] refresh token's — a stale one is normal and gets refreshed on boot. Only a"
-  echo "[electron-dev] missing refresh token means signed out. 'stop'/'save-login' also probe the"
-  echo "[electron-dev] running renderer, so a cookie-only session is captured too."
+  dev_instance login-status --snapshot "$LOGIN_STATE_DIR"
 }
 
 do_stop_all() {
@@ -600,6 +516,14 @@ case "$CMD" in
   start)
     derive_instance "$INSTANCE"
     do_start
+    ;;
+  start-local)
+    derive_instance "${INSTANCE:-1}"
+    if [ "$POOL_MODE" != "1" ]; then
+      echo "[electron-dev] start-local needs a pool instance (it never touches your own profile)."
+      exit 1
+    fi
+    START_LOCAL=1 do_start
     ;;
   stop)
     if [ "$INSTANCE" = "--all" ]; then
@@ -633,11 +557,15 @@ case "$CMD" in
     ;;
   *)
     echo "Usage: $0 {start|stop|status|restart} [<id>]   |   $0 stop --all   |   $0 list"
-    echo "       $0 save-login <id>   |   $0 login-status"
+    echo "       $0 save-login <id>   |   $0 login-status   |   $0 start-local [<id>]"
     echo ""
     echo "  start [<id>]      — Start an instance. No id = legacy single instance (CDP 9222)."
     echo "                      <id> = pool member: CDP 9222+id, Vite 5173+id, own userData"
     echo "                      (login seeded from the saved snapshot) + IPC id."
+    echo "                      start <id> -- <app args> forwards args to the app"
+    echo "  start-local [<id>] — Start pool instance <id> (default 1) signed in to the local dev"
+    echo "                      server (SERVER_URL, default http://localhost:3010) as the seeded"
+    echo "                      user. No OAuth; the login is never saved to the snapshot."
     echo "  stop [<id>]       — Stop an instance. Pool stop is sibling-safe, and snapshots the"
     echo "                      instance's login first. KEEP_DATA=1 preserves the userData;"
     echo "                      SKIP_LOGIN_SAVE=1 skips the snapshot."

@@ -22,7 +22,10 @@ const relay = vi.hoisted(() => ({
   usageEstimated: false,
 }));
 
-vi.mock('@/server/modules/ModelRuntime', () => ({ initModelRuntimeFromDB: vi.fn() }));
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  initModelRuntimeFromDB: vi.fn(),
+  resolveProviderResponseApiMode: vi.fn(async () => undefined),
+}));
 vi.mock('../llmRelay/resolveLlmExecutionSite', () => ({ resolveLlmExecutionSite: vi.fn() }));
 vi.mock('../llmRelay/RelayModelRuntime', () => ({
   RelayModelRuntime: vi.fn(function (this: any) {

@@ -1,4 +1,4 @@
-import { type SpendOrigin } from '@lobechat/types';
+import { type SpendOrigin, type VideoGenerationRoute } from '@lobechat/types';
 
 interface ChargeParams {
   computePriceParams?: { duration?: number; generateAudio?: boolean; resolution?: string };
@@ -14,6 +14,8 @@ interface ChargeParams {
   model: string;
   prechargeResult?: Record<string, unknown>;
   provider: string;
+  /** Route that created the video; attributes the completion charge to its channel. */
+  route?: VideoGenerationRoute;
   usage?: { completionTokens: number; totalTokens: number };
   userId: string;
   workspaceId?: string;
