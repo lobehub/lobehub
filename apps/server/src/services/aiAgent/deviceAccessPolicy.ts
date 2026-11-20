@@ -24,6 +24,13 @@ export type DeviceAccessReason =
   /** Bot caller, sender is identifiable but not the owner — DENY device tools. */
   | 'bot-external-sender'
   /**
+   * Started from inside a run that may not use devices (an external bot
+   * sender's or a share visitor's), with the token that run's sandbox holds —
+   * e.g. `lh topic send --new`. The nested run keeps that run's denial: it
+   * executes as the owner but is still driven by the same sender — DENY.
+   */
+  | 'delegated-from-denied-run'
+  /**
    * Bot caller but `senderExternalUserId` is missing (e.g. the platform's
    * webhook didn't deliver the author). Treated as untrusted external —
    * fail-closed.
@@ -71,6 +78,12 @@ export interface DeviceAccessPolicyInput {
   /** Undefined when the caller is a first-party UI (web / desktop / mobile). */
   botContext?: ChatTopicBotContext;
   /**
+   * The request came with a token minted for a run that may not use devices
+   * (`device_access: 'denied'`, see `signUserJWT`). Set by the router from the
+   * verified token, never from the request body.
+   */
+  delegatedDeviceAccessDenied?: boolean;
+  /**
    * Present when the run serves a shared-agent visitor (share gate present);
    * `canUseDevice` is the share's device grant resolved for this visitor.
    */
@@ -96,7 +109,13 @@ export interface DeviceAccessPolicyOutput {
 export const resolveDeviceAccessPolicy = (
   input: DeviceAccessPolicyInput,
 ): DeviceAccessPolicyOutput => {
-  const { botContext, shareVisitor } = input;
+  const { botContext, delegatedDeviceAccessDenied, shareVisitor } = input;
+
+  // Before every trust branch: whatever the nested request claims about its
+  // sender, the run that holds this token may not use devices.
+  if (delegatedDeviceAccessDenied) {
+    return { canUseDevice: false, reason: 'delegated-from-denied-run' };
+  }
 
   // Checked before every trust branch: a share visitor reaches the creator's
   // devices only through the share's own grant, regardless of how the

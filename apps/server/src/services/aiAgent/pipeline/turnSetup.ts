@@ -354,6 +354,7 @@ export interface TurnSetupInput {
   conversationAgentId: string;
   createdThreadId?: string;
   cronJobId?: string;
+  delegatedDeviceAccessDenied?: boolean;
   externalOrigin?: InternalExecAgentParams['externalOrigin'];
   files?: InternalExecAgentParams['files'];
   modelOverride?: string;
@@ -468,6 +469,7 @@ export const setupTurn = async (
     continuationAssistantId,
     conversationAgentId,
     createdThreadId,
+    delegatedDeviceAccessDenied,
     externalOrigin,
     cronJobId,
     webhookThread,
@@ -581,7 +583,10 @@ export const setupTurn = async (
   await assertShareHetero(model);
 
   const assertProjectDirectoryAccess = () => {
-    if (shareGate || (botContext && !resolveDeviceAccessPolicy({ botContext }).canUseDevice))
+    if (
+      shareGate ||
+      !resolveDeviceAccessPolicy({ botContext, delegatedDeviceAccessDenied }).canUseDevice
+    )
       throw new Error('Project directory access denied');
   };
   /** Pin the run to the device a project directory lives on — only it can honour the run. */
@@ -598,7 +603,10 @@ export const setupTurn = async (
     // Liveness comes from the gateway's device listing — not a device round
     // trip — so the send path keeps the latency fix, and the dispatch remains
     // the authority on whether the directory still exists on the device.
-    const { canUseDevice: canUseProjectDevice } = resolveDeviceAccessPolicy({ botContext });
+    const { canUseDevice: canUseProjectDevice } = resolveDeviceAccessPolicy({
+      botContext,
+      delegatedDeviceAccessDenied,
+    });
     const projectDevices = canUseProjectDevice
       ? await getScopedOnlineDevices(deps.db, deps.userId, deps.workspaceId)
       : [];
@@ -899,6 +907,7 @@ export const setupTurn = async (
   // chat) and stops the device list from leaking into the LLM context.
   const { canUseDevice, reason: deviceAccessReason } = resolveDeviceAccessPolicy({
     botContext,
+    delegatedDeviceAccessDenied,
     shareVisitor: shareGate ? { canUseDevice: shareGate.canUseDevice } : undefined,
   });
   log(

@@ -96,10 +96,36 @@ export const prepareParentWorkspace = async (
       params.userInterventionConfig ??
       (await resolveForegroundInterventionConfig(scope.db, scope.userId)),
   };
+  const initial = params.appContext?.initialTopicMetadata as Record<string, unknown> | undefined;
+
+  // Opened from inside a run that may not use devices (an external bot
+  // sender's sandbox): the child keeps that denial, so it never takes the
+  // parent's device or a directory on it — only a cloud-sandbox placement.
+  if (params.delegatedDeviceAccessDenied) {
+    if (parentWorkspace === 'new-worktree') {
+      throw new ParentWorkspaceError(
+        'A new worktree is made on a device, and this conversation may not use devices. Use "inherit" or "none" instead.',
+      );
+    }
+    const sandbox =
+      parentWorkspace === 'inherit' ? pickSandboxPlacement(metadata ?? undefined) : {};
+    const { deviceId: _dropped, ...rest } = params;
+    return {
+      params: {
+        ...rest,
+        ...(Object.keys(sandbox).length > 0 && {
+          appContext: {
+            ...params.appContext,
+            initialTopicMetadata: { ...sandbox, ...initial } as any,
+          },
+        }),
+      },
+    };
+  }
+
   // The parent's device unless the caller named one: a device-bound agent
   // (Claude Code) has nowhere else to run.
   const deviceId = params.deviceId ?? metadata?.boundDeviceId ?? undefined;
-  const initial = params.appContext?.initialTopicMetadata as Record<string, unknown> | undefined;
 
   if (parentWorkspace === 'none') {
     return { params: { ...params, ...(deviceId && { deviceId }) } };

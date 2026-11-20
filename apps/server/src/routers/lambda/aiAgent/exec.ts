@@ -56,6 +56,18 @@ import { acceptsFileWorksOf, acceptsMemberRuntimeEndOf } from './utils';
 
 const log = debug('lobe-server:ai-agent-router');
 
+const DELEGATED_DEVICE_DENIED_MESSAGE =
+  'This request comes from a run that may not use devices, so it cannot start a run on a device.';
+
+/**
+ * Whether the caller's token was minted for a run that may not use devices
+ * (`device_access: 'denied'`, see `signUserJWT`) — an external bot sender's or
+ * a share visitor's sandbox. Anything such a run starts keeps that denial,
+ * whatever the request itself says.
+ */
+export const delegatedDeviceAccessDeniedOf = (ctx: { oidcAuth?: Record<string, any> | null }) =>
+  ctx.oidcAuth?.device_access === 'denied';
+
 const SubmitWorktreeTurnSchema = z.object({
   agentId: z.string().min(1),
   assistantMessageId: z.string().regex(entityIdPattern('messages')),
@@ -255,8 +267,12 @@ export const execRouter = router({
     } = input;
 
     log('execAgent: identifier=%s, prompt=%s', agentId || slug, prompt.slice(0, 50));
+    const delegatedDeviceAccessDenied = delegatedDeviceAccessDeniedOf(ctx);
 
     try {
+      if (delegatedDeviceAccessDenied && input.deviceId) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: DELEGATED_DEVICE_DENIED_MESSAGE });
+      }
       await assertCanUseWorkspaceAgent({
         agentId,
         db: ctx.serverDB,
@@ -317,6 +333,7 @@ export const execRouter = router({
           ...request,
           acceptsFileWorks: acceptsFileWorksOf(input.streamFeatures),
           acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
+          ...(delegatedDeviceAccessDenied && { delegatedDeviceAccessDenied }),
           // A non-superseding start waits on the surface like a server-started
           // follow-up, so a thread's live run is refused as well.
           ...(supersedeLiveRun ? {} : { queuedSuccessor: true }),
@@ -514,6 +531,7 @@ export const execRouter = router({
    */
   execAgents: aiAgentWriteProcedure.input(ExecAgentsSchema).mutation(async ({ input, ctx }) => {
     const { tasks, parallel = true } = input;
+    const delegatedDeviceAccessDenied = delegatedDeviceAccessDeniedOf(ctx);
 
     log('execAgents: %d tasks, parallel=%s', tasks.length, parallel);
 
@@ -542,6 +560,9 @@ export const execRouter = router({
       } = task;
 
       try {
+        if (delegatedDeviceAccessDenied && deviceId) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: DELEGATED_DEVICE_DENIED_MESSAGE });
+        }
         await assertCanUseWorkspaceAgent({
           agentId,
           db: ctx.serverDB,
@@ -571,6 +592,7 @@ export const execRouter = router({
           agentId,
           appContext,
           autoStart,
+          ...(delegatedDeviceAccessDenied && { delegatedDeviceAccessDenied }),
           deviceId,
           existingMessageIds,
           parentMessageId,

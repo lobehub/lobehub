@@ -260,6 +260,7 @@ export class AiAgentService {
       db: this.db,
       getMarketService: (runFacts, options) => this.getMarketService(runFacts, options),
       messageModel: this.messageModel,
+      onTopicRunSettled: (settled) => this.onSubTopicTurnSettled(settled),
       pluginModel: this.pluginModel,
       resolveAgentConfigOrThrow: (id) => this.resolveAgentConfigOrThrow(id),
       resolveDeviceWorkspaceId: (deviceId) => this.resolveDeviceWorkspaceId(deviceId),

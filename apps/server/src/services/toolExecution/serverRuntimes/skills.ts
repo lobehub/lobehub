@@ -33,6 +33,7 @@ import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { resolveDeviceAccessPolicy } from '@/server/services/aiAgent/deviceAccessPolicy';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
 import { FileService } from '@/server/services/file';
@@ -46,11 +47,7 @@ import {
 import type { SandboxInitialization } from '@/server/services/sandbox/environmentInit';
 import { SkillResourceService } from '@/server/services/skill/resource';
 import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
-import {
-  buildDeviceLhEnv,
-  isLhCommand,
-  preprocessLhCommand,
-} from '@/server/services/toolExecution/preprocessLhCommand';
+import { buildDeviceLhEnv } from '@/server/services/toolExecution/preprocessLhCommand';
 import {
   canonicalUserSkillIdentifier,
   readTaskSkillIds,
@@ -61,6 +58,7 @@ import { resolveAgentSkillGates } from './librarySkillGate';
 import { pageSandboxWrapper, type SandboxWrapper } from './pageSandboxSync';
 import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { createSandboxMarketService } from './sandboxMarket';
+import { preprocessSkillSandboxCommand } from './skillsLhCommand';
 import { type ServerRuntimeRegistration } from './types';
 
 const log = debug('lobe-server:skills-runtime');
@@ -180,6 +178,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   ) => Promise<{ fileHash: string; url: string } | undefined>;
   private isSkillGranted?: (identifier: string) => boolean;
   private shareVisitorBlocked: boolean;
+  private deviceAccessDenied: boolean;
   private wrapSandbox?: SandboxWrapper;
 
   constructor(options: {
@@ -225,6 +224,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     serverDB: LobeChatDatabase;
     /** Agent Share only: `lh` must not mint a creator-scoped token for a visitor. */
     shareVisitorBlocked?: boolean;
+    deviceAccessDenied?: boolean;
     skillModel: AgentSkillModel;
     topicId?: string;
     userId: string;
@@ -254,6 +254,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.isLibrarySkillEnabled = options.isLibrarySkillEnabled;
     this.isSkillGranted = options.isSkillGranted;
     this.shareVisitorBlocked = options.shareVisitorBlocked ?? false;
+    this.deviceAccessDenied = options.deviceAccessDenied ?? false;
     this.wrapSandbox = options.wrapSandbox;
   }
 
@@ -306,36 +307,16 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     });
   };
 
-  /**
-   * Rewrite an `lh` command for sandbox execution: prepend the auth +
-   * workspace-scope prelude so the CLI runs as this user, against this run's
-   * workspace. Shared by `runCommand` and `execScript` — the model picks
-   * between them by manifest wording alone (`execScript` is the one described
-   * as "run the CLI commands a skill's instructions tell you to"), so a hole in
-   * either one is a hole in the whole `lh` surface.
-   */
-  private preprocessSandboxCommand = async (
-    command: string,
-  ): Promise<{ command: string; error?: string }> => {
-    const workspaceId =
-      this.workspaceId ?? (isLhCommand(command) ? await this.resolveWorkspaceId() : undefined);
-    // `lobe-skills` IS reachable in an Agent Share visitor's run now (only its
-    // two load APIs are), so this runtime does get constructed for one and the
-    // guard is no longer redundant: `this.userId` is the CREATOR, and minting
-    // an `lh` token from it inside a shell a visitor influenced would hand over
-    // the creator's whole CLI surface. Nothing routes here today — the gate
-    // strips `runCommand` / `execScript` before dispatch — so this is the
-    // backstop for the day Agent Share grows an approval step and they open.
-    const result = await preprocessLhCommand(
-      command,
-      this.userId,
-      workspaceId,
-      this.shareVisitorBlocked,
-      this.operationId,
-    );
-
-    return { command: result.command, error: result.error };
-  };
+  /** See {@link preprocessSkillSandboxCommand}. */
+  private preprocessSandboxCommand = (command: string) =>
+    preprocessSkillSandboxCommand(command, {
+      deviceAccessDenied: this.deviceAccessDenied,
+      operationId: this.operationId,
+      resolveWorkspaceId: this.resolveWorkspaceId,
+      shareVisitorBlocked: this.shareVisitorBlocked,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
 
   readResource = async (id: string, path: string): Promise<SkillResourceContent> => {
     // Goes through `findById`, not `skillModel.findById`: this is a second
@@ -1068,6 +1049,8 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       sandboxWorkingDir: sandbox.workingDir,
       serverDB: context.serverDB,
       shareVisitorBlocked: !!shareVisitor,
+      deviceAccessDenied: !resolveDeviceAccessPolicy({ botContext: context.botContext })
+        .canUseDevice,
       skillModel,
       topicId: context.topicId,
       userId: context.userId,

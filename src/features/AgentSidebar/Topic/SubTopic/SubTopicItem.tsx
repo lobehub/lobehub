@@ -1,7 +1,7 @@
 'use client';
 
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
-import { ContextMenuTrigger, Icon, toast } from '@lobehub/ui';
+import { Center, ContextMenuTrigger, Icon, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { Archive, ArrowUpToLine, ListTodo } from 'lucide-react';
 import { memo, type MouseEvent, useCallback } from 'react';
@@ -36,6 +36,21 @@ const StateIcon = memo<{ state: SubTopicNode['state'] }>(({ state }) => {
 });
 
 StateIcon.displayName = 'SubTopicStateIcon';
+
+/**
+ * The trailing marker sits in the same 24px column as a row's action button
+ * ("⋯"), inset from the edge, instead of flush against the sidebar's border.
+ */
+const TrailingState = memo<{ state: SubTopicNode['state'] }>(({ state }) => {
+  if (state !== 'running' && state !== 'waiting_for_user' && state !== 'failed') return null;
+  return (
+    <Center flex={'none'} height={24} style={{ marginInlineEnd: 2 }} width={24}>
+      <StateIcon state={state} />
+    </Center>
+  );
+});
+
+TrailingState.displayName = 'SubTopicTrailingState';
 
 /**
  * A sub-topic nested under its opener. It opens on its own agent's route
@@ -128,7 +143,7 @@ const SubTopicItem = memo<{ node: SubTopicNode; openerAgentId?: string }>(
         <NavItem
           active={active}
           data-testid="sub-topic-item"
-          extra={<StateIcon state={node.state} />}
+          extra={<TrailingState state={node.state} />}
           href={path ? buildWorkspaceAwarePath(path, workspaceSlug) : undefined}
           icon={icon}
           title={node.title || t('subTopic.untitled')}

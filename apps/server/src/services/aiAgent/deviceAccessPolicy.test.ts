@@ -20,6 +20,20 @@ describe('resolveDeviceAccessPolicy', () => {
     });
   });
 
+  it('keeps the denial of the run whose token started this one, whatever the request says', () => {
+    // A first-party-looking request (no botContext) from an external sender's sandbox.
+    expect(resolveDeviceAccessPolicy({ delegatedDeviceAccessDenied: true })).toEqual({
+      canUseDevice: false,
+      reason: 'delegated-from-denied-run',
+    });
+    expect(
+      resolveDeviceAccessPolicy({
+        botContext: baseBotContext({ isOwner: true }),
+        delegatedDeviceAccessDenied: true,
+      }).canUseDevice,
+    ).toBe(false);
+  });
+
   it('grants device access when bot sender is the owner', () => {
     expect(
       resolveDeviceAccessPolicy({

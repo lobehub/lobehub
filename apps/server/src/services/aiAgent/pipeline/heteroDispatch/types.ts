@@ -9,6 +9,7 @@ import type {
 
 import type { MessageModel } from '@/database/models/message';
 import type { TopicModel } from '@/database/models/topic';
+import type { TopicRunSettledHandler } from '@/server/services/agentRuntime/CompletionLifecycle';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import type { MarketService } from '@/server/services/market';
 import type { SandboxSessionConfig } from '@/server/services/sandbox/session';
@@ -33,6 +34,8 @@ export interface HeteroDispatchDeps {
    */
   includeShareVisitor?: boolean;
   messageModel: MessageModel;
+  /** See `HeteroDispatchErrorDeps.onTopicRunSettled`. */
+  onTopicRunSettled?: TopicRunSettledHandler;
   resolveDeviceWorkspaceId: (deviceId: string | undefined) => Promise<string | undefined>;
   topicModel: TopicModel;
   userId: string;
