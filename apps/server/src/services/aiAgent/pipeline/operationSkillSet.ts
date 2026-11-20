@@ -211,13 +211,22 @@ export const buildOperationSkillSet = async (
         })),
     ];
 
-    const projectMetas = workspaceInit.workspace.skills.map((s) => ({
-      description: s.description ?? '',
-      identifier: `${s.scope === 'device' ? 'device' : 'project'}:${s.name}`,
-      location: s.path,
-      name: s.name,
-      source: s.scope === 'device' ? ('device' as const) : ('project' as const),
-    }));
+    // Exclude skills with `disable-model-invocation: true` or missing description
+    // from automatic model discovery (<available_skills>), unless the user
+    // explicitly invoked the skill in the conversation (`selectedSkillIds`).
+    const projectMetas = workspaceInit.workspace.skills
+      .filter((s) => {
+        const identifier = `${s.scope === 'device' ? 'device' : 'project'}:${s.name}`;
+        if (injectedSkillIds.has(s.name) || injectedSkillIds.has(identifier)) return true;
+        return !s.disableModelInvocation && Boolean(s.description?.trim());
+      })
+      .map((s) => ({
+        description: s.description?.trim() ?? '',
+        identifier: `${s.scope === 'device' ? 'device' : 'project'}:${s.name}`,
+        location: s.path,
+        name: s.name,
+        source: s.scope === 'device' ? ('device' as const) : ('project' as const),
+      }));
 
     if (projectMetas.length) {
       log(

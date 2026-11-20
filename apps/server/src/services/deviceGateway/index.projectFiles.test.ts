@@ -71,6 +71,7 @@ describe('DeviceGateway', () => {
             createProjectSkillItem(),
             {
               description: 'device',
+              disableModelInvocation: true,
               fileCount: 2,
               files: ['SKILL.md', 'refs.md'],
               name: 'device-writer',
@@ -99,6 +100,7 @@ describe('DeviceGateway', () => {
           },
           {
             description: 'device',
+            disableModelInvocation: true,
             name: 'device-writer',
             path: '/home/.agents/skills/device-writer/SKILL.md',
             scope: 'device',

@@ -183,12 +183,10 @@ const parseSkillFrontmatter = (raw: string): SkillFrontmatterFields => {
  * `SKILL.md`. Returns `[]` when the source directory is absent or unreadable.
  * Unsorted — callers sort/merge.
  */
-const scanSkillsInSource = async ({
-  previewRoot,
-  scope,
-  source,
-  sourceRoot,
-}: SkillScanRoot): Promise<ProjectSkillItem[]> => {
+const scanSkillsInSource = async (
+  { previewRoot, scope, source, sourceRoot }: SkillScanRoot,
+  seenRealPaths: Set<string>,
+): Promise<ProjectSkillItem[]> => {
   let entries;
   try {
     entries = await readdir(sourceRoot, { withFileTypes: true });
@@ -199,10 +197,14 @@ const scanSkillsInSource = async ({
   const skills = await Promise.all(
     entries
       .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
-      .map(async (entry): Promise<ProjectSkillItem | null> => {
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(async (entry): Promise<(ProjectSkillItem & { realPath: string }) | null> => {
         const skillDir = path.join(sourceRoot, entry.name);
         const skillFile = path.join(skillDir, 'SKILL.md');
         try {
+          const realPath = await realpath(skillFile);
+          if (seenRealPaths.has(realPath)) return null;
+
           const raw = await readFile(skillFile, 'utf8');
           const fields = parseSkillFrontmatter(raw);
           const files = await listSkillFilesRecursive(skillDir);
@@ -214,6 +216,7 @@ const scanSkillsInSource = async ({
             name: fields.name || entry.name,
             path: skillFile,
             previewRoot,
+            realPath,
             scope,
             skillDir,
             source,
@@ -224,17 +227,25 @@ const scanSkillsInSource = async ({
       }),
   );
 
-  return skills.filter((skill): skill is ProjectSkillItem => skill !== null);
+  const result: ProjectSkillItem[] = [];
+  for (const skill of skills) {
+    if (!skill || seenRealPaths.has(skill.realPath)) continue;
+    seenRealPaths.add(skill.realPath);
+    const { realPath: _, ...item } = skill;
+    result.push(item);
+  }
+  return result;
 };
 
 const collectSkills = async (roots: SkillScanRoot[]): Promise<ProjectSkillItem[]> => {
-  const seen = new Set<string>();
+  const seenNames = new Set<string>();
+  const seenRealPaths = new Set<string>();
   const skills: ProjectSkillItem[] = [];
 
   for (const root of roots) {
-    for (const skill of await scanSkillsInSource(root)) {
-      if (seen.has(skill.name)) continue;
-      seen.add(skill.name);
+    for (const skill of await scanSkillsInSource(root, seenRealPaths)) {
+      if (seenNames.has(skill.name)) continue;
+      seenNames.add(skill.name);
       skills.push(skill);
     }
   }

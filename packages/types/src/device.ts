@@ -36,6 +36,8 @@ export type ProjectSkillSource = '.agents/skills' | '.claude/skills' | '.codex/s
 export interface ProjectSkillMeta {
   /** Skill description from SKILL.md frontmatter. */
   description?: string;
+  /** SKILL.md declares that the model must not invoke this skill automatically. */
+  disableModelInvocation?: boolean;
   /** Skill name from frontmatter (falls back to the directory name). */
   name: string;
   /** Absolute path to the skill's SKILL.md on the device filesystem. */

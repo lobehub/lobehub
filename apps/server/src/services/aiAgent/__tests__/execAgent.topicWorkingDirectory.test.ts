@@ -642,6 +642,60 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     );
   });
 
+  it('excludes disable-model-invocation and description-less skills from automatic discovery unless explicitly selected', async () => {
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+    );
+    mockInitWorkspace.mockResolvedValue({
+      instructions: [],
+      skills: [
+        {
+          description: 'Visible device skill',
+          name: 'visible',
+          path: '/home/user/.agents/skills/visible/SKILL.md',
+          scope: 'device',
+        },
+        {
+          description: 'Manual-only deploy skill',
+          disableModelInvocation: true,
+          name: 'deploy',
+          path: '/home/user/.agents/skills/deploy/SKILL.md',
+          scope: 'device',
+        },
+        {
+          description: '   ',
+          name: 'undescribed',
+          path: '/home/user/.agents/skills/undescribed/SKILL.md',
+          scope: 'device',
+        },
+      ],
+    });
+
+    await service.execAgent(topicRunInput());
+
+    const defaultOperation = mockCreateOperation.mock.calls[0][0];
+    expect(defaultOperation.operationSkillSet?.skills).toEqual([
+      {
+        description: 'Visible device skill',
+        identifier: 'device:visible',
+        location: '/home/user/.agents/skills/visible/SKILL.md',
+        name: 'visible',
+        source: 'device',
+      },
+    ]);
+
+    mockCreateOperation.mockClear();
+    await service.execAgent({
+      ...topicRunInput(),
+      selectedSkillIds: ['deploy'],
+    });
+
+    const selectedOperation = mockCreateOperation.mock.calls[0][0];
+    expect(
+      selectedOperation.operationSkillSet?.skills.map((s: { name: string }) => s.name),
+    ).toEqual(['visible', 'deploy']);
+  });
+
   it('continues without device skills when a directory-less device scan is unavailable', async () => {
     mockGetAgentConfig.mockResolvedValue({
       ...createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),

@@ -219,4 +219,33 @@ describe('listProjectSkills', () => {
     ]);
     expect(approveProjectRoot).toHaveBeenCalledWith(path.join(repo, '.agents', 'skills'));
   });
+
+  it('deduplicates symlinked skills pointing to the same physical SKILL.md via realpath', async () => {
+    const repo = path.join(base, 'repo');
+    await mkdir(path.join(repo, '.git'), { recursive: true });
+    // Physical skill without frontmatter `name`, so directory name would otherwise decide `name`
+    const targetDir = path.join(repo, '.agents', 'skills', 'shared-skill');
+    await write(path.join(targetDir, 'SKILL.md'), '---\ndescription: Shared physical skill\n---\n');
+
+    // Symlink in .claude/skills under a different directory name and in home .codex/skills
+    await mkdir(path.join(repo, '.claude', 'skills'), { recursive: true });
+    await symlink(targetDir, path.join(repo, '.claude', 'skills', 'claude-alias'), 'dir');
+    await mkdir(path.join(home, '.codex', 'skills'), { recursive: true });
+    await symlink(targetDir, path.join(home, '.codex', 'skills', 'codex-alias'), 'dir');
+
+    const result = await initWorkspace({ scope: repo });
+
+    expect(result.skills).toMatchObject([
+      {
+        description: 'Shared physical skill',
+        disableModelInvocation: false,
+        name: 'shared-skill',
+        path: path.join(targetDir, 'SKILL.md'),
+        previewRoot: repo,
+        scope: 'project',
+        skillDir: targetDir,
+        source: '.agents/skills',
+      },
+    ]);
+  });
 });
