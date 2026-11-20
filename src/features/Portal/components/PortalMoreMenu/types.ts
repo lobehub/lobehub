@@ -22,6 +22,11 @@ export interface PortalMoreMenuConfig {
   delete?: () => void;
   /** Portal-specific actions, rendered as their own group before delete. */
   extraItems?: DropdownItem[];
+  /**
+   * Runs after the link is copied. Returning `true` means it showed its own
+   * confirmation (e.g. "only you can open this"), so the plain one is skipped.
+   */
+  onLinkCopied?: () => boolean | Promise<boolean>;
   /** Leave the panel for the entity's full page. */
   openInPage?: () => void;
   /** Refetch the entity from the server. */

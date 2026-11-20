@@ -57,6 +57,19 @@ describe('buildPortalMoreMenuItems', () => {
     expect(copy).toHaveBeenCalledWith('/repo/a.ts', 'moreMenu.copyPathSuccess');
   });
 
+  it('hands the copy-link follow-up to the copier so it can replace the plain confirmation', () => {
+    const copy = vi.fn();
+    const onLinkCopied = vi.fn();
+    const [item] = build({ copyLink: 'https://app.lobehub.com/x', onLinkCopied }, copy);
+
+    (item as any).onClick();
+    expect(copy).toHaveBeenCalledWith(
+      'https://app.lobehub.com/x',
+      'moreMenu.copyLinkSuccess',
+      onLinkCopied,
+    );
+  });
+
   it('ignores the declaration order of the config', () => {
     const items = build({
       delete: vi.fn(),
@@ -103,6 +116,7 @@ describe('buildPortalMoreMenuItems', () => {
       1,
       'https://app.lobehub.com/x',
       'moreMenu.copyLinkSuccess',
+      undefined,
     );
     expect(copy).toHaveBeenNthCalledWith(2, 'id_1', 'moreMenu.copyIdSuccess');
   });
