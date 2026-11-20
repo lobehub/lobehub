@@ -2,6 +2,7 @@ import type { UIChatMessage } from '@lobechat/types';
 
 import { type MessageListQueryContext, normalizeMessageListQueryContext } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
+import { workTypeOptIn } from '@/services/workTypeOptIn';
 
 import type { MessageListPage, MessageRoundCursor } from './cache';
 
@@ -40,7 +41,7 @@ export const toRoundCursorQueryInput = (
   countBudget: params.projectToolPayloads ? GATEWAY_PAGE_ROW_BUDGET : MESSAGE_PAGE_ROW_BUDGET,
   cursor,
   groupId: params.groupId,
-  includeFileWorks: true,
+  ...workTypeOptIn(),
   projectToolPayloads: params.projectToolPayloads,
   // The row budget is the real bound; ask for as many whole rounds as it holds.
   roundLimit: MESSAGE_PAGE_ROW_BUDGET,
@@ -93,7 +94,7 @@ export const toForwardRoundCursorQueryInput = (
   cursor,
   direction: 'forward' as const,
   groupId: params.groupId,
-  includeFileWorks: true,
+  ...workTypeOptIn(),
   roundLimit: size.roundLimit,
   topicId: params.topicId,
   topicShareId: params.topicShareId,

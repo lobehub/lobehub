@@ -1,9 +1,11 @@
 import {
+  type ArtboardWorkPublishMetadata,
   type CanvasWorkPublishMetadata,
   type DeleteDocumentWorkParams,
   type DeleteTaskWorkParams,
   type DeleteWorkParams,
   isWorkSkillProvider,
+  type RegisterArtboardWorkParams,
   type RegisterCanvasWorkParams,
   type RegisterDocumentWorkParams,
   type RegisterExternalWorkParams,
@@ -21,8 +23,19 @@ import debug from 'debug';
 import type { LobeChatDatabase } from '../../type';
 import { ScmChangeRequestModel } from '../scm';
 import {
+  clearArtboardPublish,
+  findArtboardIdsByDeploymentIds,
+  findArtboardWork,
+  findArtboardWorkByWorkId,
+  recordArtboardPublish,
+  registerArtboardWork,
+} from './artboard';
+import { registerShellArtboardResult } from './artboardShellResult';
+import {
   findCanvasIdByWorkId,
   findCanvasIdsByDeploymentIds,
+  findCanvasSourcesByVersionIds,
+  findCanvasVersionId,
   findCanvasWork,
   findCanvasWorkVersion,
   findCanvasWorkVersionByToolCall,
@@ -120,12 +133,36 @@ export class WorkModel {
   registerFile = (params: RegisterFileWorkParams): Promise<WorkItem> =>
     registerFileWork(this.ctx, params);
 
+  registerArtboard = (params: RegisterArtboardWorkParams): Promise<WorkItem> =>
+    registerArtboardWork(this.ctx, params);
+
+  findArtboardWork = (artboardId: string) => findArtboardWork(this.ctx, artboardId);
+
+  findArtboardWorkByWorkId = (workId: string) => findArtboardWorkByWorkId(this.ctx, workId);
+
+  recordArtboardPublish = (
+    artboardId: string,
+    params: ArtboardWorkPublishMetadata & { url: string },
+  ): Promise<WorkItem | null> => recordArtboardPublish(this.ctx, artboardId, params);
+
+  clearArtboardPublish = (artboardId: string): Promise<WorkItem | null> =>
+    clearArtboardPublish(this.ctx, artboardId);
+
+  findArtboardIdsByDeploymentIds = (deploymentIds: string[]) =>
+    findArtboardIdsByDeploymentIds(this.ctx, deploymentIds);
+
   registerCanvas = (params: RegisterCanvasWorkParams): Promise<WorkItem> =>
     registerCanvasWork(this.ctx, params);
 
   findCanvas = (canvasId: string) => findCanvasWork(this.ctx, canvasId);
 
   findCanvasIdByWorkId = (workId: string) => findCanvasIdByWorkId(this.ctx, workId);
+
+  findCanvasVersionId = (canvasId: string, version: number) =>
+    findCanvasVersionId(this.ctx, canvasId, version);
+
+  findCanvasSourcesByVersionIds = (versionIds: string[]) =>
+    findCanvasSourcesByVersionIds(this.ctx, versionIds);
 
   findCanvasIdsByDeploymentIds = (deploymentIds: string[]) =>
     findCanvasIdsByDeploymentIds(this.ctx, deploymentIds);
@@ -199,6 +236,10 @@ export class WorkModel {
     return this.registerExternal({ ...operation.params, toolIdentifier });
   };
 
+  registerShellArtboardResult = (
+    params: SkillToolResultWorkInput & { toolIdentifier: string },
+  ): Promise<WorkItem | null> => registerShellArtboardResult(this.ctx, params);
+
   /**
    * Hand a just-registered `github_pull_request` Work to the provider row,
    * when one exists in the Work's own scope. Share-visitor registrations stay
@@ -241,12 +282,14 @@ export class WorkModel {
     writes.setTaskWorksVisibility(this.ctx, taskIds, visibility);
 
   listByRootOperation = (params: {
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     rootOperationId?: string | null;
   }) => queries.listByRootOperation(this.ctx, params);
 
   listByRootOperations = (params: {
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     rootOperationIds?: string[] | null;
@@ -256,12 +299,14 @@ export class WorkModel {
   listSummariesByIds = (workIds: string[]) => queries.listSummariesByIds(this.ctx, workIds);
 
   listSummariesByRootOperations = (params: {
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     rootOperationIds?: string[] | null;
   }) => queries.listSummariesByRootOperations(this.ctx, params);
 
   listByConversation = (params: {
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     threadId?: string | null;

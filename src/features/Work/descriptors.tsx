@@ -16,6 +16,7 @@ import {
   CircleCheckIcon,
   CircleDotIcon,
   ClipboardListIcon,
+  DraftingCompassIcon,
   FileBoxIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
@@ -121,6 +122,7 @@ export interface WorkBranch {
  * only names the destination, it never reaches into a store or the DOM itself.
  */
 export type WorkOpenTarget =
+  | { artboardId: string; kind: 'artboard' }
   | { agentDocumentId?: string; documentId: string; kind: 'document' }
   | { taskId: string; identifier?: string; kind: 'task'; name?: string | null }
   | { kind: 'external'; url: string }
@@ -253,6 +255,14 @@ const getFileWorkPath = (item: WorkItemOfType<'file'>): string | null =>
 export const WORK_TYPE_DESCRIPTORS: {
   [T in ListedWorkType]: WorkTypeDescriptor<WorkItemOfType<T>>;
 } = {
+  artboard: {
+    getDescription: (item) => item.description?.trim() ?? null,
+    getIcon: () => DraftingCompassIcon,
+    getIdentifier: () => null,
+    getOpenTarget: (item) =>
+      item.resourceId ? { artboardId: item.resourceId, kind: 'artboard' } : null,
+    getTitle: (item) => item.title,
+  },
   canvas: {
     getDescription: (item) => item.description?.trim() ?? null,
     getIcon: () => PanelsTopLeftIcon,

@@ -24,6 +24,7 @@ export type IFeatureFlagsState = {
    * open/chat on an already-live shared agent. One allowlist gates both sides.
    */
   enableAgentShare: boolean | undefined;
+  enableArtboard: boolean | undefined;
   enableAuthCaptcha: boolean | undefined;
   /**
    * Multi-agent Channels (`channel`). Off by default: the sidebar section and Channel pages are

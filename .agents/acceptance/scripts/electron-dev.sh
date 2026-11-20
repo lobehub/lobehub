@@ -52,6 +52,15 @@
 #   SKIP_LOGIN_SAVE=1 — on `stop <id>`, do not snapshot the login state
 #   ELECTRON_WAIT_S   — max seconds to wait for CDP (default: 90)
 #   RENDERER_WAIT_S   — max seconds to wait for the SPA (default: 60)
+#   SERVER_URL        — `start-local` target server (default: http://localhost:3010)
+#
+# Local server (no OAuth, no manual sign-in):
+#   ./electron-dev.sh start-local [<id>]   # pool instance (default id 1) signed in to the
+#                                          # local dev server as the seeded user
+#   Mints an access token with the local server's own JWKS_KEY
+#   (mint-desktop-login.mjs, env from the repo-root .env) and hands it to the
+#   dev build through LOBE_DESKTOP_DEV_REMOTE_LOGIN. Its login is never saved
+#   into the shared snapshot, which belongs to the cloud sign-in.
 #
 set -euo pipefail
 
@@ -96,6 +105,7 @@ PIDFILE=""
 # Resolve the target instance's ports/paths from its id (empty id = legacy).
 derive_instance() {
   local id="$1"
+  LOCAL_LOGIN_FILE=""
   if [ -z "$id" ]; then
     POOL_MODE=0
     CDP_PORT="${ENV_CDP_PORT:-$CDP_BASE}"
@@ -124,6 +134,7 @@ derive_instance() {
       --user-data "$USER_DATA_DIR" --label "$INSTANCE_LABEL")
     ELECTRON_LOG="$POOL_DIR/instance-$id.log"
     PIDFILE="$POOL_DIR/instance-$id.pid"
+    LOCAL_LOGIN_FILE="$POOL_DIR/instance-$id.local-login.json"
   fi
 }
 
@@ -249,7 +260,10 @@ do_stop() {
   # Ask the still-running app whether it is signed in — after the kill there is
   # nothing left to ask, and the on-disk token alone can't see a cookie session.
   local authed=0
-  if [ "$POOL_MODE" = "1" ] && [ "${SKIP_LOGIN_SAVE:-0}" != "1" ]; then
+  # A start-local instance holds a minted local-server login; never snapshot it.
+  local skip_save="${SKIP_LOGIN_SAVE:-0}"
+  [ "$POOL_MODE" = "1" ] && [ -f "$LOCAL_LOGIN_FILE" ] && skip_save=1
+  if [ "$POOL_MODE" = "1" ] && [ "$skip_save" != "1" ]; then
     authed=$(probe_renderer_authed)
   fi
 
@@ -318,13 +332,14 @@ do_stop() {
   # Pool mode: capture the (freshly rotated) login before touching the userData,
   # then wipe it unless asked to keep it.
   if [ "$POOL_MODE" = "1" ] && [ -n "$USER_DATA_DIR" ]; then
-    [ "${SKIP_LOGIN_SAVE:-0}" = "1" ] || save_login_state "$USER_DATA_DIR" "$authed"
+    [ "$skip_save" = "1" ] || save_login_state "$USER_DATA_DIR" "$authed"
     if [ "${KEEP_DATA:-0}" = "1" ]; then
       echo "[electron-dev] Keeping userData: $USER_DATA_DIR"
     else
       rm -rf "$USER_DATA_DIR"
       echo "[electron-dev] Removed userData: $USER_DATA_DIR"
     fi
+    rm -f "$LOCAL_LOGIN_FILE"
   fi
 
   echo "[electron-dev] Stopped ($label)."
@@ -368,6 +383,14 @@ do_start() {
     mkdir -p "$POOL_DIR"
     seed_userdata "$USER_DATA_DIR"
     env_assignments=("${INSTANCE_ENV[@]}")
+    # Minted here, after the pre-start stop has cleared any previous instance's files.
+    if [ "${START_LOCAL:-0}" = "1" ]; then
+      local env_file=()
+      [ -f "$PROJECT_ROOT/.env" ] && env_file=(--env-file="$PROJECT_ROOT/.env")
+      node "${env_file[@]}" "$SCRIPT_DIR/mint-desktop-login.mjs" \
+        --out "$LOCAL_LOGIN_FILE" --server "${SERVER_URL:-http://localhost:3010}"
+      env_assignments+=("LOBE_DESKTOP_DEV_REMOTE_LOGIN=$LOCAL_LOGIN_FILE")
+    fi
   else
     env_assignments=("LOBE_DESKTOP_CDP_PORT=$CDP_PORT")
     [ -n "$INSTANCE_LABEL" ] && env_assignments+=("LOBE_DESKTOP_INSTANCE_LABEL=$INSTANCE_LABEL")
@@ -477,6 +500,14 @@ case "$CMD" in
     derive_instance "$INSTANCE"
     do_start
     ;;
+  start-local)
+    derive_instance "${INSTANCE:-1}"
+    if [ "$POOL_MODE" != "1" ]; then
+      echo "[electron-dev] start-local needs a pool instance (it never touches your own profile)."
+      exit 1
+    fi
+    START_LOCAL=1 do_start
+    ;;
   stop)
     if [ "$INSTANCE" = "--all" ]; then
       do_stop_all
@@ -509,11 +540,14 @@ case "$CMD" in
     ;;
   *)
     echo "Usage: $0 {start|stop|status|restart} [<id>]   |   $0 stop --all   |   $0 list"
-    echo "       $0 save-login <id>   |   $0 login-status"
+    echo "       $0 save-login <id>   |   $0 login-status   |   $0 start-local [<id>]"
     echo ""
     echo "  start [<id>]      — Start an instance. No id = legacy single instance (CDP 9222)."
     echo "                      <id> = pool member: CDP 9222+id, Vite 5173+id, own userData"
     echo "                      (login seeded from the saved snapshot) + IPC id."
+    echo "  start-local [<id>] — Start pool instance <id> (default 1) signed in to the local dev"
+    echo "                      server (SERVER_URL, default http://localhost:3010) as the seeded"
+    echo "                      user. No OAuth; the login is never saved to the snapshot."
     echo "  stop [<id>]       — Stop an instance. Pool stop is sibling-safe, and snapshots the"
     echo "                      instance's login first. KEEP_DATA=1 preserves the userData;"
     echo "                      SKIP_LOGIN_SAVE=1 skips the snapshot."
