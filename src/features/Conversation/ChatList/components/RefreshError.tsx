@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   row: {
@@ -15,7 +16,7 @@ const styles = stylex.create({
     minHeight: '40px',
     paddingBlockStart: '2px',
     paddingBlockEnd: '4px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockStartWidth: '1px',
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,

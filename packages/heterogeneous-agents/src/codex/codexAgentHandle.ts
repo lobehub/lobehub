@@ -220,5 +220,6 @@ export const createCodexAgentHandle = async (
       return nativeSessionId;
     },
     stderr,
+    supportsSteerImageAttachments: true,
   };
 };

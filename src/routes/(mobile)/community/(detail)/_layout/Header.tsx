@@ -14,11 +14,17 @@ const Header = memo(() => {
   // Extract the path segment (assistant, model, provider, mcp)
   const path = location.pathname.split('/').find(Boolean);
 
+  const catalog = location.state?.marketplaceCatalog;
+
   return (
     <ChatHeader
       showBackButton
       style={mobileHeaderSticky}
-      onBackClick={() => navigate(`/${path}`)}
+      onBackClick={() =>
+        typeof catalog === 'string'
+          ? navigate(catalog, { escape: true, replace: true })
+          : navigate(`/${path}`)
+      }
     />
   );
 });

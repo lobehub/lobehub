@@ -23,15 +23,17 @@ import {
   workspaceMembers,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed, trashStamp } from '../../utils/softDelete';
 import { normalizeWorkspaceId } from '../../utils/workspace';
 import type { ChannelAddAgentInput } from './agent';
 import {
   addAgentMember,
-  isSharedAgentChannel,
   memberEnvironment,
   requireAgentMember,
   requireChannelAgent,
+  sharedAgentFields,
+  sharedAgentView,
 } from './agent';
 import { openAgentPair } from './agentPair';
 import { channelAvatarMembers } from './avatars';
@@ -55,15 +57,23 @@ import {
 import { joinPublicChannel, listJoinableChannels } from './publicAccess';
 import { retryJob } from './retry';
 import { retryRouting } from './routing';
-import type { ChannelSendInput } from './send';
 import { type ChannelSearchOptions, searchChannelMessages } from './search';
+import { ChannelSectionRepository } from './sections';
+import type { ChannelSendInput } from './send';
 import { sendMessage } from './send';
 import type { ChannelStopScope } from './stop';
 import { stopScope } from './stop';
 import { channelThreadMentions } from './threadMentions';
 import { audit, lockChannel } from './transaction';
 import type { ChannelAccess, ChannelAgentPairAccess, ChannelWriteOptions } from './types';
-import { createChannelThread, readChannelView } from './view';
+import { createChannelThread, readChannelView, viewerJobs } from './view';
+import {
+  readWakeConfig,
+  replaceChannelWake,
+  replaceMemberWake,
+  wakeRecordScope,
+  withMemberWake,
+} from './wake';
 
 export type { ChannelAddAgentInput } from './agent';
 export { memberEnvironment } from './agent';
@@ -90,6 +100,7 @@ export type {
 } from './opening';
 export type { ChannelAgentPostInput } from './post';
 export type { AppliedChannelRouting, ChannelRoutingDecision } from './routing';
+export { ChannelSectionRepository } from './sections';
 export type { ChannelSendInput } from './send';
 export type { ChannelStopScope } from './stop';
 export type { ChannelAccess, ChannelAgentPairAccess, ChannelWriteOptions } from './types';
@@ -114,16 +125,10 @@ const WORKSPACE_MANAGER_ROLES = ['owner', 'admin'];
  * scope (personal, or the given workspace). Every write runs inside `write`, which holds the
  * `channels` row lock so mutations of one channel serialize in a transaction.
  */
-/** A member config with its reply strategy set, or without one when `wake` is empty. */
-/** An environment plus the member's own settings that live beside it: reply strategy and mute. */
-const withMemberWake = (
-  config: ChannelMemberConfig,
-  wake: Record<string, unknown> | null | undefined,
-  muted: boolean | undefined,
-): ChannelMemberConfig => ({ ...config, ...(wake && { wake }), ...(muted && { muted }) });
-
 export class ChannelRepository {
   private readonly workspaceId: string | null;
+  /** The caller's own sidebar sections in this scope. */
+  readonly sections: ChannelSectionRepository;
 
   constructor(
     private readonly db: LobeChatDatabase,
@@ -131,6 +136,7 @@ export class ChannelRepository {
     workspaceId?: string | null,
   ) {
     this.workspaceId = normalizeWorkspaceId(workspaceId);
+    this.sections = new ChannelSectionRepository(db, userId, this.workspaceId);
   }
 
   /** Opens the unique direct conversation, or creates a group with its initial members. */
@@ -142,7 +148,7 @@ export class ChannelRepository {
     /** Callers check that the project is readable in this scope. */
     projectId?: string;
     title: string;
-    /** Workspace people a group starts with, checked the same way as adding them later. */
+    /** People a group starts with, checked the same way as adding them later. */
     userIds?: string[];
     /** The direct conversation binds another person's Agent through its live link share. */
     sharedAgent?: boolean;
@@ -190,9 +196,8 @@ export class ChannelRepository {
       const member = await this.addOwner(tx, channel.id);
 
       if (agentId)
-        await addAgentMember(tx, channel, this.userId, { agentId, config: params.agentConfig });
-      for (const agent of params.agents ?? [])
-        await addAgentMember(tx, channel, this.userId, agent);
+        await addAgentMember(tx, channel, member, { agentId, config: params.agentConfig });
+      for (const agent of params.agents ?? []) await addAgentMember(tx, channel, member, agent);
       const access = { channel, member } satisfies ChannelAccess;
       for (const userId of new Set(params.userIds)) await addChannelUser(tx, access, userId);
 
@@ -202,7 +207,7 @@ export class ChannelRepository {
   /**
    * Inviting into a direct conversation starts a group instead, and the direct conversation stays
    * as it is. The group holds its person and Agent, the Agent keeping its channel-local
-   * environment, joined by the invited Agents and workspace people.
+   * environment, joined by the invited Agents and people.
    */
   createGroupFromDirect = async (
     channelId: string,
@@ -234,14 +239,13 @@ export class ChannelRepository {
           .returning();
         const member = await this.addOwner(tx, channel.id);
         const access = { channel, member } satisfies ChannelAccess;
-        await addAgentMember(tx, channel, this.userId, {
+        await addAgentMember(tx, channel, member, {
           agentId: direct.agentId,
           config: bound.config ?? undefined,
           description: bound.description,
           name: bound.name ?? undefined,
         });
-        for (const agent of params.agents ?? [])
-          await addAgentMember(tx, channel, this.userId, agent);
+        for (const agent of params.agents ?? []) await addAgentMember(tx, channel, member, agent);
         for (const userId of new Set(params.userIds)) await addChannelUser(tx, access, userId);
         return access;
       },
@@ -250,7 +254,7 @@ export class ChannelRepository {
 
   /** Adds a usable Agent reference; a missing reference is allowed only for retained history. */
   addAgent = async (channelId: string, input: ChannelAddAgentInput) =>
-    this.write(channelId, (tx, { channel }) => addAgentMember(tx, channel, this.userId, input), {
+    this.write(channelId, (tx, { channel, member }) => addAgentMember(tx, channel, member, input), {
       minRole: 'admin',
     });
 
@@ -303,65 +307,22 @@ export class ChannelRepository {
    * `null` means the defaults apply. Validation belongs to the shared wake schema in the caller.
    */
   wakeConfig = async (channelId: string) =>
-    this.write(
-      channelId,
-      async (tx, { channel }) => {
-        const members = await tx
-          .select({ config: channelMembers.config, id: channelMembers.id })
-          .from(channelMembers)
-          .where(
-            and(
-              eq(channelMembers.channelId, channelId),
-              eq(channelMembers.actorType, 'agent'),
-              eq(channelMembers.status, 'active'),
-            ),
-          );
-        return {
-          channel: channel.config?.wake ?? null,
-          members: members.map((member) => ({
-            memberId: member.id,
-            wake: member.config?.wake ?? null,
-          })),
-        };
-      },
-      { minRole: 'admin' },
-    );
+    this.write(channelId, (tx, { channel }) => readWakeConfig(tx, channel), { minRole: 'admin' });
 
   /**
    * Whose records one Agent member's wake decisions are filed under: its Agent's owner, in the
    * channel's workspace. `null` when the Agent has no owner left to file them under.
    */
   memberWakeRecordScope = async (channelId: string, memberId: string) =>
-    this.write(
-      channelId,
-      async (tx, { channel }) => {
-        const member = await requireAgentMember(tx, channelId, memberId);
-        const [agent] = await tx
-          .select({ userId: agents.userId })
-          .from(agents)
-          .where(eq(agents.id, member.agentId));
-        return agent?.userId ? { userId: agent.userId, workspaceId: channel.workspaceId } : null;
-      },
-      { minRole: 'admin' },
-    );
+    this.write(channelId, (tx, { channel }) => wakeRecordScope(tx, channel, memberId), {
+      minRole: 'admin',
+    });
 
   /** Replaces the channel's reply strategy; `null` returns it to the defaults. */
   updateChannelWakeConfig = async (channelId: string, wake: Record<string, unknown> | null) =>
-    this.write(
-      channelId,
-      async (tx, { channel }) => {
-        const { wake: _previous, ...rest } = channel.config ?? {};
-        const config = wake ? { ...rest, wake } : rest;
-        const [updated] = await tx
-          .update(channels)
-          .set({ config: Object.keys(config).length ? config : null })
-          .where(eq(channels.id, channelId))
-          .returning();
-        await audit(tx, channelId, 'wake_config_changed', channelId, { reset: !wake });
-        return updated.config?.wake ?? null;
-      },
-      { minRole: 'admin' },
-    );
+    this.write(channelId, (tx, { channel }) => replaceChannelWake(tx, channel, wake), {
+      minRole: 'admin',
+    });
 
   /**
    * Replaces one Agent member's own reply strategy over the channel's; `null` removes it. Its
@@ -372,22 +333,9 @@ export class ChannelRepository {
     memberId: string,
     wake: Record<string, unknown> | null,
   ) =>
-    this.write(
-      channelId,
-      async (tx) => {
-        const current = await requireAgentMember(tx, channelId, memberId);
-        const [member] = await tx
-          .update(channelMembers)
-          .set({
-            config: withMemberWake(memberEnvironment(current.config), wake, current.config?.muted),
-          })
-          .where(eq(channelMembers.id, memberId))
-          .returning();
-        await audit(tx, channelId, 'member_wake_config_changed', memberId, { reset: !wake });
-        return member.config?.wake ?? null;
-      },
-      { minRole: 'admin' },
-    );
+    this.write(channelId, (tx) => replaceMemberWake(tx, channelId, memberId, wake), {
+      minRole: 'admin',
+    });
 
   rename = async (channelId: string, title: string) =>
     this.write(
@@ -472,15 +420,11 @@ export class ChannelRepository {
       { allowArchived: true },
     );
 
-  /** People a new Channel in this workspace can start with. */
-  newChannelUserCandidates = async (search?: string) => {
-    const { workspaceId } = this;
-    if (!workspaceId)
-      throw new ChannelError('BAD_REQUEST', 'People can only be added to workspace group channels');
-    return this.db.transaction((tx) =>
-      newChannelUserCandidates(tx, workspaceId, this.userId, search),
+  /** People a new Channel in this scope can start with. */
+  newChannelUserCandidates = async (search?: string) =>
+    this.db.transaction((tx) =>
+      newChannelUserCandidates(tx, this.workspaceId, this.userId, search),
     );
-  };
 
   userCandidates = async (channelId: string, search?: string) =>
     this.write(channelId, (tx, access) => channelUserCandidates(tx, access, search), {
@@ -508,18 +452,14 @@ export class ChannelRepository {
         if (access.channel.isDeleted) throw new ChannelError('NOT_FOUND', 'Channel not found');
         const admin = hasRole(access.member.role, 'admin');
         const view = await readChannelView(tx, channelId, options, this.userId);
+        const shared = await sharedAgentView(tx, access.channel, this.userId);
         return {
-          channel: { ...access.channel, canDelete: admin },
+          channel: { ...access.channel, canDelete: admin, ...shared.channel },
           joined: true,
+          sharedAgentOwner: shared.owner,
           ...view,
-          jobs: view.jobs.map(({ requesterMemberId, topicId, topicOwnerId, ...job }) => ({
-            ...job,
-            // Mirrors `stop`: the requester or an admin.
-            canStop: admin || requesterMemberId === access.member.id,
-            // Only the viewer who runs the reply can follow it into its topic; for anyone else
-            // the job carries no topic at all.
-            ...(topicId && topicOwnerId === this.userId ? { topicId } : {}),
-          })),
+          // Mirrors `stop`: the requester or an admin.
+          jobs: viewerJobs(view.jobs, this.userId, (id) => admin || id === access.member.id),
         };
       },
       { allowArchived: true, allowTrashed: true },
@@ -546,7 +486,7 @@ export class ChannelRepository {
       { allowArchived: true, allowTrashed: true },
     );
 
-  /** Pins the conversation atop the caller's own list, or unpins it; nobody else sees it. */
+  /** Pins the conversation atop the caller's own list (joining an open one), or unpins it. */
   setPinned = async (channelId: string, pinned: boolean) =>
     this.write(
       channelId,
@@ -554,6 +494,35 @@ export class ChannelRepository {
         const pinnedAt = pinned ? (member.pinnedAt ?? new Date()) : null;
         await tx.update(channelMembers).set({ pinnedAt }).where(eq(channelMembers.id, member.id));
         return pinnedAt;
+      },
+      { allowArchived: true, allowTrashed: true, joinOpen: pinned },
+    );
+
+  /**
+   * Files the conversation under one of the caller's own sections (joining an open one), or back
+   * into its built-in section with `null`; nobody else sees it.
+   */
+  moveToSection = async (channelId: string, sectionId: string | null) =>
+    this.write(
+      channelId,
+      async (tx, { member }) => {
+        if (sectionId) await this.sections.assertOwned(tx, sectionId);
+        await tx.update(channelMembers).set({ sectionId }).where(eq(channelMembers.id, member.id));
+        return sectionId;
+      },
+      { allowArchived: true, allowTrashed: true, joinOpen: sectionId !== null },
+    );
+
+  /**
+   * Hides the conversation from the caller's own list, or shows it again; the next message
+   * brings it back by itself.
+   */
+  setHidden = async (channelId: string, hidden: boolean) =>
+    this.write(
+      channelId,
+      async (tx, { member }) => {
+        await tx.update(channelMembers).set({ hidden }).where(eq(channelMembers.id, member.id));
+        return hidden;
       },
       { allowArchived: true, allowTrashed: true },
     );
@@ -574,8 +543,10 @@ export class ChannelRepository {
         memberAvatars: ChannelAvatarMember[];
         memberRole: ChannelMemberRole | null;
         mentionCount: number;
+        hidden: boolean;
         pinnedAt: Date | null;
         replyJobs: ChannelReplyJob[];
+        sectionId: string | null;
         sharedAgentHandle: string | null;
         threadMentions: ChannelThreadMention[];
         unreadCount: number;
@@ -588,10 +559,12 @@ export class ChannelRepository {
         agentVisibility: agents.visibility,
         agentWorkspaceId: agents.workspaceId,
         channel: channels,
+        hidden: channelMembers.hidden,
         lastReadSequence: channelMembers.lastReadSequence,
         memberId: channelMembers.id,
         pinnedAt: channelMembers.pinnedAt,
         role: this.callerRole(),
+        sectionId: channelMembers.sectionId,
         shareId: agentShares.id,
         shareSlug: sql<string | null>`${agentShares.shareConfig} ->> 'slug'`,
       })
@@ -704,15 +677,23 @@ export class ChannelRepository {
     }
 
     const joined = rows.map(
-      ({ channel, lastReadSequence, pinnedAt, role, shareId, shareSlug, ...agent }) => {
-        const sharedAgent = isSharedAgentChannel(channel, agent, this.userId);
+      ({
+        channel,
+        hidden,
+        lastReadSequence,
+        pinnedAt,
+        role,
+        sectionId,
+        shareId,
+        shareSlug,
+        ...agent
+      }) => {
         return {
           ...channel,
           agentIds: agentIdsOf.get(channel.id) ?? [],
-          sharedAgent,
-          // Its visitor page (`/a/<handle>`) is where the caller can see this Agent; it has no other.
-          sharedAgentHandle: sharedAgent ? (shareSlug ?? shareId) : null,
+          ...sharedAgentFields(channel, agent, this.userId, shareSlug ?? shareId),
           canDelete: hasRole(role, 'admin'),
+          hidden,
           joined: true,
           lastMessage: lastMessageOf.get(channel.id) ?? null,
           memberAvatars: avatarsOf.get(channel.id) ?? [],
@@ -721,6 +702,7 @@ export class ChannelRepository {
           peerUserId: peerOf(channel, this.userId),
           pinnedAt,
           replyJobs: replyJobsOf.get(channel.id) ?? [],
+          sectionId,
           threadMentions: threadMentionsOf.get(channel.id) ?? [],
           unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
         };
@@ -735,6 +717,7 @@ export class ChannelRepository {
         sharedAgent: false,
         sharedAgentHandle: null,
         canDelete: false,
+        hidden: false,
         joined: false,
         lastMessage: lastMessageOf.get(channel.id) ?? null,
         memberAvatars: avatarsOf.get(channel.id) ?? [],
@@ -743,6 +726,7 @@ export class ChannelRepository {
         peerUserId: peerOf(channel, this.userId),
         pinnedAt: null,
         replyJobs: [],
+        sectionId: null,
         threadMentions: [],
         unreadCount: 0,
       })),
@@ -822,7 +806,7 @@ export class ChannelRepository {
       .select({
         agentId: channelMembers.agentId,
         agentName: agents.name,
-        agentTitle: agents.title,
+        agentTitle: agentTitleSql(),
         channelId: channelMembers.channelId,
         description: sql<
           string | null

@@ -7,10 +7,10 @@ import type { KeyboardEvent } from 'react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useHotkeyById } from '@/hooks/useHotkeys/useHotkeyById';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 
 import { useTaskListFind } from './useTaskListFind';
 
@@ -32,6 +32,7 @@ interface TaskListFindProps {
  */
 const TaskListFind = memo<TaskListFindProps>(({ content, onChange }) => {
   const { t } = useTranslation('chat');
+  const headerActionSmallSize = useHeaderActionSize(true);
   const findHotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.FindInTopic));
   const inputRef = useRef<HTMLInputElement>(null);
   const { blur, clearAndClose, commit, draft, expanded, focus, focusRequest, openFind, setDraft } =
@@ -73,7 +74,7 @@ const TaskListFind = memo<TaskListFindProps>(({ content, onChange }) => {
     return (
       <ActionIcon
         icon={SearchIcon}
-        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+        size={headerActionSmallSize}
         title={t('taskList.find.open')}
         tooltipProps={{ hotkey: findHotkey, placement: 'bottom' }}
         onClick={openFind}

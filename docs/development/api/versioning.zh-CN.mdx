@@ -1,0 +1,104 @@
+---
+title: LobeHub API 版本管理、弃用与变更日志
+description: >-
+  LobeHub 公开 API 和 SDK 的版本规则、哪些改动属于破坏性变更、弃用如何公告，以及
+  API 变更日志。
+tags:
+  - LobeHub
+  - REST API
+  - 版本管理
+  - 弃用
+  - 变更日志
+---
+
+# LobeHub API 版本管理、弃用与变更日志
+
+## 版本管理
+
+- **主版本号在路径中。** 所有公开端点都位于 `/api/v1` 下。`v1` 内的改动保持向后兼容。会破坏现有客户端的改动改为在新的主版本路径下发布，`v1` 与其并存并继续可用。
+- **规范即契约。** [`packages/openapi/openapi.yml`](https://github.com/lobehub/lobehub/blob/canary/packages/openapi/openapi.yml) 在每次改动时由路由定义生成，SDK 再由它生成。每个部署都在 `/api/v1/openapi.json` 提供自己的规范；运行旧版本的自托管实例只支持其规范中列出的内容。
+- **LobeHub Cloud 跟随 `canary`。** 合并的改动随下一次部署进入 LobeHub Cloud。自托管实例在包含该改动的下一个版本中获得它。
+
+### v1 内的兼容改动
+
+客户端必须能容忍以下改动，它们可能不经通知发生：
+
+- 新增端点、新增可选请求字段、新增查询参数
+- 响应中新增字段
+- 枚举中新增取值，例如事件类型、状态和错误码。遇到未知取值时，按最接近的已知类别处理（未知错误码按其 HTTP 状态码处理，未知事件直接忽略）
+- 新增 Webhook 事件类型，只有订阅后才会投递到端点
+- 新增 API Key scope。新 scope 随新端点增加。现有 API Key 的访问权限保持不变；少数高风险 scope（如 `device:operate`）需要显式授予，不包含在完全访问权限中
+
+### 破坏性变更
+
+以下改动不会在 `v1` 内进行：删除或重命名端点、字段或 SDK 方法；修改字段类型；将可选字段改为必填；改变状态码或错误码的含义；要求现有操作使用新的 scope。
+
+错误码只增不减。操作 id 会成为 SDK 方法名（`agents.list`），一经发布便不再变更。
+
+## 弃用
+
+当字段、参数或端点被替代时：
+
+1. 旧形式继续可用，OpenAPI 规范将其标记为 `deprecated: true`。SDK 在类型文档中显示弃用信息。
+2. 替代方案连同迁移说明记录在[变更日志](#api-changelog)中。
+3. 旧形式只会在新的主版本中移除。
+
+当前的弃用项，自 [#23231](https://github.com/lobehub/lobehub/pull/23231) 发布后生效：
+
+| 已弃用                                                                       | 替代方案                                         |
+| ------------------------------------------------------------------------- | -------------------------------------------- |
+| 查询参数 `page`、`pageSize`、`offset`                                           | `limit` 和 `cursor`                           |
+| 错误响应体中的 `error` 文本                                                        | `code` 和 `message`                           |
+| `GET /agent-groups`、`/api-keys`、`/mcp-servers` 上的 `format=array`（旧的裸数组响应） | 分页响应 `{ items, total, hasMore, nextCursor }` |
+
+**兼容规则的例外。**[#23231](https://github.com/lobehub/lobehub/pull/23231) 上线后，`GET /agent-groups`、`GET /api-keys` 和 `GET /mcp-servers` 的默认响应会从数组改为分页对象。这是 `v1` 内的破坏性变更。把这些列表当作数组读取的客户端，需要在该版本发布前发送 `format=array`，或改用分页响应。
+
+## SDK 版本
+
+- SDK 有改动时，`@lobehub/sdk` 会从 `canary` 自动发布到 npm，版本号为 `1.0.<UTC timestamp>`，使用 `latest` 标签。
+- [#23246](https://github.com/lobehub/lobehub/pull/23246) 合并后，版本遵循语义化版本并维护 `CHANGELOG.md`：有变更日志条目的版本以 `latest` 发布，其余改动以 `x.y.z-canary.<timestamp>` 发布在 `canary` 标签下。生产环境请固定使用 `latest` 版本。届时，修改了规范却未重新生成 SDK 的 PR 会在 CI 中失败。
+- Python SDK `lobehub`（[#23337](https://github.com/lobehub/lobehub/pull/23337)）从 `0.1.0` 起步。
+
+<a id="api-changelog" />
+
+## API 变更日志
+
+条目按状态分组。**已发布**的条目已合并并上线 LobeHub Cloud；**即将推出**的条目是尚未合并的 PR，正式发布前可能调整。
+
+### 已发布
+
+| 日期         | 变更                                                                                            | PR                                                      |
+| ---------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| 2026-11-18 | 规范中每个成功响应都有类型化 schema，SDK 返回类型因此是具体的。所有 `DELETE` 都返回 `{ deleted, id }` 或 `{ deleted, count }` | [#23217](https://github.com/lobehub/lobehub/pull/23217) |
+| 2026-11-16 | `GET /users/me` 仅在调用方请求时返回 `messageCount`                                                     | [#23119](https://github.com/lobehub/lobehub/pull/23119) |
+| 2026-10-30 | `GET /usage` 返回调用方的额度配额                                                                       | [#21933](https://github.com/lobehub/lobehub/pull/21933) |
+| 2026-10-22 | `POST /tasks/{id}/runs` 立即运行任务；`GET /tasks/{id}/runs` 列出其运行记录                                 | [#21470](https://github.com/lobehub/lobehub/pull/21470) |
+| 2026-10-20 | 用于多 Agent 群组的 `/chat-groups`，以及 `sdk.chatGroups`                                              | [#21280](https://github.com/lobehub/lobehub/pull/21280) |
+
+### 即将推出
+
+| 变更                                                                                                   | PR                                                      |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| 统一的错误响应体，包含 `code`、`requestId` 和 `details`；游标分页；按 API Key 限流；`Idempotency-Key`                       | [#23231](https://github.com/lobehub/lobehub/pull/23231) |
+| SDK：可读的方法名、`workspaceId`、重试、超时、类型化错误、`paginate`、`responses.stream`、`files.upload`、文档中的 scope、CI 漂移检查 | [#23246](https://github.com/lobehub/lobehub/pull/23246) |
+| `/runs`：启动、读取、流式获取、取消和引导 Agent 运行；人工审批；客户端工具结果；`run:read` / `run:write`                              | [#23253](https://github.com/lobehub/lobehub/pull/23253) |
+| 消息和话题：编辑、fork /clone/branch、对话记录、导出 / 导入、搜索、批量操作、分享、thread 写入                                        | [#23254](https://github.com/lobehub/lobehub/pull/23254) |
+| `/documents` 和 `/notebooks`：文稿、版本、评论、分享；`document:*`                                                 | [#23255](https://github.com/lobehub/lobehub/pull/23255) |
+| 资源库语义搜索；记忆的写入、搜索和提取                                                                                  | [#23265](https://github.com/lobehub/lobehub/pull/23265) |
+| 图像、视频、语音和转录生成；`generation:*`                                                                         | [#23267](https://github.com/lobehub/lobehub/pull/23267) |
+| 带 HMAC 签名和重试投递的开发者 Webhook；`webhook:*`                                                               | [#23272](https://github.com/lobehub/lobehub/pull/23272) |
+| 技能、插件安装、连接器和直接工具调用；`tool:invoke`                                                                     | [#23274](https://github.com/lobehub/lobehub/pull/23274) |
+| 高级 Agent 配置、Agent 标签、会话分组、群聊操作；`agent:transfer`                                                      | [#23292](https://github.com/lobehub/lobehub/pull/23292) |
+| 工作区、成员、邀请、审计日志、协作者、转移请求、分享链接；`share:*`                                                               | [#23301](https://github.com/lobehub/lobehub/pull/23301) |
+| 任务子资源、任务模板和目标控制                                                                                      | [#23303](https://github.com/lobehub/lobehub/pull/23303) |
+| 项目、组件、仪表盘、Artifact 发布；`project:*`、`widget:*`、`dashboard:*`、`artifact:publish`                        | [#23311](https://github.com/lobehub/lobehub/pull/23311) |
+| 设置、模型和服务商操作、OAuth 应用、回收站、导出 / 导入；`oauth_app:*`、`trash:*`                                             | [#23315](https://github.com/lobehub/lobehub/pull/23315) |
+| 设备和沙箱；`device:read`、需显式授予的 `device:operate`                                                          | [#23316](https://github.com/lobehub/lobehub/pull/23316) |
+| 位于 `/api/v1/mcp` 的 MCP Server                                                                        | [#23318](https://github.com/lobehub/lobehub/pull/23318) |
+| OAuth 开放平台：动态客户端注册、`client_credentials`、OAuth token 的 API scope                                      | [#23322](https://github.com/lobehub/lobehub/pull/23322) |
+| Custom Webhook 渠道和 `/bots`；`bot:*`                                                                   | [#23332](https://github.com/lobehub/lobehub/pull/23332) |
+| Python SDK `lobehub`                                                                                 | [#23337](https://github.com/lobehub/lobehub/pull/23337) |
+
+相关的开发者能力同样即将推出：在工具卡片中以 MCP-UI 渲染 `ui://` 资源（[#23325](https://github.com/lobehub/lobehub/pull/23325)）、可发布的组件规范包（[#23321](https://github.com/lobehub/lobehub/pull/23321)）、在任意网站嵌入分享的 Agent（[#23333](https://github.com/lobehub/lobehub/pull/23333)），以及 `lh` CLI 改为通过 `@lobehub/sdk` 调用 REST API（[#23350](https://github.com/lobehub/lobehub/pull/23350)）。
+
+条目合并后会移入**已发布**并注明日期，本指南各页面也会去掉对应能力的「即将推出」标记。

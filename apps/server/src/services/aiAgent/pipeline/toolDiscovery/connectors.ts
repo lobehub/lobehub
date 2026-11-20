@@ -2,15 +2,21 @@ import type { LobeToolManifest } from '@lobechat/context-engine';
 import debug from 'debug';
 import pMap from 'p-map';
 
-import { ConnectorModel, type DecryptedConnector } from '@/database/models/connector';
+import {
+  ConnectorModel,
+  type ConnectorRunTarget,
+  type DecryptedConnector,
+} from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import type { UserConnectorToolItem } from '@/database/schemas';
 import { patchManifestWithPermissions } from '@/libs/mcp/connectorPermissionCheck';
 import type { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   buildLastSyncedAtMap,
+  connectorSyncContextForRow,
   scheduleStaleConnectorToolsRefresh,
 } from '@/server/services/connector/refresh';
+import type { ConnectorToolSyncContext } from '@/server/services/connector/sync';
 import {
   buildConnectorOwnershipPrompt,
   collectBorrowedConnectors,
@@ -100,18 +106,37 @@ export const scheduleConnectorRefresh = (
     const refreshConnectorModel = params.connectorGateKeeper
       ? new ConnectorModel(deps.db, deps.userId, deps.workspaceId, params.connectorGateKeeper)
       : deps.connectorModel;
+    const runContext = {
+      connectorModel: refreshConnectorModel,
+      connectorToolModel: deps.connectorToolModel,
+    };
     // Discoverable (unpinned) connectors are refreshed too: the model can
     // activate them, so a stale list would offer removed APIs and hide new ones.
-    scheduleStaleConnectorToolsRefresh(
-      [...params.connectorsMcp, ...params.discoverableConnectorsMcp],
-      buildLastSyncedAtMap([...params.connectorTools, ...params.discoverableConnectorTools]),
-      {
-        connectorModel: refreshConnectorModel,
-        connectorToolModel: deps.connectorToolModel,
+    const connectors = [...params.connectorsMcp, ...params.discoverableConnectorsMcp];
+    const lastSyncedAt = buildLastSyncedAtMap([
+      ...params.connectorTools,
+      ...params.discoverableConnectorTools,
+    ]);
+    // A private agent's workspace run can resolve its owner's personal
+    // connectors. Their rows live in the personal scope, which this
+    // workspace-scoped context cannot write, so they refresh through it
+    // (`connectorSyncContextForRow`); otherwise a connector the owner only uses
+    // here would keep its install-time tool list.
+    const personal = deps.workspaceId ? connectors.filter((c) => c.workspaceId === null) : [];
+    const groups: [DecryptedConnector[], ConnectorToolSyncContext | undefined][] = [
+      [connectors.filter((c) => !personal.includes(c)), runContext],
+    ];
+    if (personal.length > 0) {
+      groups.push([personal, connectorSyncContextForRow(runContext, personal[0], deps.db)]);
+    }
+    for (const [group, context] of groups) {
+      if (!context) continue;
+      scheduleStaleConnectorToolsRefresh(group, lastSyncedAt, {
+        ...context,
         // Lists under this user's mcp_apps flag, so view-only tools are found too
         userId: deps.userId,
-      },
-    );
+      });
+    }
   } catch (err) {
     log('execAgent: failed to schedule connector tool refresh (ignored): %O', err);
   }
@@ -136,7 +161,7 @@ interface PermissionPatchTargets<P> {
  */
 export const patchConnectorPermissions = async <P extends { identifier: string }>(
   deps: ToolDiscoveryDeps,
-  resolvedAgentId: string,
+  runTarget: ConnectorRunTarget,
   targets: PermissionPatchTargets<P>,
 ): Promise<PermissionPatchTargets<P>> => {
   let { composioManifests, lobehubSkillManifests, pluginsWithoutConnectors } = targets;
@@ -156,11 +181,13 @@ export const patchConnectorPermissions = async <P extends { identifier: string }
     ];
     const connectorEntries =
       allIdentifiers.length > 0
-        ? await deps.connectorModel.resolveByIdentifiers(allIdentifiers, resolvedAgentId)
+        ? await deps.connectorModel.resolveByIdentifiers(allIdentifiers, runTarget)
         : [];
 
     if (connectorEntries.length > 0) {
-      const toolModel = new ConnectorToolModel(deps.db, deps.userId, deps.workspaceId);
+      const toolModel = new ConnectorToolModel(deps.db, deps.userId, deps.workspaceId, {
+        agentRun: true,
+      });
       const connectorToolsMap = new Map<string, Map<string, string>>();
       await pMap(
         connectorEntries,

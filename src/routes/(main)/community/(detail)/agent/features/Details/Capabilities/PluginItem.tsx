@@ -17,6 +17,7 @@ import urlJoin from 'url-join';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useDiscoverStore } from '@/store/discover';
 import { pluginSelectors } from '@/store/discover/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 /**
  * Icon component for built-in tools (Composio & LobehubSkill)
@@ -38,12 +39,17 @@ BuiltinToolIcon.displayName = 'BuiltinToolIcon';
 
 const styles = stylex.create({
   clickable: { cursor: 'pointer' },
-  desc: { flex: '1', margin: '0', fontSize: '14px', color: cssVar.colorTextSecondary },
+  desc: {
+    flex: '1',
+    margin: '0',
+    fontSize: densityTokens['--lobe-density-font-size'],
+    color: cssVar.colorTextSecondary,
+  },
   noLink: { cursor: 'default' },
   tag: { flexShrink: 0 },
   title: {
     margin: '0',
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 500,
     color: { default: null, [stylex.when.ancestor(':hover')]: cssVar.colorLink },
   },
@@ -167,7 +173,7 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
       default: {
         return {
           clickable: true,
-          href: urlJoin('/community/mcp', identifier),
+          href: urlJoin('/marketplace/mcp', identifier),
           isExternal: false,
           tagColor: undefined,
           tagText: undefined,

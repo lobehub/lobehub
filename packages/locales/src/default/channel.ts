@@ -6,8 +6,22 @@ export default {
   'people.noOthers': 'No one else is in this workspace yet',
   'people.searchMore': 'Showing the first 50 members. Search to find more.',
   'receipt.errorReason': 'Failure reason',
+  'receipt.errorShareHeteroDevice': "The creator's device is offline. Try again later.",
+  'receipt.errorShareHeteroUnsupported':
+    "This Agent can run for you only with its creator's permission. Ask its creator for access.",
+  'receipt.errorShareMessageLimit':
+    'You have sent all the messages its creator allows to this shared Agent.',
+  'receipt.errorSharePromptTooLong':
+    'This message is longer than a shared Agent accepts. Shorten it and send it again.',
+  'receipt.errorShareSpendLimit':
+    'This shared Agent reached the monthly usage limit its creator set. It will be available again next month.',
   'receipt.errorUnavailable':
     'No detailed reason was recorded. Check the Agent’s model and device settings before sending again.',
+  'shareRefusal.addOwner': 'Add contact',
+  'shareRefusal.added': 'Added as a contact',
+  'shareRefusal.alreadyContact': 'Already your contact',
+  'shareRefusal.ownerCaption': 'Creator of this Agent',
+  'shareRefusal.requestSent': 'Request sent',
   'sort.by': 'Sort by',
   'sort.by.createdAt': 'Date created',
   'sort.by.title': 'Name',
@@ -36,6 +50,7 @@ export default {
     'This Agent is no longer available. Remove it and choose another.',
   'environment.checkingDevice': 'Checking status',
   'environment.followAgent': "Use the Agent's own settings",
+  'environment.remoteHost': 'This Agent runs on its own host, so there is no device to choose.',
   'environment.configurationFailed': 'Could not load this Agent’s settings. Try again.',
   'environment.configurationLoading': 'Loading this Agent’s settings…',
   'environment.connectorUpgradeRequired':
@@ -110,6 +125,8 @@ export default {
   'actionFailed': 'Something went wrong. Try again.',
   'send': 'Send',
   'sendFailed': 'Message was not sent. Your draft is preserved; try again.',
+  'shareVisitorReadOnlyNotice':
+    "A visitor's conversation through your share link. You can read it but can't reply.",
   'outgoing.discard': 'Delete',
   'outgoing.failed': 'Not sent',
   'outgoing.retry': 'Retry',
@@ -129,6 +146,8 @@ export default {
   'threadCard.messages_other': '{{count}} messages',
   'closeThread': 'Close thread',
   'thread': 'Thread',
+  /** Heads the Channel's own actions in a menu that also holds a thread's. */
+  'channel': 'Channel',
   'threadDivider': 'Replies in this thread',
   'followers': 'Replies from: {{names}}',
   'olderMessages': 'Older messages',
@@ -203,7 +222,6 @@ export default {
   'events.joined': '{{names}} joined the channel',
   'events.youInvited': 'You invited {{names}} to the channel',
   'failure.locate': 'Show message',
-  'failure.messageLabel': 'Reply failed: {{names}}',
   'failure.title': 'Failed replies · {{count}}',
   'nameOptional': 'Channel name (optional)',
   'rename': 'Rename channel',

@@ -64,6 +64,25 @@ describe('buildProjectContextPrompt', () => {
     expect(prompt).not.toContain('<coordination_rules>');
   });
 
+  it('introduces a named member by its name with its role behind it', () => {
+    const prompt = buildProjectContextPrompt({
+      ...input,
+      currentAgentId: 'agt_writer',
+      members: [
+        ...input.members.filter(({ agentId }) => agentId !== 'agt_writer'),
+        { agentId: 'agt_writer', name: 'Justin', role: 'copywriter', title: 'Writer' },
+      ],
+      openTasks: [
+        { assigneeAgentId: 'agt_writer', identifier: 'APO-2', priority: 2, status: 'running' },
+      ],
+    });
+
+    expect(prompt).toContain('Justin (Writer) (agt_writer): copywriter [you]');
+    // An assigned task names the same agent the roster does.
+    expect(prompt).toContain('— Justin (Writer) (agt_writer)');
+    expect(prompt).not.toMatch(/- Writer \(agt_writer\)/);
+  });
+
   it('leaves the identifier out for a project without its own prefix', () => {
     const prompt = buildProjectContextPrompt({
       ...input,

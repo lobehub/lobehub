@@ -9,6 +9,7 @@ import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useTaskStore } from '@/store/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
+import { useDensityTokens } from '@/styles/density';
 
 import { shouldShowMemberAssignee } from '../shared/memberAssigneeMode';
 import { taskDetailPath } from '../shared/taskDetailPath';
@@ -54,6 +55,7 @@ const toTaskStatus = (status: string): TaskStatus =>
   TASK_STATUS_SET.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
 
 const AgentTaskItem = memo<TaskItemProps>((props) => {
+  const { fontSize: rowFontSize, listRowHeight } = useDensityTokens();
   const { className, hideProject, task, routeScope = 'agent', variant = 'default' } = props;
   const { t, i18n } = useTranslation('common');
   const { t: tChat } = useTranslation('chat');
@@ -139,15 +141,15 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
       {archivedBadge}
       {hasName ? (
         <>
-          <Text style={{ flex: 'none' }} type={'secondary'}>
+          <Text fontSize={rowFontSize} style={{ flex: 'none' }} type={'secondary'}>
             {task.identifier}
           </Text>
-          <Text ellipsis style={{ minWidth: 0 }} weight={500}>
+          <Text ellipsis fontSize={rowFontSize} style={{ minWidth: 0 }} weight={500}>
             {task.name}
           </Text>
         </>
       ) : (
-        <Text ellipsis style={{ minWidth: 0 }} weight={500}>
+        <Text ellipsis fontSize={rowFontSize} style={{ minWidth: 0 }} weight={500}>
           {task.identifier}
         </Text>
       )}
@@ -273,7 +275,8 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
         clickable
         className={className}
         gap={4}
-        padding={12}
+        paddingBlock={(listRowHeight - 24) / 2}
+        paddingInline={12}
         variant={'borderless'}
         onClick={handleClick}
       >

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { ContactModel } from '../../../models/contact';
-import { agents, userContacts, users, workspaceMembers } from '../../../schemas';
+import { agents, files, userContacts, users, workspaceMembers } from '../../../schemas';
 import { ChannelRepository } from '..';
 import { createChannelFixture, jobsOf } from './testUtils';
 
@@ -189,6 +189,40 @@ describe('a conversation with an external contact of a workspace', () => {
     await expect(inTeam(carol).openPeer(bob, 'Mia')).rejects.toThrow('Workspace member not found');
     await contactsInTeam(carol).openTo(bob);
     expect(await inTeam(carol).openPeer(bob, 'Mia')).toBeDefined();
+  });
+
+  it('lets them attach only files they uploaded, never one of the workspace’s', async () => {
+    await inviteBob();
+    const upload = async (userId: string, workspaceId: string | null) => {
+      const [file] = await db
+        .insert(files)
+        .values({
+          fileType: 'text/plain',
+          name: 'f.txt',
+          size: 1,
+          url: 'files/f',
+          userId,
+          workspaceId,
+        })
+        .returning();
+      return file.id;
+    };
+    // A public file of the workspace, which any member may attach.
+    const teamFile = await upload(carol, fixture.workspaceId);
+    const { channel } = await inTeam(bob).openPeer(alice, 'Olivia');
+    const send = (userId: string, fileId: string) =>
+      inTeam(userId).send(channel.id, {
+        content: 'See this',
+        fileIds: [fileId],
+        requestKey: `${userId}-${fileId}`,
+        routing: 'fallback',
+      });
+
+    await expect(send(bob, teamFile)).rejects.toThrow('One or more attachments are unavailable');
+    // His own upload, which the file router stores in his personal space, goes through.
+    expect(await send(bob, await upload(bob, null))).toBeDefined();
+    // A member still attaches the workspace's file.
+    expect(await send(alice, teamFile)).toBeDefined();
   });
 
   it('goes silent once the member closes themselves to them', async () => {

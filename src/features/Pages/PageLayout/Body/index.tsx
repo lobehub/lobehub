@@ -17,6 +17,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import PageEmpty from '@/features/PageEmpty';
 import { pageActions, pageSelectors, usePageStore } from '@/store/page';
@@ -36,6 +37,7 @@ export enum GroupKey {
  * lock on their row instead of living in a separate section.
  */
 const Body = memo(() => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation('file');
 
   // Drive the list's replica sync; keep `isValidating` so the accordion header
@@ -65,12 +67,12 @@ const Body = memo(() => {
         <AccordionItem value={GroupKey.AllPages}>
           <ContextMenuTrigger items={dropdownMenu}>
             <AccordionHeader>
-              <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+              <AccordionTrigger style={sectionTriggerStyle}>
                 <Flexbox horizontal align="center" gap={4}>
-                  <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+                  <SectionTitle>
                     {t('pageList.title')}
                     {filteredDocumentsCount > 0 && ` ${filteredDocumentsCount}`}
-                  </Text>
+                  </SectionTitle>
                   {isValidating && <Spin size="small" variant="network" />}
                 </Flexbox>
               </AccordionTrigger>

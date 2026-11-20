@@ -118,4 +118,27 @@ describe('AiChatService', () => {
     expect(mockQueryMessages).toHaveBeenCalled();
     expect(res.topics).toBeUndefined();
   });
+
+  it('getMessagesAndTopics returns the work types the client asked for', async () => {
+    const mockQueryMessages = vi.fn().mockResolvedValue([]);
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return { query: mockQueryMessages } as any;
+    });
+    vi.mocked(TopicModel).mockImplementation(function () {
+      return { query: vi.fn() } as any;
+    });
+    vi.mocked(FileService).mockImplementation(function () {
+      return {} as any;
+    });
+
+    const service = new AiChatService({} as LobeChatDatabase, 'u1', undefined, {
+      workTypeOptIn: { includeArtboardWorks: true },
+    });
+    await service.getMessagesAndTopics({ topicId: 't1' });
+
+    expect(mockQueryMessages).toHaveBeenCalledWith(
+      { includeArtboardWorks: true, topicId: 't1' },
+      expect.anything(),
+    );
+  });
 });

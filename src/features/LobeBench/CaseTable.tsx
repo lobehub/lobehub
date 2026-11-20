@@ -41,6 +41,8 @@ import { openCreateDatasetModal } from '@/features/LobeBench/PicksDatasetModal';
 import { type LobeBenchCase, useDatasetCases } from '@/features/LobeBench/useLobeBench';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { agentEvalService } from '@/services/agentEval';
+import { useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 /** The preset Memory records an attempt starts with, flattened across layers. */
 const presetMemoryRecords = (environment?: EvalCaseEnvironment) =>
@@ -71,7 +73,7 @@ const styles = stylex.create({
   table: {
     display: 'grid',
     gridTemplateColumns: '36px minmax(0, 1fr) 150px 110px 240px',
-    columnGap: 12,
+    columnGap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
   },
   // The same columns behind a checkbox, where cases can be picked.
@@ -80,23 +82,28 @@ const styles = stylex.create({
   },
   head: {
     paddingBlock: 8,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     fontSize: 12,
     color: cssVar.colorTextSecondary,
   },
   row: {
     cursor: 'pointer',
     paddingBlock: 10,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadius,
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+  },
+  // Compact density: 6px block padding and 13px text → ~34px rows.
+  rowCompact: {
+    paddingBlock: 6,
+    fontSize: 13,
   },
   mono: { fontFamily: cssVar.fontFamilyCode, fontVariantNumeric: 'tabular-nums' },
   pre: {
     overflow: 'auto',
     maxHeight: 240,
     margin: 0,
-    padding: 12,
+    padding: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadius,
     fontFamily: cssVar.fontFamilyCode,
     fontSize: 12,
@@ -142,6 +149,7 @@ type EditorState = { draft?: CaseDraft; testCase?: LobeBenchCase } | undefined;
 const CaseTable = memo<CaseTableProps>(
   ({ benchmarkIds, dataset, editable, memberships, selectable }) => {
     const { t } = useTranslation('eval');
+    const compact = useInterfaceDensity() === 'compact';
     const navigate = useWorkspaceAwareNavigate();
     const datasetId = dataset?.id;
     const benchmarkId = dataset?.benchmarkId ?? benchmarkIds[0];
@@ -427,8 +435,12 @@ const CaseTable = memo<CaseTableProps>(
                 <div
                   key={item.id}
                   className={
-                    stylex.props(styles.table, picking && styles.tableSelectable, styles.row)
-                      .className
+                    stylex.props(
+                      styles.table,
+                      picking && styles.tableSelectable,
+                      styles.row,
+                      compact && styles.rowCompact,
+                    ).className
                   }
                   onClick={() => setOpen(item)}
                 >

@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { levelLabelKey, resolveCaseDifficulty } from '@/features/Eval/caseDifficulty';
 import { getJudgeFailure } from '@/features/Eval/judgeError';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { densityVars } from '@/styles/densityVars';
 
 import SegmentBar from '../../../../../../../../features/SegmentBar';
 
@@ -52,7 +53,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   // The headline score for the panel — large mono number on a tonal surface.
   scoreCard: css`
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadius};
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -65,7 +66,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   // Divider between titled sections — tonal hairline, not a heavy rule.
   section: css`
-    padding-block-end: 16px;
+    padding-block-end: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   rubricName: css`

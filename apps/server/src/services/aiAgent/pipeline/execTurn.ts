@@ -1,5 +1,7 @@
 import type { SandboxStorageClaim } from '@lobechat/builtin-tool-cloud-sandbox';
+import { getLegacyDisabledBuiltinToolIds } from '@lobechat/builtin-tools';
 import type { LobeChatDatabase } from '@lobechat/database';
+import { getLegacyDisabledBuiltinSkillIds } from '@lobechat/mecha/builtinSkillGate';
 import type { AgentSenderMetadata, ExecAgentResult, UserInterventionConfig } from '@lobechat/types';
 import { agentShareFileAccessScope, ordinaryFileAccessScope } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
@@ -133,6 +135,7 @@ export const execAgentTurn = async (
     trigger,
     cronJobId,
     webhookThread,
+    openedByTopicId,
     taskId,
     evalContext,
     evalRuntime,
@@ -261,6 +264,7 @@ export const execAgentTurn = async (
     agentSlug,
     assistantAgentId,
     autoSkillIds,
+    builtinOverrides,
     canManageAgent,
     conversationAgentId,
     disabledPluginIds,
@@ -447,6 +451,7 @@ export const execAgentTurn = async (
         externalOrigin,
         cronJobId,
         webhookThread,
+        openedByTopicId,
         files,
         modelOverride,
         operationTaskId,
@@ -569,6 +574,7 @@ export const execAgentTurn = async (
             bindTopicWorkingDirectory({ topicModel: deps.topicModel }, p),
           db: deps.db,
           getMarketService: (options) => deps.getMarketService(runFacts, options),
+          includeShareVisitor: !!runContext.shareGate,
           messageModel: deps.messageModel,
           resolveDeviceWorkspaceId: deps.resolveDeviceWorkspaceId,
           topicModel: deps.topicModel,
@@ -620,10 +626,18 @@ export const execAgentTurn = async (
   }
 
   // 4. Fetch user settings (memory config + timezone)
-  const { enableExpertise, globalMemoryEnabled, userTimezone } = await traceSendStage(
-    'run_settings',
-    () => resolveRunSettings({ agentConfig, runFacts, shareGate }),
-  );
+  const { enableExpertise, globalMemoryEnabled, uninstalledBuiltinIds, userTimezone } =
+    await traceSendStage('run_settings', () =>
+      resolveRunSettings({ agentConfig, runFacts, shareGate, workspaceId: deps.workspaceId }),
+    );
+  if (!shareGate && !exclusivePluginIds) {
+    disabledPluginIds.push(
+      ...getLegacyDisabledBuiltinSkillIds(uninstalledBuiltinIds, builtinOverrides),
+    );
+    disabledPluginIds.push(
+      ...getLegacyDisabledBuiltinToolIds(uninstalledBuiltinIds, builtinOverrides),
+    );
+  }
   log(
     'execAgent: globalMemoryEnabled=%s, timezone=%s',
     globalMemoryEnabled,
@@ -812,6 +826,7 @@ export const execAgentTurn = async (
       },
       runContext,
       {
+        acceptsArtboardWorks: params.acceptsArtboardWorks,
         acceptsFileWorks: params.acceptsFileWorks,
         acceptsMemberRuntimeEnd: params.acceptsMemberRuntimeEnd,
         approvalClaim,

@@ -62,7 +62,8 @@ const WORKER_ENV_KEYS = ['DEBUG', 'LANG', 'NODE_ENV', 'TEMP', 'TMP', 'TMPDIR', '
  * A V8 heap flag on the parent process (`--max-old-space-size` and friends, from the command line
  * or `NODE_OPTIONS`) overrides the `resourceLimits` of every worker thread (Node docs, `Worker`
  * options), and neither the worker `env` nor `execArgv` can undo it. So the budget is verified,
- * not assumed: a probe thread, never a parser, reports the heap limit it really got.
+ * not assumed: a probe thread, never a parser, reports the heap limit it really got, and an
+ * override is reported instead of being taken for the budget.
  */
 const HEAP_PROBE_YOUNG_MB = 48;
 const HEAP_PROBE_SOURCE = `
@@ -175,13 +176,17 @@ export const createFileParseRunner = (
   let active = 0;
   /** The process flags never change, so one successful probe holds for the runner's life. */
   let heapProbe: Promise<number> | undefined;
+  let heapOverrideReported = false;
 
   /**
-   * Fails closed when the parent's V8 flags give a worker more heap than `maxOldGenerationSizeMb`
-   * allows. A smaller limit is kept: it is inside the budget (a parse may then run out of memory
-   * earlier, as a typed `OUT_OF_MEMORY`).
+   * Checks the heap a worker really gets against `maxOldGenerationSizeMb`. A parent V8 heap flag
+   * above it cannot be undone for a thread, and hosts such as Vercel set one on the function
+   * process themselves, so the parse is not refused: it runs with the parent's limit, still on its
+   * own thread and inside the input budgets, and the override is reported once. A smaller limit
+   * is kept: it is inside the budget (a parse may then run out of memory earlier, as a typed
+   * `OUT_OF_MEMORY`).
    */
-  const assertHeapBudgetHolds = async () => {
+  const checkHeapBudget = async () => {
     heapProbe ??= probeHeapLimitBytes(
       options.maxOldGenerationSizeMb,
       // The default parse budget, not the caller's: a thread cold start must not depend on a tight one.
@@ -195,14 +200,15 @@ export const createFileParseRunner = (
       throw error;
     }
     const allowedBytes = (options.maxOldGenerationSizeMb + HEAP_PROBE_YOUNG_MB) * 1024 * 1024;
-    if (actualBytes > allowedBytes) {
-      throw new FileParseError(
-        'START_FAILED',
-        `File parse workers get ${Math.round(actualBytes / 1024 / 1024)}MB of heap instead of the ` +
-          `${options.maxOldGenerationSizeMb}MB old generation budget: the Node process was started ` +
-          'with a larger V8 heap flag (--max-old-space-size / --max-heap-size, on the command line ' +
-          'or in NODE_OPTIONS), which overrides the worker limit. Remove it or lower it to at most ' +
-          'the budget.',
+    if (actualBytes > allowedBytes && !heapOverrideReported) {
+      heapOverrideReported = true;
+      console.warn(
+        JSON.stringify({
+          budgetMb: options.maxOldGenerationSizeMb,
+          event: 'file_parse.heap_budget_overridden',
+          hint: 'a parent V8 heap flag (--max-old-space-size / --max-heap-size) overrides the worker limit',
+          workerHeapMb: Math.round(actualBytes / 1024 / 1024),
+        }),
       );
     }
   };
@@ -254,9 +260,9 @@ export const createFileParseRunner = (
       return release();
     }
 
-    // Before any parser is loaded: a worker that would outgrow its budget never starts.
+    // Before any parser is loaded, so a heap override is reported before the first parse.
     try {
-      await assertHeapBudgetHolds();
+      await checkHeapBudget();
     } catch (error) {
       task.reject(
         isFileParseError(error)

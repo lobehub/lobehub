@@ -40,6 +40,7 @@ import ChannelTarget from '@/features/Automations/ChannelTarget';
 import { openRenameAutomationModal } from '@/features/Automations/RenameAutomationModal';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { inboundWebhookService } from '@/services/inboundWebhook';
+import { densityTokens } from '@/styles/density.stylex';
 
 import DeliveryLog from './DeliveryLog';
 import { openWebhookKeyModal } from './KeyReveal';
@@ -61,7 +62,7 @@ const styles = stylex.create({
   },
   endpointRow: {
     paddingBlock: '6px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadius,
     backgroundColor: cssVar.colorFillQuaternary,
     backgroundImage: 'none',
@@ -81,8 +82,8 @@ const styles = stylex.create({
   },
   meta: { fontSize: '12px', color: cssVar.colorTextSecondary },
   root: {
-    paddingBlock: '16px',
-    paddingInline: '16px',
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,

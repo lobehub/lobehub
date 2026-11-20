@@ -15,6 +15,7 @@ import {
   workspaceMembers,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { agentTitleSql } from '../../utils/inboxAgent';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { fileIdsByMessage } from './attachments';
 import { isAgentAuthored } from './author';
@@ -140,7 +141,7 @@ export class ChannelRoutingRepository {
       const candidateQuery = tx
         .select({
           agentId: agents.id,
-          agentTitle: agents.title,
+          agentTitle: agentTitleSql(),
           model: agents.model,
           ownerId: agents.userId,
           provider: agents.provider,
@@ -186,7 +187,7 @@ export class ChannelRoutingRepository {
         .select({
           agentId: channelMessages.agentId,
           agentName: agents.name,
-          agentTitle: agents.title,
+          agentTitle: agentTitleSql(),
           content: channelMessages.content,
           createdAt: channelMessages.createdAt,
           fullName: users.fullName,

@@ -100,6 +100,10 @@ describe('WorkspaceHeader', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'user.openWorkspacePublicProfile' }));
 
-    expect(open).toHaveBeenCalledWith('/community/org/acme-labs', '_blank', 'noopener,noreferrer');
+    expect(open).toHaveBeenCalledWith(
+      '/marketplace/org/acme-labs',
+      '_blank',
+      'noopener,noreferrer',
+    );
   });
 });

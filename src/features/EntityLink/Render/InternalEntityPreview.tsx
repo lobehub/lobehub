@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next';
 import { ArticleSkeleton } from '@/components/Skeleton';
 import { goalStatusKey } from '@/features/AgentGoals/goalPresentation';
 import type { EntityPreview } from '@/store/entityPreview';
+import { densityVars } from '@/styles/densityVars';
 import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import type { InternalLinkReference } from '../internalLink';
@@ -35,7 +36,7 @@ import { useEntityPreview } from './useEntityPreview';
 const styles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
     width: 320px;
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
   `,
   description: css`
     overflow: hidden;

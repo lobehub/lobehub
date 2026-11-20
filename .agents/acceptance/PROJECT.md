@@ -280,6 +280,15 @@ stale standalone install: a recently added workspace package fails to resolve �
   browser, against a per-instance localhost origin that usually can't even
   complete. If no injectable state exists, report auth as blocked and ask for
   one manual sign-in instead.
+- Local server: `.agents/acceptance/scripts/electron-dev.sh start-local [<id>]`
+  starts pool instance `<id>` (default 1, CDP `9222+id`) already signed in to the
+  local dev server (`SERVER_URL`, default `http://localhost:3010`) as the seeded
+  user — no OAuth page, no manual sign-in. It mints an access token with the local
+  server's own `JWKS_KEY` (`mint-desktop-login.mjs`, env from the repo-root
+  `.env`; refuses non-local hosts) and hands it to the dev build through
+  `LOBE_DESKTOP_DEV_REMOTE_LOGIN`. Use it whenever the change under test is
+  server-side. Its login is never saved into the shared snapshot. Agents the app
+  spawns (Codex, Claude Code) get the same login through the `lh` sign-in file.
 - Concurrent instances (N worktrees / parallel runs): `electron-dev.sh` drives a
   pool — `start <id>` gives each its own CDP port, userData dir (with copied
   login), Vite port, and IPC id, and labels every window with the checkout and
@@ -377,8 +386,8 @@ bash "$GUARD" stop                      # teardown, always
 | ------------------------- | --------------------------------------------- | ---------------------------------------------------------- |
 | `ACCEPTANCE_RUN_TAG`      | — (required)                                  | Proves ownership; must be ≥ 8 chars and `[A-Za-z0-9._-]+`  |
 | `ACCEPTANCE_GUARD_DIR`    | `${TMPDIR:-/tmp}/lobe-acceptance/guard/<tag>` | Keeps the run's samples and claims out of the working tree |
-| `ACCEPTANCE_GUARD_YELLOW` | `swap=60,free=20`                             | Linux host warning thresholds                              |
-| `ACCEPTANCE_GUARD_RED`    | `swap=80,free=8`                              | Linux host stop thresholds                                 |
+| `ACCEPTANCE_GUARD_YELLOW` | `free=20`                                     | Linux host warning threshold (`MemAvailable` %)            |
+| `ACCEPTANCE_GUARD_RED`    | `free=8`                                      | Linux host stop threshold (`MemAvailable` %)               |
 
 Thresholds are host-level on purpose. The groups (`Google Chrome for Testing`,
 `next-server|vite`, `tsrs`) also match other worktrees' servers and other runs'
@@ -391,7 +400,8 @@ On **macOS**, kernel pressure (`kern.memorystatus_vm_pressure_level`: 1 normal,
 diagnostics only: neither low unused RAM nor a high fraction of dynamically
 allocated swap proves exhaustion. Three consecutive red samples are required
 before automatic termination. Unknown pressure exits 2 and never kills processes.
-On **Linux**, the existing `MemAvailable` and swap thresholds apply; cgroup/PSI
+On **Linux**, the `MemAvailable` thresholds apply; swap occupancy is diagnostic
+only, because swapped pages can stay in zram after pressure subsides. cgroup/PSI
 support is not implemented. Native Windows is unsupported. See the skill's
 [platform policy](../skills/acceptance/references/resource-guard.md#platform-policy).
 

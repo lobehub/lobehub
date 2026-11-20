@@ -1,9 +1,10 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
-import { isHeterogeneousAgentModelId } from '@lobechat/const';
+import { isAgentShareVisitorHeteroType, isHeterogeneousAgentModelId } from '@lobechat/const';
 import type {
   ChannelExecutionConfig,
   ChannelMemberConfig,
   ChannelSharedAgentAccess,
+  ContactUserProfile,
   LobeAgentConfig,
 } from '@lobechat/types';
 import { agentDisplayName, isChannelRuntime } from '@lobechat/types';
@@ -12,8 +13,8 @@ import { and, eq, ne } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import type { ChannelItem, ChannelMemberItem } from '../../schemas';
-import { agents, agentShares, channelMembers, userSettings } from '../../schemas';
-import type { Transaction } from '../../type';
+import { agents, agentShares, channelMembers, users, userSettings } from '../../schemas';
+import type { LobeChatDatabase, Transaction } from '../../type';
 import { agentUsableByWhere } from '../../utils/agent-access';
 import { mergeAgentDefaultConfig } from '../../utils/agentConfig';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
@@ -41,6 +42,64 @@ export const isSharedAgentChannel = (
     agent.agentVisibility !== 'private'
   );
 
+/**
+ * What a listed Channel tells its viewer about another person's shared Agent it is with: that it
+ * is one, and its visitor page (`/a/<handle>`), the only page of the Agent the viewer can open.
+ */
+export const sharedAgentFields = (
+  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
+  agent: Parameters<typeof isSharedAgentChannel>[1],
+  viewerId: string,
+  handle: string | null,
+) => {
+  const sharedAgent = isSharedAgentChannel(channel, agent, viewerId);
+  return {
+    sharedAgent,
+    sharedAgentHandle: sharedAgent ? handle : null,
+  };
+};
+
+/**
+ * The owner of the Agent a direct conversation is with, when it is another person's shared Agent
+ * (`isSharedAgentChannel`): the profile a refused reply's contact card shows. `null` otherwise.
+ */
+export const sharedAgentOwner = async (
+  tx: Transaction,
+  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
+  viewerId: string,
+): Promise<ContactUserProfile | null> => {
+  if (!channel.agentId) return null;
+  const [agent] = await tx
+    .select({
+      agentOwnerId: agents.userId,
+      agentVisibility: agents.visibility,
+      agentWorkspaceId: agents.workspaceId,
+      owner: {
+        avatar: users.avatar,
+        fullName: users.fullName,
+        id: users.id,
+        username: users.username,
+      },
+    })
+    .from(agents)
+    .innerJoin(users, eq(users.id, agents.userId))
+    .where(eq(agents.id, channel.agentId));
+  return agent && isSharedAgentChannel(channel, agent, viewerId) ? agent.owner : null;
+};
+
+/**
+ * What a conversation view says about another person's shared Agent it is with: the same marks as
+ * `list` (the composer reads them there to hide upload) and the owner's contact card.
+ */
+export const sharedAgentView = async (
+  tx: Transaction,
+  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
+  viewerId: string,
+) => {
+  const owner = await sharedAgentOwner(tx, channel, viewerId);
+  return { channel: { sharedAgent: !!owner }, owner };
+};
+
 /** Explicitly select environment fields so legacy or untyped copies cannot override an Agent. */
 export const memberEnvironment = (config?: ChannelMemberConfig | null): ChannelMemberConfig =>
   cleanObject({
@@ -64,7 +123,7 @@ export interface ChannelAddAgentInput {
  * limits per person.
  */
 export const findSharedChannelAgent = async (
-  tx: Transaction,
+  tx: LobeChatDatabase | Transaction,
   userId: string,
   agentId: string,
 ): Promise<
@@ -107,6 +166,28 @@ export const findSharedChannelAgent = async (
 const acceptsSharedAgent = (channel: Pick<ChannelItem, 'agentId'>, agentId: string) =>
   channel.agentId === agentId;
 
+/**
+ * The share a member's reply runs under, resolved as {@link resolveExecutionConfig} does: only in a
+ * direct conversation, and only for an Agent the requester cannot use as their own.
+ */
+export const channelReplyShare = async (
+  db: LobeChatDatabase | Transaction,
+  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
+  agentId: string,
+  userId: string,
+) => {
+  if (!acceptsSharedAgent(channel, agentId)) return;
+  const [usable] = await db
+    .select({ id: agents.id })
+    .from(agents)
+    .where(agentUsableByWhere(agentId, { userId, workspaceId: channel.workspaceId ?? undefined }));
+  if (usable) return;
+  const share = await findSharedChannelAgent(db, userId, agentId);
+  return (
+    share && { ownerId: share.ownerId, shareId: share.shareId, workspaceId: share.workspaceId }
+  );
+};
+
 /** Check Agent scope and hold it through creation of the Channel/member reference. */
 export const requireChannelAgent = async (
   tx: Transaction,
@@ -130,13 +211,18 @@ export const requireChannelAgent = async (
   return { name: shared.name, title: shared.title };
 };
 
-/** Called under the Channel lock after the caller's admin role has been checked. */
+/**
+ * Called under the Channel lock after the caller's admin role has been checked. `inviter` is the
+ * caller's own member: its person must be able to use the Agent, and the join line names it.
+ */
 export const addAgentMember = async (
   tx: Transaction,
   channel: ChannelItem,
-  userId: string,
+  inviter: ChannelMemberItem,
   input: ChannelAddAgentInput,
 ): Promise<ChannelMemberItem> => {
+  const { id: invitedBy, userId } = inviter;
+  if (!userId) throw new ChannelError('FORBIDDEN', 'Only a person adds an Agent');
   if (channel.peerUserId)
     throw new ChannelError('BAD_REQUEST', 'A conversation between two people has no Agents');
   if (channel.agentId) {
@@ -176,6 +262,7 @@ export const addAgentMember = async (
       channelId: channel.id,
       config: memberEnvironment(input.config),
       description: input.description,
+      metadata: { invitedBy },
       name: input.name?.trim() || agentDisplayName(agent, 'Agent'),
     })
     .returning();
@@ -261,11 +348,18 @@ export const resolveExecutionConfig = async (
     .for('share');
   if (!owned) return null;
   const config = await mergeDefaults(tx, owned, share.ownerId, share.workspaceId, serverDefault);
-  if (agentRuntime(config) !== 'native') return null;
+  // The runtimes its share page runs: Native, or a locally executed CLI runtime. The visitor picks no device;
+  // the run's share gate decides whether the share grants the owner's device and routes there.
+  const runtime = agentRuntime(config);
+  if (
+    !isChannelRuntime(runtime) ||
+    (runtime !== 'native' && !isAgentShareVisitorHeteroType(runtime))
+  )
+    return null;
   return {
     ...config,
     provider: config.provider || DEFAULT_PROVIDER,
-    runtime: 'native',
+    runtime,
     share: { ownerId: share.ownerId, shareId: share.shareId, workspaceId: share.workspaceId },
   };
 };

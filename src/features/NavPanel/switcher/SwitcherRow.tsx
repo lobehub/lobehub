@@ -3,7 +3,9 @@ import { CheckIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import { densityVars } from '@/styles/densityVars';
 
+import { useNavItemMetrics } from '../density';
 import type { SwitcherItem } from './switcherItems';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -17,7 +19,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: none;
 
     padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
+    border-radius: ${densityVars.radius};
 
     &:hover {
       background: ${cssVar.colorFillTertiary};
@@ -33,55 +35,60 @@ interface SwitcherRowProps {
   privateLabel?: string;
 }
 
-const SwitcherRow = memo<SwitcherRowProps>(({ active, item, kind, onSelect, privateLabel }) => (
-  <Block
-    clickable
-    horizontal
-    align={'center'}
-    className={active ? `${styles.row} ${styles.current}` : styles.row}
-    flex={'none'}
-    gap={8}
-    height={36}
-    variant={'borderless'}
-    onClick={() => onSelect(item.id)}
-  >
-    {kind === 'agent' ? (
-      <AgentAvatar
-        agentId={item.id}
-        avatar={item.avatar}
-        background={item.background}
-        name={item.title}
-        size={24}
-        title={item.title}
-      />
-    ) : (
-      <Avatar
-        avatar={item.avatar}
-        background={item.background}
-        shape={'square'}
-        size={24}
-        title={item.title}
-      />
-    )}
-    <Text
-      ellipsis
-      color={active ? cssVar.colorText : cssVar.colorTextSecondary}
-      style={{ flex: 1 }}
-      weight={active ? 500 : undefined}
+const SwitcherRow = memo<SwitcherRowProps>(({ active, item, kind, onSelect, privateLabel }) => {
+  const metrics = useNavItemMetrics();
+
+  return (
+    <Block
+      clickable
+      horizontal
+      align={'center'}
+      className={active ? `${styles.row} ${styles.current}` : styles.row}
+      flex={'none'}
+      gap={metrics.gap}
+      height={metrics.rowHeight}
+      variant={'borderless'}
+      onClick={() => onSelect(item.id)}
     >
-      {item.title}
-      {item.subtitle && (
-        <span style={{ fontSize: 12, marginInlineStart: 6, opacity: 0.6 }}>{item.subtitle}</span>
+      {kind === 'agent' ? (
+        <AgentAvatar
+          agentId={item.id}
+          avatar={item.avatar}
+          background={item.background}
+          name={item.title}
+          size={24}
+          title={item.title}
+        />
+      ) : (
+        <Avatar
+          avatar={item.avatar}
+          background={item.background}
+          shape={'square'}
+          size={24}
+          title={item.title}
+        />
       )}
-    </Text>
-    {item.private && privateLabel && (
-      <Text color={cssVar.colorTextTertiary} fontSize={12}>
-        {privateLabel}
+      <Text
+        ellipsis
+        color={active ? cssVar.colorText : cssVar.colorTextSecondary}
+        fontSize={metrics.fontSize}
+        style={{ flex: 1 }}
+        weight={active ? 500 : undefined}
+      >
+        {item.title}
+        {item.subtitle && (
+          <span style={{ fontSize: 12, marginInlineStart: 6, opacity: 0.6 }}>{item.subtitle}</span>
+        )}
       </Text>
-    )}
-    {active && <Icon color={cssVar.colorText} icon={CheckIcon} size={14} />}
-  </Block>
-));
+      {item.private && privateLabel && (
+        <Text color={cssVar.colorTextTertiary} fontSize={12}>
+          {privateLabel}
+        </Text>
+      )}
+      {active && <Icon color={cssVar.colorText} icon={CheckIcon} size={14} />}
+    </Block>
+  );
+});
 
 SwitcherRow.displayName = 'SwitcherRow';
 

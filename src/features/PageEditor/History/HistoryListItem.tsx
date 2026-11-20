@@ -12,6 +12,7 @@ import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorksp
 import MemberProfilePopup from '@/features/MemberProfileCard/MemberProfilePopup';
 import { useEventCallback } from '@/hooks/useEventCallback';
 import type { DocumentHistorySaveSource } from '@/server/routers/lambda/_schema/documentHistory';
+import { densityVars } from '@/styles/densityVars';
 
 import { formatHistoryAbsoluteTime, formatHistoryRowTime } from './formatHistoryDate';
 import { historyItemSelectors, useHistoryItemsStore } from './HistoryItemsProvider';
@@ -71,7 +72,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     padding-block: 8px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
 
     transition: background ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
 
@@ -121,7 +122,7 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorText};
   `,
   rowTimeCurrent: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     color: ${cssVar.colorPrimary};
   `,
   sourceTag: css`

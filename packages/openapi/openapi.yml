@@ -238,24 +238,20 @@ components:
         - deleted
         - id
       additionalProperties: false
-    AgentList:
+    AgentPlugin:
       type: object
       properties:
-        hasMore:
-          $ref: "#/components/schemas/PageHasMore"
-        nextCursor:
-          $ref: "#/components/schemas/PageNextCursor"
-        agents:
-          type: array
-          items:
-            $ref: "#/components/schemas/Agent"
-        total:
-          $ref: "#/components/schemas/PageTotal"
+        identifier:
+          type: string
+        mode:
+          type: string
+          enum:
+            - pinned
+            - auto
+            - disabled
       required:
-        - hasMore
-        - nextCursor
-        - agents
-        - total
+        - identifier
+        - mode
       additionalProperties: false
     Agent:
       type: object
@@ -340,113 +336,24 @@ components:
         - title
         - updatedAt
       additionalProperties: false
-    AgentPlugin:
+    AgentList:
       type: object
       properties:
-        identifier:
-          type: string
-        mode:
-          type: string
-          enum:
-            - pinned
-            - auto
-            - disabled
+        hasMore:
+          $ref: "#/components/schemas/PageHasMore"
+        nextCursor:
+          $ref: "#/components/schemas/PageNextCursor"
+        agents:
+          type: array
+          items:
+            $ref: "#/components/schemas/Agent"
+        total:
+          $ref: "#/components/schemas/PageTotal"
       required:
-        - identifier
-        - mode
-      additionalProperties: false
-    AgentDetail:
-      type: object
-      properties:
-        agencyConfig:
-          anyOf:
-            - type: object
-              propertyNames:
-                type: string
-              additionalProperties: {}
-            - type: "null"
-        avatar:
-          type:
-            - string
-            - "null"
-        chatConfig:
-          anyOf:
-            - type: object
-              propertyNames:
-                type: string
-              additionalProperties: {}
-            - type: "null"
-        createdAt:
-          type: string
-          format: date-time
-        description:
-          type:
-            - string
-            - "null"
-        id:
-          type: string
-        model:
-          type:
-            - string
-            - "null"
-        params:
-          anyOf:
-            - type: object
-              propertyNames:
-                type: string
-              additionalProperties: {}
-            - type: "null"
-        personal:
-          type: boolean
-        plugins:
-          type: array
-          items:
-            $ref: "#/components/schemas/AgentPlugin"
-        provider:
-          type:
-            - string
-            - "null"
-        slug:
-          type:
-            - string
-            - "null"
-        systemRole:
-          type:
-            - string
-            - "null"
-        title:
-          type:
-            - string
-            - "null"
-        updatedAt:
-          type: string
-          format: date-time
-        files:
-          type: array
-          items:
-            $ref: "#/components/schemas/AgentFile"
-        knowledgeBases:
-          type: array
-          items:
-            $ref: "#/components/schemas/AgentKnowledgeBase"
-      required:
-        - agencyConfig
-        - avatar
-        - chatConfig
-        - createdAt
-        - description
-        - id
-        - model
-        - params
-        - personal
-        - plugins
-        - provider
-        - slug
-        - systemRole
-        - title
-        - updatedAt
-        - files
-        - knowledgeBases
+        - hasMore
+        - nextCursor
+        - agents
+        - total
       additionalProperties: false
     AgentFile:
       type: object
@@ -565,21 +472,113 @@ components:
         - updatedAt
         - visibility
       additionalProperties: false
-    AgentAccountList:
+    AgentDetail:
       type: object
       properties:
-        accounts:
+        agencyConfig:
+          anyOf:
+            - type: object
+              propertyNames:
+                type: string
+              additionalProperties: {}
+            - type: "null"
+        avatar:
+          type:
+            - string
+            - "null"
+        chatConfig:
+          anyOf:
+            - type: object
+              propertyNames:
+                type: string
+              additionalProperties: {}
+            - type: "null"
+        createdAt:
+          type: string
+          format: date-time
+        description:
+          type:
+            - string
+            - "null"
+        id:
+          type: string
+        model:
+          type:
+            - string
+            - "null"
+        params:
+          anyOf:
+            - type: object
+              propertyNames:
+                type: string
+              additionalProperties: {}
+            - type: "null"
+        personal:
+          type: boolean
+        plugins:
           type: array
           items:
-            $ref: "#/components/schemas/AgentAccount"
-        total:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
+            $ref: "#/components/schemas/AgentPlugin"
+        provider:
+          type:
+            - string
+            - "null"
+        slug:
+          type:
+            - string
+            - "null"
+        systemRole:
+          type:
+            - string
+            - "null"
+        title:
+          type:
+            - string
+            - "null"
+        updatedAt:
+          type: string
+          format: date-time
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentFile"
+        knowledgeBases:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentKnowledgeBase"
       required:
-        - accounts
-        - total
+        - agencyConfig
+        - avatar
+        - chatConfig
+        - createdAt
+        - description
+        - id
+        - model
+        - params
+        - personal
+        - plugins
+        - provider
+        - slug
+        - systemRole
+        - title
+        - updatedAt
+        - files
+        - knowledgeBases
       additionalProperties: false
+    AgentAccountCapabilities:
+      type: object
+      properties:
+        login:
+          type: boolean
+        receive:
+          type: boolean
+        send:
+          type: boolean
+        sign:
+          type: boolean
+      required:
+        - receive
+        - send
     AgentAccount:
       type: object
       properties:
@@ -692,20 +691,21 @@ components:
         - userId
         - workspaceId
       additionalProperties: false
-    AgentAccountCapabilities:
+    AgentAccountList:
       type: object
       properties:
-        login:
-          type: boolean
-        receive:
-          type: boolean
-        send:
-          type: boolean
-        sign:
-          type: boolean
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentAccount"
+        total:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
       required:
-        - receive
-        - send
+        - accounts
+        - total
+      additionalProperties: false
     ApiKey:
       type: object
       properties:
@@ -886,24 +886,34 @@ components:
       required:
         - reply
       additionalProperties: false
-    ChatGroupList:
+    ChatGroupMember:
       type: object
       properties:
-        hasMore:
-          $ref: "#/components/schemas/PageHasMore"
-        nextCursor:
-          $ref: "#/components/schemas/PageNextCursor"
-        chatGroups:
-          type: array
-          items:
-            $ref: "#/components/schemas/ChatGroup"
-        total:
-          $ref: "#/components/schemas/PageTotal"
+        agentId:
+          type: string
+        enabled:
+          type:
+            - boolean
+            - "null"
+        order:
+          anyOf:
+            - type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: "null"
+        role:
+          anyOf:
+            - type: string
+              enum:
+                - supervisor
+                - participant
+                - assistant
+            - type: "null"
       required:
-        - hasMore
-        - nextCursor
-        - chatGroups
-        - total
+        - agentId
+        - enabled
+        - order
+        - role
       additionalProperties: false
     ChatGroup:
       type: object
@@ -954,35 +964,172 @@ components:
         - title
         - updatedAt
       additionalProperties: false
-    ChatGroupMember:
+    ChatGroupList:
       type: object
       properties:
-        agentId:
-          type: string
-        enabled:
-          type:
-            - boolean
-            - "null"
-        order:
-          anyOf:
-            - type: integer
-              minimum: -9007199254740991
-              maximum: 9007199254740991
-            - type: "null"
-        role:
-          anyOf:
-            - type: string
-              enum:
-                - supervisor
-                - participant
-                - assistant
-            - type: "null"
+        hasMore:
+          $ref: "#/components/schemas/PageHasMore"
+        nextCursor:
+          $ref: "#/components/schemas/PageNextCursor"
+        chatGroups:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatGroup"
+        total:
+          $ref: "#/components/schemas/PageTotal"
       required:
-        - agentId
-        - enabled
-        - order
-        - role
+        - hasMore
+        - nextCursor
+        - chatGroups
+        - total
       additionalProperties: false
+    DocumentSummary:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+        fileType:
+          type: string
+        id:
+          type: string
+        parentId:
+          type:
+            - string
+            - "null"
+        slug:
+          type:
+            - string
+            - "null"
+        title:
+          type:
+            - string
+            - "null"
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - createdAt
+        - fileType
+        - id
+        - parentId
+        - slug
+        - title
+        - updatedAt
+      additionalProperties: false
+    Document:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+        fileType:
+          type: string
+        id:
+          type: string
+        parentId:
+          type:
+            - string
+            - "null"
+        slug:
+          type:
+            - string
+            - "null"
+        title:
+          type:
+            - string
+            - "null"
+        updatedAt:
+          type: string
+          format: date-time
+        content:
+          description: Markdown body.
+          type:
+            - string
+            - "null"
+      required:
+        - createdAt
+        - fileType
+        - id
+        - parentId
+        - slug
+        - title
+        - updatedAt
+        - content
+      additionalProperties: false
+    EvalRunMetrics:
+      type: object
+      properties:
+        averageScore:
+          type: number
+        completedCases:
+          type: number
+        cost:
+          type: number
+        duration:
+          type: number
+        errorCases:
+          type: number
+        externalCases:
+          type: number
+        failedCases:
+          type: number
+        judgeErrorCases:
+          type: number
+        llmCalls:
+          type: number
+        passAllAt:
+          type: object
+          propertyNames:
+            type: string
+          additionalProperties:
+            type: number
+        passAllK:
+          type: number
+        passAnyAt:
+          type: object
+          propertyNames:
+            type: string
+          additionalProperties:
+            type: number
+        passAtK:
+          type: number
+        passedCases:
+          type: number
+        passRate:
+          type: number
+        perCaseCost:
+          type: number
+        perCaseLlmCalls:
+          type: number
+        perCaseSteps:
+          type: number
+        perCaseTokens:
+          type: number
+        perCaseToolCalls:
+          type: number
+        rubricScores:
+          type: object
+          propertyNames:
+            type: string
+          additionalProperties:
+            type: number
+        steps:
+          type: number
+        timeoutCases:
+          type: number
+        tokens:
+          type: number
+        toolCalls:
+          type: number
+        totalCases:
+          type: number
+        totalCost:
+          type: number
+        totalDuration:
+          type: number
+        totalTokens:
+          type: number
     EvalRun:
       type: object
       properties:
@@ -1089,129 +1236,37 @@ components:
         - targetAgentId
         - updatedAt
       additionalProperties: false
-    EvalRunMetrics:
+    EvalRubricScore:
       type: object
       properties:
-        averageScore:
-          type: number
-        completedCases:
-          type: number
-        cost:
-          type: number
-        duration:
-          type: number
-        errorCases:
-          type: number
-        externalCases:
-          type: number
-        failedCases:
-          type: number
-        judgeErrorCases:
-          type: number
-        llmCalls:
-          type: number
-        passAllAt:
-          type: object
-          propertyNames:
-            type: string
-          additionalProperties:
-            type: number
-        passAllK:
-          type: number
-        passAnyAt:
-          type: object
-          propertyNames:
-            type: string
-          additionalProperties:
-            type: number
-        passAtK:
-          type: number
-        passedCases:
-          type: number
-        passRate:
-          type: number
-        perCaseCost:
-          type: number
-        perCaseLlmCalls:
-          type: number
-        perCaseSteps:
-          type: number
-        perCaseTokens:
-          type: number
-        perCaseToolCalls:
-          type: number
-        rubricScores:
-          type: object
-          propertyNames:
-            type: string
-          additionalProperties:
-            type: number
-        steps:
-          type: number
-        timeoutCases:
-          type: number
-        tokens:
-          type: number
-        toolCalls:
-          type: number
-        totalCases:
-          type: number
-        totalCost:
-          type: number
-        totalDuration:
-          type: number
-        totalTokens:
-          type: number
-    EvalRunTopic:
-      type: object
-      properties:
-        createdAt:
+        reason:
           type: string
-          format: date-time
-        evalResult:
-          anyOf:
-            - $ref: "#/components/schemas/EvalStoredResult"
-            - type: "null"
-        input:
-          type: string
-        passed:
-          type:
-            - boolean
-            - "null"
-        runId:
+        rubricId:
           type: string
         score:
-          type:
-            - number
-            - "null"
-        status:
-          anyOf:
-            - type: string
-              enum:
-                - pending
-                - running
-                - passed
-                - failed
-                - error
-                - timeout
-                - external
-                - completed
-                - judge_error
-            - type: "null"
-        testCaseId:
-          type: string
-        topicId:
-          type: string
+          type: number
+        verdicts:
+          type: array
+          items:
+            type: object
+            properties:
+              reason:
+                type: string
+              rule:
+                type: string
+              verdict:
+                type: string
+                enum:
+                  - satisfied
+                  - unverifiable
+                  - violated
+            required:
+              - rule
+              - verdict
+            additionalProperties: false
       required:
-        - createdAt
-        - evalResult
-        - input
-        - passed
-        - runId
+        - rubricId
         - score
-        - status
-        - testCaseId
-        - topicId
       additionalProperties: false
     EvalStoredResult:
       type: object
@@ -1361,54 +1416,24 @@ components:
           additionalProperties: {}
         operationId:
           type: string
-    EvalRubricScore:
-      type: object
-      properties:
-        reason:
-          type: string
-        rubricId:
-          type: string
-        score:
-          type: number
-        verdicts:
-          type: array
-          items:
-            type: object
-            properties:
-              reason:
-                type: string
-              rule:
-                type: string
-              verdict:
-                type: string
-                enum:
-                  - satisfied
-                  - unverifiable
-                  - violated
-            required:
-              - rule
-              - verdict
-            additionalProperties: false
-      required:
-        - rubricId
-        - score
-      additionalProperties: false
-    EvalRunResult:
+    EvalRunTopic:
       type: object
       properties:
         createdAt:
           type: string
           format: date-time
+        evalResult:
+          anyOf:
+            - $ref: "#/components/schemas/EvalStoredResult"
+            - type: "null"
         input:
           type: string
         passed:
           type:
             - boolean
             - "null"
-        result:
-          anyOf:
-            - $ref: "#/components/schemas/EvalCaseResult"
-            - type: "null"
+        runId:
+          type: string
         score:
           type:
             - number
@@ -1433,13 +1458,57 @@ components:
           type: string
       required:
         - createdAt
+        - evalResult
         - input
         - passed
-        - result
+        - runId
         - score
         - status
         - testCaseId
         - topicId
+      additionalProperties: false
+    EvalThreadResult:
+      type: object
+      properties:
+        completionReason:
+          type: string
+        cost:
+          type: number
+        duration:
+          type: number
+        error:
+          type: string
+        llmCalls:
+          type: number
+        passed:
+          type: boolean
+        rubricScores:
+          type: array
+          items:
+            $ref: "#/components/schemas/EvalRubricScore"
+        score:
+          type: number
+        status:
+          type: string
+          enum:
+            - error
+            - external
+            - failed
+            - passed
+            - running
+            - timeout
+            - completed
+            - judge_error
+        steps:
+          type: number
+        threadId:
+          type: string
+        tokens:
+          type: number
+        toolCalls:
+          type: number
+      required:
+        - threadId
       additionalProperties: false
     EvalCaseResult:
       type: object
@@ -1493,96 +1562,53 @@ components:
         totalTokens:
           type: number
       additionalProperties: false
-    EvalThreadResult:
-      type: object
-      properties:
-        completionReason:
-          type: string
-        cost:
-          type: number
-        duration:
-          type: number
-        error:
-          type: string
-        llmCalls:
-          type: number
-        passed:
-          type: boolean
-        rubricScores:
-          type: array
-          items:
-            $ref: "#/components/schemas/EvalRubricScore"
-        score:
-          type: number
-        status:
-          type: string
-          enum:
-            - error
-            - external
-            - failed
-            - passed
-            - running
-            - timeout
-            - completed
-            - judge_error
-        steps:
-          type: number
-        threadId:
-          type: string
-        tokens:
-          type: number
-        toolCalls:
-          type: number
-      required:
-        - threadId
-      additionalProperties: false
-    EvalBenchmark:
+    EvalRunResult:
       type: object
       properties:
         createdAt:
           type: string
           format: date-time
-        description:
+        input:
+          type: string
+        passed:
           type:
-            - string
+            - boolean
             - "null"
-        id:
-          type: string
-        identifier:
-          type: string
-        isSystem:
-          type: boolean
-        metadata:
+        result:
           anyOf:
-            - type: object
-              propertyNames:
-                type: string
-              additionalProperties: {}
+            - $ref: "#/components/schemas/EvalCaseResult"
             - type: "null"
-        name:
-          type: string
-        referenceUrl:
+        score:
           type:
-            - string
+            - number
             - "null"
-        rubrics:
-          type: array
-          items:
-            $ref: "#/components/schemas/EvalBenchmarkRubric"
-        updatedAt:
+        status:
+          anyOf:
+            - type: string
+              enum:
+                - pending
+                - running
+                - passed
+                - failed
+                - error
+                - timeout
+                - external
+                - completed
+                - judge_error
+            - type: "null"
+        testCaseId:
           type: string
-          format: date-time
+        topicId:
+          type: string
       required:
         - createdAt
-        - description
-        - id
-        - identifier
-        - isSystem
-        - metadata
-        - name
-        - referenceUrl
-        - rubrics
-        - updatedAt
+        - input
+        - passed
+        - result
+        - score
+        - status
+        - testCaseId
+        - topicId
       additionalProperties: false
     EvalBenchmarkRubric:
       type: object
@@ -1827,6 +1853,54 @@ components:
         - name
         - type
         - weight
+      additionalProperties: false
+    EvalBenchmark:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+        description:
+          type:
+            - string
+            - "null"
+        id:
+          type: string
+        identifier:
+          type: string
+        isSystem:
+          type: boolean
+        metadata:
+          anyOf:
+            - type: object
+              propertyNames:
+                type: string
+              additionalProperties: {}
+            - type: "null"
+        name:
+          type: string
+        referenceUrl:
+          type:
+            - string
+            - "null"
+        rubrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/EvalBenchmarkRubric"
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - createdAt
+        - description
+        - id
+        - identifier
+        - isSystem
+        - metadata
+        - name
+        - referenceUrl
+        - rubrics
+        - updatedAt
       additionalProperties: false
     EvalDataset:
       type: object
@@ -2250,34 +2324,6 @@ components:
         - totalThreads
         - runStatus
       additionalProperties: false
-    EvalBatchReportResult:
-      type: object
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/EvalReportReceipt"
-        runId:
-          type: string
-        runStatus:
-          type: string
-          enum:
-            - idle
-            - pending
-            - running
-            - completed
-            - failed
-            - aborted
-            - external
-        success:
-          type: boolean
-          const: true
-      required:
-        - items
-        - runId
-        - runStatus
-        - success
-      additionalProperties: false
     EvalReportReceipt:
       type: object
       properties:
@@ -2311,24 +2357,33 @@ components:
         - topicId
         - totalThreads
       additionalProperties: false
-    InstalledPluginList:
+    EvalBatchReportResult:
       type: object
       properties:
-        hasMore:
-          $ref: "#/components/schemas/PageHasMore"
-        nextCursor:
-          $ref: "#/components/schemas/PageNextCursor"
-        plugins:
+        items:
           type: array
           items:
-            $ref: "#/components/schemas/InstalledPlugin"
-        total:
-          $ref: "#/components/schemas/PageTotal"
+            $ref: "#/components/schemas/EvalReportReceipt"
+        runId:
+          type: string
+        runStatus:
+          type: string
+          enum:
+            - idle
+            - pending
+            - running
+            - completed
+            - failed
+            - aborted
+            - external
+        success:
+          type: boolean
+          const: true
       required:
-        - hasMore
-        - nextCursor
-        - plugins
-        - total
+        - items
+        - runId
+        - runStatus
+        - success
       additionalProperties: false
     InstalledPlugin:
       type: object
@@ -2352,27 +2407,126 @@ components:
         - type
         - updatedAt
       additionalProperties: false
-    FileList:
+    InstalledPluginList:
       type: object
       properties:
         hasMore:
           $ref: "#/components/schemas/PageHasMore"
         nextCursor:
           $ref: "#/components/schemas/PageNextCursor"
-        files:
+        plugins:
           type: array
           items:
-            $ref: "#/components/schemas/FileListItem"
+            $ref: "#/components/schemas/InstalledPlugin"
         total:
           $ref: "#/components/schemas/PageTotal"
-        totalSize:
-          type: string
       required:
         - hasMore
         - nextCursor
-        - files
+        - plugins
         - total
-        - totalSize
+      additionalProperties: false
+    AsyncTaskError:
+      type: object
+      properties:
+        body:
+          anyOf:
+            - type: string
+            - type: object
+              properties:
+                detail:
+                  type: string
+                retryAt:
+                  type: string
+                  format: date-time
+              required:
+                - detail
+        name:
+          type: string
+      required:
+        - body
+        - name
+    FileAsyncTask:
+      type: object
+      properties:
+        count:
+          anyOf:
+            - type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: "null"
+        error:
+          anyOf:
+            - $ref: "#/components/schemas/AsyncTaskError"
+            - type: "null"
+        id:
+          type: string
+        status:
+          anyOf:
+            - type: string
+              enum:
+                - error
+                - pending
+                - processing
+                - success
+            - type: "null"
+        type:
+          type: string
+          enum:
+            - chunk
+            - embedding
+      required:
+        - error
+        - status
+      additionalProperties: false
+    FileKnowledgeBaseRef:
+      type: object
+      properties:
+        avatar:
+          type:
+            - string
+            - "null"
+        description:
+          type:
+            - string
+            - "null"
+        id:
+          type: string
+        name:
+          type: string
+      required:
+        - avatar
+        - description
+        - id
+        - name
+      additionalProperties: false
+    FileUser:
+      type: object
+      properties:
+        avatar:
+          type:
+            - string
+            - "null"
+        email:
+          type:
+            - string
+            - "null"
+        fullName:
+          type:
+            - string
+            - "null"
+        id:
+          type: string
+        username:
+          type:
+            - string
+            - "null"
+      required:
+        - avatar
+        - email
+        - fullName
+        - id
+        - username
       additionalProperties: false
     FileListItem:
       type: object
@@ -2448,117 +2602,27 @@ components:
         - knowledgeBases
         - users
       additionalProperties: false
-    FileAsyncTask:
+    FileList:
       type: object
       properties:
-        count:
-          anyOf:
-            - type: integer
-              minimum: -9007199254740991
-              maximum: 9007199254740991
-            - type: "null"
-        error:
-          anyOf:
-            - $ref: "#/components/schemas/AsyncTaskError"
-            - type: "null"
-        id:
-          type: string
-        status:
-          anyOf:
-            - type: string
-              enum:
-                - error
-                - pending
-                - processing
-                - success
-            - type: "null"
-        type:
-          type: string
-          enum:
-            - chunk
-            - embedding
-      required:
-        - error
-        - status
-      additionalProperties: false
-    AsyncTaskError:
-      type: object
-      properties:
-        body:
-          anyOf:
-            - type: string
-            - type: object
-              properties:
-                detail:
-                  type: string
-                retryAt:
-                  type: string
-                  format: date-time
-              required:
-                - detail
-        name:
+        hasMore:
+          $ref: "#/components/schemas/PageHasMore"
+        nextCursor:
+          $ref: "#/components/schemas/PageNextCursor"
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/FileListItem"
+        total:
+          $ref: "#/components/schemas/PageTotal"
+        totalSize:
           type: string
       required:
-        - body
-        - name
-    FileKnowledgeBaseRef:
-      type: object
-      properties:
-        avatar:
-          type:
-            - string
-            - "null"
-        description:
-          type:
-            - string
-            - "null"
-        id:
-          type: string
-        name:
-          type: string
-      required:
-        - avatar
-        - description
-        - id
-        - name
-      additionalProperties: false
-    FileUser:
-      type: object
-      properties:
-        avatar:
-          type:
-            - string
-            - "null"
-        email:
-          type:
-            - string
-            - "null"
-        fullName:
-          type:
-            - string
-            - "null"
-        id:
-          type: string
-        username:
-          type:
-            - string
-            - "null"
-      required:
-        - avatar
-        - email
-        - fullName
-        - id
-        - username
-      additionalProperties: false
-    FileDetail:
-      type: object
-      properties:
-        file:
-          $ref: "#/components/schemas/File"
-        parsed:
-          $ref: "#/components/schemas/FileParseResult"
-      required:
-        - file
+        - hasMore
+        - nextCursor
+        - files
+        - total
+        - totalSize
       additionalProperties: false
     File:
       type: object
@@ -2662,6 +2726,16 @@ components:
         - fileType
         - name
         - parseStatus
+      additionalProperties: false
+    FileDetail:
+      type: object
+      properties:
+        file:
+          $ref: "#/components/schemas/File"
+        parsed:
+          $ref: "#/components/schemas/FileParseResult"
+      required:
+        - file
       additionalProperties: false
     FileUrl:
       type: object
@@ -2833,62 +2907,6 @@ components:
         - success
         - total
       additionalProperties: false
-    GoalList:
-      type: object
-      properties:
-        hasMore:
-          $ref: "#/components/schemas/PageHasMore"
-        nextCursor:
-          $ref: "#/components/schemas/PageNextCursor"
-        goals:
-          type: array
-          items:
-            $ref: "#/components/schemas/GoalListItem"
-        total:
-          $ref: "#/components/schemas/PageTotal"
-      required:
-        - hasMore
-        - nextCursor
-        - goals
-        - total
-      additionalProperties: false
-    GoalListItem:
-      type: object
-      properties:
-        findingCount:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-        goal:
-          $ref: "#/components/schemas/Goal"
-        pendingDecisions:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-        signedOff:
-          type: boolean
-        taskDone:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-        taskTotal:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-        totalRunCost:
-          type: number
-        totalRunDuration:
-          type: number
-      required:
-        - findingCount
-        - goal
-        - pendingDecisions
-        - signedOff
-        - taskDone
-        - taskTotal
-        - totalRunCost
-        - totalRunDuration
-      additionalProperties: false
     Goal:
       type: object
       properties:
@@ -3013,38 +3031,93 @@ components:
         - visibility
         - workspaceId
       additionalProperties: false
-    GoalGraphSnapshot:
+    GoalListItem:
       type: object
       properties:
-        decisions:
-          type: array
-          items:
-            $ref: "#/components/schemas/GoalGraphDecision"
-        edges:
-          type: array
-          items:
-            $ref: "#/components/schemas/GoalGraphEdge"
-        events:
-          type: array
-          items:
-            $ref: "#/components/schemas/GoalGraphEvent"
+        findingCount:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
         goal:
           $ref: "#/components/schemas/Goal"
-        nodes:
-          type: array
-          items:
-            $ref: "#/components/schemas/GoalGraphNode"
-        workVersions:
-          type: array
-          items:
-            $ref: "#/components/schemas/GoalGraphWorkVersionLink"
+        pendingDecisions:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        signedOff:
+          type: boolean
+        taskDone:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        taskTotal:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        totalRunCost:
+          type: number
+        totalRunDuration:
+          type: number
       required:
-        - decisions
-        - edges
-        - events
+        - findingCount
         - goal
-        - nodes
-        - workVersions
+        - pendingDecisions
+        - signedOff
+        - taskDone
+        - taskTotal
+        - totalRunCost
+        - totalRunDuration
+      additionalProperties: false
+    GoalList:
+      type: object
+      properties:
+        hasMore:
+          $ref: "#/components/schemas/PageHasMore"
+        nextCursor:
+          $ref: "#/components/schemas/PageNextCursor"
+        goals:
+          type: array
+          items:
+            $ref: "#/components/schemas/GoalListItem"
+        total:
+          $ref: "#/components/schemas/PageTotal"
+      required:
+        - hasMore
+        - nextCursor
+        - goals
+        - total
+      additionalProperties: false
+    GoalDecisionOption:
+      type: object
+      properties:
+        alsoRetires:
+          type: array
+          items:
+            type: object
+            properties:
+              nodeId:
+                type: string
+              title:
+                type: string
+            required:
+              - nodeId
+              - title
+            additionalProperties: false
+        description:
+          type: string
+        effect:
+          type: string
+          enum:
+            - retry
+            - retire
+            - retry_after_reset
+        id:
+          type: string
+        label:
+          type: string
+      required:
+        - id
+        - label
       additionalProperties: false
     GoalGraphDecision:
       type: object
@@ -3139,38 +3212,6 @@ components:
         - resolvedOptionId
         - status
         - updatedAt
-      additionalProperties: false
-    GoalDecisionOption:
-      type: object
-      properties:
-        alsoRetires:
-          type: array
-          items:
-            type: object
-            properties:
-              nodeId:
-                type: string
-              title:
-                type: string
-            required:
-              - nodeId
-              - title
-            additionalProperties: false
-        description:
-          type: string
-        effect:
-          type: string
-          enum:
-            - retry
-            - retire
-            - retry_after_reset
-        id:
-          type: string
-        label:
-          type: string
-      required:
-        - id
-        - label
       additionalProperties: false
     GoalGraphEdge:
       type: object
@@ -3404,13 +3445,16 @@ components:
             resourceType:
               type: string
               enum:
+                - artboard
                 - canvas
                 - document
                 - github_issue
                 - github_pull_request
                 - linear_document
                 - linear_issue
+                - link
                 - file
+                - collection
                 - goal_report
                 - task
             status:
@@ -3424,10 +3468,12 @@ components:
             type:
               type: string
               enum:
+                - artboard
                 - canvas
                 - document
                 - external
                 - file
+                - collection
                 - goal_report
                 - task
             url:
@@ -3453,6 +3499,39 @@ components:
         - nodeId
         - relation
         - workVersionId
+      additionalProperties: false
+    GoalGraphSnapshot:
+      type: object
+      properties:
+        decisions:
+          type: array
+          items:
+            $ref: "#/components/schemas/GoalGraphDecision"
+        edges:
+          type: array
+          items:
+            $ref: "#/components/schemas/GoalGraphEdge"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/GoalGraphEvent"
+        goal:
+          $ref: "#/components/schemas/Goal"
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/GoalGraphNode"
+        workVersions:
+          type: array
+          items:
+            $ref: "#/components/schemas/GoalGraphWorkVersionLink"
+      required:
+        - decisions
+        - edges
+        - events
+        - goal
+        - nodes
+        - workVersions
       additionalProperties: false
     GoalGraph:
       type: object
@@ -4013,25 +4092,6 @@ components:
         - goal
         - restartedTaskIds
       additionalProperties: false
-    ImSendResult:
-      type: object
-      properties:
-        accepted:
-          type: boolean
-        operationId:
-          type:
-            - string
-            - "null"
-        topicId:
-          type: string
-        userMessage:
-          $ref: "#/components/schemas/ImMessage"
-      required:
-        - accepted
-        - operationId
-        - topicId
-        - userMessage
-      additionalProperties: false
     ImMessage:
       type: object
       properties:
@@ -4085,6 +4145,25 @@ components:
         - id
         - role
       additionalProperties: false
+    ImSendResult:
+      type: object
+      properties:
+        accepted:
+          type: boolean
+        operationId:
+          type:
+            - string
+            - "null"
+        topicId:
+          type: string
+        userMessage:
+          $ref: "#/components/schemas/ImMessage"
+      required:
+        - accepted
+        - operationId
+        - topicId
+        - userMessage
+      additionalProperties: false
     ImSyncResult:
       type: object
       properties:
@@ -4133,25 +4212,6 @@ components:
           maximum: 9007199254740991
       required:
         - unread
-      additionalProperties: false
-    KnowledgeBaseList:
-      type: object
-      properties:
-        hasMore:
-          $ref: "#/components/schemas/PageHasMore"
-        nextCursor:
-          $ref: "#/components/schemas/PageNextCursor"
-        knowledgeBases:
-          type: array
-          items:
-            $ref: "#/components/schemas/KnowledgeBaseListItem"
-        total:
-          $ref: "#/components/schemas/PageTotal"
-      required:
-        - hasMore
-        - nextCursor
-        - knowledgeBases
-        - total
       additionalProperties: false
     KnowledgeBaseListItem:
       type: object
@@ -4214,13 +4274,24 @@ components:
         - visibility
         - accessType
       additionalProperties: false
-    KnowledgeBaseDetail:
+    KnowledgeBaseList:
       type: object
       properties:
-        knowledgeBase:
-          $ref: "#/components/schemas/KnowledgeBase"
+        hasMore:
+          $ref: "#/components/schemas/PageHasMore"
+        nextCursor:
+          $ref: "#/components/schemas/PageNextCursor"
+        knowledgeBases:
+          type: array
+          items:
+            $ref: "#/components/schemas/KnowledgeBaseListItem"
+        total:
+          $ref: "#/components/schemas/PageTotal"
       required:
-        - knowledgeBase
+        - hasMore
+        - nextCursor
+        - knowledgeBases
+        - total
       additionalProperties: false
     KnowledgeBase:
       type: object
@@ -4275,6 +4346,14 @@ components:
         - updatedAt
         - visibility
       additionalProperties: false
+    KnowledgeBaseDetail:
+      type: object
+      properties:
+        knowledgeBase:
+          $ref: "#/components/schemas/KnowledgeBase"
+      required:
+        - knowledgeBase
+      additionalProperties: false
     KnowledgeBaseFileOperationResult:
       type: object
       properties:
@@ -4298,6 +4377,38 @@ components:
       required:
         - failed
         - successed
+      additionalProperties: false
+    McpServerTool:
+      type: object
+      properties:
+        description:
+          type:
+            - string
+            - "null"
+        id:
+          type: string
+          format: uuid
+        inputSchema:
+          anyOf:
+            - type: object
+              propertyNames:
+                type: string
+              additionalProperties: {}
+            - type: "null"
+        name:
+          type: string
+        permission:
+          type: string
+          enum:
+            - auto
+            - disabled
+            - needs_approval
+      required:
+        - description
+        - id
+        - inputSchema
+        - name
+        - permission
       additionalProperties: false
     McpServer:
       type: object
@@ -4348,38 +4459,6 @@ components:
         - status
         - tools
         - updatedAt
-      additionalProperties: false
-    McpServerTool:
-      type: object
-      properties:
-        description:
-          type:
-            - string
-            - "null"
-        id:
-          type: string
-          format: uuid
-        inputSchema:
-          anyOf:
-            - type: object
-              propertyNames:
-                type: string
-              additionalProperties: {}
-            - type: "null"
-        name:
-          type: string
-        permission:
-          type: string
-          enum:
-            - auto
-            - disabled
-            - needs_approval
-      required:
-        - description
-        - id
-        - inputSchema
-        - name
-        - permission
       additionalProperties: false
     McpServerSyncResult:
       type: object
@@ -4460,23 +4539,6 @@ components:
         - count
         - deleted
       additionalProperties: false
-    MemoryCategoryEntries:
-      anyOf:
-        - type: array
-          items:
-            $ref: "#/components/schemas/MemoryIdentity"
-        - type: array
-          items:
-            $ref: "#/components/schemas/MemoryPreference"
-        - type: array
-          items:
-            $ref: "#/components/schemas/MemoryContext"
-        - type: array
-          items:
-            $ref: "#/components/schemas/MemoryActivity"
-        - type: array
-          items:
-            $ref: "#/components/schemas/MemoryExperience"
     MemoryIdentity:
       type: object
       properties:
@@ -5054,6 +5116,23 @@ components:
         - situation
         - userMemoryId
       additionalProperties: false
+    MemoryCategoryEntries:
+      anyOf:
+        - type: array
+          items:
+            $ref: "#/components/schemas/MemoryIdentity"
+        - type: array
+          items:
+            $ref: "#/components/schemas/MemoryPreference"
+        - type: array
+          items:
+            $ref: "#/components/schemas/MemoryContext"
+        - type: array
+          items:
+            $ref: "#/components/schemas/MemoryActivity"
+        - type: array
+          items:
+            $ref: "#/components/schemas/MemoryExperience"
     MessageTranslationWrite:
       type: object
       properties:
@@ -5102,6 +5181,152 @@ components:
         - id
         - to
         - userId
+      additionalProperties: false
+    TopicSummary:
+      type: object
+      properties:
+        agentId:
+          type:
+            - string
+            - "null"
+        completedAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: "null"
+        content:
+          type:
+            - string
+            - "null"
+        cost:
+          anyOf:
+            - type: object
+              propertyNames:
+                type: string
+              additionalProperties: {}
+            - type: "null"
+        createdAt:
+          type: string
+          format: date-time
+        description:
+          type:
+            - string
+            - "null"
+        favorite:
+          type:
+            - boolean
+            - "null"
+        groupId:
+          type:
+            - string
+            - "null"
+        historySummary:
+          type:
+            - string
+            - "null"
+        id:
+          type: string
+        metadata:
+          anyOf:
+            - type: object
+              propertyNames:
+                type: string
+              additionalProperties: {}
+            - type: "null"
+        mode:
+          type:
+            - string
+            - "null"
+        model:
+          type:
+            - string
+            - "null"
+        provider:
+          type:
+            - string
+            - "null"
+        sessionId:
+          type:
+            - string
+            - "null"
+        status:
+          anyOf:
+            - type: string
+              enum:
+                - active
+                - running
+                - waitingForHuman
+                - scheduled
+                - failed
+                - completed
+                - archived
+                - unread
+            - type: "null"
+        title:
+          type:
+            - string
+            - "null"
+        totalCost:
+          type:
+            - number
+            - "null"
+        totalInputTokens:
+          anyOf:
+            - type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: "null"
+        totalOutputTokens:
+          anyOf:
+            - type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: "null"
+        totalTokens:
+          anyOf:
+            - type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: "null"
+        trigger:
+          type:
+            - string
+            - "null"
+        updatedAt:
+          type: string
+          format: date-time
+        usage:
+          anyOf:
+            - type: object
+              propertyNames:
+                type: string
+              additionalProperties: {}
+            - type: "null"
+      required:
+        - agentId
+        - completedAt
+        - content
+        - cost
+        - createdAt
+        - description
+        - favorite
+        - groupId
+        - historySummary
+        - id
+        - metadata
+        - mode
+        - model
+        - provider
+        - sessionId
+        - status
+        - title
+        - totalCost
+        - totalInputTokens
+        - totalOutputTokens
+        - totalTokens
+        - trigger
+        - updatedAt
+        - usage
       additionalProperties: false
     Message:
       type: object
@@ -5371,152 +5596,6 @@ components:
         - topic
         - topicId
         - traceId
-        - updatedAt
-        - usage
-      additionalProperties: false
-    TopicSummary:
-      type: object
-      properties:
-        agentId:
-          type:
-            - string
-            - "null"
-        completedAt:
-          anyOf:
-            - type: string
-              format: date-time
-            - type: "null"
-        content:
-          type:
-            - string
-            - "null"
-        cost:
-          anyOf:
-            - type: object
-              propertyNames:
-                type: string
-              additionalProperties: {}
-            - type: "null"
-        createdAt:
-          type: string
-          format: date-time
-        description:
-          type:
-            - string
-            - "null"
-        favorite:
-          type:
-            - boolean
-            - "null"
-        groupId:
-          type:
-            - string
-            - "null"
-        historySummary:
-          type:
-            - string
-            - "null"
-        id:
-          type: string
-        metadata:
-          anyOf:
-            - type: object
-              propertyNames:
-                type: string
-              additionalProperties: {}
-            - type: "null"
-        mode:
-          type:
-            - string
-            - "null"
-        model:
-          type:
-            - string
-            - "null"
-        provider:
-          type:
-            - string
-            - "null"
-        sessionId:
-          type:
-            - string
-            - "null"
-        status:
-          anyOf:
-            - type: string
-              enum:
-                - active
-                - running
-                - waitingForHuman
-                - scheduled
-                - failed
-                - completed
-                - archived
-                - unread
-            - type: "null"
-        title:
-          type:
-            - string
-            - "null"
-        totalCost:
-          type:
-            - number
-            - "null"
-        totalInputTokens:
-          anyOf:
-            - type: integer
-              minimum: -9007199254740991
-              maximum: 9007199254740991
-            - type: "null"
-        totalOutputTokens:
-          anyOf:
-            - type: integer
-              minimum: -9007199254740991
-              maximum: 9007199254740991
-            - type: "null"
-        totalTokens:
-          anyOf:
-            - type: integer
-              minimum: -9007199254740991
-              maximum: 9007199254740991
-            - type: "null"
-        trigger:
-          type:
-            - string
-            - "null"
-        updatedAt:
-          type: string
-          format: date-time
-        usage:
-          anyOf:
-            - type: object
-              propertyNames:
-                type: string
-              additionalProperties: {}
-            - type: "null"
-      required:
-        - agentId
-        - completedAt
-        - content
-        - cost
-        - createdAt
-        - description
-        - favorite
-        - groupId
-        - historySummary
-        - id
-        - metadata
-        - mode
-        - model
-        - provider
-        - sessionId
-        - status
-        - title
-        - totalCost
-        - totalInputTokens
-        - totalOutputTokens
-        - totalTokens
-        - trigger
         - updatedAt
         - usage
       additionalProperties: false
@@ -5965,25 +6044,6 @@ components:
         - totalCount
         - unreadCount
       additionalProperties: false
-    PermissionList:
-      type: object
-      properties:
-        hasMore:
-          $ref: "#/components/schemas/PageHasMore"
-        nextCursor:
-          $ref: "#/components/schemas/PageNextCursor"
-        permissions:
-          type: array
-          items:
-            $ref: "#/components/schemas/Permission"
-        total:
-          $ref: "#/components/schemas/PageTotal"
-      required:
-        - hasMore
-        - nextCursor
-        - permissions
-        - total
-      additionalProperties: false
     Permission:
       type: object
       properties:
@@ -6016,6 +6076,25 @@ components:
         - isActive
         - name
         - updatedAt
+      additionalProperties: false
+    PermissionList:
+      type: object
+      properties:
+        hasMore:
+          $ref: "#/components/schemas/PageHasMore"
+        nextCursor:
+          $ref: "#/components/schemas/PageNextCursor"
+        permissions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Permission"
+        total:
+          $ref: "#/components/schemas/PageTotal"
+      required:
+        - hasMore
+        - nextCursor
+        - permissions
+        - total
       additionalProperties: false
     Provider:
       type: object
@@ -6104,6 +6183,250 @@ components:
       required:
         - deviceId
         - platform
+      additionalProperties: false
+    ResponseError:
+      type: object
+      properties:
+        code:
+          type: string
+          enum:
+            - server_error
+            - invalid_request_error
+            - not_found
+            - model_error
+            - rate_limit_error
+        message:
+          type: string
+      required:
+        - code
+        - message
+      additionalProperties: false
+    ResponseOutputText:
+      type: object
+      properties:
+        annotations:
+          type: array
+          items:
+            anyOf:
+              - type: object
+                properties:
+                  end_index:
+                    type: integer
+                    minimum: -9007199254740991
+                    maximum: 9007199254740991
+                  start_index:
+                    type: integer
+                    minimum: -9007199254740991
+                    maximum: 9007199254740991
+                  title:
+                    type: string
+                  type:
+                    type: string
+                    const: url_citation
+                  url:
+                    type: string
+                required:
+                  - end_index
+                  - start_index
+                  - title
+                  - type
+                  - url
+                additionalProperties: false
+              - type: object
+                properties:
+                  file_id:
+                    type: string
+                  filename:
+                    type: string
+                  index:
+                    type: integer
+                    minimum: -9007199254740991
+                    maximum: 9007199254740991
+                  type:
+                    type: string
+                    const: file_citation
+                required:
+                  - file_id
+                  - filename
+                  - index
+                  - type
+                additionalProperties: false
+        logprobs:
+          type: array
+          items:
+            type: object
+            properties:
+              bytes:
+                type: array
+                items:
+                  type: integer
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+              logprob:
+                type: number
+              token:
+                type: string
+              top_logprobs:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    bytes:
+                      type: array
+                      items:
+                        type: integer
+                        minimum: -9007199254740991
+                        maximum: 9007199254740991
+                    logprob:
+                      type: number
+                    token:
+                      type: string
+                  required:
+                    - bytes
+                    - logprob
+                    - token
+                  additionalProperties: false
+            required:
+              - bytes
+              - logprob
+              - token
+              - top_logprobs
+            additionalProperties: false
+        text:
+          type: string
+        type:
+          type: string
+          const: output_text
+      required:
+        - annotations
+        - logprobs
+        - text
+        - type
+      additionalProperties: false
+    ResponseOutputMessage:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResponseOutputText"
+        id:
+          type: string
+        role:
+          type: string
+          const: assistant
+        status:
+          type: string
+          enum:
+            - completed
+            - in_progress
+        type:
+          type: string
+          const: message
+      required:
+        - content
+        - id
+        - role
+        - status
+        - type
+      additionalProperties: false
+    ResponseFunctionCall:
+      type: object
+      properties:
+        arguments:
+          type: string
+        call_id:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+            - completed
+            - in_progress
+        type:
+          type: string
+          const: function_call
+      required:
+        - arguments
+        - call_id
+        - id
+        - name
+        - status
+        - type
+      additionalProperties: false
+    ResponseFunctionCallOutput:
+      type: object
+      properties:
+        call_id:
+          type: string
+        id:
+          type: string
+        output:
+          type: string
+        status:
+          type: string
+          enum:
+            - completed
+            - in_progress
+        type:
+          type: string
+          const: function_call_output
+      required:
+        - call_id
+        - id
+        - output
+        - status
+        - type
+      additionalProperties: false
+    ResponseOutputItem:
+      oneOf:
+        - $ref: "#/components/schemas/ResponseOutputMessage"
+        - $ref: "#/components/schemas/ResponseFunctionCall"
+        - $ref: "#/components/schemas/ResponseFunctionCallOutput"
+    ResponseUsage:
+      type: object
+      properties:
+        input_tokens:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        input_tokens_details:
+          type: object
+          properties:
+            cached_tokens:
+              type: integer
+              minimum: 0
+              maximum: 9007199254740991
+          required:
+            - cached_tokens
+          additionalProperties: false
+        output_tokens:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        output_tokens_details:
+          type: object
+          properties:
+            reasoning_tokens:
+              type: integer
+              minimum: 0
+              maximum: 9007199254740991
+          required:
+            - reasoning_tokens
+          additionalProperties: false
+        total_tokens:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+      required:
+        - input_tokens
+        - input_tokens_details
+        - output_tokens
+        - output_tokens_details
+        - total_tokens
       additionalProperties: false
     ResponseObject:
       type: object
@@ -6335,265 +6658,6 @@ components:
         - usage
         - user
       additionalProperties: false
-    ResponseError:
-      type: object
-      properties:
-        code:
-          type: string
-          enum:
-            - server_error
-            - invalid_request_error
-            - not_found
-            - model_error
-            - rate_limit_error
-        message:
-          type: string
-      required:
-        - code
-        - message
-      additionalProperties: false
-    ResponseOutputItem:
-      oneOf:
-        - $ref: "#/components/schemas/ResponseOutputMessage"
-        - $ref: "#/components/schemas/ResponseFunctionCall"
-        - $ref: "#/components/schemas/ResponseFunctionCallOutput"
-    ResponseOutputMessage:
-      type: object
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/ResponseOutputText"
-        id:
-          type: string
-        role:
-          type: string
-          const: assistant
-        status:
-          type: string
-          enum:
-            - completed
-            - in_progress
-        type:
-          type: string
-          const: message
-      required:
-        - content
-        - id
-        - role
-        - status
-        - type
-      additionalProperties: false
-    ResponseOutputText:
-      type: object
-      properties:
-        annotations:
-          type: array
-          items:
-            anyOf:
-              - type: object
-                properties:
-                  end_index:
-                    type: integer
-                    minimum: -9007199254740991
-                    maximum: 9007199254740991
-                  start_index:
-                    type: integer
-                    minimum: -9007199254740991
-                    maximum: 9007199254740991
-                  title:
-                    type: string
-                  type:
-                    type: string
-                    const: url_citation
-                  url:
-                    type: string
-                required:
-                  - end_index
-                  - start_index
-                  - title
-                  - type
-                  - url
-                additionalProperties: false
-              - type: object
-                properties:
-                  file_id:
-                    type: string
-                  filename:
-                    type: string
-                  index:
-                    type: integer
-                    minimum: -9007199254740991
-                    maximum: 9007199254740991
-                  type:
-                    type: string
-                    const: file_citation
-                required:
-                  - file_id
-                  - filename
-                  - index
-                  - type
-                additionalProperties: false
-        logprobs:
-          type: array
-          items:
-            type: object
-            properties:
-              bytes:
-                type: array
-                items:
-                  type: integer
-                  minimum: -9007199254740991
-                  maximum: 9007199254740991
-              logprob:
-                type: number
-              token:
-                type: string
-              top_logprobs:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    bytes:
-                      type: array
-                      items:
-                        type: integer
-                        minimum: -9007199254740991
-                        maximum: 9007199254740991
-                    logprob:
-                      type: number
-                    token:
-                      type: string
-                  required:
-                    - bytes
-                    - logprob
-                    - token
-                  additionalProperties: false
-            required:
-              - bytes
-              - logprob
-              - token
-              - top_logprobs
-            additionalProperties: false
-        text:
-          type: string
-        type:
-          type: string
-          const: output_text
-      required:
-        - annotations
-        - logprobs
-        - text
-        - type
-      additionalProperties: false
-    ResponseFunctionCall:
-      type: object
-      properties:
-        arguments:
-          type: string
-        call_id:
-          type: string
-        id:
-          type: string
-        name:
-          type: string
-        status:
-          type: string
-          enum:
-            - completed
-            - in_progress
-        type:
-          type: string
-          const: function_call
-      required:
-        - arguments
-        - call_id
-        - id
-        - name
-        - status
-        - type
-      additionalProperties: false
-    ResponseFunctionCallOutput:
-      type: object
-      properties:
-        call_id:
-          type: string
-        id:
-          type: string
-        output:
-          type: string
-        status:
-          type: string
-          enum:
-            - completed
-            - in_progress
-        type:
-          type: string
-          const: function_call_output
-      required:
-        - call_id
-        - id
-        - output
-        - status
-        - type
-      additionalProperties: false
-    ResponseUsage:
-      type: object
-      properties:
-        input_tokens:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
-        input_tokens_details:
-          type: object
-          properties:
-            cached_tokens:
-              type: integer
-              minimum: 0
-              maximum: 9007199254740991
-          required:
-            - cached_tokens
-          additionalProperties: false
-        output_tokens:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
-        output_tokens_details:
-          type: object
-          properties:
-            reasoning_tokens:
-              type: integer
-              minimum: 0
-              maximum: 9007199254740991
-          required:
-            - reasoning_tokens
-          additionalProperties: false
-        total_tokens:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
-      required:
-        - input_tokens
-        - input_tokens_details
-        - output_tokens
-        - output_tokens_details
-        - total_tokens
-      additionalProperties: false
-    ResponseStreamEvent:
-      oneOf:
-        - $ref: "#/components/schemas/ResponseCreatedEvent"
-        - $ref: "#/components/schemas/ResponseInProgressEvent"
-        - $ref: "#/components/schemas/ResponseCompletedEvent"
-        - $ref: "#/components/schemas/ResponseFailedEvent"
-        - $ref: "#/components/schemas/ResponseIncompleteEvent"
-        - $ref: "#/components/schemas/ResponseOutputItemAddedEvent"
-        - $ref: "#/components/schemas/ResponseOutputItemDoneEvent"
-        - $ref: "#/components/schemas/ResponseContentPartAddedEvent"
-        - $ref: "#/components/schemas/ResponseContentPartDoneEvent"
-        - $ref: "#/components/schemas/ResponseOutputTextDeltaEvent"
-        - $ref: "#/components/schemas/ResponseOutputTextDoneEvent"
-        - $ref: "#/components/schemas/ResponseFunctionCallArgumentsDeltaEvent"
-        - $ref: "#/components/schemas/ResponseFunctionCallArgumentsDoneEvent"
     ResponseCreatedEvent:
       type: object
       properties:
@@ -6977,25 +7041,21 @@ components:
         - output_index
         - arguments
       additionalProperties: false
-    RoleList:
-      type: object
-      properties:
-        hasMore:
-          $ref: "#/components/schemas/PageHasMore"
-        nextCursor:
-          $ref: "#/components/schemas/PageNextCursor"
-        roles:
-          type: array
-          items:
-            $ref: "#/components/schemas/Role"
-        total:
-          $ref: "#/components/schemas/PageTotal"
-      required:
-        - hasMore
-        - nextCursor
-        - roles
-        - total
-      additionalProperties: false
+    ResponseStreamEvent:
+      oneOf:
+        - $ref: "#/components/schemas/ResponseCreatedEvent"
+        - $ref: "#/components/schemas/ResponseInProgressEvent"
+        - $ref: "#/components/schemas/ResponseCompletedEvent"
+        - $ref: "#/components/schemas/ResponseFailedEvent"
+        - $ref: "#/components/schemas/ResponseIncompleteEvent"
+        - $ref: "#/components/schemas/ResponseOutputItemAddedEvent"
+        - $ref: "#/components/schemas/ResponseOutputItemDoneEvent"
+        - $ref: "#/components/schemas/ResponseContentPartAddedEvent"
+        - $ref: "#/components/schemas/ResponseContentPartDoneEvent"
+        - $ref: "#/components/schemas/ResponseOutputTextDeltaEvent"
+        - $ref: "#/components/schemas/ResponseOutputTextDoneEvent"
+        - $ref: "#/components/schemas/ResponseFunctionCallArgumentsDeltaEvent"
+        - $ref: "#/components/schemas/ResponseFunctionCallArgumentsDoneEvent"
     Role:
       type: object
       properties:
@@ -7029,23 +7089,23 @@ components:
         - name
         - updatedAt
       additionalProperties: false
-    RolePermissionList:
+    RoleList:
       type: object
       properties:
         hasMore:
           $ref: "#/components/schemas/PageHasMore"
         nextCursor:
           $ref: "#/components/schemas/PageNextCursor"
-        permissions:
+        roles:
           type: array
           items:
-            $ref: "#/components/schemas/RolePermission"
+            $ref: "#/components/schemas/Role"
         total:
           $ref: "#/components/schemas/PageTotal"
       required:
         - hasMore
         - nextCursor
-        - permissions
+        - roles
         - total
       additionalProperties: false
     RolePermission:
@@ -7072,6 +7132,25 @@ components:
         - id
         - isActive
         - name
+      additionalProperties: false
+    RolePermissionList:
+      type: object
+      properties:
+        hasMore:
+          $ref: "#/components/schemas/PageHasMore"
+        nextCursor:
+          $ref: "#/components/schemas/PageNextCursor"
+        permissions:
+          type: array
+          items:
+            $ref: "#/components/schemas/RolePermission"
+        total:
+          $ref: "#/components/schemas/PageTotal"
+      required:
+        - hasMore
+        - nextCursor
+        - permissions
+        - total
       additionalProperties: false
     RolePermissionsUpdateResult:
       type: object
@@ -7104,20 +7183,6 @@ components:
         - accepted
         - scopeKey
         - workflowRunId
-      additionalProperties: false
-    AgentSignalReceiptList:
-      type: object
-      properties:
-        cursor:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-        receipts:
-          type: array
-          items:
-            $ref: "#/components/schemas/AgentSignalReceipt"
-      required:
-        - receipts
       additionalProperties: false
     AgentSignalReceipt:
       type: object
@@ -7622,24 +7687,38 @@ components:
         - topicId
         - userId
       additionalProperties: false
-    TaskList:
+    AgentSignalReceiptList:
       type: object
       properties:
-        hasMore:
-          $ref: "#/components/schemas/PageHasMore"
-        nextCursor:
-          $ref: "#/components/schemas/PageNextCursor"
-        tasks:
+        cursor:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        receipts:
           type: array
           items:
-            $ref: "#/components/schemas/TaskListItem"
-        total:
-          $ref: "#/components/schemas/PageTotal"
+            $ref: "#/components/schemas/AgentSignalReceipt"
       required:
-        - hasMore
-        - nextCursor
-        - tasks
-        - total
+        - receipts
+      additionalProperties: false
+    TaskLabelRef:
+      type: object
+      properties:
+        color:
+          type:
+            - string
+            - "null"
+        id:
+          type: string
+        name:
+          type: string
+        parentId:
+          type:
+            - string
+            - "null"
+      required:
+        - id
+        - name
       additionalProperties: false
     TaskListItem:
       type: object
@@ -7875,24 +7954,24 @@ components:
         - workspaceId
         - labels
       additionalProperties: false
-    TaskLabelRef:
+    TaskList:
       type: object
       properties:
-        color:
-          type:
-            - string
-            - "null"
-        id:
-          type: string
-        name:
-          type: string
-        parentId:
-          type:
-            - string
-            - "null"
+        hasMore:
+          $ref: "#/components/schemas/PageHasMore"
+        nextCursor:
+          $ref: "#/components/schemas/PageNextCursor"
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskListItem"
+        total:
+          $ref: "#/components/schemas/PageTotal"
       required:
-        - id
-        - name
+        - hasMore
+        - nextCursor
+        - tasks
+        - total
       additionalProperties: false
     Task:
       type: object
@@ -8108,310 +8187,6 @@ components:
         - visibility
         - workspaceId
       additionalProperties: false
-    TaskDetail:
-      type: object
-      properties:
-        activities:
-          type: array
-          items:
-            $ref: "#/components/schemas/TaskDetailActivity"
-        agentId:
-          type:
-            - string
-            - "null"
-        archivedAt:
-          anyOf:
-            - type: string
-              format: date-time
-            - type: "null"
-        automationMode:
-          anyOf:
-            - type: string
-              enum:
-                - heartbeat
-                - schedule
-            - type: "null"
-        checkpoint:
-          type: object
-          properties:
-            onAgentRequest:
-              type: boolean
-            tasks:
-              type: object
-              properties:
-                afterIds:
-                  type: array
-                  items:
-                    type: string
-                afterTasks:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                      identifier:
-                        type: string
-                    required:
-                      - id
-                      - identifier
-                    additionalProperties: false
-                beforeIds:
-                  type: array
-                  items:
-                    type: string
-                beforeTasks:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                      identifier:
-                        type: string
-                    required:
-                      - id
-                      - identifier
-                    additionalProperties: false
-              additionalProperties: false
-            topic:
-              type: object
-              properties:
-                after:
-                  type: boolean
-                before:
-                  type: boolean
-              additionalProperties: false
-          additionalProperties: false
-        config:
-          type: object
-          propertyNames:
-            type: string
-          additionalProperties: {}
-        createdAt:
-          type: string
-          format: date-time
-        createdByUserId:
-          type:
-            - string
-            - "null"
-        dependencies:
-          type: array
-          items:
-            type: object
-            properties:
-              dependsOn:
-                type: string
-              dependsOnId:
-                type: string
-              type:
-                type: string
-            required:
-              - dependsOn
-              - type
-            additionalProperties: false
-        description:
-          type:
-            - string
-            - "null"
-        editorData: {}
-        error:
-          type:
-            - string
-            - "null"
-        files:
-          type: array
-          items:
-            type: object
-            properties:
-              content:
-                type: string
-              downloadUrl:
-                type: string
-              fileType:
-                type: string
-              id:
-                type: string
-              inaccessible:
-                type: boolean
-              name:
-                type: string
-              originalCharCount:
-                type: integer
-                minimum: -9007199254740991
-                maximum: 9007199254740991
-              size:
-                type: number
-              url:
-                type: string
-            required:
-              - fileType
-              - id
-              - name
-              - size
-              - url
-            additionalProperties: false
-        goal:
-          anyOf:
-            - type: object
-              properties:
-                id:
-                  type: string
-                title:
-                  type: string
-              required:
-                - id
-                - title
-              additionalProperties: false
-            - type: "null"
-        heartbeat:
-          type: object
-          properties:
-            interval:
-              anyOf:
-                - type: integer
-                  minimum: -9007199254740991
-                  maximum: 9007199254740991
-                - type: "null"
-            lastAt:
-              anyOf:
-                - type: string
-                  format: date-time
-                - type: "null"
-            scheduledAt:
-              anyOf:
-                - type: string
-                  format: date-time
-                - type: "null"
-            timeout:
-              anyOf:
-                - type: integer
-                  minimum: -9007199254740991
-                  maximum: 9007199254740991
-                - type: "null"
-          additionalProperties: false
-        id:
-          type: string
-        identifier:
-          type: string
-        instruction:
-          type: string
-        labels:
-          type: array
-          items:
-            $ref: "#/components/schemas/TaskLabelRef"
-        name:
-          type:
-            - string
-            - "null"
-        parent:
-          anyOf:
-            - type: object
-              properties:
-                agentId:
-                  type:
-                    - string
-                    - "null"
-                id:
-                  type: string
-                identifier:
-                  type: string
-                name:
-                  type:
-                    - string
-                    - "null"
-              required:
-                - identifier
-                - name
-              additionalProperties: false
-            - type: "null"
-        priority:
-          anyOf:
-            - type: integer
-              minimum: -9007199254740991
-              maximum: 9007199254740991
-            - type: "null"
-        projectId:
-          type:
-            - string
-            - "null"
-        schedule:
-          type: object
-          properties:
-            maxExecutions:
-              anyOf:
-                - type: integer
-                  minimum: -9007199254740991
-                  maximum: 9007199254740991
-                - type: "null"
-            pattern:
-              type:
-                - string
-                - "null"
-            timezone:
-              type:
-                - string
-                - "null"
-          additionalProperties: false
-        startedAt:
-          type: string
-          format: date-time
-        status:
-          type: string
-        subtasks:
-          type: array
-          items:
-            $ref: "#/components/schemas/TaskDetailSubtask"
-        topicCount:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-        updatedAt:
-          type: string
-          format: date-time
-        userId:
-          type:
-            - string
-            - "null"
-        verify:
-          anyOf:
-            - type: object
-              properties:
-                enabled:
-                  type: boolean
-                maxIterations:
-                  type: integer
-                  minimum: -9007199254740991
-                  maximum: 9007199254740991
-                requirement:
-                  type: string
-                verifierAgentId:
-                  type: string
-                verifyCriteriaIds:
-                  type: array
-                  items:
-                    type: string
-                verifyRubricId:
-                  type: string
-              additionalProperties: false
-            - type: "null"
-        visibility:
-          type: string
-          enum:
-            - private
-            - public
-        workspace:
-          type: array
-          items:
-            $ref: "#/components/schemas/TaskDetailWorkspaceNode"
-        workspaceId:
-          type:
-            - string
-            - "null"
-      required:
-        - identifier
-        - instruction
-        - status
     TaskDetailActivity:
       type: object
       properties:
@@ -9055,6 +8830,310 @@ components:
       required:
         - documentId
       additionalProperties: false
+    TaskDetail:
+      type: object
+      properties:
+        activities:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskDetailActivity"
+        agentId:
+          type:
+            - string
+            - "null"
+        archivedAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: "null"
+        automationMode:
+          anyOf:
+            - type: string
+              enum:
+                - heartbeat
+                - schedule
+            - type: "null"
+        checkpoint:
+          type: object
+          properties:
+            onAgentRequest:
+              type: boolean
+            tasks:
+              type: object
+              properties:
+                afterIds:
+                  type: array
+                  items:
+                    type: string
+                afterTasks:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      identifier:
+                        type: string
+                    required:
+                      - id
+                      - identifier
+                    additionalProperties: false
+                beforeIds:
+                  type: array
+                  items:
+                    type: string
+                beforeTasks:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      identifier:
+                        type: string
+                    required:
+                      - id
+                      - identifier
+                    additionalProperties: false
+              additionalProperties: false
+            topic:
+              type: object
+              properties:
+                after:
+                  type: boolean
+                before:
+                  type: boolean
+              additionalProperties: false
+          additionalProperties: false
+        config:
+          type: object
+          propertyNames:
+            type: string
+          additionalProperties: {}
+        createdAt:
+          type: string
+          format: date-time
+        createdByUserId:
+          type:
+            - string
+            - "null"
+        dependencies:
+          type: array
+          items:
+            type: object
+            properties:
+              dependsOn:
+                type: string
+              dependsOnId:
+                type: string
+              type:
+                type: string
+            required:
+              - dependsOn
+              - type
+            additionalProperties: false
+        description:
+          type:
+            - string
+            - "null"
+        editorData: {}
+        error:
+          type:
+            - string
+            - "null"
+        files:
+          type: array
+          items:
+            type: object
+            properties:
+              content:
+                type: string
+              downloadUrl:
+                type: string
+              fileType:
+                type: string
+              id:
+                type: string
+              inaccessible:
+                type: boolean
+              name:
+                type: string
+              originalCharCount:
+                type: integer
+                minimum: -9007199254740991
+                maximum: 9007199254740991
+              size:
+                type: number
+              url:
+                type: string
+            required:
+              - fileType
+              - id
+              - name
+              - size
+              - url
+            additionalProperties: false
+        goal:
+          anyOf:
+            - type: object
+              properties:
+                id:
+                  type: string
+                title:
+                  type: string
+              required:
+                - id
+                - title
+              additionalProperties: false
+            - type: "null"
+        heartbeat:
+          type: object
+          properties:
+            interval:
+              anyOf:
+                - type: integer
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                - type: "null"
+            lastAt:
+              anyOf:
+                - type: string
+                  format: date-time
+                - type: "null"
+            scheduledAt:
+              anyOf:
+                - type: string
+                  format: date-time
+                - type: "null"
+            timeout:
+              anyOf:
+                - type: integer
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                - type: "null"
+          additionalProperties: false
+        id:
+          type: string
+        identifier:
+          type: string
+        instruction:
+          type: string
+        labels:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskLabelRef"
+        name:
+          type:
+            - string
+            - "null"
+        parent:
+          anyOf:
+            - type: object
+              properties:
+                agentId:
+                  type:
+                    - string
+                    - "null"
+                id:
+                  type: string
+                identifier:
+                  type: string
+                name:
+                  type:
+                    - string
+                    - "null"
+              required:
+                - identifier
+                - name
+              additionalProperties: false
+            - type: "null"
+        priority:
+          anyOf:
+            - type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: "null"
+        projectId:
+          type:
+            - string
+            - "null"
+        schedule:
+          type: object
+          properties:
+            maxExecutions:
+              anyOf:
+                - type: integer
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                - type: "null"
+            pattern:
+              type:
+                - string
+                - "null"
+            timezone:
+              type:
+                - string
+                - "null"
+          additionalProperties: false
+        startedAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+        subtasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskDetailSubtask"
+        topicCount:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        updatedAt:
+          type: string
+          format: date-time
+        userId:
+          type:
+            - string
+            - "null"
+        verify:
+          anyOf:
+            - type: object
+              properties:
+                enabled:
+                  type: boolean
+                maxIterations:
+                  type: integer
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+                requirement:
+                  type: string
+                verifierAgentId:
+                  type: string
+                verifyCriteriaIds:
+                  type: array
+                  items:
+                    type: string
+                verifyRubricId:
+                  type: string
+              additionalProperties: false
+            - type: "null"
+        visibility:
+          type: string
+          enum:
+            - private
+            - public
+        workspace:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskDetailWorkspaceNode"
+        workspaceId:
+          type:
+            - string
+            - "null"
+      required:
+        - identifier
+        - instruction
+        - status
     TaskStatusUpdateResult:
       type: object
       properties:
@@ -16169,6 +16248,633 @@ paths:
                     minLength: 1
               required:
                 - agentIds
+  /api/v1/documents:
+    get:
+      operationId: documents.list
+      summary: List documents
+      tags:
+        - documents
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/DocumentSummary"
+                      hasMore:
+                        $ref: "#/components/schemas/PageHasMore"
+                      nextCursor:
+                        $ref: "#/components/schemas/PageNextCursor"
+                      total:
+                        $ref: "#/components/schemas/PageTotal"
+                    required:
+                      - items
+                      - hasMore
+                      - nextCursor
+                      - total
+                    additionalProperties: false
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - knowledge:read
+      parameters:
+        - in: query
+          name: cursor
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+          description: Opaque cursor from the previous page's `nextCursor`. Omit for the
+            first page.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          description: Page size, 1–100. Defaults to 20.
+        - in: query
+          name: parentId
+          schema:
+            type: string
+            minLength: 1
+          description: Only list the direct children of this folder (id or slug).
+        - $ref: "#/components/parameters/WorkspaceId"
+      description: "**API key scopes:** `knowledge:read`."
+    post:
+      operationId: documents.create
+      description: >-
+        Creates a page from Markdown, or a folder with `fileType:
+        "custom/folder"`.
+
+
+        **API key scopes:** `knowledge:write`.
+      summary: Create a document
+      tags:
+        - documents
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Document"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - knowledge:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  description: Markdown body. Omit for a folder.
+                  type: string
+                  maxLength: 10000000
+                fileType:
+                  description: "`custom/folder` creates a folder; defaults to a page
+                    (`custom/document`)."
+                  type: string
+                  minLength: 1
+                parentId:
+                  description: Folder to create in (id or slug).
+                  type: string
+                  minLength: 1
+                title:
+                  type: string
+                  minLength: 1
+              required:
+                - title
+              additionalProperties: false
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/documents/{id}:
+    get:
+      operationId: documents.get
+      summary: Get a document
+      tags:
+        - documents
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Document"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - knowledge:read
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+      description: "**API key scopes:** `knowledge:read`."
+    patch:
+      operationId: documents.update
+      description: >-
+        Replaces the title and/or the whole Markdown body. A page open in the
+        editor receives the write through its live room.
+
+
+        **API key scopes:** `knowledge:write`.
+      summary: Update a document
+      tags:
+        - documents
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Document"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - knowledge:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  description: Markdown body; replaces the whole body.
+                  type: string
+                  maxLength: 10000000
+                title:
+                  type: string
+                  minLength: 1
+              additionalProperties: false
   /api/v1/eval/runs:
     post:
       operationId: eval.createRuns
@@ -35703,22 +36409,21 @@ paths:
                     - type: "null"
                 tool_choice:
                   anyOf:
-                    - anyOf:
-                        - type: string
-                          enum:
-                            - auto
-                            - required
-                            - none
-                        - type: object
-                          properties:
-                            name:
-                              type: string
-                            type:
-                              type: string
-                              const: function
-                          required:
-                            - name
-                            - type
+                    - type: string
+                      enum:
+                        - auto
+                        - required
+                        - none
+                    - type: object
+                      properties:
+                        name:
+                          type: string
+                        type:
+                          type: string
+                          const: function
+                      required:
+                        - name
+                        - type
                     - type: "null"
                 tools:
                   anyOf:
@@ -39707,7 +40412,8 @@ paths:
                   description: The agent the imported topic belongs to.
                 data:
                   anyOf:
-                    - $ref: "#/components/schemas/ExportedTopic"
+                    - description: What `GET /topics/{id}/export` answers.
+                      $ref: "#/components/schemas/ExportedTopic"
                     - minItems: 1
                       type: array
                       items:

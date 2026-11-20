@@ -1,4 +1,3 @@
-import { TaskIdentifier as TaskSkillIdentifier } from '@lobechat/builtin-skills';
 import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { INBOX_SESSION_ID } from '@lobechat/const';
@@ -31,6 +30,7 @@ import {
   resolveTaskRunExecution,
   resolveTopicExecutionPatch,
 } from './resolveRunExecution';
+import { clearBlockingRun } from './runConflict';
 
 const log = debug('task-runner');
 
@@ -44,7 +44,7 @@ interface TopicRetarget {
 }
 
 export interface RunTaskParams {
-  /** Extra builtin tools this run mounts beside the Task skill, e.g. the Goal report tool. */
+  /** Extra builtin tools this run mounts for the task, e.g. the Goal report tool. */
   additionalPluginIds?: string[];
   continueTopicId?: string;
   /** Explicit device target for this run only. The Task itself does not retain the binding. */
@@ -223,22 +223,17 @@ export class TaskRunnerService {
 
       const existingTopics = await this.taskTopicModel.findByTaskId(task.id);
 
-      if (continueTopicId) {
-        const target = existingTopics.find((t) => t.topicId === continueTopicId);
-        if (target?.status === 'running') {
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message: `Topic ${continueTopicId} is already running.`,
-          });
-        }
-      } else {
-        const runningTopic = existingTopics.find((t) => t.status === 'running');
-        if (runningTopic) {
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message: `Task already has a running topic (${runningTopic.topicId}). Cancel it first or use --continue.`,
-          });
-        }
+      // A `running` row may be a leftover whose operation ended long ago; those
+      // are settled here, and a real concurrent run is refused with its state.
+      const blockingRuns = existingTopics.filter(
+        (t) => t.status === 'running' && (!continueTopicId || t.topicId === continueTopicId),
+      );
+      for (const row of blockingRuns) {
+        await clearBlockingRun(
+          { db: this.db, userId: this.userId, workspaceId: this.workspaceId },
+          row,
+          { continuing: !!continueTopicId },
+        );
       }
 
       // Auto-detect and clean up timed-out topics
@@ -336,7 +331,7 @@ export class TaskRunnerService {
           ? 'agent'
           : 'auto'
       ) as 'agent' | 'auto';
-      const pluginIds = [TaskSkillIdentifier];
+      const pluginIds: string[] = [];
       // Mount BriefIdentifier (createBrief + requestCheckpoint) only in the
       // legacy 'agent' path; in 'auto' the agent must not also call
       // createBrief or we'd double up.

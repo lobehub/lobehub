@@ -21,6 +21,11 @@ const { cancelScheduled, scheduleNextTopic, trashTasksInTransaction } = vi.hoist
 vi.mock('../trash', () => ({ trashTasksInTransaction }));
 vi.mock('../inboundWebhook/lifecycle', () => ({ removeByTopics: vi.fn() }));
 
+const { takeTaskArtboardsOffline } = vi.hoisted(() => ({
+  takeTaskArtboardsOffline: vi.fn(),
+}));
+vi.mock('@/server/services/artboard/taskCleanup', () => ({ takeTaskArtboardsOffline }));
+
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(),
 }));
@@ -208,6 +213,36 @@ describe('TaskService.deleteTask', () => {
           targets.map((target) => target.taskId),
       );
       mockTaskTopicModel.findByTaskId.mockResolvedValue([]);
+    });
+
+    it("takes the trashed task's artboard shares offline after the delete commits", async () => {
+      mockTaskModel.findById.mockResolvedValue({
+        id: 'task-idle',
+        identifier: 'T-3',
+        status: 'todo',
+      });
+
+      await new TaskService(db, userId).deleteTask('T-3');
+
+      expect(takeTaskArtboardsOffline).toHaveBeenCalledWith(
+        { db, userId, workspaceId: undefined },
+        ['task-idle'],
+      );
+      expect(trashTasksInTransaction.mock.invocationCallOrder[0]).toBeLessThan(
+        takeTaskArtboardsOffline.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('leaves artboard shares alone when the delete loses to a run that moved the task on', async () => {
+      mockTaskModel.findById.mockResolvedValue({
+        id: 'task-idle',
+        identifier: 'T-3',
+        status: 'todo',
+      });
+      trashTasksInTransaction.mockResolvedValueOnce([]);
+
+      await expect(new TaskService(db, userId).deleteTask('T-3')).rejects.toThrow();
+      expect(takeTaskArtboardsOffline).not.toHaveBeenCalled();
     });
 
     it('interrupts a running execution before trashing the task', async () => {

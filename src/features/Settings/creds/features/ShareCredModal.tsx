@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { useWorkspaceOptionLabel } from '@/business/client/hooks/useWorkspaceOptionLabel';
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import { createWorkspaceLambdaClient, lambdaQuery } from '@/libs/trpc/client';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { credErrorKey } from './credError';
 
@@ -42,7 +43,7 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorFillQuaternary,
     borderRadius: cssVar.borderRadius,
     paddingBlock: '8px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
 });
 

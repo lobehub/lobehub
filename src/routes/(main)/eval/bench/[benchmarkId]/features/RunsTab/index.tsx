@@ -6,6 +6,7 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { runSelectors, useEvalStore } from '@/store/eval';
+import { densityVars } from '@/styles/densityVars';
 
 import { useCreateRun } from '../RunCreateModal/useCreateRun';
 import { createRunEditModal } from '../RunEditModal';
@@ -18,7 +19,7 @@ const styles = createStaticStyles(({ css }) => ({
   grid: css`
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
-    gap: 12px;
+    gap: ${densityVars.contentGap};
 
     @media (width <= 640px) {
       grid-template-columns: 1fr;

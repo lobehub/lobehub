@@ -11,6 +11,7 @@ import {
   memberJobStatus,
   replyActivityJobs,
   replyAvatarState,
+  replyFailurePlacement,
   unresolvedFailures,
 } from './jobStatus';
 
@@ -271,5 +272,60 @@ describe('hasReplyActivity', () => {
     });
     expect(hasReplyActivity(running, 'thread-a')).toBe(true);
     expect(hasReplyActivity(running, null)).toBe(false);
+  });
+});
+
+describe('replyFailurePlacement', () => {
+  const failed = (patch: Partial<ChannelPublicJob>) =>
+    ({
+      messageId: 'request',
+      openingMessageId: null,
+      status: 'failed',
+      threadId: null,
+      ...patch,
+    }) as ChannelPublicJob;
+  const ids = (jobs: ChannelPublicJob[] | undefined) => jobs?.map((job) => job.id);
+
+  it('mounts a failure under the acknowledgement it posted, and after the request otherwise', () => {
+    const { afterMessage, underMessage } = replyFailurePlacement(
+      [
+        failed({ id: 'no-ack' }),
+        failed({ id: 'acked', openingMessageId: 'ack' }),
+        // Its acknowledgement is on an older page: the request is where it still shows.
+        failed({ id: 'ack-unloaded', openingMessageId: 'old-ack' }),
+      ],
+      new Set(['request', 'ack']),
+      null,
+    );
+
+    expect(ids(underMessage.get('ack'))).toEqual(['acked']);
+    // Oldest first, though jobs arrive newest first.
+    expect(ids(afterMessage.get('request'))).toEqual(['ack-unloaded', 'no-ack']);
+  });
+
+  it('leaves out replies still at work, other conversations, and requests not loaded', () => {
+    const { afterMessage, underMessage } = replyFailurePlacement(
+      [
+        failed({ id: 'running', status: 'running' }),
+        failed({ id: 'completed', openingMessageId: 'ack', status: 'completed' }),
+        failed({ id: 'in-thread', threadId: 'thread-a' }),
+        failed({ id: 'older-page', messageId: 'older' }),
+      ],
+      new Set(['request', 'ack']),
+      null,
+    );
+
+    expect(afterMessage.size).toBe(0);
+    expect(underMessage.size).toBe(0);
+  });
+
+  it('places a thread reply in its thread, after the root it answered', () => {
+    const { afterMessage } = replyFailurePlacement(
+      [failed({ id: 'in-thread', messageId: 'root', threadId: 'thread-a' })],
+      new Set(['root']),
+      'thread-a',
+    );
+
+    expect(ids(afterMessage.get('root'))).toEqual(['in-thread']);
   });
 });

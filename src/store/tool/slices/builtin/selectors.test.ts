@@ -39,6 +39,23 @@ const hiddenToolsState = () => ({
 });
 
 describe('builtinToolSelectors', () => {
+  it('keeps a bundled skill available to the agent picker after a legacy uninstall', () => {
+    const state = {
+      ...initialState,
+      builtinSkills: [mockBuiltinSkill],
+      uninstalledBuiltinTools: [mockBuiltinSkill.identifier],
+    };
+    expect(builtinToolSelectors.installedBuiltinSkills(state)).toEqual([mockBuiltinSkill]);
+  });
+
+  it('offers the calculator in agent tools even when legacy settings list it as uninstalled', () => {
+    const id = 'lobe-calculator';
+    const state = { ...initialState, uninstalledBuiltinTools: [id] };
+    expect(
+      builtinToolSelectors.metaListIncludingHidden(state).map((item) => item.identifier),
+    ).toContain(id);
+  });
+
   describe('metaList', () => {
     it('should return meta list with builtin tools and skills', () => {
       const state = {
@@ -112,73 +129,16 @@ describe('builtinToolSelectors', () => {
     });
   });
 
-  describe('fixedDisplayMetaList', () => {
-    const fixedState = {
-      ...initialState,
-      builtinTools: [
-        {
-          hidden: true,
-          identifier: 'lobe-agent',
-          manifest: {
-            api: [],
-            identifier: 'lobe-agent',
-            meta: { avatar: '🤖', title: 'Lobe Agent' },
-            systemRole: '',
-          },
-          type: 'builtin',
-        },
-        {
-          discoverable: false,
-          hidden: true,
-          identifier: 'lobe-activator',
-          manifest: { api: [], identifier: 'lobe-activator', meta: {}, systemRole: '' },
-          type: 'builtin',
-        },
-        {
-          hidden: true,
-          identifier: 'lobe-skill-store',
-          manifest: { api: [], identifier: 'lobe-skill-store', meta: {}, systemRole: '' },
-          type: 'builtin',
-        },
-        {
-          hidden: true,
-          identifier: 'tool-1',
-          manifest: { api: [], identifier: 'tool-1', meta: { title: 'Tool 1' }, systemRole: '' },
-          type: 'builtin',
-        },
-      ],
-      uninstalledBuiltinTools: [],
-    } as ToolStoreState;
-
-    it('should surface app-fixed tools (e.g. lobe-agent) even though they are hidden', () => {
-      const result = builtinToolSelectors.fixedDisplayMetaList()(fixedState);
-
-      // Only fixed-display ids are returned; lobe-agent leads the list, unrelated tools excluded.
-      expect(result.map((item) => item.identifier)).toContain('lobe-agent');
-      expect(result.map((item) => item.identifier)).not.toContain('lobe-activator');
-      expect(result.map((item) => item.identifier)).not.toContain('tool-1');
-      expect(result[0].identifier).toBe('lobe-agent');
-    });
-
-    it('should drop manual-mode-excluded discovery tools in manual mode', () => {
-      const result = builtinToolSelectors.fixedDisplayMetaList({ isManualMode: true })(fixedState);
-      const ids = result.map((item) => item.identifier);
-
-      // activator + skill-store are stripped from defaults in manual mode, so they aren't on.
+  it('keeps fixed loaders out of both tool pickers but leaves Skill Store configurable', () => {
+    for (const select of [
+      builtinToolSelectors.metaList,
+      builtinToolSelectors.metaListIncludingHidden,
+    ]) {
+      const ids = select(initialState).map((tool) => tool.identifier);
+      expect(ids).not.toContain('lobe-skills');
       expect(ids).not.toContain('lobe-activator');
-      expect(ids).not.toContain('lobe-skill-store');
-      // lobe-agent stays on in manual mode.
-      expect(ids).toContain('lobe-agent');
-    });
-
-    it('should skip fixed ids that are not registered in builtinTools', () => {
-      const state = {
-        ...initialState,
-        builtinTools: [],
-      } as unknown as ToolStoreState;
-
-      expect(builtinToolSelectors.fixedDisplayMetaList()(state)).toEqual([]);
-    });
+      expect(ids).toContain('lobe-skill-store');
+    }
   });
 
   describe('installedAllMetaList', () => {
@@ -279,12 +239,11 @@ describe('builtinToolSelectors', () => {
       })(state);
 
       expect(autoVisible.map((item) => item.identifier)).toEqual([
+        'lobe-skill-store',
         'lobe-agent-management',
         'profile-tool',
       ]);
-      expect(autoExcluded).toEqual(
-        expect.arrayContaining(['lobe-web-browsing', 'lobe-verify', 'lobe-skill-store']),
-      );
+      expect(autoExcluded).toEqual(expect.arrayContaining(['lobe-web-browsing', 'lobe-verify']));
       expect(manualVisible.map((item) => item.identifier)).toEqual([
         'lobe-skill-store',
         'lobe-agent-management',

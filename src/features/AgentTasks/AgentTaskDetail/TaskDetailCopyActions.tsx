@@ -5,7 +5,7 @@ import { CopyIcon, LinkIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { useHeaderActionSize } from '@/styles/density';
 
 import { useTaskCopyActions } from './useTaskCopyActions';
 
@@ -17,6 +17,7 @@ import { useTaskCopyActions } from './useTaskCopyActions';
  */
 const TaskDetailCopyActions = memo(() => {
   const { t } = useTranslation('chat');
+  const headerActionSmallSize = useHeaderActionSize(true);
 
   const { copyId, copyLink, taskId } = useTaskCopyActions();
 
@@ -26,14 +27,14 @@ const TaskDetailCopyActions = memo(() => {
     <>
       <ActionIcon
         icon={LinkIcon}
-        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+        size={headerActionSmallSize}
         title={t('taskList.contextMenu.copyLink')}
         tooltipProps={{ placement: 'bottom' }}
         onClick={copyLink}
       />
       <ActionIcon
         icon={CopyIcon}
-        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+        size={headerActionSmallSize}
         title={t('taskList.contextMenu.copyId')}
         tooltipProps={{ placement: 'bottom' }}
         onClick={copyId}

@@ -6,6 +6,9 @@ import { getTestDB } from '../../core/getTestDB';
 import {
   agents,
   agentShares,
+  channelMembers,
+  channelMessages,
+  channels,
   userContactRequests,
   userContacts,
   users,
@@ -377,6 +380,18 @@ describe('external contacts of a workspace', () => {
     await expect(bobInTeam().list()).rejects.toThrow('Not a member of this workspace');
   });
 
+  it('lists the workspaces I am an external contact of, while a member is paired with me', async () => {
+    expect(await bobModel.listExternalWorkspaces()).toEqual([]);
+    await inviteBob();
+    expect(await bobModel.listExternalWorkspaces()).toEqual([
+      { avatar: null, id: teamId, name: 'Team' },
+    ]);
+    // Members are never external, and the workspace goes once no member is paired with me.
+    expect(await aliceModel.listExternalWorkspaces()).toEqual([]);
+    await aliceInTeam.removeUser(bob);
+    expect(await bobModel.listExternalWorkspaces()).toEqual([]);
+  });
+
   it('lets the invitation lapse once the inviter leaves the workspace', async () => {
     const { requestId } = await carolInTeam.sendRequest(bob);
     await serverDB
@@ -419,6 +434,50 @@ describe('people to message', () => {
     });
     // An external contact reaches only the members paired with them.
     expect(ids(await bobInTeam().listPeople({ limit: 10 }))).toEqual([alice]);
+  });
+});
+
+describe('address book of a scope', () => {
+  const dave = 'contact-test-dave';
+  const ids = (people: { id: string }[]) => people.map((person) => person.id);
+
+  it('holds personal contacts only, and only for their owner', async () => {
+    const { requestId } = await aliceModel.sendRequest(bob);
+    await bobModel.acceptRequest(requestId);
+
+    expect(ids(await aliceModel.listAddressBookPeople())).toEqual([bob]);
+    expect(await aliceModel.filterAddressBookPeople([bob, carol, alice])).toEqual([bob]);
+    expect(await carolModel.filterAddressBookPeople([bob])).toEqual([]);
+  });
+
+  it('holds every member and every external contact of a workspace', async () => {
+    await serverDB.insert(users).values({ id: dave, username: 'dave' });
+    // Alice invites Bob; Carol, who did not invite him, still finds him in the workspace's book.
+    const { requestId } = await aliceInTeam.sendRequest(bob);
+    await bobModel.acceptRequest(requestId);
+
+    expect(ids(await carolInTeam.listAddressBookPeople())).toEqual([alice, bob]);
+    expect(await carolInTeam.filterAddressBookPeople([alice, bob, dave, carol])).toEqual([
+      alice,
+      bob,
+    ]);
+    // Personal contacts never count for a workspace.
+    const { requestId: personal } = await carolModel.sendRequest(dave);
+    await new ContactModel(serverDB, dave).acceptRequest(personal);
+    expect(await carolInTeam.filterAddressBookPeople([dave])).toEqual([]);
+  });
+
+  it('drops someone who leaves the workspace or the address book', async () => {
+    await serverDB
+      .update(workspaceMembers)
+      .set({ deletedAt: new Date() })
+      .where(eq(workspaceMembers.userId, carol));
+    expect(await aliceInTeam.filterAddressBookPeople([carol])).toEqual([]);
+
+    const { requestId } = await aliceModel.sendRequest(bob);
+    await bobModel.acceptRequest(requestId);
+    await aliceModel.removeUser(bob);
+    expect(await aliceModel.filterAddressBookPeople([bob])).toEqual([]);
   });
 });
 
@@ -523,5 +582,154 @@ describe('contact edge cases', () => {
     const [own] = await aliceModel.search('alice-helper');
 
     expect(own).toMatchObject({ agent: { agentId: aliceAgent }, relation: 'self', type: 'agent' });
+  });
+});
+
+describe('answering an invitation after the caller joined', () => {
+  it('refuses the invitation once the invitee is already a member', async () => {
+    const { requestId } = await aliceInTeam.sendRequest(bob, 'Join us');
+    // Bob became a member by another route before answering, so the invitation is moot.
+    await serverDB
+      .insert(workspaceMembers)
+      .values({ role: 'member', userId: bob, workspaceId: teamId });
+
+    await expect(bobInTeam().acceptRequest(requestId)).rejects.toThrow(
+      'Already a member of this workspace',
+    );
+  });
+
+  it('only a member of the workspace may open themselves to an external contact', async () => {
+    // In the personal space there is nothing to open: the caller is not a member of a team.
+    await expect(aliceModel.openTo(bob)).rejects.toThrow('Only members open themselves');
+  });
+
+  it('refuses an invitation whose sender is no longer a member', async () => {
+    const { requestId } = await aliceInTeam.sendRequest(bob, 'Join us');
+    await serverDB.delete(workspaceMembers).where(eq(workspaceMembers.userId, alice));
+
+    await expect(bobModel.acceptRequest(requestId)).rejects.toThrow('Request not found');
+  });
+});
+
+describe('removing an external contact who is not one', () => {
+  it('refuses a member, and a person the workspace never paired', async () => {
+    // Carol is a member of the team, not an external contact.
+    await expect(aliceInTeam.removeExternal(carol)).rejects.toThrow('External contact not found');
+    await expect(aliceInTeam.removeExternal('contact-test-missing')).rejects.toThrow(
+      'External contact not found',
+    );
+  });
+});
+
+describe('contact cards', () => {
+  const befriend = async (a: ContactModel, b: ContactModel, addressee: string) =>
+    b.acceptRequest((await a.sendRequest(addressee)).requestId);
+
+  it('shares oneself, a contact or a fellow member, with a server snapshot', async () => {
+    await befriend(aliceModel, bobModel, bob);
+    expect(await aliceModel.resolveCard({ type: 'user', userId: bob })).toEqual({
+      avatar: null,
+      name: 'Bob',
+      type: 'user',
+      userId: bob,
+      username: 'Bob',
+    });
+    expect(await aliceModel.resolveCard({ type: 'user', userId: alice })).toMatchObject({
+      name: 'Alice',
+    });
+    expect(await aliceInTeam.resolveCard({ type: 'user', userId: carol })).toMatchObject({
+      name: 'carol',
+    });
+  });
+
+  it('refuses a stranger', async () => {
+    await expect(aliceModel.resolveCard({ type: 'user', userId: carol })).rejects.toThrow(
+      'Share only your contacts',
+    );
+  });
+
+  it("shares an Agent whose link share is on, anyone's", async () => {
+    expect(await aliceModel.resolveCard({ agentId: bobAgent, type: 'agent' })).toEqual({
+      agentId: bobAgent,
+      avatar: null,
+      backgroundColor: null,
+      name: 'Bob Helper',
+      ownerName: 'Bob',
+      shareId: bobShareId,
+      type: 'agent',
+    });
+  });
+
+  it('asks the owner to turn sharing on instead of opening it', async () => {
+    await serverDB
+      .update(agentShares)
+      .set({ visibility: 'private' })
+      .where(eq(agentShares.agentId, aliceAgent));
+    await expect(aliceModel.resolveCard({ agentId: aliceAgent, type: 'agent' })).rejects.toThrow(
+      'Turn on sharing first',
+    );
+    await expect(bobModel.resolveCard({ agentId: aliceAgent, type: 'agent' })).rejects.toThrow(
+      'Agent not found',
+    );
+  });
+});
+
+describe('a contact request from a card', () => {
+  let channelId: string;
+  let cardMessageId: string;
+
+  beforeEach(async () => {
+    const [channel] = await serverDB
+      .insert(channels)
+      .values({ title: 'Card', userId: alice })
+      .returning();
+    channelId = channel.id;
+    await serverDB.insert(channelMembers).values([
+      { actorType: 'user', channelId, role: 'owner', userId: alice },
+      { actorType: 'user', channelId, role: 'member', userId: bob },
+    ]);
+    const [message] = await serverDB
+      .insert(channelMessages)
+      .values({
+        channelId,
+        content: '[Contact card] carol',
+        metadata: { card: { name: 'carol', type: 'user', userId: carol } },
+        requestKey: 'card',
+        routingStatus: 'skipped',
+        sequence: 1,
+        userId: alice,
+      })
+      .returning();
+    cardMessageId = message.id;
+  });
+
+  afterEach(async () => {
+    await serverDB.delete(channels);
+  });
+
+  it('records who shared the card and shows it to the addressee', async () => {
+    await bobModel.sendRequest(carol, undefined, { cardMessageId });
+    const [incoming] = await carolModel.listRequests();
+    expect(incoming.source).toEqual({
+      referrer: { avatar: null, fullName: 'Alice', id: alice, username: 'alice' },
+      type: 'card',
+    });
+    const [row] = await serverDB.select().from(userContactRequests);
+    expect(row.source).toEqual({
+      channelId,
+      messageId: cardMessageId,
+      referrerId: alice,
+      type: 'card',
+    });
+  });
+
+  it('drops a source the requester cannot see or that names someone else', async () => {
+    // Carol is not in the Channel.
+    await carolModel.sendRequest(bob, undefined, { cardMessageId });
+    // The card shares Carol, not Alice.
+    await bobModel.sendRequest(alice, undefined, { cardMessageId });
+    const rows = await serverDB.select().from(userContactRequests);
+    expect(rows.map((row) => row.source)).toEqual([null, null]);
+    expect((await aliceModel.listRequests())[0].source).toBeNull();
   });
 });

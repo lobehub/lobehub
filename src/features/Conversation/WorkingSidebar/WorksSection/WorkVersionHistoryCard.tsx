@@ -7,9 +7,13 @@ import { memo, useState } from 'react';
 
 import TaskPriorityTag from '@/features/AgentTasks/features/TaskPriorityTag';
 import TaskStatusTag from '@/features/AgentTasks/features/TaskStatusTag';
+import { openArtboard } from '@/features/Artboard/openArtboard';
+import { openCollectionModal } from '@/features/CollectionModal/loader';
 import { getWorkTypeDescriptor, isSafeExternalUrl } from '@/features/Work/descriptors';
 import { useResourceDeletedPrompt } from '@/features/Work/useResourceDeletedPrompt';
 import { useChatStore } from '@/store/chat';
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import VersionList from './VersionList';
 
@@ -27,30 +31,47 @@ const toTaskStatus = (status?: string | null): TaskStatus =>
   status && TASK_STATUS_SET.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
 
 const styles = stylex.create({
-  context: { flexShrink: 0, color: cssVar.colorTextTertiary },
+  context: {
+    flexShrink: 0,
+    fontSize: sidebarRow.metaFontSize,
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextTertiary,
+  },
   header: {
     cursor: 'pointer',
     userSelect: 'none',
-    paddingBlock: '10px',
-    paddingInline: '8px',
-    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    minHeight: sidebarRow.height,
+    paddingInline: sidebarRow.paddingInline,
+    borderRadius: sidebarRow.radius,
+    fontSize: sidebarRow.textFontSize,
+    lineHeight: sidebarRow.textLineHeight,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
-  title: { minWidth: '0', fontSize: '14px', fontWeight: 500 },
-  toggle: { flexShrink: 0 },
-  workCard: {
-    overflow: 'hidden',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: cssVar.colorBorderSecondary,
-    borderRadius: '8px',
-    backgroundColor: cssVar.colorFillQuaternary,
-    backgroundImage: 'none',
+  icon: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: sidebarRow.iconBox,
+    height: sidebarRow.textLineHeight,
+    color: cssVar.colorTextTertiary,
+  },
+  title: { minWidth: '0', fontSize: 'inherit', color: 'inherit' },
+  toggle: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '16px',
+    color: cssVar.colorTextTertiary,
   },
 });
 
 const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
   const [expanded, setExpanded] = useState(false);
+  const density = useDensityTokens();
   const [openCanvas, openDocument, openFilePreview, openTaskDetail] = useChatStore((s) => [
     s.openCanvas,
     s.openDocument,
@@ -76,6 +97,9 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
   const handleTitleClick = (() => {
     if (!openTarget) return undefined;
     switch (openTarget.kind) {
+      case 'artboard': {
+        return () => void openArtboard(openTarget.artboardId);
+      }
       case 'document': {
         return resourceDeleted
           ? () => promptResourceDeleted(work)
@@ -93,6 +117,9 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
       case 'filePreview': {
         return () => openFilePreview({ fileId: openTarget.fileId });
       }
+      case 'collection': {
+        return () => void openCollectionModal(openTarget);
+      }
       case 'task': {
         return resourceDeleted
           ? () => promptResourceDeleted(work)
@@ -102,22 +129,26 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
   })();
 
   return (
-    <Flexbox className={stylex.props(styles.workCard).className}>
+    <Flexbox>
       <Flexbox
         horizontal
         align={'center'}
         className={stylex.props(styles.header).className}
-        gap={8}
+        gap={density.gap}
         onClick={() => setExpanded((value) => !value)}
       >
-        <ToggleIcon className={stylex.props(styles.toggle).className} size={16} />
+        <span {...stylex.props(styles.toggle)}>
+          <ToggleIcon size={12} />
+        </span>
         {work.type === 'task' ? (
           <>
             <TaskPriorityTag disableDropdown priority={work.task.priority} size={14} />
             <TaskStatusTag disableDropdown size={14} status={toTaskStatus(work.task.status)} />
           </>
         ) : (
-          <TypeIcon className={stylex.props(styles.context).className} size={16} />
+          <span {...stylex.props(styles.icon)}>
+            <TypeIcon size={density.iconSize} />
+          </span>
         )}
         <Text className={stylex.props(styles.context).className} style={{ flexShrink: 0 }}>
           {label}

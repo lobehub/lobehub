@@ -25,6 +25,7 @@ import {
   useProjectDirectoryStore,
   useProjectEnvironments,
 } from '@/store/projectWorkingDirectory';
+import { useDensityTokens } from '@/styles/density';
 
 import { openAddDirectoryModal } from './AddDirectoryModal';
 import { openBindDirectoryModal } from './BindDirectoryModal';
@@ -46,6 +47,7 @@ const DevicePresence = ({ device }: { device?: DeviceListItem }) => {
 
 export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
   const { t } = useTranslation('project');
+  const { pageTitleFontSize } = useDensityTokens();
   const navigate = useWorkspaceAwareNavigate();
   const [params, setParams] = useSearchParams();
   const environmentId = params.get('environment') ?? '';
@@ -84,7 +86,7 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
   return (
     <Flexbox gap={20}>
       <Flexbox gap={6}>
-        <Text fontSize={16} weight={600}>
+        <Text fontSize={pageTitleFontSize} weight={600}>
           {t('settings.workLocations')}
         </Text>
         <Text type="secondary">{t('settings.directoryListDescription')}</Text>

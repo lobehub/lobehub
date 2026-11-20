@@ -15,6 +15,7 @@ import {
   agentDocumentSelectors,
   useAgentDocumentStore,
 } from '@/store/agentDocument';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   article: css`
@@ -33,7 +34,7 @@ const styles = createStaticStyles(({ css }) => ({
     flex: none;
 
     min-height: 52px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     background: ${cssVar.colorBgContainer};

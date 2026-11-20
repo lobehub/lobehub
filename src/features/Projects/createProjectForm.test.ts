@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildCreateProjectRequest,
+  DEFAULT_MAIN_AGENT_MODE,
   doesConflictApplyTo,
   getCreateProjectInput,
   getProjectConflictField,
@@ -136,7 +137,12 @@ describe('createProjectForm', () => {
   const ids = { agentId: 'agt_AAAAAAAAAAAA', projectId: 'prj_BBBBBBBBBBBB' };
 
   it('sends the reserved ids, so the server creates a dedicated agent with them', () => {
-    expect(buildCreateProjectRequest({ name: 'Launch' }, { avatar: '🚀', ids })).toEqual({
+    expect(
+      buildCreateProjectRequest(
+        { name: 'Launch' },
+        { avatar: '🚀', ids, mainAgentId: 'inbox', mainAgentMode: 'dedicated' },
+      ),
+    ).toEqual({
       avatar: '🚀',
       dedicatedAgentId: 'agt_AAAAAAAAAAAA',
       id: 'prj_BBBBBBBBBBBB',
@@ -144,15 +150,23 @@ describe('createProjectForm', () => {
     });
   });
 
-  it('never sends a coordinator agent, even when the caller passes one', () => {
+  it('leads the project with the default agent (LobeAI) instead of creating one', () => {
     expect(
-      buildCreateProjectRequest({ name: 'Launch', slug: 'launch' }, {
-        ids,
-        mainAgentId: 'agt_1',
-        mainAgentMode: 'existing',
-      } as never),
+      buildCreateProjectRequest(
+        { name: 'Launch' },
+        { ids, mainAgentId: 'inbox', mainAgentMode: DEFAULT_MAIN_AGENT_MODE },
+      ),
+    ).toEqual({ coordinatorAgentId: 'inbox', id: 'prj_BBBBBBBBBBBB', name: 'Launch' });
+  });
+
+  it('sends the picked agent, and no dedicated id, when the project reuses an existing one', () => {
+    expect(
+      buildCreateProjectRequest(
+        { name: 'Launch', slug: 'launch' },
+        { ids, mainAgentId: 'agt_1', mainAgentMode: 'existing' },
+      ),
     ).toEqual({
-      dedicatedAgentId: 'agt_AAAAAAAAAAAA',
+      coordinatorAgentId: 'agt_1',
       id: 'prj_BBBBBBBBBBBB',
       name: 'Launch',
       slug: 'launch',
@@ -163,6 +177,7 @@ describe('createProjectForm', () => {
     expect(
       buildCreateProjectRequest({ name: 'Launch' }, {
         ids,
+        mainAgentMode: 'dedicated',
         siteOrigin: 'https://launch.dev',
         type: 'web',
       } as never),

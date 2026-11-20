@@ -1,4 +1,5 @@
 import type {
+  AgentPluginEntry,
   AgentProfile,
   LobeAgentAgencyConfig,
   LobeAgentChatConfig,
@@ -71,7 +72,7 @@ export const agents = pgTable(
      */
     societyId: text('society_id'),
 
-    plugins: jsonb('plugins').$type<string[]>(),
+    plugins: jsonb('plugins').$type<AgentPluginEntry[]>(),
 
     clientId: text('client_id'),
 

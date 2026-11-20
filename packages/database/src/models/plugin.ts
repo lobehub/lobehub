@@ -2,7 +2,7 @@ import type { LobeTool } from '@lobechat/types';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 
 import type { InstalledPluginItem, NewInstalledPlugin } from '../schemas';
-import { userInstalledPlugins } from '../schemas';
+import { userConnectors, userInstalledPlugins } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
@@ -68,6 +68,30 @@ export class PluginModel {
   };
 
   /**
+   * Remove an app's projection when its shared Composio connection goes. The
+   * shared connection's projection is the app's, so a teammate's legacy
+   * connection goes with it; a row mirroring a member's private connection of
+   * the same app stays, as that connection still runs on it.
+   */
+  deleteComposioProjectionKeepingPrivate = async (identifier: string) => {
+    return this.db.delete(userInstalledPlugins).where(
+      and(
+        eq(userInstalledPlugins.identifier, identifier),
+        this.visible(),
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${userConnectors}
+          WHERE ${userConnectors.identifier} = ${identifier}
+            AND ${userConnectors.visibility} = 'private'
+            AND ${userConnectors.agentId} IS NULL
+            AND ${userConnectors.workspaceId} IS NOT DISTINCT FROM ${userInstalledPlugins.workspaceId}
+            AND ${userConnectors.metadata} -> 'composio' ->> 'connectedAccountId'
+              = ${userInstalledPlugins.customParams} -> 'composio' ->> 'connectedAccountId'
+        )`,
+      ),
+    );
+  };
+
+  /**
    * Remove the projection rows that mirror one Composio account, leaving the
    * app's other projection rows. In a workspace every member's projection row
    * is in scope, and a private connection is one member's: deleting by
@@ -90,7 +114,14 @@ export class PluginModel {
     return this.db.delete(userInstalledPlugins).where(this.ownership());
   };
 
-  query = async () => {
+  /**
+   * The installed plugins in scope. `forClient` leaves out the Composio
+   * projection of a teammate's private connection: the projection is
+   * workspace-wide, but only its owner may run that connection, so a client
+   * listing it would offer tools whose every call is refused. A projection with
+   * no connection row (a legacy-only connection) stays.
+   */
+  query = async ({ forClient = false }: { forClient?: boolean } = {}) => {
     const data = await this.db
       .select({
         createdAt: userInstalledPlugins.createdAt,
@@ -103,7 +134,22 @@ export class PluginModel {
         updatedAt: userInstalledPlugins.updatedAt,
       })
       .from(userInstalledPlugins)
-      .where(this.visible())
+      .where(
+        and(
+          this.visible(),
+          forClient
+            ? sql`NOT EXISTS (
+                SELECT 1 FROM ${userConnectors}
+                WHERE ${userConnectors.identifier} = ${userInstalledPlugins.identifier}
+                  AND ${userConnectors.visibility} = 'private'
+                  AND ${userConnectors.userId} <> ${this.userId}
+                  AND ${userConnectors.workspaceId} IS NOT DISTINCT FROM ${userInstalledPlugins.workspaceId}
+                  AND ${userConnectors.metadata} -> 'composio' ->> 'connectedAccountId'
+                    = ${userInstalledPlugins.customParams} -> 'composio' ->> 'connectedAccountId'
+              )`
+            : undefined,
+        ),
+      )
       .orderBy(desc(userInstalledPlugins.createdAt));
 
     return data.map<LobeTool>((item) => ({

@@ -409,11 +409,18 @@ describe('recent direct-provider models', () => {
 
   it.each([
     ['openai', 'gpt-6-astra', 'gpt6ReasoningEffort'],
+    ['azure', 'gpt-6.2-astra', 'gpt6ReasoningEffort'],
+    ['azure', 'gpt-6.2-sol', 'gpt6ReasoningEffort'],
+    ['openrouter', 'openai/gpt-6.2-astra', 'gpt6ReasoningEffort'],
+    ['openrouter', 'openai/gpt-6.2-sol', 'gpt6ReasoningEffort'],
     ['google', 'gemini-3.8-flash', 'thinkingLevel3'],
     ['vertexai', 'gemini-3.8-flash', 'thinkingLevel3'],
     ['google', 'gemini-4-carbon', 'thinkingLevel3'],
     ['vertexai', 'gemini-4-carbon', 'thinkingLevel3'],
     ['openrouter', 'google/gemini-4-carbon', 'thinkingLevel3'],
+    ['google', 'gemini-4-neon', 'thinkingLevel5'],
+    ['vertexai', 'gemini-4-neon', 'thinkingLevel5'],
+    ['openrouter', 'google/gemini-4-neon', 'thinkingLevel5'],
     ['xai', 'grok-4.6', 'grok4_6ReasoningEffort'],
     ['qwen', 'qwen3.8-max', 'qwen38ReasoningEffort'],
     ['qwen', 'qwen3.8-max-0902', 'qwen38ReasoningEffort'],
@@ -428,6 +435,33 @@ describe('recent direct-provider models', () => {
       type: 'chat',
     });
     expect(model?.settings?.extendParams).toContain(reasoningParam);
+  });
+});
+
+describe('GPT-6.2 reseller cards', () => {
+  it.each([
+    ['azure', 'gpt-6.2-astra', 'gpt-6.2-astra'],
+    ['azure', 'gpt-6.2-sol', 'gpt-6.2-sol'],
+    ['openrouter', 'openai/gpt-6.2-astra', 'gpt-6.2-astra'],
+    ['openrouter', 'openai/gpt-6.2-sol', 'gpt-6.2-sol'],
+  ])('prices %s/%s at the official OpenAI list price', (providerId, id, officialId) => {
+    const official = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === 'openai' && entry.id === officialId,
+    );
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === providerId && entry.id === id,
+    );
+    expect(official?.isOfficial).toBe(true);
+    expect(model?.isOfficial).toBeUndefined();
+    expect(model?.pricing).toEqual(official?.pricing);
+    expect(model?.contextWindowTokens).toBe(official?.contextWindowTokens);
+  });
+
+  it.each(['gpt-6.2-astra', 'gpt-6.2-sol'])('deploys azure/%s under its model id', (id) => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === 'azure' && entry.id === id,
+    );
+    expect(model?.config?.deploymentName).toBe(id);
   });
 });
 
@@ -571,5 +605,30 @@ describe('Google context-caching pricing', () => {
 
   it('lists the audio cache read for Gemini 3 Flash Preview', () => {
     expect(units('gemini-3-flash-preview')).toContainEqual(fixed('audioInput_cacheRead', 0.1));
+  });
+});
+
+describe('Gemini 4 Neon pricing', () => {
+  it.each([
+    ['google', 'gemini-4-neon'],
+    ['vertexai', 'gemini-4-neon'],
+    ['openrouter', 'google/gemini-4-neon'],
+  ])('bills %s/%s at $3 input and $15 output', (providerId, id) => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === providerId && entry.id === id,
+    );
+    expect(model?.pricing?.units).toEqual(
+      expect.arrayContaining([
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+      ]),
+    );
+  });
+
+  it('marks only the Gemini API card as the official price source', () => {
+    const official = LOBE_DEFAULT_MODEL_LIST.filter(
+      (entry) => entry.id === 'gemini-4-neon' && entry.isOfficial,
+    );
+    expect(official.map((entry) => entry.providerId)).toEqual(['google']);
   });
 });

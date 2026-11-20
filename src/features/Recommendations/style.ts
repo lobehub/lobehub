@@ -21,6 +21,10 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
     text-align: start;
 
+    html[data-density='compact'] & {
+      padding-block: 4px;
+    }
+
     transition: background ${cssVar.motionDurationFast};
 
     /* the selector mirrors base-ui's variantText hover rule so the row tint

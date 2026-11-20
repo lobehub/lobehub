@@ -61,7 +61,11 @@ export interface QueryDocumentParams {
    */
   excludeKnowledgeBaseIds?: string[];
   fileTypes?: string[];
+  /** Rows to skip; overrides `current * pageSize` for cursor-backed callers. */
+  offset?: number;
   pageSize?: number;
+  /** Keep only the direct children of this folder. */
+  parentId?: string;
   /**
    * Row order: `updatedAt` (default) and `createdAt` list the newest first,
    * `title` lists A→Z. Ties fall back to the id so offset pages never overlap.
@@ -198,6 +202,8 @@ export class DocumentModel {
     pageSize = 9999,
     excludeKnowledgeBaseIds,
     fileTypes,
+    offset: explicitOffset,
+    parentId,
     sortBy = 'updatedAt',
     sourceTypes,
     standaloneOnly,
@@ -205,9 +211,10 @@ export class DocumentModel {
     items: DocumentItem[];
     total: number;
   }> => {
-    const offset = current * pageSize;
+    const offset = explicitOffset ?? current * pageSize;
     const conditions = [this.readScope()];
 
+    if (parentId) conditions.push(eq(documents.parentId, parentId));
     if (fileTypes?.length) {
       conditions.push(inArray(documents.fileType, fileTypes));
     }

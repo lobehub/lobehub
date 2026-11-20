@@ -188,6 +188,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // is separated onto `agent:credential:write` via
   // `TRPC_PROCEDURE_EXTRA_SCOPES` below.
   agentAccount: rw('agent:read', 'agent:write'),
+  // read-only status of the caller's agents: presence, queued replies, quota reset time
+  agentAvailability: rw('agent:read', null),
   // bot channel wiring carries channel credentials
   agentBotProvider: 'blocked',
   // a bot's wake records: channel message previews and the owner's marks, read through the same
@@ -222,6 +224,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // `auth.getScope` only reports which scope the presented credential runs
   // under, so any key — however narrow — can tell where its calls land
   auth: 'open',
+  artboard: 'blocked',
   artifactShare: rw('chat:read', null),
   // decrypts stored bot/messenger credentials and calls external channel APIs
   botMessage: 'blocked',

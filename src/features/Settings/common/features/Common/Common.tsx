@@ -3,7 +3,7 @@
 import { Flexbox, Icon, ImageSelect, Select, Tabs } from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
-import { Ban, Gauge, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
+import { Ban, Gauge, Monitor, Moon, Rows3, Rows4, Sun, Waves } from 'lucide-react';
 import { useTheme as useNextThemesTheme } from 'next-themes';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -158,41 +158,44 @@ const Common = memo(() => {
           <Tabs
             items={[
               {
-                icon: <Icon icon={Ban} size={16} />,
-                key: 'disabled',
-                label: t('settingAppearance.contextMenuMode.disabled'),
+                icon: <Icon icon={Rows4} size={16} />,
+                key: 'compact',
+                label: t('settingAppearance.density.compact'),
               },
               {
-                icon: <Icon icon={Mouse} size={16} />,
-                key: 'default',
-                label: t('settingAppearance.contextMenuMode.default'),
+                icon: <Icon icon={Rows3} size={16} />,
+                key: 'loose',
+                label: t('settingAppearance.density.loose'),
               },
             ]}
           />
         ),
+        desc: t('settingAppearance.density.desc'),
         label: (
-          <SettingsSearchAnchor id={'appearance-context-menu'}>
-            {t('settingAppearance.contextMenuMode.title')}
+          <SettingsSearchAnchor id={'appearance-density'}>
+            {t('settingAppearance.density.title')}
           </SettingsSearchAnchor>
         ),
         minWidth: undefined,
-        name: 'contextMenuMode',
+        name: 'interfaceDensity',
         valueProp: 'activeKey',
       },
-
       {
         children: (
           <Flexbox horizontal justify={'flex-end'}>
             <Select
-              allowClear
-              options={localeOptions}
-              placeholder={t('settingCommon.responseLanguage.placeholder')}
-              value={general?.responseLanguage || undefined}
+              value={general?.responseLanguage || 'auto'}
+              options={[
+                { label: t('settingCommon.responseLanguage.auto'), value: 'auto' },
+                ...localeOptions,
+              ]}
               style={{
                 width: '50%',
               }}
               onChange={(value) => {
-                save(() => setSettings({ general: { responseLanguage: value ?? '' } }));
+                save(() =>
+                  setSettings({ general: { responseLanguage: value === 'auto' ? '' : value } }),
+                );
               }}
             />
           </Flexbox>
