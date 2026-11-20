@@ -392,7 +392,7 @@ describe('executeLegacyMigrationSave', () => {
 
   let createConnector: Mock<MigrationSaveDeps['createConnector']>;
   let deleteConnector: Mock<MigrationSaveDeps['deleteConnector']>;
-  let hasExistingConnector: Mock<MigrationSaveDeps['hasExistingConnector']>;
+  const refreshLists = vi.fn<MigrationSaveDeps['refreshLists']>();
   let syncConnectorTools: Mock<MigrationSaveDeps['syncConnectorTools']>;
   let uninstallCustomPlugin: Mock<MigrationSaveDeps['uninstallCustomPlugin']>;
   let calls: string[];
@@ -401,7 +401,7 @@ describe('executeLegacyMigrationSave', () => {
   const getMigrationDeps = (): MigrationSaveDeps => ({
     createConnector,
     deleteConnector,
-    hasExistingConnector,
+    refreshLists,
     syncConnectorTools,
     uninstallCustomPlugin,
   });
@@ -410,13 +410,12 @@ describe('executeLegacyMigrationSave', () => {
     calls = [];
     createConnector = vi.fn<MigrationSaveDeps['createConnector']>(async () => {
       calls.push('createConnector');
-      return 'new-conn-id';
+      return { id: 'new-conn-id', isNew: true };
     });
     deleteConnector = vi.fn<MigrationSaveDeps['deleteConnector']>(async () => {
       calls.push('deleteConnector');
     });
-    // Default: no pre-existing connector (the common fresh-migration case).
-    hasExistingConnector = vi.fn<MigrationSaveDeps['hasExistingConnector']>(() => false);
+    refreshLists.mockReset().mockResolvedValue(undefined);
     syncConnectorTools = vi.fn<MigrationSaveDeps['syncConnectorTools']>(async () => {
       calls.push('syncConnectorTools');
     });
@@ -521,7 +520,7 @@ describe('executeLegacyMigrationSave', () => {
     // UPDATED, not created. A transient sync failure must not delete it —
     // that would destroy a working connector's synced tools/credentials (e.g. a
     // prior successful migration whose best-effort legacy uninstall had failed).
-    hasExistingConnector.mockReturnValue(true);
+    createConnector.mockResolvedValueOnce({ id: 'existing', isNew: false });
     syncConnectorTools.mockRejectedValueOnce(new Error('mcp tools/list timeout'));
     await expect(
       executeLegacyMigrationSave(legacy(), legacy(), getMigrationDeps()),

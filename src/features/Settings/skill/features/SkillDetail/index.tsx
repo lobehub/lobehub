@@ -506,13 +506,9 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete, visibi
             legacyPlugin={legacyPlugin}
             open={migrateOpen}
             onClose={() => setMigrateOpen(false)}
-            onEditSuccess={async () => {
+            onEditSuccess={() => {
               setMigrateOpen(false);
               setNoManifest(false);
-              // The migration created a `user_connectors` row keyed by the same
-              // identifier; refresh so this panel resolves it and swaps to the
-              // permission editor.
-              await fetchConnectors();
             }}
           />
         )}

@@ -19,7 +19,6 @@ import { waitForConnectorOAuth } from '@/utils/connectorOAuth';
 import { executeOAuthCreate } from '@/utils/connectorOAuthCreate';
 
 import { saveConnectorEdit } from './connectorEdit';
-import { executeLegacyMigrationSave } from './legacyPluginMigration';
 import { saveOAuthConnectorEdit } from './oauthEdit';
 import {
   countDroppedAccounts,
@@ -93,6 +92,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
   ({ open, onClose, connectorId, legacyPlugin, onEditSuccess, visibility }) => {
     const { t } = useTranslation('tool');
     const createConnector = useToolStore((s) => s.createConnector);
+    const migrateLegacyPlugin = useToolStore((s) => s.migrateLegacyPlugin);
     const deleteConnector = useToolStore((s) => s.deleteConnector);
     const getConnectorForEdit = useToolStore((s) => s.getConnectorForEdit);
     const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
@@ -289,18 +289,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         // `value` is the full form state — DevModal seeded itself from
         // `legacyPlugin` via `editValue`, so anything the user edited (or left
         // alone) is already inside `value`. Hand it to the orchestrator.
-        const result = await executeLegacyMigrationSave(legacyPlugin, value, {
-          // The migration orchestrator predates the server-reported `isNew`
-          // and still keys its rollback on `hasExistingConnector` below.
-          createConnector: async (payload) => (await createConnector(payload)).id,
-          deleteConnector,
-          // Read fresh so the rollback only deletes a connector this migration
-          // created, never one the idempotent upsert merely updated.
-          hasExistingConnector: (id) =>
-            Boolean(connectorSelectors.connectorByIdentifier(id)(useToolStore.getState())),
-          syncConnectorTools,
-          uninstallCustomPlugin,
-        });
+        const result = await migrateLegacyPlugin(legacyPlugin, value);
         if (!result.ok) {
           throw new Error(
             result.reason === 'no-mcp'
