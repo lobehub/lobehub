@@ -298,7 +298,8 @@ export const useTopicItemDropdownMenu = ({
           )}`;
           await copyToClipboard(url);
           // A private agent's topic link opens for nobody else in the workspace.
-          if (!notifyPrivateAgentLink(activeAgentId)) toast.success(t('actions.copyLinkSuccess'));
+          if (!(await notifyPrivateAgentLink(activeAgentId)))
+            toast.success(t('actions.copyLinkSuccess'));
         },
       },
       {

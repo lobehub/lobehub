@@ -21,8 +21,13 @@ vi.mock('./usePublishAgentToWorkspace', () => ({
   usePublishAgentToWorkspace: () => mocks.publish,
 }));
 
+const prefetch = vi.fn();
+
 const setVisibility = (visibility: 'private' | 'public') =>
-  useAgentStore.setState({ agentMap: { agt_1: { id: 'agt_1', visibility } } });
+  useAgentStore.setState({
+    agentMap: { agt_1: { id: 'agt_1', visibility } },
+    prefetchAgentConfig: prefetch,
+  });
 
 describe('usePrivateAgentLinkNotice', () => {
   beforeEach(() => {
@@ -30,11 +35,11 @@ describe('usePrivateAgentLinkNotice', () => {
     mocks.workspaceId = 'ws-1';
   });
 
-  it('warns that other members cannot open a private agent link and offers publishing', () => {
+  it('warns that other members cannot open a private agent link and offers publishing', async () => {
     setVisibility('private');
     const { result } = renderHook(() => usePrivateAgentLinkNotice());
 
-    expect(result.current('agt_1')).toBe(true);
+    await expect(result.current('agt_1')).resolves.toBe(true);
 
     const options = mocks.warning.mock.calls[0][0];
     expect(options.title).toBe('privateAgentLink.title');
@@ -43,20 +48,30 @@ describe('usePrivateAgentLinkNotice', () => {
     expect(mocks.publish).toHaveBeenCalledWith('agt_1');
   });
 
-  it('stays quiet for a workspace agent', () => {
+  it('stays quiet for a workspace agent', async () => {
     setVisibility('public');
     const { result } = renderHook(() => usePrivateAgentLinkNotice());
 
-    expect(result.current('agt_1')).toBe(false);
+    await expect(result.current('agt_1')).resolves.toBe(false);
     expect(mocks.warning).not.toHaveBeenCalled();
   });
 
-  it('stays quiet outside a workspace', () => {
+  it('stays quiet outside a workspace', async () => {
     mocks.workspaceId = undefined;
     setVisibility('private');
     const { result } = renderHook(() => usePrivateAgentLinkNotice());
 
-    expect(result.current('agt_1')).toBe(false);
+    await expect(result.current('agt_1')).resolves.toBe(false);
     expect(mocks.warning).not.toHaveBeenCalled();
+  });
+
+  it('loads an uncached agent before deciding, so a cold project row still warns', async () => {
+    prefetch.mockImplementationOnce(async () => setVisibility('private'));
+    useAgentStore.setState({ agentMap: {}, prefetchAgentConfig: prefetch });
+    const { result } = renderHook(() => usePrivateAgentLinkNotice());
+
+    await expect(result.current('agt_1')).resolves.toBe(true);
+    expect(prefetch).toHaveBeenCalledWith('agt_1');
+    expect(mocks.warning).toHaveBeenCalledTimes(1);
   });
 });

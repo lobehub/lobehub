@@ -23,11 +23,21 @@ export const usePrivateAgentLinkNotice = () => {
   const publishAgent = usePublishAgentToWorkspace();
 
   return useCallback(
-    (agentId: string | undefined) => {
+    async (agentId: string | undefined) => {
       if (!activeWorkspaceId || !agentId) return false;
 
-      const visibility = agentSelectors.getAgentVisibilityById(agentId)(useAgentStore.getState());
-      if (visibility !== 'private') return false;
+      const readVisibility = () =>
+        agentSelectors.getAgentVisibilityById(agentId)(useAgentStore.getState());
+      // A row of a cold project visit may point at an agent whose config was
+      // never loaded; load it before deciding which confirmation to show.
+      if (!readVisibility()) {
+        try {
+          await useAgentStore.getState().prefetchAgentConfig(agentId);
+        } catch {
+          return false;
+        }
+      }
+      if (readVisibility() !== 'private') return false;
 
       toast.warning({
         actions: [{ label: t('agent.publishToWorkspace'), onClick: () => publishAgent(agentId) }],

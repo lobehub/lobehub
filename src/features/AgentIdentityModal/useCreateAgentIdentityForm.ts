@@ -60,6 +60,7 @@ export const useCreateAgentIdentityForm = ({
   const [description, setDescription] = useState('');
   const [slug, setSlug] = useState('');
   const [createdAgentId, setCreatedAgentId] = useState<string>();
+  const [createdVisibility, setCreatedVisibility] = useState<'private' | 'public'>();
   const [error, setError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -90,9 +91,16 @@ export const useCreateAgentIdentityForm = ({
       let agentId = createdAgentId;
       if (agentId) {
         await updateAgentMeta(agentId, meta);
+        // The visibility may have changed while the form stayed open for a
+        // rejected slug; the retry must not keep the first choice.
+        if (visibility && visibility !== createdVisibility) {
+          await agentService.setAgentVisibility(agentId, visibility);
+          setCreatedVisibility(visibility);
+        }
       } else {
         ({ agentId } = await createAgent({ config: meta, groupId, visibility }));
         setCreatedAgentId(agentId);
+        setCreatedVisibility(visibility);
       }
 
       const nextSlug = slug.trim().toLowerCase();
