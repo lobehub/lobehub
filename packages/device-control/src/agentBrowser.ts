@@ -12,6 +12,8 @@
  * browser tool. Mirrors `BrowserIdentifier` in `@lobechat/builtin-tool-browser`,
  * which device runtimes do not import because it carries the React renders.
  */
+import path from 'node:path';
+
 import {
   browserEditCommandOf,
   DEFAULT_BROWSER_VIEWPORT,
@@ -24,6 +26,12 @@ export const BROWSER_IDENTIFIER = 'lobe-browser';
 /** Matches the desktop `readPage` cap so both devices hand the model the same budget. */
 export const READ_PAGE_MAX_CHARS = 12_000;
 
+/** Matches the desktop upload cap. */
+export const MAX_UPLOAD_FILES = 20;
+
+/** What `uploadFile` targets when the call names no ref or selector. */
+const FILE_INPUT_SELECTOR = 'input[type="file"]';
+
 /**
  * Runs `agent-browser --session <session> --json batch --bail` once with the
  * JSON command list on stdin and resolves its stdout, even on a nonzero exit:
@@ -33,12 +41,19 @@ export type AgentBrowserExec = (session: string, commands: string[][]) => Promis
 
 export interface AgentBrowserCallOptions {
   exec: AgentBrowserExec;
+  /** Home folder a leading `~` in an upload path stands for. */
+  homeDir?: string;
   /** OS of the browser's host, for `ControlOrMeta` and macOS editing shortcuts. */
   platform?: string;
   /** Reads the PNG the `screenshot` step wrote. */
   readFile: (filePath: string) => Promise<Uint8Array>;
   /** Where `screenshot` writes its capture; owned (and cleaned up) by the caller. */
   screenshotPath: string;
+  /**
+   * Stats an upload path. agent-browser attaches a missing path as an empty
+   * file and reports success, so `uploadFile` refuses to run without it.
+   */
+  statFile?: (filePath: string) => Promise<{ isFile: () => boolean; size: number }>;
 }
 
 export interface AgentBrowserCommandContext {
@@ -46,6 +61,8 @@ export interface AgentBrowserCommandContext {
   fillsSelect?: boolean;
   /** OS of the browser's host, for `ControlOrMeta` and macOS editing shortcuts. */
   platform?: string;
+  /** `uploadFile` only: the checked absolute paths; see {@link resolveUploadFiles}. */
+  uploadPaths?: string[];
 }
 
 export interface AgentBrowserToolResult {
@@ -96,6 +113,64 @@ const PAGE_INFO: string[][] = [
   ['get', 'url'],
 ];
 
+interface UploadFile {
+  name: string;
+  path: string;
+  size: number;
+}
+
+/**
+ * Checks every upload path before agent-browser sees it: absolute (a leading
+ * `~` is the home folder) and an existing regular file. agent-browser itself
+ * attaches a missing path as an empty file and reports success.
+ */
+export const resolveUploadFiles = async (
+  paths: unknown,
+  { homeDir, statFile }: Pick<AgentBrowserCallOptions, 'homeDir' | 'statFile'>,
+): Promise<UploadFile[]> => {
+  if (!statFile) throw new Error('File upload is not available on this device');
+  if (!Array.isArray(paths) || paths.length === 0) {
+    throw new Error('paths must list at least one absolute file path');
+  }
+  if (paths.length > MAX_UPLOAD_FILES) {
+    throw new Error(`At most ${MAX_UPLOAD_FILES} files can be uploaded at once`);
+  }
+
+  const files: UploadFile[] = [];
+  const problems: string[] = [];
+  for (const raw of paths) {
+    if (typeof raw !== 'string' || !raw.trim()) {
+      problems.push(`${JSON.stringify(raw)} is not a path`);
+      continue;
+    }
+    const trimmed = raw.trim();
+    const filePath =
+      homeDir && (trimmed === '~' || /^~[/\\]/.test(trimmed))
+        ? path.join(homeDir, trimmed.slice(1))
+        : trimmed;
+    if (!path.isAbsolute(filePath)) {
+      problems.push(`${raw} is not an absolute path`);
+      continue;
+    }
+    const stats = await statFile(filePath).catch((error: NodeJS.ErrnoException) =>
+      error.code === 'ENOENT' ? 'no such file on this device' : error.message,
+    );
+    if (typeof stats === 'string') problems.push(`${raw}: ${stats}`);
+    else if (!stats.isFile()) problems.push(`${raw} is not a file`);
+    else files.push({ name: path.basename(filePath), path: filePath, size: stats.size });
+  }
+
+  if (problems.length > 0) throw new Error(`Cannot upload: ${problems.join('; ')}`);
+  return files;
+};
+
+/** Ref, CSS selector, or the page's only file input, as agent-browser's `upload` takes it. */
+const uploadTarget = (args: Record<string, unknown>): string => {
+  if (args.ref !== undefined && args.ref !== '') return toRef(args.ref);
+  if (typeof args.selector === 'string' && args.selector.trim()) return args.selector.trim();
+  return FILE_INPUT_SELECTOR;
+};
+
 /**
  * The agent-browser commands for one browser api call. Commands go as argv
  * arrays over stdin, never through a shell or a command string: agent-browser
@@ -105,7 +180,11 @@ export const buildAgentBrowserCommands = (
   apiName: string,
   args: Record<string, unknown>,
   screenshotPath: string,
-  { fillsSelect = false, platform = process.platform }: AgentBrowserCommandContext = {},
+  {
+    fillsSelect = false,
+    platform = process.platform,
+    uploadPaths,
+  }: AgentBrowserCommandContext = {},
 ): string[][] => {
   switch (apiName) {
     case 'navigate': {
@@ -157,9 +236,32 @@ export const buildAgentBrowserCommands = (
     case 'readPage': {
       return [['read'], ...PAGE_INFO];
     }
+    case 'uploadFile': {
+      if (!uploadPaths?.length) throw new Error('uploadFile needs checked file paths');
+      return [['upload', uploadTarget(args), ...uploadPaths], ...PAGE_INFO];
+    }
     default: {
       throw new Error(`Browser tool "${apiName}" is not available on this device`);
     }
+  }
+};
+
+/**
+ * agent-browser's `upload` takes the first match of a selector, so without a
+ * ref or selector the page must have exactly one file input, as on desktop.
+ */
+const assertSingleFileInput = async (exec: AgentBrowserExec, session: string) => {
+  const [step] = parseSteps(await exec(session, [['get', 'count', FILE_INPUT_SELECTOR]]));
+  const count = Number(step?.success ? step.result?.count : Number.NaN);
+  if (count === 0) {
+    throw new Error(
+      'This page has no file input; pass the ref of the upload button or drop zone instead',
+    );
+  }
+  if (count > 1) {
+    throw new Error(
+      `This page has ${count} file inputs; pass a CSS selector for the one to use, e.g. input[type=file][accept=".zip"]`,
+    );
   }
 };
 
@@ -218,9 +320,17 @@ export const runAgentBrowserCall = async (
     const { __agentId: _agentId, __topicId: topicId, ...args } = rawArgs;
     const session = agentBrowserSessionName(topicId);
     const platform = options.platform ?? process.platform;
+    let uploads: UploadFile[] | undefined;
+    if (apiName === 'uploadFile') {
+      uploads = await resolveUploadFiles(args.paths, options);
+      if (uploadTarget(args) === FILE_INPUT_SELECTOR) {
+        await assertSingleFileInput(options.exec, session);
+      }
+    }
     const commands = buildAgentBrowserCommands(apiName, args, options.screenshotPath, {
       fillsSelect: apiName === 'fill' && (await isNativeSelect(options.exec, session, args.ref)),
       platform,
+      uploadPaths: uploads?.map((file) => file.path),
     });
     const steps = parseSteps(await options.exec(session, commands));
 
@@ -287,6 +397,16 @@ export const runAgentBrowserCall = async (
       }
       case 'scroll': {
         return { content: `Scrolled by ${String(args.dy)}px.`, success: true };
+      }
+      case 'uploadFile': {
+        // agent-browser cannot read the input back; the receipt is what was sent.
+        const files = (uploads ?? []).map(({ name, size }) => ({ name, size }));
+        const names = files.map((file) => `${file.name} (${file.size} B)`).join(', ');
+        return {
+          content: `Attached ${names} to the page's file input. The page handles them from here: take a new snapshot to see whether it uploaded them or still needs a confirm/submit click.`,
+          state: { files, title, url, via: 'input' },
+          success: true,
+        };
       }
       case 'screenshot': {
         const bytes = await options.readFile(options.screenshotPath);

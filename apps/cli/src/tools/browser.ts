@@ -184,8 +184,10 @@ export const executeBrowserCall = async (
     await writeFile(configPath, '{}');
     return await runAgentBrowserCall(apiName, args, {
       exec: createExec(device.binaryPath, timeoutMs, configPath),
+      homeDir: os.homedir(),
       readFile,
       screenshotPath: path.join(dir, 'screenshot.png'),
+      statFile: stat,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

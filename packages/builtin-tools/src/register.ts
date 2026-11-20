@@ -27,6 +27,7 @@ import { ArtboardInspectors, ArtboardManifest } from '@lobechat/builtin-tool-art
 import { AuvIdentifier, AuvInspectors } from '@lobechat/builtin-tool-auv/client';
 import {
   BrowserInspectors,
+  BrowserInterventions,
   BrowserManifest,
   BrowserRenders,
 } from '@lobechat/builtin-tool-browser/client';
@@ -503,6 +504,7 @@ export const registerBuiltinToolSurfaces = (): void => {
       [ClaudeCodeApiName.AskUserQuestion]:
         ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
     },
+    [BrowserManifest.identifier]: BrowserInterventions as Record<string, BuiltinIntervention>,
     [CredsIdentifier]: CredsInterventions as Record<string, BuiltinIntervention>,
     [CloudSandboxManifest.identifier]: CloudSandboxInterventions as Record<
       string,

@@ -8,6 +8,9 @@ import type {
   BrowserPressArgs,
   BrowserScrollArgs,
   BrowserSetViewportArgs,
+  BrowserUploadedFile,
+  BrowserUploadFileArgs,
+  BrowserUploadFileState,
 } from '../../types';
 import { BrowserIdentifier } from '../../types';
 
@@ -21,9 +24,19 @@ const BrowserApiEnum = {
   scroll: 'scroll' as const,
   setViewport: 'setViewport' as const,
   snapshot: 'snapshot' as const,
+  uploadFile: 'uploadFile' as const,
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const formatSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+};
+
+const describeFiles = (files: BrowserUploadedFile[]) =>
+  files.map((file) => `${file.name} (${formatSize(file.size)})`).join(', ');
 
 /**
  * Browser Tool Executor (client / desktop only)
@@ -209,6 +222,49 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
     }
   };
 
+  uploadFile = async (params: BrowserUploadFileArgs, ctx?: BuiltinToolContext) => {
+    try {
+      await this.revealBrowserTab(ctx);
+      const { electronBrowserControlService } = await import('@/services/electron/browserControl');
+      const result = await electronBrowserControlService.uploadFile({
+        paths: params.paths,
+        ref: params.ref,
+        selector: params.selector,
+        sessionId: this.sessionIdOf(ctx),
+      });
+      if (!result.success) {
+        const reason = result.error ?? 'The file could not be attached';
+        return result.manualSelectionRequired
+          ? this.manualSelectionRequired(reason, params.paths)
+          : this.failure(reason);
+      }
+
+      const files = result.files ?? [];
+      const state: BrowserUploadFileState = {
+        accept: result.accept,
+        files,
+        paths: params.paths,
+        title: result.title,
+        url: result.url,
+        via: result.via,
+      };
+      // Reading the input back is the receipt: an empty list means the page
+      // replaced or cleared the input in its change handler.
+      if (files.length === 0) {
+        return this.success(
+          "The files were handed to the page's file input, but it holds no file now: the page took them in its change handler or cleared the input. Take a new snapshot to see whether the page lists or uploads them.",
+          state,
+        );
+      }
+      return this.success(
+        `Attached ${describeFiles(files)} to the page's file input${result.via === 'fileChooser' ? ' through the file chooser its upload button opened' : ''}. The page handles them from here: take a new snapshot to see whether it uploaded them or still needs a confirm/submit click.`,
+        state,
+      );
+    } catch (error) {
+      return this.errorResult(error);
+    }
+  };
+
   readPage = async (_params: object, ctx?: BuiltinToolContext) => {
     try {
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
@@ -287,6 +343,22 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
     return {
       content: message,
       error: { message, type: 'PluginServerError' },
+      success: false,
+    };
+  }
+
+  /**
+   * The structured "a person has to pick the file" answer. Without it an agent
+   * kept trying other ways into the native file dialog (clicks, keys, desktop
+   * screenshots) and used up its attempts.
+   */
+  private manualSelectionRequired(reason: string, paths: string[]): BuiltinToolResult {
+    const state: BrowserUploadFileState = { manualSelectionRequired: true, paths, reason };
+    const content = `${reason}\nThe file cannot be attached automatically on this page; the user has to choose it. Ask the user to select ${paths.join(', ')} in the browser panel themselves and tell you when it is done. Do not retry uploadFile or try to open the file dialog on this page.`;
+    return {
+      content,
+      error: { body: state, message: reason, type: 'ManualFileSelectionRequired' },
+      state,
       success: false,
     };
   }
