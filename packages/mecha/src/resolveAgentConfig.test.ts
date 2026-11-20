@@ -31,7 +31,7 @@ describe('resolveAgentConfig without a host', () => {
 
     expect(resolved.agentConfig.systemRole).toContain('Preferred reply language: zh-CN.');
     expect(resolved.agentConfig.systemRole).toContain(
-      "Reply in the language of the user's message; default to zh-CN",
+      'Use this language unless the user explicitly asks to switch.',
     );
   });
 

@@ -1927,7 +1927,7 @@
   "settingCommon.lang.title": "语言",
   "settingCommon.liteMode.desc": "简化界面并隐藏高级功能",
   "settingCommon.liteMode.title": "精简模式",
-  "settingCommon.responseLanguage.auto": "跟随系统",
+  "settingCommon.responseLanguage.auto": "自动",
   "settingCommon.responseLanguage.desc": "设置 AI 回复使用的语言",
   "settingCommon.responseLanguage.placeholder": "选择回复语言",
   "settingCommon.responseLanguage.title": "回复语言",

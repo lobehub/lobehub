@@ -1716,7 +1716,7 @@ export default {
   'settingCommon.lang.title': 'Language',
   'settingCommon.liteMode.desc': 'Simplify the interface and hide advanced features',
   'settingCommon.liteMode.title': 'Lite Mode',
-  'settingCommon.responseLanguage.auto': 'Follow System',
+  'settingCommon.responseLanguage.auto': 'Automatic',
   'settingCommon.responseLanguage.desc': 'Choose the Agent’s reply language',
   'settingCommon.responseLanguage.placeholder': 'Select response language',
   'settingCommon.responseLanguage.title': 'Response Language',

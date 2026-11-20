@@ -81,7 +81,7 @@ export type ListUsersForMemoryExtractorOptions = {
 export type ListUsersForHourlyMemoryExtractorOptions = ListUsersForMemoryExtractorOptions;
 
 export interface UserInfoForAIGeneration {
-  responseLanguage: string;
+  responseLanguage?: string;
   userName: string;
 }
 
@@ -1062,7 +1062,7 @@ export class UserModel {
     const general = user?.general as UserGeneralConfig | undefined;
 
     return {
-      responseLanguage: general?.responseLanguage || 'en-US',
+      responseLanguage: general?.responseLanguage || undefined,
       userName: user?.fullName || user?.firstName || 'User',
     };
   };

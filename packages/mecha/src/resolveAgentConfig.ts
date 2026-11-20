@@ -2,6 +2,7 @@ import { type BuiltinAgentSlug } from '@lobechat/builtin-agents';
 import {
   BUILTIN_AGENT_SLUGS,
   getAgentRuntimeConfig,
+  getReplyLanguageInstruction,
   isCollaborativeBuiltinAgentRow,
 } from '@lobechat/builtin-agents';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
@@ -390,9 +391,7 @@ export const resolveAgentConfig = (
 
     // Inject response language preference into system role for regular agents
     const { userLocale } = snapshot;
-    const localeInstruction = userLocale
-      ? `Preferred reply language: ${userLocale}. Reply in the language of the user's message; default to ${userLocale} when the input has no clear natural language (e.g., code, logs, or files only).`
-      : '';
+    const localeInstruction = userLocale && getReplyLanguageInstruction(userLocale);
     const systemRoleWithLocale = localeInstruction
       ? agentConfig.systemRole
         ? `${agentConfig.systemRole}\n\n${localeInstruction}`

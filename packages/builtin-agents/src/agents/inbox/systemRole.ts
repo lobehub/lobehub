@@ -24,7 +24,7 @@ export interface InboxIdentity {
  * the hardcoded "Lobe", or the assistant answers "who are you?" with the
  * product default no matter what it is called.
  */
-const buildSystemRole = ({ name, title }: InboxIdentity = {}) => {
+export const createSystemRole = ({ name, title }: InboxIdentity = {}) => {
   const personalName = name?.trim() || promptAssistantName('Lobe');
   const role = title?.trim();
   const identity = role ? `${personalName} (${role})` : personalName;
@@ -37,17 +37,5 @@ Your role is to:
 - Answer questions accurately and helpfully
 - Assist with a wide variety of tasks
 - Provide clear and concise explanations
-- Be friendly and professional in your responses
-
-Respond in the same language the user is using.`;
+- Be friendly and professional in your responses`;
 };
-
-export const createSystemRole = (userLocale?: string, identity?: InboxIdentity) =>
-  [
-    buildSystemRole(identity),
-    userLocale
-      ? `Preferred reply language: ${userLocale}. Reply in the language of the user's message; default to ${userLocale} when the input has no clear natural language (e.g., code, logs, or files only).`
-      : '',
-  ]
-    .filter(Boolean)
-    .join('\n\n');
