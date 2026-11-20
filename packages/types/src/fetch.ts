@@ -12,8 +12,9 @@ export const ChatErrorType = {
   WorkspaceSubscriptionInactive: 'WorkspaceSubscriptionInactive', // Workspace's paid subscription has lapsed — view-only for non-primary members; spend blocked until renewed
   ShareMessageLimitExceeded: 'ShareMessageLimitExceeded', // Visitor hit shareConfig.maxMessagesPerVisitor on this shared agent
   ShareSpendLimitExceeded: 'ShareSpendLimitExceeded', // Shared agent reached shareConfig.monthlySpendLimit for the current month — recovers on the next reset
+  SharePromptTooLong: 'SharePromptTooLong', // Visitor's message to a shared agent is longer than SHARE_VISITOR_PROMPT_MAX_LENGTH
   ShareHeterogeneousAgentUnsupported: 'ShareHeterogeneousAgentUnsupported', // This agent configuration is not supported for shared visitors
-  ShareHeteroDeviceUnavailable: 'ShareHeteroDeviceUnavailable', // The shared Claude Code / Codex agent's device is offline or not set — visitor can retry later
+  ShareHeteroDeviceUnavailable: 'ShareHeteroDeviceUnavailable', // The shared local CLI agent's device is offline or not set — visitor can retry later
   AgentShareProviderNotSupported: 'AgentShareProviderNotSupported', // This shared agent uses a provider that is not supported for shared visitors
   SupervisorDecisionFailed: 'SupervisorDecisionFailed', // Supervisor decision failed
   AgentConcurrencyLimitExceeded: 'AgentConcurrencyLimitExceeded', // The user already has as many agent runs in flight as allowed — recovers when one finishes

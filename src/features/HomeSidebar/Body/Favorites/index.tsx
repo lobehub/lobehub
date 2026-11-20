@@ -1,6 +1,17 @@
 'use client';
 
-import { AccordionHeader, AccordionItem, AccordionPanel, AccordionTrigger } from '@lobehub/ui';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  accordionStyles,
+  AccordionTrigger,
+  ActionIcon,
+  ContextMenuTrigger,
+  cx,
+  DropdownMenu,
+} from '@lobehub/ui';
+import { MoreHorizontalIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,6 +21,7 @@ import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/compon
 import { useHomeStore } from '@/store/home';
 import { favoriteSelectors } from '@/store/home/selectors';
 
+import { useSidebarSectionMenuItems } from '../useSidebarSectionMenuItems';
 import SortableFavoriteList from './SortableFavoriteList';
 
 interface FavoritesProps {
@@ -29,19 +41,36 @@ const Favorites = memo<FavoritesProps>(({ itemKey }) => {
   const { error, revalidate } = useFetchFavorites();
   const list = useHomeStore(favoriteSelectors.favoriteList);
   const loadFailed = list === undefined && !!error;
+  const menuItems = useSidebarSectionMenuItems(itemKey);
 
   if (!loadFailed && (!list || list.length === 0)) return null;
 
   return (
     <AccordionItem value={itemKey}>
-      {/* Recents and Agents carry a 24px header action that sets their height;
-          Favorites has none, so pin the same height to keep the section
-          headers aligned. */}
-      <AccordionHeader style={{ minHeight: 24 + sectionTriggerStyle.paddingBlock * 2 }}>
-        <AccordionTrigger style={sectionTriggerStyle}>
-          <SectionTitle>{t('favorite.section')}</SectionTitle>
-        </AccordionTrigger>
-      </AccordionHeader>
+      <ContextMenuTrigger items={menuItems}>
+        <AccordionHeader>
+          <AccordionTrigger style={sectionTriggerStyle}>
+            <SectionTitle>{t('favorite.section')}</SectionTitle>
+          </AccordionTrigger>
+          <div
+            className={cx(
+              'accordion-action',
+              accordionStyles.action,
+              accordionStyles.actionBorderless,
+            )}
+          >
+            <DropdownMenu items={menuItems}>
+              <ActionIcon
+                aria-label={t('more')}
+                icon={MoreHorizontalIcon}
+                size={'small'}
+                style={{ flex: 'none' }}
+                title={t('more')}
+              />
+            </DropdownMenu>
+          </div>
+        </AccordionHeader>
+      </ContextMenuTrigger>
       <AccordionPanel>
         {loadFailed ? (
           <AsyncError error={error} variant="inline" onRetry={() => revalidate()} />

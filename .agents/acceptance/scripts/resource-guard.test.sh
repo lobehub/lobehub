@@ -35,7 +35,7 @@ esac
 SH
 cat > "$TMP/bin/vm_stat" <<'SH'
 #!/usr/bin/env bash
-# Approximately 4% free, based on the captured 24 GiB host; swap is also >80%.
+# Approximately 4% free, based on the captured 24 GiB host; swap use is also high.
 echo 'Mach Virtual Memory Statistics: (page size of 16384 bytes)'
 echo 'Pages free: 63491.'
 echo 'Pages speculative: 5373.'
@@ -60,7 +60,7 @@ check() {
   local expected_exit="$1" expected_tier="$2"
   shift 2
   local status=0 output
-  output=$(bash "$GUARD" check --yellow swap=60,free=20 --red swap=80,free=8 --json "$@") || status=$?
+  output=$(bash "$GUARD" check --yellow free=20 --red free=8 --json "$@") || status=$?
   [ "$status" -eq "$expected_exit" ] || { echo "FAIL: exit $status, expected $expected_exit: $output"; exit 1; }
   if [ -n "$expected_tier" ]; then
     echo "$output" | grep -q "\"platform\":\"Darwin\",\"tier\":\"$expected_tier\"" || { echo "FAIL: $output"; exit 1; }
@@ -93,8 +93,8 @@ RUN_TAG=guard-test-owned
 INTERVAL=10
 ON_RED=stop-owned
 GRACE=0
-YELLOW=swap=60,free=20
-RED=swap=80,free=8
+YELLOW=free=20
+RED=free=8
 CONF
   : > "$TMP/state/guard.pid"
   : > "$TMP/state/events.jsonl"

@@ -115,7 +115,7 @@
   "connector.error.stdioDesktopOnly": "Stdio-Connectoren können nur in der Desktop-App synchronisiert werden. Öffnen Sie LobeHub Desktop, um diesen Connector zu synchronisieren.",
   "connector.kind.agent": "Agent-Connector",
   "connector.kind.builtin": "Eingebautes Werkzeug",
-  "connector.kind.community": "Community-Werkzeug",
+  "connector.kind.community": "Marktplatz-Tool",
   "connector.kind.custom": "Benutzerdefinierter Connector",
   "connector.kind.oauth": "OAuth-Connector",
   "connector.manageOnlyCreator": "Nur der Ersteller oder ein Arbeitsbereichsbesitzer kann diesen Connector verwalten",

@@ -29,7 +29,10 @@ describe('resolveAgentConfig without a host', () => {
   it('appends the reply-language instruction from the snapshot', () => {
     const resolved = resolveAgentConfig({ agentId: 'agt_1' }, snapshot({ userLocale: 'zh-CN' }));
 
-    expect(resolved.agentConfig.systemRole).toContain('zh-CN');
+    expect(resolved.agentConfig.systemRole).toContain('Preferred reply language: zh-CN.');
+    expect(resolved.agentConfig.systemRole).toContain(
+      'Use this language unless the user explicitly asks to switch.',
+    );
   });
 
   it('leaves the system role alone when no locale is supplied', () => {

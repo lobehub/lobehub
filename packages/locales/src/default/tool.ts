@@ -207,7 +207,7 @@ export default {
   'connector.enabled': 'Enabled',
   'connector.kind.agent': 'Agent connector',
   'connector.kind.builtin': 'Built-in tool',
-  'connector.kind.community': 'Community tool',
+  'connector.kind.community': 'Marketplace tool',
   'connector.kind.custom': 'Custom connector',
   'connector.kind.oauth': 'OAuth connector',
   'connector.manageOnlyCreator': 'Only the creator or a workspace owner can manage this connector',

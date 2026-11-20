@@ -52,7 +52,7 @@ const ModelItem = memo<DiscoverModelItem>(
   }) => {
     const { t } = useTranslation(['models', 'discover']);
     const navigate = useWorkspaceAwareNavigate();
-    const link = urlJoin('/community/model', identifier);
+    const link = urlJoin('/marketplace/model', identifier);
     return (
       <Block
         clickable

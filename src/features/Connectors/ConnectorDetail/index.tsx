@@ -6,7 +6,7 @@ import {
 import { Button, confirmModal, Flexbox, Text, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { PencilIcon, Plus, RefreshCwIcon, Trash2 } from 'lucide-react';
+import { PencilIcon, RefreshCwIcon, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +16,6 @@ import { ConnectorSourceType } from '@/database/schemas';
 import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 import { refreshConnectorManagePolicy } from '@/services/connectorManagePolicy';
 import { useToolStore } from '@/store/tool';
-import { builtinToolSelectors } from '@/store/tool/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { densityTokens } from '@/styles/density.stylex';
 import { type ConnectorActionError, toConnectorActionError } from '@/utils/connectorActionError';
@@ -111,9 +110,6 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     const disconnectConnector = useToolStore((s) => s.disconnectConnector);
     const deleteConnector = useToolStore((s) => s.deleteConnector);
     const forgetComposioConnection = useToolStore((s) => s.forgetComposioConnection);
-    const uninstallBuiltinTool = useToolStore((s) => s.uninstallBuiltinTool);
-    const installBuiltinTool = useToolStore((s) => s.installBuiltinTool);
-    const useFetchUninstalledBuiltinTools = useToolStore((s) => s.useFetchUninstalledBuiltinTools);
     const uninstallMCPPlugin = useToolStore((s) => s.uninstallMCPPlugin);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
     const updateToolPermission = useToolStore((s) => s.updateToolPermission);
@@ -124,13 +120,6 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
       isMcpConnector &&
       (connector?.mcpConnectionType === 'http' || connector?.mcpConnectionType === 'stdio');
     const isBuiltin = connector?.sourceType === ConnectorSourceType.builtin;
-    // A detail opened by link mounts without the list, which is what loads the
-    // built-in install state; load it here so Status and the actions match the list.
-    useFetchUninstalledBuiltinTools(isBuiltin);
-    const isBuiltinInstalled = useToolStore(
-      builtinToolSelectors.isBuiltinToolInstalled(connector?.identifier ?? ''),
-    );
-    const isUninstalledBuiltin = isBuiltin && !isBuiltinInstalled;
     const isMarketplace = connector?.sourceType === ConnectorSourceType.marketplace;
 
     // Members co-maintain shared connectors unless the workspace restricted it;
@@ -232,7 +221,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     ]);
 
     const handleUninstall = () => {
-      if (!connector) return;
+      if (!connector || !isMarketplace) return;
       confirmModal({
         // The modal's built-in label is not localized.
         cancelText: t('cancel', { ns: 'common' }),
@@ -241,11 +230,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
         onOk: async () => {
           setRemoveError(undefined);
           try {
-            if (isBuiltin) {
-              await uninstallBuiltinTool(connector.identifier);
-            } else if (isMarketplace) {
-              await uninstallMCPPlugin(connector.identifier);
-            }
+            await uninstallMCPPlugin(connector.identifier);
             await deleteConnector(connectorId);
             // The Composio list does not watch these writes; without this the
             // uninstalled row keeps showing as connected until a reload.
@@ -384,28 +369,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
                 </ManageTooltip>
               </>
             )}
-            {/* Uninstall for builtin and marketplace tools */}
-            {/* An uninstalled built-in offers the way back in, not another Uninstall. */}
-            {isUninstalledBuiltin && (
-              <ManageTooltip title={credentialsTooltip}>
-                <Button
-                  disabled={!canManageCredentials}
-                  icon={<Plus size={14} />}
-                  size="small"
-                  type="primary"
-                  onClick={async () => {
-                    try {
-                      await installBuiltinTool(connector.identifier);
-                    } catch (error) {
-                      notifyActionError(error);
-                    }
-                  }}
-                >
-                  {ts('connectorMarket.action.install')}
-                </Button>
-              </ManageTooltip>
-            )}
-            {((isBuiltin && !isUninstalledBuiltin) || isMarketplace) && (
+            {isMarketplace && (
               <ManageTooltip title={credentialsTooltip}>
                 <Button
                   danger

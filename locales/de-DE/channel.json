@@ -91,7 +91,6 @@
   "events.youInvited": "Sie haben {{names}} in den Kanal eingeladen",
   "events.youInvitedMembers": "Sie haben <members/> in den Kanal eingeladen",
   "failure.locate": "Nachricht anzeigen",
-  "failure.messageLabel": "Antwort fehlgeschlagen: {{names}}",
   "failure.title": "Fehlgeschlagene Antworten · {{count}}",
   "followers": "Antworten von: {{names}}",
   "invite.directHint": "Wenn Sie hier einladen, wird ein neuer Kanal mit {{name}} und den von Ihnen ausgewählten Mitgliedern gestartet. Dieses Gespräch mit {{name}} bleibt unverändert.",

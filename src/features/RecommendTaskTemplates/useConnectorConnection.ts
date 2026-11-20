@@ -3,7 +3,9 @@ import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { LOBEHUB_SKILL_AUTH_SUCCESS_MESSAGE } from '@/const/skillConnection';
+import { isDesktop } from '@/const/version';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { electronSystemService } from '@/services/electron/system';
 import { useToolStore } from '@/store/tool';
 import { composioStoreSelectors } from '@/store/tool/slices/composioStore/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore/types';
@@ -110,6 +112,8 @@ export const useConnectorConnection = (
   const [isConnecting, setIsConnecting] = useState(false);
   const [isWaitingAuth, setIsWaitingAuth] = useState(false);
 
+  const [externalTarget, setExternalTarget] = useState<ConnectTarget>();
+
   const oauthWindowRef = useRef<Window | null>(null);
   const windowCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const windowCheckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -145,17 +149,57 @@ export const useConnectorConnection = (
     if (isWaitingAuth && !nextUnconnected) cleanup();
   }, [isWaitingAuth, nextUnconnected, cleanup]);
 
+  const refreshStatus = useCallback(
+    async (target: ConnectTarget) => {
+      if (target.source === 'lobehub') {
+        await checkLobehubStatus(target.identifier);
+      } else {
+        await refreshComposioConnectionStatus(target.identifier);
+      }
+    },
+    [checkLobehubStatus, refreshComposioConnectionStatus],
+  );
+
+  // The system browser has no opener. Reconcile with the provider on return,
+  // and periodically in case consent completes while the desktop stays focused.
+  const externalConnected = !!externalTarget && isConnectedFor(externalTarget);
+  useEffect(() => {
+    if (!externalTarget) return;
+    if (externalConnected) {
+      setExternalTarget(undefined);
+      return;
+    }
+
+    let checking = false;
+    const check = async () => {
+      if (checking) return;
+      checking = true;
+      try {
+        await refreshStatus(externalTarget);
+      } catch {
+        // A transient status error can be retried until the authorization expires.
+      } finally {
+        checking = false;
+      }
+    };
+
+    window.addEventListener('focus', check);
+    const interval = setInterval(check, 5000);
+    const timeout = setTimeout(() => setExternalTarget(undefined), OAUTH_OVERALL_TIMEOUT_MS);
+    return () => {
+      window.removeEventListener('focus', check);
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [externalTarget, externalConnected, refreshStatus]);
+
   const startFallbackPolling = useCallback(
     (target: ConnectTarget) => {
       if (pollIntervalRef.current) return;
 
       pollIntervalRef.current = setInterval(async () => {
         try {
-          if (target.source === 'lobehub') {
-            await checkLobehubStatus(target.identifier);
-          } else {
-            await refreshComposioConnectionStatus(target.identifier);
-          }
+          await refreshStatus(target);
         } catch {
           // Polling failure is expected until auth completes — suppress noise.
         }
@@ -169,7 +213,7 @@ export const useConnectorConnection = (
         setIsWaitingAuth(false);
       }, POLL_TIMEOUT_MS);
     },
-    [checkLobehubStatus, refreshComposioConnectionStatus],
+    [refreshStatus],
   );
 
   const startWindowMonitor = useCallback(
@@ -194,11 +238,7 @@ export const useConnectorConnection = (
           // can advance to the next provider immediately, instead of waiting up
           // to 15s for fallback polling to release isWaitingAuth.
           try {
-            if (target.source === 'lobehub') {
-              await checkLobehubStatus(target.identifier);
-            } else {
-              await refreshComposioConnectionStatus(target.identifier);
-            }
+            await refreshStatus(target);
           } catch {
             // Status check failure isn't actionable; release waiting state regardless.
           }
@@ -223,12 +263,20 @@ export const useConnectorConnection = (
         setIsWaitingAuth(false);
       }, OAUTH_OVERALL_TIMEOUT_MS);
     },
-    [checkLobehubStatus, refreshComposioConnectionStatus, startFallbackPolling],
+    [refreshStatus, startFallbackPolling],
   );
 
   const openOAuthWindow = useCallback(
-    (url: string, target: ConnectTarget) => {
+    async (url: string, target: ConnectTarget) => {
       cleanup();
+      if (isDesktop) {
+        const parsed = new URL(url);
+        if (!['https:', 'http:'].includes(parsed.protocol)) throw new Error('Invalid OAuth URL');
+        await electronSystemService.openExternalLink(parsed.href);
+        setExternalTarget(target);
+        return;
+      }
+
       setIsWaitingAuth(true);
 
       const oauthWindow = window.open(url, '_blank', 'width=600,height=700');
@@ -249,7 +297,7 @@ export const useConnectorConnection = (
     const handler = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
       // Reject same-origin iframes / other tabs forging the success event.
-      if (event.source !== oauthWindowRef.current) return;
+      if (!oauthWindowRef.current || event.source !== oauthWindowRef.current) return;
       if (event.data?.type !== LOBEHUB_SKILL_AUTH_SUCCESS_MESSAGE) return;
       const provider = event.data?.provider;
       if (!provider) return;
@@ -261,7 +309,7 @@ export const useConnectorConnection = (
   }, [checkLobehubStatus, cleanup]);
 
   const connect = useCallback(async () => {
-    if (isConnectingRef.current || isWaitingAuth) return;
+    if (isConnectingRef.current || isWaitingAuth || externalTarget) return;
     const next = nextUnconnected;
     if (!next) return;
 
@@ -278,11 +326,12 @@ export const useConnectorConnection = (
           throw new ConnectorConnectionMarketAuthRequiredError();
         }
         // Skip redirectUri on desktop (app:// protocol) since the system browser can't navigate to it
-        const redirectUri = window.location.protocol.startsWith('http')
-          ? `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(next.identifier)}`
-          : undefined;
+        const redirectUri =
+          !isDesktop && window.location.protocol.startsWith('http')
+            ? `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(next.identifier)}`
+            : undefined;
         const { authorizeUrl } = await getLobehubAuth(next.identifier, { redirectUri });
-        openOAuthWindow(authorizeUrl, next);
+        await openOAuthWindow(authorizeUrl, next);
         return;
       }
 
@@ -299,7 +348,7 @@ export const useConnectorConnection = (
       if (newServer.status === ComposioServerStatus.ACTIVE) {
         await refreshComposioConnectionStatus(newServer.identifier);
       } else if (newServer.redirectUrl) {
-        openOAuthWindow(newServer.redirectUrl, next);
+        await openOAuthWindow(newServer.redirectUrl, next);
       } else {
         throw new Error('Composio server is missing an OAuth URL');
       }
@@ -317,6 +366,7 @@ export const useConnectorConnection = (
   }, [
     nextUnconnected,
     isWaitingAuth,
+    externalTarget,
     isMarketAuthenticated,
     signInMarket,
     getLobehubAuth,
@@ -328,7 +378,7 @@ export const useConnectorConnection = (
   return {
     connect,
     isAllConnected,
-    isConnecting: isConnecting || isWaitingAuth,
+    isConnecting: isConnecting || isWaitingAuth || !!externalTarget,
     needsConnect,
     nextUnconnected,
   };

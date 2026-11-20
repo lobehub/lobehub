@@ -67,6 +67,7 @@ export interface UserGeneralConfig {
   mermaidTheme?: MermaidProps['theme'];
   neutralColor?: NeutralColors;
   primaryColor?: LobePrimaryColor;
+  /** A locale chosen by the user. An empty string records an explicit Automatic choice. */
   responseLanguage?: string;
   /**
    * Whether a tool call that only reads an image (e.g. Claude Code `Read` of a

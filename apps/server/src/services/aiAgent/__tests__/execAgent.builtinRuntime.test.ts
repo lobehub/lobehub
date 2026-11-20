@@ -310,7 +310,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     mockResolveTask.mockResolvedValue(null);
     mockToolState.enabledToolIds = [];
     mockGetInfoForAIGeneration.mockResolvedValue({
-      responseLanguage: 'en-US',
+      preferredReplyLanguage: 'en-US',
       userName: 'Test User',
     });
     mockGetModelMetadata.mockResolvedValue(undefined);
@@ -473,7 +473,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
 
   it('should pass user response language into web onboarding runtime systemRole', async () => {
     mockGetInfoForAIGeneration.mockResolvedValue({
-      responseLanguage: 'zh-CN',
+      preferredReplyLanguage: 'zh-CN',
       userName: 'Test User',
     });
     mockGetAgentConfig.mockResolvedValue({
@@ -514,7 +514,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     await service.execAgent(inboxRunInput());
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
-    expect(callArgs.agentConfig.systemRole).toBe(customSystemRole);
+    expect(callArgs.agentConfig.systemRole).toBe(`${customSystemRole}\n\n${REPLY_LANGUAGE_ONLY}`);
   });
 
   // Regular agents get no builtin runtime prompt. They do get the user's reply

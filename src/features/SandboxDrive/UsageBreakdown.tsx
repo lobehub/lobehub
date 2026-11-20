@@ -16,32 +16,19 @@ import UserAvatar from '@/components/UserAvatar';
 import { formatSize } from '@/utils/format';
 
 import CleanupEntryButton from './Cleanup/CleanupEntryButton';
-import type { DriveUsageRefreshResult, useDriveUsage } from './useDriveData';
+import {
+  type DriveUsageRefreshResult,
+  MAX_MEASURE_CALLS,
+  MEASURE_CALL_GAP_MS,
+  pageHidden,
+  type useDriveUsage,
+  wait,
+} from './useDriveData';
 
 /** The market's code for a usage refresh whose walk did not finish. */
 const USAGE_MEASURE_FAILED = 'STORAGE_USAGE_MEASURE_FAILED';
 
 type DriveUsageData = NonNullable<ReturnType<typeof useDriveUsage>['data']>;
-
-/**
- * How many refresh calls one click keeps going for while a large drive is
- * still being measured. Each call walks for up to about half a minute on the
- * server, so this follows a walk for several minutes; past it, the measurement
- * cron finishes the walk and the next visit shows the result.
- */
-const MAX_MEASURE_CALLS = 12;
-
-/**
- * Pause between those calls. A call normally spends its time walking on the
- * server; when another caller holds the walk it answers at once, and without
- * a pause the loop would spend all its calls in a second.
- */
-const MEASURE_CALL_GAP_MS = 3000;
-
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/** Nobody is looking: the measurement cron finishes the walk without this tab. */
-const pageHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
 
 /** How many members the ranking shows before it folds the rest away. */
 const MEMBERS_FOLDED = 5;

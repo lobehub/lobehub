@@ -3,12 +3,12 @@ import { GithubIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { CheckCircle2, CircleAlert } from 'lucide-react';
-import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { densityTokens } from '@/styles/density.stylex';
 
+import { GithubImportRecovery } from './GithubImportRecovery';
 import { GithubSkillPicker } from './GithubSkillPicker';
 import { canImportCandidate } from './githubSkillSelection';
 import type { useGithubSkillImport } from './useGithubSkillImport';
@@ -35,7 +35,6 @@ const styles = stylex.create({
 export const GithubImport = ({ state }: { state: ReturnType<typeof useGithubSkillImport> }) => {
   const { t } = useTranslation(['setting', 'common']);
   const { close } = useModalContext();
-  const inputId = useId();
   const {
     canCreate,
     candidates,
@@ -62,52 +61,47 @@ export const GithubImport = ({ state }: { state: ReturnType<typeof useGithubSkil
   const failureCount = results.filter((item) =>
     ['failed', 'conflict', 'forbidden'].includes(item.status),
   ).length;
-  const error = failure && (
-    <AsyncError
-      align="start"
-      details={failure.details}
-      retrying={loading}
-      variant="inline"
-      action={
-        scan && failure.stage !== 'refresh' ? (
-          <Button disabled={loading || !canCreate} size="small" type="text" onClick={discover}>
-            {t('agentSkillModal.github.rescan')}
-          </Button>
-        ) : undefined
-      }
-      title={t(
-        failure.stage === 'import'
-          ? 'agentSkillModal.github.batchFailed'
-          : `agentSkillModal.github.${failure.stage}Failed`,
-      )}
-      onRetry={failure.stage === 'refresh' ? refreshLibrary : undefined}
-    />
+  const error = failure?.recovery ? (
+    <GithubImportRecovery recovery={failure.recovery} onConnected={state.resumeAfterConnect} />
+  ) : (
+    failure && (
+      <AsyncError
+        align="start"
+        details={failure.details}
+        retrying={loading}
+        variant="inline"
+        action={
+          scan && failure.stage !== 'refresh' ? (
+            <Button disabled={loading || !canCreate} size="small" type="text" onClick={discover}>
+              {t('agentSkillModal.github.rescan')}
+            </Button>
+          ) : undefined
+        }
+        title={t(
+          failure.stage === 'import'
+            ? 'agentSkillModal.github.batchFailed'
+            : `agentSkillModal.github.${failure.stage}Failed`,
+        )}
+        onRetry={failure.stage === 'refresh' ? refreshLibrary : undefined}
+      />
+    )
   );
 
   if (!scan)
     return (
       <Flexbox gap={20}>
         <Flexbox gap={8}>
-          <label htmlFor={inputId}>
-            <Text strong as="span">
-              {t('agentSkillModal.github.label')}
-            </Text>
-          </label>
           <Input
-            aria-describedby={inputId + '-hint'}
+            aria-label={t('agentSkillModal.github.label')}
             disabled={loading || !canCreate}
-            id={inputId}
             placeholder={t('agentSkillModal.github.example')}
             prefix={<Icon icon={GithubIcon} />}
             value={url}
             onChange={(event) => setUrl(event.target.value)}
             onPressEnter={discover}
           />
-          <Text fontSize={13} id={inputId + '-hint'} type="secondary">
-            {t('agentSkillModal.github.hint')}
-          </Text>
+          {error}
         </Flexbox>
-        {error}
         <Flexbox horizontal justify="flex-end">
           <Button
             disabled={!canCreate || !url.trim()}

@@ -22,18 +22,19 @@ export const SkillListVariantProvider = SkillListVariantContext.Provider;
 export const useSkillListVariant = () => use(SkillListVariantContext);
 
 const styles = stylex.create({
-  // A borderless row in a two-column catalog: the icon tile and whitespace
-  // identify an entry, the trailing slot is its one action (`+` or `⋯`).
+  // A borderless row in a two-column catalog (the Codex Plugins row): a 36px
+  // tile with a hairline border and the base radius identifies an entry,
+  // whitespace separates entries, the trailing slot is its one action (`+` or `⋯`).
   iconTile: {
     backgroundColor: sxVar.colorBgContainer,
     borderColor: sxVar.colorBorderSecondary,
-    borderRadius: sxVar.borderRadiusLG,
+    borderRadius: sxVar.borderRadius,
     borderStyle: 'solid',
     borderWidth: 1,
     flex: 'none',
-    height: 40,
+    height: 36,
     overflow: 'hidden',
-    width: 40,
+    width: 36,
   },
   // Compact page row: 6px padding around a 32px tile and a 20 + 2 + 18px text stack → 52px.
   iconTileCompact: {
@@ -64,12 +65,14 @@ interface SkillListRowProps {
   onClick?: () => void;
   /** What the connector does; only the page row has room for it. */
   summary?: ReactNode;
+  /** `data-testid` of the page row (the catalog rows keep the e2e hooks of the old cards). */
+  testId?: string;
   title: string;
   titleColor?: string;
 }
 
 const SkillListRow = memo<SkillListRowProps>(
-  ({ active, description, extra, icon, onClick, summary, title, titleColor }) => {
+  ({ active, description, extra, icon, onClick, summary, testId, title, titleColor }) => {
     const variant = useSkillListVariant();
     const compact = useInterfaceDensity() === 'compact';
 
@@ -94,8 +97,11 @@ const SkillListRow = memo<SkillListRowProps>(
         align={'center'}
         {...stylex.props(styles.row, compact && styles.rowCompact)}
         clickable={!!onClick}
+        data-testid={testId}
         gap={12}
-        paddingBlock={compact ? 6 : 12}
+        // 8px around the 22 + 2 + 22px text stack sits inside the 64px floor,
+        // so rows repeat every 68px (64 + the grid's 4px gap) as in Codex.
+        paddingBlock={compact ? 6 : 8}
         paddingInline={12}
         variant={'borderless'}
         onClick={onClick}
@@ -116,7 +122,7 @@ const SkillListRow = memo<SkillListRowProps>(
             <Text
               ellipsis
               color={cssVar.colorTextSecondary}
-              fontSize={compact ? 12 : 13}
+              fontSize={compact ? 12 : cssVar.fontSize}
               lineHeight={compact ? '18px' : undefined}
             >
               {summary}

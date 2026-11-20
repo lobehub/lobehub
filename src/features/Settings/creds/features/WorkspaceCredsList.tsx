@@ -7,7 +7,9 @@ import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import PrivateLockIcon from '@/components/PrivateLockIcon';
 import { CredsListSkeleton } from '@/components/Skeleton/Settings/tabs/Creds';
+import { matchesVisibilityFilter, type VisibilityFilterValue } from '@/components/VisibilityFilter';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
@@ -25,26 +27,31 @@ type Visibility = 'private' | 'public';
 interface WorkspaceCredsListProps {
   /** The workspace binding (`workspaceCreds`), with `setVisibility`. */
   credsApi: CredsApi;
-  /** Which tab: credentials shared with every member, or the caller's private ones. */
-  visibility: Visibility;
+  /** Narrow the list to private or shared credentials; every row when omitted. */
+  visibilityFilter?: VisibilityFilterValue;
 }
 
 /**
- * One tab of the workspace credential page, mirroring the device page's
- * Workspace / Private split. `workspaceCreds.list` already returns only what
- * the caller can see — shared credentials plus their own private ones — so
- * each tab is a filter on `visibility`. A row is a workspace credential or a
- * member's personal credential shared in; see `credAccess.ts` for who may do
- * what with each.
+ * The workspace credential list. `workspaceCreds.list` already returns only
+ * what the caller can see — shared credentials plus their own private ones —
+ * so it is listed as is, private rows marked with a lock. A row is a
+ * workspace credential or a member's personal credential shared in; see
+ * `credAccess.ts` for who may do what with each.
  */
-const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({ credsApi, visibility }) => {
+const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
+  credsApi,
+  visibilityFilter = 'all',
+}) => {
   const { t } = useTranslation(['setting', 'common']);
   const { session } = useMarketAuth();
   const { allowed: isAdmin } = usePermission('manage_provider_key');
   const myAccountId = session?.userInfo?.accountId;
 
   const { data, error, isLoading, refetch } = credsApi.query.list.useQuery();
-  const credentials = (data?.data ?? []).filter((cred) => cred.visibility === visibility);
+  const credentials = data?.data ?? [];
+  const visibleCredentials = credentials.filter((cred) =>
+    matchesVisibilityFilter(cred.visibility === 'private', visibilityFilter),
+  );
 
   const run = async (action: () => Promise<unknown>) => {
     try {
@@ -98,21 +105,22 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({ credsApi, visibility 
   return (
     <AsyncBoundary
       data={data}
+      empty={<Empty description={t('creds.empty')} style={{ paddingBlock: 48 }} />}
       error={error}
       errorVariant={'block'}
       isEmpty={credentials.length === 0}
       isLoading={isLoading}
       loading={<CredsListSkeleton />}
-      empty={
-        <Empty
-          description={t(visibility === 'private' ? 'creds.privateSection.empty' : 'creds.empty')}
-          style={{ paddingBlock: 48 }}
-        />
-      }
       onRetry={() => refetch()}
     >
       <Flexbox gap={0}>
-        {credentials.map((cred) => {
+        {visibleCredentials.length === 0 && (
+          <Empty
+            description={t('visibilityFilter.empty', { ns: 'common' })}
+            style={{ paddingBlock: 48 }}
+          />
+        )}
+        {visibleCredentials.map((cred) => {
           const access = workspaceCredRowAccess(cred, { isAdmin, myAccountId });
           const extraMenuItems = [
             ...(access.publish
@@ -154,6 +162,7 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({ credsApi, visibility 
               cred={cred}
               extraMenuItems={extraMenuItems}
               key={cred.id}
+              titleSuffix={cred.visibility === 'private' && <PrivateLockIcon />}
               tags={
                 cred.ownerType === 'user' && (
                   <Tag>

@@ -1,9 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import type { ReactElement } from 'react';
 import { matchRoutes } from 'react-router';
 import { describe, expect, it } from 'vitest';
 
+import { LegacyCommunityRedirect, LegacyPathRedirect } from './legacyPathRedirect';
 import { mobileRoutes } from './mobileRouter.config';
 import { getRouteMetaFromHandle } from './routeMeta';
 
@@ -109,8 +111,8 @@ describe('mobile community route layouts', () => {
   });
 
   it('declares a route skeleton for the community list and detail layouts', () => {
-    const listMatches = matchRoutes(mobileRoutes, '/community/agent');
-    const detailMatches = matchRoutes(mobileRoutes, '/community/agent/my-agent');
+    const listMatches = matchRoutes(mobileRoutes, '/marketplace/agent');
+    const detailMatches = matchRoutes(mobileRoutes, '/marketplace/agent/my-agent');
 
     expect(listMatches?.some((match) => getRouteMetaFromHandle(match.route.handle)?.Skeleton)).toBe(
       true,
@@ -119,6 +121,54 @@ describe('mobile community route layouts', () => {
       detailMatches?.some((match) => getRouteMetaFromHandle(match.route.handle)?.Skeleton),
     ).toBe(true);
   });
+});
+
+describe('mobile Marketplace skill and connector pages', () => {
+  it.each([
+    ['/marketplace/skill/installed', 'skill/installed'],
+    ['/acme/marketplace/skill/installed', 'skill/installed'],
+    ['/marketplace/connector/installed', 'connector/installed'],
+    ['/acme/marketplace/connector/installed', 'connector/installed'],
+  ])('serves %s with the shell back header', (url, leaf) => {
+    const route = matchRoutes(mobileRoutes, url)?.at(-1)?.route;
+
+    expect(route?.path).toBe(leaf);
+    // The settings layout drew their header before they moved out of settings.
+    expect((route?.handle as { mobileShellHeader?: boolean }).mobileShellHeader).toBe(true);
+    expect(getRouteMetaFromHandle(route?.handle)?.titleKey).toBeDefined();
+  });
+
+  it.each([
+    ['/settings/skill', '/marketplace/skill/installed'],
+    ['/settings/skill/sub', '/marketplace/skill/installed'],
+    ['/settings/connector', '/marketplace/connector/installed'],
+    ['/settings/connector/sub', '/marketplace/connector/installed'],
+    ['/acme/settings/skill', '/marketplace/skill/installed'],
+    ['/acme/settings/connector', '/marketplace/connector/installed'],
+    // The MCP list merged into the Connectors Discover page.
+    ['/marketplace/mcp', '/marketplace/connector'],
+    ['/acme/marketplace/mcp', '/marketplace/connector'],
+  ])('redirects %s to %s', (url, to) => {
+    const element = matchRoutes(mobileRoutes, url)?.at(-1)?.route.element as
+      ReactElement<{ to: string }> | undefined;
+
+    expect(element?.type).toBe(LegacyPathRedirect);
+    expect(element?.props.to).toBe(to);
+  });
+
+  it('uses the marketplace entry redirect for the old community root', () => {
+    const entry = matchRoutes(mobileRoutes, '/marketplace')?.at(-1)?.route.element;
+    expect(matchRoutes(mobileRoutes, '/community')?.at(-1)?.route.element).toBe(entry);
+  });
+
+  it.each(['/community/agent/my-agent', '/acme/community/mcp'])(
+    'forwards %s to the Marketplace',
+    (url) => {
+      const element = matchRoutes(mobileRoutes, url)?.at(-1)?.route.element as
+        ReactElement | undefined;
+      expect(element?.type).toBe(LegacyCommunityRedirect);
+    },
+  );
 });
 
 describe('mobileRouter page routes', () => {

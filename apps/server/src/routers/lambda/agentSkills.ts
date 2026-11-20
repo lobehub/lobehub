@@ -8,7 +8,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
 import { router } from '@/libs/trpc/lambda';
-import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { resolveMarketUserContext, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
 import {
@@ -26,19 +26,30 @@ import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManag
 
 const skillImportErrorToTRPCCode = (
   code: SkillImportError['code'],
-): 'CONFLICT' | 'BAD_REQUEST' | 'NOT_FOUND' | 'BAD_GATEWAY' | 'FORBIDDEN' => {
+):
+  | 'CONFLICT'
+  | 'BAD_REQUEST'
+  | 'NOT_FOUND'
+  | 'BAD_GATEWAY'
+  | 'FORBIDDEN'
+  | 'PRECONDITION_FAILED' => {
   switch (code) {
+    case 'CONNECT_GITHUB': {
+      return 'PRECONDITION_FAILED';
+    }
+
+    case 'GITHUB_ACCESS':
+    case 'NOT_FOUND':
+    case 'FILE_NOT_FOUND': {
+      return 'NOT_FOUND';
+    }
+
     case 'CONFLICT': {
       return 'CONFLICT';
     }
 
     case 'FORBIDDEN': {
       return 'FORBIDDEN';
-    }
-
-    case 'NOT_FOUND':
-    case 'FILE_NOT_FOUND': {
-      return 'NOT_FOUND';
     }
 
     case 'DOWNLOAD_FAILED': {
@@ -70,12 +81,23 @@ const skillProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
   const workspaceId = ctx.workspaceId ?? undefined;
   const skillModel = new AgentSkillModel(ctx.serverDB, ctx.userId, workspaceId);
 
+  const githubProxy: MarketService['proxyOAuthRequest'] = async (request) => {
+    const { marketAccessToken, marketUserInfo } = await resolveMarketUserContext(ctx);
+    const market = new MarketService({
+      // Keep the workspace claim on trusted requests and personal bearer tokens in personal mode.
+      accessToken: workspaceId ? undefined : (marketAccessToken ?? ctx.marketAccessToken),
+      userInfo: marketUserInfo,
+    });
+    return market.proxyOAuthRequest(request);
+  };
+
   return opts.next({
     ctx: {
+      githubProxy,
       fileModel: new FileModel(ctx.serverDB, ctx.userId, workspaceId),
       fileService: new FileService(ctx.serverDB, ctx.userId, workspaceId),
       marketService: new MarketService({ userInfo: { userId: ctx.userId } }),
-      skillImporter: new SkillImporter(ctx.serverDB, ctx.userId, workspaceId),
+      skillImporter: new SkillImporter(ctx.serverDB, ctx.userId, workspaceId, { githubProxy }),
       skillModel,
     },
   });
@@ -97,6 +119,7 @@ const skillWriteProcedure = skillProcedure
     return opts.next({
       ctx: {
         skillImporter: new SkillImporter(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined, {
+          githubProxy: ctx.githubProxy,
           workspaceRole: (ctx as { workspaceRole?: string }).workspaceRole,
         }),
       },
@@ -225,7 +248,9 @@ export const agentSkillsRouter = router({
 
   discoverGitHubSkills: skillWriteProcedure
     .input(z.object({ gitUrl: z.string().url() }))
-    .mutation(({ ctx, input }) => ctx.skillImporter.discoverGitHubSkills(input.gitUrl)),
+    .mutation(({ ctx, input }) =>
+      ctx.skillImporter.discoverGitHubSkills(input.gitUrl).catch(handleSkillImportError),
+    ),
 
   importGitHubSkills: skillWriteProcedure
     .input(
@@ -239,7 +264,9 @@ export const agentSkillsRouter = router({
           .max(200),
       }),
     )
-    .mutation(({ ctx, input }) => ctx.skillImporter.importGitHubSkills(input)),
+    .mutation(({ ctx, input }) =>
+      ctx.skillImporter.importGitHubSkills(input).catch(handleSkillImportError),
+    ),
 
   importFromGitHub: skillWriteProcedure
     .input(

@@ -3,7 +3,7 @@ import {
   LocalExecutionHeterogeneousAgentTypeSchema,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './agent/heterogeneousAgent';
-import type { ContactCard, ContactCardType } from './contact';
+import type { ContactCard, ContactCardType, ContactUserProfile } from './contact';
 import { getWorkingDirEffectivePath } from './device';
 import type { BotWakeKind } from './signal';
 import type { ExternalWorkSummaryItem } from './work';
@@ -893,6 +893,8 @@ export interface ChannelPublicJob {
   id: string;
   memberId: string;
   messageId: string;
+  /** The acknowledgement the reply posted before its run, so its outcome can show under it. */
+  openingMessageId?: string | null;
   publicationRevoked: boolean;
   status: ChannelJobStatus;
   threadId: string | null;
@@ -954,6 +956,11 @@ export interface ChannelDetail {
    */
   readOnly?: boolean;
   rootMessage: ChannelPublicMessage | null;
+  /**
+   * The person who owns the shared Agent of a `sharedAgent` conversation: the contact card a
+   * refused reply offers the visitor. Null or absent otherwise.
+   */
+  sharedAgentOwner?: ContactUserProfile | null;
   threads: ChannelPublicThread[];
 }
 
@@ -970,5 +977,37 @@ export interface ShareVisitorConversation {
   totalCost: number;
   totalTokens: number;
   updatedAt: Date;
-  visitor: { avatar: string | null; id: string; name: string | null };
+  visitor: ShareVisitorIdentity;
+}
+
+/** A share visitor as the shared Agent's owner sees them. */
+export interface ShareVisitorIdentity {
+  avatar: string | null;
+  id: string;
+  name: string | null;
+}
+
+/**
+ * One run topic of a visitor's conversation with a shared Agent. A visitor's conversation spans
+ * several: a new one starts after a long pause or when the Agent's configuration changes.
+ */
+export interface ShareVisitorTopic {
+  createdAt: Date;
+  id: string;
+  /**
+   * The start of the visitor's first message. Run topics get no generated title, so this is what
+   * names one when `title` is empty.
+   */
+  preview: string | null;
+  title: string | null;
+  /** USD cost of the topic's runs. */
+  totalCost: number;
+  totalTokens: number;
+  updatedAt: Date;
+}
+
+/** A visitor's run topics with a shared Agent, newest first, for its owner's sidebar. */
+export interface ShareVisitorTopicGroup {
+  topics: ShareVisitorTopic[];
+  visitor: ShareVisitorIdentity;
 }

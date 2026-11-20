@@ -1,6 +1,6 @@
 'use client';
 
-import { BotIcon, Download, HomeIcon, Settings, ShapesIcon } from 'lucide-react';
+import { Blocks, BotIcon, Download, HomeIcon, Settings, ShapesIcon } from 'lucide-react';
 import type { RouteObject } from 'react-router';
 
 import {
@@ -12,16 +12,25 @@ import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
 import { delayed } from '@/components/Skeleton/Delayed';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
+import { MARKETPLACE_SEGMENT } from '@/features/Marketplace/paths';
 import { communityDetailRouteMeta } from '@/features/RouteMeta/communityRouteMeta';
 import {
   createSettingsTitleRouteMeta,
   providerDetailRouteMeta,
 } from '@/features/Settings/features/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
+import {
+  legacyCommunityRoutes,
+  legacySettingsMarketplaceRedirects,
+  marketplaceIndexRoute,
+  marketplaceManageRoutes,
+  marketplaceMcpListRedirect,
+} from '@/spa/router/marketplaceRoutes';
 import { mobileAgentRoute, mobileGroupRoute } from '@/spa/router/mobileAgentRoutes';
 import { mobileUnsupportedRoutes, mobileWorkspaceRoutes } from '@/spa/router/mobileWorkspaceRoutes';
 import { mobileWorkspaceSettingsChildren } from '@/spa/router/mobileWorkspaceSettingsRoutes';
 import { routeMeta } from '@/spa/router/routeMeta';
+import { overlayRoutes, withHandle } from '@/spa/router/routeOverlay';
 import { LegacySandboxStorageRedirect } from '@/spa/router/sandboxStorageRedirect';
 import { statsPageLoader } from '@/spa/router/statsPageLoader';
 import { SettingsTabs } from '@/store/global/initialState';
@@ -40,8 +49,16 @@ const settingsTabSubElement = dynamicElement(
   { preloadId: 'mobile-settings' },
 );
 
+// Skills and connectors moved to the Marketplace; their old tabs are redirects.
+const TABS_WITHOUT_SETTINGS_PAGE = new Set<string>([
+  SettingsTabs.Connector,
+  SettingsTabs.Creds,
+  SettingsTabs.Provider,
+  SettingsTabs.Skill,
+]);
+
 const personalSettingsTabRoutes: RouteObject[] = [...new Set(Object.values(SettingsTabs))]
-  .filter((tab) => tab !== SettingsTabs.Provider && tab !== SettingsTabs.Creds)
+  .filter((tab) => !TABS_WITHOUT_SETTINGS_PAGE.has(tab))
   .flatMap((tab) => {
     const meta = createSettingsTitleRouteMeta(tab);
     return [
@@ -101,18 +118,17 @@ export const sharedMainAreaChildren: RouteObject[] = [
         ),
         path: 'workspace/settings',
       },
+      // Installed skills and connectors: second-level pages with the shell's
+      // back header (the settings layout drew it before they moved here).
+      ...overlayRoutes(marketplaceManageRoutes, {
+        'connector/installed': withHandle({ mobileShellHeader: true }),
+        'skill/installed': withHandle({ mobileShellHeader: true }),
+      }),
+      marketplaceIndexRoute,
+      marketplaceMcpListRedirect,
       // List routes (with ListLayout)
       {
         children: [
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/(home)'),
-              'Mobile > Discover > List > Home',
-              { preloadId: 'mobile-community' },
-            ),
-            handle: { meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discover' }) },
-            index: true,
-          },
           {
             children: [
               {
@@ -121,7 +137,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
                   'Mobile > Discover > List > Agent',
                 ),
                 handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverAssistants' }),
+                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceAgents' }),
                 },
                 path: 'agent',
               },
@@ -135,7 +151,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
                   'Mobile > Discover > List > Model',
                 ),
                 handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverModels' }),
+                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceModels' }),
                 },
                 path: 'model',
               },
@@ -147,30 +163,28 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Mobile > Discover > List > Provider',
             ),
             handle: {
-              meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverProviders' }),
+              meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceProviders' }),
             },
             path: 'provider',
           },
           {
-            children: [
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/community/(list)/mcp'),
-                  'Mobile > Discover > List > MCP',
-                ),
-                handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverMcp' }),
-                },
-                path: 'mcp',
-              },
-            ],
+            element: dynamicElement(
+              () => import('@/routes/(main)/community/(list)/connector'),
+              'Mobile > Discover > List > Connector',
+            ),
+            handle: {
+              meta: routeMeta({ icon: Blocks, titleKey: 'navigation.marketplaceConnectors' }),
+            },
+            path: 'connector',
           },
           {
             element: dynamicElement(
               () => import('@/routes/(main)/community/(list)/skill'),
               'Mobile > Discover > List > Skill',
             ),
-            handle: { meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discover' }) },
+            handle: {
+              meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceSkills' }),
+            },
             path: 'skill',
           },
           {
@@ -290,8 +304,9 @@ export const sharedMainAreaChildren: RouteObject[] = [
       { preloadId: 'mobile-community' },
     ),
     errorElement: <ErrorBoundary />,
-    path: 'community',
+    path: MARKETPLACE_SEGMENT,
   },
+  ...legacyCommunityRoutes,
 
   // Agents view-all route (flat list of workspace/private agents)
   {
@@ -372,6 +387,7 @@ export const mobileRoutes: RouteObject[] = [
             path: 'creds',
           },
           { element: <LegacySandboxStorageRedirect />, path: 'drive' },
+          ...legacySettingsMarketplaceRedirects,
           // Every known tab gets a static segment: `/settings/memory` and
           // `/:workspaceSlug/memory` (or `/agent`, `/image`, …) tie on route
           // score, and the workspace tree would read `settings` as a slug.

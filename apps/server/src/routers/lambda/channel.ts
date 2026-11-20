@@ -254,6 +254,20 @@ export const channelRouter = router({
       data: await ctx.channelService.shareVisitors(input.agentId),
       success: true,
     })),
+  /** A visitor's run topic with its transcript, read-only for the shared Agent's owner. */
+  shareVisitorTopic: channelProcedure
+    .input(z.object({ topicId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.channelService.shareVisitorTopic(input.topicId),
+      success: true,
+    })),
+  /** The run topics of visitors' conversations with the caller's shared Agent, by visitor. */
+  shareVisitorTopics: channelProcedure
+    .input(z.object({ agentId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.channelService.shareVisitorTopics(input.agentId),
+      success: true,
+    })),
   /** Messages in a Channel and its Threads containing every word of `query`, newest first. */
   searchMessages: channelProcedure
     .input(

@@ -1,6 +1,6 @@
 import type { ChannelDetail, ChannelPublicJob, ChannelPublicMessage } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
-import { Button, Flexbox, Popover, Text, usePopoverContext } from '@lobehub/ui';
+import { Button, Flexbox, Text, usePopoverContext } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { ExternalLink, Square } from 'lucide-react';
 import { useState } from 'react';
@@ -21,6 +21,7 @@ const RECEIPT_ERROR_KEYS = {
   [ChatErrorType.ShareHeteroDeviceUnavailable]: 'receipt.errorShareHeteroDevice',
   [ChatErrorType.ShareHeterogeneousAgentUnsupported]: 'receipt.errorShareHeteroUnsupported',
   [ChatErrorType.ShareMessageLimitExceeded]: 'receipt.errorShareMessageLimit',
+  [ChatErrorType.SharePromptTooLong]: 'receipt.errorSharePromptTooLong',
   [ChatErrorType.ShareSpendLimitExceeded]: 'receipt.errorShareSpendLimit',
 } as const;
 
@@ -168,46 +169,6 @@ export function ReplyList({ channelId, entries }: { channelId: string; entries: 
         <ReplyDetail channelId={channelId} entry={entry} key={entry.job.id} />
       ))}
     </Flexbox>
-  );
-}
-
-/**
- * A text-less marker beside a message whose reply failed, so the failure flagged in the
- * header can be traced to its message. The reason is one click away.
- */
-export function MessageFailureMark({
-  detail,
-  message,
-}: {
-  detail: ChannelDetail;
-  message: ChannelPublicMessage;
-}) {
-  const { t, i18n } = useTranslation('channel');
-  const failed = (detail.jobs ?? []).filter(
-    (job) => job.messageId === message.id && job.status === 'failed',
-  );
-  if (!failed.length) return null;
-  const entries = replyEntries(detail, failed, t('unnamedAgent'));
-  const label = t('failure.messageLabel', {
-    names: new Intl.ListFormat(i18n.language, { type: 'conjunction' }).format(
-      entries.map((entry) => entry.name),
-    ),
-  });
-  return (
-    <Popover
-      content={<ReplyList channelId={detail.channel.id} entries={entries} />}
-      placement="bottomLeft"
-      trigger="click"
-    >
-      <button
-        aria-label={label}
-        title={label}
-        type="button"
-        {...stylex.props(statusStyles.failureMark)}
-      >
-        <span aria-hidden {...stylex.props(statusStyles.dot)} />
-      </button>
-    </Popover>
   );
 }
 

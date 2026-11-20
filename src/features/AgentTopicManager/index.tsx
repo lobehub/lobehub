@@ -359,7 +359,7 @@ const AgentTopicManager = memo(() => {
                   onRetry={shareVisitors.retry}
                 />
               ) : (
-                <ShareVisitorSection conversations={visibleShareVisitors} />
+                <ShareVisitorSection agentId={activeAgentId} conversations={visibleShareVisitors} />
               )}
               {totalAfterFilter === 0 ? null : viewMode === 'card' ? (
                 <TopicGrid

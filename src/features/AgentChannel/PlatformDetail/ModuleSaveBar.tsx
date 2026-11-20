@@ -9,6 +9,8 @@ interface ModuleSaveBarProps {
   disabled?: boolean;
   onDiscard: () => void;
   onSave: () => void;
+  /** Blocks only Save, e.g. while a field is invalid; Discard stays available. */
+  saveDisabled?: boolean;
   saving?: boolean;
 }
 
@@ -20,7 +22,7 @@ interface ModuleSaveBarProps {
  * With a change pending it says so and offers to put the block back.
  */
 export const ModuleSaveBar = memo<ModuleSaveBarProps>(
-  ({ dirty, disabled, onDiscard, onSave, saving }) => {
+  ({ dirty, disabled, onDiscard, onSave, saveDisabled, saving }) => {
     const { t: _t } = useTranslation('agent');
     const t = _t as (key: string) => string;
 
@@ -37,7 +39,7 @@ export const ModuleSaveBar = memo<ModuleSaveBarProps>(
           </Button>
         )}
         <Button
-          disabled={disabled || !dirty}
+          disabled={disabled || saveDisabled || !dirty}
           loading={saving}
           size={'small'}
           type={dirty ? 'primary' : 'default'}

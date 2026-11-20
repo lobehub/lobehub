@@ -30,10 +30,12 @@ import {
   type GitHubRepoInfo,
 } from '@/server/modules/GitHub';
 import { FileService } from '@/server/services/file';
+import type { MarketService } from '@/server/services/market';
 import { redisService } from '@/server/services/redis';
 
 import { SkillImportError, SkillManifestError, SkillParseError } from './errors';
 import { readGitHubArchive } from './githubArchive';
+import { GitHubSkillRepository } from './githubRepository';
 import {
   checkGitHubRows,
   installedFingerprint,
@@ -60,6 +62,7 @@ const log = debug('lobe-chat:service:skill-importer');
 /** GitHub and package failures reach the client as import errors, not as a 500. */
 const asImportError = (error: unknown): never => {
   if (error instanceof GitHubNotFoundError) throw new SkillImportError(error.message, 'NOT_FOUND');
+  if (error instanceof GitHubParseError) throw new SkillImportError(error.message, 'INVALID_URL');
   if (
     error instanceof GitHubError ||
     error instanceof SkillParseError ||
@@ -75,6 +78,7 @@ export class SkillImporter {
   private resourceService: SkillResourceService;
   private fileService: FileService;
   private github: GitHub;
+  private repository: GitHubSkillRepository;
   private userId: string;
   private workspaceId?: string;
   private workspaceRole?: string;
@@ -83,13 +87,14 @@ export class SkillImporter {
     db: LobeChatDatabase,
     userId: string,
     workspaceId?: string,
-    options?: { workspaceRole?: string },
+    options?: { githubProxy?: MarketService['proxyOAuthRequest']; workspaceRole?: string },
   ) {
     this.skillModel = new AgentSkillModel(db, userId, workspaceId);
     this.parser = new SkillParser();
     this.resourceService = new SkillResourceService(db, userId, workspaceId);
     this.fileService = new FileService(db, userId, workspaceId);
     this.github = new GitHub({ userAgent: 'LobeHub-Skill-Importer' });
+    this.repository = new GitHubSkillRepository(this.github, options?.githubProxy);
     this.userId = userId;
     this.workspaceId = workspaceId;
     this.workspaceRole = options?.workspaceRole;
@@ -236,6 +241,7 @@ export class SkillImporter {
       log('importFromGitHub: downloaded ZIP size=%d bytes', zipBuffer.length);
     } catch (error) {
       log('importFromGitHub: download failed, error=%s', (error as Error).message);
+      if (error instanceof SkillImportError) throw error;
       if (error instanceof GitHubNotFoundError) {
         throw new SkillImportError(error.message, 'NOT_FOUND');
       }
@@ -260,15 +266,13 @@ export class SkillImporter {
    * older commit than the one this import is about to install.
    */
   private async resolveCommit(info: GitHubRepoInfo) {
-    const commit = await this.github.resolveCommit(info);
-    await redisService.gitHubRefs.record(info, commit);
-    return commit;
+    return (await this.repository.resolveCommit(info)).commit;
   }
 
   private async downloadRef(info: GitHubRepoInfo) {
     try {
       const commit = await this.resolveCommit(info);
-      return { buffer: await this.github.downloadCommitZip(info, commit), commit };
+      return { buffer: await this.repository.downloadCommitZip(info, commit), commit };
     } catch (error) {
       if (!(error instanceof GitHubRateLimitError)) throw error;
       // The REST quota is shared by everyone behind this server's address. The
@@ -313,7 +317,7 @@ export class SkillImporter {
         const info = this.installedSource(skill);
         return info ? [{ info, skill }] : [];
       }),
-      this.github,
+      this.repository,
       this.parser,
     );
   }
@@ -339,7 +343,7 @@ export class SkillImporter {
     const tracking = { ...info, branch: ref };
     const archive = await this.resolveCommit(tracking)
       .then(async (commit) =>
-        readGitHubArchive(await this.github.downloadCommitZip(info, commit), info.path),
+        readGitHubArchive(await this.repository.downloadCommitZip(info, commit), info.path),
       )
       .catch(asImportError);
     if (!archive.get(info.path ?? ''))
@@ -373,7 +377,7 @@ export class SkillImporter {
       skill.upstream?.installedFingerprint !== installedFingerprint(skill)
     )
       throw new SkillImportError('Confirm replacement of local changes', 'CONFLICT');
-    const parsed = await this.github
+    const parsed = await this.repository
       .downloadCommitZip(info, input.commit)
       .then((buffer) =>
         this.parser.parseZipPackage(buffer, {
@@ -545,7 +549,7 @@ export class SkillImporter {
     const commit = pinnedCommit ?? (await this.resolveCommit(info));
     const base = info.path ?? '';
     const archive = await readGitHubArchive(
-      await this.github.downloadCommitZip(info, commit),
+      await this.repository.downloadCommitZip(info, commit),
       base,
     );
     const exact = url.pathname.split('/')[3] === 'blob' || (!!base && archive.has(base));
@@ -556,7 +560,7 @@ export class SkillImporter {
   }
 
   async discoverGitHubSkills(gitUrl: string): Promise<GitHubSkillDiscovery> {
-    const { commit, directories, info } = await this.gitHubCollection(gitUrl);
+    const { commit, directories, info } = await this.gitHubCollection(gitUrl).catch(asImportError);
     const entries = directories.map(([path, directory]) => {
       const fallbackName = path.split('/').at(-1) || info.repo;
       const source = { ...info, path };
@@ -628,7 +632,9 @@ export class SkillImporter {
   async importGitHubSkills(input: GitHubSkillBatchInput): Promise<GitHubSkillOutcome[]> {
     if (this.importScope !== input.scope)
       throw new SkillImportError('The active library changed. Find skills again.', 'CONFLICT');
-    const { directories, info } = await this.gitHubCollection(input.gitUrl, input.commit);
+    const { directories, info } = await this.gitHubCollection(input.gitUrl, input.commit).catch(
+      asImportError,
+    );
     const available = new Map(directories);
     const results: GitHubSkillOutcome[] = [];
     for (const { path, revision } of input.selections) {
