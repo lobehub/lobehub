@@ -360,6 +360,7 @@ export default {
   'agentSkillModal.github.clearSearch': 'Clear search',
   'agentSkillModal.github.complete_one': '{{count}} skill is ready to use',
   'agentSkillModal.github.complete_other': '{{count}} skills are ready to use',
+  'agentSkillModal.github.connectionSettings': 'Open GitHub connection settings',
   'agentSkillModal.github.desc': 'Choose a GitHub repository or folder containing a SKILL.md file.',
   'agentSkillModal.github.empty':
     'No SKILL.md found at this URL. Try another repository or directory.',
@@ -368,7 +369,6 @@ export default {
   'agentSkillModal.github.findFailed':
     'Couldn’t read this GitHub link. Check the URL and try again.',
   'agentSkillModal.github.finding': 'Finding skills…',
-  'agentSkillModal.github.hint': 'Private repositories use your GitHub connector.',
   'agentSkillModal.github.importFailed':
     'Couldn’t import the selected skills. Find skills again, then retry.',
   'agentSkillModal.github.importSelected_one': 'Import {{count}} skill',

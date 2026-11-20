@@ -7,9 +7,9 @@ import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { densityTokens } from '@/styles/density.stylex';
 
+import { GithubImportRecovery } from './GithubImportRecovery';
 import { GithubSkillPicker } from './GithubSkillPicker';
 import { canImportCandidate } from './githubSkillSelection';
 import type { useGithubSkillImport } from './useGithubSkillImport';
@@ -71,13 +71,10 @@ export const GithubImport = ({ state }: { state: ReturnType<typeof useGithubSkil
       variant="inline"
       action={
         failure.recovery ? (
-          <WorkspaceLink
-            rel="noopener noreferrer"
-            target="_blank"
-            to="/settings/connector?open=lobehub-connector%3Agithub"
-          >
-            {t('tab.connector')}
-          </WorkspaceLink>
+          <GithubImportRecovery
+            recovery={failure.recovery}
+            onConnected={state.resumeAfterConnect}
+          />
         ) : scan && failure.stage !== 'refresh' ? (
           <Button disabled={loading || !canCreate} size="small" type="text" onClick={discover}>
             {t('agentSkillModal.github.rescan')}
@@ -107,7 +104,6 @@ export const GithubImport = ({ state }: { state: ReturnType<typeof useGithubSkil
             </Text>
           </label>
           <Input
-            aria-describedby={inputId + '-hint'}
             disabled={loading || !canCreate}
             id={inputId}
             placeholder={t('agentSkillModal.github.example')}
@@ -116,9 +112,6 @@ export const GithubImport = ({ state }: { state: ReturnType<typeof useGithubSkil
             onChange={(event) => setUrl(event.target.value)}
             onPressEnter={discover}
           />
-          <Text fontSize={13} id={inputId + '-hint'} type="secondary">
-            {t('agentSkillModal.github.hint')}
-          </Text>
         </Flexbox>
         {error}
         <Flexbox horizontal justify="flex-end">

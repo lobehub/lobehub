@@ -70,7 +70,7 @@ describe('useGithubSkillImport', () => {
       Object.assign(new Error('GitHub access failed'), { data: { code } }),
     );
     const { result } = await scanned();
-    expect(result.current.failure).toMatchObject({ recovery, stage: 'find' });
+    expect(result.current.failure).toEqual({ recovery, stage: 'find' });
     expect(result.current.url.trim()).toBe('https://github.com/lobehub/skills');
   });
 
@@ -80,7 +80,48 @@ describe('useGithubSkillImport', () => {
       Object.assign(new Error(details), { data: { code: 'INTERNAL_SERVER_ERROR' } }),
     );
     const { result } = await scanned();
-    expect(result.current.failure).toEqual({ details, recovery: 'access', stage: 'find' });
+    expect(result.current.failure).toEqual({ recovery: 'access', stage: 'find' });
+  });
+
+  it('rescans the original link after connecting without installing a skill', async () => {
+    mocks.discoverGitHubSkills
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Connect GitHub'), { data: { code: 'PRECONDITION_FAILED' } }),
+      )
+      .mockResolvedValueOnce({ candidates: [demo], commit, scope: 'scope' });
+    const { result } = await scanned();
+
+    await act(() => result.current.resumeAfterConnect());
+
+    expect(mocks.discoverGitHubSkills.mock.calls).toEqual([
+      ['https://github.com/lobehub/skills'],
+      ['https://github.com/lobehub/skills'],
+    ]);
+    expect(result.current.selected).toEqual([demo.path]);
+    expect(result.current.failure).toBeUndefined();
+    expect(mocks.importGitHubSkills).not.toHaveBeenCalled();
+  });
+
+  it('keeps the pinned preview and selection when reconnecting after a batch error', async () => {
+    mocks.discoverGitHubSkills.mockResolvedValueOnce({
+      candidates: [demo],
+      commit,
+      scope: 'scope',
+    });
+    mocks.importGitHubSkills.mockRejectedValueOnce(
+      Object.assign(new Error('Connect GitHub'), { data: { code: 'PRECONDITION_FAILED' } }),
+    );
+    const { result } = await scanned();
+    await act(() => result.current.install([demo.path]));
+
+    expect(result.current.failure).toEqual({ recovery: 'connect', stage: 'import' });
+    await act(() => result.current.resumeAfterConnect());
+
+    expect(result.current.scan?.commit).toBe(commit);
+    expect(result.current.selected).toEqual([demo.path]);
+    expect(result.current.failure).toBeUndefined();
+    expect(mocks.importGitHubSkills).toHaveBeenCalledTimes(1);
+    expect(mocks.discoverGitHubSkills).toHaveBeenCalledTimes(1);
   });
 
   it('records a failed scan with its raw message as details', async () => {

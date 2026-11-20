@@ -22,9 +22,8 @@ export default {
   'fetchError.detail': 'Error details',
   'fetchError.title': 'Request failed',
   'import.github.access':
-    'Check the repository URL and branch. For a private repository, make sure your GitHub connector has read access.',
-  'import.github.connect':
-    'Check the link. If this repository is private, connect a GitHub account that can read it, then try again.',
+    'Couldn’t open this repository or branch. Check the link and your GitHub account’s access.',
+  'import.github.connect': 'Private repositories need a GitHub account with read access.',
   'import.importConfigFile.description': 'Error reason: {{reason}}',
   'import.importConfigFile.title': 'Import Failed',
   'import.incompatible.description':

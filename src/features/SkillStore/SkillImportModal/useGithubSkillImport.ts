@@ -8,7 +8,7 @@ import { useToolStore } from '@/store/tool';
 
 export interface GithubSkillImportFailure {
   /** Raw message from the server, folded behind "Show details". */
-  details: string;
+  details?: string;
   recovery?: 'access' | 'connect';
   stage: 'find' | 'import' | 'refresh';
 }
@@ -17,15 +17,15 @@ const detailsOf = (err: unknown) => (err instanceof Error ? err.message : String
 
 const importFailure = (error: unknown, stage: 'find' | 'import'): GithubSkillImportFailure => {
   const { code } = normalizeAsyncError(error);
-  const failure: GithubSkillImportFailure = { details: detailsOf(error), stage };
-  if (code === 'PRECONDITION_FAILED') failure.recovery = 'connect';
+  if (code === 'PRECONDITION_FAILED') return { recovery: 'connect', stage };
+  const details = detailsOf(error);
   // Older discovery endpoints return this GitHub error as an internal error.
   if (
     code === 'NOT_FOUND' ||
-    (stage === 'find' && failure.details === 'GitHub repository or ref not found')
+    (stage === 'find' && details === 'GitHub repository or ref not found')
   )
-    failure.recovery = 'access';
-  return failure;
+    return { recovery: 'access', stage };
+  return { details, stage };
 };
 
 /**
@@ -71,6 +71,12 @@ export const useGithubSkillImport = () => {
     } finally {
       setPending(undefined);
     }
+  };
+
+  const resumeAfterConnect = () => {
+    if (failure?.stage === 'find') return discover();
+    // A batch still needs an explicit import. Keep its pinned commit and selection.
+    setFailure(undefined);
   };
 
   const refreshLibrary = async () => {
@@ -119,6 +125,7 @@ export const useGithubSkillImport = () => {
     query,
     refreshLibrary,
     results,
+    resumeAfterConnect,
     scan,
     selected,
     setQuery,
