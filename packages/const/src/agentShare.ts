@@ -232,19 +232,20 @@ export const isShareToolApiGranted = (
 export const AGENT_SHARE_DEVICE_ALLOW_USERS_LIMIT = 100;
 
 /**
- * Heterogeneous runtimes a share visitor may run, on a device the share grants
- * them: every runtime that executes on the creator's machine (descriptor-backed
- * CLIs such as Claude Code / Codex / OpenCode, plus protocol-driven ones such as
- * DeepSeek Harness). They share one device dispatch, so the device grant covers
- * them alike. Platform agents (OpenClaw / Hermes) run as remote tasks with no
- * visitor-scoped dispatch and stay excluded.
+ * Whether a share visitor may run this heterogeneous runtime type, on a device
+ * the share grants them: every runtime that executes on the creator's machine
+ * (descriptor-backed CLIs such as Claude Code / Codex / OpenCode, plus
+ * protocol-driven ones such as DeepSeek Harness). They share one device
+ * dispatch, so the device grant covers them alike. Platform agents (OpenClaw /
+ * Hermes) run as remote tasks with no visitor-scoped dispatch and stay excluded.
+ *
+ * The schema is read on call, not at module load: `@lobechat/const` is imported
+ * almost everywhere, and a module-level read would crash every test that
+ * replaces `@lobechat/types` with a partial `vi.mock` factory.
  */
-export const AGENT_SHARE_VISITOR_HETERO_TYPES: readonly string[] =
-  LocalExecutionHeterogeneousAgentTypeSchema.options;
-
-/** Whether a share visitor may run this heterogeneous runtime type. */
 export const isAgentShareVisitorHeteroType = (type?: string | null): boolean =>
-  !!type && AGENT_SHARE_VISITOR_HETERO_TYPES.includes(type);
+  !!type &&
+  (LocalExecutionHeterogeneousAgentTypeSchema.options as readonly string[]).includes(type);
 
 /**
  * Whether an agent's effective config is exempt from the shared-agent model
