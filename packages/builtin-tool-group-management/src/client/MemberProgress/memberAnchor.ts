@@ -44,3 +44,18 @@ export const resolveMemberStatus = (anchor: UIChatMessage): ThreadStatus => {
 /** The member's isolation thread, once polled or backfilled onto the anchor. */
 export const resolveMemberThreadId = (anchor: UIChatMessage): string | undefined =>
   anchor.taskDetail?.threadId ?? anchorState(anchor)?.threadId;
+
+/**
+ * Whether the group card shows the call's own result. A server run shows each
+ * member's answer under its task, and its group result repeats those answers
+ * for the supervisor, so the block only shows for a client run (no anchors) or
+ * when a hook replaced the result with its own reason.
+ */
+export const shouldShowGroupResult = (
+  content: string,
+  anchors: Record<number, UIChatMessage>,
+  pluginState?: unknown,
+): boolean =>
+  !!content &&
+  (Object.keys(anchors).length === 0 ||
+    (pluginState as { type?: string } | undefined)?.type === 'blocked');
