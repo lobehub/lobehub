@@ -708,6 +708,7 @@ export const setupTurn = async (
               db: deps.db,
               expectedShareId: shareGate.shareId,
               ownerId: deps.userId,
+              visitorUserId: shareGate.visitorUserId,
               workspaceId: deps.workspaceId,
             },
             newTopicParams,

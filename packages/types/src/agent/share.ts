@@ -1,6 +1,35 @@
 import type { ShareVisibility } from '../topic';
 import type { CollectionWorkVersionMetadata, WorkItem } from '../work';
 
+/**
+ * An Agent share's reach. `private` pauses it for everyone but the owner. `card` admits only the
+ * people the owner granted it to by sharing the Agent's card into a Channel; its link page stays
+ * closed. `link` opens it to anyone signed in with the link, card grantees included.
+ */
+export type AgentShareVisibility = ShareVisibility | 'card';
+
+/** A share that admits someone besides its owner: by link, or by an owner's card. */
+export const isLiveAgentShareVisibility = (visibility: string | null | undefined) =>
+  visibility === 'link' || visibility === 'card';
+
+/** Where an Agent share grant came from: the owner's card message the grantee added it from. */
+export interface AgentShareGrantSource {
+  channelId: string;
+  messageId: string;
+  type: 'card';
+}
+
+/** A person the owner granted a `card` share to, for the owner's share settings. */
+export interface AgentShareGrantItem {
+  createdAt: Date;
+  user: {
+    avatar: string | null;
+    fullName: string | null;
+    id: string;
+    username: string | null;
+  };
+}
+
 /** A creator-authored visitor task, independent of the agent's opening questions. */
 export interface AgentShareDemoCase {
   description: string;
@@ -130,7 +159,7 @@ export interface SharedAgentData {
    * direct media input.
    */
   uploadAbility: SharedAgentUploadAbility;
-  visibility: ShareVisibility;
+  visibility: AgentShareVisibility;
 }
 
 /**

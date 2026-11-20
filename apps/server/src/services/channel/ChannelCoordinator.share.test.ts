@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelCoordinator } from './ChannelCoordinator';
 
 const {
+  admitsVisitor,
   checkSpend,
   countMessagesBySender,
   execAgent,
@@ -34,6 +35,10 @@ const {
     recentContext: vi.fn(),
     retireReservation: vi.fn(),
   },
+  // The grant lookup itself is the model's test; here a live share admits the requester.
+  admitsVisitor: vi.fn(async (_db: unknown, share: { visibility: string }) =>
+    ['card', 'link'].includes(share.visibility),
+  ),
   findOperation: vi.fn(),
   findShare: vi.fn(),
   resolveChannelAttachments: vi.fn(),
@@ -46,7 +51,9 @@ vi.mock('@/database/repositories/channel', () => ({
     }
   },
 }));
-vi.mock('@/database/models/agentShare', () => ({ AgentShareModel: { findByShareId: findShare } }));
+vi.mock('@/database/models/agentShare', () => ({
+  AgentShareModel: { admitsVisitor, findByShareId: findShare },
+}));
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: class {
     findById = findOperation;
@@ -196,10 +203,29 @@ describe('dispatching a contact’s shared Agent', () => {
     expect(params.shareGate).toBeDefined();
   });
 
+  it('runs a card-only share for a requester its owner granted it to', async () => {
+    findShare.mockResolvedValue({ ...liveShare, visibility: 'card' });
+    await coordinator().advance('channel');
+
+    expect(admitsVisitor).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ visibility: 'card' }),
+      expect.any(String),
+    );
+    expect(execAgent).toHaveBeenCalled();
+  });
+
   it.each([
     [
       'the share was paused',
       () => findShare.mockResolvedValue({ ...liveShare, visibility: 'private' }),
+    ],
+    [
+      'a card-only share no longer admits the requester',
+      () => {
+        findShare.mockResolvedValue({ ...liveShare, visibility: 'card' });
+        admitsVisitor.mockResolvedValueOnce(false);
+      },
     ],
     [
       'the share moved to another owner',

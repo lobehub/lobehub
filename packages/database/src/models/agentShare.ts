@@ -5,9 +5,13 @@ import {
   AGENT_SHARE_SLUG_PATTERN,
   RESERVED_AGENT_SHARE_SLUGS,
 } from '@lobechat/const';
-import type { ShareVisibility } from '@lobechat/types';
+import type {
+  AgentShareGrantItem,
+  AgentShareGrantSource,
+  AgentShareVisibility,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { and, eq, exists, isNull, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, isNull, ne, sql } from 'drizzle-orm';
 
 import type {
   AgentShareConfig,
@@ -15,8 +19,9 @@ import type {
   AgentShareItem,
   NormalizedAgentShareConfig,
 } from '../schemas';
-import { agents, agentShares, users, workspaces } from '../schemas';
+import { agents, agentShareGrants, agentShares, users, workspaces } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { agentShareAdmits } from '../utils/agentShareAdmits';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
 import { notTrashed } from '../utils/softDelete';
 import { isUuid } from '../utils/uuid';
@@ -252,7 +257,7 @@ export class AgentShareModel {
     });
 
   /** Create a private share by default, or return the existing share for the agent. */
-  create = async (agentId: string, visibility: ShareVisibility = 'private') => {
+  create = async (agentId: string, visibility: AgentShareVisibility = 'private') => {
     const share = await this.withScopedAgentLock(agentId, async (tx, agent) => {
       // One row per agent, forever: `onConflictDoNothing` on `agentId` makes a
       // re-enable fall back to the SELECT below, returning the existing row
@@ -431,7 +436,7 @@ export class AgentShareModel {
    */
   updateVisibility = async (
     agentId: string,
-    visibility: ShareVisibility,
+    visibility: AgentShareVisibility,
   ): Promise<NormalizedAgentShareItem | null> =>
     this.withScopedAgentLock(agentId, async (tx) => {
       const [updated] = await tx
@@ -586,7 +591,8 @@ export class AgentShareModel {
   /**
    * Whether an in-flight visitor run is STILL authorized to continue: the
    * agent's share row must exist, still be the SAME instance the run was
-   * authorized against (`shareId`), and still be `link`.
+   * authorized against (`shareId`), and still admit the visitor ({@link admits}):
+   * `link`, or `card` with the visitor's grant.
    *
    * Turning sharing off flips `visibility` to `private` and KEEPS the row, so
    * a disable → re-enable cycle deliberately resumes the same link and must
@@ -605,17 +611,97 @@ export class AgentShareModel {
    */
   static isRunStillAuthorized = async (
     db: LobeChatDatabase,
-    params: { agentId: string; shareId: string },
+    params: { agentId: string; shareId: string; visitorUserId?: string },
   ): Promise<boolean> => {
     const [share] = await db
-      .select({ id: agentShares.id, visibility: agentShares.visibility })
+      .select({ id: agentShares.id })
       .from(agentShares)
       .innerJoin(agents, eq(agentShares.agentId, agents.id))
-      .where(and(eq(agentShares.agentId, params.agentId), notTrashed(agents.isDeleted)))
+      .where(
+        and(
+          eq(agentShares.agentId, params.agentId),
+          notTrashed(agents.isDeleted),
+          AgentShareModel.admits(params.visitorUserId),
+        ),
+      )
       .limit(1);
 
-    return !!share && share.id === params.shareId && share.visibility === 'link';
+    return !!share && share.id === params.shareId;
   };
+
+  /** See {@link agentShareAdmits}. */
+  static admits = agentShareAdmits;
+
+  /** {@link admits} for a share already read: one grant lookup when it is a `card` share. */
+  static admitsVisitor = async (
+    db: LobeChatDatabase,
+    share: { shareId: string; visibility: string },
+    visitorUserId: string,
+  ): Promise<boolean> => {
+    if (share.visibility === 'link') return true;
+    if (share.visibility !== 'card') return false;
+    const [grant] = await db
+      .select({ id: agentShareGrants.id })
+      .from(agentShareGrants)
+      .where(
+        and(
+          eq(agentShareGrants.shareId, share.shareId),
+          eq(agentShareGrants.userId, visitorUserId),
+        ),
+      )
+      .limit(1);
+    return !!grant;
+  };
+
+  /**
+   * Admit a person to a share through the owner's card they added the Agent from. Idempotent:
+   * the first card a person added it from stays its source.
+   */
+  static grant = async (
+    db: Pick<LobeChatDatabase, 'insert'>,
+    params: { shareId: string; source: AgentShareGrantSource; userId: string },
+  ): Promise<void> => {
+    await db.insert(agentShareGrants).values(params).onConflictDoNothing();
+  };
+
+  /** The people this Agent's share admits by card, newest first, for its owner. */
+  listGrants = async (agentId: string): Promise<AgentShareGrantItem[]> => {
+    const share = await this.getByAgentId(agentId);
+    if (!share) return [];
+    return this.db
+      .select({
+        createdAt: agentShareGrants.createdAt,
+        user: {
+          avatar: users.avatar,
+          fullName: users.fullName,
+          id: users.id,
+          username: users.username,
+        },
+      })
+      .from(agentShareGrants)
+      .innerJoin(users, eq(users.id, agentShareGrants.userId))
+      .where(eq(agentShareGrants.shareId, share.id))
+      .orderBy(desc(agentShareGrants.createdAt));
+  };
+
+  /**
+   * Withdraw a person's card grant. Under the same Agent row lock as every share mutation, so a
+   * run admitted before the revoke is stopped at its next step by `isRunStillAuthorized`.
+   */
+  revokeGrant = async (agentId: string, userId: string): Promise<boolean> =>
+    !!(await this.withScopedAgentLock(agentId, async (tx) => {
+      const [share] = await tx
+        .select({ id: agentShares.id })
+        .from(agentShares)
+        .where(eq(agentShares.agentId, agentId))
+        .limit(1);
+      if (!share) return false;
+      const removed = await tx
+        .delete(agentShareGrants)
+        .where(and(eq(agentShareGrants.shareId, share.id), eq(agentShareGrants.userId, userId)))
+        .returning({ id: agentShareGrants.id });
+      return removed.length > 0;
+    }));
 
   /**
    * Resolve public share metadata and derive ownership and billing scope from
@@ -727,7 +813,8 @@ export class AgentShareModel {
     // indistinguishable from a share that never existed, otherwise a
     // stranger can probe custom slugs / ids to learn which private shares
     // exist. Only the owner ever sees the private row.
-    if (!isOwner && share.visibility === 'private') {
+    // A `card` share admits its grantees in their Channels only, never through its link page.
+    if (!isOwner && share.visibility !== 'link') {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' });
     }
   };
