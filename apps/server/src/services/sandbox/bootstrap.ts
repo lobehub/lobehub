@@ -1,3 +1,5 @@
+import posixPath from 'node:path/posix';
+
 import {
   SANDBOX_UPLOADED_FILES_DIR,
   sandboxUploadedFilePath,
@@ -5,9 +7,14 @@ import {
 
 /**
  * Directory of per-file markers: `<dir>/<fileId>` exists once that file has
- * been synced into the sandbox for the current session.
+ * been synced into the sandbox for the current session. It sits next to the
+ * upload directory rather than inside it, so no uploaded file name can collide
+ * with it and listing the upload directory shows only the user's files.
  */
-export const SANDBOX_FILES_MARKER_DIR = `${SANDBOX_UPLOADED_FILES_DIR}/.lobe-files`;
+export const SANDBOX_FILES_MARKER_DIR = posixPath.join(
+  posixPath.dirname(SANDBOX_UPLOADED_FILES_DIR),
+  '.lobe-synced-files',
+);
 
 /** Timeout (ms) for the bootstrap download command. */
 export const SANDBOX_INIT_TIMEOUT_MS = 120_000;
@@ -55,5 +62,5 @@ export const buildSandboxFilesInitCommand = (downloads: SandboxInitDownload[]): 
 
   if (steps.length === 0) return `mkdir -p ${dir}`;
 
-  return [`mkdir -p ${shellQuote(SANDBOX_FILES_MARKER_DIR)}`, ...steps].join('; ');
+  return [`mkdir -p ${dir} ${shellQuote(SANDBOX_FILES_MARKER_DIR)}`, ...steps].join('; ');
 };

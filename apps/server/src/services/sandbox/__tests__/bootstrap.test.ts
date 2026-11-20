@@ -13,10 +13,24 @@ describe('buildSandboxFilesInitCommand', () => {
       { id: 'file_a', name: 'data.csv', url: 'https://files.example.com/a' },
     ]);
 
-    expect(command).toContain(`mkdir -p '${SANDBOX_FILES_MARKER_DIR}'`);
+    expect(command).toContain(
+      `mkdir -p '${SANDBOX_UPLOADED_FILES_DIR}' '${SANDBOX_FILES_MARKER_DIR}'`,
+    );
     expect(command).toContain(
       `if [ ! -f '${SANDBOX_FILES_MARKER_DIR}/file_a' ]; then curl -fsSL 'https://files.example.com/a' -o '${SANDBOX_UPLOADED_FILES_DIR}/data.csv' && touch '${SANDBOX_FILES_MARKER_DIR}/file_a' || true; fi`,
     );
+  });
+
+  it('keeps markers outside the upload directory, so no upload name collides with them', () => {
+    expect(SANDBOX_FILES_MARKER_DIR.startsWith(`${SANDBOX_UPLOADED_FILES_DIR}/`)).toBe(false);
+
+    const markerDirName = SANDBOX_FILES_MARKER_DIR.split('/').pop()!;
+    const command = buildSandboxFilesInitCommand([
+      { id: 'file_a', name: markerDirName, url: 'https://files.example.com/a' },
+    ]);
+
+    expect(command).toContain(`-o '${SANDBOX_UPLOADED_FILES_DIR}/${markerDirName}'`);
+    expect(command).toContain(`touch '${SANDBOX_FILES_MARKER_DIR}/file_a'`);
   });
 
   it('does not let one synced file stop a file attached later from syncing', () => {
