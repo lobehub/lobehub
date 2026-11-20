@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import {
   MARKETPLACE_CONNECTOR_PATH,
@@ -50,6 +51,9 @@ interface CatalogViewTabsProps {
  * Connectors, which merges the MCP catalog with the connector manager
  * (`/marketplace/connector[/installed]`).
  * With the market disabled only the installed view exists, so no tabs render.
+ * Desktop has no tabs either: the sidebar lists the installed items under the
+ * Skills / Connectors entries (Codex Customize), so only mobile, which has no
+ * sidebar, switches views here.
  */
 const CatalogViewTabs = memo<CatalogViewTabsProps>(({ active, inset, kind }) => {
   const { t } = useTranslation('discover');
@@ -64,7 +68,7 @@ const CatalogViewTabs = memo<CatalogViewTabsProps>(({ active, inset, kind }) => 
     [t],
   );
 
-  if (!showMarket) return null;
+  if (!showMarket || !isMobileSurface()) return null;
 
   return (
     <div {...stylex.props(styles.root, inset && styles.inset)}>

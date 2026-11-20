@@ -1,8 +1,8 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { ProviderIcon, SkillsIcon } from '@lobehub/ui/icons';
-import { Blocks, Bot, Brain, ShapesIcon } from 'lucide-react';
+import { SkillsIcon } from '@lobehub/ui/icons';
+import { Blocks, Bot, ShapesIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -81,20 +81,6 @@ const Nav = memo(() => {
           // Connectors merges the MCP catalog (Discover) with the installed
           // connectors; without the market only the installed view exists.
           url: showMarket ? MARKETPLACE_CONNECTOR_PATH : MARKETPLACE_INSTALLED_CONNECTORS_PATH,
-        },
-        {
-          icon: Brain,
-          key: DiscoverTab.Models,
-          marketOnly: true,
-          title: t('tab.model'),
-          url: `${MARKETPLACE_PATH}/model`,
-        },
-        {
-          icon: ProviderIcon,
-          key: DiscoverTab.Providers,
-          marketOnly: true,
-          title: t('tab.provider'),
-          url: `${MARKETPLACE_PATH}/provider`,
         },
       ].filter((item: Item) => showMarket || !item.marketOnly) as Item[],
     [showMarket, t],

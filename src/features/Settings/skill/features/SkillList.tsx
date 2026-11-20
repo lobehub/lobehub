@@ -101,6 +101,11 @@ export interface SkillListHeaderContext {
 export type SkillViewMode = 'connector' | 'skill';
 
 interface SkillListProps {
+  /**
+   * Sidebar mode (the Marketplace `Installed` section): one flat list of what
+   * is already in the library, no group headers and nothing left to add.
+   */
+  installedOnly?: boolean;
   /** Page search: filters every group by name, identifier and description. */
   keyword?: string;
   onClearKeyword?: () => void;
@@ -120,6 +125,7 @@ interface SkillListProps {
 
 const SkillList = memo<SkillListProps>(
   ({
+    installedOnly,
     keyword,
     onClearKeyword,
     onSelect,
@@ -697,6 +703,39 @@ const SkillList = memo<SkillListProps>(
     }
 
     // ── Sidebar list (skills page, mobile) ───────────────────────────────────
+    if (installedOnly) {
+      const isConnected = (item: IntegrationItem) => isIntegrationConnected(item, connectionState);
+      const items = isConnectorView
+        ? [
+            ...[
+              ...partitionByInstalled(builtinToolItems, isConnected).installed,
+              ...partitionByInstalled(communitySkillItems, isConnected).installed,
+            ].map(renderIntegration),
+            ...renderCommunityMCPs(),
+            ...renderCustomConnectors(),
+          ]
+        : [
+            ...renderAgentSkills(marketAgentSkills),
+            ...renderAgentSkills(userAgentSkills),
+            ...builtinSkillItems.map((item) =>
+              item.type === 'builtinAgent' ? (
+                <AgentSkillItem
+                  isSelected={selectedIdentifier === item.builtinAgentSkill.identifier}
+                  key={item.builtinAgentSkill.identifier}
+                  skill={item.builtinAgentSkill}
+                  onSelect={
+                    onSelect
+                      ? () => onSelect(item.builtinAgentSkill.identifier, 'builtin-skill')
+                      : undefined
+                  }
+                />
+              ) : null,
+            ),
+          ];
+
+      return <div {...stylex.props(styles.container)}>{items}</div>;
+    }
+
     const renderSection = (key: string, label: string, children: React.ReactNode) => {
       const isCollapsed = collapsed.has(key);
       return (

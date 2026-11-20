@@ -83,6 +83,8 @@
   "catalog.add": "Add",
   "catalog.back": "Back to Discover",
   "catalog.installed": "Installed",
+  "catalog.manageInstalledConnectors": "Manage installed connectors",
+  "catalog.manageInstalledSkills": "Manage installed skills",
   "catalog.new": "New & Noteworthy",
   "catalog.popular": "Popular",
   "catalog.recommended": "Recommended",

@@ -1,6 +1,6 @@
 import { Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { Blocks, Bot, Brain, BrainCircuit, House } from 'lucide-react';
+import { Blocks, Bot, House } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -53,16 +53,6 @@ export const useNav = () => {
         icon: <Icon icon={Blocks} size={ICON_SIZE} />,
         key: MARKETPLACE_CONNECTOR_TAB,
         label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.connector')}</div>,
-      },
-      {
-        icon: <Icon icon={Brain} size={ICON_SIZE} />,
-        key: DiscoverTab.Models,
-        label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.model')}</div>,
-      },
-      {
-        icon: <Icon icon={BrainCircuit} size={ICON_SIZE} />,
-        key: DiscoverTab.Providers,
-        label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.provider')}</div>,
       },
     ],
     [t],

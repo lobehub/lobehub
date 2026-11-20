@@ -83,6 +83,8 @@
   "catalog.add": "添加",
   "catalog.back": "返回发现",
   "catalog.installed": "已安装",
+  "catalog.manageInstalledConnectors": "管理已安装的连接器",
+  "catalog.manageInstalledSkills": "管理已安装的技能",
   "catalog.new": "新上架",
   "catalog.popular": "热门",
   "catalog.recommended": "推荐",
