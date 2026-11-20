@@ -23,6 +23,7 @@ import {
   ReactionFeedbackProcessor,
   RevokedDocumentResultFilter,
   StaleToolResultTrimProcessor,
+  SUB_TOPIC_TOOL_IDENTIFIER,
   SubAgentResultMessageProcessor,
   SupervisorRoleRestoreProcessor,
   TaskCallbackMessageProcessor,
@@ -281,6 +282,11 @@ export class MessagesEngine {
     const isSkillStoreReachable =
       (toolsConfig?.manifests ?? []).some((m) => m.identifier === SKILL_STORE_TOOL_ID) ||
       (toolDiscoveryConfig?.availableTools ?? []).some((t) => t.identifier === SKILL_STORE_TOOL_ID);
+    // Tools the agent has now or can activate on demand.
+    const toolIdentifiers = [
+      ...(toolsConfig?.manifests ?? []).map((manifest) => manifest.identifier),
+      ...(toolDiscoveryConfig?.availableTools ?? []).map((tool) => tool.identifier),
+    ];
 
     // Shared config for all agent document injectors
     const agentDocConfig = {
@@ -643,11 +649,11 @@ export class MessagesEngine {
       new ReactionFeedbackProcessor({ enabled: true }),
       // Who sent an agent → agent message, and how to reply (string content only)
       new AgentSenderMessageProcessor({
-        // Enabled now or activatable on demand: either way the agent can run `lh`.
-        canRunLhCommand: [
-          ...(toolsConfig?.manifests ?? []).map((manifest) => manifest.identifier),
-          ...(toolDiscoveryConfig?.availableTools ?? []).map((tool) => tool.identifier),
-        ].some((identifier) => LH_COMMAND_TOOL_IDENTIFIERS.includes(identifier)),
+        // Enabled now or activatable on demand: either way the agent can use them.
+        canRunLhCommand: toolIdentifiers.some((identifier) =>
+          LH_COMMAND_TOOL_IDENTIFIERS.includes(identifier),
+        ),
+        canUseSubTopicTool: toolIdentifiers.includes(SUB_TOPIC_TOOL_IDENTIFIER),
       }),
       // Message content processing (image encoding, multimodal)
       new MessageContentProcessor({

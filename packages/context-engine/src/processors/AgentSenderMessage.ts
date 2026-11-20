@@ -19,6 +19,9 @@ const log = debug('context-engine:processor:AgentSenderMessageProcessor');
  */
 export const LH_COMMAND_TOOL_IDENTIFIERS = ['lobe-local-system', 'lobe-cloud-sandbox'];
 
+/** The tool that continues a sub-topic without a command (`lobe-topic`). */
+export const SUB_TOPIC_TOOL_IDENTIFIER = 'lobe-topic';
+
 export interface AgentSenderMessageConfig {
   /**
    * Whether the receiving agent has a tool that can run `lh` (see
@@ -27,6 +30,12 @@ export interface AgentSenderMessageConfig {
    * could never run.
    */
   canRunLhCommand?: boolean;
+  /**
+   * The agent has the sub-topic tool, enabled or activatable
+   * ({@link SUB_TOPIC_TOOL_IDENTIFIER}): a sub-topic's report offers
+   * `sendToTopic` to continue it.
+   */
+  canUseSubTopicTool?: boolean;
 }
 
 const escapeAttribute = (value: string) =>
@@ -72,7 +81,7 @@ export const formatAgentSenderHeader = (
  */
 export const formatSubTopicResultHeader = (
   callback: MessageSubTopicCallback,
-  { canRunLhCommand = false }: AgentSenderMessageConfig = {},
+  { canRunLhCommand = false, canUseSubTopicTool = false }: AgentSenderMessageConfig = {},
 ) => {
   const attributes = [
     ['topic_id', callback.topicId],
@@ -84,9 +93,14 @@ export const formatSubTopicResultHeader = (
     .map(([key, value]) => `${key}="${escapeAttribute(value)}"`)
     .join(' ');
 
-  const instruction = canRunLhCommand
-    ? `A sub-topic you opened finished a turn; its reply follows. To continue it, run \`lh topic send ${callback.topicId} -c "<message>"\`; your response here is not delivered to it.`
-    : 'A sub-topic you opened finished a turn; its reply follows. You cannot run commands here, so you cannot continue it directly and your response stays in this conversation: if it needs more, tell the user so they can continue it.';
+  const ways = [
+    canUseSubTopicTool && `call lobe-topic sendToTopic with topicId "${callback.topicId}"`,
+    canRunLhCommand && `run \`lh topic send ${callback.topicId} -c "<message>"\``,
+  ].filter(Boolean);
+  const instruction =
+    ways.length > 0
+      ? `A sub-topic you opened finished a turn; its reply follows. To continue it, ${ways.join(', or ')}; your response here is not delivered to it.`
+      : 'A sub-topic you opened finished a turn; its reply follows. You cannot run commands here, so you cannot continue it directly and your response stays in this conversation: if it needs more, tell the user so they can continue it.';
 
   return `<sub_topic_result ${attributes}>${instruction}</sub_topic_result>`;
 };

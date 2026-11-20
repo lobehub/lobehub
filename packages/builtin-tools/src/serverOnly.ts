@@ -1,4 +1,5 @@
 import { McpEventsIdentifier } from '@lobechat/builtin-tool-mcp-events';
+import { TopicToolIdentifier } from '@lobechat/builtin-tool-topic';
 import { WebhookIdentifier } from '@lobechat/builtin-tool-webhook';
 import { WorkIdentifier } from '@lobechat/builtin-tool-work';
 
@@ -9,6 +10,7 @@ import { WorkIdentifier } from '@lobechat/builtin-tool-work';
  */
 export const serverOnlyToolIds: readonly string[] = [
   McpEventsIdentifier,
+  TopicToolIdentifier,
   WebhookIdentifier,
   WorkIdentifier,
 ];

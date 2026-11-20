@@ -15,6 +15,7 @@
     "test:update": "vitest -u"
   },
   "dependencies": {
+    "@lobechat/builtin-tool-topic": "workspace:*",
     "@lobechat/builtin-tool-user-interaction": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobechat/prompts": "workspace:*",
