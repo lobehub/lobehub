@@ -222,22 +222,29 @@ const isGenerationId = (id: string) => id.startsWith('gen_');
 
 /**
  * Resolve the images of a collection to stored image entries. Each must be an
- * image the run's user generated or uploaded as run output; the URL the card
- * shows comes from the file row, never from the agent.
+ * image of the run's user; the URL the card shows comes from the file row,
+ * never from the agent.
  *
- * `visitorTopicId` is set for a share visitor's run, which executes as the
- * creator: each image must then appear in a tool result of that visitor's
- * conversation, so a visitor cannot pull the creator's other images into a
- * card by guessing their ids.
+ * Generated images and run outputs qualify as they are. Any other image of the
+ * user (for example a file the cloud sandbox exported, which carries no
+ * source) qualifies only when a tool result of the run's conversation names
+ * it, so the agent cannot claim the user's library uploads by id.
+ *
+ * A share visitor's run executes as the creator, so there every image must
+ * appear in a tool result of the visitor's conversation: a visitor cannot pull
+ * the creator's other images into a card by guessing their ids.
  */
 export const resolveAgentWorkCollectionItems = async (params: {
   db: LobeChatDatabase;
   items: { caption?: string; image: string }[];
+  /** Whether the run is a share visitor's, which requires the proof for every image. */
+  shareVisitor?: boolean;
+  /** The run's conversation, whose tool results prove where an image came from. */
+  topicId?: string;
   userId: string;
-  visitorTopicId?: string;
   workspaceId?: string;
 }): Promise<CollectionWorkItem[]> => {
-  const { db, items, userId, visitorTopicId, workspaceId } = params;
+  const { db, items, shareVisitor, topicId, userId, workspaceId } = params;
   // Check the count before resolving: every item costs file (and generation)
   // queries, so an oversized list is refused before any of them run.
   if (items.length === 0) {
@@ -267,35 +274,38 @@ export const resolveAgentWorkCollectionItems = async (params: {
         fileId = generation.fileId;
       }
       const file = await fileModel.findById(fileId);
-      if (!file || file.userId !== userId || !COLLECTION_IMAGE_SOURCES.has(file.source ?? '')) {
+      if (!file || file.userId !== userId) {
         throw new AgentWorkRunError(`Image ${image} not found`, 404);
       }
       if (!file.fileType.startsWith('image/')) {
         throw new AgentWorkRunError(`File ${fileId} is not an image`, 409);
       }
-      return { caption, file, image, ref };
+      const needsProof = shareVisitor || !COLLECTION_IMAGE_SOURCES.has(file.source ?? '');
+      return { caption, file, image, needsProof, ref };
     }),
   );
 
-  if (visitorTopicId) {
-    // Generated images live in generation topics; the conversation only holds
-    // the id the agent names them by (the generation id or file link) in the
-    // tool result that produced them. One scan of the topic returns the
-    // messages naming any of the images.
+  const unproven = files.filter(({ needsProof }) => needsProof);
+  if (unproven.length > 0) {
+    if (!topicId) throw new AgentWorkRunError(`Image ${unproven[0].image} not found`, 404);
+    // Generated images live in generation topics, and an exported file has no
+    // link to the run; the conversation only holds the id the agent names them
+    // by (the generation id or file link) in the tool result that produced
+    // them. One scan of the topic returns the messages naming any of the images.
     const shown = await db
       .select({ content: messages.content, role: messages.role })
       .from(messages)
       .where(
         and(
-          eq(messages.topicId, visitorTopicId),
+          eq(messages.topicId, topicId),
           eq(messages.userId, userId),
-          or(...files.map(({ ref }) => sql`position(${ref} in ${messages.content}) > 0`)),
+          or(...unproven.map(({ ref }) => sql`position(${ref} in ${messages.content}) > 0`)),
         ),
       );
-    // Only tool results count: a message the visitor typed, or an assistant
-    // reply echoing it, can name any id the visitor guessed.
+    // Only tool results count: a message the user or visitor typed, or an
+    // assistant reply echoing it, can name any id.
     const toolResults = shown.filter(({ role }) => role === 'tool');
-    const missing = files.find(
+    const missing = unproven.find(
       ({ ref }) => !toolResults.some(({ content }) => content?.includes(ref)),
     );
     if (missing) throw new AgentWorkRunError(`Image ${missing.image} not found`, 404);

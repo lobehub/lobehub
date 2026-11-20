@@ -222,10 +222,10 @@ absence of a known exploit.
   3. `updateWork` / `deleteWork` reach only Works this conversation created
      through the tool or `lh work` (`agentEditable`), never ones collected
      automatically or made in another conversation;
-  4. collection images must be generated images or run outputs of the run's
-     account (`resolveAgentWorkCollectionItems`), and in a visitor run each image
-     must also appear in a message of the visitor topic (`visitorTopicId`), so
-     a guessed id of another creator image is refused as not found.
+  4. collection images must be images of the run's account
+     (`resolveAgentWorkCollectionItems`), and in a visitor run each image must
+     also appear in a tool result of the visitor topic, so a guessed id of
+     another creator image is refused as not found.
 
   Its implied grant is added after the activator check, so it never implies
   `lobe-activator` on its own.

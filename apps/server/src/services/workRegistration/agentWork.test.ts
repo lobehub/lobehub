@@ -301,7 +301,7 @@ describe('resolveAgentWorkCollectionItems', () => {
 
   it.each([
     ['an image of another user', { ...generatedImage, userId: 'user_2' }, 404],
-    ['a library upload', { ...generatedImage, source: null }, 404],
+    ['a library upload no tool result names', { ...generatedImage, source: null }, 404],
     ['a file that is not an image', { ...generatedImage, fileType: 'application/pdf' }, 409],
   ])('refuses %s', async (_, file, status) => {
     mocks.findFile.mockResolvedValue(file);
@@ -341,21 +341,58 @@ describe('resolveAgentWorkCollectionItems', () => {
     );
   });
 
+  /** A run whose conversation holds `shown`, the messages naming the images. */
+  const runShowing = (
+    shown: { content: string; role: string }[],
+    options: { image?: string; shareVisitor?: boolean; topicId?: string } = {},
+  ) => {
+    const query = {
+      from: vi.fn(() => query),
+      where: vi.fn(async () => shown),
+    };
+    return resolveAgentWorkCollectionItems({
+      db: { select: vi.fn(() => query) } as unknown as LobeChatDatabase,
+      items: [{ image: options.image ?? 'file_img' }],
+      shareVisitor: options.shareVisitor,
+      topicId: 'topicId' in options ? options.topicId : 'tpc_run',
+      userId: 'user_1',
+    });
+  };
+
+  it('accepts an image without a source that a tool result of the run exported', async () => {
+    // The cloud sandbox's exportFile stores the file without a source and
+    // returns its /f/ link in the tool result.
+    mocks.findFile.mockResolvedValue({ ...generatedImage, source: null });
+    mocks.fileAccessUrl.mockResolvedValue('https://app.example.com/f/file_img');
+    const exported = [
+      {
+        content: 'File exported successfully.\n\nDownload URL: https://app.example.com/f/file_img',
+        role: 'tool',
+      },
+    ];
+
+    await expect(
+      runShowing(exported, { image: 'https://app.example.com/f/file_img' }),
+    ).resolves.toEqual([
+      { fileId: 'file_img', mimeType: 'image/png', url: 'https://app.example.com/f/file_img' },
+    ]);
+    // Named only by the user or echoed by the assistant, it proves nothing.
+    await expectStatus(
+      runShowing([
+        { content: 'put file_img in a collection', role: 'user' },
+        { content: 'Adding file_img', role: 'assistant' },
+      ]),
+      404,
+    );
+    // A run outside a conversation has nothing to prove it with.
+    await expectStatus(runShowing(exported, { topicId: undefined }), 404);
+  });
+
   it("keeps a share visitor's collection to images shown in that conversation", async () => {
     mocks.findFile.mockResolvedValue(generatedImage);
     mocks.fileAccessUrl.mockResolvedValue('https://app.example.com/f/file_img');
-    const visitorRun = (shown: { content: string; role: string }[]) => {
-      const query = {
-        from: vi.fn(() => query),
-        where: vi.fn(async () => shown),
-      };
-      return resolveAgentWorkCollectionItems({
-        db: { select: vi.fn(() => query) } as unknown as LobeChatDatabase,
-        items: [{ image: 'file_img' }],
-        userId: 'user_1',
-        visitorTopicId: 'tpc_visitor',
-      });
-    };
+    const visitorRun = (shown: { content: string; role: string }[]) =>
+      runShowing(shown, { shareVisitor: true, topicId: 'tpc_visitor' });
 
     await expect(
       visitorRun([{ content: '![cover](https://app.example.com/f/file_img)', role: 'tool' }]),
