@@ -1,5 +1,6 @@
 import {
   alwaysOnToolIds,
+  isOnDemandBuiltinTool,
   manualModeExcludeToolIds,
   runtimeManagedToolIds,
 } from '@lobechat/builtin-tools';
@@ -137,7 +138,10 @@ const buildVisibleMetaList = (
       if (!isBuiltinToolAvailableInCurrentEnv(item.identifier)) return false;
 
       // Exclude uninstalled tools
-      if (uninstalledBuiltinTools.includes(item.identifier)) {
+      if (
+        !isOnDemandBuiltinTool(item.identifier) &&
+        uninstalledBuiltinTools.includes(item.identifier)
+      ) {
         return false;
       }
 
@@ -146,12 +150,7 @@ const buildVisibleMetaList = (
     .map(toBuiltinMeta);
 
   const skillMetas = (s.builtinSkills || [])
-    .filter((skill) => {
-      if (!isBuiltinSkillAvailableInCurrentEnv(skill.identifier)) return false;
-      if (uninstalledBuiltinTools.includes(skill.identifier)) return false;
-
-      return true;
-    })
+    .filter((skill) => isBuiltinSkillAvailableInCurrentEnv(skill.identifier))
     .map(toSkillMeta);
   const agentSkillMetas = agentSkillsSelectors.agentSkillMetaList(s);
 
@@ -223,11 +222,7 @@ const discoverableMetaList = (s: ToolStoreState): LobeToolMeta[] => {
   const { uninstalledBuiltinTools } = s;
 
   const skillMetas = (s.builtinSkills || [])
-    .filter((skill) => {
-      if (!isBuiltinSkillAvailableInCurrentEnv(skill.identifier)) return false;
-      if (uninstalledBuiltinTools.includes(skill.identifier)) return false;
-      return true;
-    })
+    .filter((skill) => isBuiltinSkillAvailableInCurrentEnv(skill.identifier))
     .map(toSkillMeta);
 
   const agentSkillMetas = agentSkillsSelectors.agentSkillMetaList(s);
@@ -236,7 +231,11 @@ const discoverableMetaList = (s: ToolStoreState): LobeToolMeta[] => {
     .filter((item) => {
       // Exclude pure infrastructure tools (never user-facing)
       if (item.discoverable === false) return false;
-      if (uninstalledBuiltinTools.includes(item.identifier)) return false;
+      if (
+        !isOnDemandBuiltinTool(item.identifier) &&
+        uninstalledBuiltinTools.includes(item.identifier)
+      )
+        return false;
       return true;
     })
     .map(toBuiltinMeta);
@@ -255,7 +254,11 @@ const installedAllMetaList = (s: ToolStoreState): LobeToolMetaWithAvailability[]
   const builtinMetas = s.builtinTools
     .filter((item) => {
       if (EXCLUDED_TOOLS.has(item.identifier)) return false;
-      if (uninstalledBuiltinTools.includes(item.identifier)) return false;
+      if (
+        !isOnDemandBuiltinTool(item.identifier) &&
+        uninstalledBuiltinTools.includes(item.identifier)
+      )
+        return false;
 
       return true;
     })
@@ -278,7 +281,11 @@ const installedProfileConfigurableMetaList =
 
     const builtinMetas = s.builtinTools
       .filter((tool) => isProfileConfigurableBuiltinTool(tool, options))
-      .filter((item) => !uninstalledBuiltinTools.includes(item.identifier))
+      .filter(
+        (item) =>
+          isOnDemandBuiltinTool(item.identifier) ||
+          !uninstalledBuiltinTools.includes(item.identifier),
+      )
       .map(toBuiltinMetaWithAvailability);
 
     return [...builtinMetas, ...getComposioMetasWithAvailability(s)];
@@ -296,15 +303,10 @@ const nonProfileConfigurableBuiltinToolIds =
       .map((tool) => tool.identifier);
 
 /**
- * Get installed builtin skills (excludes uninstalled ones)
+ * Bundled skills available on this client, including those awaiting an agent opt-in.
  */
 const installedBuiltinSkills = (s: ToolStoreState): BuiltinSkillManifest[] =>
-  (s.builtinSkills || []).filter((skill) => {
-    if (!isBuiltinSkillAvailableInCurrentEnv(skill.identifier)) return false;
-    if (s.uninstalledBuiltinTools.includes(skill.identifier)) return false;
-
-    return true;
-  });
+  (s.builtinSkills || []).filter((skill) => isBuiltinSkillAvailableInCurrentEnv(skill.identifier));
 
 /**
  * Get uninstalled builtin tool identifiers

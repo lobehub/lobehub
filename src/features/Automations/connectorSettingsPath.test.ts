@@ -14,7 +14,7 @@ describe('connectorSettingsPath', () => {
   it('opens a user connector detail through the page own selection param', () => {
     const path = connectorSettingsPath({ agentId: null, identifier: 'mwe' });
 
-    expect(path.startsWith('/settings/connector?')).toBe(true);
+    expect(path.startsWith('/marketplace/connector/installed?')).toBe(true);
     expect(selectionOf(path)).toEqual({ identifier: 'mwe', type: 'mcp-connector' });
   });
 
@@ -26,12 +26,12 @@ describe('connectorSettingsPath', () => {
 
   it('sends an agent-owned connector to the list', () => {
     expect(connectorSettingsPath({ agentId: 'agt_1', identifier: 'mwe' })).toBe(
-      '/settings/connector',
+      '/marketplace/connector/installed',
     );
   });
 
   it('falls back to the list without a connector', () => {
-    expect(connectorSettingsPath(null)).toBe('/settings/connector');
-    expect(connectorSettingsPath({ identifier: '' })).toBe('/settings/connector');
+    expect(connectorSettingsPath(null)).toBe('/marketplace/connector/installed');
+    expect(connectorSettingsPath({ identifier: '' })).toBe('/marketplace/connector/installed');
   });
 });

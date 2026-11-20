@@ -76,7 +76,7 @@ const styles = createStaticStyles(({ css, cssVar: cv }) => ({
 
     height: ${densityVars.controlHeight};
     padding-block: 4px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: ${densityVars.radius};
 
     font-size: ${densityVars.fontSize};

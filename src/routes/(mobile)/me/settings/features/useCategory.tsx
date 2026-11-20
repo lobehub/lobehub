@@ -1,8 +1,6 @@
 import { ENABLE_TOOL_CHANNEL_SETTINGS } from '@lobechat/business-const';
-import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   AppWindowIcon,
-  Blocks,
   Brain,
   BrainCircuit,
   ChartColumnBigIcon,
@@ -112,7 +110,6 @@ export const useCategory = (): CategoryGroup[] => {
         key: SettingsTabs.ServiceModel,
         label: t('setting:tab.serviceModel'),
       }),
-      makeItem({ icon: SkillsIcon, key: SettingsTabs.Skill, label: t('setting:tab.skill') }),
       makeItem({ icon: TagIcon, key: SettingsTabs.Labels, label: t('setting:tab.labels') }),
       makeItem({ icon: BrainCircuit, key: SettingsTabs.Memory, label: t('setting:tab.memory') }),
       ENABLE_TOOL_CHANNEL_SETTINGS &&
@@ -120,7 +117,6 @@ export const useCategory = (): CategoryGroup[] => {
     ].filter((item): item is CategoryItem => Boolean(item));
 
     const connection: CategoryItem[] = [
-      makeItem({ icon: Blocks, key: SettingsTabs.Connector, label: t('setting:tab.connector') }),
       makeItem({ icon: KeyRound, key: SettingsTabs.Creds, label: t('setting:tab.creds') }),
     ];
 

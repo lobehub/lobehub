@@ -17,7 +17,7 @@ import { parseSelectedSkillsFromEditorData } from '@/store/chat/slices/agentRun/
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getToolStoreState } from '@/store/tool';
 
-import { installedImplicitBuiltinSkillIds } from '../projection';
+import { installedImplicitBuiltinSkillIds, legacyDisabledBuiltinSkillsForRun } from '../projection';
 
 /** Bind both name lookup and the fallback catalog to the calling agent, not the active tab. */
 export const clientSkillCatalog = (ctx: BuiltinToolContext) => {
@@ -54,7 +54,10 @@ export const clientSkillCatalog = (ctx: BuiltinToolContext) => {
     ),
   );
   if (mentionsTopic(userTurns)) selected.add(LobeHubIdentifier);
-  const disabled = new Set(getDisabledPluginIds(plugins));
+  const disabled = new Set([
+    ...getDisabledPluginIds(plugins),
+    ...legacyDisabledBuiltinSkillsForRun(getToolStoreState(), plugins),
+  ]);
   const offered = (id: string) =>
     !disabled.has(id) && (selected.has(id) || getLibrarySkillMode(plugins, id) !== 'disabled');
   const lookup: Pick<SkillRuntimeService, 'findAll' | 'findById' | 'findByName'> = {

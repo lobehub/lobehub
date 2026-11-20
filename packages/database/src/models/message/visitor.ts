@@ -10,8 +10,6 @@ import type {
 import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 import { isPlainRecord } from '@lobechat/utils/object';
 
-import type { VisitorRedactionOptions } from './types';
-
 /**
  * Fields on {@link UIChatMessage} that are safe to forward to an agent-share
  * visitor verbatim: the message's OWN presentational content (text,
@@ -201,6 +199,7 @@ export const redactCreatorPrivateBlob = <T>(value: T): T => {
 const VISITOR_SAFE_ERROR_TYPES = new Set<string>([
   ChatErrorType.ShareMessageLimitExceeded,
   ChatErrorType.ShareSpendLimitExceeded,
+  ChatErrorType.SharePromptTooLong,
   ChatErrorType.ShareHeterogeneousAgentUnsupported,
   ChatErrorType.ShareHeteroDeviceUnavailable,
   ChatErrorType.AgentShareProviderNotSupported,
@@ -228,15 +227,14 @@ const VISITOR_PUBLIC_ERROR_TYPE = AgentRuntimeErrorType.AgentRuntimeError;
  * re-derives its localized copy, alert styling, and error-card variant from
  * `type` alone.
  *
- * Bypassed entirely when the share sets `showErrorDetails` — the creator has
- * then explicitly opted into showing visitors the raw failure.
+ * Applied to every visitor-facing error without a share-level opt-out: the raw
+ * payload describes the creator's provider and billing, which a visitor cannot
+ * act on.
  */
 export const sanitizeVisitorError = (
   error: ChatMessageError | null | undefined,
-  options: VisitorRedactionOptions = {},
 ): ChatMessageError | null | undefined => {
   if (!error) return error;
-  if (options.showErrorDetails) return error;
 
   const type = error.type as unknown;
   if (typeof type === 'string' && VISITOR_SAFE_ERROR_TYPES.has(type)) {
@@ -305,17 +303,13 @@ const sanitizeVisitorWorks = (
 /**
  * Strip creator-only fields from a message row before it reaches an
  * agent-share visitor. Creator account identity and the creator's
- * model/provider/spend choices never cross the share boundary; raw error
- * payloads cross it only when the share sets `showErrorDetails`
- * ({@link VisitorRedactionOptions}).
+ * model/provider/spend choices never cross the share boundary, and errors are
+ * projected to a classified type ({@link sanitizeVisitorError}).
  *
  * Built from {@link VISITOR_MESSAGE_ALLOWED_KEYS} plus explicit handling for
  * the fields that need transformation rather than a plain allow/deny.
  */
-export const toVisitorMessage = (
-  message: UIChatMessage,
-  options: VisitorRedactionOptions = {},
-): UIChatMessage => {
+export const toVisitorMessage = (message: UIChatMessage): UIChatMessage => {
   return {
     ...pickAllowedKeys(message),
     // `sender` is the CREATOR's account identity — never gated by any config
@@ -330,7 +324,7 @@ export const toVisitorMessage = (
     pluginError: redactCreatorPrivateBlob(message.pluginError),
     pluginState: redactCreatorPrivateBlob(message.pluginState),
     // Projected, not redacted — see `sanitizeVisitorError`.
-    error: sanitizeVisitorError(message.error, options),
+    error: sanitizeVisitorError(message.error),
     model: undefined,
     provider: undefined,
     signalCallbacks: sanitizeVisitorSignalCallbacks(message.signalCallbacks),
@@ -344,12 +338,10 @@ export const toVisitorMessage = (
     // nests member messages, so anything less than a full recursive sanitize
     // would leave the creator's identity on everything inside it.
     ...(message.compressedMessages && {
-      compressedMessages: message.compressedMessages.map((nested) =>
-        toVisitorMessage(nested, options),
-      ),
+      compressedMessages: message.compressedMessages.map((nested) => toVisitorMessage(nested)),
     }),
     ...(message.members && {
-      members: message.members.map((nested) => toVisitorMessage(nested, options)),
+      members: message.members.map((nested) => toVisitorMessage(nested)),
     }),
     // `pinnedMessages` is only ever the narrow group-node projection (see
     // `queryMessageGroupNodes` in the Compression branch).
@@ -376,7 +368,7 @@ export const toVisitorMessage = (
               message.children as unknown as VisitorGroupSnapshotProjection[],
             ) as unknown as UIChatMessage['children'])
           : ((message.children as unknown as UIChatMessage[]).map((child) =>
-              toVisitorMessage(child, options),
+              toVisitorMessage(child),
             ) as unknown as UIChatMessage['children']),
     }),
     // `AssistantContentBlock.council` on a nested assistantGroup child is a
@@ -387,7 +379,7 @@ export const toVisitorMessage = (
     ...((message as unknown as { council?: unknown }).council !== undefined &&
       ({
         council: ((message as unknown as { council?: UIChatMessage[] }).council ?? []).map(
-          (member) => toVisitorMessage(member, options),
+          (member) => toVisitorMessage(member),
         ),
       } as unknown as Partial<UIChatMessage>)),
   } as UIChatMessage;

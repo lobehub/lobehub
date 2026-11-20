@@ -701,13 +701,48 @@ export default {
   'channel.access.device.listHint':
     'Listed people can read and write files and run commands on your devices through the bot. Add only people you trust.',
   'channel.access.device.listEmpty': 'No one is authorized yet, so only you can use your devices.',
+  'channel.access.device.channel.label': 'Where devices can be used',
+  'channel.access.device.channel.any': 'Any channel',
+  'channel.access.device.channel.anyDesc':
+    'Device access follows the choice above wherever the bot is used.',
+  'channel.access.device.channel.allowlist': 'Only listed channels',
+  'channel.access.device.channel.allowlistDesc':
+    'Outside the channels listed below, the bot runs in the sandbox for everyone, you included. Direct messages are not affected.',
+  'channel.access.device.channel.list': 'Channels for devices',
+  'channel.access.device.channel.listHint':
+    'Use the same channel / group / chat IDs as Allowed Channels for conversations.',
+  'channel.access.device.channel.listEmpty':
+    'No channels added yet, so devices cannot be used in any channel.',
+  'channel.access.device.channelMembers': 'Anyone in the listed channels',
+  'channel.access.device.channelMembersDesc':
+    'You anywhere, plus everyone in the channels listed below. In other channels and in direct messages, only you.',
+  'channel.access.device.channelMembersRisk':
+    'Anyone in these channels can have the bot read and write files and run commands on your devices. List only channels whose members you all trust.',
+  'channel.access.device.grant.listEmpty':
+    'No channels added yet, so only you can use your devices.',
+  'channel.access.device.grant.listHint':
+    'Everyone in these channels can use your devices. Use the same channel / group / chat IDs as Allowed Channels for conversations.',
+  'channel.access.device.grantConfirmTitle': 'Grant these channels?',
+  'channel.access.device.grantConfirmContent':
+    '{{count}} channel(s) are already on the device channel list. They will now grant access: everyone in them can have the bot operate your devices.',
+  'channel.access.device.grantConfirmOk': 'Grant access',
   'channel.access.device.ownerMissing':
     'Add your platform user ID under Owner identity first. Until then the bot cannot recognize you, and no one can use your devices.',
+  'channel.access.device.ownerMissingChannel':
+    'Add your platform user ID under Owner identity first. Until then the bot cannot recognize you, so only members of the listed channels can use your devices, and only in those channels.',
   'channel.devicePolicy': 'Device Access',
   'channel.devicePolicyHint': 'Who may operate your devices through the bot.',
   'channel.deviceAllowFrom': 'Authorized People',
   'channel.deviceAllowFromAdd': 'Add person',
   'channel.deviceAllowFromEmpty': 'No one is authorized yet, so only you can use your devices.',
+  'channel.deviceChannelPolicy': 'Device Channels',
+  'channel.deviceChannelPolicyHint': 'In which channels the bot may operate your devices.',
+  'channel.deviceChannelAllowFrom': 'Device Channels',
+  'channel.deviceChannelAllowFromAdd': 'Add channel',
+  'channel.deviceChannelAllowFromEmpty':
+    'No channels added yet, so devices cannot be used in any channel.',
+  'channel.deviceChannelAllowFromHint':
+    'Channel / group / chat IDs where the bot may operate your devices.',
   'channel.deviceAllowFromHint':
     'Listed people can read and write files and run commands on your devices through the bot.',
   'channel.hero.title': '{{name}} bot',
@@ -889,8 +924,11 @@ export default {
   'channel.statusStarting': 'Starting',
 
   'share.entry': 'Share this Agent',
+  'share.settings.autoGrant.desc':
+    'Visitors get every tool and skill turned on in this Agent, including ones you turn on later. Anything you untick below stays closed.',
+  'share.settings.autoGrant.title': 'Open new Agent tools and skills automatically',
   'share.settings.device.desc':
-    'Choose who may run this Agent on your execution environment, for example to read files or run commands. Claude Code and Codex Agents run only there, so other visitors can’t use them. Chatting with the Agent doesn’t include device access.',
+    'Choose who may run this Agent on your execution environment, for example to read files or run commands. Local CLI Agents such as Claude Code and Codex run only there, so other visitors can’t use them. Chatting with the Agent doesn’t include device access.',
   'share.settings.device.title': 'Device access',
   'share.settings.device.who': 'Who can use your device',
   'share.settings.limits.desc':
@@ -952,6 +990,12 @@ export default {
   'share.settings.notice.workspaceDesc':
     'Visitors don’t just read this Agent — they run it. Every reply is generated in the Workspace and charged to its shared budget, without consuming the creator’s or another member’s quota. The Agent only acts with the visitor access you grant below.',
   'share.settings.notice.workspaceTitle': 'Visitors run this Agent on the Workspace budget',
+  'share.settings.pendingGrants.decline': 'Don’t open',
+  'share.settings.pendingGrants.desc':
+    'Includes {{names}}. If you choose not to open them, you won’t be asked about them again.',
+  'share.settings.pendingGrants.grantAll': 'Open to visitors',
+  'share.settings.pendingGrants.title':
+    '{{count}} tools or skills turned on in this Agent aren’t open to visitors yet',
   'share.settings.permissions.allowCreatorViewSessions': 'Let me read visitor conversations',
   'share.settings.permissions.allowCreatorViewSessionsHint':
     "Off by default: visitor conversations stay private to the visitor. When on, they appear under Share on this agent's Topics page.",
@@ -960,19 +1004,30 @@ export default {
     'The Agent may draw on your long-term memory while answering a visitor.',
   'share.settings.permissions.deviceAccessConfirm.messageLimit':
     'The monthly spend cap does not limit that usage. Only the message limit per visitor does.',
-  'share.settings.permissions.deviceAccessOption.allowlist': 'People from contacts',
+  'share.settings.permissions.deviceAccessOption.allowlist': 'Specific people from contacts',
+  'share.settings.permissions.deviceAccessConfirm.okContacts': 'Allow everyone in contacts',
+  'share.settings.permissions.deviceAccessOption.contacts': 'Everyone in contacts',
   'share.settings.permissions.deviceAccessOption.none': 'No visitors',
+  'share.settings.permissions.deviceAccessOption.noneDesc':
+    'Visitors can chat with this Agent but never run it on your execution environment.',
+  'share.settings.permissions.deviceAccessOption.contactsDesc':
+    'Everyone in this Agent’s contacts can use it, including people added later. Removing someone from contacts also removes their access.',
+  'share.settings.permissions.deviceAccessOption.allowlistDesc':
+    'Only the people you pick below from this Agent’s contacts can use it.',
+  'share.settings.limits.saved': 'Limits saved',
   'share.settings.permissions.deviceAccessConfirm.commands':
-    'They can run any command and read or write any file on the machine this Agent runs on, including through Claude Code or Codex.',
+    'They can run any command and read or write any file on the machine this Agent runs on, including through a local CLI Agent such as Claude Code or Codex.',
+  'share.settings.permissions.deviceAccessConfirm.contactsScope':
+    'Anyone added to this Agent’s contacts later gets this access too, not only the people there now.',
   'share.settings.permissions.deviceAccessConfirm.intro':
-    'People you add will run this Agent on your execution environment:',
+    'People you grant access will run this Agent on your execution environment:',
   'share.settings.permissions.deviceAccessConfirm.ok': 'Allow listed people',
   'share.settings.permissions.deviceAccessConfirm.subscription':
-    'Claude Code and Codex runs use the model subscription signed in on that machine.',
+    'Local CLI Agents such as Claude Code and Codex use the model subscription or key signed in on that machine.',
   'share.settings.permissions.deviceAccessConfirm.title':
     'Let people use your execution environment?',
   'share.settings.permissions.deviceAllowContactsUnavailable':
-    'Only people in your contacts can be added, and contacts aren’t available for your account yet.',
+    'Device access works through contacts, and contacts aren’t available for your account yet.',
   'share.settings.permissions.deviceAllowHint':
     'Only people in this Agent’s contacts can be added. Removing someone from contacts also removes their access.',
   'share.settings.permissions.deviceAllowLimitReached': 'You can add up to {{limit}} people.',
@@ -984,15 +1039,14 @@ export default {
   'share.settings.permissions.deviceAllowUnlisted':
     'No longer in contacts, so they can’t use it: {{names}}. They’re removed the next time you edit this list.',
   'share.settings.permissions.desc':
-    'What a visitor’s run may read, and what the visitor gets to see back.',
-  'share.settings.permissions.showErrorDetails': 'Show error details to visitors',
-  'share.settings.permissions.showErrorDetailsHint':
-    'Off by default: visitors see a generic failure notice instead of raw error text.',
+    'What a visitor’s run may read, and whether you can read visitor conversations.',
   'share.settings.permissions.title': 'Permissions',
+  'share.settings.skills.autoGranted': 'Open automatically because this Agent can use it',
   'share.settings.tabs.access': 'Access',
   'share.settings.tabs.profile': 'Public profile',
   'share.settings.tabs.stats': 'Stats',
   'share.settings.title': 'Share Agent',
+  'share.settings.tools.autoGranted': 'Open automatically because it’s turned on in this Agent',
   'share.settings.usage.conversations': 'Topics',
   'share.settings.usage.conversationsHint': 'Topics created by visitors through this share.',
   'share.settings.usage.desc': 'What this share has attracted, and what it has cost you.',
@@ -1024,6 +1078,9 @@ export default {
     'Could not load this Agent’s skills. Close and reopen the share settings to try again.',
   'share.settings.skills.loading': 'Loading skills…',
   'share.settings.skills.title': 'Skills visitors can use',
+  'share.settings.tools.agentOffDesc':
+    'This tool is not turned on in the Agent’s Tools and connectors.',
+  'share.settings.tools.agentOffLegend': 'Tools not turned on in the Agent’s Tools and connectors',
   'share.settings.tools.apiWritesOwnerDocuments':
     'Visitors can never delete or copy your documents or change their load rules — this action stays off in shared runs.',
   'share.settings.tools.desc':
@@ -1046,10 +1103,12 @@ export default {
     'Also turn on “Allow reading my memory” above, or this tool stays inert for visitors.',
   'share.settings.tools.notAvailableToVisitors':
     'This tool can never be used in a shared run — visitor runs are blocked from your knowledge base and Agent files.',
+  /** @deprecated Unused since the on-demand filter was removed; delete after the Cloud picker stops reading it. */
   'share.settings.tools.onDemandDesc':
     'Not enabled on this Agent. Once granted, the model turns it on in a visitor run only when needed.',
   'share.settings.tools.ownerCredentials':
     'Visitors use MCP servers, connections and plugins with your accounts and credentials.',
+  /** @deprecated See `share.settings.tools.onDemandDesc`. */
   'share.settings.tools.showOnDemand': 'Show on-demand tools',
   'share.settings.tools.title': 'Tools visitors can use',
   'share.settings.updateError': 'Could not save the change. Please try again.',
@@ -1095,7 +1154,7 @@ export default {
     'This topic runs in the owner Workspace. The Agent creator has turned on topic access and may read its messages, so avoid sharing sensitive information.',
   'share.visitor.profile.about': 'About',
   'share.visitor.profile.createdBy': 'Created by {{creator}}',
-  'share.visitor.profile.cta': 'Start a topic',
+  'share.visitor.profile.cta': 'Start a conversation',
   'share.visitor.profile.ctaSignIn': 'Sign in to start',
   'share.visitor.profile.freeNote': 'Free · paid for by the creator',
   'share.visitor.profile.freeNoteWorkspace': 'Free · paid for by the Workspace',
@@ -1238,10 +1297,15 @@ export default {
   'share.visitor.profile.works.desc': 'Selected by the creator. See what this agent can deliver.',
   'share.visitor.profile.works.untitled': 'Untitled work',
   'share.visitor.profile.works.open': 'Open work',
+  'share.visitor.profile.works.type.artboard': 'Artboard',
   'share.visitor.profile.works.type.canvas': 'Canvas',
   'share.visitor.profile.works.type.document': 'Document',
   'share.visitor.profile.works.type.task': 'Task',
   'share.visitor.profile.works.type.file': 'File',
+  'share.visitor.profile.works.images_one': '{{count}} image',
+  'share.visitor.profile.works.images_other': '{{count}} images',
+  'share.visitor.profile.works.type.collection': 'Gallery',
+  'share.visitor.profile.works.viewImages': 'View images',
   'share.visitor.profile.works.type.external': 'Linked work',
   'share.settings.profile.title': 'Public profile',
   'share.settings.profile.desc':

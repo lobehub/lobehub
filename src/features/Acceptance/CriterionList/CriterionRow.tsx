@@ -6,13 +6,14 @@ import * as stylex from '@stylexjs/stylex';
 import type { HTMLAttributes, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 const styles = stylex.create({
   list: { overflow: 'hidden', width: '100%', padding: 0 },
   row: {
     paddingBlock: '10px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockStartWidth: { default: null, [stylex.when.siblingBefore(':is(*)')]: '1px' },
     borderBlockStartStyle: { default: null, [stylex.when.siblingBefore(':is(*)')]: 'solid' },
     borderBlockStartColor: {

@@ -5,7 +5,7 @@ import { Outlet } from 'react-router';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { RouteSkeletonChromeProvider } from '@/spa/router/routeSkeletonChrome';
 
-import { MAX_WIDTH } from '../../features/const';
+import { MAX_WIDTH, SCROLL_PARENT_ID } from '../../features/const';
 import Footer from './Footer';
 import Header from './Header';
 import { styles } from './style';
@@ -17,6 +17,7 @@ const Layout = () => {
       <Flexbox
         className={stylex.props(styles.mainContainer).className}
         height={'100%'}
+        id={SCROLL_PARENT_ID}
         width={'100%'}
       >
         <WideScreenContainer

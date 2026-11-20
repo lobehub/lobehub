@@ -11,34 +11,39 @@ import { useInterfaceDensity } from '@/styles/density';
 
 /**
  * `nav` is the compact sidebar row beside a detail pane; `page` is the
- * full-width list a row opens a second-level page from.
+ * full-width management list, and `catalog` is the Marketplace discovery list.
  */
-export type SkillListVariant = 'nav' | 'page';
+type SkillListVariant = 'nav' | 'page' | 'catalog';
 
 const SkillListVariantContext = createContext<SkillListVariant>('nav');
 
 export const SkillListVariantProvider = SkillListVariantContext.Provider;
 
-export const useSkillListVariant = () => use(SkillListVariantContext);
+export const useSkillListVariant = () => (use(SkillListVariantContext) === 'nav' ? 'nav' : 'page');
 
 const styles = stylex.create({
-  // A borderless row in a two-column catalog: the icon tile and whitespace
-  // identify an entry, the trailing slot is its one action (`+` or `⋯`).
+  // A borderless row in a two-column catalog (the Codex Plugins row): a 36px
+  // tile with a hairline border and the base radius identifies an entry,
+  // whitespace separates entries, the trailing slot is its one action (`+` or `⋯`).
   iconTile: {
     backgroundColor: sxVar.colorBgContainer,
     borderColor: sxVar.colorBorderSecondary,
-    borderRadius: sxVar.borderRadiusLG,
+    borderRadius: sxVar.borderRadius,
     borderStyle: 'solid',
     borderWidth: 1,
     flex: 'none',
-    height: 40,
+    height: 36,
     overflow: 'hidden',
-    width: 40,
+    width: 36,
   },
   // Compact page row: 6px padding around a 32px tile and a 20 + 2 + 18px text stack → 52px.
   iconTileCompact: {
     height: 32,
     width: 32,
+  },
+  iconTileCatalog: {
+    height: 40,
+    width: 40,
   },
   row: {
     minHeight: 64,
@@ -46,6 +51,9 @@ const styles = stylex.create({
   },
   rowCompact: {
     minHeight: 48,
+  },
+  rowCatalog: {
+    minHeight: 60,
   },
   trailing: {
     alignItems: 'center',
@@ -57,6 +65,7 @@ const styles = stylex.create({
 
 interface SkillListRowProps {
   active?: boolean;
+  agentType?: 'agent' | 'agent-group';
   /** Feedback line (connect error, ask an admin); shown in both variants. */
   description?: ReactNode;
   extra?: ReactNode;
@@ -64,13 +73,27 @@ interface SkillListRowProps {
   onClick?: () => void;
   /** What the connector does; only the page row has room for it. */
   summary?: ReactNode;
+  /** `data-testid` of the page row (the catalog rows keep the e2e hooks of the old cards). */
+  testId?: string;
   title: string;
   titleColor?: string;
 }
 
 const SkillListRow = memo<SkillListRowProps>(
-  ({ active, description, extra, icon, onClick, summary, title, titleColor }) => {
-    const variant = useSkillListVariant();
+  ({
+    active,
+    agentType,
+    description,
+    extra,
+    icon,
+    onClick,
+    summary,
+    testId,
+    title,
+    titleColor,
+  }) => {
+    const variant = use(SkillListVariantContext);
+    const isCatalog = variant === 'catalog';
     const compact = useInterfaceDensity() === 'compact';
 
     if (variant === 'nav')
@@ -92,15 +115,23 @@ const SkillListRow = memo<SkillListRowProps>(
       <Block
         horizontal
         align={'center'}
-        {...stylex.props(styles.row, compact && styles.rowCompact)}
+        {...stylex.props(styles.row, compact && styles.rowCompact, isCatalog && styles.rowCatalog)}
         clickable={!!onClick}
+        data-agent-type={agentType}
+        data-testid={testId}
         gap={12}
-        paddingBlock={compact ? 6 : 12}
-        paddingInline={12}
+        paddingBlock={compact && !isCatalog ? 6 : 8}
+        paddingInline={isCatalog ? 8 : 12}
         variant={'borderless'}
         onClick={onClick}
       >
-        <Center {...stylex.props(styles.iconTile, compact && styles.iconTileCompact)}>
+        <Center
+          {...stylex.props(
+            styles.iconTile,
+            compact && styles.iconTileCompact,
+            isCatalog && styles.iconTileCatalog,
+          )}
+        >
           <IconNode />
         </Center>
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
@@ -116,7 +147,7 @@ const SkillListRow = memo<SkillListRowProps>(
             <Text
               ellipsis
               color={cssVar.colorTextSecondary}
-              fontSize={compact ? 12 : 13}
+              fontSize={compact ? 12 : cssVar.fontSize}
               lineHeight={compact ? '18px' : undefined}
             >
               {summary}

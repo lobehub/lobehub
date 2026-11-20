@@ -5,7 +5,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../../core/getTestDB';
 import { agents, agentShares, topics, users } from '../../../schemas';
 import { ChannelExecutionRepository, ChannelRepository } from '..';
-import { listShareVisitorConversations, readShareVisitorChannel } from '../shareVisitors';
+import {
+  findShareVisitorTopic,
+  listShareVisitorConversations,
+  listShareVisitorTopics,
+  readShareVisitorChannel,
+} from '../shareVisitors';
 import { createChannelFixture, jobsOf, lease } from './testUtils';
 
 const db = await getTestDB();
@@ -109,6 +114,7 @@ describe('share visitor conversations', () => {
     expect(view.messages.every((message) => message.sourceTopicId === null)).toBe(true);
     expect(view.jobs.length).toBeGreaterThan(0);
     expect(view.jobs.every((job) => !('topicId' in job))).toBe(true);
+    expect(view.jobs.every((job) => !('topicTitle' in job))).toBe(true);
   });
 
   it('keep a Workspace member’s own conversation private, even after the Agent turns private', async () => {
@@ -132,5 +138,78 @@ describe('share visitor conversations', () => {
     await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, agentId));
     expect(await listShareVisitorConversations(db, ownerId, agentId)).toEqual([]);
     expect(await readShareVisitorChannel(db, ownerId, channel.id)).toBeUndefined();
+  });
+});
+
+describe('share visitor topics', () => {
+  it('stay hidden from the creator until the share lets them read them', async () => {
+    const { topicId } = await openConversation(0.5, 1200);
+
+    expect(await listShareVisitorTopics(db, ownerId, agentId)).toEqual([]);
+    expect(await findShareVisitorTopic(db, ownerId, topicId)).toBeUndefined();
+  });
+
+  it('list each visitor with the run topics of their conversation', async () => {
+    await setCreatorView(true);
+    const { topicId } = await openConversation(0.25, 1500);
+
+    expect(await listShareVisitorTopics(db, ownerId, agentId)).toEqual([
+      {
+        topics: [
+          expect.objectContaining({
+            id: topicId,
+            preview: 'Hello helper',
+            totalCost: 0.25,
+            totalTokens: 1500,
+          }),
+        ],
+        visitor: expect.objectContaining({ id: visitorId, name: 'Visitor Vee' }),
+      },
+    ]);
+    expect(await findShareVisitorTopic(db, ownerId, topicId)).toMatchObject({
+      agentId,
+      id: topicId,
+      visitor: { id: visitorId, name: 'Visitor Vee' },
+    });
+  });
+
+  it('are listed and opened only by the Agent owner', async () => {
+    await setCreatorView(true);
+    const { topicId } = await openConversation(0.25, 1500);
+
+    expect(await listShareVisitorTopics(db, visitorId, agentId)).toEqual([]);
+    expect(await findShareVisitorTopic(db, visitorId, topicId)).toBeUndefined();
+  });
+
+  it('drop a topic once it is trashed', async () => {
+    await setCreatorView(true);
+    const { topicId } = await openConversation(0.25, 1500);
+    await db
+      .update(topics)
+      .set({ deletedAt: new Date(), isDeleted: true })
+      .where(eq(topics.id, topicId));
+
+    expect(await listShareVisitorTopics(db, ownerId, agentId)).toEqual([]);
+    expect(await findShareVisitorTopic(db, ownerId, topicId)).toBeUndefined();
+  });
+
+  it('keep a Workspace member’s own run topics private', async () => {
+    await setCreatorView(true);
+    await db
+      .update(agents)
+      .set({ visibility: 'public', workspaceId: fixture.workspaceId })
+      .where(eq(agents.id, agentId));
+    const member = new ChannelRepository(db, visitorId, fixture.workspaceId);
+    const { channel } = await member.create({ agentId, title: 'Helper' });
+    const message = await member.send(channel.id, {
+      content: 'Workspace question',
+      requestKey: 'member',
+      routing: 'fallback',
+    });
+    const [job] = await jobsOf(db, message.id);
+    const claim = (await execution.claim(channel.id, job.id, lease))!;
+
+    expect(await listShareVisitorTopics(db, ownerId, agentId)).toEqual([]);
+    expect(await findShareVisitorTopic(db, ownerId, claim.topic.id)).toBeUndefined();
   });
 });

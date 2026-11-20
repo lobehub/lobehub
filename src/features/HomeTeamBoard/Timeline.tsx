@@ -12,6 +12,7 @@ import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import AuthorChip from '@/features/HomeInbox/AuthorChip';
 import { useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import {
@@ -88,8 +89,8 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderWidth: 1,
     minWidth: 0,
-    paddingBlock: 16,
-    paddingInline: 16,
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   cardCompact: { paddingBlock: 12, paddingInline: 12 },
   gridLine: {
@@ -114,6 +115,7 @@ const styles = stylex.create({
     borderBlockStartWidth: 1,
     paddingBlock: 6,
   },
+  laneCompact: { paddingBlock: 2 },
   lanes: { position: 'relative' },
   meta: { color: cssVar.colorTextTertiary, fontSize: 12 },
   row: { height: 28 },
@@ -368,7 +370,10 @@ const Lane = ({
   const agentTitle = lane.title || meta?.title || t('team.agent.untitled');
 
   return (
-    <div {...stylex.props(styles.lane)} data-testid={'team-board-lane'}>
+    <div
+      {...stylex.props(styles.lane, compact && styles.laneCompact)}
+      data-testid={'team-board-lane'}
+    >
       <button
         aria-expanded={!collapsed}
         data-testid={'team-board-lane-toggle'}

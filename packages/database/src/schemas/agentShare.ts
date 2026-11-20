@@ -4,7 +4,7 @@ import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle
 import { timestamps } from './_helpers';
 import { agents } from './agent';
 
-export type AgentShareDeviceAccess = 'allowlist' | 'none';
+export type AgentShareDeviceAccess = 'allowlist' | 'contacts' | 'none';
 
 export interface AgentShareConfig {
   /**
@@ -18,6 +18,27 @@ export interface AgentShareConfig {
    * a shared conversation. Defaults to `false`.
    */
   allowReadMemory?: boolean;
+  /**
+   * Whether visitors also get every tool and skill the Agent currently turns
+   * on, beyond the explicit {@link toolGrants} / {@link skillGrants}. Resolved
+   * per visitor run from the Agent config (`withShareAutoAgentGrants`), never
+   * persisted as grants, so a tool added to the Agent later is open to
+   * visitors without the creator revisiting the share, and one turned off on
+   * the Agent leaves with it. {@link declinedGrantIds} still keeps an
+   * identifier closed. Absent reads as off.
+   */
+  autoGrantAgentTools?: boolean;
+  /**
+   * Tool and skill identifiers the creator chose NOT to grant: dismissed from
+   * the "new on this Agent" prompt, or unticked in a picker. Grants nothing and
+   * revokes nothing explicit — the server gate reads it only to keep these
+   * identifiers out of {@link autoGrantAgentTools}. Otherwise it only stops the
+   * share settings from offering these identifiers again as newly added to the
+   * Agent.
+   * Absent on shares created before the prompt existed, so their ungranted
+   * Agent tools surface once for review instead of being granted silently.
+   */
+  declinedGrantIds?: string[];
   /** Visitor trial scenarios, maintained independently of agents.openingQuestions. */
   demoCases?: AgentShareDemoCase[];
   /**
@@ -25,10 +46,13 @@ export interface AgentShareConfig {
    * (its bound or auto-selected device):
    *
    * - `none` (default): no visitor reaches a device; device tools are dropped
-   *   and a heterogeneous (Claude Code / Codex) Agent refuses the run.
+   *   and a local CLI (Claude Code, Codex, …) Agent refuses the run.
    * - `allowlist`: only the people in {@link deviceAllowUserIds} who are
    *   still in the Agent's address book. They get the device tools and, for a
    *   heterogeneous Agent, run it on the device.
+   * - `contacts`: everyone currently in the Agent's address book, so a creator
+   *   can prepare the share before someone joins: they can use it as soon as
+   *   they are added, and lose it when removed.
    *
    * There is no "every visitor" value: a stranger never reaches the creator's
    * machine. The visitor never picks the device — it always follows the
@@ -73,10 +97,14 @@ export interface AgentShareConfig {
    */
   monthlySpendLimit?: number;
   /**
-   * Whether visitors may see raw run error details (message/stack) instead of
-   * a generic failure notice. Defaults to `false`.
+   * Set only by `AgentShareModel.create` when it inserts a brand-new share:
+   * the creator share settings then grant the Agent's usable tools and skills
+   * once and write `false`. Persisted on the row rather than kept in client
+   * state, so the default lands on exactly the share that was created — never
+   * on an existing share another tab or manager configured, nor on a different
+   * Agent the page navigated to. The server gate never reads it.
    */
-  showErrorDetails?: boolean;
+  seedDefaultGrants?: boolean;
   /**
    * Skills visitors may load, by skill identifier. Deliberately separate from
    * {@link toolGrants}: a skill grant governs BOTH the tool path

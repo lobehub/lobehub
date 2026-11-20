@@ -91,7 +91,6 @@
   "events.youInvited": "Vous avez invité {{names}} au canal",
   "events.youInvitedMembers": "Vous avez invité <members/> au canal",
   "failure.locate": "Afficher le message",
-  "failure.messageLabel": "Échec de la réponse : {{names}}",
   "failure.title": "Réponses échouées · {{count}}",
   "followers": "Réponses de : {{names}}",
   "invite.directHint": "Inviter ici démarre un nouveau canal avec {{name}} et les membres que vous choisissez. Cette conversation avec {{name}} reste telle quelle.",

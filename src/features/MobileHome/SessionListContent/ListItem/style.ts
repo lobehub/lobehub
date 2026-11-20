@@ -1,5 +1,7 @@
 import { createStaticStyles, cx, lobeStaticStylish } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     actions: css`
@@ -47,7 +49,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => {
       width: 100%;
       margin: 0;
 
-      font-size: 14px;
+      font-size: ${densityVars.fontSize};
       font-weight: 500;
       line-height: 1.2;
       color: ${cssVar.colorText};

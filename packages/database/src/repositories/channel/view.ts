@@ -5,6 +5,7 @@ import {
   channelMessageReceipt,
   channelMessageVia,
   type ChatMessageError,
+  contactCardOf,
   defaultChannelAgentDirectory,
   type LobeAgentAgencyConfig,
   resolveAgentAgencyConfig,
@@ -30,7 +31,6 @@ import { sanitizeVisitorError } from '../../models/message/visitor';
 import {
   agentOperations,
   agents,
-  agentShares,
   channelJobs,
   channelMembers,
   channelMessages,
@@ -43,6 +43,7 @@ import {
   workspaceUserSettings,
 } from '../../schemas';
 import type { Transaction } from '../../type';
+import { agentAvatarSql, agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
 import { fileIdsByMessage } from './attachments';
 import { isAgentAuthored } from './author';
@@ -52,9 +53,9 @@ import { externalWorksByMessage } from './works';
 
 export const publicMessageColumns = {
   ...getTableColumns(channelMessages),
-  senderAgentAvatar: agents.avatar,
+  senderAgentAvatar: agentAvatarSql(),
   senderAgentName: agents.name,
-  senderAgentTitle: agents.title,
+  senderAgentTitle: agentTitleSql(),
   senderUserAvatar: users.avatar,
   senderUserName: users.fullName,
   senderUsername: users.username,
@@ -89,6 +90,7 @@ export const publicMessage = (row: MessageRow, fileIds: string[]) => {
       name: isAgent ? senderAgentName || senderAgentTitle : senderUserName || senderUsername,
       type: isAgent ? ('agent' as const) : ('user' as const),
     },
+    card: contactCardOf(message.metadata) ?? null,
     deletedAt: channelMessageDeletedAt(message.metadata),
     editedAt: channelMessageEditedAt(message.metadata),
     // On an Agent's message, the exchange between Agents it reports from.
@@ -124,7 +126,7 @@ const relayAgentAvatars = async (tx: Transaction, rows: MessageRow[]) => {
   ];
   if (!ids.length) return new Map<string, string | null>();
   const found = await tx
-    .select({ avatar: agents.avatar, id: agents.id })
+    .select({ avatar: agentAvatarSql(), id: agents.id })
     .from(agents)
     .where(inArray(agents.id, ids));
   return new Map(found.map(({ avatar, id }) => [id, avatar] as const));
@@ -276,7 +278,13 @@ const publicJobColumns = {
       ${channelJobs.executionConfig}->'agencyConfig'->>'boundDeviceId'
     )`,
   writerHeld: channelJobs.writerHeld,
+  // The acknowledgement posted before the run (`openingRequestKey`), so a failure shows under it.
+  openingMessageId: sql<string | null>`(SELECT ${channelMessages.id} FROM ${channelMessages}
+      WHERE ${channelMessages.channelId} = ${channelJobs.channelId}
+        AND ${channelMessages.requestKey} = 'opening:' || ${channelJobs.id}::text)`,
   topicId: channelJobs.topicId,
+  // Its name, under the same owner-only rule as the id, so a reply at work says which topic it is.
+  topicTitle: topics.title,
   // A trashed topic has no owner here, so its link goes with it.
   topicOwnerId: sql<string | null>`CASE WHEN ${notTrashed(topics.isDeleted)}
       THEN ${topics.userId} ELSE NULL END`,
@@ -286,7 +294,6 @@ const publicJobColumns = {
   publicationRevoked: channelJobs.publicationRevoked,
   // Read only to redact the error of a shared Agent's run, then dropped by `readJobs`.
   sharedRun: sql<boolean>`COALESCE(jsonb_exists(${channelJobs.executionConfig}, 'share'), false)`,
-  shareShowsErrorDetails: sql<boolean>`COALESCE(${agentShares.shareConfig}->>'showErrorDetails' = 'true', false)`,
 };
 
 /** At most this many of a main view's threads' jobs still at work ride along with its own. */
@@ -296,25 +303,25 @@ const THREAD_ACTIVE_JOB_LIMIT = 50;
  * A shared Agent runs under its owner's credentials, so its failure text can carry the owner's
  * provider or infrastructure diagnostics. The viewer of such a run is the visitor, who gets the
  * share page's projection (`sanitizeVisitorError`): a classified type, and the message only for
- * the few visitor-safe codes, unless the owner's share opts into `showErrorDetails`.
+ * the few visitor-safe codes.
  */
 const redactSharedRunError = <
   Job extends {
     errorMessage: string | null;
     errorType: string | null;
     sharedRun: boolean;
-    shareShowsErrorDetails: boolean;
   },
 >({
   sharedRun,
-  shareShowsErrorDetails,
   ...job
 }: Job) => {
-  if (!sharedRun || job.errorMessage === null) return job;
-  const safe = sanitizeVisitorError(
-    { message: job.errorMessage, type: job.errorType ?? undefined } as ChatMessageError,
-    { showErrorDetails: shareShowsErrorDetails },
-  );
+  // A failure that records only its type is redacted too: the type alone can name the owner's
+  // provider or budget (`InsufficientBudgetForModel`), which a visitor must not learn.
+  if (!sharedRun || (job.errorMessage === null && job.errorType === null)) return job;
+  const safe = sanitizeVisitorError({
+    message: job.errorMessage,
+    type: job.errorType ?? undefined,
+  } as ChatMessageError);
   return { ...job, errorMessage: safe?.message ?? null, errorType: safe?.type?.toString() ?? null };
 };
 
@@ -324,10 +331,6 @@ const readJobs = async (tx: Transaction, where: SQL | undefined, limit: number) 
     .from(channelJobs)
     .leftJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
     .leftJoin(topics, eq(topics.id, channelJobs.topicId))
-    .leftJoin(
-      agentShares,
-      sql`${agentShares.id}::text = ${channelJobs.executionConfig}->'share'->>'shareId'`,
-    )
     .where(where)
     .orderBy(desc(channelJobs.createdAt))
     .limit(limit);
@@ -493,18 +496,18 @@ const environmentViewer = async (
 };
 
 /**
- * A view's jobs as one viewer sees them: who may stop each, and the run's topic only for the
- * viewer who runs the reply; for anyone else the job carries no topic at all.
+ * A view's jobs as one viewer sees them: who may stop each, and the run's topic (id and title)
+ * only for the viewer who runs the reply; for anyone else the job carries no topic at all.
  */
 export const viewerJobs = (
   jobs: Awaited<ReturnType<typeof readChannelView>>['jobs'],
   viewerUserId: string,
   canStop: (requesterMemberId: string | null) => boolean,
 ) =>
-  jobs.map(({ requesterMemberId, topicId, topicOwnerId, ...job }) => ({
+  jobs.map(({ requesterMemberId, topicId, topicOwnerId, topicTitle, ...job }) => ({
     ...job,
     canStop: canStop(requesterMemberId),
-    ...(topicId && topicOwnerId === viewerUserId ? { topicId } : {}),
+    ...(topicId && topicOwnerId === viewerUserId ? { topicId, topicTitle } : {}),
   }));
 
 export const readChannelView = async (
@@ -519,7 +522,7 @@ export const readChannelView = async (
       .select({
         actorType: channelMembers.actorType,
         agentId: channelMembers.agentId,
-        avatar: agents.avatar,
+        avatar: agentAvatarSql(),
         // The same fallback routing uses: a Channel-specific description, else the Agent's own.
         description: sql<
           string | null

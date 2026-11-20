@@ -414,6 +414,20 @@ const config = {
           }
         : {}),
       CFBundleIconName: 'AppIcon',
+      /**
+       * Claiming `public.folder` is what puts the app in Finder's "Open With"
+       * for a folder. Without it the only ways in are the shell command and a
+       * drop on the Dock icon — which is what a first-time user is least
+       * likely to guess.
+       */
+      CFBundleDocumentTypes: [
+        {
+          CFBundleTypeName: 'Folder',
+          CFBundleTypeRole: 'Viewer',
+          LSHandlerRank: 'Alternate',
+          LSItemContentTypes: ['public.folder'],
+        },
+      ],
       CFBundleURLTypes: [
         {
           CFBundleURLName: `${brandName} Protocol`,

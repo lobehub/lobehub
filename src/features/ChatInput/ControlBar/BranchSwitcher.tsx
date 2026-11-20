@@ -45,7 +45,7 @@ import { useTranslation } from 'react-i18next';
 import { gitService } from '@/services/git';
 import { useFetchGitWorkingTreeStatus } from '@/store/device';
 import { useDensityTokens } from '@/styles/density';
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 import { openCreateBranchModal } from './CreateBranchModal';
 import { gitMenuTriggerStyles } from './gitMenuTrigger';
@@ -69,7 +69,7 @@ const styles = stylex.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: '0',
-    paddingBlock: '12px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     fontSize: '12px',
     color: cssVar.colorTextTertiary,
     textAlign: 'center',
@@ -155,7 +155,7 @@ const styles = stylex.create({
   },
   searchBar: {
     paddingBlock: '4px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorSplit,

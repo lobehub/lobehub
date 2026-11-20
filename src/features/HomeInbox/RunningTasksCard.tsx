@@ -52,6 +52,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline: 14px;
     border: 0;
 
+    html[data-density='compact'] & {
+      padding-block: 8px;
+    }
+
     text-align: start;
 
     transition: background ${cssVar.motionDurationFast};

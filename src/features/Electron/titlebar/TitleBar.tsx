@@ -2,6 +2,7 @@ import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Divider, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useDeferredMount } from '@/hooks/useDeferredMount';
 import { electronStylish } from '@/styles/electron';
 import { getPlatform } from '@/utils/platform';
@@ -13,6 +14,7 @@ import { useWatchThemeUpdate } from '../system/useWatchThemeUpdate';
 import { UpdateNotification } from '../updater/UpdateNotification';
 import { getTitleBarLayoutConfig } from './layout';
 import NavigationBar from './NavigationBar';
+import { isStatusHidden } from './statusHidden';
 import TabBar from './TabBar';
 import WinControl from './WinControl';
 
@@ -21,6 +23,7 @@ const platform = getPlatform();
 const TitleBar = memo(() => {
   useWatchThemeUpdate();
   const tabBarMounted = useDeferredMount();
+  const statusHidden = isStatusHidden(useActiveLocation().pathname);
 
   const { padding, showCustomWinControl } = getTitleBarLayoutConfig(platform);
 
@@ -40,9 +43,9 @@ const TitleBar = memo(() => {
       <Flexbox horizontal align={'center'} gap={4}>
         <Flexbox horizontal className={electronStylish.nodrag} gap={8}>
           <UpdateNotification />
-          <DeviceGateway />
+          <DeviceGateway hidden={statusHidden} />
           <AutoEnrollWorkspaceDevice />
-          <Connection />
+          <Connection statusHidden={statusHidden} />
         </Flexbox>
         {showCustomWinControl && (
           <>

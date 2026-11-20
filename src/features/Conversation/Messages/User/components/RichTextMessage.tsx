@@ -8,6 +8,7 @@ import { ActionTagNode } from '@/features/ChatInput/InputEditor/ActionTag/Action
 import { ImageRefTagNode } from '@/features/ChatInput/InputEditor/ImageRefTag/ImageRefTagNode';
 import { LocalFileTagNode } from '@/features/ChatInput/InputEditor/LocalFileTag';
 import { mentionPlainClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
+import { ReferArtboardNode } from '@/features/ChatInput/InputEditor/ReferArtboard/ReferArtboardNode';
 import { ReferDocumentNode } from '@/features/ChatInput/InputEditor/ReferDocument/ReferDocumentNode';
 import { ReferTopicNode } from '@/features/ChatInput/InputEditor/ReferTopic/ReferTopicNode';
 
@@ -26,6 +27,7 @@ const EXTRA_NODES = [
   ActionTagNode,
   ReferTopicNode,
   ReferDocumentNode,
+  ReferArtboardNode,
   LocalFileTagNode,
   ImageRefTagNode,
 ];

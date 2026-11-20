@@ -49,6 +49,7 @@ describe('AgentShareModel', () => {
           description: 'Shareable agent',
           id: agentId,
           name: 'Shareable Agent',
+          plugins: ['mcp-pinned', { identifier: 'lobe-calculator', mode: 'disabled' }],
           // Explicit (the column defaults to random words): `create` seeds the
           // share slug from it, so tests below can assert the exact value.
           slug: 'shareable-agent',
@@ -76,7 +77,6 @@ describe('AgentShareModel', () => {
           allowCreatorViewSessions: false,
           allowReadMemory: false,
           maxMessagesPerVisitor: 100,
-          showErrorDetails: false,
           toolGrants: [],
         },
         userViewCount: 0,
@@ -101,6 +101,21 @@ describe('AgentShareModel', () => {
         .where(eq(agentShares.agentId, agentId));
       expect(rows).toHaveLength(1);
       expect(rows[0].visibility).toBe('private');
+    });
+
+    it('marks only a newly inserted share for default grants', async () => {
+      const created = await agentShareModel.create(agentId, 'link');
+      expect(created.shareConfig.seedDefaultGrants).toBe(true);
+
+      await agentShareModel.updateConfig(agentId, {
+        seedDefaultGrants: false,
+        toolGrants: [{ identifier: 'search' }],
+      });
+      // Re-enabling returns the existing row and must not re-arm the marker.
+      const again = await agentShareModel.create(agentId, 'link');
+
+      expect(again.shareConfig.seedDefaultGrants).toBe(false);
+      expect(again.shareConfig.toolGrants).toEqual([{ identifier: 'search' }]);
     });
 
     describe('profile slug seed', () => {
@@ -356,6 +371,20 @@ describe('AgentShareModel', () => {
       expect((await agentShareModel.getByAgentId(agentId))?.shareConfig.demoCases).toEqual([]);
     });
 
+    it('persists declined grant ids through unrelated patches', async () => {
+      await agentShareModel.create(agentId);
+      expect(
+        (await agentShareModel.getByAgentId(agentId))?.shareConfig.declinedGrantIds,
+      ).toBeUndefined();
+
+      await agentShareModel.updateConfig(agentId, { declinedGrantIds: ['calculator'] });
+      await agentShareModel.updateConfig(agentId, { toolGrants: [{ identifier: 'search' }] });
+
+      expect((await agentShareModel.getByAgentId(agentId))?.shareConfig.declinedGrantIds).toEqual([
+        'calculator',
+      ]);
+    });
+
     it('does not let another owner replace profile content', async () => {
       await agentShareModel.create(agentId);
       expect(
@@ -393,7 +422,6 @@ describe('AgentShareModel', () => {
         maxFileStorage: 512 * 1024 * 1024,
         maxMessagesPerVisitor: 100,
         monthlySpendLimit: 10,
-        showErrorDetails: false,
         slug: undefined,
         toolGrants: [],
       });
@@ -405,12 +433,12 @@ describe('AgentShareModel', () => {
       const config: AgentShareConfig = {
         allowCreatorViewSessions: true,
         allowReadMemory: true,
+        autoGrantAgentTools: true,
         deviceAccess: 'allowlist',
         deviceAllowUserIds: ['user_alice'],
         maxFileStorage: 256 * 1024 * 1024,
         maxMessagesPerVisitor: 40,
         monthlySpendLimit: 25,
-        showErrorDetails: true,
         toolGrants: [{ identifier: 'search' }],
       };
 
@@ -418,8 +446,15 @@ describe('AgentShareModel', () => {
       const readBack = await agentShareModel.getByAgentId(agentId);
 
       // The slug seeded from the agent's profile slug at `create` survives a
-      // full config overwrite — it is owner-facing url state, not config.
-      const expected = { demoCases: [], featuredWorkIds: [], ...config, slug: 'shareable-agent' };
+      // full config overwrite — it is owner-facing url state, not config. So
+      // does the default-grant marker `create` set, which this config omits.
+      const expected = {
+        demoCases: [],
+        featuredWorkIds: [],
+        seedDefaultGrants: true,
+        ...config,
+        slug: 'shareable-agent',
+      };
       expect(updated?.shareConfig).toEqual(expected);
       expect(readBack?.shareConfig).toEqual(expected);
     });
@@ -432,14 +467,14 @@ describe('AgentShareModel', () => {
         toolGrants: [{ identifier: 'search' }],
       });
       const updated = await agentShareModel.updateConfig(agentId, {
+        allowCreatorViewSessions: true,
         maxFileStorage: 1024,
-        showErrorDetails: true,
       });
 
       expect(updated?.shareConfig).toMatchObject({
+        allowCreatorViewSessions: true,
         maxFileStorage: 1024,
         maxMessagesPerVisitor: 10,
-        showErrorDetails: true,
         toolGrants: [{ identifier: 'search' }],
       });
     });
@@ -449,15 +484,15 @@ describe('AgentShareModel', () => {
       await agentShareModel.updateConfig(agentId, { monthlySpendLimit: 25 });
 
       const updated = await agentShareModel.updateConfig(agentId, {
+        allowCreatorViewSessions: true,
         monthlySpendLimit: 0,
-        showErrorDetails: true,
         // smuggled past the type on purpose — must be stripped, not persisted
         ...({ slug: 'sneaky-slug' } as object),
       });
 
       // `0` is a real cap ("stop all visitor runs"), never a cleared one.
       expect(updated?.shareConfig.monthlySpendLimit).toBe(0);
-      expect(updated?.shareConfig.showErrorDetails).toBe(true);
+      expect(updated?.shareConfig.allowCreatorViewSessions).toBe(true);
       // The seeded profile slug is untouched; the smuggled one never lands.
       expect(updated?.shareConfig.slug).toBe('shareable-agent');
       expect(await AgentShareModel.findBySlugOrId(serverDB, 'sneaky-slug')).toBeNull();
@@ -663,6 +698,7 @@ describe('AgentShareModel', () => {
         agentDescription: 'Shareable agent',
         agentId,
         agentName: 'Shareable Agent',
+        agentPlugins: ['mcp-pinned', { identifier: 'lobe-calculator', mode: 'disabled' }],
         agentTitle: 'Shareable Agent Title',
         ownerId: userId,
         shareConfig: expect.objectContaining({ maxMessagesPerVisitor: 100 }),

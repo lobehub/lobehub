@@ -1,10 +1,11 @@
 import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { Globe2Icon, PanelsTopLeftIcon } from 'lucide-react';
-import { Activity, lazy, memo, useEffect } from 'react';
+import { DraftingCompassIcon, Globe2Icon, PanelsTopLeftIcon } from 'lucide-react';
+import { Activity, lazy, memo, Suspense, useEffect } from 'react';
 
+import BoardTabLabel from '@/features/Artboard/Conversation/BoardTabLabel';
 import { mcpEntryInstanceId } from '@/features/MCPApp/entrypoints';
-import { canvasIdOfTab } from '@/store/global/initialState';
+import { artboardIdOfTab, canvasIdOfTab } from '@/store/global/initialState';
 import { mcpAppActions } from '@/store/mcpApp/action';
 import { useMcpAppStore } from '@/store/mcpApp/store';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
@@ -15,6 +16,7 @@ import CanvasTabLabel from './Canvas/CanvasTabLabel';
 import {
   browserSessionIdOfTab,
   type BrowserTabMetadata,
+  isArtboardTab,
   isBrowserTab,
   isCanvasTab,
   type SidebarTabDescriptor,
@@ -27,11 +29,13 @@ const McpEntryPane = lazy(() =>
   import('./McpEntryPane').then((m) => ({ default: m.McpEntryPane })),
 );
 const BrowserPane = lazy(() => import('./Browser'));
+const BoardPane = lazy(() => import('@/features/Artboard/Conversation/BoardPane'));
 
 // Inline, because StyleX layout rules can lose to the `.lobe-flex` class of
 // Flexbox depending on stylesheet order.
 const PANE = { minHeight: 0, overflowY: 'auto' } as const;
 const HIDDEN_PANE = { ...PANE, display: 'none' } as const;
+const BOARD_PANE = { minHeight: 0, overflow: 'hidden' } as const;
 
 const styles = stylex.create({
   favicon: {
@@ -65,6 +69,14 @@ export const dynamicTabDescriptor = (
   const canvasId = canvasIdOfTab(tab);
   if (canvasId) {
     return { icon: PanelsTopLeftIcon, key: tab, label: <CanvasTabLabel canvasId={canvasId} /> };
+  }
+  const artboardId = artboardIdOfTab(tab);
+  if (artboardId) {
+    return {
+      icon: DraftingCompassIcon,
+      key: tab,
+      label: <BoardTabLabel artboardId={artboardId} />,
+    };
   }
   if (!isBrowserTab(tab)) return;
 
@@ -181,6 +193,15 @@ const DynamicTabPanes = memo<DynamicTabPanesProps>(
           <Activity key={tab} mode={visible && activeTab === tab ? 'visible' : 'hidden'}>
             <Flexbox flex={1} style={PANE}>
               <CanvasPane canvasId={canvasIdOfTab(tab)!} />
+            </Flexbox>
+          </Activity>
+        ))}
+        {openedTabs.filter(isArtboardTab).map((tab) => (
+          <Activity key={tab} mode={visible && activeTab === tab ? 'visible' : 'hidden'}>
+            <Flexbox flex={1} style={BOARD_PANE}>
+              <Suspense fallback={null}>
+                <BoardPane artboardId={artboardIdOfTab(tab)!} />
+              </Suspense>
             </Flexbox>
           </Activity>
         ))}

@@ -5,6 +5,7 @@ import type { RouteObject } from 'react-router';
 
 import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
 import { createWorkspaceSettingsRouteMeta } from '@/features/WorkspaceSetting/routeMeta';
+import { legacySettingsMarketplaceRedirects } from '@/spa/router/marketplaceRoutes';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { workspaceSettingsContentRoute } from '@/spa/router/workspaceSettingsRoutes';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
@@ -42,20 +43,6 @@ export const mobileWorkspaceSettingsChildren: RouteObject[] = [
   // to the query form the workspace provider page uses. Static element: the
   // redirect is tiny and lazy-loading it would flash the brand loader first.
   { element: <WorkspaceProviderRedirect />, path: 'provider/:providerId' },
-  {
-    element: dynamicElement(
-      () => import('@/routes/(main)/[workspaceSlug]/settings/skill'),
-      'Mobile > Workspace > Settings > Skill',
-    ),
-    handle: { meta: createWorkspaceSettingsRouteMeta(WorkspaceSettingsTabs.Skill) },
-    path: 'skill',
-  },
-  {
-    element: dynamicElement(
-      () => import('@/routes/(main)/[workspaceSlug]/settings/connector'),
-      'Mobile > Workspace > Settings > Connector',
-    ),
-    handle: { meta: createWorkspaceSettingsRouteMeta(WorkspaceSettingsTabs.Connector) },
-    path: 'connector',
-  },
+  // Moved to `/:slug/marketplace/skill/installed` and `/:slug/marketplace/connector`.
+  ...legacySettingsMarketplaceRedirects,
 ];

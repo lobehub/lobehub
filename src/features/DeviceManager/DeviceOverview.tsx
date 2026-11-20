@@ -41,6 +41,7 @@ import { useTranslation } from 'react-i18next';
 import SkeletonBar from '@/components/Skeleton/Bar';
 import UserAvatar from '@/components/UserAvatar';
 import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
+import { densityVars } from '@/styles/densityVars';
 import { formatSize } from '@/utils/format';
 
 import Connections from './Connections';
@@ -78,11 +79,11 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   cardBody: css`
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
   `,
   cardHeader: css`
     padding-block: 10px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -102,12 +103,12 @@ const styles = createStaticStyles(({ css }) => ({
   infoGrid: css`
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
   `,
   row: css`
     min-height: 48px;
     padding-block: 10px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
 
     & + & {
       border-block-start: 1px solid ${cssVar.colorBorderSecondary};
@@ -116,7 +117,7 @@ const styles = createStaticStyles(({ css }) => ({
   statGrid: css`
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
   `,
   statusPill: css`
     display: inline-flex;

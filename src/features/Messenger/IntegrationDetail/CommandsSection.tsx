@@ -15,6 +15,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { densityVars } from '@/styles/densityVars';
 
 import type { MessengerPlatform } from '../constants';
 
@@ -32,8 +33,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorText};
   `,
   row: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
 
     &:not(:last-child) {
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};

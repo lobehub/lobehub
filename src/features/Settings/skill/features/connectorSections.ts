@@ -1,27 +1,23 @@
 import type { ComposioAppType, LobehubSkillProviderType } from '@lobechat/const';
-import {
-  getConnectorCatalog,
-  RECOMMENDED_SKILLS,
-  RecommendedSkillType,
-  resolveConnectorCatalogItem,
-} from '@lobechat/const';
-import type { BuiltinSkillManifest, LobeBuiltinTool } from '@lobechat/types';
+import { getConnectorCatalog, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
 import type { TFunction } from 'i18next';
 
 export type IntegrationItem =
-  | { builtinAgentSkill: BuiltinSkillManifest; type: 'builtinAgent' }
-  | { builtinTool: LobeBuiltinTool; type: 'builtin' }
   | { provider: LobehubSkillProviderType; type: 'lobehub' }
   | { serverType: ComposioAppType; type: 'composio' };
+
+export const countConnectorTabItems = (items: {
+  customConnectors: readonly unknown[];
+  integrations: readonly IntegrationItem[];
+  marketplaceConnectors: readonly unknown[];
+}) =>
+  items.customConnectors.length + items.marketplaceConnectors.length + items.integrations.length;
 
 /** A page group shows this many rows before "Show all" (the first screen stays scannable). */
 export const SECTION_PREVIEW_LIMIT = 6;
 
 export interface BuildIntegrationItemsParams {
-  allBuiltinTools: LobeBuiltinTool[];
-  builtinSkills: BuiltinSkillManifest[];
   connectorAvailability: { composio: boolean; lobehub: boolean };
-  isBuiltinToolInstalled: (identifier: string) => boolean;
   isComposioActive: (identifier: string) => boolean;
   isLobehubConnected: (providerId: string) => boolean;
   /** Defaults to the app's `RECOMMENDED_SKILLS`; injectable for tests. */
@@ -30,18 +26,9 @@ export interface BuildIntegrationItemsParams {
 
 export const isIntegrationConnected = (
   item: IntegrationItem,
-  params: Pick<
-    BuildIntegrationItemsParams,
-    'isBuiltinToolInstalled' | 'isComposioActive' | 'isLobehubConnected'
-  >,
+  params: Pick<BuildIntegrationItemsParams, 'isComposioActive' | 'isLobehubConnected'>,
 ): boolean => {
   switch (item.type) {
-    case 'builtinAgent': {
-      return params.isBuiltinToolInstalled(item.builtinAgentSkill.identifier);
-    }
-    case 'builtin': {
-      return params.isBuiltinToolInstalled(item.builtinTool.identifier);
-    }
     case 'lobehub': {
       return params.isLobehubConnected(item.provider.id);
     }
@@ -51,87 +38,33 @@ export const isIntegrationConnected = (
   }
 };
 
-/**
- * Every integration the connector / skill lists can show, connected ones first:
- * built-in agent skills, built-in tools and the LobeHub / Composio OAuth catalog.
- */
+/** Connected OAuth apps first, then recommendations, retaining catalog order within ties. */
 export const buildIntegrationItems = (params: BuildIntegrationItemsParams): IntegrationItem[] => {
   const {
-    allBuiltinTools,
-    builtinSkills,
     connectorAvailability,
-    isBuiltinToolInstalled,
     isComposioActive,
     recommendedSkills = RECOMMENDED_SKILLS,
   } = params;
-
-  // Built-in agent skills first so they appear early in the list.
-  let items: IntegrationItem[] = builtinSkills.map((skill) => ({
-    builtinAgentSkill: skill,
-    type: 'builtinAgent' as const,
-  }));
-
-  const addedBuiltinIds = new Set<string>();
-  const addedConnectorIds = new Set<string>();
-
-  if (recommendedSkills.length > 0) {
-    for (const skill of recommendedSkills) {
-      if (skill.type === RecommendedSkillType.Builtin) {
-        const builtinTool = allBuiltinTools.find((tool) => tool.identifier === skill.id);
-        if (builtinTool && !builtinTool.hidden) {
-          items.push({ builtinTool, type: 'builtin' });
-          addedBuiltinIds.add(skill.id);
-        }
-      } else {
-        const connector = resolveConnectorCatalogItem(skill.id, connectorAvailability);
-        if (connector && !addedConnectorIds.has(skill.id)) {
-          items.push(connector);
-          addedConnectorIds.add(skill.id);
-        }
-      }
-    }
-
-    // Installed built-in tools that are not recommended still belong in the list.
-    for (const tool of allBuiltinTools) {
-      if (
-        !tool.hidden &&
-        isBuiltinToolInstalled(tool.identifier) &&
-        !addedBuiltinIds.has(tool.identifier)
-      ) {
-        items.push({ builtinTool: tool, type: 'builtin' });
-      }
-    }
-
-    // Every remaining connector through the shared ownership resolver, so one
-    // identifier never renders through both LobeHub and Composio authorization.
-    for (const connector of getConnectorCatalog(connectorAvailability)) {
-      const identifier =
-        connector.type === 'lobehub' ? connector.provider.id : connector.serverType.identifier;
-      if (!addedConnectorIds.has(identifier)) {
-        items.push(connector);
-        addedConnectorIds.add(identifier);
-      }
-    }
-  } else {
-    for (const tool of allBuiltinTools) {
-      if (!tool.hidden) items.push({ builtinTool: tool, type: 'builtin' });
-    }
-
-    items.push(...getConnectorCatalog(connectorAvailability));
-
-    // Show all built-in and LobeHub entries, but only connected Composio apps.
-    items = items.filter(
-      (item) => item.type !== 'composio' || isComposioActive(item.serverType.identifier),
+  const recommended = recommendedSkills
+    .filter((s) => s.type !== RecommendedSkillType.Builtin)
+    .map((s) => s.id);
+  const rank = (item: IntegrationItem) => {
+    const id = item.type === 'lobehub' ? item.provider.id : item.serverType.identifier;
+    const index = recommended.indexOf(id);
+    return index < 0 ? recommended.length : index;
+  };
+  return getConnectorCatalog(connectorAvailability)
+    .filter(
+      (item) =>
+        recommendedSkills.length > 0 ||
+        item.type !== 'composio' ||
+        isComposioActive(item.serverType.identifier),
+    )
+    .sort(
+      (a, b) =>
+        Number(isIntegrationConnected(b, params)) - Number(isIntegrationConnected(a, params)) ||
+        rank(a) - rank(b),
     );
-  }
-
-  // Stable sort: connected / installed first, catalog order otherwise.
-  return items.sort((a, b) => {
-    const connectedA = isIntegrationConnected(a, params);
-    const connectedB = isIntegrationConnected(b, params);
-    if (connectedA === connectedB) return 0;
-    return connectedA ? -1 : 1;
-  });
 };
 
 /** Case-insensitive match of a search keyword against any of an entry's text fields. */
@@ -150,18 +83,6 @@ export const matchesIntegrationKeyword = (
   t: TFunction<'setting'>,
 ): boolean => {
   switch (item.type) {
-    case 'builtin': {
-      const tool = item.builtinTool;
-      return matchesConnectorKeyword(keyword, [
-        t(`tools.builtins.${tool.identifier}.title`, {
-          defaultValue: tool.title || tool.identifier,
-        }),
-        tool.identifier,
-        t(`tools.builtins.${tool.identifier}.description`, {
-          defaultValue: tool.description ?? '',
-        }),
-      ]);
-    }
     case 'lobehub': {
       return matchesConnectorKeyword(keyword, [
         item.provider.label,
@@ -211,3 +132,18 @@ export const getVisibleSectionItems = <T>(
   if (expanded || items.length <= limit) return { hiddenCount: 0, visible: items };
   return { hiddenCount: items.length - limit, visible: items.slice(0, limit) };
 };
+
+/**
+ * Whether a page group's heading is its expand control (the Codex `Popular >`):
+ * only a group with rows beyond its preview, or one already expanded, gets the
+ * chevron. A search already shows every hit, so it has nothing to expand.
+ */
+export const isSectionExpandable = ({
+  expanded,
+  hiddenCount,
+  searching,
+}: {
+  expanded: boolean;
+  hiddenCount: number;
+  searching: boolean;
+}): boolean => !searching && (hiddenCount > 0 || expanded);

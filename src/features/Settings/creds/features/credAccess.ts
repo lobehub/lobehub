@@ -42,6 +42,17 @@ const NONE: CredRowAccess = { makePrivate: false, manage: false, publish: false,
 export const isOwnCredRow = (cred: CredRow, myAccountId: number | undefined): boolean =>
   cred.ownerType === 'user' && myAccountId !== undefined && cred.ownerAccountId === myAccountId;
 
+/**
+ * A workspace credential shared with every member is write-only in settings:
+ * whoever may manage it can replace its values but not read them back here.
+ * The server's settings endpoint refuses to decrypt one (`workspaceCreds.get`);
+ * this only decides what the UI offers. Runs still resolve the value at use
+ * time. Personal credentials shared in stay readable by their owner, on the
+ * personal page.
+ */
+export const isWriteOnlyCredRow = (cred: Pick<CredRow, 'ownerType' | 'visibility'>): boolean =>
+  cred.ownerType !== 'user' && cred.visibility === 'public';
+
 export const workspaceCredRowAccess = (cred: CredRow, viewer: CredRowViewer): CredRowAccess => {
   const isPublic = cred.visibility === 'public';
 

@@ -4,6 +4,8 @@ import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, Suspense, useState } from 'react';
 
+import { useDensityTokens } from '@/styles/density';
+
 import CountBadge from '../CountBadge';
 import { homeType } from '../homeType';
 
@@ -59,10 +61,11 @@ const GroupBlock = memo<GroupBlockProps>(
     ...rest
   }) => {
     const [isHovered, setIsHovered] = useState(false);
+    const { contentGap } = useDensityTokens();
 
     return (
       <Flexbox
-        gap={12}
+        gap={contentGap}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         {...rest}

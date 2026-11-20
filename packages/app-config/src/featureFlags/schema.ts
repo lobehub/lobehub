@@ -93,6 +93,14 @@ export const FeatureFlagsSchema = z.object({
   mcp_apps: FeatureFlagValue.optional(),
 
   /**
+   * Artboard: the agent's builtin-artboard tool in project conversations, the
+   * board card and side panel, and the Artboard Works tab. Off: the tool is
+   * never offered and artboard Works are not requested. Array values are user
+   * ids.
+   */
+  artboard: FeatureFlagValue.optional(),
+
+  /**
    * Inbound webhooks wake Agents: MCP Events subscriptions, generic webhooks (the Agent Profile
    * Webhook tab) and the Automations lists. Off: deliveries are still verified, stored and
    * acknowledged, but run nothing, and the subscription tools, the Webhook and Automations
@@ -225,6 +233,9 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   // Off until an admin publishes a user allowlist or flips it to true.
   dashboard: false,
 
+  // On in development only; production needs an explicit allowlist.
+  artboard: isDev,
+
   // Off until an admin publishes a user allowlist or flips it to true.
   mcp_apps: false,
   webhook: false,
@@ -276,6 +287,7 @@ export const mapFeatureFlagsEnvToState = (
     // Deprecated compatibility field for released LobeHub Mobile clients; see IFeatureFlagsState.
     enableGatewayMuxMobile: ENABLE_BUSINESS_FEATURES,
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId, 'agent_llm_relay'),
+    enableArtboard: evaluateFeatureFlag(config.artboard, userId, 'artboard'),
     enableDeferredInit: evaluateFeatureFlag(
       config.agent_deferred_init,
       userId,

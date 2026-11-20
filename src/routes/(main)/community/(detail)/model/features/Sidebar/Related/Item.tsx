@@ -5,13 +5,19 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ModelIcon } from '@/components/LobeIcons';
+import { densityTokens } from '@/styles/density.stylex';
 import { type DiscoverModelItem } from '@/types/discover';
 
 const styles = stylex.create({
-  desc: { flex: '1', margin: '0', fontSize: '14px', color: cssVar.colorTextSecondary },
+  desc: {
+    flex: '1',
+    margin: '0',
+    fontSize: densityTokens['--lobe-density-font-size'],
+    color: cssVar.colorTextSecondary,
+  },
   title: {
     margin: '0',
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 500,
     color: { 'default': null, ':hover': cssVar.colorLink },
   },

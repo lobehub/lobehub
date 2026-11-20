@@ -1,9 +1,13 @@
 import {
+  type AgentWorkRunContext,
+  type ArtboardWorkPublishMetadata,
   type CanvasWorkPublishMetadata,
+  type CreateAgentWorkInput,
   type DeleteDocumentWorkParams,
   type DeleteTaskWorkParams,
   type DeleteWorkParams,
   isWorkSkillProvider,
+  type RegisterArtboardWorkParams,
   type RegisterCanvasWorkParams,
   type RegisterDocumentWorkParams,
   type RegisterExternalWorkParams,
@@ -11,6 +15,7 @@ import {
   type RegisterSkillToolResultWorkParams,
   type RegisterTaskWorkParams,
   type SkillToolResultWorkInput,
+  type UpdateAgentWorkInput,
   type WorkAccessScope,
   type WorkItem,
   type WorkSkillProvider,
@@ -20,9 +25,24 @@ import debug from 'debug';
 
 import type { LobeChatDatabase } from '../../type';
 import { ScmChangeRequestModel } from '../scm';
+import { createAgentWork, deleteAgentWork, fillAgentWorkCost, updateAgentWork } from './agentWork';
+import {
+  clearArtboardPublish,
+  clearArtboardPublishForTrash,
+  deleteArtboardWorksForTrash,
+  findArtboardIdsByDeploymentIds,
+  findArtboardWork,
+  findArtboardWorkByWorkId,
+  findArtboardWorksForTrash,
+  recordArtboardPublish,
+  registerArtboardWork,
+} from './artboard';
+import { registerShellArtboardResult } from './artboardShellResult';
 import {
   findCanvasIdByWorkId,
   findCanvasIdsByDeploymentIds,
+  findCanvasSourcesByVersionIds,
+  findCanvasVersionId,
   findCanvasWork,
   findCanvasWorkVersion,
   findCanvasWorkVersionByToolCall,
@@ -74,6 +94,7 @@ const log = debug('lobe-database:work-model');
  * module, keeping the polymorphic Work registry logic split by provider type
  * without changing the public API surface.
  */
+export { AgentWorkError, type AgentWorkErrorCode } from './agentWork';
 export type { GithubShellNormalizeOptions } from './githubToolResult';
 export { type GitPushResult, parseGithubRemoteUrl, parseGitPushResult } from './gitPushResult';
 
@@ -120,12 +141,45 @@ export class WorkModel {
   registerFile = (params: RegisterFileWorkParams): Promise<WorkItem> =>
     registerFileWork(this.ctx, params);
 
+  registerArtboard = (params: RegisterArtboardWorkParams): Promise<WorkItem> =>
+    registerArtboardWork(this.ctx, params);
+
+  findArtboardWork = (artboardId: string) => findArtboardWork(this.ctx, artboardId);
+
+  findArtboardWorkByWorkId = (workId: string) => findArtboardWorkByWorkId(this.ctx, workId);
+
+  recordArtboardPublish = (
+    artboardId: string,
+    params: ArtboardWorkPublishMetadata & { url: string },
+  ): Promise<WorkItem | null> => recordArtboardPublish(this.ctx, artboardId, params);
+
+  clearArtboardPublish = (artboardId: string): Promise<WorkItem | null> =>
+    clearArtboardPublish(this.ctx, artboardId);
+
+  findArtboardIdsByDeploymentIds = (deploymentIds: string[]) =>
+    findArtboardIdsByDeploymentIds(this.ctx, deploymentIds);
+
+  findArtboardWorksForTrash = (artboardIds: string[]) =>
+    findArtboardWorksForTrash(this.ctx, artboardIds);
+
+  clearArtboardPublishForTrash = (artboardIds: string[]) =>
+    clearArtboardPublishForTrash(this.ctx, artboardIds);
+
+  deleteArtboardWorksForTrash = (artboardIds: string[]) =>
+    deleteArtboardWorksForTrash(this.ctx, artboardIds);
+
   registerCanvas = (params: RegisterCanvasWorkParams): Promise<WorkItem> =>
     registerCanvasWork(this.ctx, params);
 
   findCanvas = (canvasId: string) => findCanvasWork(this.ctx, canvasId);
 
   findCanvasIdByWorkId = (workId: string) => findCanvasIdByWorkId(this.ctx, workId);
+
+  findCanvasVersionId = (canvasId: string, version: number) =>
+    findCanvasVersionId(this.ctx, canvasId, version);
+
+  findCanvasSourcesByVersionIds = (versionIds: string[]) =>
+    findCanvasSourcesByVersionIds(this.ctx, versionIds);
 
   findCanvasIdsByDeploymentIds = (deploymentIds: string[]) =>
     findCanvasIdsByDeploymentIds(this.ctx, deploymentIds);
@@ -164,6 +218,22 @@ export class WorkModel {
     userId: string;
   }): Promise<{ id: string } | null> => findFileWorkVersionByToolCall(this.ctx, params);
 
+  /** `lh work create` / `lobe-work`: register a file, link or collection the agent produced. See {@link createAgentWork}. */
+  createAgentWork = (run: AgentWorkRunContext, input: CreateAgentWorkInput) =>
+    createAgentWork(this.ctx, run, input);
+
+  /** `lh work update`: add a version to an agent-created Work. See {@link updateAgentWork}. */
+  updateAgentWork = (run: AgentWorkRunContext, input: UpdateAgentWorkInput) =>
+    updateAgentWork(this.ctx, run, input);
+
+  /** `lh work delete`: remove a Work the agent created by mistake. See {@link deleteAgentWork}. */
+  deleteAgentWork = (run: AgentWorkRunContext, workId: string) =>
+    deleteAgentWork(this.ctx, run, workId);
+
+  /** Run completion: give the run's agent-written versions its spend. See {@link fillAgentWorkCost}. */
+  fillAgentWorkCost = (params: Parameters<typeof fillAgentWorkCost>[1]) =>
+    fillAgentWorkCost(this.ctx, params);
+
   handleSkillToolResult = async (
     params: RegisterSkillToolResultWorkParams,
   ): Promise<WorkItem | null> => {
@@ -198,6 +268,10 @@ export class WorkModel {
 
     return this.registerExternal({ ...operation.params, toolIdentifier });
   };
+
+  registerShellArtboardResult = (
+    params: SkillToolResultWorkInput & { toolIdentifier: string },
+  ): Promise<WorkItem | null> => registerShellArtboardResult(this.ctx, params);
 
   /**
    * Hand a just-registered `github_pull_request` Work to the provider row,
@@ -241,12 +315,14 @@ export class WorkModel {
     writes.setTaskWorksVisibility(this.ctx, taskIds, visibility);
 
   listByRootOperation = (params: {
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     rootOperationId?: string | null;
   }) => queries.listByRootOperation(this.ctx, params);
 
   listByRootOperations = (params: {
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     rootOperationIds?: string[] | null;
@@ -256,12 +332,14 @@ export class WorkModel {
   listSummariesByIds = (workIds: string[]) => queries.listSummariesByIds(this.ctx, workIds);
 
   listSummariesByRootOperations = (params: {
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     rootOperationIds?: string[] | null;
   }) => queries.listSummariesByRootOperations(this.ctx, params);
 
   listByConversation = (params: {
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     threadId?: string | null;

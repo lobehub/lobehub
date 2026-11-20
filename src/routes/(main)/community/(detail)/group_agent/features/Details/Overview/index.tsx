@@ -9,13 +9,14 @@ import { useTranslation } from 'react-i18next';
 import { DEFAULT_USER_AVATAR_URL } from '@/const/meta';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import Title from '../../../../../features/Title';
 import { useDetailContext } from '../../DetailProvider';
 
 const styles = stylex.create({
   desc: { flex: '1', margin: '0', color: cssVar.colorTextSecondary },
-  title: { margin: '0', fontSize: '14px', fontWeight: 500 },
+  title: { margin: '0', fontSize: densityTokens['--lobe-density-font-size'], fontWeight: 500 },
 });
 
 const MemberCard = memo(({ agent, currentVersion }: { agent: any; currentVersion: any }) => {

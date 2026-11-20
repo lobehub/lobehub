@@ -13,6 +13,10 @@ export interface ActionSize {
 }
 
 export interface DensityTokens {
+  badgeHeight: number;
+  badgeMinWidth: number;
+  cardPadding: number;
+  contentGap: number;
   controlHeight: number;
   fontSize: number;
   gap: number;
@@ -23,9 +27,14 @@ export interface DensityTokens {
   headerHeight: number;
   iconBox: number;
   iconSize: number;
+  largeIconSize: number;
   lineHeight: number;
   listRowHeight: number;
+  modalPadding: number;
   paddingInline: number;
+  pagePaddingBlockEnd: number;
+  pagePaddingBlockStart: number;
+  pagePaddingInline: number;
   pageTitleFontSize: number;
   panelPaddingInline: number;
   radius: number;
@@ -78,7 +87,11 @@ export const useDensityTokens = () => DENSITY_TOKENS[useInterfaceDensity()];
  * One density read per component: the numeric scale for props, plus the boolean that
  * picks between structural style variants.
  */
-export const useDensity = (): { compact: boolean; density: InterfaceDensity; tokens: DensityTokens } => {
+export const useDensity = (): {
+  compact: boolean;
+  density: InterfaceDensity;
+  tokens: DensityTokens;
+} => {
   const density = useInterfaceDensity();
   return { compact: density === 'compact', density, tokens: DENSITY_TOKENS[density] };
 };

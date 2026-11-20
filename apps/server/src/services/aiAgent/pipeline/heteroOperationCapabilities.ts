@@ -32,6 +32,11 @@ import type { HeteroOperationCapability } from '@/libs/trpc/utils/internalJwt';
  * the token is the only identity that can reach it. Only a Task run has a
  * round to file into.
  *
+ * `work:write` lets every run register the files and links it produced as Work
+ * cards under its reply (`lh work create|update`). The Work lands in the run's
+ * own topic; a share visitor's run included, whose Works stay fenced to that
+ * visitor topic exactly like the ones its completion scan registers.
+ *
  * Renewal copies the minted claims, so a run never gains either later.
  */
 export const heteroOperationCapabilities = (
@@ -51,7 +56,7 @@ export const heteroOperationCapabilities = (
   } = {},
 ): HeteroOperationCapability[] =>
   options.shareVisitor
-    ? ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read']
+    ? ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read', 'work:write']
     : [
         'hetero:ingest',
         ...(options.channel
@@ -65,4 +70,5 @@ export const heteroOperationCapabilities = (
           ? (['goal:manage'] as const)
           : []),
         ...(options.taskId ? (['acceptance:evidence'] as const) : []),
+        'work:write',
       ];

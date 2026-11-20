@@ -86,8 +86,11 @@ describe('a contact’s shared Agent in a direct conversation', () => {
       sharedAgentHandle: 'shared-helper',
     });
     expect(listed.memberAvatars).toMatchObject([{ actorType: 'agent', id: agentId }]);
-    // The conversation view marks it too: its composer reads `detail`, not the list.
-    expect((await visitor.detail(channel.id)).channel).toMatchObject({ sharedAgent: true });
+    // The conversation view marks it too: its composer reads `detail`, not the list, and a refused
+    // reply offers its owner's contact card.
+    const detail = await visitor.detail(channel.id);
+    expect(detail.channel).toMatchObject({ sharedAgent: true });
+    expect(detail.sharedAgentOwner).toMatchObject({ id: ownerId });
   });
 
   it('lists the share id as its handle when the owner set no custom slug', async () => {
@@ -138,6 +141,21 @@ describe('a contact’s shared Agent in a direct conversation', () => {
     });
   });
 
+  it('names its share to the reply opener, which must admit the request first', async () => {
+    const { channel } = await visitor.create({
+      agentId,
+      sharedAgent: true,
+      title: 'Shared Helper',
+    });
+    const job = await send(channel.id, 'first');
+
+    expect(await execution.openingCandidate(channel.id, job.id)).toMatchObject({
+      request: { content: 'Request first' },
+      requesterUserId: visitorId,
+      share: { ownerId, shareId, workspaceId: null },
+    });
+  });
+
   // The runtimes its share page runs. Whether the share grants the owner's device is the run's
   // share gate's call, so the claim leaves the device unset either way.
   it('runs a Claude Code or Codex Agent, as its share page does', async () => {
@@ -164,56 +182,62 @@ describe('a contact’s shared Agent in a direct conversation', () => {
 
   // The run uses the owner's device, so its presence is the owner's: asking about the visitor
   // left every visitor waiting for a device that was online.
-  it("checks the owner's routed device as the owner, in the owner's scope", async () => {
-    await db
-      .update(agents)
-      .set({
-        agencyConfig: {
-          boundDeviceId: 'owner-device',
-          executionTarget: 'device',
-          heterogeneousProvider: { command: 'claude-code', type: 'claude-code' },
-        },
-      })
-      .where(eq(agents.id, agentId));
-    const { channel } = await new ChannelRepository(db, visitorId, fixture.workspaceId).create({
-      agentId,
-      sharedAgent: true,
-      title: 'Shared Helper',
-    });
-    const message = await new ChannelRepository(db, visitorId, fixture.workspaceId).send(
-      channel.id,
-      { content: 'Hello', requestKey: 'routed', routing: 'fallback' },
-    );
-    const [job] = await jobsOf(db, message.id);
-    const routedDevice = vi.fn(async () => ({ deviceId: 'owner-device', online: true }));
+  it.each(['claude-code', 'kimi-code'])(
+    "checks the owner's routed %s device as the owner, in the owner's scope",
+    async (type) => {
+      await db
+        .update(agents)
+        .set({
+          agencyConfig: {
+            boundDeviceId: 'owner-device',
+            executionTarget: 'device',
+            heterogeneousProvider: { command: type, type },
+          },
+        })
+        .where(eq(agents.id, agentId));
+      const { channel } = await new ChannelRepository(db, visitorId, fixture.workspaceId).create({
+        agentId,
+        sharedAgent: true,
+        title: 'Shared Helper',
+      });
+      const message = await new ChannelRepository(db, visitorId, fixture.workspaceId).send(
+        channel.id,
+        { content: 'Hello', requestKey: 'routed', routing: 'fallback' },
+      );
+      const [job] = await jobsOf(db, message.id);
+      const routedDevice = vi.fn(async () => ({ deviceId: 'owner-device', online: true }));
 
-    const claim = await execution.claim(channel.id, job.id, {
-      ...lease,
-      onlineDeviceIds: [],
-      routedDevice,
-    });
-    expect(routedDevice).toHaveBeenCalledWith(
-      expect.objectContaining({ agentId, userId: ownerId, workspaceId: null }),
-    );
-    expect(claim?.job).toMatchObject({ blockedCode: null });
-  });
+      const claim = await execution.claim(channel.id, job.id, {
+        ...lease,
+        onlineDeviceIds: [],
+        routedDevice,
+      });
+      expect(routedDevice).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId, userId: ownerId, workspaceId: null }),
+      );
+      expect(claim?.job).toMatchObject({ blockedCode: null });
+    },
+  );
 
-  it('is blocked for a runtime its share page cannot run', async () => {
-    await db
-      .update(agents)
-      .set({ agencyConfig: { heterogeneousProvider: { command: 'kimi', type: 'kimi-code' } } })
-      .where(eq(agents.id, agentId));
-    const { channel } = await visitor.create({
-      agentId,
-      sharedAgent: true,
-      title: 'Shared Helper',
-    });
-    const job = await send(channel.id, 'kimi');
+  it.each(['openclaw', 'hermes'])(
+    'is blocked for the remote %s runtime its share page cannot run',
+    async (type) => {
+      await db
+        .update(agents)
+        .set({ agencyConfig: { heterogeneousProvider: { command: type, type } } })
+        .where(eq(agents.id, agentId));
+      const { channel } = await visitor.create({
+        agentId,
+        sharedAgent: true,
+        title: 'Shared Helper',
+      });
+      const job = await send(channel.id, type);
 
-    expect(await execution.claim(channel.id, job.id, lease)).toBeNull();
-    const [blocked] = await db.select().from(channelJobs).where(eq(channelJobs.id, job.id));
-    expect(blocked.blockedCode).toBe('unavailable');
-  });
+      expect(await execution.claim(channel.id, job.id, lease)).toBeNull();
+      const [blocked] = await db.select().from(channelJobs).where(eq(channelJobs.id, job.id));
+      expect(blocked.blockedCode).toBe('unavailable');
+    },
+  );
 
   it('is blocked once the owner pauses the share', async () => {
     const { channel } = await visitor.create({
@@ -313,10 +337,12 @@ describe('a contact’s shared Agent in a direct conversation', () => {
       expect(job.errorType).toBe('AgentRuntimeError');
     });
 
-    it('shows the raw failure when the owner’s share opts into error details', async () => {
+    // The share option to show visitors raw errors was removed; a row written before then
+    // must not bring it back.
+    it('still redacts the failure when a stored share config predates the removed error-details option', async () => {
       await db
         .update(agentShares)
-        .set({ shareConfig: { showErrorDetails: true } })
+        .set({ shareConfig: { showErrorDetails: true } as Record<string, unknown> })
         .where(eq(agentShares.id, shareId));
       const { channel } = await visitor.create({
         agentId,
@@ -325,7 +351,8 @@ describe('a contact’s shared Agent in a direct conversation', () => {
       });
       const job = await failedView(channel.id, visitor);
 
-      expect(job.errorMessage).toBe('Upstream provider key sk-owner-secret rejected');
+      expect(job.errorMessage).toBeNull();
+      expect(job.errorType).toBe('AgentRuntimeError');
     });
 
     // The visitor saw "no reason recorded" when the owner's monthly cap refused the reply.
@@ -353,6 +380,32 @@ describe('a contact’s shared Agent in a direct conversation', () => {
       });
     });
 
+    // A failure recording only its type skipped redaction, so the visitor read the owner's
+    // budget state from the raw type.
+    it('redacts a failure that records only its type', async () => {
+      const { channel } = await visitor.create({
+        agentId,
+        sharedAgent: true,
+        title: 'Shared Helper',
+      });
+      const claim = (await execution.claim(
+        channel.id,
+        (await send(channel.id, 'bare')).id,
+        lease,
+      ))!;
+      await execution.fail(channel.id, claim.job.id, { message: 'unused' });
+      await db
+        .update(agentOperations)
+        .set({ error: { type: 'InsufficientBudgetForModel' } })
+        .where(eq(agentOperations.id, claim.job.operationId!));
+      const job = (await visitor.detail(channel.id))!.jobs.find(
+        (item) => item.id === claim.job.id,
+      )!;
+
+      expect(job.errorMessage).toBeNull();
+      expect(job.errorType).toBe('AgentRuntimeError');
+    });
+
     it('leaves an ordinary Agent’s failure text as it was', async () => {
       const ownAgentId = 'agt_channel_shared_own';
       await db.insert(agents).values({ id: ownAgentId, title: 'Mine', userId: visitorId });
@@ -363,57 +416,60 @@ describe('a contact’s shared Agent in a direct conversation', () => {
     });
   });
 
+  // Every share limit refuses the reply when it is dispatched, never the send, so the visitor's
+  // message stays and its failed reply explains the limit, after a reload too.
   describe('visitor limits', () => {
     const open = async () =>
       (await visitor.create({ agentId, sharedAgent: true, title: 'Shared Helper' })).channel;
     const sendText = (channelId: string, content: string, requestKey: string) =>
       visitor.send(channelId, { content, requestKey, routing: 'fallback' });
 
-    it('refuses a prompt beyond the share’s length cap', async () => {
+    it('sends a prompt beyond the share’s length cap, queuing its reply', async () => {
       const channel = await open();
-      await expect(
-        sendText(channel.id, 'x'.repeat(SHARE_VISITOR_PROMPT_MAX_LENGTH + 1), 'long'),
-      ).rejects.toThrow(`limited to ${SHARE_VISITOR_PROMPT_MAX_LENGTH} characters`);
-      await expect(sendText(channel.id, 'ok', 'short')).resolves.toBeDefined();
+      const message = await sendText(
+        channel.id,
+        'x'.repeat(SHARE_VISITOR_PROMPT_MAX_LENGTH + 1),
+        'long',
+      );
+
+      expect(await jobsOf(db, message.id)).toHaveLength(1);
     });
 
-    it('refuses a message once the visitor sent maxMessagesPerVisitor, not counting replies', async () => {
+    it('sends past maxMessagesPerVisitor, queuing its reply', async () => {
       await db
         .update(agentShares)
-        .set({ shareConfig: { maxMessagesPerVisitor: 2 } })
+        .set({ shareConfig: { maxMessagesPerVisitor: 1 } })
         .where(eq(agentShares.id, shareId));
       const channel = await open();
-      const first = (await execution.claim(channel.id, (await send(channel.id, 'a')).id, lease))!;
-      await execution.accepted(channel.id, first.job.id);
-      await execution.saveDraft(channel.id, first.job.id, 'Answer');
-      await execution.publish(channel.id, first.job.id);
-      await execution.releaseWriter(channel.id, first.job.id);
-
-      // One message and several Agent replies: the replies leave room for another message.
-      await db.insert(messages).values([
-        { content: 'one', role: 'user', topicId: first.topic.id, userId: ownerId },
-        ...['r1', 'r2', 'r3'].map((content) => ({
-          content,
-          role: 'assistant' as const,
-          topicId: first.topic.id,
-          userId: ownerId,
-        })),
-      ]);
-      await expect(sendText(channel.id, 'b', 'b')).resolves.toBeDefined();
-
-      // A second message, in another topic of the same visitor, reaches the cap.
-      const [otherTopic] = await db
+      const [topic] = await db
         .insert(topics)
         .values({ agentId, senderId: visitorId, userId: ownerId })
         .returning();
       await db
         .insert(messages)
-        .values({ content: 'two', role: 'user', topicId: otherTopic.id, userId: ownerId });
-      await expect(sendText(channel.id, 'c', 'c')).rejects.toMatchObject({
-        code: 'TOO_MANY_REQUESTS',
-        message: 'ShareMessageLimitExceeded',
-      });
+        .values({ content: 'one', role: 'user', topicId: topic.id, userId: ownerId });
+      const message = await sendText(channel.id, 'two', 'two');
+
+      expect(await jobsOf(db, message.id)).toHaveLength(1);
     });
+
+    it.each(['ShareMessageLimitExceeded', 'SharePromptTooLong', 'ShareSpendLimitExceeded'])(
+      'keeps the %s refusal of its reply readable after a reload',
+      async (type) => {
+        const channel = await open();
+        const claim = (await execution.claim(
+          channel.id,
+          (await send(channel.id, 'hi')).id,
+          lease,
+        ))!;
+        await execution.retireReservation(channel.id, claim.job.id, { message: 'Readable', type });
+        const job = (await visitor.detail(channel.id))!.jobs.find(
+          (item) => item.id === claim.job.id,
+        )!;
+
+        expect(job).toMatchObject({ errorMessage: 'Readable', errorType: type, status: 'failed' });
+      },
+    );
   });
 
   describe('reading its conversation history', () => {
@@ -566,7 +622,25 @@ describe('a shared Agent in the visitor’s workspace', () => {
     const { channel } = await inWorkspace.create({ agentId: teamAgentId, title: 'Team Helper' });
 
     const [listed] = await inWorkspace.list();
-    expect(listed).toMatchObject({ id: channel.id, sharedAgent: false, sharedAgentHandle: null });
-    expect((await inWorkspace.detail(channel.id)).channel).toMatchObject({ sharedAgent: false });
+    expect(listed).toMatchObject({
+      id: channel.id,
+      sharedAgent: false,
+      sharedAgentHandle: null,
+    });
+    const teamDetail = await inWorkspace.detail(channel.id);
+    expect(teamDetail.channel).toMatchObject({ sharedAgent: false });
+    expect(teamDetail.sharedAgentOwner).toBeNull();
+
+    // Its link share does not limit a colleague, who runs it as their own: the reply opens freely.
+    await db.insert(agentShares).values({ agentId: teamAgentId, visibility: 'link' });
+    const message = await inWorkspace.send(channel.id, {
+      content: 'Hello team',
+      requestKey: 'team',
+      routing: 'fallback',
+    });
+    const [job] = await jobsOf(db, message.id);
+    const candidate = await execution.openingCandidate(channel.id, job.id);
+    expect(candidate).toBeDefined();
+    expect(candidate?.share).toBeUndefined();
   });
 });

@@ -4,7 +4,7 @@ import { mentionsTopic } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { assembleSkillPool } from '@lobechat/mecha';
 import { resourcesTreePrompt } from '@lobechat/prompts';
-import { getActivePluginIds } from '@lobechat/types';
+import { FILESYSTEM_SKILL_SELECTION_PREFIX, getActivePluginIds } from '@lobechat/types';
 import debug from 'debug';
 
 import type { AgentModel } from '@/database/models/agent';
@@ -110,8 +110,11 @@ export const buildOperationSkillSet = async (
   } = input;
 
   try {
+    const injectedSkillIds = new Set(
+      selectedSkillIds.filter((id) => !id.startsWith(FILESYSTEM_SKILL_SELECTION_PREFIX)),
+    );
     const builtinMetas = builtinSkills.map((s) => ({
-      content: selectedSkillIds.includes(s.identifier) ? s.content : undefined,
+      content: injectedSkillIds.has(s.identifier) ? s.content : undefined,
       description: s.description,
       identifier: s.identifier,
       name: s.name,
@@ -122,7 +125,6 @@ export const buildOperationSkillSet = async (
     // Only a topic selection requests a body up front. A saved (legacy)
     // pin, like auto, advertises the skill for on-demand activation.
     const pinnedSkillIds = new Set(getActivePluginIds(agentConfig.plugins));
-    const injectedSkillIds = new Set(selectedSkillIds);
     const pinnedDbSkillIds = dbSkills
       .filter((s) => injectedSkillIds.has(s.identifier))
       .map((s) => s.id);
@@ -212,13 +214,25 @@ export const buildOperationSkillSet = async (
         })),
     ];
 
-    const projectMetas = workspaceInit.workspace.skills.map((s) => ({
-      description: s.description ?? '',
-      identifier: `${s.scope === 'device' ? 'device' : 'project'}:${s.name}`,
-      location: s.path,
-      name: s.name,
-      source: s.scope === 'device' ? ('device' as const) : ('project' as const),
-    }));
+    // Exclude skills with `disable-model-invocation: true` or missing description
+    // from automatic model discovery (<available_skills>), unless the user
+    // explicitly invoked the skill in the conversation (`selectedSkillIds`).
+    const selectedFilesystemSkillIds: string[] = [];
+    const workspaceSelections = new Set(selectedSkillIds);
+    const projectMetas = workspaceInit.workspace.skills.flatMap<
+      OperationSkillSet['skills'][number]
+    >((skill) => {
+      const source = skill.scope === 'device' ? 'device' : 'project';
+      const identifier = `${source}:${skill.name}`;
+      const selected =
+        workspaceSelections.has(identifier) ||
+        workspaceSelections.has(FILESYSTEM_SKILL_SELECTION_PREFIX + skill.name);
+      const description = skill.description?.trim() ?? '';
+      if (!selected && (skill.disableModelInvocation || !description)) return [];
+
+      if (selected) selectedFilesystemSkillIds.push(identifier);
+      return [{ description, identifier, location: skill.path, name: skill.name, source }];
+    });
 
     if (projectMetas.length) {
       log(
@@ -284,7 +298,12 @@ export const buildOperationSkillSet = async (
         // Selected skills join the enabled set so the resolver auto-activates
         // them; a share allowlist or a disabled entry still drops them above.
         enabledPluginIds: [
-          ...new Set([...(agentPlugins ?? []), ...shareEnabledSkillIds, ...selectedSkillIds]),
+          ...new Set([
+            ...(agentPlugins ?? []),
+            ...shareEnabledSkillIds,
+            ...injectedSkillIds,
+            ...selectedFilesystemSkillIds,
+          ]),
         ],
         shareAllowedIds: shareAllowedSkillIds,
         skillActivateMode: agentConfig.chatConfig?.skillActivateMode,

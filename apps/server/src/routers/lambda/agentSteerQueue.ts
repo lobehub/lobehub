@@ -28,7 +28,11 @@ import {
 } from './_helpers/delegatedDeviceAccess';
 import { ExecAgentFieldsSchema, foldLegacyUserMessageFields } from './aiAgent/execSchemas';
 import { assertCanUseAgentRunConversation } from './aiAgent/guards';
-import { acceptsFileWorksOf, acceptsMemberRuntimeEndOf } from './aiAgent/utils';
+import {
+  acceptsArtboardWorksOf,
+  acceptsFileWorksOf,
+  acceptsMemberRuntimeEndOf,
+} from './aiAgent/utils';
 
 const log = debug('lobe-lambda-router:agent-steer-queue');
 
@@ -200,6 +204,7 @@ export const agentSteerQueueRouter = router({
       request: {
         // A client from before `userMessage` sends the top-level selection fields.
         ...foldLegacyUserMessageFields(request),
+        acceptsArtboardWorks: acceptsArtboardWorksOf(streamFeatures),
         acceptsFileWorks: acceptsFileWorksOf(streamFeatures),
         acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(streamFeatures),
         ...(delegatedDeviceAccessDenied && { delegatedDeviceAccessDenied }),

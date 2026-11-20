@@ -80,7 +80,7 @@ vi.mock('@/store/user', () => ({
   useUserStore: (selector: (s: unknown) => unknown) => selector({}),
 }));
 vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: { enableGoals: () => false, enableProjects: () => true },
+  labPreferSelectors: { enableProjects: () => true },
   userProfileSelectors: { userId: () => 'u1' },
 }));
 vi.mock('@/styles', () => ({ shinyTextStyles: {} }));

@@ -25,7 +25,7 @@ import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { useHeaderActionSize } from '@/styles/density';
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 import type { ComposerTarget } from '../../types';
 import { BROWSER_IMPORT_BANNER_DISMISSED_STORAGE_KEY } from './const';
@@ -82,7 +82,7 @@ const styles = stylex.create({
     position: 'relative',
     flexShrink: 0,
     minHeight: '56px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorBorderSecondary,
@@ -107,8 +107,8 @@ const styles = stylex.create({
     flexShrink: 0,
     flexWrap: 'wrap',
     minHeight: '72px',
-    paddingBlock: '12px',
-    paddingInline: '16px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorBorderSecondary,

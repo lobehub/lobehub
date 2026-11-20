@@ -17,6 +17,8 @@ vi.mock('./opener', () => ({
   CHANNEL_REPLY_OPENER_TIMEOUT_MS: 5000,
   createChannelReplyOpener: vi.fn(),
 }));
+// Unknown by default: the Agent's last run was not refused by a usage window.
+vi.mock('./quotaReset', () => ({ knownQuotaReset: vi.fn() }));
 
 const candidate = {
   addressed: true,
@@ -178,6 +180,58 @@ describe('openChannelReply', () => {
       ack: undefined,
       threadTitle: undefined,
     });
+  });
+
+  it('does not acknowledge when the Agent’s usage window is known to be closed', async () => {
+    const opener = vi.fn();
+    const quotaReset = vi.fn().mockResolvedValue(Date.parse('2026-11-18T07:00:00Z'));
+
+    await openChannelReply({} as never, 'channel', 'job', {
+      createOpener: () => opener,
+      quotaReset,
+    });
+
+    expect(quotaReset).toHaveBeenCalledWith(candidate);
+    expect(opener).not.toHaveBeenCalled();
+    // Opened with nothing, so the run starts in place and its refusal is the reply's outcome.
+    expect(executions.open).toHaveBeenCalledWith('channel', 'job', {});
+  });
+
+  it('acknowledges as usual when the usage check fails', async () => {
+    const opener = vi.fn().mockResolvedValue({ ack: 'On it.', placement: 'channel' });
+
+    await openChannelReply({} as never, 'channel', 'job', {
+      createOpener: () => opener,
+      quotaReset: vi.fn().mockRejectedValue(new Error('db down')),
+    });
+
+    expect(executions.open).toHaveBeenCalledWith('channel', 'job', {
+      ack: 'On it.',
+      threadTitle: undefined,
+    });
+  });
+
+  it('opens a shared Agent’s reply only once its share admits the request', async () => {
+    const share = { ownerId: 'owner', shareId: 'share', workspaceId: null };
+    executions.openingCandidate.mockResolvedValue({ ...candidate, share });
+    const opener = vi.fn().mockResolvedValue({ ack: 'On it', placement: 'channel' });
+    const admitShare = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+    await openChannelReply({} as never, 'channel', 'job', {
+      admitShare,
+      createOpener: () => opener,
+    });
+    expect(admitShare).toHaveBeenCalledWith(
+      expect.objectContaining({ request: candidate.request, share }),
+    );
+    expect(opener).not.toHaveBeenCalled();
+    expect(executions.open).not.toHaveBeenCalled();
+
+    await openChannelReply({} as never, 'channel', 'job', {
+      admitShare,
+      createOpener: () => opener,
+    });
+    expect(executions.open).toHaveBeenCalledWith('channel', 'job', { ack: 'On it' });
   });
 
   it('skips a job with nothing to open and never throws', async () => {

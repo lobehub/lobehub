@@ -28,6 +28,7 @@ import {
   useLobeBenchRuns,
 } from '@/features/LobeBench/useLobeBench';
 import { useSavedContenders } from '@/features/LobeBench/useSavedContenders';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   container: {
@@ -39,18 +40,18 @@ const styles = stylex.create({
   table: {
     display: 'grid',
     gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1.4fr) 100px 120px 140px',
-    columnGap: 12,
+    columnGap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
   },
   head: {
     paddingBlock: 8,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     fontSize: 12,
     color: cssVar.colorTextSecondary,
   },
   row: {
     paddingBlock: 10,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: cssVar.borderRadius,
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
   },

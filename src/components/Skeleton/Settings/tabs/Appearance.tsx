@@ -19,7 +19,7 @@ const HALF_SELECT = (
   </Flexbox>
 );
 
-/** General: theme picker, language, motion, context menu and reply language. */
+/** General: theme picker, language, motion and reply language. */
 export const CommonSectionSkeleton = () => {
   const text = useSkeletonText('setting');
 
@@ -43,11 +43,6 @@ export const CommonSectionSkeleton = () => {
             {
               control: { height: 38, radius: 8, width: 165 },
               label: text('settingAppearance.density.title', 64, 14),
-              minWidth: undefined,
-            },
-            {
-              control: { height: 38, radius: 8, width: 165 },
-              label: text('settingAppearance.contextMenuMode.title', 84, 14),
               minWidth: undefined,
             },
             {

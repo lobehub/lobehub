@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import { AGENT_GRID_MIN_COLUMN } from './AgentCard';
 import ItemActions from './ItemActions';
@@ -50,7 +51,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
        title instead of leaving a hole where the description would be. */
     min-height: 72px;
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     transition:
       transform 0.18s,
@@ -63,7 +64,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   container: css`
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -80,7 +81,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     /* Same column width as the badge wall below, so both grids line up. */
     grid-template-columns: repeat(auto-fill, minmax(min(${AGENT_GRID_MIN_COLUMN}px, 100%), 1fr));
-    gap: 12px;
+    gap: ${densityVars.contentGap};
 
     width: 100%;
     min-width: 0;
