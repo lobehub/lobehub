@@ -1,7 +1,7 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { confirmModal, Empty, Flexbox, Icon, Tag, toast } from '@lobehub/ui';
+import { confirmModal, Empty, Flexbox, Icon, Tag, toast, Tooltip } from '@lobehub/ui';
 import { EyeOffIcon, GlobeIcon, Link2Off } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +15,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { lambdaClient } from '@/libs/trpc/client';
 
-import { isOwnCredRow, workspaceCredRowAccess } from './credAccess';
+import { isOwnCredRow, isWriteOnlyCredRow, workspaceCredRowAccess } from './credAccess';
 import { credErrorKey } from './credError';
 import CredItem from './CredItem';
 import { createEditCredModal } from './EditCredModal';
@@ -122,6 +122,7 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
         )}
         {visibleCredentials.map((cred) => {
           const access = workspaceCredRowAccess(cred, { isAdmin, myAccountId });
+          const writeOnly = isWriteOnlyCredRow(cred);
           const extraMenuItems = [
             ...(access.publish
               ? [
@@ -164,19 +165,35 @@ const WorkspaceCredsList: FC<WorkspaceCredsListProps> = ({
               key={cred.id}
               titleSuffix={cred.visibility === 'private' && <PrivateLockIcon />}
               tags={
-                cred.ownerType === 'user' && (
+                cred.ownerType === 'user' ? (
                   <Tag>
                     {isOwnCredRow(cred, myAccountId)
                       ? t('creds.owner.fromPersonal')
                       : t('creds.owner.sharedBy', { name: cred.ownerDisplayName })}
                   </Tag>
+                ) : (
+                  writeOnly && (
+                    <Tooltip title={t('creds.writeOnly.tooltip')}>
+                      <Tag>{t('creds.writeOnly.tag')}</Tag>
+                    </Tooltip>
+                  )
                 )
               }
               onDelete={access.manage ? handleDelete : undefined}
-              onView={access.manage ? (cred) => createViewCredModal({ cred, credsApi }) : undefined}
               onEdit={
                 access.manage
-                  ? (cred) => createEditCredModal({ cred, credsApi, onSuccess: () => refetch() })
+                  ? (cred) =>
+                      createEditCredModal({
+                        cred,
+                        credsApi,
+                        onSuccess: () => refetch(),
+                        writeOnly,
+                      })
+                  : undefined
+              }
+              onView={
+                access.manage && !writeOnly
+                  ? (cred) => createViewCredModal({ cred, credsApi })
                   : undefined
               }
             />

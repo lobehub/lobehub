@@ -63,4 +63,27 @@ describe('WorkspaceCredsList', () => {
     expect(within(mine).getByTestId('private-lock')).toBeInTheDocument();
     expect(screen.getAllByTestId('private-lock')).toHaveLength(1);
   });
+
+  it('marks only workspace credentials shared with everyone as write-only', () => {
+    render(
+      <WorkspaceCredsList
+        credsApi={credsApiWith([
+          cred({ id: 1, key: 'TEAM_TOKEN', name: 'Team token', visibility: 'public' }),
+          cred({ id: 2, key: 'MY_TOKEN', name: 'My token', visibility: 'private' }),
+          cred({
+            id: 3,
+            key: 'SHARED_IN',
+            name: 'Shared in',
+            ownerAccountId: 1,
+            ownerType: 'user',
+            visibility: 'public',
+          }),
+        ])}
+      />,
+    );
+
+    // Only "Team token": the private one stays readable by its creator, and a
+    // personal credential shared in stays readable by its owner.
+    expect(screen.getAllByText('creds.writeOnly.tag')).toHaveLength(1);
+  });
 });
