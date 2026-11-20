@@ -290,7 +290,7 @@ export const resolveExecutionConfig = async (
     .for('share');
   if (!owned) return null;
   const config = await mergeDefaults(tx, owned, share.ownerId, share.workspaceId, serverDefault);
-  // The runtimes its share page runs: Native, or Claude Code / Codex. The visitor picks no device;
+  // The runtimes its share page runs: Native, or a locally executed CLI runtime. The visitor picks no device;
   // the run's share gate decides whether the share grants the owner's device and routes there.
   const runtime = agentRuntime(config);
   if (

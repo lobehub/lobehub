@@ -86,7 +86,7 @@ tool does not ship):
   except the `lobe-remote-device` picker: with it the visitor's model could
   list and activate the creator's other machines, so it stays default-denied
   even under the grant. The same grant lets the visitor run a heterogeneous
-  Agent (Claude Code / Codex) on that device; without it the run is refused,
+  Agent that runs locally (Claude Code, Codex and the other local CLIs) on that device; without it the run is refused,
   and a share run never falls back to the cloud sandbox.
 
 - `lobe-web-onboarding`: reads and WRITES the creator's own onboarding

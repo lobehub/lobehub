@@ -890,7 +890,7 @@ export default {
 
   'share.entry': 'Share this Agent',
   'share.settings.device.desc':
-    'Choose who may run this Agent on your execution environment, for example to read files or run commands. Claude Code and Codex Agents run only there, so other visitors can’t use them. Chatting with the Agent doesn’t include device access.',
+    'Choose who may run this Agent on your execution environment, for example to read files or run commands. Local CLI Agents such as Claude Code and Codex run only there, so other visitors can’t use them. Chatting with the Agent doesn’t include device access.',
   'share.settings.device.title': 'Device access',
   'share.settings.device.who': 'Who can use your device',
   'share.settings.limits.desc':
@@ -972,14 +972,14 @@ export default {
     'Only the people you pick below from this Agent’s contacts can use it.',
   'share.settings.limits.saved': 'Limits saved',
   'share.settings.permissions.deviceAccessConfirm.commands':
-    'They can run any command and read or write any file on the machine this Agent runs on, including through Claude Code or Codex.',
+    'They can run any command and read or write any file on the machine this Agent runs on, including through a local CLI Agent such as Claude Code or Codex.',
   'share.settings.permissions.deviceAccessConfirm.contactsScope':
     'Anyone added to this Agent’s contacts later gets this access too, not only the people there now.',
   'share.settings.permissions.deviceAccessConfirm.intro':
     'People you grant access will run this Agent on your execution environment:',
   'share.settings.permissions.deviceAccessConfirm.ok': 'Allow listed people',
   'share.settings.permissions.deviceAccessConfirm.subscription':
-    'Claude Code and Codex runs use the model subscription signed in on that machine.',
+    'Local CLI Agents such as Claude Code and Codex use the model subscription or key signed in on that machine.',
   'share.settings.permissions.deviceAccessConfirm.title':
     'Let people use your execution environment?',
   'share.settings.permissions.deviceAllowContactsUnavailable':

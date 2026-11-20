@@ -58,8 +58,8 @@ class ChannelDispatchError extends Error {
 
 /**
  * Refusals of a shared Agent's run its visitor can act on, raised by the run's share guards before
- * the visitor's message is written: the share grants them no device for a Claude Code / Codex
- * Agent, the owner's device is offline, or the visitor has sent all the messages the share allows.
+ * the visitor's message is written: the share grants them no device for a local CLI Agent
+ * (Claude Code, Codex, …), the owner's device is offline, or the visitor has sent all the messages the share allows.
  * Kept as the job's failure type, as the share page shows them.
  */
 const SHARE_REFUSAL_TYPES = new Set<string>([

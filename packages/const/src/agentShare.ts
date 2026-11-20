@@ -1,4 +1,5 @@
 import type { AgentShareToolGrant } from '@lobechat/types';
+import { LocalExecutionHeterogeneousAgentTypeSchema } from '@lobechat/types';
 
 /**
  * Default `AgentShareConfig.maxMessagesPerVisitor` applied when a share is
@@ -232,10 +233,14 @@ export const AGENT_SHARE_DEVICE_ALLOW_USERS_LIMIT = 100;
 
 /**
  * Heterogeneous runtimes a share visitor may run, on a device the share grants
- * them. Both run as a local CLI on that device; platform agents (OpenClaw /
- * Hermes) and the other CLIs have no visitor-scoped dispatch.
+ * them: every runtime that executes on the creator's machine (descriptor-backed
+ * CLIs such as Claude Code / Codex / OpenCode, plus protocol-driven ones such as
+ * DeepSeek Harness). They share one device dispatch, so the device grant covers
+ * them alike. Platform agents (OpenClaw / Hermes) run as remote tasks with no
+ * visitor-scoped dispatch and stay excluded.
  */
-export const AGENT_SHARE_VISITOR_HETERO_TYPES: readonly string[] = ['claude-code', 'codex'];
+export const AGENT_SHARE_VISITOR_HETERO_TYPES: readonly string[] =
+  LocalExecutionHeterogeneousAgentTypeSchema.options;
 
 /** Whether a share visitor may run this heterogeneous runtime type. */
 export const isAgentShareVisitorHeteroType = (type?: string | null): boolean =>
@@ -246,8 +251,8 @@ export const isAgentShareVisitorHeteroType = (type?: string | null): boolean =>
  * provider restriction (`AGENT_SHARE_ALLOWED_PROVIDERS`).
  *
  * The restriction keeps visitors from spending the creator's third-party model
- * quota. A Claude Code / Codex agent runs its own CLI on the creator's device and
- * calls none of `provider`'s models — `provider` only stamps the runtime type — so
+ * quota. An agent on a locally executed runtime (Claude Code, Codex, OpenCode, …)
+ * runs its own CLI on the creator's device and calls none of `provider`'s models — `provider` only stamps the runtime type — so
  * it is exempt. Every other driver, including heterogeneous runtimes a visitor
  * cannot run, stays restricted. Server save/publish checks and every client hint
  * must use this one predicate so they never disagree.
