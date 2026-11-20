@@ -281,8 +281,8 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
   // (operation, topic, tool call) from the execution context only, writes under
   // the share scope pinned to the visitor topic (`resolveRunWorkAccessScope`),
   // and changes or deletes only Works this conversation created. Collection images
-  // must be the creator's images that a tool result of the visitor conversation
-  // names (`resolveAgentWorkCollectionItems`).
+  // must be the creator's images the visitor conversation produced or showed
+  // in a tool result (`resolveAgentWorkCollectionItems`).
   // See the allowed-builtins section of `shareGate/README.md`.
   WorkManifest.identifier,
 ]);

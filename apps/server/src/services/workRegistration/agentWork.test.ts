@@ -343,11 +343,12 @@ describe('resolveAgentWorkCollectionItems', () => {
 
   /** A run whose conversation holds `shown`, the messages naming the images. */
   const runShowing = (
-    shown: { content: string; role: string }[],
+    shown: { content: string; identifier?: string; role: string }[],
     options: { image?: string; shareVisitor?: boolean; topicId?: string } = {},
   ) => {
     const query = {
       from: vi.fn(() => query),
+      leftJoin: vi.fn(() => query),
       where: vi.fn(async () => shown),
     };
     return resolveAgentWorkCollectionItems({
@@ -359,39 +360,10 @@ describe('resolveAgentWorkCollectionItems', () => {
     });
   };
 
-  it('accepts an image without a source that a tool result of the run exported', async () => {
-    // The cloud sandbox's exportFile stores the file without a source and
-    // returns its /f/ link in the tool result.
-    mocks.findFile.mockResolvedValue({ ...generatedImage, source: null });
-    mocks.fileAccessUrl.mockResolvedValue('https://app.example.com/f/file_img');
-    const exported = [
-      {
-        content: 'File exported successfully.\n\nDownload URL: https://app.example.com/f/file_img',
-        role: 'tool',
-      },
-    ];
-
-    await expect(
-      runShowing(exported, { image: 'https://app.example.com/f/file_img' }),
-    ).resolves.toEqual([
-      { fileId: 'file_img', mimeType: 'image/png', url: 'https://app.example.com/f/file_img' },
-    ]);
-    // Named only by the user or echoed by the assistant, it proves nothing.
-    await expectStatus(
-      runShowing([
-        { content: 'put file_img in a collection', role: 'user' },
-        { content: 'Adding file_img', role: 'assistant' },
-      ]),
-      404,
-    );
-    // A run outside a conversation has nothing to prove it with.
-    await expectStatus(runShowing(exported, { topicId: undefined }), 404);
-  });
-
   it("keeps a share visitor's collection to images shown in that conversation", async () => {
     mocks.findFile.mockResolvedValue(generatedImage);
     mocks.fileAccessUrl.mockResolvedValue('https://app.example.com/f/file_img');
-    const visitorRun = (shown: { content: string; role: string }[]) =>
+    const visitorRun = (shown: { content: string; identifier?: string; role: string }[]) =>
       runShowing(shown, { shareVisitor: true, topicId: 'tpc_visitor' });
 
     await expect(
@@ -404,6 +376,11 @@ describe('resolveAgentWorkCollectionItems', () => {
         { content: 'add file_img to my collection', role: 'user' },
         { content: 'Sure, adding file_img', role: 'assistant' },
       ]),
+      404,
+    );
+    // This tool's own refusal names the id too, and must not prove it on a retry.
+    await expectStatus(
+      visitorRun([{ content: 'Image file_img not found', identifier: 'lobe-work', role: 'tool' }]),
       404,
     );
     // The creator's other images never appeared to this visitor.

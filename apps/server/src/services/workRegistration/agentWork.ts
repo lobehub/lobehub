@@ -1,11 +1,14 @@
+import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
+import { WorkIdentifier } from '@lobechat/builtin-tool-work';
+import { CLOUD_SANDBOX_IDENTIFIER } from '@lobechat/builtin-tools/fileEditScan';
 import type { AgentWorkRunContext, CollectionWorkItem, WorkAccessScope } from '@lobechat/types';
 import { COLLECTION_WORK_MAX_ITEMS, FileSource } from '@lobechat/types';
-import { and, eq, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 
 import { FileModel } from '@/database/models/file';
 import { AgentWorkError, WorkModel } from '@/database/models/work';
 import { hasActiveWorkspaceMembership } from '@/database/models/workspace';
-import { agentOperations, generations, messages } from '@/database/schemas';
+import { agentOperations, generations, messagePlugins, messages } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import type { HeteroOperationJwtClaims } from '@/libs/trpc/utils/internalJwt';
 import { FileService } from '@/server/services/file';
@@ -226,13 +229,16 @@ const isGenerationId = (id: string) => id.startsWith('gen_');
  * never from the agent.
  *
  * Generated images and run outputs qualify as they are. Any other image of the
- * user (for example a file the cloud sandbox exported, which carries no
- * source) qualifies only when a tool result of the run's conversation names
- * it, so the agent cannot claim the user's library uploads by id.
+ * user qualifies only when a successful sandbox `exportFile` call of the run's
+ * conversation produced it: the cloud sandbox stores its exports without a
+ * source, and the agent must not claim the user's library uploads by id. The
+ * proof is the `fileId` the server wrote to that call's state, never message
+ * text, which any tool can echo (this tool's own "not found" included).
  *
- * A share visitor's run executes as the creator, so there every image must
- * appear in a tool result of the visitor's conversation: a visitor cannot pull
- * the creator's other images into a card by guessing their ids.
+ * A share visitor's run executes as the creator, so there every generated
+ * image or run output must also appear in a tool result of the visitor's
+ * conversation: a visitor cannot pull the creator's other images into a card
+ * by guessing their ids.
  */
 export const resolveAgentWorkCollectionItems = async (params: {
   db: LobeChatDatabase;
@@ -280,32 +286,66 @@ export const resolveAgentWorkCollectionItems = async (params: {
       if (!file.fileType.startsWith('image/')) {
         throw new AgentWorkRunError(`File ${fileId} is not an image`, 409);
       }
-      const needsProof = shareVisitor || !COLLECTION_IMAGE_SOURCES.has(file.source ?? '');
-      return { caption, file, image, needsProof, ref };
+      const exported = !COLLECTION_IMAGE_SOURCES.has(file.source ?? '');
+      return { caption, exported, file, image, ref };
     }),
   );
 
-  const unproven = files.filter(({ needsProof }) => needsProof);
-  if (unproven.length > 0) {
-    if (!topicId) throw new AgentWorkRunError(`Image ${unproven[0].image} not found`, 404);
-    // Generated images live in generation topics, and an exported file has no
-    // link to the run; the conversation only holds the id the agent names them
-    // by (the generation id or file link) in the tool result that produced
-    // them. One scan of the topic returns the messages naming any of the images.
-    const shown = await db
-      .select({ content: messages.content, role: messages.role })
-      .from(messages)
+  const exports = files.filter(({ exported }) => exported);
+  if (exports.length > 0) {
+    if (!topicId) throw new AgentWorkRunError(`Image ${exports[0].image} not found`, 404);
+    const exportCalls = await db
+      .select({ fileId: sql<string>`${messagePlugins.state} ->> 'fileId'` })
+      .from(messagePlugins)
+      .innerJoin(messages, eq(messages.id, messagePlugins.id))
       .where(
         and(
           eq(messages.topicId, topicId),
           eq(messages.userId, userId),
-          or(...unproven.map(({ ref }) => sql`position(${ref} in ${messages.content}) > 0`)),
+          eq(messagePlugins.apiName, 'exportFile'),
+          inArray(messagePlugins.identifier, [CLOUD_SANDBOX_IDENTIFIER, SkillsIdentifier]),
+          inArray(
+            sql`${messagePlugins.state} ->> 'fileId'`,
+            exports.map(({ file }) => file.id),
+          ),
         ),
       );
-    // Only tool results count: a message the user or visitor typed, or an
-    // assistant reply echoing it, can name any id.
-    const toolResults = shown.filter(({ role }) => role === 'tool');
-    const missing = unproven.find(
+    const missing = exports.find(
+      ({ file }) => !exportCalls.some((call) => call.fileId === file.id),
+    );
+    if (missing) throw new AgentWorkRunError(`Image ${missing.image} not found`, 404);
+  }
+
+  const shownToVisitor = files.filter(({ exported }) => shareVisitor && !exported);
+  if (shownToVisitor.length > 0) {
+    if (!topicId) throw new AgentWorkRunError(`Image ${shownToVisitor[0].image} not found`, 404);
+    // Generated images live in generation topics; the conversation only holds
+    // the id the agent names them by (the generation id or file link) in the
+    // tool result that produced them. One scan of the topic returns the
+    // messages naming any of the images.
+    const shown = await db
+      .select({
+        content: messages.content,
+        identifier: messagePlugins.identifier,
+        role: messages.role,
+      })
+      .from(messages)
+      .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
+      .where(
+        and(
+          eq(messages.topicId, topicId),
+          eq(messages.userId, userId),
+          or(...shownToVisitor.map(({ ref }) => sql`position(${ref} in ${messages.content}) > 0`)),
+        ),
+      );
+    // Only tool results count: a message the visitor typed, or an assistant
+    // reply echoing it, can name any id the visitor guessed. So can this tool's
+    // own refusal ("Image <id> not found"), which a retry would otherwise read
+    // as proof.
+    const toolResults = shown.filter(
+      ({ identifier, role }) => role === 'tool' && identifier !== WorkIdentifier,
+    );
+    const missing = shownToVisitor.find(
       ({ ref }) => !toolResults.some(({ content }) => content?.includes(ref)),
     );
     if (missing) throw new AgentWorkRunError(`Image ${missing.image} not found`, 404);

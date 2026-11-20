@@ -223,9 +223,10 @@ absence of a known exploit.
      through the tool or `lh work` (`agentEditable`), never ones collected
      automatically or made in another conversation;
   4. collection images must be images of the run's account
-     (`resolveAgentWorkCollectionItems`), and in a visitor run each image must
-     also appear in a tool result of the visitor topic, so a guessed id of
-     another creator image is refused as not found.
+     (`resolveAgentWorkCollectionItems`): a generated image or run output must
+     also appear in a tool result of the visitor topic, and any other image must
+     come from an `exportFile` call of that topic (its state's `fileId`), so a
+     guessed id of another creator image is refused as not found.
 
   Its implied grant is added after the activator check, so it never implies
   `lobe-activator` on its own.
