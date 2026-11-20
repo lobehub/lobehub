@@ -660,6 +660,14 @@ describe('contact cards', () => {
     });
   });
 
+  it('names an Agent by its personal name, as every list does, over its role title', async () => {
+    await serverDB.update(agents).set({ name: '晚诺' }).where(eq(agents.id, bobAgent));
+
+    expect(await aliceModel.resolveCard({ agentId: bobAgent, type: 'agent' })).toMatchObject({
+      name: '晚诺',
+    });
+  });
+
   it('asks the owner to turn sharing on instead of opening it', async () => {
     await serverDB
       .update(agentShares)
