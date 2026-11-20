@@ -3,13 +3,18 @@ import {
   sandboxUploadedFilePath,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 
-/** Marker file written once the uploaded files have been synced for a session. */
-export const SANDBOX_FILES_INIT_MARKER = `${SANDBOX_UPLOADED_FILES_DIR}/.lobe-files-initialized`;
+/**
+ * Directory of per-file markers: `<dir>/<fileId>` exists once that file has
+ * been synced into the sandbox for the current session.
+ */
+export const SANDBOX_FILES_MARKER_DIR = `${SANDBOX_UPLOADED_FILES_DIR}/.lobe-files`;
 
 /** Timeout (ms) for the bootstrap download command. */
 export const SANDBOX_INIT_TIMEOUT_MS = 120_000;
 
 export interface SandboxInitDownload {
+  /** File id; keys the marker, so a file attached later in the topic is still synced. */
+  id: string;
   name: string;
   /** A download URL (e.g. presigned) the sandbox can fetch with curl. */
   url: string;
@@ -19,30 +24,36 @@ const shellQuote = (value: string): string => `'${value.replaceAll("'", String.r
 
 /**
  * Build an idempotent shell command that downloads the given uploaded files into
- * the sandbox upload directory. A marker file guards re-runs, so the command is
- * a cheap no-op once the files have been synced for the current session.
+ * the sandbox upload directory.
  *
- * Downloads are best-effort: a single failed fetch does not abort the rest, and
- * the marker is always written so the sync is not retried on every tool call.
+ * Each file has its own marker, written only after its download succeeded, so
+ * the command is a cheap no-op for files already synced in this session, while
+ * a file attached after the session started — or one whose download failed —
+ * is fetched by the next call. A single session-wide marker used to skip those
+ * files for the rest of the session, although the prompt lists them as
+ * pre-loaded.
+ *
+ * Downloads are best-effort: a failed fetch does not abort the rest.
  */
 export const buildSandboxFilesInitCommand = (downloads: SandboxInitDownload[]): string => {
   const dir = shellQuote(SANDBOX_UPLOADED_FILES_DIR);
-  const marker = shellQuote(SANDBOX_FILES_INIT_MARKER);
 
   const seen = new Set<string>();
-  const curls: string[] = [];
+  const steps: string[] = [];
 
-  for (const { name, url } of downloads) {
-    if (!url) continue;
+  for (const { id, name, url } of downloads) {
+    if (!url || !id) continue;
     const path = sandboxUploadedFilePath(name);
     if (seen.has(path)) continue;
     seen.add(path);
-    curls.push(`curl -fsSL ${shellQuote(url)} -o ${shellQuote(path)} || true`);
+
+    const marker = shellQuote(`${SANDBOX_FILES_MARKER_DIR}/${id}`);
+    steps.push(
+      `if [ ! -f ${marker} ]; then curl -fsSL ${shellQuote(url)} -o ${shellQuote(path)} && touch ${marker} || true; fi`,
+    );
   }
 
-  if (curls.length === 0) return `mkdir -p ${dir}`;
+  if (steps.length === 0) return `mkdir -p ${dir}`;
 
-  const body = [...curls, `touch ${marker}`].join('; ');
-
-  return `mkdir -p ${dir}; if [ ! -f ${marker} ]; then ${body}; fi`;
+  return [`mkdir -p ${shellQuote(SANDBOX_FILES_MARKER_DIR)}`, ...steps].join('; ');
 };
