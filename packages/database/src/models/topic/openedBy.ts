@@ -28,6 +28,33 @@ export interface ListOpenedTopicsParams {
 }
 
 /**
+ * A topic the caller may see as a child: anything but a task run, and a task
+ * run only when the caller may see that run of its task — a private task's
+ * runs stay with their runner and the task's creator. Every listing of a
+ * topic's children applies it (`listOpenedTopics`, the `openedByTopicId`
+ * branch of `query`), since `ownership()` alone lets every workspace member
+ * see the run's row.
+ */
+export const visibleTaskRunCondition = (ctx: TopicModelContext) => {
+  const visibleTaskRun = ctx.db
+    .select({ one: sql`1` })
+    .from(taskTopics)
+    .where(
+      and(
+        // The outer row's id: qualified, or it would resolve against task_topics.
+        sql`${taskTopics.topicId} = ${sql.identifier('topics')}.${sql.identifier('id')}`,
+        topicsOwnership({ db: ctx.db, userId: ctx.userId, workspaceId: ctx.workspaceId }),
+      ),
+    );
+  // `trigger` is null for most topics, and `NOT (null = 'task')` is null: say so explicitly.
+  return or(
+    isNull(topics.trigger),
+    not(eq(topics.trigger, 'task')),
+    sql`exists (${visibleTaskRun})`,
+  );
+};
+
+/**
  * The live (not detached, not trashed) topics opened by any of `openerTopicIds`,
  * newest activity first per generation. With `includeDescendants`, their own
  * sub-topics come along too, at every depth, so a list can attach a
@@ -52,24 +79,7 @@ export const listOpenedTopics = async (
       ? or(isNull(topics.status), not(inArray(topics.status, excludeStatuses)))
       : undefined;
   const runStartedAt = topicRunStartedAtColumn(ctx.db);
-  // A task run is listed only when the caller may see that run of its task:
-  // a private task's runs stay with their runner and the task's creator.
-  const visibleTaskRun = ctx.db
-    .select({ one: sql`1` })
-    .from(taskTopics)
-    .where(
-      and(
-        // The outer row's id: qualified, or it would resolve against task_topics.
-        sql`${taskTopics.topicId} = ${sql.identifier('topics')}.${sql.identifier('id')}`,
-        topicsOwnership({ db: ctx.db, userId: ctx.userId, workspaceId: ctx.workspaceId }),
-      ),
-    );
-  // `trigger` is null for most topics, and `NOT (null = 'task')` is null: say so explicitly.
-  const taskVisibilityCondition = or(
-    isNull(topics.trigger),
-    not(eq(topics.trigger, 'task')),
-    sql`exists (${visibleTaskRun})`,
-  );
+  const taskVisibilityCondition = visibleTaskRunCondition(ctx);
 
   // The latest top-level run decides what a sub-topic is doing: server runs
   // keep `topics.status` as it was and only write the operation row.
