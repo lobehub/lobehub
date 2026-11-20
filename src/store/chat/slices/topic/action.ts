@@ -79,6 +79,7 @@ import {
   type TopicListParams,
   topicListResource,
   topicListViewFields,
+  topicListViewOf,
 } from './projection';
 import { type ChatTopicDispatch } from './reducer';
 import { topicSelectors } from './selectors';
@@ -1427,15 +1428,10 @@ export class ChatTopicActionImpl {
     const currentData = topicDataMap[key];
 
     await this.#topicList.loadMore(key, {
+      ...topicListViewOf(currentData),
       agentId: activeAgentId,
-      excludeOpenedTopics: currentData?.excludeOpenedTopics,
-      excludeStatuses: currentData?.excludeStatuses,
-      excludeTriggers: currentData?.excludeTriggers,
       groupId: activeGroupId,
-      isInbox: currentData?.isInbox,
-      onlyMine: currentData?.onlyMine,
       pageSize: currentData?.pageSize || useGlobalStore.getState().status.topicPageSize || 20,
-      sortBy: currentData?.sortBy,
       withDetails: currentData?.withDetails,
     });
   };
@@ -1976,18 +1972,13 @@ export class ChatTopicActionImpl {
         const nextItems = append ? [...(currentData?.items || []), ...items] : items;
 
         return {
+          ...topicListViewOf(currentData),
           currentPage,
-          excludeOpenedTopics: currentData?.excludeOpenedTopics,
-          excludeStatuses: currentData?.excludeStatuses,
-          excludeTriggers: currentData?.excludeTriggers,
           hasMore: total > nextItems.length,
-          isInbox: currentData?.isInbox,
           isExpandingPageSize: false,
           isLoadingMore: false,
           items: nextItems,
-          onlyMine: currentData?.onlyMine,
           pageSize,
-          sortBy: currentData?.sortBy,
           total,
         };
       },

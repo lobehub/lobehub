@@ -371,6 +371,7 @@ export default {
   'subTopic.retire.trash.self': 'Delete only this one',
   'subTopic.retire.trash.title': 'Delete a topic with sub-topics',
   'subTopic.sectionTitle': 'Sub-topics',
+  'subTopic.showMore': 'Show {{count}} more',
   'subTopic.untitled': 'Sub-topic',
   'subTopic.untitledConversation': 'Untitled topic',
   'taskManager.agent': 'Task Agent',

@@ -13,12 +13,6 @@ import { topicRunStartedAtColumn } from '../../utils/topicRunStartedAt';
 import { topicsOwnership } from '../task/context';
 import type { TopicModelContext } from './context';
 
-/** How many generations below the openers a listing walks; deeper ones stay where they are. */
-const MAX_OPENED_BY_DEPTH = 4;
-
-/** Upper bound on rows one listing returns, so a runaway fan-out cannot flood a sidebar. */
-const MAX_OPENED_BY_ROWS = 500;
-
 export type { OpenedTopicItem } from '@lobechat/types';
 
 export interface ListOpenedTopicsParams {
@@ -29,28 +23,21 @@ export interface ListOpenedTopicsParams {
   openerTopicIds: string[];
 }
 
-interface WalkLimits {
-  maxDepth: number;
-  /** Rows per generation query and in all; `undefined` = no cap. */
-  maxRows?: number;
-}
-
 /**
  * The live (not detached, not trashed) topics opened by any of `openerTopicIds`,
- * newest activity first. With `includeDescendants`, their own sub-topics come
- * along too (bounded depth), so a list can attach a grandchild to the topmost
- * opener it shows.
+ * newest activity first per generation. With `includeDescendants`, their own
+ * sub-topics come along too, at every depth, so a list can attach a
+ * grandchild to the topmost opener it shows.
+ *
+ * The walk has no depth or row cap: an agent list leaves out every topic
+ * whose parent it could list (`openedFromLiveParentCondition`), so a
+ * descendant this walk dropped would be shown nowhere. Each topic is walked
+ * once (the `walked` set), so a cycle in `openedBy` cannot loop; a wide tree
+ * is paged where it is drawn.
  */
-export const listOpenedTopics = (
-  ctx: TopicModelContext,
-  params: ListOpenedTopicsParams,
-): Promise<OpenedTopicItem[]> =>
-  walkOpenedTopics(ctx, params, { maxDepth: MAX_OPENED_BY_DEPTH, maxRows: MAX_OPENED_BY_ROWS });
-
-const walkOpenedTopics = async (
+export const listOpenedTopics = async (
   ctx: TopicModelContext,
   { excludeStatuses, includeDescendants = false, openerTopicIds }: ListOpenedTopicsParams,
-  { maxDepth, maxRows }: WalkLimits,
 ): Promise<OpenedTopicItem[]> => {
   const openers = [...new Set(openerTopicIds.filter(Boolean))];
   if (openers.length === 0) return [];
@@ -96,8 +83,8 @@ const walkOpenedTopics = async (
   const walked = new Set<string>(openers);
   let frontier = openers;
 
-  for (let depth = 0; depth < maxDepth && frontier.length > 0; depth += 1) {
-    const query = ctx.db
+  while (frontier.length > 0) {
+    const rows = (await ctx.db
       .select({
         agentId: topics.agentId,
         createdAt: topics.createdAt,
@@ -123,10 +110,7 @@ const walkOpenedTopics = async (
           statusCondition,
         ),
       )
-      .orderBy(desc(topics.updatedAt));
-    const rows = (await (maxRows === undefined
-      ? query
-      : query.limit(maxRows))) as unknown as OpenedTopicItem[];
+      .orderBy(desc(topics.updatedAt))) as unknown as OpenedTopicItem[];
 
     const next: string[] = [];
     for (const row of rows) {
@@ -138,36 +122,27 @@ const walkOpenedTopics = async (
       next.push(row.id);
     }
 
-    if (!includeDescendants || (maxRows !== undefined && result.length >= maxRows)) break;
+    if (!includeDescendants) break;
     frontier = next;
   }
 
-  return maxRows === undefined ? result : result.slice(0, maxRows);
+  return result;
 };
 
 /**
  * Every live descendant of `rootTopicId` (children, grandchildren, …), for
  * cascading archive / trash. Detached sub-topics are not descendants.
- *
- * Unlike a sidebar listing this walk is exhaustive — no depth or row cap — so
- * "archive / delete all" never leaves a deep or wide branch running under a
- * retired parent. Each topic is walked once (the `walked` set), so a cycle in
- * `openedBy` cannot loop.
  */
 export const listOpenedDescendants = async (
   ctx: TopicModelContext,
   rootTopicId: string,
   options: { excludeStatuses?: ChatTopicStatus[] } = {},
 ): Promise<OpenedTopicItem[]> => {
-  const rows = await walkOpenedTopics(
-    ctx,
-    {
-      excludeStatuses: options.excludeStatuses,
-      includeDescendants: true,
-      openerTopicIds: [rootTopicId],
-    },
-    { maxDepth: Number.POSITIVE_INFINITY },
-  );
+  const rows = await listOpenedTopics(ctx, {
+    excludeStatuses: options.excludeStatuses,
+    includeDescendants: true,
+    openerTopicIds: [rootTopicId],
+  });
   // The root is never its own descendant, even if a hand-edited link loops back to it.
   return rows.filter((row) => row.id !== rootTopicId);
 };
@@ -226,18 +201,33 @@ export const detachOpenedTopics = async (
     .returning({ agentId: topics.agentId, id: topics.id, trigger: topics.trigger });
 };
 
+/** The list filters a parent must pass for its sub-topics to list under it. */
+export interface OpenedParentListFilters {
+  excludeStatuses?: ChatTopicStatus[];
+  excludeTriggers?: string[];
+  /** Trigger allow-lists (`includeTriggers`, `triggers`); the parent must match each one given. */
+  includeTriggers?: (string[] | undefined)[];
+  onlyMine?: boolean;
+}
+
 /**
  * A topic opened from a parent that is still there — linked (not detached),
- * the parent neither deleted, in the recycle bin nor archived. Such a topic
- * lists under its parent, so an agent's own list can leave it out
- * (`QueryTopicParams.excludeOpenedTopics`); once its parent is gone it shows
- * at the top level again.
+ * the parent neither deleted, in the recycle bin nor archived — and that a
+ * list with the same `filters` would show. Such a topic lists under its
+ * parent, so an agent's own list can leave it out
+ * (`QueryTopicParams.excludeOpenedTopics`). Once its parent is gone, or is a
+ * topic the list hides (a cron or task run, another member's topic under
+ * "only mine"), it shows at the top level: a hidden parent draws no tree.
  *
  * The outer columns go through `sql.identifier`: inside a correlated subquery
  * a bare `${topics.metadata}` renders unqualified and would resolve against
  * the inner alias.
  */
-export const openedFromLiveParentCondition = (ctx: TopicModelContext) => {
+export const openedFromLiveParentCondition = (
+  ctx: TopicModelContext,
+  filters: OpenedParentListFilters = {},
+) => {
+  const { excludeStatuses, excludeTriggers, includeTriggers = [], onlyMine } = filters;
   const opener = alias(topics, 'opened_by_opener');
   const outerOpenedBy = sql`${sql.identifier('topics')}.${sql.identifier('metadata')} -> 'openedBy' ->> 'topicId'`;
   const liveOpener = ctx.db
@@ -247,7 +237,17 @@ export const openedFromLiveParentCondition = (ctx: TopicModelContext) => {
       and(
         eq(opener.id, outerOpenedBy),
         notTrashed(opener.isDeleted),
-        or(isNull(opener.status), not(inArray(opener.status, ['completed', 'archived']))),
+        or(
+          isNull(opener.status),
+          not(inArray(opener.status, ['completed', 'archived', ...(excludeStatuses ?? [])])),
+        ),
+        excludeTriggers && excludeTriggers.length > 0
+          ? or(isNull(opener.trigger), not(inArray(opener.trigger, excludeTriggers)))
+          : undefined,
+        ...includeTriggers
+          .filter((list): list is string[] => !!list && list.length > 0)
+          .map((list) => inArray(opener.trigger, list)),
+        onlyMine ? eq(opener.userId, ctx.userId) : undefined,
       ),
     );
 
