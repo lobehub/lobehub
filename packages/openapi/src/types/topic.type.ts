@@ -351,6 +351,12 @@ export const ExportedTopicMessageSchema = z
       .optional()
       .describe('Set on a `tool` message: the call it answers.'),
     pluginError: jsonObjectSchema.optional(),
+    pluginIntervention: jsonObjectSchema
+      .optional()
+      .describe(
+        'Set on a `tool` message: the intervention payload the chat UI persists and exports. ' +
+          'The UI export (`generateFullExport`) writes it, so import has to accept it.',
+      ),
     pluginState: jsonObjectSchema.optional(),
     provider: z.string().optional(),
     reasoning: jsonObjectSchema.optional(),

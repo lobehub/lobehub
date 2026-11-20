@@ -342,6 +342,68 @@ describe('GET /:id/export and POST /import', () => {
     expect(rows.map((row) => row.role)).toEqual(['user', 'assistant', 'tool', 'user', 'verify']);
   });
 
+  it('accepts a chat-UI export that carries a tool intervention', async () => {
+    // Shape written by `src/features/ShareModal/ShareJSON/generateFullExport.ts`:
+    // a tool message parked for human approval also persists `pluginIntervention`.
+    const res = await post('/import', {
+      agentId: AGENT_2,
+      data: {
+        exportedAt: '2026-01-01T00:00:00.000Z',
+        messages: [
+          {
+            content: 'search for pelicans',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            id: 'ui_m1',
+            role: 'user',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+          {
+            content: '',
+            createdAt: '2026-01-01T00:00:01.000Z',
+            id: 'ui_m2',
+            parentId: 'ui_m1',
+            plugin: { apiName: 'query', arguments: '{}', identifier: 'search', type: 'default' },
+            pluginIntervention: {
+              batchId: 'batch_ui',
+              operationId: 'op_ui',
+              status: 'approved',
+            },
+            role: 'tool',
+            tool_call_id: 'ui_call',
+            updatedAt: '2026-01-01T00:00:01.000Z',
+          },
+        ],
+        title: 'UI export with an intervention',
+        version: '2.0',
+      },
+    });
+    expect(res.status).toBe(201);
+    const imported = TopicImportResultSchema.parse(await data(res));
+    const rows = await topicMessages(imported.topic.id);
+    expect(rows.map((row) => row.role)).toEqual(['user', 'tool']);
+  });
+
+  it('still refuses genuinely unknown message fields', async () => {
+    const res = await post('/import', {
+      agentId: AGENT,
+      data: {
+        exportedAt: '2026-01-01T00:00:00.000Z',
+        messages: [
+          {
+            content: 'hi',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            id: 'ui_unknown',
+            role: 'user',
+            unexpectedField: true,
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        version: '2.0',
+      },
+    });
+    expect(res.status).toBe(400);
+  });
+
   it('imports a plain message list as a chain', async () => {
     const res = await post('/import', {
       agentId: AGENT,
