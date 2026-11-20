@@ -21,6 +21,17 @@ describe('humanizeHeteroDispatchError', () => {
     );
   });
 
+  it.each([
+    'DEVICE_NOT_FOUND',
+    'DEVICE_NOT_FOUND (HTTP 404)',
+    '{"error":"DEVICE_NOT_FOUND","success":false}',
+  ])('offers retry before reconnection without claiming deregistration: %s', (raw) => {
+    expect(humanizeHeteroDispatchError(raw)).toBe(
+      "Can't reach the device this agent is bound to right now. Try again in a moment. If it still can't connect, check that the LobeHub desktop app or `lh` CLI on the device is connected, or switch to another online device.",
+    );
+    expect(resolveHeteroDispatchErrorType(raw)).toBe('DeviceNotFound');
+  });
+
   it('keeps the existing gateway-not-configured copy', () => {
     expect(humanizeHeteroDispatchError('GATEWAY_NOT_CONFIGURED')).toContain(
       "run device gateway isn't configured",
@@ -38,7 +49,6 @@ describe('resolveHeteroDispatchErrorType', () => {
     for (const raw of [
       'DEVICE_OFFLINE',
       'DEVICE_CHANNEL_UNAVAILABLE (HTTP 503)',
-      'DEVICE_NOT_FOUND (HTTP 404)',
       'GATEWAY_NOT_CONFIGURED',
     ]) {
       expect(resolveHeteroDispatchErrorType(raw)).toBe(ChatErrorType.DeviceGatewayNotConfigured);
@@ -54,7 +64,7 @@ describe('resolveHeteroDispatchErrorType', () => {
 });
 
 describe('JSON device-gateway dispatch errors', () => {
-  it.each(['DEVICE_NOT_FOUND', 'DEVICE_OFFLINE', 'DEVICE_CHANNEL_UNAVAILABLE'])(
+  it.each(['DEVICE_OFFLINE', 'DEVICE_CHANNEL_UNAVAILABLE'])(
     'explains %s and selects the localized device error',
     (code) => {
       const raw = JSON.stringify({ error: code, success: false });

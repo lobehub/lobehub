@@ -32,6 +32,7 @@ export const ChatErrorType = {
   SystemTimeNotMatchError: 'SystemTimeNotMatchError',
   ServerAgentRuntimeError: 'ServerAgentRuntimeError',
   DeviceGatewayNotConfigured: 'DeviceGatewayNotConfigured', // Heterogeneous agent has no reachable run device / gateway
+  DeviceNotFound: 'DeviceNotFound', // Bound device was unavailable at dispatch; it may reconnect
   DeviceResponseTimeout: 'DeviceResponseTimeout', // Run reached the device, which did not answer in time
 
   // ******* Desktop Backend-Proxy Network Errors ******* //
