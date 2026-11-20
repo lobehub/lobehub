@@ -334,7 +334,8 @@ export class ActionImpl {
       await this.readQuotaDeviceAccount(agentId, deviceId);
     await this.#deviceAccount.optimistic(
       key,
-      () => ({ accountId }),
+      // Only the pick changes: the device's logins stay listed meanwhile.
+      (current) => ({ ...current, accountId }),
       () => agentQuotaService.setDeviceAccount(agentId, deviceId, accountId),
     );
     await Promise.all([

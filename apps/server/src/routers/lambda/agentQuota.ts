@@ -323,16 +323,21 @@ export const agentQuotaRouter = router({
     .mutation(async ({ ctx, input }) => ctx.bindingModel.remove(input.id)),
 
   // ── per-device account choice (a login only exists on its machine) ───────
-  /** The account an agent uses on one device; `accountId: null` = Auto there. */
+  /**
+   * The account an agent uses on one device (`accountId: null` = Auto there),
+   * with the accounts that device holds a login for — the ones it can be
+   * switched to.
+   */
   getDeviceAccount: quotaProcedure
     .input(z.object({ agentId: z.string(), deviceId: z.string() }))
     .query(async ({ ctx, input }): Promise<QuotaDeviceAccount> => {
       const deviceRowId = await deviceRowIdOf(ctx, input.deviceId);
-      return {
-        accountId: deviceRowId
-          ? await ctx.quotaService.getDeviceAccount(input.agentId, deviceRowId)
-          : null,
-      };
+      if (!deviceRowId) return { accountId: null, signedInAccountIds: [] };
+      const [accountId, signedInAccountIds] = await Promise.all([
+        ctx.quotaService.getDeviceAccount(input.agentId, deviceRowId),
+        ctx.quotaService.listDeviceLoginAccountIds(deviceRowId),
+      ]);
+      return { accountId, signedInAccountIds };
     }),
 
   /** Pin an account for an agent on one device, or return it to Auto (`accountId: null`). */

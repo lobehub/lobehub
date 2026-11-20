@@ -285,6 +285,27 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
     [localAccounts, managesLocalLogins],
   );
 
+  /**
+   * Accounts a Manual pick on the target device can name. This desktop goes by
+   * its own logins (which it also syncs to the server); a bound device by the
+   * logins the server recorded for it, the same record `setDeviceAccount`
+   * checks, so a listed account never comes back as "not signed in on this
+   * device". `undefined`: the pick is agent-wide (the web without a bound
+   * device) and any account can be pinned. `null`: not known yet.
+   */
+  const pinnableIds = useMemo((): ReadonlySet<string> | null | undefined => {
+    if (managesLocalLogins && localAccounts) {
+      const local = new Set(localAccounts.map((l) => l.identity.externalAccountId));
+      return new Set(accounts.filter((a) => local.has(a.externalAccountId)).map((a) => a.id));
+    }
+    if (targetDeviceId) return deviceAccount ? new Set(deviceAccount.signedInAccountIds) : null;
+    return managesLocalLogins ? null : undefined;
+  }, [accounts, deviceAccount, localAccounts, managesLocalLogins, targetDeviceId]);
+  const pinnableHere = useCallback(
+    (account: Account) => pinnableIds === undefined || !!pinnableIds?.has(account.id),
+    [pinnableIds],
+  );
+
   // A legacy agent-wide pin only counts here while this device can run it: a
   // pin picked on another machine leaves this one balancing (as runs do).
   const agentPinnedId = bindings.find((b) => b.role === 'pinned')?.accountId;
@@ -293,13 +314,20 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
   const pinnedId = targetDeviceId
     ? devicePinnedId && inRotation(devicePinnedId)
       ? devicePinnedId
-      : agentPinned && signedInHere(agentPinned)
+      : agentPinned && pinnableHere(agentPinned)
         ? agentPinned.id
         : undefined
     : agentPinnedId;
   const current = pinnedId ?? AUTO;
   const selected = pending ?? current;
   const dirty = pending !== null && pending !== current;
+
+  // Only accounts this device can switch to are listed. The current pick stays
+  // even while its login is being dropped, so the selection never hides.
+  const listedAccounts = useMemo(
+    () => accounts.filter((a) => a.id === current || pinnableHere(a)),
+    [accounts, current, pinnableHere],
+  );
 
   // Every write lands on the replica optimistically and re-reads its entry.
   const run = useCallback(async (fn: () => Promise<unknown>) => {
@@ -465,9 +493,9 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
             ),
             value: AUTO,
           },
-          ...accounts.map((a) => {
+          ...listedAccounts.map((a) => {
             const rotate = inRotation(a.id);
-            const runnable = signedInHere(a);
+            const runnable = pinnableHere(a);
             const weekly = weeklyById[a.id];
             const isEditing = editingId === a.id;
             const menuItems = [
@@ -549,7 +577,8 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
                           </Text>
                         )}
                       </Flexbox>
-                      {!runnable && (
+                      {/* Signing in here only reaches this desktop's own logins. */}
+                      {!runnable && managesLocalLogins && (
                         <span {...stylex.props(styles.interactive)} onClick={preventRadioSelection}>
                           <Button
                             disabled={loginPending}
@@ -592,6 +621,12 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
       {accounts.length === 0 && (accountsConfirmed || !!accountsError) && (
         <Text className={stylex.props(styles.hint).className}>
           {t('heteroAgent.claudeQuota.manage.empty')}
+        </Text>
+      )}
+
+      {!!pinnableIds && accounts.length > 0 && listedAccounts.length === 0 && (
+        <Text className={stylex.props(styles.hint).className}>
+          {t('heteroAgent.claudeQuota.manage.emptyOnDevice')}
         </Text>
       )}
 
@@ -639,7 +674,9 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
         </Flexbox>
       ) : (
         <Text className={stylex.props(styles.hint).className} style={{ marginBlockStart: 4 }}>
-          {t('heteroAgent.claudeQuota.manage.addHint')}
+          {targetDeviceId
+            ? t('heteroAgent.claudeQuota.manage.addHintDevice')
+            : t('heteroAgent.claudeQuota.manage.addHint')}
         </Text>
       )}
     </Flexbox>
