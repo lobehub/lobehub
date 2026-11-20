@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon } from '@lobehub/ui';
-import { SettingsIcon } from 'lucide-react';
+import { SearchIcon, SettingsIcon } from 'lucide-react';
 import { type PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -13,6 +13,7 @@ import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useChatStore } from '@/store/chat';
+import { useGlobalStore } from '@/store/global';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useHeaderActionSize } from '@/styles/density';
 import { isMobileSurface } from '@/utils/mobileSurface';
@@ -26,6 +27,7 @@ const HeaderInfo = (_props: PropsWithChildren) => {
   const { aid: agentId } = useActiveRouteParams();
   const router = useQueryRoute();
   const switchTopic = useChatStore((s) => s.switchTopic);
+  const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
   const { allowed: canEditContent } = usePermission('edit_own_content');
   const { canEditResource } = useResourceAccess('agent', agentId);
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
@@ -45,14 +47,24 @@ const HeaderInfo = (_props: PropsWithChildren) => {
         {...back}
         left={<Agent />}
         right={
-          showProfile && !isMobileSurface() ? (
+          <>
             <ActionIcon
-              aria-label={t('tab.profile')}
-              icon={SettingsIcon}
+              aria-label={t('tab.search')}
+              icon={SearchIcon}
               size={headerActionSmallSize}
-              onClick={openProfile}
+              title={t('tab.search')}
+              onClick={() => toggleCommandMenu(true)}
             />
-          ) : undefined
+            {showProfile && !isMobileSurface() && (
+              <ActionIcon
+                aria-label={t('tab.profile')}
+                icon={SettingsIcon}
+                size={headerActionSmallSize}
+                title={t('tab.profile')}
+                onClick={openProfile}
+              />
+            )}
+          </>
         }
       />
       <Nav showProfile={showProfile} onOpenProfile={openProfile} />

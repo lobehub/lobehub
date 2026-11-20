@@ -1,6 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
+import type * as LobeUI from '@lobehub/ui';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +9,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Nav from './index';
 
 vi.mock('./Agent', () => ({ default: () => null }));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof LobeUI>();
+  return {
+    ...actual,
+    // Real ActionIcon only surfaces `title` through a hover Tooltip, which
+    // happy-dom cannot open; a plain button keeps the hover label assertable.
+    ActionIcon: ({
+      'aria-label': ariaLabel,
+      onClick,
+      title,
+    }: {
+      'aria-label'?: string;
+      'onClick'?: () => void;
+      'title'?: ReactNode;
+    }) => (
+      <button
+        aria-label={ariaLabel}
+        data-hover-title={typeof title === 'string' ? title : undefined}
+        type="button"
+        onClick={onClick}
+      />
+    ),
+  };
+});
 vi.mock('@/features/NavPanel/backOrigin', () => ({ useBackButtonProps: () => ({}) }));
 vi.mock('@/features/NavPanel/SideBarHeaderLayout', () => ({
   default: ({ left, right }: { left: ReactNode; right?: ReactNode }) => (
@@ -243,6 +268,38 @@ describe('Agent sidebar header nav', () => {
 
     expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
     expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/profile');
+  });
+
+  it('opens search from the header, not from the nav list', () => {
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+    const searchButton = screen.getByRole('button', { name: 'tab.search' });
+    expect(screen.getByRole('banner')).toContainElement(searchButton);
+    expect(screen.getAllByRole('button', { name: 'tab.search' })).toHaveLength(1);
+    fireEvent.click(searchButton);
+
+    expect(toggleCommandMenuMock).toHaveBeenCalledWith(true);
+  });
+
+  it('keeps header search for members who cannot open the profile', () => {
+    permissionMock.edit_own_content = false;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.getByRole('banner')).toContainElement(
+      screen.getByRole('button', { name: 'tab.search' }),
+    );
+    expect(screen.queryByRole('button', { name: 'tab.profile' })).toBeNull();
+  });
+
+  it.each(['tab.search', 'tab.profile'])('shows the %s label on hover', (label) => {
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.getByRole('button', { name: label })).toHaveAttribute('data-hover-title', label);
   });
 
   it.each([
