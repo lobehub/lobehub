@@ -18,6 +18,7 @@ import { WorkModel } from '@/database/models/work';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { unpublishArtboardWork } from '@/server/services/artboard/publish/offline';
 import { createCanvasStorageService, isOwnCanvasManifestKey } from '@/server/services/canvas';
 import { deleteCanvas } from '@/server/services/canvas/delete';
 import {
@@ -163,6 +164,7 @@ export const workRouter = router({
   listByConversation: workProcedure
     .input(
       z.object({
+        includeArtboardWorks: z.boolean().optional(),
         // Opt-in for the `file` work type. Absent → the legacy (pre-`file`) set,
         // so already-deployed clients whose descriptor table lacks `file` never
         // receive it (see resolveAllowedWorkTypes in the work registry).
@@ -178,11 +180,15 @@ export const workRouter = router({
     .input(
       z.object({
         cursor: z.string().nullable().optional(),
+        includeArtboardWorks: z.boolean().optional(),
         includeFileWorks: z.boolean().optional(),
         limit: z.number().min(1).max(100).default(30),
         originAgentId: z.string().nullable().optional(),
         provider: z.enum(WORK_SKILL_PROVIDERS).optional(),
-        type: z.enum(['task', 'document', 'external', 'file', 'canvas']).nullable().optional(),
+        type: z
+          .enum(['task', 'document', 'external', 'file', 'canvas', 'artboard'])
+          .nullable()
+          .optional(),
         visibility: z.enum(['private', 'public']).optional(),
       }),
     )
@@ -191,6 +197,7 @@ export const workRouter = router({
   listByRootOperation: workProcedure
     .input(
       z.object({
+        includeArtboardWorks: z.boolean().optional(),
         includeFileWorks: z.boolean().optional(),
         limit: z.number().min(1).max(50).default(20),
         rootOperationId: z.string().nullable().optional(),
@@ -198,6 +205,7 @@ export const workRouter = router({
     )
     .query(async ({ ctx, input }) =>
       ctx.workModel.listByRootOperation({
+        includeArtboardWorks: input.includeArtboardWorks,
         includeFileWorks: input.includeFileWorks,
         limit: input.limit,
         rootOperationId: input.rootOperationId,
@@ -207,6 +215,7 @@ export const workRouter = router({
   listByRootOperations: workProcedure
     .input(
       z.object({
+        includeArtboardWorks: z.boolean().optional(),
         includeFileWorks: z.boolean().optional(),
         limit: z.number().min(1).max(50).default(20),
         rootOperationIds: z.array(z.string()).max(100).nullable().optional(),
@@ -214,6 +223,7 @@ export const workRouter = router({
     )
     .query(async ({ ctx, input }) =>
       ctx.workModel.listByRootOperations({
+        includeArtboardWorks: input.includeArtboardWorks,
         includeFileWorks: input.includeFileWorks,
         limit: input.limit,
         rootOperationIds: input.rootOperationIds,
@@ -253,6 +263,13 @@ export const workRouter = router({
         });
         return;
       }
+
+      const artboardWork = await ctx.workModel.findArtboardWorkByWorkId(input.id);
+      if (artboardWork?.userId === ctx.userId)
+        await unpublishArtboardWork(
+          { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+          artboardWork,
+        );
 
       await ctx.workModel.deleteWork(input);
     }),

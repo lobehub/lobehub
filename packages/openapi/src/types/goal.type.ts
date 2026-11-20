@@ -233,6 +233,7 @@ const GoalNodeWorkVersionRelationSchema = unionEnum<GoalNodeWorkVersionRelation>
   'contradicts',
 ]);
 const WorkTypeSchema = unionEnum<WorkType>()([
+  'artboard',
   'canvas',
   'document',
   'external',
@@ -241,6 +242,7 @@ const WorkTypeSchema = unionEnum<WorkType>()([
   'task',
 ]);
 const WorkResourceTypeSchema = unionEnum<WorkResourceType>()([
+  'artboard',
   'canvas',
   'document',
   'github_issue',

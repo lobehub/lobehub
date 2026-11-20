@@ -1,6 +1,6 @@
 'use client';
 
-import { CHANNEL_URL } from '@lobechat/const';
+import { AGENT_SHARE_VISITOR_TOPIC_URL, CHANNEL_URL } from '@lobechat/const';
 import type { ShareVisitorConversation } from '@lobechat/types';
 import { formatPrice, formatTokenNumber } from '@lobechat/utils/format';
 import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
@@ -10,6 +10,7 @@ import { type KeyboardEvent, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import UserAvatar from '@/components/UserAvatar';
+import { useShareVisitorTopics } from '@/features/ShareVisitorTopics/useShareVisitorTopics';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActivityTime } from '@/hooks/useActivityTime';
 
@@ -18,11 +19,24 @@ import { channelCardStyles as styles } from './ChannelSection';
 /** Counts and amounts are compared across cards, so digits keep the same width. */
 const NUMBER_STYLE = { fontVariantNumeric: 'tabular-nums' } as const;
 
-const ShareVisitorCard = memo<{ conversation: ShareVisitorConversation }>(({ conversation }) => {
+interface ShareVisitorCardProps {
+  agentId: string;
+  conversation: ShareVisitorConversation;
+  /** The visitor's newest run topic, where the full execution can be read. */
+  latestTopicId?: string;
+}
+
+const ShareVisitorCard = memo<ShareVisitorCardProps>(({ agentId, conversation, latestTopicId }) => {
   const { t } = useTranslation('topic');
   const navigate = useWorkspaceAwareNavigate();
   const activity = useActivityTime(conversation.updatedAt ?? conversation.createdAt);
-  const open = () => navigate(CHANNEL_URL(conversation.id));
+  // A conversation whose first run has not been claimed yet has no topic; its Channel shows it.
+  const open = () =>
+    navigate(
+      latestTopicId
+        ? AGENT_SHARE_VISITOR_TOPIC_URL(agentId, latestTopicId)
+        : CHANNEL_URL(conversation.id),
+    );
   const name = conversation.visitor.name || t('management.shareVisitors.unnamedVisitor');
   const preview = conversation.lastMessage?.content?.trim();
   const { totalCost, totalTokens } = conversation;
@@ -91,12 +105,16 @@ ShareVisitorCard.displayName = 'AgentTopicManagerShareVisitorCard';
 
 /**
  * Visitors' conversations with the Agent through its share link, one card per visitor. Each opens
- * the visitor's Channel read-only; its run topics stay private execution context.
+ * the visitor's newest run topic read-only, beside the visitor's other topics in the sidebar.
  */
-const ShareVisitorSection = memo<{ conversations: ShareVisitorConversation[] }>(
-  ({ conversations }) => {
+const ShareVisitorSection = memo<{ agentId: string; conversations: ShareVisitorConversation[] }>(
+  ({ agentId, conversations }) => {
     const { t } = useTranslation('topic');
+    const topicGroups = useShareVisitorTopics(agentId);
     if (conversations.length === 0) return null;
+    const latestTopicByVisitor = new Map(
+      topicGroups.map((group) => [group.visitor.id, group.topics[0]?.id]),
+    );
 
     return (
       <Flexbox gap={12}>
@@ -110,7 +128,12 @@ const ShareVisitorSection = memo<{ conversations: ShareVisitorConversation[] }>(
         </Flexbox>
         <div {...stylex.props(styles.grid)}>
           {conversations.map((conversation) => (
-            <ShareVisitorCard conversation={conversation} key={conversation.id} />
+            <ShareVisitorCard
+              agentId={agentId}
+              conversation={conversation}
+              key={conversation.id}
+              latestTopicId={latestTopicByVisitor.get(conversation.visitor.id)}
+            />
           ))}
         </div>
       </Flexbox>

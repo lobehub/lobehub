@@ -49,9 +49,9 @@ export const EnvironmentDefinitionSkeleton = () => (
 );
 
 /**
- * `EnvironmentManager` before its chunk loads: the heading row (pool tabs, or
- * the section name, then refresh + create) above the list frame. `leading`
- * replaces the section name, e.g. with a tab-strip placeholder.
+ * `EnvironmentManager` before its chunk loads: the heading row (the section
+ * name or the host's lead-in, then refresh + create) above the list frame.
+ * `leading` replaces the section name.
  */
 export const EnvironmentManagerSkeleton = ({ leading }: { leading?: ReactNode }) => {
   const { t } = useTranslation('setting');

@@ -300,77 +300,26 @@ describe('ConnectorDetail', () => {
     expect(screen.queryByText('connector.authError')).not.toBeInTheDocument();
   });
 
-  it('shows an uninstalled built-in tool as uninstalled, matching the list', () => {
-    mocks.toolState.connectors[0] = {
-      id: 'connector-1',
-      identifier: 'lobe-web-browsing',
-      name: 'Web Browsing',
-      sourceType: ConnectorSourceType.builtin,
-    };
-    mocks.toolState.uninstalledBuiltinTools = ['lobe-web-browsing'];
-
-    const { unmount } = render(<ConnectorDetail connectorId="connector-1" />);
-
-    expect(screen.getByText('tools.builtins.uninstalled')).toBeInTheDocument();
-    expect(screen.queryByText('connector.enabled')).not.toBeInTheDocument();
-
-    unmount();
-    mocks.toolState.uninstalledBuiltinTools = [];
-    render(<ConnectorDetail connectorId="connector-1" />);
-
-    expect(screen.getByText('connector.enabled')).toBeInTheDocument();
-  });
-
-  it('offers Install instead of Uninstall for an uninstalled built-in tool', () => {
-    mocks.toolState.connectors[0] = {
-      id: 'connector-1',
-      identifier: 'lobe-web-browsing',
-      name: 'Web Browsing',
-      sourceType: ConnectorSourceType.builtin,
-    };
-    mocks.toolState.uninstalledBuiltinTools = ['lobe-web-browsing'];
-
-    render(<ConnectorDetail connectorId="connector-1" />);
-
-    expect(screen.queryByRole('button', { name: 'Uninstall' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'connectorMarket.action.install' }));
-    expect(mocks.toolState.installBuiltinTool).toHaveBeenCalledWith('lobe-web-browsing');
-  });
-
-  it('does not name an authorizer for an uninstalled built-in', () => {
-    mocks.toolState.connectors[0] = {
-      authorizedByName: 'Avery',
-      id: 'connector-1',
-      identifier: 'lobe-web-browsing',
-      name: 'Web Browsing',
-      sourceType: ConnectorSourceType.builtin,
-    };
-    mocks.toolState.uninstalledBuiltinTools = ['lobe-web-browsing'];
-
-    const { unmount } = render(<ConnectorDetail connectorId="connector-1" />);
-    expect(screen.queryByText('connector.overview.authorizedBy')).not.toBeInTheDocument();
-    expect(screen.queryByText('Avery')).not.toBeInTheDocument();
-    unmount();
-
-    // Once installed, the built-in keeps its authorizer.
-    mocks.toolState.uninstalledBuiltinTools = [];
-    render(<ConnectorDetail connectorId="connector-1" />);
-    expect(screen.getByText('connector.overview.authorizedBy')).toBeInTheDocument();
-    expect(screen.getByText('Avery')).toBeInTheDocument();
-  });
-
-  it('loads the built-in install state when the detail is opened without the list', () => {
-    mocks.toolState.connectors[0] = {
-      id: 'connector-1',
-      identifier: 'lobe-web-browsing',
-      name: 'Web Browsing',
-      sourceType: ConnectorSourceType.builtin,
-    };
-
-    render(<ConnectorDetail connectorId="connector-1" />);
-
-    expect(mocks.toolState.useFetchUninstalledBuiltinTools).toHaveBeenCalledWith(true);
-  });
+  it.each([true, false])(
+    'omits library install actions for a bundled tool (previously installed: %s)',
+    (installed) => {
+      mocks.toolState.connectors[0] = {
+        authorizedByName: 'Avery',
+        id: 'connector-1',
+        identifier: 'lobe-calculator',
+        name: 'Calculator',
+        sourceType: ConnectorSourceType.builtin,
+      };
+      mocks.toolState.uninstalledBuiltinTools = installed ? [] : ['lobe-calculator'];
+      render(<ConnectorDetail connectorId="connector-1" />);
+      expect(screen.queryByRole('button', { name: 'Uninstall' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'connectorMarket.action.install' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText('connector.overview.status')).not.toBeInTheDocument();
+      expect(screen.queryByText('connector.overview.authorizedBy')).not.toBeInTheDocument();
+    },
+  );
 
   it('shows accounts only for an OAuth connector, each naming its own authorizer', () => {
     mocks.toolState.connectors[0] = {

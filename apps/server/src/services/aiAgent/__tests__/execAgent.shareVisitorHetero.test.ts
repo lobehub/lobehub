@@ -232,17 +232,20 @@ describe('AiAgentService.execAgent - share visitors and heterogeneous agents', (
     expect(mockCreateOperation).not.toHaveBeenCalled();
   });
 
-  it('rejects a heterogeneous type other than Claude Code / Codex even with the grant', async () => {
-    mockGetAgentConfig.mockResolvedValue(
-      agentConfig({ boundDeviceId: 'device-1', heterogeneousProvider: { type: 'openclaw' } }),
-    );
-    mockGetScopedOnlineDevices.mockResolvedValue([{ deviceId: 'device-1', online: true }]);
+  it.each(['openclaw', 'hermes'])(
+    'rejects the remote %s runtime even with the grant',
+    async (type) => {
+      mockGetAgentConfig.mockResolvedValue(
+        agentConfig({ boundDeviceId: 'device-1', heterogeneousProvider: { type } }),
+      );
+      mockGetScopedOnlineDevices.mockResolvedValue([{ deviceId: 'device-1', online: true }]);
 
-    await expect(run(true)).rejects.toMatchObject({
-      message: 'ShareHeterogeneousAgentUnsupported',
-    });
-    expect(mockMessageCreate).not.toHaveBeenCalled();
-  });
+      await expect(run(true)).rejects.toMatchObject({
+        message: 'ShareHeterogeneousAgentUnsupported',
+      });
+      expect(mockMessageCreate).not.toHaveBeenCalled();
+    },
+  );
 
   // No cloud-sandbox fallback: a granted visitor runs on the creator's device
   // or not at all, and learns it is offline before any row is written.
@@ -268,6 +271,29 @@ describe('AiAgentService.execAgent - share visitors and heterogeneous agents', (
     expect(error?.message).not.toBe('ShareHeterogeneousAgentUnsupported');
     expect(error?.message).not.toBe('ShareHeteroDeviceUnavailable');
   });
+
+  // Every runtime that executes on the creator's machine shares the same device
+  // dispatch, so the grant covers it as it covers Claude Code / Codex.
+  it.each(['opencode', 'kimi-code', 'deepseek-harness'])(
+    'lets a granted visitor run the local %s runtime on the bound device',
+    async (type) => {
+      mockGetAgentConfig.mockResolvedValue(
+        agentConfig({
+          boundDeviceId: 'device-1',
+          executionTarget: 'device',
+          heterogeneousProvider: { type },
+        }),
+      );
+      mockGetScopedOnlineDevices.mockResolvedValue([{ deviceId: 'device-1', online: true }]);
+
+      const error = await run(true).then(
+        () => undefined,
+        (e: unknown) => e as { message?: string },
+      );
+      expect(error?.message).not.toBe('ShareHeterogeneousAgentUnsupported');
+      expect(error?.message).not.toBe('ShareHeteroDeviceUnavailable');
+    },
+  );
 
   it('resolves an auto Agent to its only online device', async () => {
     mockGetAgentConfig.mockResolvedValue(

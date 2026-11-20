@@ -116,7 +116,7 @@ const UserGroupCard = memo<UserGroupCardProps>(
     const link = qs.stringifyUrl(
       {
         query: { source: 'new' },
-        url: urlJoin('/community/group_agent', identifier),
+        url: urlJoin('/marketplace/group_agent', identifier),
       },
       { skipNull: true },
     );

@@ -9,15 +9,22 @@ import { useMobileNavigation } from './useMobileNavigation';
 describe('useMobileNavigation', () => {
   it.each([
     ['/', true, 'chat'],
-    ['/community', true, 'community'],
+    // The Marketplace keeps its `community` tab key under the `/marketplace` URL.
+    ['/marketplace', true, 'community'],
+    ['/marketplace/skill', true, 'community'],
+    // Management pages are second-level pages with a back header, not tab roots.
+    ['/marketplace/skill/installed', false, 'community'],
+    // Connectors' Discover view (the former MCP list) is a tab root; Installed is not.
+    ['/marketplace/connector', true, 'community'],
+    ['/marketplace/connector/installed', false, 'community'],
     ['/me', true, 'me'],
     ['/agent/agt_fixture', false, 'agent'],
     ['/acme', true, 'chat'],
     ['/acme/', true, 'chat'],
-    ['/acme/community', true, 'community'],
-    ['/acme/community/agent', true, 'community'],
-    ['/acme/community/agent/', true, 'community'],
-    ['/acme/community/agent/agt_fixture', false, 'community'],
+    ['/acme/marketplace', true, 'community'],
+    ['/acme/marketplace/agent', true, 'community'],
+    ['/acme/marketplace/agent/', true, 'community'],
+    ['/acme/marketplace/agent/agt_fixture', false, 'community'],
     ['/acme/agent/agt_fixture', false, 'agent'],
     ['/acme/settings/general', false, 'settings'],
   ])('resolves navigation for %s', (pathname, showNav, activeKey) => {
@@ -29,7 +36,7 @@ describe('useMobileNavigation', () => {
               children: [
                 { index: true },
                 { path: 'agent/*' },
-                { path: 'community/*' },
+                { path: 'marketplace/*' },
                 { path: 'me/*' },
                 { path: ':workspaceSlug/*' },
               ],

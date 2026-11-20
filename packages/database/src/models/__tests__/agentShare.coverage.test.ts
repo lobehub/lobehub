@@ -33,7 +33,12 @@ describe('AgentShareModel coverage edges', () => {
     });
     await serverDB.insert(agents).values([
       { id: agentId, slug: 'ascov-agent-slug', title: 'ascov agent', userId },
-      { id: unsharedAgentId, slug: 'ascov-unshared-slug', userId },
+      {
+        agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+        id: unsharedAgentId,
+        slug: 'ascov-unshared-slug',
+        userId,
+      },
       { id: workspaceAgentId, slug: 'ascov-workspace-slug', userId, workspaceId },
       {
         id: nullListsAgentId,
@@ -133,23 +138,26 @@ describe('AgentShareModel coverage edges', () => {
     it('keeps the stored config when the patch carries no defined field', async () => {
       const model = new AgentShareModel(serverDB, userId);
       await model.create(agentId);
-      await model.updateConfig(agentId, { maxMessagesPerVisitor: 7, showErrorDetails: true });
+      await model.updateConfig(agentId, {
+        allowCreatorViewSessions: true,
+        maxMessagesPerVisitor: 7,
+      });
 
       const updated = await model.updateConfig(agentId, {
+        allowCreatorViewSessions: undefined,
         maxMessagesPerVisitor: undefined,
-        showErrorDetails: undefined,
       });
 
       expect(updated?.shareConfig).toMatchObject({
+        allowCreatorViewSessions: true,
         maxMessagesPerVisitor: 7,
-        showErrorDetails: true,
         slug: 'ascov-agent-slug',
       });
 
       const empty = await model.updateConfig(agentId, {});
       expect(empty?.shareConfig).toMatchObject({
+        allowCreatorViewSessions: true,
         maxMessagesPerVisitor: 7,
-        showErrorDetails: true,
       });
     });
   });
@@ -180,6 +188,24 @@ describe('AgentShareModel coverage edges', () => {
   });
 
   describe('findByShareId', () => {
+    it('returns the Agent harness so visitor grants can follow it', async () => {
+      const share = await new AgentShareModel(serverDB, userId).create(unsharedAgentId, 'link');
+
+      const found = await AgentShareModel.findByShareId(serverDB, share.id);
+
+      expect(found?.agentAgencyConfig).toEqual({
+        heterogeneousProvider: { type: 'claude-code' },
+      });
+      expect(
+        (
+          await AgentShareModel.findByShareId(
+            serverDB,
+            (await new AgentShareModel(serverDB, userId).create(agentId, 'link')).id,
+          )
+        )?.agentAgencyConfig ?? null,
+      ).toBeNull();
+    });
+
     it('falls back to empty lists when the agent stores null tags and opening questions', async () => {
       const share = await new AgentShareModel(serverDB, userId).create(nullListsAgentId, 'link');
 

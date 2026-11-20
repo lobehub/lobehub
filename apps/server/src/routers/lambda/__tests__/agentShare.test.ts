@@ -383,6 +383,13 @@ describe('agentShareRouter', () => {
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', config);
     });
 
+    it('stores an address-book-wide grant without a list', async () => {
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      await caller.updateShareConfig({ agentId: 'agent-1', config: { deviceAccess: 'contacts' } });
+      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', { deviceAccess: 'contacts' });
+    });
+
     // The runtime grants nothing while contacts are off, so a grant must not be
     // stored then either (it would also come alive when they turn on).
     it('refuses a grant while contacts are off for the Agent owner', async () => {
@@ -398,6 +405,9 @@ describe('agentShareRouter', () => {
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
       await expect(
         caller.updateShareConfig({ agentId: 'agent-1', config: { deviceAccess: 'allowlist' } }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(
+        caller.updateShareConfig({ agentId: 'agent-1', config: { deviceAccess: 'contacts' } }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
       expect(mockUpdateConfig).not.toHaveBeenCalled();
 

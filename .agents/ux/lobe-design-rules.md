@@ -201,3 +201,15 @@ Enforcement: the picker metadata excludes always-on identifiers; builtin selecto
 The profile library picker and chat Tools menu are two views of the same agent configuration. Share the tool inventory, translated names, state and agent-scoped write path, **not the popup**. The profile keeps its searchable checklist; chat keeps its loading-policy filters. Derive profile counts from the same unfiltered options. Agent-owned connector provisioning and the Skills invocation picker are separate tasks.
 
 Enforcement: both surfaces use the same tool controls; regression tests cover the profile summary, runtime-backed settings and fixed-loader exclusions.
+
+## LOBE-UX-028 — Recover GitHub skill imports in the import dialog
+
+Show GitHub authorization guidance when an import encounters an access error. Keep the source URL in the dialog while the user connects. Offer technical details only when they add diagnostic information beyond the recovery message.
+
+Enforcement: `useGithubSkillImport.test.ts` covers the single access message, retrying discovery after authorization, and retaining the user's selection when an import needs reconnection.
+
+## LOBE-UX-029 — Let success stay quiet; mark only the exceptions
+
+On result surfaces (acceptance checks, verify boards, run summaries), passing is the default state and carries no badge of its own: no per-item "Passed" tag, check stamp or green outline. Show the outcome once, in one plain sentence (for example "6 项已核对，等你确认"). Item identifiers stay neutral (`01`, `04B`), without a check mark. Color and badges are reserved for what needs a person: a failed check (error color with the reason) or a pending decision. Actions such as "Accept" may keep their icon; status may not.
+
+Source: lead review of the artboard acceptance redesign (2026-11-16): too many Pass tags read as AI-generated.

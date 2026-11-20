@@ -26,6 +26,7 @@ import {
 import { memo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import PrivateLockIcon from '@/components/PrivateLockIcon';
 import UserAvatar from '@/components/UserAvatar';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useUserStore } from '@/store/user';
@@ -265,9 +266,14 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
           <div className={styles.iconTile}>{getDeviceIcon(device.platform, 22)}</div>
 
           <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
-            <Text ellipsis fontSize={16} weight={600}>
-              {displayName}
-            </Text>
+            <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
+              <Text ellipsis fontSize={16} weight={600}>
+                {displayName}
+              </Text>
+              {device.scope === 'workspace' && device.visibility === 'private' && (
+                <PrivateLockIcon />
+              )}
+            </Flexbox>
             <Flexbox horizontal align={'center'} gap={6} wrap={'wrap'}>
               {platformLabel && (
                 <Text fontSize={13} type={'secondary'}>

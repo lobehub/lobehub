@@ -103,6 +103,13 @@ export class FileService {
   }
 
   /**
+   * Like listFileKeys, with each object's ETag (unquoted) and size
+   */
+  public async listFileObjects(prefix: string, limit?: number) {
+    return this.impl.listFileObjects(prefix, limit);
+  }
+
+  /**
    * Get file content
    */
   public async getFileContent(key: string, byteLength?: number): Promise<string> {

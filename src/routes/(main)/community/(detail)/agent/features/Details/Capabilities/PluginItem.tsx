@@ -173,7 +173,7 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
       default: {
         return {
           clickable: true,
-          href: urlJoin('/community/mcp', identifier),
+          href: urlJoin('/marketplace/mcp', identifier),
           isExternal: false,
           tagColor: undefined,
           tagText: undefined,

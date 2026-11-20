@@ -1,16 +1,12 @@
 import { SettingsTabs } from '@/store/global/initialState';
 
 /**
- * Tabs that draw their own navigation header and container: the split panes
- * (provider, skill) and the connector page that reuses the skill pane. Every
- * other tab renders under the one shared header that shows the tab title.
- * Their skeletons provide a `Page` for the same reason.
+ * Tabs that draw their own navigation header and container: the provider
+ * split pane. Every other tab renders under the one shared header that shows
+ * the tab title. Their skeletons provide a `Page` for the same reason.
+ * (Skills and connectors moved to the Marketplace and draw their own frame there.)
  */
-export const OWN_FRAME_TABS = new Set<string>([
-  SettingsTabs.Connector,
-  SettingsTabs.Provider,
-  SettingsTabs.Skill,
-]);
+export const OWN_FRAME_TABS = new Set<string>([SettingsTabs.Provider]);
 
 /**
  * Width of the content column every in-frame tab shares, so switching tabs

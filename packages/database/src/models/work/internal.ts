@@ -15,6 +15,7 @@ import type { SQL } from 'drizzle-orm';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
+import { artboards } from '../../schemas/artboard';
 import { documents, files } from '../../schemas/file';
 import { tasks } from '../../schemas/task';
 import { works, workVersions } from '../../schemas/work';
@@ -186,7 +187,7 @@ export interface TaskWorkSummaryQueryRow {
  * Work types whose list rows are fully described by the `works` display columns
  * (unlike `task`, which additionally joins the live tasks table).
  */
-export type DisplayWorkType = 'canvas' | 'document' | 'external' | 'file';
+export type DisplayWorkType = 'artboard' | 'canvas' | 'document' | 'external' | 'file';
 
 /** Version-event row for display-backed types (each mutation event). */
 export interface DisplayVersionEventRow {
@@ -283,6 +284,7 @@ export const resourceDeletedField = sql<boolean>`case ${works.resourceType} when
  */
 export const resourceLiveFilter = sql<boolean>`case ${works.resourceType}
   when 'task' then ${tasks.id} is not null
+  when 'artboard' then exists (select 1 from ${artboards} where ${artboards.id} = ${works.resourceId})
   when 'document' then ${documents.id} is not null and ${documents.isDeleted} is not true
   when 'file' then coalesce(${currentVersions.metadata} ->> 'fileId', '') = '' or exists (
     select 1 from ${files}

@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { MARKETPLACE_CONNECTOR_PATH } from '@/features/Marketplace/paths';
 import { useDetailContext } from '@/features/MCPPluginDetail/DetailProvider';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
@@ -22,14 +23,14 @@ const Related = memo(() => {
           query: {
             category,
           },
-          url: '/community/mcp',
+          url: MARKETPLACE_CONNECTOR_PATH,
         })}
       >
         {t('mcp.details.related.listTitle')}
       </Title>
       <Flexbox gap={8}>
         {related?.map((item, index) => {
-          const link = urlJoin('/community/mcp', item.identifier);
+          const link = urlJoin('/marketplace/mcp', item.identifier);
           return (
             <WorkspaceLink key={index} style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
               <Item {...item} />

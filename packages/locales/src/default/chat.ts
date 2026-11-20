@@ -2046,7 +2046,7 @@ export default {
   'shareModal.popover.visibility': 'Visibility',
   'shareModal.social.agent.description': 'An AI agent worth a try',
   'shareModal.social.agent.disabledHint':
-    'Publish this agent to the Community to share it on social media',
+    'Publish this agent to the Marketplace to share it on social media',
   'shareModal.social.agent.entry': 'Share to social media',
   'shareModal.social.agent.untitled': 'Untitled agent',
   'shareModal.social.copyText': 'Copy caption',

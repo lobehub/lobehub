@@ -28,16 +28,19 @@ export class SkillResourceError extends Error {
 }
 
 export class SkillImportError extends Error {
-  code:
-    'CONFLICT' | 'INVALID_URL' | 'NOT_FOUND' | 'DOWNLOAD_FAILED' | 'FILE_NOT_FOUND' | 'FORBIDDEN';
-
   constructor(
     message: string,
-    code:
-      'CONFLICT' | 'INVALID_URL' | 'NOT_FOUND' | 'DOWNLOAD_FAILED' | 'FILE_NOT_FOUND' | 'FORBIDDEN',
+    readonly code:
+      | 'CONFLICT'
+      | 'INVALID_URL'
+      | 'NOT_FOUND'
+      | 'DOWNLOAD_FAILED'
+      | 'FILE_NOT_FOUND'
+      | 'FORBIDDEN'
+      | 'CONNECT_GITHUB'
+      | 'GITHUB_ACCESS',
   ) {
     super(message);
     this.name = 'SkillImportError';
-    this.code = code;
   }
 }

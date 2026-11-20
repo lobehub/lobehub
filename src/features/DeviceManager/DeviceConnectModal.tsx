@@ -121,7 +121,11 @@ const DeviceConnectModal = memo<DeviceConnectModalProps>(
           title={t('devices.connectWizard.cli.connectTitle')}
           desc={
             isWorkspace
-              ? t('workspaceSetting.devices.enrollDesc')
+              ? t(
+                  visibility === 'private'
+                    ? 'workspaceSetting.devices.enrollPrivateDesc'
+                    : 'workspaceSetting.devices.enrollDesc',
+                )
               : t('devices.connectWizard.cli.connectDesc')
           }
         >

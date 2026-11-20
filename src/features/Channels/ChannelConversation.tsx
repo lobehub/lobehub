@@ -31,6 +31,7 @@ import { ReadOnlyNotice } from './ReadOnlyNotice';
 import { ReplyActivity } from './ReplyActivity';
 import { ReplyFailureRow } from './ReplyFailure';
 import type { ReplyTopic } from './ReplyTopicPanel';
+import { withoutShareRefusals } from './shareRefusal';
 import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
 import { useChannelEvents } from './useChannelEvents';
@@ -42,6 +43,11 @@ interface ChannelConversationProps {
   channelId: string;
   /** Mounted beside a thread panel that covers it, so keep it out of the tab order. */
   inert?: boolean;
+  /**
+   * Caps the feed and composer column width, centered. A Channel spans the full width by default;
+   * a standalone chat page (an Agent share) caps it like a regular Agent conversation.
+   */
+  maxWidth?: number;
   onOpenThread?: (threadId: string, toggle?: boolean) => void;
   onOpenTopic?: (topic: ReplyTopic) => void;
   onStartThread?: (draft: ChannelThreadDraft) => void;
@@ -53,6 +59,7 @@ interface ChannelConversationProps {
 const Timeline = ({
   channelId,
   inert,
+  maxWidth,
   starter,
   threadId = null,
   onOpenThread,
@@ -141,7 +148,7 @@ const Timeline = ({
       )
     : [];
   const failures = replyFailurePlacement(
-    detail?.jobs ?? [],
+    detail ? withoutShareRefusals(detail, detail.jobs ?? []) : [],
     new Set([
       ...timeline.flatMap((item) => (item.kind === 'message' ? [item.message.id] : [])),
       ...(detail?.rootMessage ? [detail.rootMessage.id] : []),
@@ -189,7 +196,7 @@ const Timeline = ({
               }}
               {...stylex.props(styles.feed)}
             >
-              <WideScreenContainer fullWidth paddingInline={16}>
+              <WideScreenContainer fullWidth paddingInline={16} style={{ maxWidth }}>
                 {(detail.hasMore || before !== undefined) && (
                   <Flexbox horizontal align="center" gap={8} justify="center" paddingBlock={8}>
                     <Button
@@ -304,6 +311,7 @@ const Timeline = ({
                 channel={detail.channel}
                 draftKey={channelDraftKey(channelId, threadId)}
                 key={channelDraftKey(channelId, threadId)}
+                maxWidth={maxWidth}
                 members={activeMembers}
                 replyTarget={reply.target}
                 starter={threadId ? undefined : starter}

@@ -59,7 +59,7 @@ const RelatedSkillCard = memo<DiscoverSkillItem>(
         selectSkill(identifier);
         return;
       }
-      navigate(urlJoin('/community/skill', identifier));
+      navigate(urlJoin('/marketplace/skill', identifier));
     }, [identifier, navigate, selectSkill]);
 
     return (

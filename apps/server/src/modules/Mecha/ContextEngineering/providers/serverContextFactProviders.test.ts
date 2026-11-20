@@ -133,7 +133,7 @@ describe('createServerContextFactProviders', () => {
   });
 
   it('reads user info for the user the rules name, defaulting to the run owner', async () => {
-    getInfoForAIGeneration.mockResolvedValue({ responseLanguage: 'ja-JP', userName: 'v' });
+    getInfoForAIGeneration.mockResolvedValue({ preferredReplyLanguage: 'ja-JP', userName: 'v' });
     const providers = createServerContextFactProviders(source());
 
     await expect(providers.getUserInfo!('visitor-1')).resolves.toEqual({

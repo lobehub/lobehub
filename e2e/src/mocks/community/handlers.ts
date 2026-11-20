@@ -152,7 +152,13 @@ const getAssistantList = (input: unknown) => {
     if (filtered.length > 0) items = filtered;
   }
 
-  return { ...mockAssistantList, ...paginate(items, input, 42) };
+  // Keep the unfiltered catalog's second page distinct from its first.
+  if (!query && (!category || category === 'all')) {
+    const page = getNumberInput(input, 'page') ?? 1;
+    items = page === 1 ? items.slice(0, -1) : items.slice(-1);
+  }
+
+  return { ...mockAssistantList, ...paginate(items, input, mockAssistantList.totalCount) };
 };
 
 const getMcpList = (input: unknown) => {
@@ -294,6 +300,7 @@ const getMockResponse = (procedure: string, input: unknown): unknown => {
       return SUCCESS_RESPONSE;
     }
 
+    case 'connector.list':
     case 'plugin.getPlugins': {
       return [];
     }
@@ -319,9 +326,9 @@ const marketHandler: MockHandler = {
     const inputs = getProcedureInputs(request, url, procedures.length);
 
     // Keep tRPC batch positions intact. Community pages can batch mocked
-    // market.* calls with normal app calls, such as plugin.getPlugins on the MCP
-    // detail page; returning only market responses would make the batch client
-    // read the wrong result for subsequent procedures.
+    // market.* calls with normal app calls, such as connector.list on Discover
+    // or plugin.getPlugins on the MCP detail page. Preserve the response for
+    // each procedure so the client can match results to calls.
     const responses = procedures.map((procedure, index) =>
       getMockResponse(procedure, inputs[index]),
     );

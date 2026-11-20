@@ -6,7 +6,6 @@ import APIKeySkeleton from './APIKey';
 import AppearanceSkeleton from './Appearance';
 import AutomationsSkeleton from './Automations';
 import BillingSkeleton from './Billing';
-import ConnectorSkeleton from './Connector';
 import CreditsSkeleton from './Credits';
 import CredsSkeleton from './Creds';
 import DevicesSkeleton from './Devices';
@@ -25,7 +24,6 @@ import ProxySkeleton from './Proxy';
 import ReferralSkeleton from './Referral';
 import SecuritySkeleton from './Security';
 import ServiceModelSkeleton from './ServiceModel';
-import SkillSkeleton from './Skill';
 import StatsSkeleton from './Stats';
 import StorageSkeleton from './Storage';
 import SubscriptionAccountsSkeleton from './SubscriptionAccounts';
@@ -47,7 +45,6 @@ export const SETTINGS_TAB_SKELETONS: Partial<Record<SettingsTabs, SettingsTabSke
   // The same list surface.
   [SettingsTabs.Webhooks]: AutomationsSkeleton,
   [SettingsTabs.Billing]: BillingSkeleton,
-  [SettingsTabs.Connector]: ConnectorSkeleton,
   [SettingsTabs.Credits]: CreditsSkeleton,
   [SettingsTabs.Creds]: CredsSkeleton,
   [SettingsTabs.Devices]: DevicesSkeleton,
@@ -66,7 +63,6 @@ export const SETTINGS_TAB_SKELETONS: Partial<Record<SettingsTabs, SettingsTabSke
   [SettingsTabs.Referral]: ReferralSkeleton,
   [SettingsTabs.Security]: SecuritySkeleton,
   [SettingsTabs.ServiceModel]: ServiceModelSkeleton,
-  [SettingsTabs.Skill]: SkillSkeleton,
   [SettingsTabs.Stats]: StatsSkeleton,
   [SettingsTabs.Storage]: StorageSkeleton,
   [SettingsTabs.SubscriptionAccounts]: SubscriptionAccountsSkeleton,

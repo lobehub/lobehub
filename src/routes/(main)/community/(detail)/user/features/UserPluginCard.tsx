@@ -38,7 +38,7 @@ const UserPluginCard = memo<UserPluginCardProps>(
   ({ title, avatar, author, description, identifier, category }) => {
     const { t } = useTranslation('discover');
     const navigate = useWorkspaceAwareNavigate();
-    const link = urlJoin('/community/plugin', identifier);
+    const link = urlJoin('/marketplace/mcp', identifier);
 
     const handleClick = useCallback(() => {
       navigate(link);

@@ -15,8 +15,8 @@ const Header = memo<PropsWithChildren>(() => {
       <SideBarHeaderLayout
         breadcrumb={[
           {
-            href: '/community',
-            title: t('tab.community'),
+            href: '/marketplace',
+            title: t('tab.marketplace'),
           },
         ]}
       />

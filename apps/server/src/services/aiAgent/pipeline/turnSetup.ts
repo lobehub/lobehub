@@ -555,7 +555,7 @@ export const setupTurn = async (
     : providerOverride;
   let topicEditingGroupId: string | undefined;
 
-  // Share visitors run Claude Code / Codex only on the granted device. Checked
+  // Share visitors run a local CLI Agent only on the granted device. Checked
   // against the agent-level config before any row is written, and re-asserted
   // once a reused topic's pinned model and device are applied.
   const assertShareHetero = async (runModel: string) => {

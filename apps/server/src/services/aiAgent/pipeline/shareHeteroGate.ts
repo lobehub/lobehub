@@ -25,10 +25,11 @@ export interface AssertShareHeteroAllowedParams {
 /**
  * Share-visitor fail-closed gate for heterogeneous agents, checked BEFORE any
  * topic/message row is written (and so before the visitor's topic quota is
- * spent). A visitor may run Claude Code / Codex only when the share grants
+ * spent). A visitor may run a locally executed runtime (Claude Code, Codex and
+ * the other local CLIs) only when the share grants
  * them the Agent's device (`shareGate.canUseDevice`), and only there: the CLI
  * then has a shell on the creator's machine, which is exactly what that grant
- * hands over. Every other heterogeneous runtime, and every visitor without the
+ * hands over. Remote platform runtimes (OpenClaw / Hermes), and every visitor without the
  * grant, is refused.
  *
  * The run goes to the Agent's device or nowhere — never the cloud sandbox,
