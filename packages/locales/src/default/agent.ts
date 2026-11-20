@@ -1098,8 +1098,13 @@ export default {
     'Also turn on “Allow reading my memory” above, or this tool stays inert for visitors.',
   'share.settings.tools.notAvailableToVisitors':
     'This tool can never be used in a shared run — visitor runs are blocked from your knowledge base and Agent files.',
+  /** @deprecated Unused since the on-demand filter was removed; delete after the Cloud picker stops reading it. */
+  'share.settings.tools.onDemandDesc':
+    'Not enabled on this Agent. Once granted, the model turns it on in a visitor run only when needed.',
   'share.settings.tools.ownerCredentials':
     'Visitors use MCP servers, connections and plugins with your accounts and credentials.',
+  /** @deprecated See `share.settings.tools.onDemandDesc`. */
+  'share.settings.tools.showOnDemand': 'Show on-demand tools',
   'share.settings.tools.title': 'Tools visitors can use',
   'share.settings.updateError': 'Could not save the change. Please try again.',
   'share.visitor.access.backHome': 'Back to home',
