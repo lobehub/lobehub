@@ -3469,7 +3469,9 @@ components:
                 - github_pull_request
                 - linear_document
                 - linear_issue
+                - link
                 - file
+                - collection
                 - goal_report
                 - task
             status:
@@ -3488,6 +3490,7 @@ components:
                 - document
                 - external
                 - file
+                - collection
                 - goal_report
                 - task
             url:

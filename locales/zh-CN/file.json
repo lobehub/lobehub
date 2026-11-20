@@ -554,12 +554,14 @@
   "work.totalCost": "累计开销 {{cost}}",
   "work.type.artboard": "画板",
   "work.type.canvas": "画布",
+  "work.type.collection": "图集",
   "work.type.document": "文档",
   "work.type.file": "文件",
   "work.type.githubIssue": "GitHub Issue",
   "work.type.githubPullRequest": "GitHub PR",
   "work.type.linearDocument": "Linear 文档",
   "work.type.linearIssue": "Linear Issue",
+  "work.type.link": "链接",
   "work.type.task": "任务",
   "work.updatedAt": "更新于 {{date}}"
 }

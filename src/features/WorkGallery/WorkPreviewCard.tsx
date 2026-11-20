@@ -157,6 +157,9 @@ const workTypeKey = (item: WorkSummaryItem) => {
     case 'file': {
       return 'work.type.file';
     }
+    case 'collection': {
+      return 'work.type.collection';
+    }
     case 'github_issue': {
       return 'work.type.githubIssue';
     }
@@ -168,6 +171,9 @@ const workTypeKey = (item: WorkSummaryItem) => {
     }
     case 'linear_issue': {
       return 'work.type.linearIssue';
+    }
+    case 'link': {
+      return 'work.type.link';
     }
     case 'task': {
       return 'work.type.task';

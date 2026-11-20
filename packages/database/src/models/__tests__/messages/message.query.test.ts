@@ -1893,7 +1893,7 @@ describe('MessageModel Query Tests', () => {
           { allowShareVisitor: true },
         );
 
-        expect(findAnchor(result).works).toBeUndefined();
+        expect(findAnchor(result).works).toEqual([]);
       });
     });
 

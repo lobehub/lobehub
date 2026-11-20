@@ -10,6 +10,7 @@ import { AcceptanceFlowModel } from '@/database/models/acceptanceFlow';
 import { ArtboardModel, type ArtboardRow } from '@/database/models/artboard';
 import { ArtboardCommentModel } from '@/database/models/artboard/comment';
 import { ArtboardStructureModel } from '@/database/models/artboard/structure';
+import { ArtboardFileModel } from '@/database/models/artboardFile';
 import { TaskModel } from '@/database/models/task';
 import { TopicModel } from '@/database/models/topic';
 import { WorkModel } from '@/database/models/work';
@@ -30,6 +31,7 @@ import {
   type ArtboardFilePlan,
   ArtboardFileService,
   type ArtboardFileUploadRequest,
+  artboardFileUsage,
   createFileServiceArtboardBlobStore,
 } from './files';
 import { buildJourneyFlow } from './finalize';
@@ -132,6 +134,7 @@ export class ArtboardService {
       store:
         options.fileStore ??
         createFileServiceArtboardBlobStore(() => new FileService(db, userId, workspaceId)),
+      usage: artboardFileUsage(new ArtboardFileModel(db, userId, workspaceId)),
     });
   }
 

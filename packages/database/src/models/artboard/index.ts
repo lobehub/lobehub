@@ -1,5 +1,5 @@
 import { ARTBOARD_DEFAULT_PAGE_NAME, type ArtboardPhase } from '@lobechat/types';
-import { and, desc, eq, exists, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import { artboardPages, artboards } from '../../schemas/artboard';
 import { tasks } from '../../schemas/task';
@@ -137,6 +137,26 @@ export class ArtboardModel {
 
   delete = async (id: string): Promise<void> => {
     await this.db.delete(artboards).where(and(eq(artboards.id, id), this.scope()));
+  };
+
+  // Recycle-bin internals only: the parent task is trashed, so `scope()` no longer sees these rows.
+  private ownedRows = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: artboards.userId, workspaceId: artboards.workspaceId },
+    );
+
+  listByTrashedTaskIds = async (taskIds: string[]): Promise<ArtboardRow[]> => {
+    if (taskIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(artboards)
+      .where(and(inArray(artboards.taskId, taskIds), this.ownedRows()));
+  };
+
+  deleteForTrashPurge = async (ids: string[]): Promise<void> => {
+    if (ids.length === 0) return;
+    await this.db.delete(artboards).where(and(inArray(artboards.id, ids), this.ownedRows()));
   };
 
   /** The structure revision and the row's updatedAt, which file-only writes also move. */

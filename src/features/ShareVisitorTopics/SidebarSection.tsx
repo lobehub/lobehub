@@ -7,22 +7,28 @@ import {
   AccordionItem,
   AccordionPanel,
   AccordionRoot,
+  accordionStyles,
   AccordionTrigger,
+  ActionIcon,
+  cx,
   Flexbox,
   Text,
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
-import { useMemo, useState } from 'react';
+import { ArrowRight } from 'lucide-react';
+import { type MouseEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import UserAvatar from '@/components/UserAvatar';
+import { useNavigateToAgentTopics } from '@/features/AgentSidebar/Topic/hooks/useTopicNavigation';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
+import { useActiveVisitorTopic } from './useActiveVisitorTopic';
 import { useShareVisitorTopics } from './useShareVisitorTopics';
 
 const COUNT_STYLE = { fontVariantNumeric: 'tabular-nums' } as const;
@@ -87,8 +93,6 @@ const VisitorGroup = ({
   );
 };
 
-const VISITOR_TOPIC_PATH = /\/visitor\/([^/]+)\/?$/;
-
 interface ShareVisitorTopicsSectionProps {
   agentId: string;
   itemKey: string;
@@ -102,16 +106,8 @@ const ShareVisitorTopicsSection = ({ agentId, itemKey }: ShareVisitorTopicsSecti
   const { t } = useTranslation('topic');
   const sectionTriggerStyle = useSectionTriggerStyle();
   const groups = useShareVisitorTopics(agentId);
-  const { pathname } = useLocation();
-  const activeTopicId = VISITOR_TOPIC_PATH.exec(pathname)?.[1];
-  const activeVisitorId = useMemo(
-    () =>
-      activeTopicId
-        ? groups.find((group) => group.topics.some((topic) => topic.id === activeTopicId))?.visitor
-            .id
-        : undefined,
-    [activeTopicId, groups],
-  );
+  const navigateToAgentTopics = useNavigateToAgentTopics();
+  const { activeTopicId, activeVisitorId } = useActiveVisitorTopic(groups);
   const [expanded, setExpanded] = useState<string[]>([]);
   const [revealedVisitorId, setRevealedVisitorId] = useState<string>();
 
@@ -135,6 +131,26 @@ const ShareVisitorTopicsSection = ({ agentId, itemKey }: ShareVisitorTopicsSecti
             </Text>
           </Flexbox>
         </AccordionTrigger>
+        {/* Same hover arrow as the Topics section, opening the Topics page on the Share source. */}
+        <div
+          className={cx(
+            'accordion-action',
+            accordionStyles.action,
+            accordionStyles.actionBorderless,
+            isMobileSurface() && accordionStyles.actionAlwaysVisible,
+          )}
+        >
+          <ActionIcon
+            icon={ArrowRight}
+            size={'small'}
+            title={t('shareVisitorTopics.viewAll')}
+            onClick={(e: MouseEvent) => {
+              // Stop the click from toggling the accordion header.
+              e.stopPropagation();
+              navigateToAgentTopics(agentId, 'share');
+            }}
+          />
+        </div>
       </AccordionHeader>
       <AccordionPanel contentStyle={{ padding: 0 }}>
         <AccordionRoot

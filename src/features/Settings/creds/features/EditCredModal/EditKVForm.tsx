@@ -1,7 +1,7 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Button, Flexbox, Input, InputPassword, Spin, TextArea } from '@lobehub/ui';
+import { Button, Flexbox, Input, InputPassword, Spin, Text, TextArea } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { usePermission } from '@/hooks/usePermission';
 
 import { type CredsApi } from '../useCredsApi';
+import { buildKVUpdateInput } from './kvUpdateInput';
 
 const styles = stylex.create({
   footer: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginBlockStart: '24px' },
@@ -23,6 +24,11 @@ interface EditKVFormProps {
   credsApi: CredsApi;
   onCancel: () => void;
   onSuccess: () => void;
+  /**
+   * The stored values cannot be read back: the form starts empty, leaving it
+   * empty keeps them, and filling it in replaces them all.
+   */
+  writeOnly?: boolean;
 }
 
 interface FormValues {
@@ -31,7 +37,7 @@ interface FormValues {
   name: string;
 }
 
-const EditKVForm: FC<EditKVFormProps> = ({ cred, credsApi, onCancel, onSuccess }) => {
+const EditKVForm: FC<EditKVFormProps> = ({ cred, credsApi, onCancel, onSuccess, writeOnly }) => {
   const { t } = useTranslation('setting');
   const { allowed: canManageCredentials } = usePermission('manage_provider_key');
   const form = useForm<FormValues>({ onSubmit: (values) => handleSubmit(values) });
@@ -40,6 +46,16 @@ const EditKVForm: FC<EditKVFormProps> = ({ cred, credsApi, onCancel, onSuccess }
   // Fetch decrypted values on mount
   useEffect(() => {
     const fetchDecryptedValues = async () => {
+      if (writeOnly) {
+        form.setValues({
+          description: cred.description,
+          kvPairs: [{ key: '', value: '' }],
+          name: cred.name,
+        });
+        setIsLoading(false);
+        return;
+      }
+
       if (!canManageCredentials) {
         setIsLoading(false);
         return;
@@ -76,29 +92,13 @@ const EditKVForm: FC<EditKVFormProps> = ({ cred, credsApi, onCancel, onSuccess }
     };
 
     fetchDecryptedValues();
-  }, [canManageCredentials, cred.id, cred.name, cred.description, credsApi, form]);
+  }, [canManageCredentials, cred.id, cred.name, cred.description, credsApi, form, writeOnly]);
 
   const updateMutation = useMutation({
     mutationFn: async (values: FormValues) => {
       if (!canManageCredentials) return;
 
-      const kvPairs = values.kvPairs || [];
-      const valuesObj = kvPairs.reduce(
-        (acc, pair) => {
-          if (pair.key && pair.value) {
-            acc[pair.key] = pair.value;
-          }
-          return acc;
-        },
-        {} as Record<string, string>,
-      );
-
-      await credsApi.client.update.mutate({
-        description: values.description,
-        id: cred.id,
-        name: values.name,
-        values: valuesObj,
-      });
+      await credsApi.client.update.mutate(buildKVUpdateInput(cred.id, values, writeOnly));
     },
     onSuccess: () => {
       onSuccess();
@@ -126,6 +126,11 @@ const EditKVForm: FC<EditKVFormProps> = ({ cred, credsApi, onCancel, onSuccess }
       </Form.Field>
 
       <Form.Field label={t('creds.form.values')}>
+        {writeOnly && (
+          <Text fontSize={12} style={{ display: 'block', marginBlockEnd: 8 }} type={'secondary'}>
+            {t('creds.writeOnly.editHint')}
+          </Text>
+        )}
         <Form.List name="kvPairs">
           {({ fields, add, remove }) => (
             <Flexbox gap={8}>

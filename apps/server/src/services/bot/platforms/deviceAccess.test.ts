@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   extractDeviceAllowlist,
   extractDeviceChannelAllowlist,
+  extractDeviceChannelGrantlist,
+  isDeviceChannelGranted,
   isDeviceChannelRestricted,
 } from './deviceAccess';
 
@@ -103,5 +105,62 @@ describe('isDeviceChannelRestricted', () => {
         isDM: false,
       }),
     ).toBe(true);
+  });
+});
+
+describe('device channel grant', () => {
+  const granted = {
+    deviceChannelAllowFrom: [{ id: ' c1 ', name: '#dev' }, { id: '' }, { id: 'c2' }],
+    deviceChannelPolicy: 'allowlist',
+    devicePolicy: 'channel',
+  };
+
+  it('returns the listed channel IDs as the grant list under the channel policy', () => {
+    expect(extractDeviceChannelGrantlist(granted)).toEqual(['c1', 'c2']);
+  });
+
+  it('has no grant list under any other policy', () => {
+    expect(
+      extractDeviceChannelGrantlist({ ...granted, devicePolicy: 'allowlist' }),
+    ).toBeUndefined();
+    expect(extractDeviceChannelGrantlist({ ...granted, devicePolicy: 'owner' })).toBeUndefined();
+    expect(extractDeviceChannelGrantlist(undefined)).toBeUndefined();
+  });
+
+  it('turns off the channel restriction under the channel policy', () => {
+    expect(extractDeviceChannelAllowlist(granted)).toBeUndefined();
+  });
+
+  it('grants a conversation in a listed channel, including a reply thread of it', () => {
+    expect(
+      isDeviceChannelGranted({
+        candidateChannelIds: ['thread-1', 'c2'],
+        channelGrantlist: ['c1', 'c2'],
+        isDM: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('does not grant other channels, DMs, an empty list or a missing list', () => {
+    expect(
+      isDeviceChannelGranted({
+        candidateChannelIds: ['c3'],
+        channelGrantlist: ['c1'],
+        isDM: false,
+      }),
+    ).toBe(false);
+    expect(
+      isDeviceChannelGranted({ candidateChannelIds: ['c1'], channelGrantlist: ['c1'], isDM: true }),
+    ).toBe(false);
+    expect(
+      isDeviceChannelGranted({ candidateChannelIds: ['c1'], channelGrantlist: [], isDM: false }),
+    ).toBe(false);
+    expect(
+      isDeviceChannelGranted({
+        candidateChannelIds: ['c1'],
+        channelGrantlist: undefined,
+        isDM: false,
+      }),
+    ).toBe(false);
   });
 });

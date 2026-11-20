@@ -114,6 +114,7 @@ describe('share visitor conversations', () => {
     expect(view.messages.every((message) => message.sourceTopicId === null)).toBe(true);
     expect(view.jobs.length).toBeGreaterThan(0);
     expect(view.jobs.every((job) => !('topicId' in job))).toBe(true);
+    expect(view.jobs.every((job) => !('topicTitle' in job))).toBe(true);
   });
 
   it('keep a Workspace member’s own conversation private, even after the Agent turns private', async () => {

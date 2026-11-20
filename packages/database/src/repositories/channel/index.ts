@@ -486,7 +486,7 @@ export class ChannelRepository {
       { allowArchived: true, allowTrashed: true },
     );
 
-  /** Pins the conversation atop the caller's own list, or unpins it; nobody else sees it. */
+  /** Pins the conversation atop the caller's own list (joining an open one), or unpins it. */
   setPinned = async (channelId: string, pinned: boolean) =>
     this.write(
       channelId,
@@ -495,12 +495,12 @@ export class ChannelRepository {
         await tx.update(channelMembers).set({ pinnedAt }).where(eq(channelMembers.id, member.id));
         return pinnedAt;
       },
-      { allowArchived: true, allowTrashed: true },
+      { allowArchived: true, allowTrashed: true, joinOpen: pinned },
     );
 
   /**
-   * Files the conversation under one of the caller's own sections, or back into its built-in
-   * section with `null`; nobody else sees it.
+   * Files the conversation under one of the caller's own sections (joining an open one), or back
+   * into its built-in section with `null`; nobody else sees it.
    */
   moveToSection = async (channelId: string, sectionId: string | null) =>
     this.write(
@@ -510,7 +510,7 @@ export class ChannelRepository {
         await tx.update(channelMembers).set({ sectionId }).where(eq(channelMembers.id, member.id));
         return sectionId;
       },
-      { allowArchived: true, allowTrashed: true },
+      { allowArchived: true, allowTrashed: true, joinOpen: sectionId !== null },
     );
 
   /**

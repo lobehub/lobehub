@@ -340,6 +340,7 @@ export default {
   'shareVisitorTopics.title': 'Visitors',
   'shareVisitorTopics.unavailable': 'This conversation is no longer available',
   'shareVisitorTopics.untitled': 'Untitled conversation',
+  'shareVisitorTopics.viewAll': 'View all visitor conversations',
   'sidebar.collapseAll': 'Collapse all groups',
   'sidebar.expandAll': 'Expand all groups',
   'sidebar.title': 'Topics',

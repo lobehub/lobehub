@@ -1,4 +1,9 @@
-import type { SharedAgentDeliveryStats, SharedAgentWork } from '@lobechat/types';
+import type {
+  CollectionWorkVersionMetadata,
+  SharedAgentDeliveryStats,
+  SharedAgentWork,
+  WorkVersionMetadata,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import {
   and,
@@ -43,6 +48,26 @@ const inAgentScope = (workspaceId: AnyColumn) =>
 const outsideAgentScope = (workspaceId: AnyColumn) =>
   sql`${workspaceId} is distinct from ${agents.workspaceId}`;
 
+/**
+ * The images of a collection Work, the only file links a share profile exposes:
+ * featuring a collection is choosing to show its images. Each keeps only an
+ * http(s) URL.
+ */
+const toSharedCollection = (
+  metadata: WorkVersionMetadata | null,
+): CollectionWorkVersionMetadata | undefined => {
+  const collection = metadata?.collection;
+  if (!collection) return undefined;
+  const items = collection.items.flatMap(({ caption, fileId, mimeType, url }) => {
+    const safeUrl = sanitizeExternalUrl(url);
+    if (!safeUrl) return [];
+    return [
+      { ...(caption ? { caption } : {}), fileId, ...(mimeType ? { mimeType } : {}), url: safeUrl },
+    ];
+  });
+  return { ...(collection.coverFileId ? { coverFileId: collection.coverFileId } : {}), items };
+};
+
 /** Owner-scoped source for explicitly curated share profiles, not a general resource grant. */
 export class AgentShareProfileModel {
   constructor(
@@ -71,6 +96,7 @@ export class AgentShareProfileModel {
         type: works.type,
         updatedAt: works.updatedAt,
         url: works.url,
+        versionMetadata: workVersions.metadata,
       })
       .from(works)
       .innerJoin(agents, eq(agents.id, works.originAgentId))
@@ -119,7 +145,7 @@ export class AgentShareProfileModel {
           ),
           ids ? inArray(works.id, ids) : undefined,
           or(
-            inArray(works.type, ['external', 'file']),
+            inArray(works.type, ['external', 'file', 'collection']),
             and(
               eq(works.type, 'document'),
               exists(
@@ -177,15 +203,26 @@ export class AgentShareProfileModel {
       rows.map(({ id }) => id),
     );
     const byId = new Map(
-      rows.map(({ deliveredAt: _deliveredAt, ...work }) => [
-        work.id,
-        {
-          ...work,
-          totalCost: costs.get(work.id) ?? null,
-          /** File URLs can be bearer download links; featuring a Work is not a download grant. */
-          url: work.type === 'external' ? (sanitizeExternalUrl(work.url) ?? null) : null,
-        },
-      ]),
+      rows.map(({ deliveredAt: _deliveredAt, versionMetadata, ...work }) => {
+        const collection =
+          work.type === 'collection' ? toSharedCollection(versionMetadata) : undefined;
+        return [
+          work.id,
+          {
+            ...work,
+            ...(collection ? { collection } : {}),
+            totalCost: costs.get(work.id) ?? null,
+            /**
+             * File URLs can be bearer download links; featuring a file Work is not a
+             * download grant. A collection's URL is its cover, shown with its images.
+             */
+            url:
+              work.type === 'external' || work.type === 'collection'
+                ? (sanitizeExternalUrl(work.url) ?? null)
+                : null,
+          },
+        ];
+      }),
     );
     return workIds.flatMap((id) => {
       const work = byId.get(id);
@@ -225,14 +262,19 @@ export class AgentShareProfileModel {
       allRows.map(({ id }) => id),
     );
     const byId = new Map(
-      allRows.map(({ deliveredAt: _deliveredAt, ...work }) => [
-        work.id,
-        {
-          ...work,
-          totalCost: costs.get(work.id) ?? null,
-          url: sanitizeExternalUrl(work.url) ?? null,
-        },
-      ]),
+      allRows.map(({ deliveredAt: _deliveredAt, versionMetadata, ...work }) => {
+        const collection =
+          work.type === 'collection' ? toSharedCollection(versionMetadata) : undefined;
+        return [
+          work.id,
+          {
+            ...work,
+            ...(collection ? { collection } : {}),
+            totalCost: costs.get(work.id) ?? null,
+            url: sanitizeExternalUrl(work.url) ?? null,
+          },
+        ];
+      }),
     );
     const orderedIds = [...includeWorkIds, ...pageRows.map(({ id }) => id)];
 

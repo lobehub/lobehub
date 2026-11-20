@@ -44,6 +44,7 @@ import ComposioSkillItem from './ComposioSkillItem';
 import { AccountsNeedReauth, countAccountsNeedingReauth } from './ConnectorRowFeedback';
 import {
   buildIntegrationItems,
+  countConnectorTabItems,
   getVisibleSectionItems,
   type IntegrationItem,
   isIntegrationConnected,
@@ -271,12 +272,16 @@ const SkillList = memo<SkillListProps>(
       : installedPluginList.filter((plugin) => plugin.type === 'customPlugin');
     const agentBoundConnectors = isPrivateTab ? [] : allAgentBoundConnectors;
 
+    const connectorTabCount = countConnectorTabItems({
+      customConnectors,
+      integrations,
+      marketplaceConnectors,
+    });
     const hasAnySkills =
       viewMode === 'skill'
         ? marketAgentSkills.length > 0 || userAgentSkills.length > 0
-        : integrations.length > 0 ||
+        : connectorTabCount > 0 ||
           communityMCPs.length > 0 ||
-          marketplaceConnectors.length > 0 ||
           customMCPs.length > 0 ||
           agentBoundConnectors.length > 0;
 
@@ -299,7 +304,7 @@ const SkillList = memo<SkillListProps>(
 
     const privateState = isPrivateTab
       ? privateTabState({
-          count: customConnectors.length + marketplaceConnectors.length + integrations.length,
+          count: connectorTabCount,
           error: connectorsSWR.error,
           isConnectorsInit,
         })

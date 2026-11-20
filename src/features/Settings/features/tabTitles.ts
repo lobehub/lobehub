@@ -20,7 +20,7 @@ export const SETTINGS_TAB_TITLE_KEYS: Partial<Record<SettingsTabs, TitleKey>> = 
   [SettingsTabs.Creds]: ['setting', 'tab.creds'],
   [SettingsTabs.Credits]: ['subscription', 'tab.credits'],
   [SettingsTabs.Devices]: ['setting', 'devices.title'],
-  [SettingsTabs.Environments]: ['setting', 'tab.environments'],
+  [SettingsTabs.Environments]: ['setting', 'tab.environmentsAndCreds'],
   [SettingsTabs.SubscriptionAccounts]: ['setting', 'tab.subscriptionAccounts'],
   [SettingsTabs.Hotkey]: ['setting', 'tab.hotkey'],
   [SettingsTabs.Integrations]: ['setting', 'tab.integrations'],

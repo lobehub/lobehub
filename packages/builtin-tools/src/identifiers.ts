@@ -43,10 +43,12 @@ import { VideoGenerationManifest } from '@lobechat/builtin-tool-video-generation
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
 import { WebhookManifest } from '@lobechat/builtin-tool-webhook';
+import { WorkManifest } from '@lobechat/builtin-tool-work';
 
 export const builtinToolIdentifiers: string[] = [
   McpEventsManifest.identifier,
   WebhookManifest.identifier,
+  WorkManifest.identifier,
   ChannelManifest.identifier,
   AcceptanceEvidenceManifest.identifier,
   AgentBuilderManifest.identifier,

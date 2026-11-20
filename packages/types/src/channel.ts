@@ -903,6 +903,8 @@ export interface ChannelPublicJob {
    * `sourceTopicId` on replies), so they can follow a reply still at work.
    */
   topicId?: string;
+  /** That topic's title, under the same rule as `topicId`; null while the topic is unnamed. */
+  topicTitle?: string | null;
   /** Git branch of the worktree the run works in, instead of the member's own directory. */
   worktreeBranch?: string | null;
   writerHeld: boolean;

@@ -4,8 +4,9 @@ import { agentOperations, topics } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resolveHeteroRunShareVisitor } from '@/server/services/heterogeneousAgent/shareVisitor';
+
 import { aiAgentRouter } from '../aiAgent';
-import { resolveHeteroRunShareVisitor } from '../aiAgent/guards';
 import { cleanupTestUser, createTestUser } from './integration/setup';
 
 let testDB: LobeChatDatabase;

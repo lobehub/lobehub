@@ -88,6 +88,33 @@ describe('resolveDeviceAccessPolicy', () => {
     });
   });
 
+  describe('device channel grant', () => {
+    it('grants a channel member in a granted channel', () => {
+      expect(
+        resolveDeviceAccessPolicy({
+          botContext: baseBotContext({ isDeviceChannelGranted: true }),
+        }),
+      ).toEqual({ canUseDevice: true, reason: 'bot-channel-granted' });
+    });
+
+    it('keeps the owner decision ahead of the channel grant', () => {
+      expect(
+        resolveDeviceAccessPolicy({
+          botContext: baseBotContext({ isDeviceChannelGranted: true, isOwner: true }),
+        }),
+      ).toEqual({ canUseDevice: true, reason: 'bot-owner' });
+    });
+
+    it('still denies a granted channel member in a shared-agent visitor run', () => {
+      expect(
+        resolveDeviceAccessPolicy({
+          botContext: baseBotContext({ isDeviceChannelGranted: true }),
+          shareVisitor: { canUseDevice: false },
+        }),
+      ).toEqual({ canUseDevice: false, reason: 'share-visitor' });
+    });
+  });
+
   describe('device channel scope', () => {
     it('denies the owner in a channel outside the device channel list', () => {
       expect(
