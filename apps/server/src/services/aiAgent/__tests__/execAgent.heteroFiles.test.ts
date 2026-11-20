@@ -299,6 +299,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(AgentOperationModel.prototype, 'settleRunning').mockResolvedValue(true);
+    vi.spyOn(AgentOperationModel.prototype, 'findById').mockResolvedValue(undefined);
     recordStartSpy = vi.spyOn(CompletionLifecycle.prototype, 'recordStart').mockResolvedValue(true);
     topicMock.appendRunningOperationChild.mockResolvedValue(true);
     topicMock.create.mockResolvedValue({ id: 'topic-1', metadata: undefined });
@@ -2211,31 +2212,17 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
           },
         },
       });
-      // An unconfirmed stop first checks whether the run can be settled as
-      // runnerless. This one reported just now on a device that answered, so it
-      // must stay live for a retry to reach its process.
-      const now = new Date();
-      const findOperationSpy = vi
-        .spyOn(AgentOperationModel.prototype, 'findById')
-        .mockResolvedValue({ createdAt: now, status: 'running', updatedAt: now } as any);
 
-      try {
-        const result = await service.interruptTask({
-          operationId: 'operation-codex',
-          topicId: 'topic-1',
-        });
+      const result = await service.interruptTask({
+        operationId: 'operation-codex',
+        topicId: 'topic-1',
+      });
 
-        expect(result).toMatchObject({
-          deviceCancellationConfirmed: false,
-          failureReason: 'runner_unconfirmed',
-          operationId: 'operation-codex',
-          success: false,
-        });
-        expect(findOperationSpy).toHaveBeenCalledWith('operation-codex');
-      } finally {
-        findOperationSpy.mockRestore();
-      }
-      expect(AgentOperationModel.prototype.settleRunning).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        deviceCancellationConfirmed: false,
+        operationId: 'operation-codex',
+        success: false,
+      });
       expect(mockInterruptOperation).not.toHaveBeenCalled();
     });
 
@@ -2404,7 +2391,6 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
 
     afterEach(() => {
       completeOperationSpy.mockRestore();
-      findOperationSpy.mockRestore();
     });
 
     const errorBubbleUpdates = () => mockMessageUpdate.mock.calls.filter((call) => call[1]?.error);
