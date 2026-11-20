@@ -83,11 +83,15 @@ interface DocumentDetailResult {
   fileType: string;
   id: string;
   knowledgeBaseId?: string | null;
+  parentId?: string | null;
   title?: string | null;
 }
 
 /** The only document type this tool edits: notes written as text, not parsed uploads. */
 const EDITABLE_DOCUMENT_FILE_TYPE = 'custom/document';
+
+/** Upper bound on the ancestor walk; deeper (or already looping) trees are refused. */
+const MAX_PARENT_DEPTH = 64;
 
 interface RagService {
   getFileContents: (fileIds: string[], signal?: AbortSignal) => Promise<FileContentResult[]>;
@@ -599,6 +603,28 @@ export class KnowledgeBaseExecutionRuntime {
             content: `Parent "${parentId}" not found in knowledge base \`${document.knowledgeBaseId}\`. The new parent must be a folder or document in the same knowledge base.`,
             success: false,
           };
+        }
+
+        // Neither the shared write flow nor the model checks ancestry, so a move
+        // under one of the document's own descendants would persist a loop: both
+        // drop out of the tree and subtree walks never terminate.
+        let ancestorId = parent.parentId ?? undefined;
+        let depth = 0;
+        while (ancestorId) {
+          if (ancestorId === documentId) {
+            return {
+              content: `Error: "${parentId}" is inside document "${documentId}", so the document cannot be moved under it.`,
+              success: false,
+            };
+          }
+          if (++depth > MAX_PARENT_DEPTH) {
+            return {
+              content: `Error: Could not verify where "${parentId}" sits in the knowledge base (nesting is too deep), so the document was not moved.`,
+              success: false,
+            };
+          }
+          const ancestor = await this.documentService.getDocumentById(ancestorId);
+          ancestorId = ancestor?.parentId ?? undefined;
         }
       }
 

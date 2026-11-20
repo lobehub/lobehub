@@ -202,6 +202,7 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
             fileType: doc.fileType,
             id: doc.id,
             knowledgeBaseId: doc.knowledgeBaseId,
+            parentId: doc.parentId,
             title: doc.title,
           };
         },

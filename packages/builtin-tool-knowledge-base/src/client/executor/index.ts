@@ -111,6 +111,7 @@ class KnowledgeBaseExecutor extends BaseExecutor<typeof KnowledgeBaseApiName> {
           fileType: doc.fileType,
           id: doc.id,
           knowledgeBaseId: doc.knowledgeBaseId,
+          parentId: doc.parentId,
           title: doc.title,
         };
       },

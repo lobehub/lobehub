@@ -10,7 +10,10 @@ const kbDoc = {
 };
 
 const setup = (
-  documents: Record<string, Partial<typeof kbDoc> & { knowledgeBaseId?: string | null }> = {
+  documents: Record<
+    string,
+    Partial<typeof kbDoc> & { knowledgeBaseId?: string | null; parentId?: string | null }
+  > = {
     docs_a: kbDoc,
   },
   knowledgeBases: string[] = ['kb_1'],
@@ -186,6 +189,75 @@ describe('KnowledgeBaseExecutionRuntime.updateDocument', () => {
     expect(crossKb.success).toBe(false);
     expect(crossKb.content).toContain('must be a folder or document in the same knowledge base');
     expect(self.success).toBe(false);
+    expect(documentService.updateDocument).not.toHaveBeenCalled();
+  });
+
+  it('refuses a parent nested inside the document being moved', async () => {
+    // docs_a > docs_section > docs_leaf: moving docs_a under docs_leaf would close a loop.
+    const { documentService, runtime } = setup({
+      docs_a: kbDoc,
+      docs_leaf: {
+        fileType: 'custom/document',
+        id: 'docs_leaf',
+        knowledgeBaseId: 'kb_1',
+        parentId: 'docs_section',
+      },
+      docs_section: {
+        fileType: 'custom/folder',
+        id: 'docs_section',
+        knowledgeBaseId: 'kb_1',
+        parentId: 'docs_a',
+      },
+    });
+
+    const result = await runtime.updateDocument({ documentId: 'docs_a', parentId: 'docs_leaf' });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('is inside document "docs_a"');
+    expect(documentService.updateDocument).not.toHaveBeenCalled();
+  });
+
+  it('moves under a nested folder whose ancestors do not include the document', async () => {
+    const { documentService, runtime } = setup({
+      docs_a: kbDoc,
+      docs_child: {
+        fileType: 'custom/folder',
+        id: 'docs_child',
+        knowledgeBaseId: 'kb_1',
+        parentId: 'docs_top',
+      },
+      docs_top: { fileType: 'custom/folder', id: 'docs_top', knowledgeBaseId: 'kb_1' },
+    });
+
+    const result = await runtime.updateDocument({ documentId: 'docs_a', parentId: 'docs_child' });
+
+    expect(result.success).toBe(true);
+    expect(documentService.updateDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'docs_a', parentId: 'docs_child' }),
+    );
+  });
+
+  it('refuses the move when the ancestor chain already loops', async () => {
+    const { documentService, runtime } = setup({
+      docs_a: kbDoc,
+      docs_x: {
+        fileType: 'custom/folder',
+        id: 'docs_x',
+        knowledgeBaseId: 'kb_1',
+        parentId: 'docs_y',
+      },
+      docs_y: {
+        fileType: 'custom/folder',
+        id: 'docs_y',
+        knowledgeBaseId: 'kb_1',
+        parentId: 'docs_x',
+      },
+    });
+
+    const result = await runtime.updateDocument({ documentId: 'docs_a', parentId: 'docs_x' });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('nesting is too deep');
     expect(documentService.updateDocument).not.toHaveBeenCalled();
   });
 
