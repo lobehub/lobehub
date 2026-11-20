@@ -4,12 +4,22 @@ import type { DeviceExecutionTarget } from '@lobechat/types';
 import { Flexbox, Icon, Popover, Text, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronDownIcon, CircleOffIcon, FolderIcon, PlusIcon, SettingsIcon } from 'lucide-react';
+import {
+  ChevronDownIcon,
+  CircleOffIcon,
+  FolderIcon,
+  HardDriveIcon,
+  PlusIcon,
+  SettingsIcon,
+} from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import RepositoryAvatar from '@/components/RepositoryAvatar';
 import OptionRow from '@/features/ChatInput/ControlBar/OptionRow';
+import SandboxDriveMenu, {
+  type SandboxDriveFolderPick,
+} from '@/features/ChatInput/ControlBar/SandboxDriveMenu';
 import {
   repositoriesLabel,
   repositorySlug,
@@ -70,6 +80,12 @@ const styles = stylex.create({
 });
 
 interface ProjectWorkLocationPickerProps {
+  /**
+   * Which edge of the composer the chip sits on, so the second level opens
+   * inward. The project home puts it on the right; a conversation's bar on
+   * the left.
+   */
+  align?: 'left' | 'right';
   /** Whether this member may give the project another environment. */
   canManage: boolean;
   /** Icon only, the place in the tooltip — for a narrow composer. */
@@ -81,6 +97,19 @@ interface ProjectWorkLocationPickerProps {
     setPickedId: (directoryId: string) => void;
   };
   disabled?: boolean;
+  /**
+   * The cloud sandbox that keeps the conversation's files on the drive, offered
+   * beside the environment when the plan includes a drive: the folder picked,
+   * and how to pick another.
+   */
+  drive?: {
+    /** The picked folder's name, when the conversation is on one. */
+    label?: string;
+    onBrowse: () => void;
+    onOpenStorage: () => void;
+    onPick: (pick: SandboxDriveFolderPick) => void;
+    selectedPath?: string;
+  };
   /** Where the agent runs and where it can be moved to. */
   location: ReturnType<typeof useProjectWorkLocation>;
   /**
@@ -104,10 +133,12 @@ interface ProjectWorkLocationPickerProps {
  * picker writes it; the code environment is this conversation's.
  */
 const ProjectWorkLocationPicker = ({
+  align = 'right',
   canManage,
   compact,
   directoryState,
   disabled,
+  drive,
   location,
   onPickDirectory,
   projectId,
@@ -133,6 +164,9 @@ const ProjectWorkLocationPicker = ({
 
   const { repositories, repository, setPickedId, withoutEnvironment } = state;
   const repositoryShown = showRepositories && onSandbox && !!repository;
+  // On the drive, the folder is where the conversation works.
+  const driveShown = showRepositories && !!drive?.label;
+  const submenuPlacement = align === 'right' ? 'leftTop' : 'rightTop';
 
   const select = async (next: DeviceExecutionTarget, deviceId?: string) => {
     setOpen(false);
@@ -190,6 +224,9 @@ const ProjectWorkLocationPicker = ({
     const slug = repositorySlug(repository) ?? repository.name;
     chipIcon = <RepositoryAvatar size={16} url={environmentRepositoryUrl(repository)} />;
     chipLabel = slug.split('/').pop() || repository.name;
+  } else if (onSandbox && driveShown) {
+    chipIcon = <Icon icon={HardDriveIcon} size={16} />;
+    chipLabel = drive?.label ?? chipLabel;
   } else if (target === 'device') {
     chipIcon = <ExecutionTargetIcon devicePlatform={boundDevice?.platform} target={'device'} />;
   }
@@ -259,6 +296,46 @@ const ProjectWorkLocationPicker = ({
           {t('overview.context.location.noEnvironments')}
         </Text>
       )}
+      {drive && (
+        <Popover
+          arrow={false}
+          closeDelay={150}
+          placement={submenuPlacement}
+          styles={SUBMENU_STYLES}
+          trigger={['hover', 'click']}
+          content={
+            <SandboxDriveMenu
+              selectedLabel={drive.label}
+              selectedPath={drive.selectedPath}
+              onBrowse={() => {
+                setOpen(false);
+                drive.onBrowse();
+              }}
+              onOpenStorage={() => {
+                setOpen(false);
+                drive.onOpenStorage();
+              }}
+              onPick={(pick) => {
+                setOpen(false);
+                drive.onPick(pick);
+              }}
+            />
+          }
+        >
+          <div data-testid={'project-location-drive'}>
+            <OptionRow
+              arrow
+              compact
+              active={onSandbox && driveShown}
+              hint={driveShown ? drive.label : undefined}
+              icon={<Icon icon={HardDriveIcon} size={16} />}
+              label={tChat('heteroAgent.executionTarget.persistentSandbox')}
+              // The folder is picked one level down; the row itself only opens it.
+              onClick={() => {}}
+            />
+          </div>
+        </Popover>
+      )}
       {canManage && (
         <OptionRow
           compact
@@ -319,7 +396,7 @@ const ProjectWorkLocationPicker = ({
         closeDelay={150}
         content={directoryMenu(next, deviceId)}
         key={deviceId ?? next}
-        placement={'leftTop'}
+        placement={submenuPlacement}
         styles={SUBMENU_STYLES}
         trigger={['hover', 'click']}
       >
@@ -351,9 +428,8 @@ const ProjectWorkLocationPicker = ({
             arrow={false}
             closeDelay={150}
             content={repositoryMenu}
-            // The chip sits at the composer's right edge, so the second level
-            // opens inward rather than off the side of the window.
-            placement={'leftTop'}
+            // The second level opens inward rather than off the side of the window.
+            placement={submenuPlacement}
             styles={SUBMENU_STYLES}
             trigger={['hover', 'click']}
           >
@@ -440,7 +516,7 @@ const ProjectWorkLocationPicker = ({
       arrow={false}
       content={content}
       open={open}
-      placement={'bottomRight'}
+      placement={align === 'right' ? 'bottomRight' : 'bottomLeft'}
       styles={{ content: { padding: 4 } }}
       trigger={'click'}
       onOpenChange={setOpen}

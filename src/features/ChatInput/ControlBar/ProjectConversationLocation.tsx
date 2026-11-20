@@ -4,6 +4,7 @@ import { confirmModal, toast } from '@lobehub/ui';
 import { useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useCanManageProject } from '@/features/Projects/useCanManageProject';
 import ProjectWorkLocationPicker from '@/features/Projects/Workspace/ProjectWorkLocationPicker';
 import { directoriesOnDevice } from '@/features/Projects/Workspace/useProjectDirectory';
@@ -12,6 +13,9 @@ import {
   useProjectRepository,
 } from '@/features/Projects/Workspace/useProjectRepository';
 import { useProjectWorkLocation } from '@/features/Projects/Workspace/useProjectWorkLocation';
+import { SANDBOX_STORAGE_PATH } from '@/features/ResourceHome/paths';
+import { openSandboxDirectoryModal } from '@/features/WorkingDirectory';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
 import {
   getPendingSandboxSelection,
@@ -21,8 +25,10 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useProjectDirectories, useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import { useTopicId } from '../hooks/useTopicId';
+import type { SandboxDriveFolderPick } from './SandboxDriveMenu';
 import { useIsSharedAgent } from './useSandboxEnvironmentList';
-import { useSandboxPlacement } from './useSandboxPlacement';
+import { isPersistentSelection, useSandboxPlacement } from './useSandboxPlacement';
+import { useSandboxStorageAccess } from './useSandboxStorageAccess';
 
 /**
  * The project a composer's conversation belongs to: its topic's, or the one a
@@ -81,7 +87,8 @@ const ProjectConversationLocation = ({ agentId, projectId }: ProjectConversation
   const repository = projectDefault
     ? repositoryBase.repository
     : repositoryBase.repositories.find((item) => item.id === selection.environmentId);
-  const withoutEnvironment = !repository;
+  const onDrive = isPersistentSelection(selection);
+  const withoutEnvironment = !repository && !onDrive;
   const repositoryState = {
     ...repositoryBase,
     repository,
@@ -109,6 +116,46 @@ const ProjectConversationLocation = ({ agentId, projectId }: ProjectConversation
     directoriesOn: (deviceId: string) => directoriesOnDevice(directories, deviceId),
     setPickedId: () => {},
   };
+
+  // The drive: offered when the plan includes one. A folder on it is the
+  // persistent sandbox — the conversation keeps its files there — and takes
+  // the place of the environment, which only a temporary sandbox clones.
+  const navigate = useWorkspaceAwareNavigate();
+  const workspaceId = useActiveWorkspaceId();
+  const { status: driveStatus } = useSandboxStorageAccess(agentId);
+  const pickDriveFolder = async (folder: SandboxDriveFolderPick) => {
+    try {
+      await setSelection({ drive: folder.drive, workingDirectory: folder.workingDirectory });
+      if (location.target !== 'sandbox') await location.select('sandbox');
+    } catch {
+      toast.error(t('workingDirectory.drive.pickFailed', { ns: 'device' }));
+    }
+  };
+  const driveLabel =
+    onDrive && selection.workingDirectory !== undefined
+      ? selection.workingDirectory === '.'
+        ? t('sandboxDrive.root')
+        : selection.workingDirectory.split('/').pop() || selection.workingDirectory
+      : undefined;
+  const drive =
+    driveStatus === 'ready'
+      ? {
+          label: driveLabel,
+          onBrowse: () =>
+            openSandboxDirectoryModal({
+              defaultPath:
+                selection.workingDirectory && selection.workingDirectory !== '.'
+                  ? selection.workingDirectory
+                  : undefined,
+              drive: selection.drive,
+              isWorkspace: !!workspaceId,
+              onPick: pickDriveFolder,
+            }),
+          onOpenStorage: () => navigate(SANDBOX_STORAGE_PATH),
+          onPick: (folder: SandboxDriveFolderPick) => void pickDriveFolder(folder),
+          selectedPath: onDrive ? selection.workingDirectory : undefined,
+        }
+      : undefined;
 
   const moveTopic = useProjectDirectoryStore((s) => s.moveTopic);
   const refreshTopic = useChatStore((s) => s.refreshTopic);
@@ -143,8 +190,10 @@ const ProjectConversationLocation = ({ agentId, projectId }: ProjectConversation
 
   return (
     <ProjectWorkLocationPicker
+      align={'left'}
       canManage={canManage}
       directoryState={directoryState}
+      drive={drive}
       location={location}
       projectId={projectId}
       state={repositoryState}

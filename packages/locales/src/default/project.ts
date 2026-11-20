@@ -7,15 +7,15 @@ export default {
   'settings.editDirectoryOtherEnvironment':
     'This folder already belongs to another environment. Choose a different folder or device.',
   'settings.editDirectoryDescription':
-    'Choose the device and folder this working directory points to. Its topics move to the new folder and start new sessions there.',
+    'Choose the device and folder this local folder points to. Its topics move to the new folder and start new sessions there.',
   'settings.editDirectoryFailed': 'Could not update the folder',
   'settings.removeDirectory': 'Remove folder',
   'settings.removeDirectoryConfirmDescription':
-    '{{path}} on {{device}} will no longer be a working directory of this project. Files on the device are not changed. Its topics stay in the project but are no longer linked to this folder.',
+    '{{path}} on {{device}} will no longer be a local folder of this project. Files on the device are not changed. Its topics stay in the project but are no longer linked to this folder.',
   'settings.removeDirectoryConfirmTitle': 'Remove {{name}} from this project?',
   'settings.removeDirectoryFailed':
     'Could not remove the folder. If a topic is running here, wait for it to finish and try again.',
-  'settings.addDirectoryFailed': 'Could not add working directory',
+  'settings.addDirectoryFailed': 'Could not add the local folder',
   'settings.identifier': 'Project identifier',
   'settings.identifierDescription':
     'Prefix for this project’s task numbers, set when the project is created. Projects without one use the default prefix.',
@@ -29,8 +29,8 @@ export default {
     'Files stay on {{device}}. Linking only organizes the topics in this directory.',
   'directories.bindFailed': 'Could not link directory',
   'topics.associateFailed': 'Could not add topic to project',
-  'topics.chooseLocation': 'Choose a working directory',
-  'topics.addLocation': 'Add a working directory (optional)',
+  'topics.chooseLocation': 'Choose a local folder',
+  'topics.addLocation': 'Add a local folder (optional)',
 
   'topics.complete': 'Mark completed',
   'topics.resume': 'Resume work',
@@ -108,14 +108,14 @@ export default {
   'directories.boundTip':
     "This directory belongs to the project ({{path}}). Switch devices to use the project's directory on another device.",
   'directories.boundRoot':
-    'This topic is bound to a project directory. Start a new topic to use a different directory.',
+    'This topic is bound to a local folder of the project. Start a new topic to use a different folder.',
   'directories.detectRepository': 'Detect GitHub repository',
   'directories.stagedNewTopic': 'A new topic will start in <project>{{name}}</project>',
   'directories.unavailable':
     'Device is offline or the directory is unavailable. Reconnect and retry.',
 
-  'directories.title': 'Working directories',
-  'directories.add': 'Add working directory',
+  'directories.title': 'Local folders',
+  'directories.add': 'Add local folder',
   'directories.bind': 'Link to project',
   'directories.bindDescription':
     'Link the folder below to a project so you can continue working from that project. Files stay on the current device.',
@@ -227,7 +227,7 @@ export default {
   'disabled.action': 'Enable in Labs',
   'disabled.title': 'Project workspaces are an Alpha experiment',
   'delete.confirm.continue': 'Delete project',
-  'delete.confirm.kept.files': 'Files in the working directories on your devices',
+  'delete.confirm.kept.files': "Files in the project's local folders on your devices",
   'delete.confirm.kept.work': 'Tasks, goals, topics and channels',
   'delete.confirm.keptLead': 'These are kept, but no longer belong to a project:',
   'delete.confirm.namePrompt': 'Type “{{name}}” to confirm',
@@ -235,8 +235,7 @@ export default {
     'Project widgets and their run history, Linear sync rules, review sites, dashboards and project memories',
   'delete.confirm.removed.bindings':
     'Links to agents, groups and knowledge bases (your agents and knowledge bases are kept)',
-  'delete.confirm.removed.settings':
-    'Project settings, members, working directories and environments',
+  'delete.confirm.removed.settings': 'Project settings, members, local folders and environment',
   'delete.confirm.removedLead': 'Deleting “{{name}}” cannot be undone. It permanently removes:',
   'delete.confirm.title': 'Delete project',
   'delete.description':
@@ -307,14 +306,14 @@ export default {
   'rename.success': 'Project renamed',
   'rename.title': 'Rename project',
   'overview.context.location.devices': 'Devices',
-  'overview.context.location.directories': 'Project folders',
+  'overview.context.location.directories': 'Local folders',
   'overview.context.location.directoryUnavailable':
     "Couldn't reach this folder. Check that the device is online and the folder still exists.",
-  'overview.context.location.noDirectories': 'No project folders on this device yet.',
+  'overview.context.location.noDirectories': 'No local folders on this device yet.',
   'overview.context.location.noDirectoryTooltip':
-    "This device has no project folder yet, so the conversation starts in the device's default directory.",
-  'overview.context.location.environments': 'Code environments',
-  'overview.context.location.noEnvironments': 'No code environments yet.',
+    "This device has no local folder for the project yet, so the conversation starts in the device's default directory.",
+  'overview.context.location.environments': 'Environment',
+  'overview.context.location.noEnvironments': 'The environment has no repositories yet.',
   'overview.context.location.title': 'Work location',
   'overview.openTasks': 'Open task workspace',
   'overview.composerPlaceholder': 'Tell the project what to move forward next…',
@@ -695,4 +694,7 @@ export default {
   'createFromGithub.advancedWithCount': 'Advanced settings · {{count}} extra',
   'createFromGithub.extraRepositoriesLabel': 'More repositories',
   'createFromGithub.chooseFromGithub': 'Choose from GitHub',
+  'settings.enableDirectory': 'Enable',
+  'settings.enableDirectoryHint':
+    'Link this folder to the project environment so topics can start in it',
 };

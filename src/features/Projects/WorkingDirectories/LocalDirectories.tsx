@@ -121,6 +121,7 @@ export function LocalDirectories({ canManage, environmentId, projectId }: LocalD
             <Button
               icon={LinkIcon}
               size="small"
+              title={t('settings.enableDirectoryHint')}
               onClick={() =>
                 openBindDirectoryModal({
                   projectId,
@@ -129,7 +130,7 @@ export function LocalDirectories({ canManage, environmentId, projectId }: LocalD
                 })
               }
             >
-              {t('directories.bind')}
+              {t('settings.enableDirectory')}
             </Button>
           )}
           {canManage && (
