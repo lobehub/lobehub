@@ -210,9 +210,9 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
   const { t } = useTranslation('chat');
   const openLocalFile = useChatStore((s) => s.openLocalFile);
   const workingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
-  // Off desktop the file lives on the topic's device and is read over the
-  // device RPC while it is online; desktop keeps local IPC.
-  const remoteDeviceId = useTopicRemoteDeviceId();
+  // A topic that ran on another device is read over that device's RPC while it
+  // is online; this desktop's own topics keep local IPC.
+  const { canReadFiles, deviceId: remoteDeviceId } = useTopicRemoteDeviceId();
 
   const parsed = useMemo(
     () => parseLocalFileHref(file.path, { workingDirectory }),
@@ -220,8 +220,7 @@ export const LocalFileTag = memo<LocalFileTagProps>(({ className, editor, file, 
   );
   const allowExternalFilePreview =
     !!parsed && (!workingDirectory || parsed.workingDirectory !== workingDirectory);
-  const canPreview =
-    (isDesktop || !!remoteDeviceId) && !file.isDirectory && !!parsed?.workingDirectory;
+  const canPreview = canReadFiles && !file.isDirectory && !!parsed?.workingDirectory;
   const canRenderImagePreview = canPreview && isPreviewableImageFile(file);
 
   // The thumbnail is read through the local-file preview replica (one request

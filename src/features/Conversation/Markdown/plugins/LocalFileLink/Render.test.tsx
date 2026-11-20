@@ -11,6 +11,7 @@ import { useChatStore } from '@/store/chat';
 import { createLocalFileTabId } from '@/store/chat/slices/portal/helpers';
 import { useDeviceStore } from '@/store/device';
 import { DEVICE_LIST_KEY } from '@/store/device/projection';
+import { useElectronStore } from '@/store/electron';
 
 import type { MarkdownElementProps } from '../type';
 import Render from './Render';
@@ -66,6 +67,7 @@ describe('LocalFileLink Render', () => {
     platform.isDesktop = true;
     useChatStore.setState(useChatStore.getInitialState());
     useDeviceStore.setState(useDeviceStore.getInitialState());
+    useElectronStore.setState({ gatewayDeviceInfo: undefined });
   });
 
   it.each(['/home/ubuntu/workspace/src/client.ts:391', './src/client.ts:391'])(
@@ -210,7 +212,7 @@ describe('LocalFileLink Render', () => {
       },
     ]);
   });
-  describe('on mobile / web with a remote topic device', () => {
+  describe('with a topic device', () => {
     const setRemoteTopic = (topicMetadata: Record<string, unknown>) =>
       useChatStore.setState({
         activeAgentId: 'agent-1',
@@ -241,7 +243,7 @@ describe('LocalFileLink Render', () => {
         />,
       );
 
-    it('opens the portal through the online topic device', () => {
+    it('opens the portal through the online topic device off desktop', () => {
       platform.isDesktop = false;
       setRemoteTopic({ boundDeviceId: 'device-1' });
       setDevices([{ deviceId: 'device-1', online: true }]);
@@ -266,7 +268,7 @@ describe('LocalFileLink Render', () => {
       expect(useChatStore.getState().showPortal).toBe(true);
     });
 
-    it('stays a non-clickable chip when the topic has no device', () => {
+    it('stays a non-clickable chip off desktop when the topic has no device', () => {
       platform.isDesktop = false;
       setRemoteTopic({});
       setDevices([{ deviceId: 'device-1', online: true }]);
@@ -279,7 +281,7 @@ describe('LocalFileLink Render', () => {
       expect(useChatStore.getState().openLocalFiles).toEqual([]);
     });
 
-    it('stays a non-clickable chip while the topic device is offline', () => {
+    it('stays a non-clickable chip off desktop while the topic device is offline', () => {
       platform.isDesktop = false;
       setRemoteTopic({ boundDeviceId: 'device-1' });
       setDevices([{ deviceId: 'device-1', online: false }]);
@@ -291,21 +293,93 @@ describe('LocalFileLink Render', () => {
       expect(useChatStore.getState().openLocalFiles).toEqual([]);
     });
 
-    it('keeps desktop on local IPC even when the topic has a device', () => {
-      setRemoteTopic({ boundDeviceId: 'device-1' });
-      setDevices([{ deviceId: 'device-1', online: true }]);
+    describe('on desktop', () => {
+      const setThisMachine = (deviceId: string) =>
+        useElectronStore.setState({
+          gatewayDeviceInfo: { deviceId, hostname: 'this-mac', platform: 'darwin' },
+        });
 
-      renderPdfLink();
-      fireEvent.click(screen.getByRole('link', { name: 'x.pdf' }));
+      it('reads a topic that ran on another device through that device', () => {
+        setThisMachine('device-local');
+        setRemoteTopic({ boundDeviceId: 'device-remote' });
+        setDevices([
+          { deviceId: 'device-local', online: true },
+          { deviceId: 'device-remote', online: true },
+        ]);
 
-      const [opened] = useChatStore.getState().openLocalFiles;
-      expect(opened).not.toHaveProperty('deviceId');
-      expect(opened.id).toBe(
-        createLocalFileTabId({
-          filePath: '/Users/me/project/docs/x.pdf',
-          workingDirectory: '/Users/me/project',
-        }),
-      );
+        renderPdfLink();
+        const link = screen.getByRole('link', { name: 'x.pdf' });
+        expect(link).toHaveAttribute(RENDERER_HANDLED_LINK_ATTR, 'true');
+        fireEvent.click(link);
+
+        // The device RPC needs the topic too: files in its session worktree
+        // are only reachable with it.
+        expect(useChatStore.getState().openLocalFiles).toEqual([
+          {
+            allowExternalFilePreview: false,
+            deviceId: 'device-remote',
+            filePath: '/Users/me/project/docs/x.pdf',
+            id: createLocalFileTabId({
+              deviceId: 'device-remote',
+              filePath: '/Users/me/project/docs/x.pdf',
+              workingDirectory: '/Users/me/project',
+            }),
+            topicId: 'topic-1',
+            workingDirectory: '/Users/me/project',
+          },
+        ]);
+        expect(useChatStore.getState().showPortal).toBe(true);
+      });
+
+      it('keeps a topic that ran on this machine on local IPC', () => {
+        setThisMachine('device-local');
+        setRemoteTopic({ boundDeviceId: 'device-local' });
+        setDevices([{ deviceId: 'device-local', online: true }]);
+
+        renderPdfLink();
+        fireEvent.click(screen.getByRole('link', { name: 'x.pdf' }));
+
+        expect(useChatStore.getState().openLocalFiles).toEqual([
+          {
+            allowExternalFilePreview: false,
+            filePath: '/Users/me/project/docs/x.pdf',
+            id: createLocalFileTabId({
+              filePath: '/Users/me/project/docs/x.pdf',
+              workingDirectory: '/Users/me/project',
+            }),
+            workingDirectory: '/Users/me/project',
+          },
+        ]);
+      });
+
+      it('keeps a topic with no device on local IPC', () => {
+        setThisMachine('device-local');
+        setRemoteTopic({});
+        setDevices([{ deviceId: 'device-remote', online: true }]);
+
+        renderPdfLink();
+        fireEvent.click(screen.getByRole('link', { name: 'x.pdf' }));
+
+        const [opened] = useChatStore.getState().openLocalFiles;
+        expect(opened).not.toHaveProperty('deviceId');
+        expect(opened).not.toHaveProperty('topicId');
+      });
+
+      it('stays a non-clickable chip while the other device is offline', () => {
+        setThisMachine('device-local');
+        setRemoteTopic({ boundDeviceId: 'device-remote' });
+        setDevices([
+          { deviceId: 'device-local', online: true },
+          { deviceId: 'device-remote', online: false },
+        ]);
+
+        const { container } = renderPdfLink();
+
+        expect(screen.queryByRole('link')).toBeNull();
+        expect(container.querySelector('[href]')).toBeNull();
+        fireEvent.click(screen.getByText('x.pdf'));
+        expect(useChatStore.getState().openLocalFiles).toEqual([]);
+      });
     });
   });
 });

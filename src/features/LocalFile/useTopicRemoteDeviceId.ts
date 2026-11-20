@@ -1,25 +1,46 @@
 import { isDesktop } from '@lobechat/const';
 
+import { useLocalMachineDeviceIds } from '@/hooks/useLocalMachineDeviceIds';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
+export interface TopicRemoteDevice {
+  /**
+   * Whether this client can read the current topic's local files right now:
+   * over this desktop's own IPC, or through the topic's device while it is
+   * online. Callers gate previews on this alone — a reference that can't be
+   * read stays a plain chip instead of a link that opens an error.
+   */
+  canReadFiles: boolean;
+  /**
+   * The device to read through over RPC. `undefined` while `canReadFiles`
+   * means this desktop reads the file itself over Electron IPC.
+   */
+  deviceId: string | undefined;
+}
+
 /**
- * The device that can serve local-file reads for the current topic when this
- * client has no filesystem of its own (web / mobile SPA).
+ * Where the current topic's local files can be read from.
  *
- * Returns the topic's device id only while that device is online, so callers
- * can gate previews on it: a preview without a `deviceId` would fall back to
- * the Electron IPC transport, which does not exist off desktop and fails
- * silently.
+ * A topic whose device is another machine (or any device, off desktop) is read
+ * through that device's RPC, and only while it is online: the Electron IPC
+ * fallback would read this machine's same path instead, which on desktop
+ * opens the wrong (usually missing) file and off desktop does not exist.
  *
- * Desktop always gets `undefined` and keeps reading through local IPC.
+ * A topic that ran on this desktop — under its personal or its active
+ * workspace device id — or never bound a device keeps reading through local
+ * IPC. Web / mobile have nothing to read such a topic with.
  */
-export const useTopicRemoteDeviceId = (): string | undefined => {
+export const useTopicRemoteDeviceId = (): TopicRemoteDevice => {
   const topicDeviceId = useChatStore(topicSelectors.currentTopicDeviceId);
-  const remoteDeviceId = isDesktop ? undefined : topicDeviceId;
+  const localDeviceIds = useLocalMachineDeviceIds();
+  const remoteDeviceId =
+    topicDeviceId && !(isDesktop && localDeviceIds.includes(topicDeviceId))
+      ? topicDeviceId
+      : undefined;
   const isLogin = useUserStore(authSelectors.isLogin);
 
   useDeviceStore((s) => s.useFetchDevices)(!!remoteDeviceId && isLogin);
@@ -27,5 +48,9 @@ export const useTopicRemoteDeviceId = (): string | undefined => {
     (s) => !!remoteDeviceId && !!deviceSelectors.getDeviceById(remoteDeviceId)(s)?.online,
   );
 
-  return isOnline ? remoteDeviceId : undefined;
+  if (remoteDeviceId) {
+    return { canReadFiles: isOnline, deviceId: isOnline ? remoteDeviceId : undefined };
+  }
+
+  return { canReadFiles: isDesktop, deviceId: undefined };
 };

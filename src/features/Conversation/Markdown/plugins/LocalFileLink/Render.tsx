@@ -1,6 +1,5 @@
 'use client';
 
-import { isDesktop } from '@lobechat/const';
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import { A, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -66,11 +65,11 @@ const Render = memo<MarkdownElementProps<LocalFileLinkProperties>>(({ node }) =>
   const { linkHref, linkLabel } = node?.properties || {};
   const openLocalFile = useChatStore((s) => s.openLocalFile);
   const workingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
-  // Off desktop the file lives on the topic's device: the portal reads it over
-  // the device RPC while that device is online. Desktop keeps local IPC.
-  const remoteDeviceId = useTopicRemoteDeviceId();
+  // A topic that ran on another device is read over that device's RPC while it
+  // is online; this desktop's own topics keep local IPC.
+  const { canReadFiles, deviceId: remoteDeviceId } = useTopicRemoteDeviceId();
   const parsed = parseLocalFileHref(linkHref, { workingDirectory });
-  const canPreview = (isDesktop || !!remoteDeviceId) && !!parsed?.workingDirectory;
+  const canPreview = canReadFiles && !!parsed?.workingDirectory;
   const allowExternalFilePreview =
     !!parsed && (!workingDirectory || parsed.workingDirectory !== workingDirectory);
   const label = linkLabel || parsed?.filePath || linkHref || '';
