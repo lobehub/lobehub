@@ -4,6 +4,7 @@ import { Blocks, ShapesIcon } from 'lucide-react';
 import type { RouteObject } from 'react-router';
 
 import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
+import { MarketplaceCatalogSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import {
   getMarketplaceEntryPath,
@@ -102,25 +103,17 @@ export const marketplaceRoute: RouteObject = {
     {
       children: [
         {
-          children: [
-            {
-              element: dynamicElement(
-                () => import('@/routes/(main)/community/(list)/agent'),
-                'Desktop > Discover > List > Agent',
-              ),
-              handle: {
-                meta: routeMeta({
-                  icon: ShapesIcon,
-                  titleKey: 'navigation.marketplaceAgents',
-                }),
-              },
-              index: true,
-            },
-          ],
           element: dynamicElement(
-            () => import('@/routes/(main)/community/(list)/agent/_layout'),
-            'Desktop > Discover > List > Agent > Layout',
+            () => import('@/routes/(main)/community/(list)/agent'),
+            'Desktop > Discover > List > Agent',
           ),
+          handle: {
+            meta: routeMeta({
+              icon: ShapesIcon,
+              Skeleton: MarketplaceCatalogSkeleton,
+              titleKey: 'navigation.marketplaceAgents',
+            }),
+          },
           path: 'agent',
         },
         {
@@ -158,7 +151,11 @@ export const marketplaceRoute: RouteObject = {
             'Desktop > Discover > List > Skill',
           ),
           handle: {
-            meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceSkills' }),
+            meta: routeMeta({
+              icon: ShapesIcon,
+              Skeleton: MarketplaceCatalogSkeleton,
+              titleKey: 'navigation.marketplaceSkills',
+            }),
           },
           path: 'skill',
         },
@@ -168,7 +165,11 @@ export const marketplaceRoute: RouteObject = {
             'Desktop > Discover > List > Connector',
           ),
           handle: {
-            meta: routeMeta({ icon: Blocks, titleKey: 'navigation.marketplaceConnectors' }),
+            meta: routeMeta({
+              icon: Blocks,
+              Skeleton: MarketplaceCatalogSkeleton,
+              titleKey: 'navigation.marketplaceConnectors',
+            }),
           },
           path: 'connector',
         },

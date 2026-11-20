@@ -10,6 +10,7 @@ import {
 import AppsSkeleton from '@/components/Skeleton/Apps';
 import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
 import { delayed } from '@/components/Skeleton/Delayed';
+import { MarketplaceCatalogSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
 import { MARKETPLACE_SEGMENT } from '@/features/Marketplace/paths';
@@ -138,7 +139,11 @@ export const sharedMainAreaChildren: RouteObject[] = [
                   'Mobile > Discover > List > Agent',
                 ),
                 handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceAgents' }),
+                  meta: routeMeta({
+                    icon: ShapesIcon,
+                    Skeleton: MarketplaceCatalogSkeleton,
+                    titleKey: 'navigation.marketplaceAgents',
+                  }),
                 },
                 path: 'agent',
               },
@@ -174,7 +179,11 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Mobile > Discover > List > Connector',
             ),
             handle: {
-              meta: routeMeta({ icon: Blocks, titleKey: 'navigation.marketplaceConnectors' }),
+              meta: routeMeta({
+                icon: Blocks,
+                Skeleton: MarketplaceCatalogSkeleton,
+                titleKey: 'navigation.marketplaceConnectors',
+              }),
             },
             path: 'connector',
           },
@@ -184,7 +193,11 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Mobile > Discover > List > Skill',
             ),
             handle: {
-              meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.marketplaceSkills' }),
+              meta: routeMeta({
+                icon: ShapesIcon,
+                Skeleton: MarketplaceCatalogSkeleton,
+                titleKey: 'navigation.marketplaceSkills',
+              }),
             },
             path: 'skill',
           },

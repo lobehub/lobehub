@@ -2,20 +2,27 @@
 
 import { Avatar } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { memo, useCallback, useMemo } from 'react';
+import isEqual from 'fast-deep-equal';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import urlJoin from 'url-join';
 
-import { createSkillDetailModal } from '@/features/CommunitySkillDetail';
+import AsyncBoundary from '@/components/AsyncBoundary';
+import { CatalogRowsSkeleton } from '@/components/Skeleton/MarketplaceCatalog';
 import { useMarketSkillInstall } from '@/features/CommunitySkillDetail/useMarketSkillInstall';
+import AgentSkillItem from '@/features/Settings/skill/features/AgentSkillItem';
+import { matchesConnectorKeyword } from '@/features/Settings/skill/features/connectorSections';
 import SkillListRow from '@/features/Settings/skill/features/SkillListRow';
 import { useQuery } from '@/hooks/useQuery';
 import { useSkillCategory } from '@/hooks/useSkillCategory';
 import Pagination from '@/routes/(main)/community/(list)/features/Pagination';
+import SortButton from '@/routes/(main)/community/(list)/features/SortButton';
 import SkillEmpty from '@/routes/(main)/community/features/SkillEmpty';
 import { discoverService } from '@/services/discover';
 import { useDiscoverStore } from '@/store/discover';
 import { skillSelectors } from '@/store/discover/selectors';
 import { useToolStore } from '@/store/tool';
+import { agentSkillsSelectors } from '@/store/tool/selectors';
 import {
   type DiscoverSkillItem,
   SkillCategory,
@@ -24,6 +31,7 @@ import {
 } from '@/types/discover';
 
 import CatalogViewTabs from '../CatalogViewTabs';
+import { buildInstalledDetailPath } from '../InstalledNav';
 import { MARKETPLACE_SKILL_PATH } from '../paths';
 import CatalogListView from './CatalogListView';
 import CatalogSection, { useSeenOnce } from './CatalogSection';
@@ -37,20 +45,14 @@ import {
   orderCategoriesByCount,
 } from './sections';
 import { catalogStyles } from './styles';
+import { useCatalogDetailNavigate } from './useCatalogDetailNavigate';
 
-/** A market skill as a Codex catalog row: open its detail, `+` installs it. */
 const SkillCatalogRow = memo<{ item: DiscoverSkillItem }>(({ item }) => {
   const { description, icon, identifier, name } = item;
   const { t } = useTranslation('discover');
   const { t: tp } = useTranslation('plugin');
   const { canCreate, install, installed, installing } = useMarketSkillInstall(identifier, name);
-
-  const openDetail = useCallback(() => {
-    discoverService
-      .reportSkillEvent({ event: 'click', identifier, source: location.pathname })
-      .catch(() => {});
-    createSkillDetailModal({ identifier });
-  }, [identifier]);
+  const navigate = useCatalogDetailNavigate();
 
   return (
     <SkillListRow
@@ -65,10 +67,16 @@ const SkillCatalogRow = memo<{ item: DiscoverSkillItem }>(({ item }) => {
           installed={installed}
           installedLabel={t('skills.details.header.installed')}
           loading={installing}
+          name={name}
           onAdd={install}
         />
       }
-      onClick={openDetail}
+      onClick={() => {
+        discoverService
+          .reportSkillEvent({ event: 'click', identifier, source: location.pathname })
+          .catch(() => {});
+        navigate(urlJoin(MARKETPLACE_SKILL_PATH, identifier));
+      }}
     />
   );
 });
@@ -76,98 +84,90 @@ const SkillCatalogRow = memo<{ item: DiscoverSkillItem }>(({ item }) => {
 SkillCatalogRow.displayName = 'MarketplaceSkillCatalogRow';
 
 interface SkillGroup {
+  category: SkillCategory;
+  count: number;
   eager: boolean;
   label: string;
-  params: SkillQueryParams;
-  to: string;
+  q?: string;
 }
 
-/** One Discover group: fetches its preview once it nears the viewport. */
-const SkillCatalogGroup = memo<SkillGroup>(({ eager, label, params, to }) => {
+const SkillCatalogGroup = ({ category, count, eager, label, q }: SkillGroup) => {
   const [sectionRef, seen] = useSeenOnce(eager);
   const useSkillList = useDiscoverStore((s) => s.useFetchSkillList);
   const { error, mutate, queryKey } = useSkillList(
-    { ...params, page: 1, pageSize: CATALOG_SECTION_SIZE },
+    { category, page: 1, pageSize: CATALOG_SECTION_SIZE, q, sort: SkillSorts.InstallCount },
     { enabled: seen },
   );
   const data = useDiscoverStore(skillSelectors.skillList(queryKey));
 
-  // A group with nothing in it is not worth a heading.
-  if (data && data.items.length === 0) return null;
+  if (data?.items.length === 0) return null;
 
   return (
     <CatalogSection
+      count={data?.totalCount ?? count}
       error={data ? undefined : error}
       label={label}
       loading={!data}
       sectionRef={sectionRef}
-      to={to}
-      onRetry={() => mutate()}
+      to={buildCatalogListUrl(MARKETPLACE_SKILL_PATH, { category, q })}
+      onRetry={() => void mutate()}
     >
-      {data?.items.map((item) => (
+      {data?.items.slice(0, CATALOG_SECTION_SIZE).map((item) => (
         <SkillCatalogRow item={item} key={item.identifier} />
       ))}
     </CatalogSection>
   );
-});
-
-SkillCatalogGroup.displayName = 'MarketplaceSkillCatalogGroup';
-
-/** The sorts that open the page as their own groups, before the categories. */
-const useFeaturedSkillGroups = () => {
-  const { t } = useTranslation('discover');
-  return useMemo(
-    () => [
-      { label: t('catalog.popular'), sort: SkillSorts.InstallCount },
-      { label: t('catalog.new'), sort: SkillSorts.CreatedAt },
-    ],
-    [t],
-  );
 };
 
-/** The bare Discover page: Popular, New, then every category with skills. */
-const SkillCatalogGroups = memo(() => {
+const SkillCatalogGroups = ({
+  installedSection,
+  q,
+}: {
+  installedSection?: React.ReactNode;
+  q?: string;
+}) => {
   const categories = useSkillCategory();
-  const featured = useFeaturedSkillGroups();
   const useSkillCategories = useDiscoverStore((s) => s.useSkillCategories);
-  const { queryKey } = useSkillCategories({});
+  const { error, isLoading, mutate, queryKey } = useSkillCategories({ q });
   const counts = useDiscoverStore(skillSelectors.skillCategories(queryKey));
-
-  const groups = useMemo(
-    () => [
-      ...featured.map(({ label, sort }) => ({
-        key: sort,
-        label,
-        params: { sort },
-        to: buildCatalogListUrl(MARKETPLACE_SKILL_PATH, { sort }),
-      })),
-      ...orderCategoriesByCount(categories, counts, [SkillCategory.All]).map(({ key, label }) => ({
-        key,
-        label,
-        params: { category: key, sort: SkillSorts.InstallCount },
-        to: buildCatalogListUrl(MARKETPLACE_SKILL_PATH, { category: key }),
-      })),
-    ],
-    [categories, counts, featured],
-  );
+  const groups = orderCategoriesByCount(categories, counts, [SkillCategory.All]);
 
   return (
     <div {...stylex.props(catalogStyles.sections)}>
-      {groups.map(({ key, ...group }, index) => (
-        <SkillCatalogGroup eager={index < 2} key={key} {...group} />
-      ))}
+      {installedSection}
+      <AsyncBoundary
+        data={counts.length > 0 ? counts : undefined}
+        error={error}
+        isLoading={isLoading}
+        loading={<CatalogRowsSkeleton />}
+        onRetry={() => void mutate()}
+      >
+        {groups.length === 0 ? (
+          <SkillCatalogList query={{ q }} showEmpty={!installedSection} />
+        ) : (
+          groups.map(({ count, key, label }, index) => (
+            <SkillCatalogGroup
+              category={key}
+              count={count}
+              eager={index < 2}
+              key={key}
+              label={label}
+              q={q}
+            />
+          ))
+        )}
+      </AsyncBoundary>
     </div>
   );
-});
+};
 
-SkillCatalogGroups.displayName = 'MarketplaceSkillCatalogGroups';
-
-/** Every skill of one category, sort or search, behind a group heading. */
-const SkillCatalogList = memo(() => {
-  const { t } = useTranslation('discover');
-  const { q, page, category, sort, order } = useQuery() as SkillQueryParams;
-  const categories = useSkillCategory();
-  const featured = useFeaturedSkillGroups();
+const SkillCatalogList = ({
+  query: { category, order, page, q, sort },
+  showEmpty = true,
+}: {
+  query: SkillQueryParams;
+  showEmpty?: boolean;
+}) => {
   const useSkillList = useDiscoverStore((s) => s.useFetchSkillList);
   const { error, isLoading, mutate, queryKey } = useSkillList({
     category,
@@ -180,23 +180,16 @@ const SkillCatalogList = memo(() => {
   const data = useDiscoverStore(skillSelectors.skillList(queryKey));
   const items = data?.items ?? [];
 
-  const title = q
-    ? t('catalog.searchResults', { keyword: q })
-    : (categories.find((item) => item.key === category)?.label ??
-      featured.find((item) => item.sort === sort)?.label ??
-      t(`skills.sorts.${sort}` as any));
-
   return (
     <CatalogListView
-      backTo={MARKETPLACE_SKILL_PATH}
-      empty={<SkillEmpty />}
+      empty={showEmpty && <SkillEmpty search={Boolean(q)} />}
       error={error}
       hasData={!!data}
       isEmpty={items.length === 0}
       loading={isLoading}
-      title={title}
       pagination={
-        data && (
+        data &&
+        data.totalPages > 1 && (
           <Pagination
             currentPage={data.currentPage}
             pageSize={data.pageSize}
@@ -205,37 +198,90 @@ const SkillCatalogList = memo(() => {
           />
         )
       }
-      onRetry={() => mutate()}
+      onRetry={() => void mutate()}
     >
       {items.map((item) => (
         <SkillCatalogRow item={item} key={item.identifier} />
       ))}
     </CatalogListView>
   );
-});
+};
 
-SkillCatalogList.displayName = 'MarketplaceSkillCatalogList';
-
-/**
- * `/marketplace/skill`: the skills catalog laid out like Codex Plugins. With no
- * filter it is a page of groups (Popular, New, then each category) previewing
- * a few rows; a group heading opens that group's full list.
- */
-const SkillCatalog = memo(() => {
-  const query = useQuery() as SkillQueryParams;
-  // Rows show whether each skill is already installed.
+const SkillCatalog = () => {
+  const { t } = useTranslation('discover');
+  const { group, ...query } = useQuery() as SkillQueryParams & { group?: string };
+  const { category, q, sort } = query;
+  const categories = useSkillCategory();
+  const openDetail = useCatalogDetailNavigate();
   const useFetchAgentSkills = useToolStore((s) => s.useFetchAgentSkills);
-  useFetchAgentSkills(true);
+  const skillLibrary = useFetchAgentSkills(true);
+  const installed = useToolStore(agentSkillsSelectors.getAgentSkills, isEqual);
+  const localSkills = installed.filter((skill) =>
+    matchesConnectorKeyword(q, [skill.name, skill.identifier, skill.description]),
+  );
+
+  const isInstalledGroup = group === 'installed';
+  const isMarketGroup = isCatalogListView(query);
+  const backTo = buildCatalogListUrl(MARKETPLACE_SKILL_PATH, { q });
+  const localLabel = t('catalog.yourSkills');
+  const title = isInstalledGroup
+    ? localLabel
+    : (categories.find((item) => item.key === category)?.label ??
+      (sort === SkillSorts.CreatedAt ? t('catalog.new') : t('catalog.allSkills')));
+  const renderLocalSkills = (skills: typeof localSkills) =>
+    skills.map((skill) => (
+      <AgentSkillItem
+        key={skill.id}
+        skill={skill}
+        onSelect={() => openDetail(buildInstalledDetailPath('skill', skill.id, 'agent-skill'))}
+      />
+    ));
 
   return (
-    <>
-      <DiscoverCatalogHeader kind={'skill'} query={query.q} />
+    <div
+      {...stylex.props(
+        catalogStyles.frame,
+        (isInstalledGroup || isMarketGroup) && catalogStyles.groupFrame,
+      )}
+    >
+      <DiscoverCatalogHeader
+        group={isInstalledGroup || isMarketGroup ? { backTo, title } : undefined}
+        kind={'skill'}
+        sortControl={isMarketGroup && !isInstalledGroup ? <SortButton resetPage /> : undefined}
+      />
       <CatalogViewTabs active={'discover'} kind={'skill'} />
-      {isCatalogListView(query) ? <SkillCatalogList /> : <SkillCatalogGroups />}
-    </>
+      {isInstalledGroup ? (
+        <CatalogListView
+          empty={<SkillEmpty search={Boolean(q)} />}
+          error={skillLibrary.error}
+          hasData={installed.length > 0}
+          isEmpty={localSkills.length === 0}
+          loading={skillLibrary.isLoading}
+          onRetry={() => void skillLibrary.mutate()}
+        >
+          {renderLocalSkills(localSkills)}
+        </CatalogListView>
+      ) : isMarketGroup ? (
+        <SkillCatalogList query={query} />
+      ) : (
+        <SkillCatalogGroups
+          q={q}
+          installedSection={
+            localSkills.length > 0 ? (
+              <CatalogSection
+                count={localSkills.length}
+                label={localLabel}
+                loading={false}
+                to={buildCatalogListUrl(MARKETPLACE_SKILL_PATH, { group: 'installed', q })}
+              >
+                {renderLocalSkills(localSkills.slice(0, CATALOG_SECTION_SIZE))}
+              </CatalogSection>
+            ) : undefined
+          }
+        />
+      )}
+    </div>
   );
-});
-
-SkillCatalog.displayName = 'MarketplaceSkillCatalog';
+};
 
 export default SkillCatalog;

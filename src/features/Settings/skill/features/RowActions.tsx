@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
 import { MoreHorizontalIcon, PanelRightOpen, Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +13,7 @@ interface RowAddActionProps {
   label: string;
   loading?: boolean;
   onClick: () => void;
+  showLabel?: boolean;
 }
 
 /**
@@ -20,19 +21,37 @@ interface RowAddActionProps {
  * that connects or installs in place. Once added it becomes {@link RowMoreMenu}.
  */
 export const RowAddAction = memo<RowAddActionProps>(
-  ({ disabled, disabledReason, label, loading, onClick }) => (
-    <ActionIcon
-      aria-label={label}
-      disabled={disabled || loading}
-      icon={Plus}
-      loading={loading}
-      title={disabled && disabledReason ? disabledReason : label}
-      onClick={(event) => {
-        event.stopPropagation();
-        onClick();
-      }}
-    />
-  ),
+  ({ disabled, disabledReason, label, loading, onClick, showLabel }) => {
+    const handleClick = (event: React.MouseEvent) => {
+      event.stopPropagation();
+      onClick();
+    };
+
+    if (showLabel)
+      return (
+        <Button
+          disabled={disabled || loading}
+          icon={Plus}
+          loading={loading}
+          size={'small'}
+          title={disabled ? disabledReason : undefined}
+          onClick={handleClick}
+        >
+          {label}
+        </Button>
+      );
+
+    return (
+      <ActionIcon
+        aria-label={label}
+        disabled={disabled || loading}
+        icon={Plus}
+        loading={loading}
+        title={disabled && disabledReason ? disabledReason : label}
+        onClick={handleClick}
+      />
+    );
+  },
 );
 
 RowAddAction.displayName = 'RowAddAction';

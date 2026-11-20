@@ -48,10 +48,10 @@ export const getMarketplaceSubPath = (pathname: string): string | undefined => {
   return segments.slice(index + 1).join('/');
 };
 
-// These two catalog pages render their own search and actions in the content header.
+// The catalog pages render their own search and actions in the content header.
 export const hasCatalogPageHeader = (pathname: string): boolean => {
   const section = getMarketplaceSubPath(pathname);
-  return section === 'skill' || section === 'connector';
+  return section === 'agent' || section === 'skill' || section === 'connector';
 };
 
 /**
