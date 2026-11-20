@@ -40420,7 +40420,8 @@ paths:
                   description: The agent the imported topic belongs to.
                 data:
                   anyOf:
-                    - $ref: "#/components/schemas/ExportedTopic"
+                    - description: What `GET /topics/{id}/export` answers.
+                      $ref: "#/components/schemas/ExportedTopic"
                     - minItems: 1
                       type: array
                       items:
