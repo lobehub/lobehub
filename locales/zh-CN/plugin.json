@@ -409,6 +409,7 @@
   "builtins.lobe-group-agent-builder.apiName.getAvailableModels": "获取可用模型",
   "builtins.lobe-group-agent-builder.apiName.installPlugin": "安装技能",
   "builtins.lobe-group-agent-builder.apiName.inviteAgent": "邀请成员",
+  "builtins.lobe-group-agent-builder.apiName.listGroupMembers": "查看成员",
   "builtins.lobe-group-agent-builder.apiName.removeAgent": "移除成员",
   "builtins.lobe-group-agent-builder.apiName.searchAgent": "搜索助理",
   "builtins.lobe-group-agent-builder.apiName.searchMarketTools": "搜索技能市场",

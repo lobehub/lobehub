@@ -235,9 +235,14 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
 
           if (Object.keys(finalConfig).length > 0) {
             await agentService.updateAgentConfig(agentId, finalConfig);
-            const nonPluginFields = Object.keys(finalConfig).filter((f) => f !== 'plugins');
-            if (nonPluginFields.length > 0) {
-              updatedParts.push(`config fields: ${nonPluginFields.join(', ')}`);
+            // `togglePlugin` already reported its plugin change above; a plain
+            // `config.plugins` write has to be reported here, or the model is
+            // told "No fields to update" for a write that just landed.
+            const configFields = Object.keys(finalConfig).filter(
+              (f) => !(f === 'plugins' && params.togglePlugin),
+            );
+            if (configFields.length > 0) {
+              updatedParts.push(`config fields: ${configFields.join(', ')}`);
             }
           }
 

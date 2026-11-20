@@ -26,6 +26,9 @@ export const GroupAgentBuilderApiName = {
 
   inviteAgent: 'inviteAgent',
 
+  // Group member roster (read)
+  listGroupMembers: 'listGroupMembers',
+
   removeAgent: 'removeAgent',
 
   searchAgent: 'searchAgent',
@@ -49,6 +52,14 @@ export interface GetAgentInfoParams {
    * The ID of the agent to get information about
    */
   agentId: string;
+  /**
+   * The group to act on. Defaults to the group this conversation is editing —
+   * pass the id `createGroup` returned to target a group created in this run.
+   */
+  groupId?: string;
+}
+
+export interface ListGroupMembersParams {
   /**
    * The group to act on. Defaults to the group this conversation is editing —
    * pass the id `createGroup` returned to target a group created in this run.
@@ -254,6 +265,11 @@ export interface UpdateAgentConfigWithIdParams extends UpdateAgentConfigParams {
    * The agent ID to update. If not provided, updates the supervisor agent.
    */
   agentId?: string;
+  /**
+   * The group to act on. Defaults to the group this conversation is editing —
+   * pass the id `createGroup` returned to target a group created in this run.
+   */
+  groupId?: string;
 }
 
 /**
@@ -378,6 +394,22 @@ export interface SearchAgentResult {
 export interface SearchAgentState {
   agents: SearchAgentResult[];
   query?: string;
+  total: number;
+}
+
+export interface GroupMemberSummary {
+  description?: string;
+  /** Agent ID — the id updateAgentPrompt / updateConfig / removeAgent take */
+  id: string;
+  isSupervisor: boolean;
+  /** User-facing display name, when it differs from the title */
+  name?: string;
+  title: string;
+}
+
+export interface ListGroupMembersState {
+  groupId: string;
+  members: GroupMemberSummary[];
   total: number;
 }
 

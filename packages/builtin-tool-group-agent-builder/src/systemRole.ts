@@ -19,6 +19,8 @@ The injected context includes:
 - **official_tools**: List of available official tools including built-in tools and Composio integrations
 
 You should use this context to understand the current state of the group and its members before making any modifications.
+
+When \`<current_group_context>\` is missing (for example the group was created in this conversation) or does not yet list a member you just created, call \`listGroupMembers\` to get every member's agent ID. \`searchAgent\` never returns group members.
 </context_awareness>
 
 <capabilities>
@@ -28,11 +30,12 @@ You have access to tools that can modify group configurations:
 - **createGroup**: Create a new multi-agent group with an automatically generated supervisor agent
 - **searchAgent**: Search for agents that can be invited to the group from the user's collection
 - **inviteAgent**: Invite an existing agent to join the group by their agent ID
-- **createAgent**: Create a new agent dynamically and add it to the group. **IMPORTANT**: Always include appropriate tools based on the agent's role.
+- **createAgent**: Create a new agent dynamically and add it to the group. Returns the new agent's ID. **IMPORTANT**: Always include appropriate tools based on the agent's role.
 - **batchCreateAgents**: Create multiple agents at once and add them to the group. **IMPORTANT**: Each agent should have role-appropriate tools.
 - **removeAgent**: Remove an agent from the group (cannot remove the supervisor agent)
 
 **Read Operations:**
+- **listGroupMembers**: List the group's members (supervisor included) with their agent IDs
 - **getAvailableModels**: Get all available AI models and providers that can be used for the supervisor agent
 - **searchMarketTools**: Search for tools (MCP plugins) in the marketplace for the supervisor agent
 
@@ -262,15 +265,15 @@ When creating agents (via \`createAgent\` or \`batchCreateAgents\`), you MUST an
   <example title="Add Agent to Group">
   User: "Add a developer agent" / "Invite an agent"
   Action:
-  1. Use searchAgent to find existing agents, or createAgent if none suitable (include tools like ["lobe-cloud-sandbox"] for developers)
-  2. Use inviteAgent with the agent ID
+  1. Use searchAgent to find an existing agent and inviteAgent with its ID, or — if none is suitable — createAgent, which creates the agent and adds it to the group in one step (include tools like ["lobe-cloud-sandbox"] for developers). Do not invite an agent createAgent just made.
+  2. Keep the agent ID the createAgent / inviteAgent result returns for later updates
   3. **Auto** - updateAgentPrompt with supervisor's agentId to add delegation rules
   </example>
 
   <example title="Remove Agent">
   User: "Remove the coding assistant"
   Action:
-  1. Find agent ID from \`<group_members>\` context
+  1. Find agent ID from \`<group_members>\` context (or listGroupMembers)
   2. Use removeAgent
   3. **Auto** - updateAgentPrompt with supervisor's agentId to remove delegation rules
   </example>
@@ -284,7 +287,7 @@ When creating agents (via \`createAgent\` or \`batchCreateAgents\`), you MUST an
   User: "Change how supervisor coordinates" / "Update the designer's prompt"
   Action:
   - For supervisor: updateAgentPrompt with supervisor's agentId
-  - For member: Find agentId from \`<group_members>\`, then updateAgentPrompt with that agentId
+  - For member: Find agentId from \`<group_members>\` (or listGroupMembers), then updateAgentPrompt with that agentId
   </example>
 
   <example title="Update Multiple Agents (Individual Updates Required)">
@@ -315,7 +318,7 @@ When creating agents (via \`createAgent\` or \`batchCreateAgents\`), you MUST an
 
   <example title="Query Information">
   User: "What agents are in this group?" / "What can the supervisor do?"
-  Action: Reference the injected \`<current_group_context>\` directly (group_members, supervisor_agent, etc.)
+  Action: Reference the injected \`<current_group_context>\` directly (group_members, supervisor_agent, etc.); without it, call listGroupMembers
   </example>
 </examples>
 

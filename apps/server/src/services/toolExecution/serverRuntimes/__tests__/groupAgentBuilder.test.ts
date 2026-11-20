@@ -157,6 +157,19 @@ describe('groupAgentBuilderRuntime', () => {
       });
     });
 
+    // The model reads `content`, not `state`. A group-built member is virtual,
+    // so no search tool can find it later — the id has to be in the reply.
+    it('puts the new agent id in the model-facing content', async () => {
+      mockBatchCreate.mockResolvedValue([{ id: 'agt_new', visibility: 'public' }]);
+
+      const result = await createRuntime().createAgent(
+        { systemRole: 'x', title: 'Product Manager' },
+        groupCtx,
+      );
+
+      expect(result.content).toContain('(ID: agt_new)');
+    });
+
     it('inherits the group access level for workspace members', async () => {
       mockBatchCreate.mockResolvedValue([{ id: 'agt_new', visibility: 'public' }]);
       mockGetAccessLevel.mockResolvedValue('edit');
@@ -199,6 +212,106 @@ describe('groupAgentBuilderRuntime', () => {
         state: { failedCount: 0, successCount: 2 },
         success: true,
       });
+    });
+  });
+
+  describe('listGroupMembers', () => {
+    it('lists every member with its agent id, supervisor flagged', async () => {
+      mockGetGroupAgentsWithMeta.mockResolvedValue([
+        { agentId: 'agt_sup', description: null, name: null, role: 'supervisor', title: 'Host' },
+        {
+          agentId: 'agt_notes',
+          description: 'Keeps the vault tidy',
+          name: null,
+          role: 'participant',
+          title: 'Note Keeper',
+        },
+      ]);
+
+      const result = await createRuntime().listGroupMembers({}, groupCtx);
+
+      expect(mockGetGroupAgentsWithMeta).toHaveBeenCalledWith('cg_1');
+      expect(result.success).toBe(true);
+      expect(result.state).toEqual({
+        groupId: 'cg_1',
+        members: [
+          {
+            description: undefined,
+            id: 'agt_sup',
+            isSupervisor: true,
+            name: undefined,
+            title: 'Host',
+          },
+          {
+            description: 'Keeps the vault tidy',
+            id: 'agt_notes',
+            isSupervisor: false,
+            name: undefined,
+            title: 'Note Keeper',
+          },
+        ],
+        total: 2,
+      });
+      expect(result.content).toContain('Host (ID: agt_sup, supervisor)');
+      expect(result.content).toContain('Note Keeper (ID: agt_notes) - Keeps the vault tidy');
+    });
+
+    it('targets an explicitly named group', async () => {
+      await createRuntime().listGroupMembers({ groupId: 'cg_other' }, {} as never);
+
+      expect(mockGetGroupAgentsWithMeta).toHaveBeenCalledWith('cg_other');
+    });
+
+    it('hides a group the caller cannot view', async () => {
+      mockGetResourceConfigAccess.mockResolvedValue('none');
+
+      const result = await createRuntime('ws_1').listGroupMembers({ groupId: 'cg_x' }, {} as never);
+
+      expect(result).toMatchObject({ error: { type: 'GroupNotFound' }, success: false });
+      expect(mockGetGroupAgentsWithMeta).not.toHaveBeenCalled();
+    });
+
+    it('returns a structured error when no group is in context', async () => {
+      const result = await createRuntime().listGroupMembers({}, {} as never);
+
+      expect(result).toMatchObject({ error: { type: 'NoGroupContext' }, success: false });
+    });
+
+    // Acceptance path: a member made by createAgent can be found again and
+    // then updated and removed with the id the roster returns.
+    it('gives back an id that update and remove accept', async () => {
+      mockBatchCreate.mockResolvedValue([{ id: 'agt_new', visibility: 'public' }]);
+      await createRuntime().createAgent({ systemRole: 'x', title: 'Note Keeper' }, groupCtx);
+
+      mockGetGroupAgentsWithMeta.mockResolvedValue([
+        { agentId: 'agt_sup', description: null, name: null, role: 'supervisor', title: 'Host' },
+        {
+          agentId: 'agt_new',
+          description: null,
+          name: null,
+          role: 'participant',
+          title: 'Note Keeper',
+        },
+      ]);
+      const listed = await createRuntime().listGroupMembers({}, groupCtx);
+      const memberId = (listed.state as any).members.find(
+        (m: { title: string }) => m.title === 'Note Keeper',
+      ).id;
+
+      const updated = await createRuntime().updateAgentPrompt(
+        { agentId: memberId, prompt: 'Vault path: ~/notes' },
+        groupCtx,
+      );
+      const removed = await createRuntime().removeAgent({ agentId: memberId }, groupCtx);
+
+      expect(memberId).toBe('agt_new');
+      expect(updated.success).toBe(true);
+      expect(mockUpdateAgent).toHaveBeenCalledWith(
+        'agt_new',
+        expect.objectContaining({ systemRole: 'Vault path: ~/notes' }),
+      );
+      expect(removed.success).toBe(true);
+      expect(mockRemoveAgentsFromGroup).toHaveBeenCalledWith('cg_1', ['agt_new']);
     });
   });
 
@@ -306,6 +419,26 @@ describe('groupAgentBuilderRuntime', () => {
         { model: 'gpt-5' },
         expect.objectContaining({ editingAgentId: 'agt_sup' }),
       );
+    });
+
+    // A member of a group that is neither being edited nor created in this
+    // conversation is reachable only through an explicit groupId — the same
+    // escape hatch every other member tool has.
+    it('targets an explicitly named group and keeps groupId out of the config write', async () => {
+      const result = await createRuntime('ws_1').updateConfig(
+        { agentId: 'agt_sup', config: { plugins: ['lobe-web-browsing'] }, groupId: 'cg_other' },
+        {} as never,
+      );
+
+      expect(mockGetGroupAgentsWithMeta).toHaveBeenCalledWith('cg_other');
+      expect(mockAssertCanPerformResourceAction).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'edit', resourceId: 'cg_other' }),
+      );
+      expect(mockBuilderUpdateConfig).toHaveBeenCalledWith(
+        { config: { plugins: ['lobe-web-browsing'] } },
+        expect.objectContaining({ editingAgentId: 'agt_sup' }),
+      );
+      expect(result).not.toMatchObject({ success: false });
     });
 
     it('falls back to the supervisor when no agentId is given', async () => {
