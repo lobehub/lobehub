@@ -248,6 +248,14 @@ export interface ToolExecutionContext {
    */
   currentTodos?: StepContextTodoItem[];
   /**
+   * The run's device-access decision (`state.principal.policy.deviceAccess`),
+   * resolved once at run start from every source — an IM sender, a share
+   * visitor, or a token minted for a device-denied run that started this one.
+   * A tool that starts other runs must not hand those runs a device this run
+   * may not use.
+   */
+  deviceAccess?: { canUseDevice: boolean; reason?: string };
+  /**
    * Whether the run's execution plan is device-capable (`device` or
    * `device-unrouted`) — derived from `state.plan.execution` by the
    * runtime executors. Device-only skills gate listing/activation/loading on

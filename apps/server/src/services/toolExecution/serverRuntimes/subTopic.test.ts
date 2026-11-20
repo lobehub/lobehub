@@ -204,6 +204,21 @@ describe('lobe-topic server runtime', () => {
     expect((await runtime(externalSender).stopTopic({ topicId: 'tpc_child' })).success).toBe(true);
   });
 
+  // A run started through `lh` from a device-denied run (an external bot
+  // sender's sandbox) carries no bot sender of its own, only the denial its
+  // token passed on: it must not open a sub-topic that would run first-party.
+  it('refuses for a run whose own device decision is a denial, without any bot sender', async () => {
+    mocks.isOpenedBy.mockResolvedValue(true);
+    const denied = runtime({
+      deviceAccess: { canUseDevice: false, reason: 'delegated-from-denied-run' },
+    });
+
+    expect((await denied.openTopic({ prompt: 'run the deploy script' })).success).toBe(false);
+    expect((await denied.sendToTopic({ message: 'hi', topicId: 'tpc_child' })).success).toBe(false);
+    expect(mocks.execAgent).not.toHaveBeenCalled();
+    expect(mocks.startComposerRun).not.toHaveBeenCalled();
+  });
+
   it("opens one for the bot's owner", async () => {
     const result = await runtime({
       botContext: { ...externalSender.botContext, isOwner: true, senderExternalUserId: 'owner' },

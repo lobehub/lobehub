@@ -62,9 +62,13 @@ export const subTopicRuntime: ServerRuntimeRegistration = {
       if (context.agentShareVisitor) {
         throw new Error('Sub-topics cannot be started from a shared agent conversation.');
       }
+      // The run's own device decision covers every source of a denial (an
+      // IM sender, a share visitor, a device-denied run that started this one
+      // through `lh`); the sender check backs it up for a run without one.
       if (
-        context.botContext &&
-        !resolveDeviceAccessPolicy({ botContext: context.botContext }).canUseDevice
+        context.deviceAccess?.canUseDevice === false ||
+        (context.botContext &&
+          !resolveDeviceAccessPolicy({ botContext: context.botContext }).canUseDevice)
       ) {
         throw new Error(
           'Sub-topics can only be started or continued by the bot owner or a trusted sender in this chat.',

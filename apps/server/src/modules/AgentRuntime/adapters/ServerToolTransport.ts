@@ -284,6 +284,8 @@ export class ServerToolTransport implements ToolTransport {
               // (changing a bot's settings) refuse anyone else.
               botContext: context.state.principal?.actor?.bot,
               clientIp: context.state.principal?.audit?.clientIp,
+              deviceAccess: context.state.principal?.policy?.deviceAccess as
+                { canUseDevice: boolean; reason?: string } | undefined,
               currentTodos: context.currentTodos,
               deviceCapable: context.state.plan?.execution
                 ? isDeviceCapablePlan(context.state.plan?.execution)
