@@ -124,10 +124,15 @@ describe('SkillStoreExecutionRuntime — inspectSkill', () => {
       scripts: ['scripts/caption.py'],
       settings: [{ files: ['scripts/caption.py'], name: 'SN_VISION_MODEL' }],
     });
-    expect(result.content).toContain('Credentials the user must supply');
+    expect(result.content).toContain('The user has to supply their own');
+    // Fallback chains: any one of the keys may be enough.
+    expect(result.content).toContain('not every name is necessarily required');
     expect(result.content).toContain('  - SN_API_KEY (SKILL.md, scripts/caption.py)');
     expect(result.content).toContain('  - token.sensenova.cn (scripts/caption.py)');
     expect(result.content).toContain('do not describe the skill as needing no setup');
+    // Findings must not read as a complete list.
+    expect(result.content).toContain('static check');
+    expect(result.content).toContain('Do not present them as exhaustive');
     // Inspecting installs nothing.
     expect(service.importFromMarket).not.toHaveBeenCalled();
     expect(service.onSkillImported).not.toHaveBeenCalled();
@@ -148,8 +153,36 @@ describe('SkillStoreExecutionRuntime — inspectSkill', () => {
     expect(result.success).toBe(true);
     expect(result.content).toContain('it ships no scripts');
     expect(result.content).toContain('Credentials: none found.');
-    expect(result.content).toContain('Network hosts: none found in its scripts.');
+    expect(result.content).toContain('Network hosts: none written in its scripts.');
     expect(result.content).toContain('static check');
+    expect(result.content).not.toContain('Tell the user which credentials');
+  });
+
+  it('flags a destination the scripts take from the environment, even with no literal host', async () => {
+    const service = {
+      ...createService(),
+      getMarketSkillFiles: vi.fn().mockResolvedValue({
+        files: [
+          {
+            content: 'requests.post(os.environ["VISION_BASE_URL"] + "/chat", json=payload)',
+            path: 'scripts/run.py',
+          },
+        ],
+      }),
+    };
+
+    const result = await new SkillStoreExecutionRuntime({ service }).inspectSkill({
+      identifier: 'configurable-endpoint',
+    });
+
+    expect(result.content).toContain('Network hosts: none written in its scripts.');
+    expect(result.content).toContain(
+      'Where the scripts send data can also be changed through VISION_BASE_URL.',
+    );
+    expect(result.content).toContain(
+      'Tell the user which credentials it needs and where it sends data',
+    );
+    expect(result.content).toContain('Do not present them as exhaustive');
   });
 
   it('fails with the reason when the package cannot be fetched', async () => {

@@ -50,6 +50,13 @@ const SEARCH_RESULT_NOTE =
 const formatEnvVars = (vars: SkillEnvVarUsage[]) =>
   vars.map(({ name, files }) => `  - ${name} (${files.join(', ')})`).join('\n');
 
+/** Settings that point the scripts somewhere else: a base URL, endpoint or host. */
+const DESTINATION_SETTING = /(?:URL|URI|ENDPOINT|HOST|BASE)$/;
+
+/** Shown on every result: a list of findings can look complete when it is not. */
+const STATIC_SCAN_CAVEAT =
+  'This is a static check of the files: credential names and URLs a script builds at run time are not detected, so these lists can be incomplete. Do not present them as exhaustive.';
+
 const formatRequirements = (state: InspectSkillState): string => {
   const { credentials, endpoints, scripts, settings } = state;
   const label = state.name ? `"${state.name}" (${state.identifier})` : `"${state.identifier}"`;
@@ -58,22 +65,28 @@ const formatRequirements = (state: InspectSkillState): string => {
       ? `SKILL.md and ${scripts.length} script(s): ${scripts.join(', ')}`
       : 'SKILL.md; it ships no scripts';
 
-  const needsSetupOrSendsData = credentials.length > 0 || endpoints.length > 0;
+  const destinationSettings = settings
+    .map(({ name }) => name)
+    .filter((name) => DESTINATION_SETTING.test(name));
+  const needsSetupOrSendsData =
+    credentials.length > 0 || endpoints.length > 0 || destinationSettings.length > 0;
   const hostList = endpoints.map(({ host, files }) => `  - ${host} (${files.join(', ')})`);
 
   return [
     `Checked the files of ${label}: ${scriptSummary}. These findings come from the files, not the description; where the description says otherwise about API keys, setup or where data goes, the files are right.`,
     credentials.length > 0
-      ? `Credentials the user must supply (environment variables it reads or tells the user to set):\n${formatEnvVars(credentials)}`
+      ? `Credential environment variables it reads or tells the user to set. The user has to supply their own; scripts often accept one of several alternatives (a specific key falling back to a general one), so not every name is necessarily required:\n${formatEnvVars(credentials)}`
       : 'Credentials: none found.',
     settings.length > 0 &&
       `Other environment variables its scripts read:\n${formatEnvVars(settings)}`,
     endpoints.length > 0
-      ? `Network hosts its scripts contact — data the scripts process (files, images, text) can be sent there:\n${hostList.join('\n')}`
-      : 'Network hosts: none found in its scripts.',
-    needsSetupOrSendsData
-      ? 'Tell the user these credentials and hosts before installing, and do not describe the skill as needing no setup or keeping data local.'
-      : 'This is a static check: a value a script builds at run time is not detected, so do not promise more than "none found".',
+      ? `Network hosts written in its scripts — data the scripts process (files, images, text) can be sent there:\n${hostList.join('\n')}`
+      : 'Network hosts: none written in its scripts.',
+    destinationSettings.length > 0 &&
+      `Where the scripts send data can also be changed through ${destinationSettings.join(', ')}.`,
+    needsSetupOrSendsData &&
+      'Tell the user which credentials it needs and where it sends data before installing, and do not describe the skill as needing no setup or keeping data local.',
+    STATIC_SCAN_CAVEAT,
   ]
     .filter(Boolean)
     .join('\n\n');
