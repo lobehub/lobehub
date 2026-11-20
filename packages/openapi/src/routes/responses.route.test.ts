@@ -1,6 +1,11 @@
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
+import {
+  openResponsesErrors,
+  OpenResponsesHttpErrorSchema,
+} from '../middleware/open-responses-errors';
+import { requestIdMiddleware } from '../middleware/request-id';
 import { ResponseObjectSchema } from '../types/responses.type';
 
 const { createResponseMock } = vi.hoisted(() => ({ createResponseMock: vi.fn() }));
@@ -90,5 +95,51 @@ describe('POST /responses', () => {
     expect(res.status).toBe(200);
     expect(body).not.toHaveProperty('success');
     expect(() => ResponseObjectSchema.parse(body)).not.toThrow();
+  });
+
+  const errorApp = () => {
+    const app = new Hono();
+    app.use('*', requestIdMiddleware);
+    app.use('*', openResponsesErrors);
+    app.use('*', async (c, next) => {
+      c.set('userId' as never, 'user-1' as never);
+      c.set('authType' as never, 'oidc' as never);
+      await next();
+    });
+    app.route('/', ResponsesRoutes);
+    return app;
+  };
+
+  it('answers a validation failure in the OpenResponses error shape with a requestId', async () => {
+    const res = await errorApp().request('/', {
+      body: JSON.stringify({ input: 'hi' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(OpenResponsesHttpErrorSchema.parse(body)).toMatchObject({
+      error: { code: 'validation_error', type: 'invalid_request_error' },
+    });
+    expect(body.requestId).toBe(res.headers.get('X-Request-Id'));
+    expect(body).not.toHaveProperty('success');
+  });
+
+  it('answers a thrown service error in the OpenResponses error shape', async () => {
+    createResponseMock.mockRejectedValue(
+      Object.assign(new Error('agent not found'), { code: 'NOT_FOUND', name: 'TRPCError' }),
+    );
+    const res = await errorApp().request('/', {
+      body: JSON.stringify({ input: 'hi', model: 'agt_missing' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({
+      error: { code: 'not_found', message: 'agent not found', param: null, type: 'not_found' },
+      requestId: res.headers.get('X-Request-Id'),
+    });
   });
 });

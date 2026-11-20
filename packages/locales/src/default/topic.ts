@@ -275,6 +275,7 @@ export default {
   'management.filters.trigger.chat': 'Chat',
   'management.filters.trigger.eval': 'Eval',
   'management.filters.trigger.label': 'Trigger',
+  'management.filters.trigger.share': 'Share',
   'management.filters.trigger.task': 'Task',
   'management.filters.trigger.webhook': 'Webhook',
   'management.group.byProject': 'By project',
@@ -295,6 +296,10 @@ export default {
   'management.moveModal.moving': 'Moving…',
   'management.moveModal.title': 'Move topics',
   'management.searchPlaceholder': "Search this agent's topics…",
+  'management.shareVisitors.desc':
+    'Visitors who chat with this agent through its share link. Open one to read the conversation.',
+  'management.shareVisitors.title': 'Shared with visitors',
+  'management.shareVisitors.unnamedVisitor': 'Visitor',
   'management.sidebarEntry': 'Topics',
   'management.sort.createdAt': 'Created time',
   'management.sort.label': 'Sort',

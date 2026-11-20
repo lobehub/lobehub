@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useLinearIntegration } from '@/features/Integrations/useLinearIntegration';
 import { useGlobalStore } from '@/store/global';
 import type { ProjectDetail } from '@/store/project';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import ImportTrigger from '../LinearSync/ImportTrigger';
@@ -36,7 +37,7 @@ const styles = stylex.create({
     borderBlockStartColor: cssVar.colorBorderSecondary,
     borderBlockStartStyle: 'solid',
     borderBlockStartWidth: 1,
-    paddingBlockStart: 12,
+    paddingBlockStart: densityTokens['--lobe-density-content-gap'],
   },
   fill: {
     backgroundColor: cssVar.colorPrimary,

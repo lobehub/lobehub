@@ -1,0 +1,191 @@
+---
+title: LobeHub Developer Webhooks
+description: >-
+  Subscribe to LobeHub events, receive signed deliveries, and verify the
+  X-LobeHub-Signature header in Node.js and Python.
+tags:
+  - LobeHub
+  - REST API
+  - Webhooks
+  - HMAC
+  - Signature
+---
+
+# LobeHub Developer Webhooks
+
+<Callout type="info">
+  **Coming soon** ([#23272](https://github.com/lobehub/lobehub/pull/23272)). Developer webhooks are
+  not on LobeHub Cloud yet. This page describes the delivery format and signature scheme
+  implemented in that pull request so you can prepare a receiver; names and limits can still change
+  before release.
+</Callout>
+
+A webhook endpoint is a URL of yours that LobeHub calls with a signed `POST` when something happens in your personal space or Workspace: a run finishes, a message is created, a file is parsed. Endpoints are managed through `/api/v1/webhooks` with the `webhook:read` and `webhook:write` scopes, or from **Settings → Webhooks** in the app, which the same pull request adds.
+
+## Manage Endpoints
+
+| Method and path                                         | Purpose                                                                                                                              |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /webhooks`                                         | List endpoints (cursor pagination)                                                                                                   |
+| `POST /webhooks`                                        | Create an endpoint: `url`, `events`, optional `description` and `enabled`. The response contains the signing secret, shown only here |
+| `GET /webhooks/{id}`                                    | Read an endpoint                                                                                                                     |
+| `PATCH /webhooks/{id}`                                  | Change its URL, events, description, or enable it again                                                                              |
+| `DELETE /webhooks/{id}`                                 | Delete it                                                                                                                            |
+| `POST /webhooks/{id}/rotate-secret`                     | Issue a new signing secret (shown once)                                                                                              |
+| `POST /webhooks/{id}/test`                              | Send a `webhook.test` event                                                                                                          |
+| `GET /webhooks/{id}/deliveries`                         | Delivery log                                                                                                                         |
+| `POST /webhooks/{id}/deliveries/{deliveryId}/redeliver` | Send a past delivery again, with the same event id and body                                                                          |
+
+```bash
+curl -X POST https://app.lobehub.com/api/v1/webhooks \
+  -H "Authorization: Bearer $LOBEHUB_API_KEY" -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com/lobehub/webhook","events":["run.completed","run.failed"]}'
+```
+
+A space can have up to 20 endpoints. Subscribing to an event also needs the read scope of its data, for example `run:read` for `run.*`; otherwise the request returns `403` `insufficient_scope`.
+
+## Event Catalog
+
+| Event                        | Sent when                                                                        | `data`                                                  | Read scope       |
+| ---------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------- | ---------------- |
+| `run.started`                | An Agent run starts                                                              | `{ runId, agentId, topicId }`                           | `run:read`       |
+| `run.completed`              | A run finishes                                                                   | Run fields plus `assistantMessageId`, `steps`           | `run:read`       |
+| `run.failed`                 | A run fails                                                                      | Run fields plus `error`                                 | `run:read`       |
+| `run.intervention_requested` | A run waits for [human approval](/docs/development/api/streaming#human-approval) | `{ runId, agentId, topicId }`                           | `run:read`       |
+| `message.created`            | A message is created                                                             | `{ messageId, role, topicId, threadId, agentId }`       | `chat:read`      |
+| `topic.created`              | A Topic is created                                                               | `{ topicId, title, agentId }`                           | `chat:read`      |
+| `task.status_changed`        | A task changes status                                                            | `{ taskId, identifier, status, previousStatus }`        | `agent:read`     |
+| `goal.status_changed`        | A goal changes status                                                            | `{ goalId, status, previousStatus }`                    | `agent:read`     |
+| `file.parsed`                | File parsing finishes                                                            | `{ fileId, name, status: "success" \| "error", error }` | `file:read`      |
+| `notification.created`       | A notification is created                                                        | `{ notificationId, category, type, title }`             | `user:read`      |
+| `webhook.test`               | You call `POST /webhooks/{id}/test`                                              | `{ webhookId, message }`                                | Not subscribable |
+
+## Delivery Format
+
+```http
+POST /lobehub/webhook HTTP/1.1
+Content-Type: application/json
+User-Agent: LobeHub-Webhooks/1.0
+X-LobeHub-Event-Id: evt_…
+X-LobeHub-Event-Type: run.completed
+X-LobeHub-Delivery-Id: …
+X-LobeHub-Timestamp: 1795075200
+X-LobeHub-Signature: v1=5d41402abc4b2a76b9719d911017c592…
+
+{"id":"evt_…","type":"run.completed","createdAt":"2026-11-18T08:00:00.000Z","workspaceId":"ws_…","data":{…}}
+```
+
+- `id` stays the same across retries and redeliveries. Use it to ignore duplicates.
+- `workspaceId` is `null` for events from a personal space.
+- Only a `2xx` answer counts as delivered. Redirects are not followed. Answer within 10 seconds and do slow work afterwards.
+
+### Retries
+
+A failed delivery is attempted up to 6 times in total, waiting 30 seconds, 2 minutes, 8 minutes, 32 minutes, and about 2 hours between attempts. After 5 deliveries in a row fail every attempt, the endpoint is disabled; enable it again with `PATCH /webhooks/{id}` once the receiver is fixed. Test deliveries are attempted once.
+
+## Verify the Signature
+
+Every delivery is signed with the endpoint's secret (`whsec_…`):
+
+```text
+X-LobeHub-Signature: v1=<hex HMAC-SHA256(secret, "<X-LobeHub-Timestamp>.<raw body>")>
+```
+
+- The HMAC key is the whole secret string, including the `whsec_` prefix.
+- The signed string is the timestamp header, a dot, and the **raw request body as received**. Parsing and re-serializing the JSON changes it and the signature will not match.
+- Reject a timestamp more than 300 seconds away from your clock, so a captured request cannot be replayed later.
+- The header can hold several `v1=` values separated by spaces or commas, for example right after a secret rotation. Accept the request if any of them matches.
+- Compare in constant time.
+
+### Node.js
+
+```ts
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
+const TOLERANCE_SECONDS = 300;
+
+export function verifyLobeHubWebhook(
+  rawBody: string,
+  headers: Record<string, string | undefined>,
+  secret: string,
+): void {
+  const timestamp = headers['x-lobehub-timestamp'];
+  const signatureHeader = headers['x-lobehub-signature'];
+  if (!timestamp || !signatureHeader) throw new Error('Missing signature headers');
+
+  const age = Math.abs(Date.now() / 1000 - Number(timestamp));
+  if (!Number.isFinite(age) || age > TOLERANCE_SECONDS) throw new Error('Timestamp out of range');
+
+  const expected = createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest();
+  const matches = signatureHeader
+    .split(/[\s,]+/)
+    .filter((part) => part.startsWith('v1='))
+    .some((part) => {
+      const received = Buffer.from(part.slice(3), 'hex');
+      return received.length === expected.length && timingSafeEqual(received, expected);
+    });
+  if (!matches) throw new Error('Signature does not match');
+}
+```
+
+With Express, read the raw body before any JSON parser: `app.post('/lobehub/webhook', express.raw({ type: 'application/json' }), …)`, then pass `req.body.toString('utf8')` and `req.headers`.
+
+### Python
+
+```python
+import hashlib
+import hmac
+import time
+
+TOLERANCE_SECONDS = 300
+
+
+def verify_lobehub_webhook(raw_body: bytes, headers: dict, secret: str) -> None:
+    timestamp = headers.get("x-lobehub-timestamp")
+    signature_header = headers.get("x-lobehub-signature")
+    if not timestamp or not signature_header:
+        raise ValueError("Missing signature headers")
+
+    if abs(time.time() - int(timestamp)) > TOLERANCE_SECONDS:
+        raise ValueError("Timestamp out of range")
+
+    signed = timestamp.encode() + b"." + raw_body
+    expected = hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
+    candidates = [
+        part[3:]
+        for part in signature_header.replace(",", " ").split()
+        if part.startswith("v1=")
+    ]
+    if not any(hmac.compare_digest(candidate, expected) for candidate in candidates):
+        raise ValueError("Signature does not match")
+```
+
+Pass header names in lower case (Flask: `{k.lower(): v for k, v in request.headers.items()}`) and the body from `request.get_data()`.
+
+### With the TypeScript SDK
+
+The same pull request adds verification helpers to `@lobehub/sdk`. They work with Fetch `Headers` or Node header objects:
+
+```ts
+import { constructWebhookEvent } from '@lobehub/sdk';
+
+export async function POST(request: Request) {
+  const rawBody = await request.text();
+  const event = await constructWebhookEvent({
+    headers: request.headers,
+    payload: rawBody,
+    secret: process.env.LOBEHUB_WEBHOOK_SECRET!,
+  });
+
+  if (event.type === 'run.completed') {
+    // event.data is typed for run.completed
+  }
+  return new Response(null, { status: 204 });
+}
+```
+
+`verifyWebhookSignature` checks without parsing. Both throw `WebhookSignatureVerificationError` with a `code` such as `missing_signature`, `timestamp_out_of_range`, or `signature_mismatch`.
+
+## Webhook Channels for Chat Platforms
+
+A separate pull request, [#23332](https://github.com/lobehub/lobehub/pull/23332) (**coming soon**), adds a **Custom Webhook** channel that connects any chat platform to an Agent, plus `/api/v1/bots` (`bot:read`, `bot:write`) to manage bots. Its inbound and outbound messages use the same `X-LobeHub-Timestamp` and `X-LobeHub-Signature` scheme, signed with the bot's own secret.

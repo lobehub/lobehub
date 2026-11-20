@@ -8,6 +8,7 @@ import type {
   ExecAgentClientIds,
   ExecAgentLlmExecutor,
   ExecAgentResult,
+  HeteroPermissionMode,
   PageSelection,
   ResumeClientLlmWaitResult,
   RuntimeMentionedAgent,
@@ -481,6 +482,14 @@ class AiAgentService {
    */
   async stopHeteroBackgroundTask(params: { operationId: string; taskId: string }) {
     return await lambdaClient.aiAgent.stopHeteroBackgroundTask.mutate(params);
+  }
+
+  /**
+   * Switch the Claude Code permission mode of a run hosted by `lh hetero exec`
+   * (the composer's mode chip, mid-run). `accepted` means Claude Code confirmed.
+   */
+  async setHeteroPermissionMode(params: { mode: HeteroPermissionMode; operationId: string }) {
+    return await lambdaClient.aiAgent.setHeteroPermissionMode.mutate(params);
   }
 
   /**

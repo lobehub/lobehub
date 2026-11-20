@@ -398,6 +398,10 @@ export default {
   'compression.summary': 'History summary',
   'confirmClearCurrentMessages':
     'You are about to clear the current conversation messages. Once cleared, they cannot be retrieved. Please confirm your action.',
+  'confirmRemoveAgentOtherCreator':
+    'This agent was created by {{name}}, not you. Deleting it takes it away from its creator and everyone in the workspace.',
+  'confirmRemoveAgentOtherCreatorUnknown':
+    'This agent was created by another member, not you. Deleting it takes it away from its creator and everyone in the workspace.',
   'confirmRemoveChatGroupItemAlert':
     'This Group will be deleted. Group-specific assistants will also be deleted, while external assistants will not be affected.',
   'confirmRemoveGroupItemAlert':
@@ -405,6 +409,14 @@ export default {
   'confirmRemoveGroupSuccess': 'Group deleted successfully',
   'confirmRemoveSessionItemAlert':
     'You are about to delete this agent and its topics. They will be moved to the trash and can be restored within 30 days.',
+  'confirmRemoveSessionItemAlertImpactUnknown':
+    "Couldn't check whether this agent holds other members' content. Deleting it moves every topic under it to the trash, including other members' topics. They can be restored within 30 days.",
+  'confirmRemoveSessionItemAlertWithOthers':
+    'This agent includes comments or messages from other members. Deleting the agent moves them to the trash too, not just your own. They can be restored within 30 days.',
+  'confirmRemoveSessionItemAlertWithOthersCount_one':
+    'This agent has {{count}} topic started by another member. Deleting the agent moves that topic and its comments to the trash too, not just your own. It can be restored within 30 days.',
+  'confirmRemoveSessionItemAlertWithOthersCount_other':
+    'This agent has {{count}} topics started by other members. Deleting the agent moves those topics and their comments to the trash too, not just your own. They can be restored within 30 days.',
   'confirmRemoveSessionSuccess': 'Agent removed successfully',
   'defaultAgent': 'Default Agent',
   'defaultGroupChat': 'Group',
@@ -670,6 +682,30 @@ export default {
   'groupWizard.searchTemplates': 'Search templates...',
   'groupWizard.title': 'Create Group',
   'groupWizard.useTemplate': 'Use Template',
+  'heteroAgent.permissionMode.label': 'Permission mode',
+  'heteroAgent.permissionMode.tooltip':
+    'How Claude Code asks before acting. Applies to this topic; a new topic in this directory starts with your last pick.',
+  'heteroAgent.permissionMode.default.title': 'Ask every time',
+  'heteroAgent.permissionMode.default.desc': 'Asks before every edit and command',
+  'heteroAgent.permissionMode.acceptEdits.title': 'Accept edits',
+  'heteroAgent.permissionMode.acceptEdits.desc': 'Edits go ahead; commands still ask',
+  'heteroAgent.permissionMode.auto.title': 'Auto',
+  'heteroAgent.permissionMode.auto.desc': 'Claude Code decides what needs asking',
+  'heteroAgent.permissionMode.plan.title': 'Plan',
+  'heteroAgent.permissionMode.plan.desc': 'Reads and plans only; acts once you approve the plan',
+  'heteroAgent.permissionMode.bypassPermissions.title': 'Allow everything',
+  'heteroAgent.permissionMode.bypassPermissions.desc': 'Never asks; runs every action',
+  'heteroAgent.permissionMode.fallback.root':
+    'Running as root can’t allow everything, so this run accepts edits and asks before other commands.',
+  'heteroAgent.permissionMode.fallback.outdatedCli':
+    'The last run allowed every action: lh on this device is too old for permission modes. Update lh to apply “{{mode}}”.',
+  'heteroAgent.permissionMode.switchFailed':
+    'Couldn’t switch the running session. The new mode applies from the next message.',
+  'heteroAgent.permissionMode.switchPendingNotice':
+    'This run is still in “{{running}}”: the session couldn’t switch. “{{next}}” applies from the next message.',
+  'heteroAgent.permissionMode.switchUnsupported':
+    'lh on this device can’t switch a running session. The new mode applies from the next message; update lh to switch mid-run.',
+  'heteroAgent.permissionMode.saveFailed': 'Couldn’t save the permission mode. Try again.',
   'heteroAgent.fullAccess.label': 'Full access',
   'heteroAgent.fullAccess.tooltip':
     'The local coding agent runs with full read/write access to the working directory. Switching permission modes is not available yet.',
@@ -1104,11 +1140,27 @@ export default {
   'knowledgeBase.disabled':
     'Library chat isn’t available in this deployment. Switch to a server-side database, or use {{cloud}}.',
   'knowledgeBase.library.action.add': 'Add',
+  'knowledgeBase.library.action.added': 'Added',
   'knowledgeBase.library.action.detail': 'Details',
   'knowledgeBase.library.action.remove': 'Remove',
   'knowledgeBase.library.title': 'Files / Libraries',
   'knowledgeBase.files': 'Files',
   'knowledgeBase.libraries': 'Libraries',
+  'knowledgeBase.picker.title': 'Attach Knowledge',
+  'knowledgeBase.picker.tabs.library': 'Libraries',
+  'knowledgeBase.picker.tabs.file': 'Files',
+  'knowledgeBase.picker.searchLibrary': 'Search libraries',
+  'knowledgeBase.picker.searchFile': 'Search files',
+  'knowledgeBase.picker.sort.updatedAt': 'Recently updated',
+  'knowledgeBase.picker.sort.createdAt': 'Recently created',
+  'knowledgeBase.picker.sort.name': 'Name A–Z',
+  'knowledgeBase.picker.sort.nameDesc': 'Name Z–A',
+  'knowledgeBase.picker.noMatch': 'Nothing matches your search',
+  'knowledgeBase.picker.libraryEmpty':
+    'No libraries yet. Create one, then add documents to it in Resources.',
+  'knowledgeBase.picker.createLibrary': 'Create library',
+  'knowledgeBase.picker.fileEmpty':
+    'No documents to attach yet. Upload them in Resources first; images, audio and video can’t be searched.',
   'knowledgeBase.related.browse': 'Choose Files / Libraries',
   'knowledgeBase.related.empty': 'No related files or libraries',
   'knowledgeBase.relativeFilesOrLibraries': 'Related Files/Libraries',
@@ -1935,6 +1987,17 @@ export default {
   'shareModal.format.markdown': 'Markdown',
   'shareModal.generatePdf': 'Generate PDF',
   'shareModal.generatingPdf': 'Generating PDF...',
+  'shareModal.generation.disabled': 'Public link turned off',
+  'shareModal.generation.disabledHint': 'Turn on the public link to share it on social media',
+  'shareModal.generation.enabled': 'Public link created and copied',
+  'shareModal.generation.enabledNotCopied': 'Public link created',
+  'shareModal.generation.entry': 'Share',
+  'shareModal.generation.link.desc':
+    'Visitors can view and download the file. You can turn the link off at any time.',
+  'shareModal.generation.link.label': 'Anyone with the link can view',
+  'shareModal.generation.loadError': "Couldn't load the share settings",
+  'shareModal.generation.title': 'Share this creation',
+  'shareModal.generation.updateError': "Couldn't update the link. Try again.",
   'shareModal.imageType': 'Image Format',
   'shareModal.includeTool': 'Include Skill messages',
   'shareModal.includeUser': 'Include User Messages',
@@ -1981,6 +2044,35 @@ export default {
   'shareModal.popover.privacyWarning.title': 'Before you share this link',
   'shareModal.popover.title': 'Share Topic',
   'shareModal.popover.visibility': 'Visibility',
+  'shareModal.social.agent.description': 'An AI agent worth a try',
+  'shareModal.social.agent.disabledHint':
+    'Publish this agent to the Community to share it on social media',
+  'shareModal.social.agent.entry': 'Share to social media',
+  'shareModal.social.agent.untitled': 'Untitled agent',
+  'shareModal.social.copyText': 'Copy caption',
+  'shareModal.social.copyTextSuccess': 'Caption copied',
+  'shareModal.social.description': 'A conversation worth a look',
+  'shareModal.social.disabledHint': 'Turn on link sharing to post this topic',
+  'shareModal.social.generation.description.image': 'An image made with AI',
+  'shareModal.social.generation.description.music': 'A song made with AI',
+  'shareModal.social.generation.description.video': 'A video made with AI',
+  'shareModal.social.generation.fallbackTitle.image': 'AI image',
+  'shareModal.social.generation.fallbackTitle.music': 'AI music',
+  'shareModal.social.generation.fallbackTitle.video': 'AI video',
+  'shareModal.social.instagram.copied': 'Caption copied. Paste it into an Instagram post or story',
+  'shareModal.social.instagram.hint':
+    "Instagram can't be filled in from the web. Copy the caption with the link, then paste it into a post or story.",
+  'shareModal.social.instagram.open': 'Open Instagram',
+  'shareModal.social.platform.instagram': 'Instagram',
+  'shareModal.social.platform.wechat': 'WeChat',
+  'shareModal.social.platform.weibo': 'Weibo',
+  'shareModal.social.platform.x': 'X',
+  'shareModal.social.shareTo': 'Share to {{platform}}',
+  'shareModal.social.title': 'Share to social media',
+  'shareModal.social.untitled': 'Untitled topic',
+  'shareModal.social.wechat.hint':
+    'Scan with WeChat, then tap ··· on the opened page to share to Moments',
+  'shareModal.social.wechat.qrLabel': 'QR code of the share link',
   'shareModal.regeneratePdf': 'Regenerate PDF',
   'shareModal.screenshot': 'Screenshot',
   'shareModal.settings': 'Export Settings',
@@ -4208,24 +4300,14 @@ export default {
   'workingPanel.skills.convert.titlePlaceholder': 'e.g. Weekly Report',
   'workingPanel.skills.detail.title': 'Skill details',
   'workingPanel.skills.empty': 'No skills available',
-  'workingPanel.skills.manualOnly': 'Manual only',
   'workingPanel.skills.noSearchResults': 'No matching skills',
   'workingPanel.skills.searchPlaceholder': 'Filter skills...',
   'workingPanel.skills.section.agent': 'Agent skills',
   'workingPanel.skills.section.device': 'Device skills',
   'workingPanel.skills.section.project': 'Project skills',
   'workingPanel.skills.section.user': 'User skills',
-  'workingPanel.skills.manage.noneEnabled':
-    'No skills selected. Use the settings icon to choose skills.',
-  'workingPanel.skills.manage.noPermission':
-    'You do not have permission to change skills for this agent.',
-  'workingPanel.skills.manage.save': 'Save',
-  'workingPanel.skills.manage.saveFailed':
-    'Could not save changes. Your selections are kept; try saving again.',
-  'workingPanel.skills.manage.selected': 'Selected skills: {{count}}',
-  'workingPanel.skills.manage.selectResults': 'Select all results ({{count}})',
-  'workingPanel.skills.manage.title': 'Choose the skills this agent can use',
-  'workingPanel.skills.manage.unsaved': 'Unsaved changes',
+  'workingPanel.skills.manage.noneEnabled': 'No user skills enabled.',
+  'workingPanel.skills.manage.title': 'Open agent skill settings',
   'workingPanel.skills.title': 'Skills',
   'workingPanel.files.openNeedsTopic':
     'Send a message first — this environment’s files open once the conversation has a session.',
@@ -4545,16 +4627,17 @@ export default {
   'you': 'You',
   'sandboxDrive.manageEnvironments': 'Settings',
   'sandboxDrive.openStorage': 'Sandbox Storage',
-  'sandboxEnvironment.none': 'No repository',
+  'sandboxEnvironment.none': 'No environment',
   'sandboxEnvironment.missing': 'Environment unavailable',
   'sandboxEnvironment.loading': 'Loading environment…',
   'sandboxDrive.pickerTitle': 'Work location',
   'sandboxDrive.pickerInfoTooltip':
-    'A temporary directory is cleaned up with the sandbox. A folder on your cloud drive is kept across conversations. A repository is cloned before the first command.',
-  'sandboxEnvironment.title': 'Repository',
-  'sandboxEnvironment.hint': 'Cloned and set up once before the first command.',
-  'sandboxEnvironment.empty': 'No repositories yet. Add one to get started.',
-  'sandboxEnvironment.add': 'Add repository',
+    'A temporary directory is cleaned up with the sandbox. A folder on your cloud drive is kept across conversations. An environment is set up before the first command.',
+  'sandboxEnvironment.title': 'Environment',
+  'sandboxEnvironment.hint':
+    'Its repositories are cloned, setup runs and its variables are set before the first command.',
+  'sandboxEnvironment.empty': 'No environments yet. Create one to get started.',
+  'sandboxEnvironment.add': 'New environment',
   'sandboxEnvironment.loadFailed': "Couldn't load environments",
   'sandboxEnvironment.retry': 'Retry',
   'sandboxEnvironment.saveFailed': 'Could not change the environment. Try again.',
@@ -4614,4 +4697,5 @@ export default {
   'taskList.find.open': 'Find in view',
   'taskList.find.placeholder': 'Find in view…',
   'taskList.groupBy.labelGroup': 'Label: {{name}}',
+  'sandboxEnvironment.noRepository': 'No repository',
 };

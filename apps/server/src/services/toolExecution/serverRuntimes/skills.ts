@@ -1183,14 +1183,14 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       // back to these because the raw LLM args never carry activatedSkills.
       activatedSkills: context.activatedSkills,
       builtinSkills: [
-        // Device-only skills resolve in device-capable runs — mirrors the
-        // SkillEngine gate in aiAgent that builds <available_skills>, so a
-        // `device-unrouted` run can activate/read them before the model routes
-        // a device. `activeDeviceId` is the fallback for callers without an
-        // execution plan.
+        // Match the device and opt-in gates of the operation's skill catalog.
         ...filterBuiltinSkills(builtinSkills, {
           canExecuteOnDevice: context.deviceCapable ?? !!activeDeviceId,
-        }).filter((skill) => isSkillReachable(skill.identifier)),
+        }).filter(
+          (skill) =>
+            isSkillReachable(skill.identifier) &&
+            (isLibrarySkillEnabled?.(skill.identifier) ?? true),
+        ),
         ...agentSkillBuiltins,
       ],
       deviceFileAccess,

@@ -81,10 +81,7 @@ const dispatchHeteroAgentImpl = async (
   const shareStream = shareGate
     ? {
         streamOwnerUserId: shareGate.visitorUserId,
-        visitorRedaction: {
-          showErrorDetails: shareGate.shareConfig.showErrorDetails,
-          showModelInfo: shareGate.shareConfig.showModelInfo,
-        },
+        visitorRedaction: { showErrorDetails: shareGate.shareConfig.showErrorDetails },
       }
     : undefined;
   // Same structured shape as the built-in path (`op_{ts}_{agentId}_{topicId}_{rand}`)

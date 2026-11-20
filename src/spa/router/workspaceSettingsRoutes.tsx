@@ -390,6 +390,20 @@ export const workspaceSettingsContentRoute: RouteObject = {
       },
       path: 'environments',
     },
+    // Environment detail level — the page reads the environment id from `sub`.
+    {
+      element: dynamicElement(
+        () => import('@/routes/(main)/[workspaceSlug]/settings/environments'),
+        'Desktop > Workspace > Settings > Environments > Detail',
+      ),
+      handle: {
+        meta: createWorkspaceSettingsRouteMeta(
+          WorkspaceSettingsTabs.Environments,
+          createSurfaceSkeleton('detail'),
+        ),
+      },
+      path: 'environments/:sub',
+    },
     // Sandbox storage moved to Docs (`/:slug/resource/sandbox-storage`).
     { element: <LegacySandboxStorageRedirect />, path: 'drive' },
     // Account-level tabs mirrored inside the workspace so members can

@@ -3,12 +3,13 @@ import { Block, createStaticStyles, cx, Highlighter } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { genServerConfig } from '@/features/MCP/utils';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => {
   return {
     lite: css`
       pre {
-        padding: 12px !important;
+        padding: ${densityVars.contentGap} !important;
       }
     `,
   };

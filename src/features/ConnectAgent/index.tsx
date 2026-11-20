@@ -51,6 +51,7 @@ import { heteroAgentDefaultName } from '@/store/agent/utils/heteroAgentDefaultNa
 import { isDevicePresenceUnknown, useDeviceList } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useHomeStore } from '@/store/home';
+import { densityVars } from '@/styles/densityVars';
 
 import { getDeviceListState, isListableDevice } from './deviceListState';
 import type { ConnectableProvider, ConnectAgentProfile } from './providers';
@@ -73,7 +74,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   commandHint: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
     justify-content: space-between;
 
@@ -205,11 +206,11 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
 
     transition: background 0.15s;
 

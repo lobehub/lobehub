@@ -1,7 +1,6 @@
 import {
   AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
-  AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
-  AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
+  AGENT_SHARE_DEFAULT_MAX_MESSAGES_PER_VISITOR,
   AGENT_SHARE_DEFAULT_MONTHLY_SPEND_LIMIT,
   AGENT_SHARE_SLUG_PATTERN,
   RESERVED_AGENT_SHARE_SLUGS,
@@ -29,11 +28,9 @@ const DEFAULT_AGENT_SHARE_CONFIG = {
   demoCases: [],
   featuredWorkIds: [],
   maxFileStorage: AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
-  maxTopicsPerVisitor: AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
-  maxTurnsPerTopic: AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
+  maxMessagesPerVisitor: AGENT_SHARE_DEFAULT_MAX_MESSAGES_PER_VISITOR,
   monthlySpendLimit: AGENT_SHARE_DEFAULT_MONTHLY_SPEND_LIMIT,
   showErrorDetails: false,
-  showModelInfo: false,
   toolGrants: [],
 } satisfies AgentShareConfig;
 
@@ -49,12 +46,10 @@ const normalizeAgentShareConfig = (
   deviceAllowUserIds: config?.deviceAllowUserIds ?? [],
   featuredWorkIds: config?.featuredWorkIds ?? [],
   maxFileStorage: config?.maxFileStorage ?? DEFAULT_AGENT_SHARE_CONFIG.maxFileStorage,
-  maxTopicsPerVisitor:
-    config?.maxTopicsPerVisitor ?? DEFAULT_AGENT_SHARE_CONFIG.maxTopicsPerVisitor,
-  maxTurnsPerTopic: config?.maxTurnsPerTopic ?? DEFAULT_AGENT_SHARE_CONFIG.maxTurnsPerTopic,
+  maxMessagesPerVisitor:
+    config?.maxMessagesPerVisitor ?? DEFAULT_AGENT_SHARE_CONFIG.maxMessagesPerVisitor,
   monthlySpendLimit: config?.monthlySpendLimit ?? DEFAULT_AGENT_SHARE_CONFIG.monthlySpendLimit,
   showErrorDetails: config?.showErrorDetails ?? DEFAULT_AGENT_SHARE_CONFIG.showErrorDetails,
-  showModelInfo: config?.showModelInfo ?? DEFAULT_AGENT_SHARE_CONFIG.showModelInfo,
   /**
    * Left absent rather than defaulted to `[]`: both read as "no skill
    * granted", so a default would only write a value the creator never picked.
@@ -528,7 +523,7 @@ export class AgentShareModel {
     });
 
   /**
-   * Read the CURRENT `maxTopicsPerVisitor` / `maxTurnsPerTopic` caps for an
+   * Read the CURRENT `maxMessagesPerVisitor` cap for an
    * agent's share, bypassing any snapshot a caller might already be holding —
    * intended to be called from inside the SAME locked transaction a
    * visitor-abuse guard uses to recount and insert, so a cap reduction the
@@ -544,9 +539,7 @@ export class AgentShareModel {
     db: LobeChatDatabase,
     agentId: string,
   ): Promise<
-    Required<
-      Pick<AgentShareConfig, 'maxTopicsPerVisitor' | 'maxTurnsPerTopic' | 'monthlySpendLimit'>
-    > & {
+    Pick<NormalizedAgentShareConfig, 'maxMessagesPerVisitor' | 'monthlySpendLimit'> & {
       shareId: string | null;
       workspaceId: string | null;
     }
@@ -563,9 +556,8 @@ export class AgentShareModel {
 
     const normalized = normalizeAgentShareConfig(row?.shareConfig ?? null);
     return {
-      maxTopicsPerVisitor: normalized.maxTopicsPerVisitor!,
-      maxTurnsPerTopic: normalized.maxTurnsPerTopic!,
-      monthlySpendLimit: normalized.monthlySpendLimit!,
+      maxMessagesPerVisitor: normalized.maxMessagesPerVisitor,
+      monthlySpendLimit: normalized.monthlySpendLimit,
       shareId: row?.id ?? null,
       workspaceId: row?.workspaceId ?? null,
     };

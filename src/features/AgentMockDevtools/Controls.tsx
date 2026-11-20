@@ -2,6 +2,8 @@ import { ActionIcon, createStaticStyles, cssVar, Flexbox, toast } from '@lobehub
 import { Pause, Play, Repeat, RotateCcw, SkipForward, Square } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
+import { densityVars } from '@/styles/densityVars';
+
 import { CaseTrigger } from './CaseTrigger';
 import { useAgentMockPlayer } from './hooks/useAgentMockPlayer';
 import { useAgentMockReplayTarget } from './hooks/useAgentMockReplayTarget';
@@ -12,7 +14,7 @@ const styles = createStaticStyles(({ css }) => ({
   actions: css`
     flex-shrink: 0;
     height: 40px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   controls: css`
@@ -34,7 +36,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     height: 28px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     &:hover .agent-mock-progress-track {
@@ -72,7 +74,7 @@ const styles = createStaticStyles(({ css }) => ({
   selection: css`
     flex-shrink: 0;
     height: 44px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));

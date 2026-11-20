@@ -7,6 +7,9 @@ import {
 } from '../../types/knowledge-base.type';
 import { KnowledgeBaseService } from '../knowledge-base.service';
 
+// Services return the page's rows and total; the controller adds `hasMore`/`nextCursor`.
+const SERVICE_PAGE_FIELDS = { hasMore: true, nextCursor: true } as const;
+
 const { deleteWithFilesMock, deleteFilesMock, findByIdMock } = vi.hoisted(() => ({
   deleteFilesMock: vi.fn(),
   deleteWithFilesMock: vi.fn(),
@@ -90,7 +93,9 @@ describe('KnowledgeBaseService response payloads', () => {
 
     const result = asJson(await buildService(db).getKnowledgeBaseList({}));
 
-    expect(() => KnowledgeBaseListResponseSchema.parse(result)).not.toThrow();
+    expect(() =>
+      KnowledgeBaseListResponseSchema.omit(SERVICE_PAGE_FIELDS).parse(result),
+    ).not.toThrow();
     expect(result.knowledgeBases[0].accessType).toBe('owner');
   });
 });

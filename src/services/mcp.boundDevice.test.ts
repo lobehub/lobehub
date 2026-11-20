@@ -42,7 +42,7 @@ vi.mock('@/libs/trpc/client', () => ({
     connector: {
       callTool: { mutate: vi.fn() },
       getDeviceMcpManifest: { mutate: vi.fn() },
-      getForEdit: { query: vi.fn() },
+      getForRun: { query: vi.fn() },
       getLocalCallToken: { mutate: vi.fn() },
     },
   },
@@ -124,7 +124,7 @@ describe('a connector bound to a device', () => {
   it('runs a call here over IPC when this desktop is the bound device', async () => {
     const { lambdaClient } = await import('@/libs/trpc/client');
     mockGetToolStoreState.mockReturnValue({ connectors: [lanConnector('this-desktop')] });
-    vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue({
+    vi.mocked(lambdaClient.connector.getForRun.query).mockResolvedValue({
       ...lanConnector('this-desktop'),
       credentials: null,
       tools: [{ permission: 'auto', toolName: 'list_files' }],
@@ -142,7 +142,7 @@ describe('a connector rebound since this client loaded it', () => {
     const { lambdaClient } = await import('@/libs/trpc/client');
     // The stored projection is still unbound, so the call looks local
     mockGetToolStoreState.mockReturnValue({ connectors: [lanConnector()] });
-    vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue({
+    vi.mocked(lambdaClient.connector.getForRun.query).mockResolvedValue({
       ...lanConnector('office-nas'),
       credentials: null,
       tools: [{ permission: 'auto', toolName: 'list_files' }],

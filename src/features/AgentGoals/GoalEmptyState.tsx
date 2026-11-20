@@ -15,6 +15,8 @@ import {
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import type { GoalExampleKey, GoalExampleSeed } from './goalExamples';
 import { buildGoalExampleSeed, GOAL_EXAMPLE_KEYS } from './goalExamples';
 import { createGoalHowItWorksModal } from './GoalHowItWorksModal';
@@ -23,7 +25,7 @@ const styles = createStaticStyles(({ css }) => ({
   example: css`
     cursor: pointer;
 
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 14px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};

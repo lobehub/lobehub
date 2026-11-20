@@ -54,6 +54,7 @@ const touchesShareModel = (value: PartialDeep<AgentItem>): boolean =>
  * Used when returning agent config from database (id is always present).
  */
 export type AgentConfigWithId = LobeAgentConfig &
+  Partial<Pick<AgentItem, 'createdAt'>> &
   Pick<AgentItem, 'id' | 'slug' | 'userId' | 'visibility' | 'workspaceId'> & {
     /**
      * Raw callSubAgent chatConfig override, stamped by execAgent alongside the
@@ -108,7 +109,6 @@ export class AgentService {
 
     const agent = await this.agentModel.create({
       ...input.config,
-      plugins: input.config?.plugins as unknown as string[] | undefined,
       sessionGroupId: input.groupId,
       ...(visibility || folderVisibility ? { visibility: visibility ?? folderVisibility } : {}),
     });
@@ -439,11 +439,6 @@ export class AgentService {
     }
 
     // 1. Execute update
-    // `AgentItem` here is the `@lobechat/types` domain shape (plugins:
-    // AgentPluginEntry[]); `agentModel.updateConfig` takes the DB-layer
-    // AgentItem, whose `plugins` column type is intentionally left as
-    // `string[]` (only the domain types are widened for the tri-state
-    // rollout, not the JSONB column's compile-time annotation).
     await this.agentModel.updateConfig(agentId, value as any, replaceWorkingDirDeviceIds);
 
     // 2. Query and return updated data (with default config merged)

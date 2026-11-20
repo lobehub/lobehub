@@ -194,3 +194,39 @@ export const moveToBaseUnlessIdentifierHeld = async (
       );
     return { moved: true as const };
   });
+
+/**
+ * Change a base connector's visibility unless the destination slot (a base row
+ * of `identifier` in `visibility`) is held: the lookup and the change are one
+ * step, under the lock {@link claimBaseIdentifier} takes, so two members
+ * sharing private connectors of one identifier at once never both land in the
+ * shared slot.
+ */
+export const changeBaseVisibilityUnlessHeld = async (
+  db: LobeChatDatabase,
+  scope: BaseIdentifierScope,
+  id: string,
+  identifier: string,
+  visibility: ConnectorVisibility,
+): Promise<{ changed: true } | { holder: UserConnectorItem }> =>
+  db.transaction(async (tx) => {
+    await lockBaseIdentifier(tx, scope, identifier);
+
+    const holder = (await findBaseHolders(tx, scope, identifier, visibility)).find(
+      (row) => row.id !== id,
+    );
+    if (holder) return { holder };
+
+    await tx
+      .update(userConnectors)
+      .set({ updatedAt: new Date(), visibility })
+      .where(
+        and(
+          eq(userConnectors.id, id),
+          eq(userConnectors.identifier, identifier),
+          isNull(userConnectors.agentId),
+          scope.ownership(),
+        ),
+      );
+    return { changed: true as const };
+  });

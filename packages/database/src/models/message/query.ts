@@ -293,8 +293,8 @@ export class MessageConversationQueries extends MessageScope {
    * Share messages persist under the CREATOR's account (see `shareChat.ts`),
    * so `query()`'s joined `sender` and the billing/model-snapshot fields
    * describe the creator, not the visitor reading them. `redaction` carries the
-   * share's own `showModelInfo` / `showErrorDetails` switches; omitting it
-   * strips everything (fail closed).
+   * share's own `showErrorDetails` switch; omitting it strips everything
+   * (fail closed). Model, provider and spend never reach a visitor.
    */
   queryForVisitor = async (
     params: QueryMessageParams = {},
@@ -320,30 +320,6 @@ export class MessageConversationQueries extends MessageScope {
       { ...options, allowShareVisitor: true },
     );
     return messageItems.map((message) => toVisitorMessage(message, options.redaction));
-  };
-
-  /**
-   * Exact per-topic turn count for one role, used by `maxTurnsPerTopic`.
-   *
-   * MUST NOT reuse {@link MessageModel.count}: its `analyticsConditions()` ANDs
-   * in `notShareVisitorMessage()`, which excludes every message whose topic has
-   * a non-null `senderId` — i.e. every agent-share visitor topic. That
-   * predicate is correct for personal analytics (visitor usage is reported
-   * separately), but it would make `count()` return 0 forever for a share
-   * topic, silently disabling the turn cap.
-   *
-   * Safe without a visitor/ownership check here: the caller (shareChat router /
-   * `reserveShareVisitorTurn`) already resolved and authorized the topic, and
-   * `this.ownership()` matches because share messages carry the creator's
-   * `userId` (the model is constructed with `share.ownerId`).
-   */
-  countByTopic = async ({ role, topicId }: { role: string; topicId: string }): Promise<number> => {
-    const result = await this.db
-      .select({ count: count(messages.id) })
-      .from(messages)
-      .where(and(this.ownership(), eq(messages.topicId, topicId), eq(messages.role, role)));
-
-    return result[0].count;
   };
 
   /**

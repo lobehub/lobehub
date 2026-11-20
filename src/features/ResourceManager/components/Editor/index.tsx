@@ -12,6 +12,7 @@ import { PageAgentProvider } from '@/features/PageEditor/PageAgentProvider';
 import FileDetailComponent from '@/features/ResourceManager/FileDetail';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
+import { useDensityTokens, useHeaderActionSize } from '@/styles/density';
 import { downloadFile } from '@/utils/client/downloadFile';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
@@ -59,6 +60,8 @@ const openFileDetailModal = () =>
 const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
   const { t } = useTranslation(['common', 'file']);
   const theme = useTheme();
+  const { controlHeight, fontSize } = useDensityTokens();
+  const headerActionSize = useHeaderActionSize(true);
 
   const currentViewItemId = useResourceManagerStore((s) => s.currentViewItemId);
 
@@ -79,14 +82,19 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
               horizontal
               align={'center'}
               gap={12}
-              style={{ minHeight: 32, minWidth: 0, overflow: 'hidden' }}
+              style={{ minHeight: controlHeight, minWidth: 0, overflow: 'hidden' }}
             >
-              <ActionIcon icon={ArrowLeftIcon} title={t('back')} onClick={onBack} />
+              <ActionIcon
+                icon={ArrowLeftIcon}
+                size={headerActionSize}
+                title={t('back')}
+                onClick={onBack}
+              />
               <span
                 title={fileDetail?.name}
                 style={{
                   color: theme.colorText,
-                  fontSize: 14,
+                  fontSize,
                   fontWeight: 500,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -103,6 +111,7 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
               {fileDetail?.url && (
                 <ActionIcon
                   icon={DownloadIcon}
+                  size={headerActionSize}
                   title={t('download', { ns: 'common' })}
                   onClick={() => {
                     if (fileDetail?.url && fileDetail?.name) {
@@ -111,7 +120,7 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
                   }}
                 />
               )}
-              <ActionIcon icon={InfoIcon} onClick={openFileDetailModal} />
+              <ActionIcon icon={InfoIcon} size={headerActionSize} onClick={openFileDetailModal} />
             </Flexbox>
           }
           style={{

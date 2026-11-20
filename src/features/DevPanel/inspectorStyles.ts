@@ -1,5 +1,7 @@
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export const inspectorStyles = createStaticStyles(({ css }) => ({
   listCount: css`
     flex-shrink: 0;
@@ -27,7 +29,7 @@ export const inspectorStyles = createStaticStyles(({ css }) => ({
 
     width: 100%;
     height: 32px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 0;
 
     font-family: ${cssVar.fontFamilyCode};
@@ -76,7 +78,7 @@ export const inspectorStyles = createStaticStyles(({ css }) => ({
     flex-direction: column;
     gap: 4px;
 
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   detailFields: css`
@@ -144,7 +146,7 @@ export const inspectorStyles = createStaticStyles(({ css }) => ({
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
     justify-content: center;
 

@@ -21,6 +21,7 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import { HOME_ENTITY_PORTAL_SCOPE, isAcceptancePortalView } from './acceptancePortalView';
 import { isHomeMinimalLayout } from './CustomizeModal/config';
@@ -157,7 +158,7 @@ const styles = createStaticStyles(({ css }) => ({
     display: grid;
     grid-area: 1 / 1 / 2 / -1;
     grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     align-items: end;
 
     width: 100%;
@@ -201,7 +202,7 @@ const styles = createStaticStyles(({ css }) => ({
     --home-portrait-overlap: -${COMPACT_PORTRAIT_OVERLAP}px;
 
     display: flex;
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     align-items: flex-end;
     justify-self: end;
 

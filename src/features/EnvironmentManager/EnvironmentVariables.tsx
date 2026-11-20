@@ -18,6 +18,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
+import { densityVars } from '@/styles/densityVars';
 
 import { describeError } from './errorMessage';
 
@@ -30,7 +31,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   row: css`
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     & + & {
       border-block-start: 1px solid ${cssVar.colorBorderSecondary};
@@ -48,7 +49,7 @@ const styles = createStaticStyles(({ css }) => ({
    */
   empty: css`
     padding-block: 32px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border: 1px dashed ${cssVar.colorBorder};
     border-radius: ${cssVar.borderRadiusLG};
   `,
@@ -282,10 +283,9 @@ const EnvironmentVariables = memo<EnvironmentVariablesProps>(({ entries, onSave 
   return (
     <Flexbox gap={12}>
       <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-        <Text weight={600}>
-          {entries.length === 0
-            ? t('environments.form.env')
-            : t('environments.form.envCount', { count: entries.length })}
+        {/* The section around this editor carries its title; only the count is said here. */}
+        <Text fontSize={12} type={'secondary'}>
+          {entries.length > 0 && t('environments.form.envCount', { count: entries.length })}
         </Text>
         <Flexbox horizontal align={'center'} gap={4}>
           {raw === null ? (

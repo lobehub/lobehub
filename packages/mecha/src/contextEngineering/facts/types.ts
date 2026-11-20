@@ -116,12 +116,6 @@ export interface ContextFactRequest {
   mentionedAgents?: RuntimeMentionedAgent[];
   /** Conversation as the engine will see it (history hints already applied). */
   messages: UIChatMessage[];
-  /**
-   * Identifiers the agent turned on (every `plugins` entry that is not
-   * disabled). A connector is opt-in per agent, so a connected service absent
-   * from it is not offered as usable. Omitted = no opt-in cut.
-   */
-  optedInPluginIds?: string[];
   /** Present only on a shared-agent visitor run. */
   shareVisitor?: Pick<AgentShareVisitorContext, 'agentId' | 'visitorUserId'>;
   topicId?: string;
@@ -221,7 +215,14 @@ export interface ContextFactProviders {
    * ephemeral, which is what every run without one gets.
    */
   resolveSandboxPersistence?: () => Promise<
-    { cwd?: string; mode: 'drive' | 'ephemeral' | 'persistent'; workingDir?: string } | undefined
+    | {
+        cwd?: string;
+        mode: 'drive' | 'ephemeral' | 'persistent';
+        /** The repositories the topic's environment checks out, in order. */
+        repositories?: { folder?: string; ref?: string; repository: string }[];
+        workingDir?: string;
+      }
+    | undefined
   >;
 }
 

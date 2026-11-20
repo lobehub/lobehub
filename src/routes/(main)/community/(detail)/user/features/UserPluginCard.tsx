@@ -9,6 +9,7 @@ import urlJoin from 'url-join';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { densityTokens } from '@/styles/density.stylex';
 import { type DiscoverPluginItem } from '@/types/discover';
 
 const styles = stylex.create({
@@ -25,7 +26,7 @@ const styles = stylex.create({
   secondaryDesc: { fontSize: '12px', color: cssVar.colorTextDescription },
   title: {
     margin: '0',
-    fontSize: '16px',
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
     fontWeight: 500,
     color: { 'default': null, ':hover': cssVar.colorLink },
   },

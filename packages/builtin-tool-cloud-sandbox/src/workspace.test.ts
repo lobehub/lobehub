@@ -119,3 +119,49 @@ describe('the three placements a run can have', () => {
     ).not.toContain(persisted);
   });
 });
+
+describe('the repositories of the environment', () => {
+  it('tells a temporary run which repository its working directory checks out', () => {
+    const { sandbox_workspace } = formatSandboxStoragePromptVariables({
+      repositories: [{ ref: 'canary', repository: 'lobehub/lobehub' }],
+    });
+
+    expect(sandbox_workspace).toContain(
+      'Your working directory is a checkout of `lobehub/lobehub` (`canary`)',
+    );
+    expect(sandbox_workspace).toContain('AGENTS.md');
+  });
+
+  it('lists several side by side and says the top is not a repository', () => {
+    const { sandbox_workspace } = formatSandboxStoragePromptVariables({
+      repositories: [
+        { folder: 'lobehub', repository: 'lobehub/lobehub' },
+        { folder: 'lobe-ui', repository: 'lobehub/lobe-ui' },
+      ],
+    });
+
+    expect(sandbox_workspace).toContain('checks out 2 repositories side by side');
+    expect(sandbox_workspace).toContain('`lobehub/` — `lobehub/lobehub`');
+    expect(sandbox_workspace).toContain('`lobe-ui/` — `lobehub/lobe-ui`');
+    expect(sandbox_workspace).toContain('The working directory itself is not a git repository');
+  });
+
+  it('adds the same lines on a persistent run', () => {
+    const { sandbox_workspace } = formatSandboxStoragePromptVariables({
+      mode: 'persistent',
+      repositories: [
+        { folder: 'a', repository: 'o/a' },
+        { folder: 'b', repository: 'o/b' },
+      ],
+    });
+
+    expect(sandbox_workspace).toContain('environment directory');
+    expect(sandbox_workspace).toContain('`b/` — `o/b`');
+  });
+
+  it('says nothing about repositories when there are none', () => {
+    const { sandbox_workspace } = formatSandboxStoragePromptVariables();
+    expect(sandbox_workspace).not.toContain('side by side');
+    expect(sandbox_workspace).not.toContain('checkout of');
+  });
+});

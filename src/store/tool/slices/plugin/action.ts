@@ -231,6 +231,7 @@ export class PluginActionImpl {
       onThisDevice = false,
       server,
       toolArguments,
+      topicId,
     }: {
       agentId?: string;
       /** The account the view acts as, when its arguments cannot name one. */
@@ -238,6 +239,7 @@ export class PluginActionImpl {
       onThisDevice?: boolean;
       server?: string;
       toolArguments?: string;
+      topicId?: string;
     },
   ): SWRResponse<ReadResourceResult | undefined> =>
     useClientDataSWR(
@@ -247,6 +249,7 @@ export class PluginActionImpl {
         onThisDevice,
         server,
         toolArguments,
+        topicId,
       }),
       () =>
         mcpService.readMcpAppResource(identifier, resourceUri, {
@@ -255,6 +258,7 @@ export class PluginActionImpl {
           onThisDevice,
           server,
           toolArguments,
+          topicId,
         }),
       { revalidateOnFocus: false, revalidateOnReconnect: false },
     );

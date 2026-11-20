@@ -90,6 +90,7 @@ const ImageCard = memo<UploadFileItem>((item) => {
   const removeChatUploadFile = useFileStore((s) => s.removeChatUploadFile);
   const retryChatUploadFile = useFileStore((s) => s.retryChatUploadFile);
   const { busy, canRetry, indicator } = getUploadChipState(item);
+  const failed = indicator === 'error';
   const src = previewUrl || item.fileUrl || item.base64Url;
   const cardRef = useRef<HTMLDivElement>(null);
   useRepastePulse(cardRef, item.repastedAt);
@@ -105,11 +106,7 @@ const ImageCard = memo<UploadFileItem>((item) => {
   });
 
   return (
-    <div
-      aria-busy={busy}
-      ref={cardRef}
-      {...stylex.props(styles.card, canRetry && styles.cardError)}
-    >
+    <div aria-busy={busy} ref={cardRef} {...stylex.props(styles.card, failed && styles.cardError)}>
       {src && <img alt={file.name} draggable={false} src={src} {...stylex.props(styles.image)} />}
       <Tooltip title={<UploadTooltipContent {...item} />}>
         <button
@@ -120,15 +117,16 @@ const ImageCard = memo<UploadFileItem>((item) => {
           {...stylex.props(styles.previewButton)}
         />
       </Tooltip>
-      {(busy || canRetry) && (
+      {(busy || failed) && (
         <div {...stylex.props(styles.overlay)}>
           {indicator === 'busy' ? (
             <UploadIndicator label={t('upload.preview.status.uploading')} size={24} />
           ) : (
             <>
               <Icon
-                aria-label={t('upload.preview.status.error')}
+                aria-label={item.error || t('upload.preview.status.error')}
                 icon={CircleAlertIcon}
+                role={'img'}
                 size={20}
                 style={{ color: cssVar.colorError }}
               />
@@ -136,12 +134,14 @@ const ImageCard = memo<UploadFileItem>((item) => {
                 {errorCode ? (
                   <FileUploadErrorActions compact code={errorCode} />
                 ) : (
-                  <ActionIcon
-                    icon={RotateCwIcon}
-                    size={'small'}
-                    title={t('retry', { ns: 'common' })}
-                    onClick={handleRetry}
-                  />
+                  canRetry && (
+                    <ActionIcon
+                      icon={RotateCwIcon}
+                      size={'small'}
+                      title={t('retry', { ns: 'common' })}
+                      onClick={handleRetry}
+                    />
+                  )
                 )}
               </div>
             </>

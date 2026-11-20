@@ -1472,11 +1472,15 @@ describe('StreamingExecutor actions', () => {
         }),
       );
     });
-
-    it.each([true, false])(
-      'keeps manual-mode tools callable while omitting the activator (builtin: %s)',
-      (isBuiltinAgent) => {
-        const chatConfig = createMockChatConfig({ skillActivateMode: 'manual' });
+    it.each([
+      { isBuiltinAgent: true, skillActivateMode: 'manual' },
+      { isBuiltinAgent: false, skillActivateMode: 'manual' },
+      { isBuiltinAgent: true, skillActivateMode: 'auto' },
+      { isBuiltinAgent: false, skillActivateMode: 'auto' },
+    ] as const)(
+      'keeps the activator and skill loader callable with $skillActivateMode preferences (builtin: $isBuiltinAgent)',
+      ({ isBuiltinAgent, skillActivateMode }) => {
+        const chatConfig = createMockChatConfig({ skillActivateMode });
         const plugins = ['lobe-skill-store'];
         vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
           agentConfig: createMockAgentConfig({ plugins }),
@@ -1490,52 +1494,13 @@ describe('StreamingExecutor actions', () => {
           agentId: TEST_IDS.SESSION_ID,
           messages: [userMessage],
           parentMessageId: userMessage.id,
+          uninstalledBuiltinTools: [],
         });
         expect(agentConfig.enabledToolIds).toContain('lobe-skill-store');
         expect(agentConfig.enabledToolIds).toContain('lobe-skills');
-        expect(agentConfig.enabledToolIds).not.toContain('lobe-activator');
+        expect(agentConfig.enabledToolIds).toContain('lobe-activator');
       },
     );
-
-    it('should not set excludeDefaultToolIds in auto mode', () => {
-      act(() => {
-        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
-      });
-
-      const { result } = renderHook(() => useChatStore());
-      const userMessage = createUserMessage();
-
-      const generateToolsDetailed = vi.fn().mockReturnValue({
-        enabledManifests: [],
-        enabledToolIds: [],
-        tools: [],
-      });
-
-      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
-        agentConfig: createMockAgentConfig(),
-        chatConfig: createMockChatConfig(),
-        isBuiltinAgent: true,
-        plugins: [],
-      });
-      vi.spyOn(toolEngineering, 'createAgentToolsEngine').mockReturnValue({
-        generateToolsDetailed,
-      } as any);
-
-      result.current.internal_createAgentState({
-        messages: [userMessage],
-        parentMessageId: userMessage.id,
-        agentId: TEST_IDS.SESSION_ID,
-        topicId: TEST_IDS.TOPIC_ID,
-      });
-
-      // In auto mode, no tools should be excluded from defaults
-      expect(generateToolsDetailed).toHaveBeenCalledWith(
-        expect.objectContaining({
-          skipDefaultTools: undefined,
-          excludeDefaultToolIds: undefined,
-        }),
-      );
-    });
 
     it('should preserve default model/provider payload when initialContext is provided', () => {
       act(() => {

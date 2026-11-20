@@ -5,6 +5,8 @@ import { ClipboardList } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { type MarkdownElementProps } from '../type';
 import { useTaskCardScope } from './context';
 import { type ParsedTaskContent, parseTaskContent } from './parseTaskContent';
@@ -18,7 +20,7 @@ const styles = stylex.create({
   },
   fallback: {
     overflow: 'auto',
-    paddingBlock: '12px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     paddingInline: '14px',
     borderWidth: '1px',
     borderStyle: 'dashed',

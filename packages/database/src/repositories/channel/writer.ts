@@ -20,7 +20,8 @@ export const advanceOperation = async (
   tx: Transaction,
   job: ChannelJobItem,
   status: AgentOperationStatus,
-  error?: string,
+  /** A bare message, or one with the category a client explains in the viewer's language. */
+  error?: string | { message: string; type?: string },
 ) => {
   if (!job.operationId) return;
 
@@ -29,7 +30,7 @@ export const advanceOperation = async (
     .set({
       status,
       ...(status === 'running' ? { startedAt: new Date() } : { completedAt: new Date() }),
-      ...(error && { error: { message: error } }),
+      ...(error && { error: typeof error === 'string' ? { message: error } : error }),
     })
     .where(
       and(

@@ -8,6 +8,7 @@ import { contextSelectors, useConversationStore } from '@/features/Conversation/
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 const styles = createStaticStyles(({ css }) => ({
   // base-ui stacks title and description in a gapless column, and both use a
@@ -20,7 +21,7 @@ const styles = createStaticStyles(({ css }) => ({
   // block, and keep a gutter so wrapped text never runs up against it.
   retry: css`
     align-self: center;
-    padding-inline-start: 12px;
+    padding-inline-start: ${densityVars.contentGap};
   `,
 }));
 

@@ -21,6 +21,8 @@ import { memo, type MouseEvent, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { useDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import ItemActions from './ItemActions';
 import LabelTags from './LabelTags';
@@ -60,7 +62,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     display: flex;
     flex: 1;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     min-width: 0;
@@ -94,7 +96,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     container: agent-row / inline-size;
 
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadiusLG};
 
     color: inherit;
@@ -102,6 +104,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     &:hover {
       background: ${cssVar.colorFillTertiary};
     }
+  `,
+  /** Compact density: 6px block padding + 24px avatar → 36px rows, 13px text. */
+  rowCompact: css`
+    padding-block: 6px;
+    font-size: 13px;
   `,
   /**
    * Reserved width, right-aligned: "3 天前" and "2026-07-22" differ by ~30px,
@@ -155,6 +162,7 @@ const AgentRow = memo<AgentRowProps>(
     const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
     const role = agentSecondaryDisplayName(item);
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+    const { compact, tokens } = useDensity();
 
     // Right-click support (Task-List-style): the hook-bearing menu mounts on
     // the ROW's pointer-enter (which always precedes a right-click) and hands
@@ -180,7 +188,7 @@ const AgentRow = memo<AgentRowProps>(
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.row}
+          className={cx(styles.row, compact && styles.rowCompact)}
           gap={12}
           ref={setAnchor}
           onPointerEnter={activateMenu}
@@ -190,7 +198,7 @@ const AgentRow = memo<AgentRowProps>(
             className={styles.identity}
             to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
           >
-            <SidebarItemAvatar item={item} size={28} />
+            <SidebarItemAvatar item={item} size={tokens.headerAvatarSize} />
             {/* Three single-line columns: who the agent is, the role it plays,
               and what it is responsible for. */}
             <Text ellipsis className={cx('agent-row-title', styles.name)} weight={500}>

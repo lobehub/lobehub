@@ -1,11 +1,13 @@
 import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   summary: css`
     position: relative;
 
-    padding-block: 16px;
+    padding-block: ${densityVars.cardPadding};
     padding-inline: 20px;
     border-radius: 8px;
 

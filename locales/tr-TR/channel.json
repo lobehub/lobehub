@@ -91,7 +91,6 @@
   "events.youInvited": "{{names}} kişisini kanala davet ettiniz",
   "events.youInvitedMembers": "<members/> kişisini kanala davet ettiniz",
   "failure.locate": "Mesajı göster",
-  "failure.messageLabel": "Yanıt başarısız: {{names}}",
   "failure.title": "Başarısız yanıtlar · {{count}}",
   "followers": "Yanıtlayanlar: {{names}}",
   "invite.directHint": "Buradan davet etmek, {{name}} ve seçtiğiniz üyelerle yeni bir kanal başlatır. {{name}} ile bu sohbet olduğu gibi kalır.",

@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { buildNewTopicMetadata } from './newTopicMetadata';
+import { buildNewTopicMetadata, resolveTopicOpenedBy } from './newTopicMetadata';
 
 const worktree = '/Users/me/.lobehub/worktrees/lobehub-0000beef/quiet-hill';
 const prepared = {
@@ -72,5 +72,78 @@ describe('buildNewTopicMetadata — project directory', () => {
     });
 
     expect(metadata?.workingDirectoryConfig).toEqual({ path: '/code/lobehub' });
+  });
+});
+
+describe('buildNewTopicMetadata — Claude Code permission mode', () => {
+  it('is born with the mode the composer chip showed', () => {
+    expect(
+      buildNewTopicMetadata({
+        appContext: {
+          initialTopicMetadata: { heteroPermissionMode: 'plan', workingDirectory: '/code/d' },
+        } as any,
+      }),
+    ).toMatchObject({ heteroPermissionMode: 'plan', workingDirectory: '/code/d' });
+  });
+
+  it('keeps the mode inside a project directory too', () => {
+    expect(
+      buildNewTopicMetadata({
+        appContext: { initialTopicMetadata: { heteroPermissionMode: 'default' } } as any,
+        projectDirectory: { path: '/code/lobehub' },
+      }),
+    ).toMatchObject({ heteroPermissionMode: 'default', workingDirectory: '/code/lobehub' });
+  });
+});
+
+describe('sub-topic link (metadata.openedBy)', () => {
+  it('records the opener read through the caller scope', async () => {
+    const findById = vi.fn().mockResolvedValue({ agentId: 'agt_parent', id: 'tpc_parent' });
+
+    const openedBy = await resolveTopicOpenedBy({ findById } as any, 'tpc_parent');
+
+    expect(findById).toHaveBeenCalledWith('tpc_parent');
+    expect(openedBy).toEqual({
+      agentId: 'agt_parent',
+      at: expect.any(String),
+      topicId: 'tpc_parent',
+    });
+    expect(buildNewTopicMetadata({ openedBy })).toEqual(expect.objectContaining({ openedBy }));
+  });
+
+  it('records nothing for an unknown or unreadable opener', async () => {
+    expect(
+      await resolveTopicOpenedBy({ findById: vi.fn().mockResolvedValue(undefined) } as any, 'x'),
+    ).toBeUndefined();
+    expect(
+      await resolveTopicOpenedBy(
+        { findById: vi.fn().mockRejectedValue(new Error('no')) } as any,
+        'x',
+      ),
+    ).toBeUndefined();
+    expect(await resolveTopicOpenedBy({ findById: vi.fn() } as any, undefined)).toBeUndefined();
+  });
+});
+
+// A draft's first send in a project: the composer's placement and whether it
+// was picked must both reach `withProjectSandbox`, which decides from them
+// whether the project's environment applies.
+describe('buildNewTopicMetadata — cloud sandbox placement', () => {
+  it('carries a temporary sandbox picked on purpose', () => {
+    expect(
+      buildNewTopicMetadata({
+        appContext: { initialTopicMetadata: { sandboxTemporary: true } } as any,
+      }),
+    ).toMatchObject({ sandboxTemporary: true });
+  });
+
+  it('carries a default environment nobody picked as such', () => {
+    expect(
+      buildNewTopicMetadata({
+        appContext: {
+          initialTopicMetadata: { sandboxEnvironmentId: 'env-1', sandboxSeeded: true },
+        } as any,
+      }),
+    ).toMatchObject({ sandboxEnvironmentId: 'env-1', sandboxSeeded: true });
   });
 });

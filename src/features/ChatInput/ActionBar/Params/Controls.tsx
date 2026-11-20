@@ -35,6 +35,7 @@ import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selec
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 import type { LobeAgentChatConfig, LobeAgentConfig } from '@/types/agent';
 
 import { useAgentId } from '../../hooks/useAgentId';
@@ -76,7 +77,7 @@ const styles = stylex.create({
     cursor: 'pointer',
     width: 'calc(100% + 16px)',
     marginInline: '-8px',
-    paddingBlock: '12px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     paddingInline: '8px',
     borderStyle: 'none',
     borderRadius: '10px',
@@ -118,7 +119,7 @@ const styles = stylex.create({
     flexDirection: 'column',
     minHeight: '0',
     paddingBlockEnd: '4px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   commonSection: { display: 'flex', flexDirection: 'column', paddingBlock: '0' },
   divider: { height: '1px', backgroundColor: cssVar.colorSplit, backgroundImage: 'none' },
@@ -127,15 +128,15 @@ const styles = stylex.create({
   formSidebar: { display: 'flex', flex: '1', width: '100%', height: '100%', minHeight: '0' },
   header: {
     display: 'flex',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBlock: '16px',
-    paddingInline: '12px',
+    paddingBlock: densityTokens['--lobe-density-card-padding'],
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorSplit,
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 600,
     lineHeight: 1.4,
     color: cssVar.colorText,
@@ -165,7 +166,7 @@ const styles = stylex.create({
   },
   labelMain: { flexWrap: 'wrap', minWidth: '0' },
   labelMuted: { color: cssVar.colorTextTertiary },
-  modelConfigSection: { paddingBlock: '12px' },
+  modelConfigSection: { paddingBlock: densityTokens['--lobe-density-content-gap'] },
   panel: {
     overflow: 'hidden',
     display: 'flex',
@@ -191,7 +192,7 @@ const styles = stylex.create({
     boxShadow: 'none',
   },
   rowControl: { width: '100%' },
-  rowRoot: { paddingBlock: '12px' },
+  rowRoot: { paddingBlock: densityTokens['--lobe-density-content-gap'] },
   // Rows inside the advanced list are divided from the previous row; the first has no rule.
   rowSeparated: {
     borderBlockStartWidth: '1px',

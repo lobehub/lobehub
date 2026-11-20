@@ -1,15 +1,17 @@
 import { createStaticStyles, Flexbox, Grid, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { densityVars } from '@/styles/densityVars';
+
 import { type ViewMode } from './ViewModeSwitcher';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
 
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 

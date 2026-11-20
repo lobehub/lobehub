@@ -1,5 +1,7 @@
 import type { EnvironmentConfiguration } from '@lobechat/types';
 
+import { getProjectSettingsPath } from '@/features/Projects/Layout/navigation';
+
 import type { SandboxSelection } from './useSandboxPlacement';
 
 /**
@@ -31,6 +33,22 @@ export const repositorySlug = (environment: {
 };
 
 /**
+ * The repositories an environment checks out, as a label: the first one's
+ * `owner/name`, and `+N` for the rest — so a picker row never reads as one
+ * repository when the environment clones several.
+ */
+export const repositoriesLabel = (environment: {
+  configuration?: Pick<EnvironmentConfiguration, 'sources'> | null;
+}): string | undefined => {
+  const first = repositorySlug(environment);
+  if (!first) return undefined;
+  const count = (environment.configuration?.sources ?? []).filter(
+    (source) => source.kind === 'git',
+  ).length;
+  return count > 1 ? `${first} +${count - 1}` : first;
+};
+
+/**
  * What the environment chip says. A list still loading, or one that failed to
  * load, says nothing about the topic's environment — so it is not reported as
  * "none", which would read as initialization being off.
@@ -59,6 +77,28 @@ export const environmentChipState = ({
 
   return failed ? { kind: 'loadFailed' } : { kind: 'loading' };
 };
+
+/**
+ * The environment the server applies to a project conversation nobody placed:
+ * the project's, when it checks out a repository (see
+ * `resolveProjectTopicSandbox`). Undefined while it loads, or when there is none.
+ */
+export const projectStartEnvironmentId = (
+  environments: readonly {
+    configuration?: Pick<EnvironmentConfiguration, 'sources'> | null;
+    id: string;
+  }[],
+) =>
+  environments.find((environment) =>
+    (environment.configuration?.sources ?? []).some((source) => source.kind === 'git'),
+  )?.id;
+
+/**
+ * Where a conversation's environments are managed: a project's one on the
+ * project's settings, anything else in the workspace's list.
+ */
+export const environmentSettingsPath = (projectId?: string) =>
+  projectId ? getProjectSettingsPath(projectId, 'environments') : '/settings/environments';
 
 /**
  * Where a conversation works once a repository is picked: a fresh temporary

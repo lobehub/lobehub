@@ -51,9 +51,10 @@ const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(
     // §1.1). Only genuinely-empty (no error) keeps the "hide the section" behavior.
     if (projectItems.length === 0) {
       if (!error) return null;
-      if (hideHeader) return <SkillSection isEmpty error={error} onRetry={mutate} />;
+      if (hideHeader) return <SkillSection compact isEmpty error={error} onRetry={mutate} />;
       return (
         <SkillSection
+          compact
           isEmpty
           error={error}
           sectionHeader={{ title: t('workingPanel.skills.section.project') }}
@@ -66,6 +67,7 @@ const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(
 
     const list = (
       <SkillsList
+        compact
         items={items}
         onSelectSkill={onSelectSkill}
         onSkillDragStart={handleSkillDragStart}
@@ -76,6 +78,7 @@ const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(
 
     return (
       <SkillSection
+        compact
         sectionHeader={{
           count: items.length,
           title: t('workingPanel.skills.section.project'),

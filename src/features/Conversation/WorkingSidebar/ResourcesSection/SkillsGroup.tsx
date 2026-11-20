@@ -47,6 +47,7 @@ const SkillsGroup = memo<SkillsGroupProps>(({ deviceId, workingDirectory }) => {
 
   const renderList = (items: typeof projectItems) => (
     <SkillsList
+      compact
       items={items}
       onSelectSkill={onSelectSkill}
       onSkillDragStart={handleSkillDragStart}
@@ -66,10 +67,11 @@ const SkillsGroup = memo<SkillsGroupProps>(({ deviceId, workingDirectory }) => {
       <>
         <SkillsSearchBar onSearch={setSearchQuery} />
         {!hasMatchedProject && !hasMatchedDevice && (
-          <SkillSection isEmpty emptyText={t('workingPanel.skills.noSearchResults')} />
+          <SkillSection compact isEmpty emptyText={t('workingPanel.skills.noSearchResults')} />
         )}
         {hasMatchedProject && (
           <SkillSection
+            compact
             sectionHeader={{
               collapsible: false,
               count: matchedProjectItems.length,
@@ -81,6 +83,7 @@ const SkillsGroup = memo<SkillsGroupProps>(({ deviceId, workingDirectory }) => {
         )}
         {hasMatchedDevice && (
           <SkillSection
+            compact
             sectionHeader={{
               collapsible: false,
               count: matchedDeviceItems.length,
@@ -96,6 +99,7 @@ const SkillsGroup = memo<SkillsGroupProps>(({ deviceId, workingDirectory }) => {
 
   return (
     <SkillSection
+      compact
       isEmpty
       emptyText={t('workingPanel.skills.empty')}
       error={error}

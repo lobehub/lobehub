@@ -1,6 +1,8 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 export const pickerStyles = stylex.create({
   picker: {
     display: 'flex',
@@ -8,7 +10,7 @@ export const pickerStyles = stylex.create({
     height: 500,
     maxHeight: '55vh',
     minHeight: 240,
-    padding: 12,
+    padding: densityTokens['--lobe-density-content-gap'],
     borderWidth: 1,
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
@@ -19,7 +21,7 @@ export const pickerStyles = stylex.create({
     borderInlineStartWidth: 1,
     borderInlineStartStyle: 'solid',
     borderInlineStartColor: cssVar.colorBorderSecondary,
-    paddingInlineStart: 12,
+    paddingInlineStart: densityTokens['--lobe-density-content-gap'],
   },
   row: {
     display: 'flex',

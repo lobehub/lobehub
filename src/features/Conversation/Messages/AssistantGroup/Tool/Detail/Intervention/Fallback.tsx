@@ -18,6 +18,7 @@ import { pluginHelpers, useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 import { useUserStore } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { dataSelectors, useConversationStore } from '../../../../../store';
 import Arguments from '../Arguments';
@@ -36,7 +37,7 @@ const styles = stylex.create({
   },
   description: {
     paddingBlock: '8px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     fontSize: cssVar.fontSize,
     fontWeight: 600,
     color: cssVar.colorText,
@@ -44,7 +45,7 @@ const styles = stylex.create({
   reason: {
     marginBlockStart: '-4px',
     paddingBlockEnd: '8px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     fontSize: cssVar.fontSizeSM,
     lineHeight: 1.45,
     color: cssVar.colorTextSecondary,
