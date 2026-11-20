@@ -15,8 +15,13 @@ import type {
 const KILL_SIGNAL: NodeJS.Signals = 'SIGKILL';
 
 /**
- * Non-interactive backend: a plain `child_process` with stdin left as an
- * unused pipe and stdout/stderr inherited straight into the output files.
+ * Non-interactive backend: a plain `child_process` with stdin bound to the
+ * null device and stdout/stderr inherited straight into the output files.
+ *
+ * Nothing ever writes to a command's stdin here, so it must not be an open
+ * pipe: a command that reads stdin (a `(y/N)` confirm, `read`, a CLI that falls
+ * back to piped input) would wait on it until the shell timeout. With `ignore`
+ * it reads EOF at once and fails or cancels instead of hanging.
  */
 export class ChildProcessBackend implements ShellBackend {
   readonly capabilities: ShellBackendCapabilities = {
@@ -55,7 +60,7 @@ export class ChildProcessBackend implements ShellBackend {
       detached: process.platform !== 'win32',
       env: env as NodeJS.ProcessEnv,
       shell: false,
-      stdio: ['pipe', outputFiles.stdout.fd, outputFiles.stderr.fd],
+      stdio: ['ignore', outputFiles.stdout.fd, outputFiles.stderr.fd],
       // The Electron main process is a GUI process without a console, so on
       // Windows spawning a console program (powershell.exe / cmd.exe) allocates
       // a new console window that flashes up for every command. windowsHide

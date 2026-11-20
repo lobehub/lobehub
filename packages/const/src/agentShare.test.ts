@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   hasShareToolGrant,
+  isAgentShareModelRestrictionExempt,
   isShareToolApiGranted,
   resolveShareAllowedSkillIds,
   resolveShareToolGrants,
@@ -108,5 +109,49 @@ describe('resolveShareAllowedSkillIds', () => {
     // Default-closed: no grant means no skill, and `toolGrants` is never read
     // as a skill list even though the two share one identifier namespace.
     expect(resolveShareAllowedSkillIds(['pdf-report'], {})).toEqual([]);
+  });
+});
+
+describe('isAgentShareModelRestrictionExempt', () => {
+  const driver = (type: string) => ({ heterogeneousProvider: { type } });
+
+  it('exempts Claude Code and Codex agents, which run no provider model', () => {
+    expect(
+      isAgentShareModelRestrictionExempt({
+        agencyConfig: driver('claude-code'),
+        provider: 'claude-code',
+      }),
+    ).toBe(true);
+    expect(
+      isAgentShareModelRestrictionExempt({ agencyConfig: driver('codex'), provider: 'codex' }),
+    ).toBe(true);
+  });
+
+  it('keeps LobeHub agents and runtimes a visitor cannot run restricted', () => {
+    expect(isAgentShareModelRestrictionExempt(undefined)).toBe(false);
+    expect(isAgentShareModelRestrictionExempt({ agencyConfig: null, provider: 'lobehub' })).toBe(
+      false,
+    );
+    expect(
+      isAgentShareModelRestrictionExempt({
+        agencyConfig: { heterogeneousProvider: null },
+        provider: 'claude-code',
+      }),
+    ).toBe(false);
+    expect(
+      isAgentShareModelRestrictionExempt({
+        agencyConfig: driver('openclaw'),
+        provider: 'openclaw',
+      }),
+    ).toBe(false);
+  });
+
+  it('checks a real provider saved next to a Claude Code driver', () => {
+    expect(
+      isAgentShareModelRestrictionExempt({
+        agencyConfig: driver('claude-code'),
+        provider: 'openai',
+      }),
+    ).toBe(false);
   });
 });

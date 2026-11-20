@@ -115,7 +115,7 @@
   "connector.error.stdioDesktopOnly": "Konektory Stdio mogą synchronizować się tylko w aplikacji desktopowej. Otwórz LobeHub Desktop, aby zsynchronizować ten konektor.",
   "connector.kind.agent": "Konektor agenta",
   "connector.kind.builtin": "Wbudowane narzędzie",
-  "connector.kind.community": "Narzędzie społecznościowe",
+  "connector.kind.community": "Narzędzie z Rynku",
   "connector.kind.custom": "Niestandardowy konektor",
   "connector.kind.oauth": "Konektor OAuth",
   "connector.manageOnlyCreator": "Tylko twórca lub właściciel przestrzeni roboczej może zarządzać tym konektorem",

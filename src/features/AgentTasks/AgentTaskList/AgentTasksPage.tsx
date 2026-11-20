@@ -14,7 +14,6 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useSearchParams } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -27,6 +26,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskLabelSelectors, taskListSelectors } from '@/store/task/selectors';
 import { TASK_COLLECTION_PAGE_SIZE } from '@/store/task/slices/list/action';
+import { useHeaderActionSize } from '@/styles/density';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { createTaskModal } from '../CreateTaskModal';
@@ -235,6 +235,7 @@ export const resolveTaskCollectionView = (
 
 const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, projectId }) => {
   const { t } = useTranslation('chat');
+  const headerActionSmallSize = useHeaderActionSize(true);
   const navigate = useWorkspaceAwareNavigate();
   const isMobile = useIsMobile();
   const { allowed: canCreateTask, reason } = usePermission('create_content');
@@ -587,7 +588,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
                 <ActionIcon
                   disabled={createActionBehavior.disabled}
                   icon={Plus}
-                  size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                  size={headerActionSmallSize}
                   title={createActionBehavior.disabled ? reason : undefined}
                   onClick={handleCreateTask}
                 />
@@ -596,7 +597,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
                 <ActionIcon
                   disabled={!canCreateTask}
                   icon={Plus}
-                  size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                  size={headerActionSmallSize}
                   title={canCreateTask ? t('createTask.submitScheduled') : reason}
                   onClick={handleCreateScheduledTask}
                 />

@@ -22,6 +22,7 @@ import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { getForwardedMessageText } from '@/store/chat/slices/forward/helpers';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import {
   contextSelectors,
@@ -52,7 +53,12 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorFillQuaternary,
     backgroundImage: 'none',
   },
-  previewLines: { overflowY: 'auto', flex: '1', paddingBlock: '12px', paddingInline: '12px' },
+  previewLines: {
+    overflowY: 'auto',
+    flex: '1',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-content-gap'],
+  },
   note: { backgroundColor: 'transparent', backgroundImage: 'none' },
   noteDivider: {
     blockSize: '1px',

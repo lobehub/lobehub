@@ -54,7 +54,7 @@ const mockCreateHeaderWithAuth = vi.hoisted(() =>
 
 // Helper to compute expected date content from SystemDateProvider
 const getCurrentDateContent = () => {
-  const tz = 'UTC';
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const today = new Date();
   const year = today.toLocaleString('en-US', { timeZone: tz, year: 'numeric' });
   const month = today.toLocaleString('en-US', { month: '2-digit', timeZone: tz });
@@ -1258,9 +1258,9 @@ describe('ChatService', () => {
             role: 'system',
           }),
         );
-        expect(requestMessages[0].content).toContain('<available_skills>');
-        expect(requestMessages[0].content).toContain(
-          'Use the activateSkill tool to activate a skill when needed.',
+        expect(requestMessages[0].content).not.toContain('<available_skills>');
+        expect(requestMessages[0].content).not.toContain(
+          "Use the activateSkill tool to load a skill when the user's task matches its description.",
         );
         expect(requestMessages[0].content).toContain('<tool name="SEO">');
         expect(requestMessages[1]).toEqual(
@@ -1342,7 +1342,7 @@ describe('ChatService', () => {
             role: 'system',
           }),
         );
-        expect(requestMessages[0].content).toContain('<available_skills>');
+        expect(requestMessages[0].content).not.toContain('<available_skills>');
         expect(requestMessages[0].content).toContain('<tool name="SEO">');
         expect(requestMessages[1]).toEqual(
           expect.objectContaining({
@@ -1394,7 +1394,7 @@ describe('ChatService', () => {
             role: 'system',
           }),
         );
-        expect(requestMessages[0].content).toContain('<available_skills>');
+        expect(requestMessages[0].content).not.toContain('<available_skills>');
         expect(requestMessages[0].content).not.toContain('<tool name="SEO">');
         expect(requestMessages[1]).toEqual(
           expect.objectContaining({

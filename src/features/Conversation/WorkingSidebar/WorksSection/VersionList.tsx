@@ -1,33 +1,42 @@
 import type { WorkVersionItem } from '@lobechat/types';
-import { Center, Flexbox, Spin, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
 import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskItemDate';
 import { useWorkStore, workActions, workSelectors } from '@/store/work';
+import { sidebarRow } from '@/styles/density.stylex';
 import { computeWorkVersionCostDeltas, formatWorkVersionCost } from '@/utils/workVersionCost';
 
+// Version rows start where the header's icon does: row padding + 16px chevron column + gap.
 const styles = stylex.create({
-  context: { flexShrink: 0, color: cssVar.colorTextTertiary },
+  context: { flexShrink: 0, fontSize: sidebarRow.metaFontSize, color: cssVar.colorTextTertiary },
   error: {
-    paddingBlock: '8px',
-    paddingInlineStart: '36px',
-    paddingInlineEnd: '8px',
+    display: 'flex',
+    alignItems: 'center',
+    minHeight: sidebarRow.height,
+    paddingInlineStart: `calc(${sidebarRow.paddingInline} + 16px + ${sidebarRow.gap})`,
+    paddingInlineEnd: sidebarRow.paddingInline,
+    fontSize: sidebarRow.metaFontSize,
     color: cssVar.colorError,
   },
-  versionCost: { color: cssVar.colorTextTertiary },
-  versionList: {
-    marginInlineStart: '34px',
-    paddingBlockStart: '6px',
-    paddingBlockEnd: '10px',
-    borderBlockStartWidth: '1px',
-    borderBlockStartStyle: 'solid',
-    borderBlockStartColor: cssVar.colorBorderSecondary,
+  skeleton: {
+    paddingInlineStart: `calc(${sidebarRow.paddingInline} + 16px + ${sidebarRow.gap})`,
+    paddingInlineEnd: 0,
   },
-  versionRow: { paddingBlock: '6px', fontSize: '12px' },
-  versionTitle: { color: cssVar.colorTextSecondary },
+  versionCost: { color: cssVar.colorTextTertiary },
+  versionList: { gap: '1px' },
+  versionRow: {
+    justifyContent: 'center',
+    minHeight: sidebarRow.height,
+    paddingInlineStart: `calc(${sidebarRow.paddingInline} + 16px + ${sidebarRow.gap})`,
+    paddingInlineEnd: sidebarRow.paddingInline,
+    fontSize: sidebarRow.metaFontSize,
+  },
+  versionTitle: { fontSize: sidebarRow.textFontSize, color: cssVar.colorTextSecondary },
 });
 
 const EMPTY_VERSIONS: WorkVersionItem[] = [];
@@ -46,11 +55,7 @@ const VersionList = memo<{ workId: string }>(({ workId }) => {
   if (stored === undefined && !error && !isHydrated) return null;
 
   if (stored === undefined && !error) {
-    return (
-      <Center height={56}>
-        <Spin size="small" />
-      </Center>
-    );
+    return <SkeletonList compact className={stylex.props(styles.skeleton).className} rows={2} />;
   }
 
   // A failed refresh keeps the settled timeline on screen.
@@ -64,8 +69,10 @@ const VersionList = memo<{ workId: string }>(({ workId }) => {
 
   if (data.length === 0) {
     return (
-      <Flexbox className={stylex.props(styles.versionList).className}>
-        <Text type={'secondary'}>{t('workingPanel.works.emptyVersions')}</Text>
+      <Flexbox className={stylex.props(styles.versionRow).className}>
+        <Text fontSize={12} type={'secondary'}>
+          {t('workingPanel.works.emptyVersions')}
+        </Text>
       </Flexbox>
     );
   }

@@ -10,6 +10,7 @@ import {
   getTaskVisibilityLabelKey,
 } from '@/features/AgentTasks/features/taskVisibilityLabel';
 import TaskVisibilityTag from '@/features/AgentTasks/features/TaskVisibilityTag';
+import { densityVars } from '@/styles/densityVars';
 
 interface GenerationVisibilitySelectorProps {
   disabledReason?: string;
@@ -32,7 +33,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-width: 0;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 1;
     color: ${cssVar.colorText};
     text-overflow: ellipsis;

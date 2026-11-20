@@ -9,6 +9,7 @@ import { X } from 'lucide-react';
 import { memo, useRef } from 'react';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import { useAgentSelectionStore } from './store';
 
@@ -36,7 +37,13 @@ const styles = stylex.create({
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
-  title: { overflow: 'hidden', flex: '1', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  title: {
+    overflow: 'hidden',
+    flex: '1',
+    fontSize: sidebarRow.textFontSize,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
 });
 
 export interface AgentItemData {

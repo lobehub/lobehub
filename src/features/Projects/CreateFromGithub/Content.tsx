@@ -1,4 +1,3 @@
-import type { ScmRepositoryListItem } from '@lobechat/types';
 import {
   Button,
   cssVar,
@@ -19,32 +18,36 @@ import { useProjectStore } from '@/store/project';
 
 import {
   buildCreateProjectRequest,
+  DEFAULT_MAIN_AGENT_MODE,
   getCreateProjectInput,
   getProjectConflictField,
   getProjectFieldSuggestions,
   isProjectIdentifierValid,
+  type MainAgentMode,
   reserveProjectIds,
 } from '../createProjectForm';
 import MainAgentSection from '../MainAgentSection';
+import { useDefaultMainAgent } from '../useDefaultMainAgent';
 import { parseGithubRepository } from './githubRepository';
-import RepositoryList from './RepositoryList';
+import RepositoryField, { AdvancedRepositories, type PickedRepository } from './RepositoryField';
 
 interface FormState {
-  /** Default branch of the picked repository; unknown for a pasted URL. */
-  defaultBranch?: string;
   /** The field another project already holds, as the last create reported it. */
   duplicate?: 'identifier' | 'name';
   identifier: string;
   loading: boolean;
+  /** Explicit pick in this dialog; otherwise the workspace inbox agent, LobeAI. */
+  mainAgentId?: string;
+  mainAgentMode: MainAgentMode;
   name: string;
   nameEdited: boolean;
-  url: string;
 }
 
 /**
  * New project from a GitHub repository: pick one the connected GitHub App can
- * read, or paste a URL, and the project is named after it, led by an agent of
- * its own, and created with the repository attached as its environment —
+ * read, or paste a URL, and the project is named after it, led by an existing
+ * agent (LobeAI unless another is picked) or by one created for it, and created
+ * with the repository attached as its environment —
  * no fields to fill unless the defaults are wrong.
  */
 const CreateFromGithubContent = () => {
@@ -55,16 +58,21 @@ const CreateFromGithubContent = () => {
   const [form, setForm] = useState<FormState>({
     identifier: '',
     loading: false,
+    mainAgentMode: DEFAULT_MAIN_AGENT_MODE,
     name: '',
     nameEdited: false,
-    url: '',
   });
+
+  // The project's environment checks these out; the first one names the project.
+  const [repositories, setRepositories] = useState<PickedRepository[]>([]);
+  const [main, ...extras] = repositories;
 
   // Taken once per open dialog: the dedicated agent's previewed character is seeded by it.
   const [reservedIds] = useState(reserveProjectIds);
 
-  const repository = parseGithubRepository(form.url);
-  const urlInvalid = Boolean(form.url.trim()) && !repository;
+  const repository = main && parseGithubRepository(main.url);
+  const defaultMainAgentId = useDefaultMainAgent();
+  const mainAgentId = form.mainAgentId ?? defaultMainAgentId;
   const identifierInvalid =
     (Boolean(form.identifier.trim()) && !isProjectIdentifierValid(form.identifier)) ||
     form.duplicate === 'identifier';
@@ -76,17 +84,15 @@ const CreateFromGithubContent = () => {
       })
     : null;
 
-  /** A new repository renames the project unless the person already named it. */
-  const applyUrl = (url: string, defaultBranch?: string) => {
-    const parsed = parseGithubRepository(url);
-    setForm((current) => {
-      const name = current.nameEdited ? current.name : (parsed?.name ?? '');
-      return { ...current, defaultBranch, duplicate: undefined, name, url };
-    });
-  };
-
-  const selectRepository = (repo: ScmRepositoryListItem) => {
-    applyUrl(repo.htmlUrl, repo.defaultBranch);
+  /** A new first repository renames the project unless the person already named it. */
+  const changeRepositories = (next: PickedRepository[]) => {
+    setRepositories(next);
+    const first = next[0] && parseGithubRepository(next[0].url);
+    setForm((current) => ({
+      ...current,
+      duplicate: undefined,
+      name: current.nameEdited ? current.name : (first?.name ?? ''),
+    }));
   };
 
   const updateName = (name: string) => {
@@ -103,16 +109,28 @@ const CreateFromGithubContent = () => {
     setForm((current) => ({ ...current, loading: true }));
     try {
       const project = await createProject({
-        ...buildCreateProjectRequest(createInput, { ids: reservedIds }),
+        ...buildCreateProjectRequest(createInput, {
+          ids: reservedIds,
+          mainAgentId,
+          mainAgentMode: form.mainAgentMode,
+        }),
         repository: {
-          defaultBranch: form.defaultBranch,
+          defaultBranch: main?.defaultBranch,
           name: repository.fullName,
           url: repository.url,
         },
+        ...(extras.length > 0 && {
+          additionalRepositories: extras.map(({ defaultBranch, url }) => ({
+            url,
+            ...(defaultBranch && { defaultBranch }),
+          })),
+        }),
       });
-      // The project created an agent and maybe the Project label; show both.
-      const { refreshAgentLabels, refreshAgentList } = useHomeStore.getState();
-      void Promise.all([refreshAgentList(), refreshAgentLabels()]);
+      if (form.mainAgentMode === 'dedicated') {
+        // The project created an agent and maybe the Project label; show both.
+        const { refreshAgentLabels, refreshAgentList } = useHomeStore.getState();
+        void Promise.all([refreshAgentList(), refreshAgentLabels()]);
+      }
       close();
       navigate(`/project/${project.slug ?? project.id}`);
     } catch (error) {
@@ -134,31 +152,11 @@ const CreateFromGithubContent = () => {
   return (
     <>
       <Flexbox gap={16} padding={16}>
-        {/* Picking a connected repository is the primary path; the URL field is the fallback. */}
-        <RepositoryList
-          selected={repository?.fullName}
+        <RepositoryField
+          value={repositories}
+          onChange={changeRepositories}
           onConnect={connectGithub}
-          onSelect={selectRepository}
         />
-
-        <Flexbox gap={6}>
-          <Text fontSize={13} weight={500}>
-            {t('createFromGithub.urlLabel')}
-          </Text>
-          <Input
-            aria-invalid={urlInvalid}
-            placeholder={t('createFromGithub.urlPlaceholder')}
-            style={urlInvalid ? { borderColor: cssVar.colorError } : undefined}
-            value={form.url}
-            onChange={(event) => applyUrl(event.target.value)}
-            onPressEnter={handleCreate}
-          />
-          {urlInvalid && (
-            <Text fontSize={12} type={'danger'}>
-              {t('createFromGithub.urlInvalid')}
-            </Text>
-          )}
-        </Flexbox>
 
         {repository && (
           <Flexbox horizontal gap={12}>
@@ -198,20 +196,32 @@ const CreateFromGithubContent = () => {
             </Flexbox>
           </Flexbox>
         )}
-        {repository && (
-          <Text fontSize={12} type={identifierInvalid || form.duplicate ? 'danger' : 'secondary'}>
+        {repository && (identifierInvalid || form.duplicate) && (
+          <Text fontSize={12} type={'danger'}>
             {form.duplicate === 'name'
               ? t('createFromGithub.duplicateName')
               : form.duplicate === 'identifier'
                 ? t('createFromGithub.duplicateIdentifier')
-                : identifierInvalid
-                  ? t('create.identifierInvalid')
-                  : t('createFromGithub.environmentHint')}
+                : t('create.identifierInvalid')}
           </Text>
         )}
         {repository && (
-          <MainAgentSection dedicatedAgentId={reservedIds.agentId} projectName={form.name} />
+          <MainAgentSection
+            agentId={mainAgentId}
+            dedicatedAgentId={reservedIds.agentId}
+            disabled={form.loading}
+            mode={form.mainAgentMode}
+            projectName={form.name}
+            onAgentChange={(id) => setForm((current) => ({ ...current, mainAgentId: id }))}
+            onModeChange={(mainAgentMode) => setForm((current) => ({ ...current, mainAgentMode }))}
+          />
         )}
+        <AdvancedRepositories
+          layoutHint={t('createFromGithub.layoutHint')}
+          value={repositories}
+          onChange={changeRepositories}
+          onConnect={connectGithub}
+        />
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

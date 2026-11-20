@@ -26,6 +26,8 @@ import { useCacheScope } from '@/libs/swr/useCacheScope';
 import type { GoalListFilter } from '@/store/goal';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 import { globalGoalListScopeId, goalListKey, goalListScopeId } from '@/store/goal/projection';
+import { useDensityTokens } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import { createGoalModal } from './CreateGoalModal';
 import GoalAgentFilter from './GoalAgentFilter';
@@ -56,7 +58,7 @@ const styles = createStaticStyles(({ css }) => ({
   list: css`
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    gap: ${densityVars.contentGap};
 
     @media (width <= 900px) {
       grid-template-columns: minmax(0, 1fr);
@@ -69,7 +71,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   metric: css`
     min-width: 88px;
-    padding-inline-start: 16px;
+    padding-inline-start: ${densityVars.cardPadding};
     border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
 
     &:first-child {
@@ -116,6 +118,7 @@ interface AgentGoalsPageProps {
 
 const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   const { t } = useTranslation('chat');
+  const { pageTitleFontSize } = useDensityTokens();
   const navigate = useWorkspaceAwareNavigate();
   const cacheScope = useCacheScope();
   const isGlobal = !agentId && !projectId;
@@ -373,7 +376,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
               {/* Wraps so the filters drop below the title on a phone instead of crushing it. */}
               <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
                 <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
-                  <Text fontSize={16} weight={600}>
+                  <Text fontSize={pageTitleFontSize} weight={600}>
                     {t('goalPage.listTitle')}
                   </Text>
                   <span className={styles.countBadge}>{visibleGoalCount}</span>

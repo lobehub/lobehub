@@ -1,5 +1,7 @@
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 /**
  * One sheet, Linear-style: a sticky header row, one hairline per row, group rows that run the
  * full width, and hover-only controls. The grid is shared by the header row and every rule row
@@ -115,6 +117,9 @@ export const styles = createStaticStyles(({ css }) => ({
   rowArchived: css`
     color: ${cssVar.colorTextTertiary};
   `,
+  rowCompact: css`
+    padding-block: 6px;
+  `,
   rowHover: css`
     &:hover [data-hover] {
       opacity: 1;
@@ -155,6 +160,11 @@ export const styles = createStaticStyles(({ css }) => ({
   `,
   sectionCollapsed: css`
     background: ${cssVar.colorFillQuaternary};
+  `,
+  // Compact group rows sit on the shared section-header height.
+  sectionCompact: css`
+    height: ${densityVars.controlHeight};
+    margin-block-start: 6px;
   `,
   sectionCount: css`
     font-size: 12px;

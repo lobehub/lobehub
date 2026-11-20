@@ -1,10 +1,8 @@
 import { isDesktop } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
-import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   AppWindowIcon,
   BellIcon,
-  Blocks,
   Brain,
   Building2,
   ChartColumnBigIcon,
@@ -234,11 +232,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.ServiceModel,
               label: t('tab.serviceModel'),
             },
-            {
-              icon: SkillsIcon,
-              key: WorkspaceSettingsTabs.Skill,
-              label: t('workspaceSetting.tab.skill'),
-            },
             // Label registry is readable by everyone; the page itself keeps
             // management actions behind the admin gate (disabled, not hidden).
             {
@@ -262,11 +255,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Integrations,
               label: t('tab.integrations'),
             },
-            {
-              icon: Blocks,
-              key: WorkspaceSettingsTabs.Connector,
-              label: t('workspaceSetting.tab.connector'),
-            },
             // Every member sees the workspace's event subscriptions, so it is
             // clear what fires the shared agents; managing one is per row.
             enableWebhook && {
@@ -279,11 +267,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: WebhookIcon,
               key: WorkspaceSettingsTabs.Webhooks,
               label: t('tab.webhooks'),
-            },
-            {
-              icon: KeyRound,
-              key: WorkspaceSettingsTabs.Creds,
-              label: t('tab.creds'),
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Connection,
@@ -312,6 +295,13 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: ContainerIcon,
               key: WorkspaceSettingsTabs.Environments,
               label: t('tab.environments'),
+            },
+            // Secrets the agents' runs read at execution time, next to the
+            // environments that consume them.
+            {
+              icon: KeyRound,
+              key: WorkspaceSettingsTabs.Creds,
+              label: t('tab.creds'),
             },
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Resource,

@@ -11,6 +11,7 @@ import { messengerActions, messengerSelectors, useMessengerStore } from '@/store
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import AgentSelect from '../../AgentSelect';
 import { type MessengerPlatform, PlatformBrandIcon } from '../../constants';
@@ -57,7 +58,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   iconRow: css`
     display: flex;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
     justify-content: center;
 
@@ -65,7 +66,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   infoRow: css`
     display: flex;
-    gap: 16px;
+    gap: ${densityVars.sectionGap};
     align-items: center;
     justify-content: space-between;
 
@@ -85,8 +86,8 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     background: #22c55e;
   `,
   warningBlock: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border-color: ${cssVar.colorWarningBorder};
     background: ${cssVar.colorWarningBg};
   `,

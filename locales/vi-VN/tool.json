@@ -115,7 +115,7 @@
   "connector.error.stdioDesktopOnly": "Các kết nối Stdio chỉ có thể đồng bộ trong ứng dụng máy tính. Mở LobeHub Desktop để đồng bộ kết nối này.",
   "connector.kind.agent": "Kết nối Agent",
   "connector.kind.builtin": "Công cụ tích hợp",
-  "connector.kind.community": "Công cụ cộng đồng",
+  "connector.kind.community": "Công cụ Chợ",
   "connector.kind.custom": "Kết nối tùy chỉnh",
   "connector.kind.oauth": "Kết nối OAuth",
   "connector.manageOnlyCreator": "Chỉ người tạo hoặc chủ sở hữu không gian làm việc mới có thể quản lý trình kết nối này",

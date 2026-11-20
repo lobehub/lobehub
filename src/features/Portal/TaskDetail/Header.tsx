@@ -1,4 +1,3 @@
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
 import { ActionIcon } from '@lobehub/ui';
 import { ExternalLink } from 'lucide-react';
 import { memo } from 'react';
@@ -9,6 +8,7 @@ import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useTaskStore } from '@/store/task';
+import { useHeaderActionSize } from '@/styles/density';
 import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import PortalHeader from '../components/Header';
@@ -17,6 +17,7 @@ import { getTaskDetailPageUrl } from './url';
 import { useForeignTaskDetail } from './useForeignTaskDetail';
 
 const TaskDetailHeader = memo<{ onClose?: () => void }>(({ onClose }) => {
+  const headerActionSize = useHeaderActionSize(true);
   const { t } = useTranslation('verify');
   const appOrigin = useAppOrigin();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
@@ -45,7 +46,7 @@ const TaskDetailHeader = memo<{ onClose?: () => void }>(({ onClose }) => {
         <ActionIcon
           disabled={!pageUrl}
           icon={ExternalLink}
-          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+          size={headerActionSize}
           title={t('report.actions.openInBrowser')}
           onClick={() => {
             if (!pageUrl) return;

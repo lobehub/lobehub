@@ -1,15 +1,14 @@
-import { AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC } from '@lobechat/const';
 import type { ChannelExecutionConfig } from '@lobechat/types';
-import { and, count, desc, eq, isNotNull, isNull, ne } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, ne } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
 import type { ChannelItem, ChannelJobItem, ChannelMemberItem } from '../../schemas';
-import { agentOperations, agentShares, channelJobs, messages, topics } from '../../schemas';
+import { agentOperations, channelJobs, topics } from '../../schemas';
 import type { Transaction } from '../../type';
 import { CHANNEL_TOPIC_TRIGGER } from '../../utils/topicVisibility';
 
 // Matches Bot AgentBridgeService: check on the next request, never expire guild Threads.
-const TOPIC_STALE_THRESHOLD = 4 * 60 * 60 * 1000;
+export const TOPIC_STALE_THRESHOLD = 4 * 60 * 60 * 1000;
 
 /**
  * Resolve continuation from the source-side job history, without Channel fields on topics.
@@ -22,8 +21,7 @@ const TOPIC_STALE_THRESHOLD = 4 * 60 * 60 * 1000;
  *
  * Another person's shared Agent runs as its owner, so the topic belongs to the owner and its
  * scope, with the requester as `senderId` — the same row a visit to the share page would write,
- * hidden from the owner's own lists. Such a topic also ends at the share's per-topic turn limit,
- * where the share page would ask for a new conversation.
+ * hidden from the owner's own lists.
  */
 export interface ChannelTopicScope {
   /** The requester when the run executes as a shared Agent's owner. */
@@ -83,7 +81,6 @@ export const continuationTopic = async (
     (topic.senderId ?? undefined) === scope.senderId &&
     !topic.isDeleted &&
     (job.threadId || Date.now() - topic.updatedAt.getTime() <= TOPIC_STALE_THRESHOLD) &&
-    !(executionConfig.share && (await reachedShareTurnLimit(tx, member.agentId!, topic.id))) &&
     // A topic another branch is still writing into stays that run's own. Gathering a running
     // peer into a Thread changes only its branch, so its topic would otherwise look settled
     // here: the main timeline would start on it while the gathered run still holds it, and the
@@ -153,18 +150,4 @@ export const resolveTopic = async (
     })
     .returning();
   return created;
-};
-
-const reachedShareTurnLimit = async (tx: Transaction, agentId: string, topicId: string) => {
-  const [share] = await tx
-    .select({ config: agentShares.shareConfig })
-    .from(agentShares)
-    .where(eq(agentShares.agentId, agentId))
-    .limit(1);
-  const limit = share?.config?.maxTurnsPerTopic ?? AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC;
-  const [turns] = await tx
-    .select({ value: count() })
-    .from(messages)
-    .where(and(eq(messages.topicId, topicId), eq(messages.role, 'user')));
-  return (turns?.value ?? 0) >= limit;
 };

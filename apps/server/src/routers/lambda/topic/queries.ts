@@ -17,10 +17,35 @@ import { router } from '@/libs/trpc/lambda';
 import { TopicReferenceService } from '@/server/services/topicReference';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
-import { assertCanUseConversationTargets } from '../_helpers/conversationResourceGuard';
+import {
+  assertCanUseConversationTargets,
+  assertCanViewConversationTargets,
+  assertCanViewTopicTargets,
+} from '../_helpers/conversationResourceGuard';
 import { batchResolveAgentIdFromSessions, resolveContext } from '../_helpers/resolveContext';
 import { guardCtx, topicProcedure, topicSearchProcedure } from './procedures';
 import { readTopicTranscript, topicTranscriptInput } from './transcript';
+
+/**
+ * Child topics may run any agent of the workspace: the ones among `agentIds`
+ * the caller may view (another member's private agent stays hidden).
+ */
+const viewableAgentIds = async (
+  ctx: Parameters<typeof guardCtx>[0],
+  agentIds: string[],
+): Promise<string[]> => {
+  const viewable: string[] = [];
+  // A topic's children run few distinct agents; each check is a lookup.
+  for (const agentId of agentIds) {
+    try {
+      await assertCanViewConversationTargets(guardCtx(ctx), [{ agentId }]);
+      viewable.push(agentId);
+    } catch {
+      // Not viewable: left out.
+    }
+  }
+  return viewable;
+};
 
 export const queryRouter = router({
   getTopicDetail: topicProcedure
@@ -103,6 +128,12 @@ export const queryRouter = router({
         isInbox: z.boolean().optional(),
         /** Only topics the caller created — the workspace "only mine" filter. */
         onlyMine: z.boolean().optional(),
+        /**
+         * Only the topics opened from this one (its child topics), whatever
+         * their agent. Needs `view` on that topic; children whose agent the
+         * caller may not view are left out.
+         */
+        openedByTopicId: z.string().nullish(),
         pageSize: z.number().max(100).optional(),
         sessionId: z.string().nullish(),
         /**
@@ -128,8 +159,32 @@ export const queryRouter = router({
         excludeTriggers,
         includeTriggers,
         triggers,
+        openedByTopicId,
         ...rest
       } = input;
+
+      // Child topics of one topic: authorized on the parent, then per child agent.
+      if (openedByTopicId) {
+        await assertCanViewTopicTargets(guardCtx(ctx), [openedByTopicId]);
+        // Decide which child agents the caller may view first, so paging and
+        // the total only ever count what can be shown.
+        const openedByAgentIds = ctx.workspaceId
+          ? await viewableAgentIds(
+              ctx,
+              await ctx.topicModel.listChildTopicAgentIds(openedByTopicId),
+            )
+          : undefined;
+        const result = await ctx.topicModel.query({
+          excludeStatuses,
+          excludeTriggers,
+          includeTriggers,
+          openedByAgentIds,
+          openedByTopicId,
+          triggers,
+          ...rest,
+        });
+        return { items: result.items, total: result.total };
+      }
 
       // If groupId is provided, query by groupId directly
       if (groupId) {

@@ -212,15 +212,6 @@ export async function createOperation(
         {
           acceptsMemberRuntimeEnd,
           agentConfig,
-          // Persisted so a queue worker that never ran this op's init still
-          // applies the owner-configured visitor redaction policy instead of the
-          // fail-closed full strip. See `gatewayVisitorRedaction.ts`.
-          visitorRedaction: agentShareVisitor
-            ? {
-                showErrorDetails: agentShareVisitor.showErrorDetails,
-                showModelInfo: agentShareVisitor.showModelInfo,
-              }
-            : undefined,
           mirrorToOperationId,
           modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
           // Share-visitor runs execute as the creator (`userId`) but stream only

@@ -19,6 +19,11 @@ const log = debug('context-engine:tools-engine');
  */
 export class ToolsEngine {
   private manifestSchemas: Map<string, LobeToolManifest>;
+  /**
+   * Connector rows sharing a base identifier, by that identifier: the tool ids
+   * of every row's tool set other than the one keyed by the identifier itself.
+   */
+  private connectorRowToolIds = new Map<string, string[]>();
   private enableChecker?: PluginEnableChecker;
   private functionCallChecker?: FunctionCallChecker;
   private defaultToolIds: string[];
@@ -37,6 +42,7 @@ export class ToolsEngine {
     this.manifestSchemas = new Map(
       options.manifestSchemas.map((schema) => [schema.identifier, schema]),
     );
+    this.indexConnectorRows();
     this.enableChecker = options.enableChecker;
     this.functionCallChecker = options.functionCallChecker;
 
@@ -192,6 +198,7 @@ export class ToolsEngine {
       reason: 'not_found' | 'disabled' | 'incompatible';
     }> = [];
 
+    pluginIds = this.expandConnectorRows(pluginIds);
     log('Filtering plugins: %o', pluginIds);
 
     // If function calling is not supported, filter all plugins as incompatible
@@ -220,12 +227,14 @@ export class ToolsEngine {
       }
 
       // Use injected checker function or default check logic
+      // A connector row's tool set is enabled as its connector is: agent
+      // configuration and enable rules speak base identifiers.
       const isEnabled = this.enableChecker
         ? this.enableChecker({
             context,
             manifest,
             model,
-            pluginId,
+            pluginId: manifest.connector?.identifier ?? pluginId,
             provider,
           })
         : this.defaultEnabledCheck();
@@ -320,6 +329,7 @@ export class ToolsEngine {
     for (const schema of manifestSchemas) {
       this.manifestSchemas.set(schema.identifier, schema);
     }
+    this.indexConnectorRows();
   }
 
   /**
@@ -327,13 +337,48 @@ export class ToolsEngine {
    */
   addPluginManifest(manifest: LobeToolManifest): void {
     this.manifestSchemas.set(manifest.identifier, manifest);
+    this.indexConnectorRows();
   }
 
   /**
    * Remove plugin manifest
    */
   removePluginManifest(pluginId: string): boolean {
-    return this.manifestSchemas.delete(pluginId);
+    const removed = this.manifestSchemas.delete(pluginId);
+    this.indexConnectorRows();
+    return removed;
+  }
+
+  private indexConnectorRows(): void {
+    this.connectorRowToolIds.clear();
+    for (const manifest of this.manifestSchemas.values()) {
+      const base = manifest.connector?.identifier;
+      if (!base || base === manifest.identifier) continue;
+      this.connectorRowToolIds.set(base, [
+        ...(this.connectorRowToolIds.get(base) ?? []),
+        manifest.identifier,
+      ]);
+    }
+  }
+
+  /**
+   * Requested ids, each followed by the other connector rows serving it: a
+   * pinned or activated connector identifier enables every row's tool set the
+   * run resolved for it (a private or personal row beside the shared one).
+   */
+  private expandConnectorRows(toolIds: string[]): string[] {
+    if (this.connectorRowToolIds.size === 0) return toolIds;
+    return [
+      ...new Set(
+        toolIds.flatMap((id) => {
+          const rows = this.connectorRowToolIds.get(id);
+          if (!rows) return [id];
+          // A connector with only private or personal rows has no manifest
+          // under its bare identifier: that is not a missing tool
+          return this.manifestSchemas.has(id) ? [id, ...rows] : rows;
+        }),
+      ),
+    ];
   }
 
   /**
@@ -341,7 +386,7 @@ export class ToolsEngine {
    */
   getEnabledPluginManifests(toolIds: string[] = []): Map<string, LobeToolManifest> {
     // Merge user-provided tool IDs with default tool IDs
-    const allToolIds = [...toolIds, ...this.defaultToolIds];
+    const allToolIds = this.expandConnectorRows([...toolIds, ...this.defaultToolIds]);
 
     log('Getting enabled plugin manifests for pluginIds=%o', allToolIds);
 

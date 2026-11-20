@@ -79,6 +79,25 @@ describe('lobe-activator executor discovery allowlist', () => {
     expect(activatedIds).not.toContain('internal-admin');
   }, 10_000);
 
+  it('only activates tools in the operation snapshot, including a contextual attachment reader', async () => {
+    mockGetState.mockReturnValue({
+      builtinTools: [
+        makeBuiltinTool('lobe-attachments', false),
+        makeBuiltinTool('lobe-user-memory'),
+      ],
+      installedPlugins: [],
+    });
+    mockAvailableToolsForDiscovery.mockReturnValue([{ identifier: 'lobe-user-memory' }]);
+    const result = await activatorExecutor.invoke(
+      'activateTools',
+      { identifiers: ['lobe-user-memory', 'lobe-attachments'], reason: 'Read an attachment' },
+      { messageId: 'msg', stepContext: { discoverableToolIds: ['lobe-attachments'] } },
+    );
+    expect(result.state?.activatedTools?.map((item) => item.identifier)).toEqual([
+      'lobe-attachments',
+    ]);
+  });
+
   it('should reject all identifiers when none are discoverable', async () => {
     const hiddenTool = makeBuiltinTool('secret-tool', false);
 

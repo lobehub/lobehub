@@ -6,6 +6,8 @@ import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import {
   formatCreditAmount,
   getBudgetContextFromErrorBody,
@@ -31,7 +33,7 @@ const styles = stylex.create({
   centered: { textAlign: 'center', textWrap: 'balance' },
   fact: {
     display: 'flex',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     justifyContent: 'space-between',
     width: '100%',
     fontSize: '13px',
@@ -51,7 +53,7 @@ const styles = stylex.create({
     width: '100%',
     maxWidth: { 'default': '360px', '@media (width <= 768px)': '90%' },
   },
-  title: { fontSize: '16px', fontWeight: 'bold' },
+  title: { fontSize: densityTokens['--lobe-density-page-title-font-size'], fontWeight: 'bold' },
 });
 
 const getBudgetDescriptionKey = (pricingBasis?: PlanLimitPricingBasis) => {

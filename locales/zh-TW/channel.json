@@ -91,7 +91,6 @@
   "events.youInvited": "您邀請了 {{names}} 加入頻道",
   "events.youInvitedMembers": "您邀請了 <members/> 加入頻道",
   "failure.locate": "顯示訊息",
-  "failure.messageLabel": "回覆失敗：{{names}}",
   "failure.title": "回覆失敗 · {{count}}",
   "followers": "回覆來自：{{names}}",
   "invite.directHint": "在此邀請將建立一個包含 {{name}} 和您所選成員的新頻道。您與 {{name}} 的此對話保持不變。",

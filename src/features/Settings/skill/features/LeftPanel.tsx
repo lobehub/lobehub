@@ -1,24 +1,49 @@
 'use client';
 
-import { Button, DropdownMenu, Flexbox, Icon, SearchBar, Text, Tooltip } from '@lobehub/ui';
-import { GithubIcon } from '@lobehub/ui/icons';
+import type { ConnectorVisibility } from '@lobechat/types';
+import {
+  ActionIcon,
+  Button,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  SearchBar,
+  Tabs,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronDown, FileArchive, Grid2x2Plus, Link, Plus, Store } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import {
+  ChevronDown,
+  Grid2x2Plus,
+  Import,
+  LockIcon,
+  Plus,
+  RotateCw,
+  Store,
+  UsersIcon,
+} from 'lucide-react';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { CustomConnectorModal } from '@/features/Connectors';
-import { createSkillStoreModal } from '@/features/SkillStore';
-import { openImportFromGithubModal } from '@/features/SkillStore/SkillList/ImportFromGithubModal';
-import { openImportFromUrlModal } from '@/features/SkillStore/SkillList/ImportFromUrlModal';
-import { openUploadSkillModal } from '@/features/SkillStore/SkillList/UploadSkillModal';
+import { MARKETPLACE_SKILL_PATH } from '@/features/Marketplace/paths';
+import { pillTabClassNames } from '@/features/Marketplace/pillTabs';
+import { NavPanelDensityContext } from '@/features/NavPanel/density';
+import { createMarketSkillStoreModal, createSkillStoreModal } from '@/features/SkillStore';
+import { openSkillImportModal } from '@/features/SkillStore/SkillImportModal';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 import { usePermission } from '@/hooks/usePermission';
+import { useInterfaceDensity } from '@/styles/density';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
+import { densityVars } from '@/styles/densityVars';
 
 import ConnectorManagePolicy from './ConnectorManagePolicy';
+import { getPageSearchPlacement } from './pageHeaderLayout';
 import { type ToolDetailType } from './SkillDetail';
-import SkillList, { type SkillViewMode } from './SkillList';
+import SkillList, { type SkillListHeaderContext, type SkillViewMode } from './SkillList';
 import { SkillListVariantProvider } from './SkillListRow';
 
 const styles = stylex.create({
@@ -38,21 +63,41 @@ const styles = stylex.create({
     },
   },
   body: { overflowY: 'auto', flex: '1', paddingBlock: '4px', paddingInline: '8px' },
+  columnTabs: { paddingInline: '8px' },
   pageBody: { paddingBlockStart: '0', paddingBlockEnd: '24px', paddingInline: '0' },
-  // Title and one line of what connectors do on the left; search and the page
-  // actions on the right, the primary Add last.
+  // The Codex Plugins header: the title shares its row with search, the page
+  // controls and the primary Add (last); one line of what the page does sits
+  // 8px under both, so a long description never pushes the toolbar down.
   pageHeader: {
     display: 'flex',
+    flexDirection: 'column',
     flexShrink: 0,
-    flexWrap: 'wrap',
-    gap: '16px',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+    gap: densityTokens['--lobe-density-gap'],
     paddingBlockStart: '32px',
     paddingBlockEnd: '8px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
+  // Mobile: the shell's top bar sits right above, so the title needs less air.
+  pageHeaderCompact: { paddingBlockStart: '16px' },
+  pageHeadRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: densityTokens['--lobe-density-section-gap'],
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  // No radius token reaches a pill; the Codex search field and Add button are pills.
   pageSearch: { width: '240px' },
+  // Mobile: a 240px field beside refresh and Add is ~390px of toolbar that
+  // cannot wrap, wider than a 375px screen; the field takes its own row.
+  pageSearchCompact: { width: '100%' },
+  // SearchBar draws its border on the inner input box, so the pill goes there.
+  pageSearchInput: { borderRadius: '999px' },
+  // 8px under the header + 12px: the Codex 20px from description to view tabs.
+  pageTabs: {
+    paddingBlockStart: densityTokens['--lobe-density-content-gap'],
+    paddingInline: densityTokens['--lobe-density-content-gap'],
+  },
   pageTitle: {
     marginBlock: 0,
     fontSize: cssVar.fontSizeHeading3,
@@ -66,8 +111,8 @@ const styles = stylex.create({
     gap: '8px',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: '42px',
-    paddingInline: '16px',
+    height: sidebarRow.headerHeight,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorBorderSecondary,
@@ -86,30 +131,92 @@ const styles = stylex.create({
 });
 
 interface LeftPanelProps {
+  /**
+   * Page only: lay the header out for a phone. The search field moves under
+   * the title row, which keeps just refresh and Add, so nothing overflows.
+   */
+  compact?: boolean;
   /** Fill the page instead of sitting as a 300px column beside the detail (mobile). */
   fullWidth?: boolean;
+  /** Rendered under the page header, e.g. the Marketplace Discover / Installed tabs. */
+  headerExtra?: ReactNode;
   onDeleteSelected: () => void;
   onSelect: (identifier: string, type: ToolDetailType) => void;
+  onVisibilityChange?: (visibility: ConnectorVisibility) => void;
   /** Render as the page-level list a row opens a second-level detail from. */
   page?: boolean;
   selectedIdentifier?: string;
   viewMode: SkillViewMode;
+  /**
+   * Workspace connectors only: the active tab — the shared pool (`public`) or
+   * the caller's private connectors. Unset outside a workspace (no tabs).
+   */
+  visibility?: ConnectorVisibility;
 }
 
 const LeftPanel = memo<LeftPanelProps>(
-  ({ fullWidth, onDeleteSelected, onSelect, page, selectedIdentifier, viewMode }) => {
+  ({
+    compact,
+    fullWidth,
+    headerExtra,
+    onDeleteSelected,
+    onSelect,
+    onVisibilityChange,
+    page,
+    selectedIdentifier,
+    viewMode,
+    visibility,
+  }) => {
     const { t } = useTranslation(['setting', 'tool']);
+    const interfaceDensity = useInterfaceDensity();
     const [showAddConnector, setShowAddConnector] = useState(false);
     const [keyword, setKeyword] = useState('');
 
-    const handleOpenStore = useCallback(() => {
-      createSkillStoreModal();
-    }, []);
-
     const isConnectorView = viewMode === 'connector';
+    const navigate = useWorkspaceAwareNavigate();
+    const handleOpenStore = isConnectorView ? createSkillStoreModal : createMarketSkillStoreModal;
+    // The page now lives in the Marketplace beside the skill catalog, so
+    // browsing more skills switches to the Discover tab instead of stacking
+    // the same catalog in a modal. Connectors keep their store modal: it also
+    // lists the OAuth and builtin connectors the Marketplace MCP list lacks.
+    const handleBrowseStore = isConnectorView
+      ? createSkillStoreModal
+      : () => navigate(MARKETPLACE_SKILL_PATH);
     const { allowed: canCreate } = usePermission('create_content');
-    // Adding a workspace connector follows the same member policy as editing one.
-    const { canManage: canAddConnector, isPending: isPolicyPending } = useConnectorManageable();
+    const isPrivateTab = isConnectorView && visibility === 'private';
+    // Adding a shared workspace connector follows the same member policy as
+    // editing one; a private connector is the caller's own and skips it.
+    const { canManage: canManageShared, isPending: isSharedPolicyPending } =
+      useConnectorManageable();
+    const canAddConnector = isPrivateTab || canManageShared;
+    const isPolicyPending = !isPrivateTab && isSharedPolicyPending;
+    const visibilityTabs = isConnectorView && visibility && (
+      <Tabs
+        activeKey={visibility}
+        // Page: the Codex Public / Personal pills; column: the compact default.
+        classNames={page ? pillTabClassNames : undefined}
+        size={page ? 'middle' : undefined}
+        variant={page ? 'rounded' : undefined}
+        items={[
+          {
+            icon: <Icon icon={UsersIcon} />,
+            key: 'public',
+            label: t('skillView.connectorTabs.workspace'),
+          },
+          {
+            icon: <Icon icon={LockIcon} />,
+            key: 'private',
+            label: t('skillView.connectorTabs.private'),
+          },
+        ]}
+        onChange={(key) => onVisibilityChange?.(key as ConnectorVisibility)}
+      />
+    );
+    const connectorsDesc = isPrivateTab
+      ? t('skillView.privateConnectorsDesc')
+      : visibility
+        ? t('skillView.workspaceConnectorsDesc')
+        : t('skillView.connectorsDesc');
     const addConnectorTitle = t('connector.add.title', {
       defaultValue: 'Add Custom Connector',
       ns: 'tool',
@@ -131,38 +238,31 @@ const LeftPanel = memo<LeftPanelProps>(
               },
             ]
           : []),
-        {
-          desc: t('connectorMarket.add.browseStoreDesc'),
-          icon: <Icon icon={Store} />,
-          key: 'store',
-          label: t('connectorMarket.add.browseStore'),
-          onClick: handleOpenStore,
-        },
+        // A store install joins the shared pool, so the private tab omits it
+        ...(isPrivateTab
+          ? []
+          : [
+              {
+                desc: t(
+                  isConnectorView
+                    ? 'connectorMarket.add.browseStoreDesc'
+                    : 'skillView.browseStoreDesc',
+                ),
+                icon: <Icon icon={Store} />,
+                key: 'store',
+                label: t('connectorMarket.add.browseStore'),
+                onClick: handleBrowseStore,
+              },
+            ]),
         ...(!isConnectorView
           ? [
               {
-                desc: t('tab.importFromGithub.desc'),
+                desc: t('agentSkillModal.sources'),
                 disabled: !canCreate,
-                icon: <Icon icon={GithubIcon} />,
-                key: 'importGithub',
-                label: t('tab.importFromGithub'),
-                onClick: () => openImportFromGithubModal(),
-              },
-              {
-                desc: t('tab.importFromUrl.desc'),
-                disabled: !canCreate,
-                icon: <Icon icon={Link} />,
-                key: 'importUrl',
-                label: t('tab.importFromUrl'),
-                onClick: () => openImportFromUrlModal(),
-              },
-              {
-                desc: t('tab.uploadZip.desc'),
-                disabled: !canCreate,
-                icon: <Icon icon={FileArchive} />,
-                key: 'uploadZip',
-                label: t('tab.uploadZip'),
-                onClick: () => openUploadSkillModal(),
+                icon: <Icon icon={Import} />,
+                key: 'import',
+                label: t('agentSkillModal.title'),
+                onClick: openSkillImportModal,
               },
             ]
           : []),
@@ -171,40 +271,62 @@ const LeftPanel = memo<LeftPanelProps>(
         isConnectorView ? 'connectorMarket.search.placeholder' : 'skillView.search.placeholder',
       );
 
-      const renderHeader = () => (
+      const searchBelowTitle = getPageSearchPlacement(compact) === 'below-title';
+      const search = (
+        <SearchBar
+          allowClear
+          aria-label={searchPlaceholder}
+          classNames={{ input: stylex.props(styles.pageSearchInput).className }}
+          placeholder={searchPlaceholder}
+          value={keyword}
+          variant={'outlined'}
+          className={
+            stylex.props(searchBelowTitle ? styles.pageSearchCompact : styles.pageSearch).className
+          }
+          onInputChange={setKeyword}
+        />
+      );
+
+      const renderHeader = ({ onRefresh, refreshing }: SkillListHeaderContext) => (
         <>
-          <div {...stylex.props(styles.pageHeader)}>
-            <Flexbox gap={4} style={{ minWidth: 0 }}>
+          <div {...stylex.props(styles.pageHeader, compact && styles.pageHeaderCompact)}>
+            <div {...stylex.props(styles.pageHeadRow)}>
               <h1 {...stylex.props(styles.pageTitle)}>
                 {t(isConnectorView ? 'skillView.connectors' : 'skillView.skills')}
               </h1>
-              <Text type={'secondary'}>
-                {t(isConnectorView ? 'skillView.connectorsDesc' : 'skillView.skillsDesc')}
-              </Text>
-            </Flexbox>
-            <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
-              <SearchBar
-                allowClear
-                aria-label={searchPlaceholder}
-                className={stylex.props(styles.pageSearch).className}
-                placeholder={searchPlaceholder}
-                value={keyword}
-                variant={'outlined'}
-                onInputChange={setKeyword}
-              />
-              <DropdownMenu items={addItems} placement={'bottomRight'}>
-                <Button
-                  className={stylex.props(styles.addTrigger).className}
-                  icon={Plus}
-                  type={'primary'}
-                >
-                  {t('connectorMarket.add')}
-                  <Icon icon={ChevronDown} size={14} />
-                </Button>
-              </DropdownMenu>
-            </Flexbox>
+              <Flexbox horizontal align={'center'} flex={'none'} gap={12}>
+                {!searchBelowTitle && search}
+                {/* The member policy governs the shared pool only */}
+                {isConnectorView && !isPrivateTab && <ConnectorManagePolicy variant={'toolbar'} />}
+                <ActionIcon
+                  aria-label={t('connectorMarket.refresh')}
+                  icon={RotateCw}
+                  loading={refreshing}
+                  title={t('connectorMarket.refresh')}
+                  onClick={onRefresh}
+                />
+                <DropdownMenu items={addItems} placement={'bottomRight'}>
+                  <Button
+                    className={stylex.props(styles.addTrigger).className}
+                    icon={Plus}
+                    shape={'round'}
+                    type={'primary'}
+                  >
+                    {t('connectorMarket.add')}
+                    <Icon icon={ChevronDown} size={14} />
+                  </Button>
+                </DropdownMenu>
+              </Flexbox>
+            </div>
+            {searchBelowTitle && search}
+            <Text type={'secondary'}>
+              {isConnectorView ? connectorsDesc : t('skillView.skillsDesc')}
+            </Text>
           </div>
-          {isConnectorView && <ConnectorManagePolicy variant={'page'} />}
+          {visibilityTabs && <div {...stylex.props(styles.pageTabs)}>{visibilityTabs}</div>}
+          {headerExtra}
+          {/* A member who may not manage shared connectors reads why once, here */}
+          {isConnectorView && !isPrivateTab && <ConnectorManagePolicy variant={'page'} />}
         </>
       );
 
@@ -215,6 +337,7 @@ const LeftPanel = memo<LeftPanelProps>(
               keyword={keyword}
               renderHeader={renderHeader}
               viewMode={viewMode}
+              visibility={visibility}
               onClearKeyword={() => setKeyword('')}
               onDeleteSelected={onDeleteSelected}
               onSelect={onSelect}
@@ -222,6 +345,7 @@ const LeftPanel = memo<LeftPanelProps>(
           </div>
           <CustomConnectorModal
             open={showAddConnector}
+            visibility={visibility}
             onClose={() => setShowAddConnector(false)}
           />
         </SkillListVariantProvider>
@@ -229,13 +353,13 @@ const LeftPanel = memo<LeftPanelProps>(
     }
 
     return (
-      <>
+      <NavPanelDensityContext value={fullWidth ? null : interfaceDensity}>
         <div
           className={stylex.props(styles.root).className}
           style={fullWidth ? { borderInlineEnd: 'none', width: '100%' } : undefined}
         >
           <div {...stylex.props(styles.header)}>
-            <Text strong style={{ fontSize: 14 }}>
+            <Text strong style={{ fontSize: densityVars.fontSize }}>
               {isConnectorView
                 ? t('skillView.connectors', 'Connectors')
                 : t('skillView.skills', 'Skills')}
@@ -264,77 +388,45 @@ const LeftPanel = memo<LeftPanelProps>(
                   </span>
                 </Tooltip>
               ) : (
-                // Skill view: import a skill from a URL, GitHub, or a zip upload.
-                <DropdownMenu
-                  nativeButton={false}
-                  placement="bottomRight"
-                  items={[
-                    {
-                      icon: <Icon icon={Link} />,
-                      key: 'importUrl',
-                      label: (
-                        <Flexbox gap={2}>
-                          <span>{t('tab.importFromUrl')}</span>
-                          <Text style={{ fontSize: 12 }} type="secondary">
-                            {t('tab.importFromUrl.desc')}
-                          </Text>
-                        </Flexbox>
-                      ),
-                      onClick: () => openImportFromUrlModal(),
-                    },
-                    {
-                      icon: <Icon icon={GithubIcon} />,
-                      key: 'importGithub',
-                      label: (
-                        <Flexbox gap={2}>
-                          <span>{t('tab.importFromGithub')}</span>
-                          <Text style={{ fontSize: 12 }} type="secondary">
-                            {t('tab.importFromGithub.desc')}
-                          </Text>
-                        </Flexbox>
-                      ),
-                      onClick: () => openImportFromGithubModal(),
-                    },
-                    {
-                      icon: <Icon icon={FileArchive} />,
-                      key: 'uploadZip',
-                      label: (
-                        <Flexbox gap={2}>
-                          <span>{t('tab.uploadZip')}</span>
-                          <Text style={{ fontSize: 12 }} type="secondary">
-                            {t('tab.uploadZip.desc')}
-                          </Text>
-                        </Flexbox>
-                      ),
-                      onClick: () => openUploadSkillModal(),
-                    },
-                  ]}
-                >
-                  <Button aria-label={t('connectorMarket.add')} icon={Grid2x2Plus} size="small" />
-                </DropdownMenu>
+                <Button
+                  aria-label={t('agentSkillModal.title')}
+                  disabled={!canCreate}
+                  icon={Import}
+                  size="small"
+                  title={t('agentSkillModal.title')}
+                  onClick={openSkillImportModal}
+                />
               )}
-              <Button
-                aria-label={t('skillStore.title')}
-                icon={<Icon icon={Store} />}
-                size="small"
-                onClick={handleOpenStore}
-              />
+              {!isPrivateTab && (
+                <Button
+                  aria-label={t('skillStore.title')}
+                  icon={<Icon icon={Store} />}
+                  size="small"
+                  onClick={handleOpenStore}
+                />
+              )}
             </div>
           </div>
 
-          {isConnectorView && <ConnectorManagePolicy />}
+          {visibilityTabs && <div {...stylex.props(styles.columnTabs)}>{visibilityTabs}</div>}
+          {isConnectorView && !isPrivateTab && <ConnectorManagePolicy />}
 
           <div {...stylex.props(styles.body)}>
             <SkillList
               selectedIdentifier={selectedIdentifier}
               viewMode={viewMode}
+              visibility={visibility}
               onDeleteSelected={onDeleteSelected}
               onSelect={onSelect}
             />
           </div>
         </div>
-        <CustomConnectorModal open={showAddConnector} onClose={() => setShowAddConnector(false)} />
-      </>
+        <CustomConnectorModal
+          open={showAddConnector}
+          visibility={visibility}
+          onClose={() => setShowAddConnector(false)}
+        />
+      </NavPanelDensityContext>
     );
   },
 );

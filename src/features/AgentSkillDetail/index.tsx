@@ -2,18 +2,21 @@
 
 import { type SkillResourceTreeNode } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { ActionIcon, createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { DotIcon, ExternalLinkIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MarketSkillIcon from '@/components/MarketSkillIcon';
 import PublishedTime from '@/components/PublishedTime';
 import { ArticleSkeleton } from '@/components/Skeleton';
 import SkillAvatar from '@/components/SkillAvatar';
 import FileTree, { FileTreeSkeleton } from '@/features/FileTree';
 import { useToolStore } from '@/store/tool';
+import { densityVars } from '@/styles/densityVars';
 
 import ContentViewer from './ContentViewer';
+import { GitHubSkillUpdate, hasGitHubSource } from './GitHubSkillUpdate';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   description: css`
@@ -49,11 +52,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   meta: css`
     flex-shrink: 0;
-    padding: 16px;
+    padding: ${densityVars.cardPadding};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   name: css`
-    font-size: 16px;
+    font-size: ${densityVars.pageTitleFontSize};
     font-weight: 500;
     line-height: 20px;
     color: ${cssVar.colorText};
@@ -122,7 +125,16 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
       {skillDetail && (
         <div className={styles.meta}>
           <Flexbox horizontal align={'center'} gap={12}>
-            <SkillAvatar size={40} />
+            {skillDetail.source === 'market' ? (
+              <MarketSkillIcon
+                fallback={<SkillAvatar size={40} />}
+                identifier={skillDetail.identifier}
+                name={skillDetail.name}
+                size={40}
+              />
+            ) : (
+              <SkillAvatar size={40} />
+            )}
             <Flexbox className={styles.headerText} flex={1} justify={'space-between'}>
               <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
                 <Flexbox horizontal align={'center'} className={styles.description} gap={4}>
@@ -167,6 +179,21 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
               {description && <p className={styles.description}>{description}</p>}
             </Flexbox>
           </Flexbox>
+          {hasGitHubSource(skillDetail) && (
+            <Flexbox horizontal align="center" gap={8} wrap="wrap">
+              {skillDetail.upstream && (
+                <Text ellipsis fontSize={12} type="secondary">
+                  {skillDetail.upstream.owner}/{skillDetail.upstream.repo}
+                  {skillDetail.upstream.path && '/' + skillDetail.upstream.path}
+                  {' @ '}
+                  {skillDetail.upstream.ref === skillDetail.upstream.installedCommit
+                    ? skillDetail.upstream.installedCommit.slice(0, 7)
+                    : skillDetail.upstream.ref}
+                </Text>
+              )}
+              <GitHubSkillUpdate skill={skillDetail} />
+            </Flexbox>
+          )}
         </div>
       )}
       <Flexbox horizontal style={{ flex: 1, overflow: 'hidden' }}>

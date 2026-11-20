@@ -5,6 +5,8 @@ import { createStaticStyles, cssVar, Flexbox, Icon, Select } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css }) => ({
   option: css`
     display: flex;
@@ -31,7 +33,7 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextSecondary};
   `,
   optionLabel: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 20px;
     color: ${cssVar.colorText};
   `,

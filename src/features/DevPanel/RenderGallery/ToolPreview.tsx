@@ -3,6 +3,8 @@
 import { createStaticStyles, Flexbox, Tabs, Tag, Text } from '@lobehub/ui';
 import { useMemo, useState } from 'react';
 
+import { densityVars } from '@/styles/densityVars';
+
 import {
   bodyKindForMode,
   deriveFixtureProps,
@@ -25,7 +27,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   cardHeader: css`
     gap: 6px;
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -34,7 +36,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     max-height: 320px;
     margin: 0;
-    padding: 12px;
+    padding: ${densityVars.contentGap};
 
     font-size: 12px;
     line-height: 1.55;
@@ -43,7 +45,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillQuaternary};
   `,
   fixture: css`
-    padding: 12px;
+    padding: ${densityVars.contentGap};
   `,
   fixtureSummary: css`
     cursor: pointer;
@@ -52,12 +54,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   previewShell: css`
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     background: ${cssVar.colorFillQuaternary};
   `,
   previewSection: css`
     gap: 8px;
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   sectionLabel: css`

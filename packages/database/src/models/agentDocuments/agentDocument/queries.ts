@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, like, ne, or, sql } fro
 import {
   AGENT_SKILL_TEMPLATE_ID,
   agentDocuments,
+  DOCUMENT_FOLDER_TYPE,
   documents,
   knowledgeBaseFiles,
 } from '../../../schemas';
@@ -11,6 +12,7 @@ import { deriveAgentDocumentFields } from '../deriveFields';
 import { canReadDocument, parseLoadRules } from '../policy';
 import {
   type AgentDocument,
+  type AgentDocumentContextQueryOptions,
   type AgentDocumentContextRow,
   type AgentDocumentListItem,
   type AgentDocumentListSourceType,
@@ -148,6 +150,7 @@ export async function findSkillDocsByAgent(
 export async function findContextByAgent(
   ctx: AgentDocumentContext,
   agentId: string,
+  options?: AgentDocumentContextQueryOptions,
 ): Promise<AgentDocumentContextRow[]> {
   const results = await ctx.db
     .select({
@@ -159,7 +162,14 @@ export async function findContextByAgent(
             ELSE ''
           END
         `.as('content'),
-        description: documents.description,
+        // Context rendering never reads `description`, and across thousands of
+        // progressive rows it is a large share of the bytes; keep it on `always` rows.
+        description: sql<string | null>`
+          CASE
+            WHEN ${agentDocuments.policyLoad} = ${PolicyLoad.ALWAYS} THEN ${documents.description}
+            ELSE NULL
+          END
+        `.as('description'),
         editorData: sql<Record<string, any> | null>`
           CASE
             WHEN ${agentDocuments.policyLoad} = ${PolicyLoad.ALWAYS} THEN ${documents.editorData}
@@ -194,6 +204,14 @@ export async function findContextByAgent(
         agentDocOwnership(ctx),
         eq(agentDocuments.agentId, agentId),
         isNull(agentDocuments.deletedAt),
+        ...(options?.excludeProgressive
+          ? [
+              or(
+                eq(agentDocuments.policyLoad, PolicyLoad.ALWAYS),
+                eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
+              ),
+            ]
+          : []),
       ),
     )
     .orderBy(desc(agentDocuments.updatedAt));

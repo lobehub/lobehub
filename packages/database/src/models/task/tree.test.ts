@@ -112,6 +112,17 @@ describe('TaskModel.moveUnfiledTreeToProject', () => {
     expect(rows.map((row) => row.projectId)).toEqual([target, target, target]);
   });
 
+  it('files a lone root with no descendants', async () => {
+    const model = new TaskModel(serverDB, ownerId, workspaceId);
+    const target = await projectIn('task-tree-move-single');
+    const lone = await model.create({ instruction: 'lone' });
+
+    const moved = await model.moveUnfiledTreeToProject(lone.id, target);
+
+    expect(moved?.projectId).toBe(target);
+    expect((await model.findById(lone.id))?.projectId).toBe(target);
+  });
+
   it("moves another member's private subtask the caller cannot read", async () => {
     const owner = new TaskModel(serverDB, ownerId, workspaceId);
     const member = new TaskModel(serverDB, memberId, workspaceId);

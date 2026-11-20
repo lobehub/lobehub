@@ -183,3 +183,27 @@ User-skill enablement belongs in a separate management view entered through the 
 The title itself states the task and scope: “Choose the skills this agent can use” / 「选择当前助理可以使用的技能」. Merge useful explanatory copy into that title rather than dropping the scope or repeating it in a subtitle. Counts describe selected skills, not checked boxes; do not foreground checkbox mechanics or add uninstall disclaimers to this selection surface. Fixed-height virtual skill lists use the same row-height constant for the rendered rows, virtualizer, and short-list viewport, rather than reserving an estimated extra row.
 
 Source: user corrections while simplifying the conversation Skills panel, including removal of redundant status tabs, the text management button, and checkbox-centric copy.
+
+## LOBE-UX-025 — Chat tools show existing connector records
+
+The chat Tools picker lists services with connection records. Keep authorization actions on pending or failed connections in their existing activation group. First-time connection discovery belongs in connector management.
+
+Enforcement: `useControls.test.ts` covers missing connection records, cached unconnected providers, and pending or failed authorization rows. Source: user correction while debugging Kai’s chat Tools picker.
+
+## LOBE-UX-026 — Tool menus expose choices, not fixed loaders
+
+Keep fixed Agent infrastructure (the skill loader and tool activator) out of both loading-policy lists. Hiding the loader must not hide individual skills or the optional Skill Store.
+
+Enforcement: the picker metadata excludes always-on identifiers; builtin selector and AgentToolsEngine tests cover the visible list and the runtime defaults.
+
+## LOBE-UX-027 — One agent, one tool configuration
+
+The profile library picker and chat Tools menu are two views of the same agent configuration. Share the tool inventory, translated names, state and agent-scoped write path, **not the popup**. The profile keeps its searchable checklist; chat keeps its loading-policy filters. Derive profile counts from the same unfiltered options. Agent-owned connector provisioning and the Skills invocation picker are separate tasks.
+
+Enforcement: both surfaces use the same tool controls; regression tests cover the profile summary, runtime-backed settings and fixed-loader exclusions.
+
+## LOBE-UX-028 — Recover GitHub skill imports in the import dialog
+
+Show GitHub authorization guidance when an import encounters an access error. Keep the source URL in the dialog while the user connects. Offer technical details only when they add diagnostic information beyond the recovery message.
+
+Enforcement: `useGithubSkillImport.test.ts` covers the single access message, retrying discovery after authorization, and retaining the user's selection when an import needs reconnection.
