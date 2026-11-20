@@ -871,8 +871,6 @@ export interface DeviceTrashProjectFilesResult {
  */
 export interface DeviceProjectSkillItem {
   description?: string;
-  fileCount: number;
-  files: string[];
   name: string;
   /** Absolute path to the SKILL.md file on the device. */
   path: string;
