@@ -64,7 +64,6 @@ export const styles = stylex.create({
   iconAuto: { color: cssVar.colorInfo },
   iconDefault: { color: cssVar.colorTextTertiary },
   iconDisabled: { color: cssVar.colorError },
-  iconPinned: { color: cssVar.colorInfo },
   policyButton: {
     cursor: { 'default': 'pointer', ':disabled': 'not-allowed' },
     display: 'inline-flex',

@@ -1,10 +1,24 @@
 import { builtinSkills } from '@lobechat/builtin-skills';
 import {
+  resolveUninstalledBuiltinTools,
+  type UninstalledBuiltinToolsScope,
+} from '@lobechat/builtin-tools';
+import {
   AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
   AGENT_SHARE_DEVICE_ALLOW_USERS_LIMIT,
 } from '@lobechat/const';
 import { assembleSkillPool } from '@lobechat/mecha';
-import { getActivePluginIds, getAutoPluginIds, getDisabledPluginIds } from '@lobechat/types';
+import {
+  getImplicitBuiltinSkillIds,
+  getLegacyDisabledBuiltinSkillIds,
+  legacyBuiltinSkillIds,
+} from '@lobechat/mecha/builtinSkillGate';
+import {
+  getActivePluginIds,
+  getAutoPluginIds,
+  getBuiltinOverrides,
+  getDisabledPluginIds,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -21,6 +35,7 @@ import { ContactModel } from '@/database/models/contact';
 import { FileModel } from '@/database/models/file';
 import { RbacModel } from '@/database/models/rbac';
 import { TopicModel } from '@/database/models/topic';
+import { UserModel } from '@/database/models/user';
 import { agents } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
@@ -391,10 +406,9 @@ export const agentShareRouter = router({
    *   filesystem, and a visitor run never routes a device;
    * - `canExecuteOnDevice: false`, for the same reason.
    *
-   * Skills are NOT filtered to the agent's pinned set: a skill is on-demand by
-   * default, so an unpinned skill is exactly the normal case. `manual` mode is
-   * the one exception, and `assembleSkillPool` applies it from
-   * `enabledPluginIds` on its own.
+   * Skills are opt-in per agent (`auto` or legacy `pinned`), with legacy
+   * agents retaining implicit builtin skills (minus legacy library uninstalls)
+   * exactly as `execTurn` / `operationSkillSet` assemble them at run time.
    *
    * Authorization matches the other share reads: `assertCanManageAgentShare`
    * for the workspace case, then `requireShare` on the ownership-scoped
@@ -413,7 +427,7 @@ export const agentShareRouter = router({
       workspaceId,
     ).getAgentConfigById(input.agentId);
 
-    const [dbSkills, agentSkills] = await Promise.all([
+    const [dbSkills, agentSkills, userSettings] = await Promise.all([
       new AgentSkillModel(ctx.serverDB, ctx.userId, workspaceId)
         .findAll()
         .then((result) => result.data),
@@ -423,7 +437,16 @@ export const agentShareRouter = router({
       new AgentDocumentsService(ctx.serverDB, ctx.userId, workspaceId)
         .getAgentSkills(input.agentId)
         .catch(() => []),
+      new UserModel(ctx.serverDB, ctx.userId).getUserSettings().catch(() => null),
     ]);
+
+    const rawPlugins = agentConfig?.plugins ?? undefined;
+    const uninstalledBuiltinIds = userSettings
+      ? resolveUninstalledBuiltinTools(
+          userSettings.tool as UninstalledBuiltinToolsScope | undefined,
+          workspaceId,
+        )
+      : legacyBuiltinSkillIds;
 
     const { skills } = assembleSkillPool(
       {
@@ -444,10 +467,20 @@ export const agentShareRouter = router({
         })),
       },
       {
-        autoSkillIds: getAutoPluginIds(agentConfig?.plugins ?? undefined),
+        autoSkillIds: getAutoPluginIds(rawPlugins),
         canExecuteOnDevice: false,
-        disabledIds: getDisabledPluginIds(agentConfig?.plugins ?? undefined),
-        enabledPluginIds: getActivePluginIds(agentConfig?.plugins ?? undefined),
+        disabledIds: [
+          ...getDisabledPluginIds(rawPlugins),
+          ...getLegacyDisabledBuiltinSkillIds(
+            uninstalledBuiltinIds,
+            getBuiltinOverrides(rawPlugins),
+          ),
+        ],
+        enabledPluginIds: getActivePluginIds(rawPlugins),
+        implicitBuiltinSkillIds: getImplicitBuiltinSkillIds(
+          agentConfig?.createdAt,
+          agentConfig?.chatConfig,
+        ),
         skillActivateMode: agentConfig?.chatConfig?.skillActivateMode,
       },
     );

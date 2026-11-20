@@ -1,6 +1,4 @@
-import { ImageGenerationIdentifier } from '@lobechat/builtin-tool-image-generation';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
-import { VideoGenerationIdentifier } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { isOnDemandBuiltinTool } from '@lobechat/builtin-tools';
 import { getConnectorCatalog } from '@lobechat/const';
@@ -8,6 +6,7 @@ import {
   parsePluginEntry,
   resolveToolMode,
   setBuiltinPluginMode,
+  upsertConnectorEnabled,
   upsertPluginMode,
 } from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
@@ -155,7 +154,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     s.removeComposioConnection,
     s.deleteConnector,
   ]);
-  const checked = useAgentStore(agentByIdSelectors.getAgentPluginsById(agentId), isEqual);
   const rawPlugins = useAgentStore(
     (s) => agentByIdSelectors.getAgentConfigById(agentId)(s)?.plugins,
   );
@@ -165,8 +163,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     (s) =>
       resolveToolMode(agentByIdSelectors.getAgentConfigById(agentId)(s)?.chatConfig) === 'agent',
   );
-  const activationSets = useActivationSets(agentId, checked, rawPlugins, discoverBuiltins);
-  const { disabledIdSet, optInIds } = activationSets;
+  const { connectorIds, disabledIdSet, optInIds } = useActivationSets(
+    agentId,
+    rawPlugins,
+    discoverBuiltins,
+  );
   const builtinList = useToolStore(builtinToolSelectors.metaListIncludingHidden, isEqual);
 
   // Memory and web browsing are runtime-managed builtin tools: `hidden` keeps them
@@ -209,26 +210,23 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           ...(hasLegacyEntry && { plugins: upsertPluginMode(plugins, id, 'auto') }),
         });
       } else {
-        // Chat has no activator: media generation reaches the model there only when pinned.
-        // Pin it in every mode — the mode can switch later without rewriting plugins, and
-        // Agent mode still loads a pinned on-demand builtin through the activator.
-        const pinMediaTool =
-          mode === 'auto' && (id === ImageGenerationIdentifier || id === VideoGenerationIdentifier);
         await updateAgentConfig({
           plugins: isOnDemandBuiltinTool(id)
-            ? setBuiltinPluginMode(plugins, id, pinMediaTool ? 'pinned' : mode)
-            : upsertPluginMode(
-                plugins,
-                id,
-                pinMediaTool ? 'pinned' : mode,
-                mode === 'auto' && !discoverBuiltins
-                  ? 'disabled'
-                  : resolveImplicitMode(id, optInIds),
-              ),
+            ? setBuiltinPluginMode(plugins, id, mode)
+            : connectorIds.has(id)
+              ? upsertConnectorEnabled(plugins, id, mode === 'auto')
+              : upsertPluginMode(
+                  plugins,
+                  id,
+                  mode,
+                  mode === 'auto' && !discoverBuiltins
+                    ? 'disabled'
+                    : resolveImplicitMode(id, optInIds),
+                ),
         });
       }
     },
-    [agentId, canEdit, discoverBuiltins, optInIds, updateAgentConfig],
+    [agentId, canEdit, connectorIds, discoverBuiltins, optInIds, updateAgentConfig],
   );
 
   const openSkillPolicyMenu = useCallback((id: string) => {
@@ -1097,10 +1095,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       detail: item.detailContent ?? item.popoverContent,
       searchText: item.searchText,
       title: item.optionTitle,
-    })),
-    activeTools: allAutoItems.map((item) => ({
-      canDisable: !!item.canDisable,
-      id: String(item.key),
     })),
     canEdit,
     setPolicy: updateSkillPolicy,

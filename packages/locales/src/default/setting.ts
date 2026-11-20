@@ -4499,12 +4499,12 @@ When I am ___, I need ___
   'tools.builtins.lobe-image-generation.description':
     'Generate images through LobeHub providers when the current chat model has no native image output.',
   'tools.builtins.lobe-image-generation.readme':
-    'Opt-in image generation for models without native image output. Pin this tool to enable it in chat or agent mode; leave unpinned to avoid the tool schema cost.',
+    'Opt-in image generation for models without native image output. Enable this tool to use it in chat or agent mode; disable it to avoid exposing the tool.',
   'tools.builtins.lobe-image-generation.title': 'Image Generation',
   'tools.builtins.lobe-video-generation.description':
     'Generate videos through LobeHub providers from text or reference images.',
   'tools.builtins.lobe-video-generation.readme':
-    'Opt-in video generation. Pin this tool to enable it in chat or agent mode; leave unpinned to avoid the tool schema cost.',
+    'Opt-in video generation. Enable this tool to use it in chat or agent mode; disable it to avoid exposing the tool.',
   'tools.builtins.lobe-video-generation.title': 'Video Generation',
   'tools.builtins.lobe-web-onboarding.description':
     'Drive the web onboarding flow with a controlled agent runtime',
@@ -4781,20 +4781,7 @@ When I am ___, I need ___
     'Your private connector: only you can see it, and only your private agents load it.',
   'tools.search': 'Search skills...',
   'tools.loading.onDemand': 'Load on demand',
-  'tools.activation.action.auto': 'Auto',
   'tools.loading.never': 'Never load',
-  'tools.activation.action.pin': 'Pin',
-  'tools.activation.auto': 'Auto',
-  'tools.activation.auto.desc': 'Smart',
-  'tools.activation.disabled.desc': 'Turned Off',
-  'tools.activation.fixed.hint': 'Always on — managed by the app and can’t be turned off',
-  'tools.activation.pinned': 'Pinned',
-  'tools.activation.pinned.desc': 'Always On',
-  'tools.skillActivateMode.auto.desc':
-    'AI can autonomously activate tools, run skills, and install new skills from the store',
-  'tools.skillActivateMode.auto.title': 'Auto',
-  'tools.skillActivateMode.manual.desc': 'Only user-selected tools and skills are available to AI',
-  'tools.skillActivateMode.manual.title': 'Manual',
   'tools.skillActivateMode.title': 'Activate Mode',
   'tools.tabs.all': 'All',
   'tools.tabs.installed': 'Enabled',

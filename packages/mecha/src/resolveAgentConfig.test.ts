@@ -59,6 +59,45 @@ describe('resolveAgentConfig without a host', () => {
     expect(resolved.plugins).toContain('lobe-web-browsing');
   });
 
+  it('treats auto entries as enabled in Chat and Custom modes while keeping disabled entries excluded', () => {
+    const plugins = [
+      { identifier: 'lobe-image-generation', mode: 'auto' },
+      { builtinOverride: true, identifier: 'lobe-task', mode: 'auto' },
+      { identifier: 'lobe-video-generation', mode: 'disabled' },
+    ];
+
+    expect(
+      resolveAgentConfig(
+        { agentId: 'agt_1' },
+        snapshot({
+          agentConfig: { plugins } as never,
+          chatConfig: { enableAgentMode: false } as never,
+        }),
+      ).plugins,
+    ).toEqual(['lobe-image-generation', 'lobe-task']);
+
+    expect(
+      resolveAgentConfig(
+        { agentId: 'agt_1' },
+        snapshot({
+          agentConfig: { plugins } as never,
+          chatConfig: { toolMode: 'custom' } as never,
+        }),
+      ).plugins,
+    ).toEqual(['lobe-image-generation', 'lobe-task']);
+
+    // Agent mode still defers auto and on-demand builtins to the activator.
+    expect(
+      resolveAgentConfig(
+        { agentId: 'agt_1' },
+        snapshot({
+          agentConfig: { plugins } as never,
+          chatConfig: { enableAgentMode: true } as never,
+        }),
+      ).plugins,
+    ).toEqual([]);
+  });
+
   it('prefers the caller plugins over the stored ones', () => {
     const resolved = resolveAgentConfig(
       { agentId: 'agt_1', plugins: ['lobe-local-system'] },

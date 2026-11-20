@@ -110,13 +110,6 @@ export const getUserDisabledToolIds = (
 };
 
 /**
- * Tool IDs to exclude from defaults when in manual skill-activate mode.
- * These are the tool/skill discovery tools that should be disabled when user wants precise control.
- * Other default tools (sandbox, web browsing, etc.) remain available if enabled externally.
- */
-export const manualModeExcludeToolIds = [LobeActivatorManifest.identifier];
-
-/**
  * Tool IDs allowed when the agent runs in chat mode
  * (`chatConfig.enableAgentMode === false`). Each one still passes through
  * its own runtime gate (e.g. knowledge base requires `hasEnabledKnowledgeBases`,

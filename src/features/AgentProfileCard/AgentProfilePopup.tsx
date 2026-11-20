@@ -1,6 +1,6 @@
 'use client';
 
-import { agentDisplayName } from '@lobechat/types';
+import { agentDisplayName, getOptedInPluginIds } from '@lobechat/types';
 import {
   ActionIcon,
   createStaticStyles,
@@ -185,7 +185,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
     const hasDisplay = Boolean(agentDisplayName(merged) || merged.avatar || merged.description);
     const showSkeleton = !hasDisplay && isLoading;
 
-    const pluginCount = fetched?.plugins?.length ?? 0;
+    const pluginCount = getOptedInPluginIds(fetched?.plugins).length;
     const knowledgeCount = fetched?.knowledgeBases?.length ?? 0;
     const fileCount = fetched?.files?.length ?? 0;
     const hasStats = pluginCount > 0 || knowledgeCount > 0 || fileCount > 0;

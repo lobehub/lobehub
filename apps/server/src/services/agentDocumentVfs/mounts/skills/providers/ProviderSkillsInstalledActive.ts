@@ -1,5 +1,5 @@
 import {
-  getActivePluginIds,
+  getOptedInPluginIds,
   type SkillItem,
   type SkillListItem,
   type SkillResourceMeta,
@@ -40,7 +40,7 @@ export class ProviderSkillsInstalledActive implements SkillMountProvider {
 
   private async getEnabledIdentifiers(agentId: string) {
     const agent = await this.deps.agentModel.getAgentConfigById(agentId);
-    return new Set(getActivePluginIds(agent?.plugins ?? undefined));
+    return new Set(getOptedInPluginIds(agent?.plugins ?? undefined));
   }
 
   private async findSkillByIdentifier(

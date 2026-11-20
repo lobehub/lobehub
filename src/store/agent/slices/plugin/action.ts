@@ -1,4 +1,12 @@
-import { type AgentPluginMode, getPluginMode, upsertPluginMode } from '@lobechat/types';
+import { isOnDemandBuiltinTool } from '@lobechat/builtin-tools';
+import { legacyBuiltinSkillIds } from '@lobechat/mecha/builtinSkillGate';
+import {
+  type AgentPluginMode,
+  parsePluginEntry,
+  setBuiltinPluginMode,
+  upsertConnectorEnabled,
+  upsertPluginMode,
+} from '@lobechat/types';
 import { produce } from 'immer';
 
 import { type StoreSetter } from '@/store/types';
@@ -24,25 +32,33 @@ export class PluginSliceActionImpl {
     this.#get = get;
   }
 
+  /** Drops an entry from `plugins` entirely (used when uninstalling or clearing deprecated items). */
   removePlugin = async (id: string): Promise<void> => {
-    await this.#get().togglePlugin(id, false);
+    await this.setPluginMode(id, 'auto');
   };
 
   /**
-   * Boolean pin/unpin toggle, kept for the many callers that only ever
-   * add-to-agent or remove-from-agent (no disabled concept). Internally
-   * upgrades to `upsertPluginMode` so the write path is unified with
-   * `setPluginMode`; callers that need the third (disabled) state should use
-   * `setPluginMode` directly instead.
+   * Two-state enable/disable toggle (`auto` vs `disabled`).
+   * Builtin tools and skills record `builtinOverride: true` so an explicit
+   * per-agent choice overrides any legacy library-wide uninstall.
    */
   togglePlugin = async (id: string, open?: boolean): Promise<void> => {
     const originConfig = agentSelectors.currentAgentConfig(this.#get());
     if (!originConfig) return;
 
-    const shouldOpen =
-      open !== undefined ? open : getPluginMode(originConfig.plugins, id) !== 'pinned';
+    const existing = originConfig.plugins?.find(
+      (entry) => parsePluginEntry(entry).identifier === id,
+    );
+    const isEnabled = existing ? parsePluginEntry(existing).mode !== 'disabled' : false;
+    const shouldOpen = open !== undefined ? open : !isEnabled;
 
-    await this.setPluginMode(id, shouldOpen ? 'pinned' : 'auto');
+    const config = produce(originConfig, (draft) => {
+      draft.plugins = (isOnDemandBuiltinTool(id) || legacyBuiltinSkillIds.includes(id)
+        ? setBuiltinPluginMode(draft.plugins, id, shouldOpen ? 'auto' : 'disabled')
+        : upsertConnectorEnabled(draft.plugins, id, shouldOpen)) as unknown as string[];
+    });
+
+    await this.#get().updateAgentConfig(config);
   };
 
   /**
