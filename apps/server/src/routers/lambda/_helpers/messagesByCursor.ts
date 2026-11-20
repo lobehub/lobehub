@@ -36,6 +36,7 @@ export const messagesByCursorInputSchema = z.object({
   cursor: z.object({ createdAt: z.string().datetime(), id: z.string().min(1) }).nullish(),
   direction: z.enum(['backward', 'forward']).optional(),
   groupId: z.string().nullish(),
+  includeArtboardWorks: z.boolean().optional(),
   // Same opt-in as `getMessages`: only clients that ship the `file` work
   // descriptor ask for `file` work summaries.
   includeFileWorks: z.boolean().optional(),

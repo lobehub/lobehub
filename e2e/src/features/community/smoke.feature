@@ -3,12 +3,12 @@ Feature: Community Smoke Tests
   Critical path tests to ensure the community/discover module is functional
 
   @COMMUNITY-SMOKE-001 @P0
-  Scenario: Load Community Home Page
+  Scenario: Open the marketplace at the assistant list
     Given I navigate to "/marketplace"
     Then the page should load without errors
     And I should see the page body
-    And I should see the featured assistants section
-    And I should see the featured MCP tools section
+    And I should be navigated to "/marketplace/agent"
+    And I should see assistant cards
 
   @COMMUNITY-SMOKE-002 @P0
   Scenario: Load Assistant List Page

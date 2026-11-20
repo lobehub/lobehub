@@ -1,18 +1,18 @@
 'use client';
 
-import { Block, Button, Empty, Flexbox, Icon, Tabs, Text, Tooltip } from '@lobehub/ui';
+import { Block, Button, Empty, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Lock, Plus, UsersIcon } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsWorkspaceViewer } from '@/business/client/hooks/useIsWorkspaceViewer';
+import VisibilityFilter, { type VisibilityFilterValue } from '@/components/VisibilityFilter';
 import { createCreateCredModal } from '@/features/Settings/creds/features/CreateCredModal';
 import MarketSignInGate from '@/features/Settings/creds/features/MarketSignInGate';
 import { type CredsApi } from '@/features/Settings/creds/features/useCredsApi';
 import WorkspaceCredsList from '@/features/Settings/creds/features/WorkspaceCredsList';
-import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
 import { densityTokens } from '@/styles/density.stylex';
@@ -51,22 +51,18 @@ const workspaceCredsApi = (createVisibility: Visibility): CredsApi => ({
   setVisibility: (id, visibility) => workspaceClient.setVisibility.mutate({ id, visibility }),
 });
 
-const credsApiByTab: Record<Visibility, CredsApi> = {
-  private: workspaceCredsApi('private'),
-  public: workspaceCredsApi('public'),
-};
+/**
+ * A new credential starts private: any non-viewer member may create one, and
+ * nothing is shared until its row's "Publish to Workspace" says so.
+ */
+const credsApi = workspaceCredsApi('private');
 
 /**
- * Workspace credential management, split like the device page:
- *
- * - "Workspace": credentials every member can use — the workspace's own and
- *   members' personal credentials published here.
- * - "Private": credentials only the caller can use in this workspace — ones
- *   they created here, and their personal credentials shared here privately.
- *
- * A credential created on a tab belongs to the workspace with that tab's
- * visibility; personal credentials are shared in from the personal settings
- * page ("Share to Workspace…"), not listed here wholesale.
+ * Workspace credential management: one list of every credential the caller
+ * can use here — the shared ones (the workspace's own and members' personal
+ * credentials published here) and the caller's private ones, marked with a
+ * lock. Personal credentials are shared in from the personal settings page
+ * ("Share to Workspace…"), not listed here wholesale.
  *
  * When the workspace has no Market organization yet (Community Profile not
  * completed), the backend returns NOT_FOUND and the page shows a setup prompt.
@@ -74,14 +70,11 @@ const credsApiByTab: Record<Visibility, CredsApi> = {
 const WorkspaceCredsSetting = () => {
   const { t } = useTranslation('setting');
   const { isAuthenticated } = useMarketAuth();
-  const { allowed: isAdmin, reason } = usePermission('manage_provider_key');
   const isViewer = useIsWorkspaceViewer();
-  const [tab, setTab] = useState<Visibility>('public');
-  const credsApi = credsApiByTab[tab];
 
-  // Both tabs filter this one list; it also shares its query key with the
-  // list inside WorkspaceCredsList, so `refetch` here refreshes the tab.
-  const { error, isLoading, refetch } = credsApi.query.list.useQuery(undefined, {
+  // Shares its query key with the list inside WorkspaceCredsList, so
+  // `refetch` here refreshes the list.
+  const { data, error, isLoading, refetch } = credsApi.query.list.useQuery(undefined, {
     enabled: isAuthenticated,
     // No retry for NOT_FOUND — the org won't materialise on its own.
     // Cap retries for other errors (500s, network) so failures surface instead of looping.
@@ -94,11 +87,13 @@ const WorkspaceCredsSetting = () => {
 
   const orgMissing = isAuthenticated && !isLoading && error?.data?.code === 'NOT_FOUND';
 
-  // Shared credentials need the Admin-or-higher `manage_provider_key`, matching
-  // the server; private ones are any non-viewer member's own.
-  const canCreate = tab === 'public' ? isAdmin : !isViewer;
-  const createBlockedReason =
-    tab === 'public' ? (isAdmin ? '' : reason) : isViewer ? t('creds.viewerHint') : '';
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilterValue>('all');
+  const credentials = data?.data ?? [];
+  const privateCount = credentials.filter((cred) => cred.visibility === 'private').length;
+
+  // New credentials are private, which any non-viewer member may create.
+  const canCreate = !isViewer;
+  const createBlockedReason = isViewer ? t('creds.viewerHint') : '';
 
   const handleCreate = () => {
     if (!canCreate) return;
@@ -119,42 +114,45 @@ const WorkspaceCredsSetting = () => {
   return (
     <Flexbox gap={16}>
       <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
-        <Tabs
-          activeKey={tab}
-          items={[
-            { icon: <Icon icon={UsersIcon} />, key: 'public', label: t('creds.tabs.workspace') },
-            { icon: <Icon icon={Lock} />, key: 'private', label: t('creds.tabs.private') },
-          ]}
-          onChange={(key) => setTab(key as Visibility)}
-        />
-        {isAuthenticated &&
-          !orgMissing &&
-          // Disabled buttons swallow hover events, so the tooltip needs the
-          // span wrapper to fire (see the usePermission docstring pattern).
-          (createBlockedReason ? (
-            <Tooltip title={createBlockedReason}>
-              <span>{createButton}</span>
-            </Tooltip>
-          ) : (
-            createButton
-          ))}
-      </Flexbox>
-      <Flexbox gap={12}>
-        <Text className={stylex.props(styles.desc).className}>
-          {t(tab === 'public' ? 'creds.workspaceSection.desc' : 'creds.privateSection.desc')}
-        </Text>
-        <Block className={stylex.props(styles.container).className} variant={'outlined'}>
-          <MarketSignInGate>
-            {orgMissing ? (
-              <Flexbox align={'center'} justify={'center'} style={{ padding: 48 }}>
-                <Empty description={t('creds.orgSetupRequired')} />
-              </Flexbox>
-            ) : (
-              <WorkspaceCredsList credsApi={credsApi} key={tab} visibility={tab} />
+        <Text className={stylex.props(styles.desc).className}>{t('creds.listDesc')}</Text>
+        {isAuthenticated && !orgMissing && (
+          <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
+            {credentials.length > 0 && (
+              <VisibilityFilter
+                value={visibilityFilter}
+                counts={{
+                  all: credentials.length,
+                  private: privateCount,
+                  workspace: credentials.length - privateCount,
+                }}
+                onChange={setVisibilityFilter}
+              />
             )}
-          </MarketSignInGate>
-        </Block>
+            {
+              // Disabled buttons swallow hover events, so the tooltip needs the
+              // span wrapper to fire (see the usePermission docstring pattern).
+              createBlockedReason ? (
+                <Tooltip title={createBlockedReason}>
+                  <span>{createButton}</span>
+                </Tooltip>
+              ) : (
+                createButton
+              )
+            }
+          </Flexbox>
+        )}
       </Flexbox>
+      <Block className={stylex.props(styles.container).className} variant={'outlined'}>
+        <MarketSignInGate>
+          {orgMissing ? (
+            <Flexbox align={'center'} justify={'center'} style={{ padding: 48 }}>
+              <Empty description={t('creds.orgSetupRequired')} />
+            </Flexbox>
+          ) : (
+            <WorkspaceCredsList credsApi={credsApi} visibilityFilter={visibilityFilter} />
+          )}
+        </MarketSignInGate>
+      </Block>
     </Flexbox>
   );
 };

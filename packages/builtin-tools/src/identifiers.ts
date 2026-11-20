@@ -9,6 +9,7 @@ import {
   agentSignalReviewManifest,
   agentSignalSkillManagementManifest,
 } from '@lobechat/builtin-tool-agent-signal';
+import { ArtboardManifest } from '@lobechat/builtin-tool-artboard';
 import { AttachmentsManifest } from '@lobechat/builtin-tool-attachments';
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
@@ -51,6 +52,7 @@ export const builtinToolIdentifiers: string[] = [
   AgentBuilderManifest.identifier,
   AgentDocumentsManifest.identifier,
   AgentManagementManifest.identifier,
+  ArtboardManifest.identifier,
   AttachmentsManifest.identifier,
   AuvManifest.identifier,
   CalculatorManifest.identifier,

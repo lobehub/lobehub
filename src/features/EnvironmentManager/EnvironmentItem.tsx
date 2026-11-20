@@ -20,6 +20,7 @@ import { EyeOffIcon, GlobeIcon, MoreHorizontalIcon, Trash2Icon } from 'lucide-re
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import PrivateLockIcon from '@/components/PrivateLockIcon';
 import UserAvatar from '@/components/UserAvatar';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useDensity } from '@/styles/density';
@@ -280,6 +281,7 @@ const EnvironmentItem = memo<EnvironmentItemProps>((props) => {
           >
             {environment.name}
           </Text>
+          {environment.workspaceId && environment.visibility === 'private' && <PrivateLockIcon />}
           {environment.description && (
             /* Shrinks a thousand times more readily than the name, the same
                  way the repository yields to the facts on the line below. */

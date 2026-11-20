@@ -142,7 +142,9 @@ const aiChatProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
   return opts.next({
     ctx: {
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
-      aiChatService: new AiChatService(ctx.serverDB, ctx.userId, wsId),
+      aiChatService: new AiChatService(ctx.serverDB, ctx.userId, wsId, {
+        workTypeOptIn: ctx.workTypeOptIn,
+      }),
       aiGenerationService: new AiGenerationService(ctx.serverDB, ctx.userId, wsId),
       fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),

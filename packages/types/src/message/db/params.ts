@@ -33,6 +33,8 @@ export interface QueryMessageParams {
   before?: { createdAt: Date; id: string };
   current?: number;
   groupId?: string | null;
+  /** Same opt-in as `includeFileWorks`, for `artboard` work summaries. */
+  includeArtboardWorks?: boolean;
   /**
    * Opt-in for `file` work summaries embedded in the message payload. Absent →
    * the legacy set, so already-deployed clients (whose descriptor table lacks

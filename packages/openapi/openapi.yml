@@ -3462,6 +3462,7 @@ components:
             resourceType:
               type: string
               enum:
+                - artboard
                 - canvas
                 - document
                 - github_issue
@@ -3482,6 +3483,7 @@ components:
             type:
               type: string
               enum:
+                - artboard
                 - canvas
                 - document
                 - external

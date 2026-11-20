@@ -1,15 +1,15 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import { NAVIGATION_ROUTES } from '@/config/routes';
 
-const LOCALES_DIR = resolve(__dirname, '../../../locales');
+const LOCALES_DIR = path.resolve(__dirname, '../../../locales');
 const locales = readdirSync(LOCALES_DIR);
 
 const readNs = (locale: string, ns: string): Record<string, string> =>
-  JSON.parse(readFileSync(resolve(LOCALES_DIR, locale, `${ns}.json`), 'utf8'));
+  JSON.parse(readFileSync(path.resolve(LOCALES_DIR, locale, `${ns}.json`), 'utf8'));
 
 /** Keys that name the Marketplace page or entry (formerly "Community"). */
 const PAGE_NAME_KEYS: Record<string, string[]> = {
@@ -73,14 +73,7 @@ describe('Marketplace page copy', () => {
 
   it('translates every Marketplace sidebar entry in zh-CN', () => {
     const zh = readNs('zh-CN', 'discover');
-    const navKeys = [
-      'tab.home',
-      'tab.assistant',
-      'tab.skill',
-      'tab.connector',
-      'tab.model',
-      'tab.provider',
-    ];
+    const navKeys = ['tab.assistant', 'tab.skill', 'tab.connector', 'tab.model', 'tab.provider'];
     for (const key of navKeys) expect(zh[key], `zh-CN/discover:${key}`).toMatch(/\p{Script=Han}/u);
     expect(zh['tab.skill']).toBe(readNs('zh-CN', 'setting')['tab.skill']);
   });

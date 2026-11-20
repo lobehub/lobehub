@@ -1,5 +1,6 @@
 import type { AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { extractActivatedToolIdsFromMessages } from '@lobechat/agent-runtime';
+import { ArtboardIdentifier } from '@lobechat/builtin-tool-artboard';
 import { ChannelIdentifier } from '@lobechat/builtin-tool-channel';
 import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
@@ -39,6 +40,7 @@ import type {
   ResolvedWorkspaceInit,
 } from '../types';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from '../workspaceInitCache';
+import { buildArtboardCommentsPrompt } from './artboardContext';
 import { buildOperationSkillSet, collectSelectedSkillIds } from './operationSkillSet';
 import { buildRunProjectContextPrompt } from './projectContext';
 import type { ToolDiscoveryResult } from './toolDiscovery';
@@ -749,14 +751,19 @@ export const prepareOperation = async (
 
   // Page-scoped context (the viewed task or goal) and the project the run is in.
   // Delegation rules name the task tool, so they follow its presence in the final set.
-  const [taskManagerPrompt, goalOverview, projectPrompt] = await Promise.all([
+  const [taskManagerPrompt, goalOverview, projectOverview, artboardComments] = await Promise.all([
     buildViewedTaskContextPrompt(deps, appContext, input.taskId),
     buildViewedGoalOverview(deps, appContext),
     buildRunProjectContextPrompt(deps, appContext?.projectId, resolvedAgentId, {
       channelMessaging: !!toolsResult.enabledToolIds?.includes(ChannelIdentifier),
       coordinationRules: !!toolsResult.enabledToolIds?.includes(TaskIdentifier),
     }),
+    toolsResult.enabledToolIds?.includes(ArtboardIdentifier)
+      ? buildArtboardCommentsPrompt(deps, appContext?.projectId, topicId)
+      : undefined,
   ]);
+  const projectPrompt =
+    [projectOverview, artboardComments].filter(Boolean).join('\n\n') || undefined;
   if (taskManagerPrompt || goalOverview || projectPrompt) {
     initialContext = {
       ...initialContext,

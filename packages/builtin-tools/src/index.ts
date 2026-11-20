@@ -16,6 +16,7 @@ import {
   agentSignalReviewManifest,
   agentSignalSkillManagementManifest,
 } from '@lobechat/builtin-tool-agent-signal';
+import { ArtboardManifest } from '@lobechat/builtin-tool-artboard';
 import { AttachmentsManifest } from '@lobechat/builtin-tool-attachments';
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BriefManifest } from '@lobechat/builtin-tool-brief';
@@ -597,6 +598,15 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
+    // Server tool discovery adds it to project conversations only; it has no
+    // client executor, so it must never be pinned or discovered.
+    discoverable: false,
+    hidden: true,
+    identifier: ArtboardManifest.identifier,
+    manifest: ArtboardManifest,
+    type: 'builtin',
+  },
+  {
     // Opt-in: pin it in the Tools popover, or the activator enables it when a
     // user asks for monitoring — not a default so ordinary turns stay lean.
     identifier: DashboardManifest.identifier,
@@ -650,16 +660,24 @@ export const onDemandBuiltinToolIds = builtinTools
   .map((tool) => tool.identifier);
 const onDemandBuiltinIds = new Set(onDemandBuiltinToolIds);
 
+/** An old library uninstall stays in effect until the agent explicitly chooses the tool. */
+export const getLegacyDisabledBuiltinToolIds = (
+  uninstalled: readonly string[],
+  overrides: readonly string[],
+) => uninstalled.filter((id) => isOnDemandBuiltinTool(id) && !overrides.includes(id));
+
 /** Agent mode discovers installed builtins by default. Other modes keep their configured toolset. */
 export const getUnavailableBuiltinToolIds = (
   available: Iterable<string>,
   chatConfig?: Pick<LobeAgentChatConfig, 'toolMode' | 'enableAgentMode'> | null,
   uninstalled: readonly string[] = [],
+  overrides: readonly string[] = [],
 ) => {
-  if (resolveToolMode(chatConfig) === 'agent') return uninstalled.filter(isOnDemandBuiltinTool);
+  const legacyDisabled = getLegacyDisabledBuiltinToolIds(uninstalled, overrides);
+  if (resolveToolMode(chatConfig) === 'agent') return legacyDisabled;
 
   const allowed = new Set(available);
-  return onDemandBuiltinToolIds.filter((id) => !allowed.has(id));
+  return onDemandBuiltinToolIds.filter((id) => !allowed.has(id) || legacyDisabled.includes(id));
 };
 export const isOnDemandBuiltinTool = (identifier: string) => onDemandBuiltinIds.has(identifier);
 

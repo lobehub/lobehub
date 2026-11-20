@@ -1331,9 +1331,7 @@ table artboard_boards {
   description text
   expected text
   rect jsonb [not null]
-  source_work_version_id uuid
   source_path text
-  source_file_id text
   metadata jsonb
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -1341,14 +1339,12 @@ table artboard_boards {
 
   indexes {
     
-    
     artboard_id [name: 'artboard_boards_artboard_id_idx']
     page_id [name: 'artboard_boards_page_id_idx']
     group_id [name: 'artboard_boards_group_id_idx']
     round_id [name: 'artboard_boards_round_id_idx']
     project_id [name: 'artboard_boards_project_id_idx']
     acceptance_flow_node_id [name: 'artboard_boards_acceptance_flow_node_id_unique', unique]
-    source_work_version_id [name: 'artboard_boards_source_work_version_id_idx']
     user_id [name: 'artboard_boards_user_id_idx']
     workspace_id [name: 'artboard_boards_workspace_id_idx']
   }

@@ -280,6 +280,15 @@ stale standalone install: a recently added workspace package fails to resolve �
   browser, against a per-instance localhost origin that usually can't even
   complete. If no injectable state exists, report auth as blocked and ask for
   one manual sign-in instead.
+- Local server: `.agents/acceptance/scripts/electron-dev.sh start-local [<id>]`
+  starts pool instance `<id>` (default 1, CDP `9222+id`) already signed in to the
+  local dev server (`SERVER_URL`, default `http://localhost:3010`) as the seeded
+  user — no OAuth page, no manual sign-in. It mints an access token with the local
+  server's own `JWKS_KEY` (`mint-desktop-login.mjs`, env from the repo-root
+  `.env`; refuses non-local hosts) and hands it to the dev build through
+  `LOBE_DESKTOP_DEV_REMOTE_LOGIN`. Use it whenever the change under test is
+  server-side. Its login is never saved into the shared snapshot. Agents the app
+  spawns (Codex, Claude Code) get the same login through the `lh` sign-in file.
 - Concurrent instances (N worktrees / parallel runs): `electron-dev.sh` drives a
   pool — `start <id>` gives each its own CDP port, userData dir (with copied
   login), Vite port, and IPC id, and labels every window with the checkout and

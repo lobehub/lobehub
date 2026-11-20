@@ -156,7 +156,12 @@ describe('mobile Marketplace skill and connector pages', () => {
     expect(element?.props.to).toBe(to);
   });
 
-  it.each(['/community', '/community/agent/my-agent', '/acme/community/mcp'])(
+  it('uses the marketplace entry redirect for the old community root', () => {
+    const entry = matchRoutes(mobileRoutes, '/marketplace')?.at(-1)?.route.element;
+    expect(matchRoutes(mobileRoutes, '/community')?.at(-1)?.route.element).toBe(entry);
+  });
+
+  it.each(['/community/agent/my-agent', '/acme/community/mcp'])(
     'forwards %s to the Marketplace',
     (url) => {
       const element = matchRoutes(mobileRoutes, url)?.at(-1)?.route.element as

@@ -7,23 +7,6 @@ import type { CustomWorld } from '../../support/world';
 // Then Steps (Assertions)
 // ============================================
 
-// Home Page Steps
-Then('I should see the featured assistants section', async function (this: CustomWorld) {
-  // Look for "Featured Agents" heading text (i18n key: home.featuredAssistants)
-  // Supports: en-US "Featured Agents", zh-CN "推荐助理"
-  const featuredSection = this.page
-    .getByRole('heading', { name: /featured agents|推荐助理/i })
-    .first();
-  await expect(featuredSection).toBeVisible({ timeout: 30_000 });
-});
-
-Then('I should see the featured MCP tools section', async function (this: CustomWorld) {
-  // Look for "Featured Skills" heading text (i18n key: home.featuredTools)
-  // Supports: en-US "Featured Skills", zh-CN "推荐技能"
-  const mcpSection = this.page.getByRole('heading', { name: /featured skills|推荐技能/i }).first();
-  await expect(mcpSection).toBeVisible({ timeout: 30_000 });
-});
-
 // Assistant List Page Steps
 Then('I should see the search bar', async function (this: CustomWorld) {
   // SearchBar component has data-testid="search-bar"

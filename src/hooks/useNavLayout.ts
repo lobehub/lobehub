@@ -4,11 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { getRouteById } from '@/config/routes';
-import {
-  MARKETPLACE_INSTALLED_SKILLS_PATH,
-  MARKETPLACE_PATH,
-  MARKETPLACE_SEGMENT,
-} from '@/features/Marketplace/paths';
+import { getMarketplaceEntryPath, MARKETPLACE_SEGMENT } from '@/features/Marketplace/paths';
 import { useGlobalStore } from '@/store/global';
 import { SidebarTabKey } from '@/store/global/initialState';
 import {
@@ -128,7 +124,7 @@ export const useNavLayout = (): NavLayout => {
           icon: getRouteById('community')!.icon,
           key: SidebarTabKey.Community,
           title: t('tab.marketplace'),
-          url: showMarket ? MARKETPLACE_PATH : MARKETPLACE_INSTALLED_SKILLS_PATH,
+          url: getMarketplaceEntryPath(showMarket),
         },
         {
           hidden: !!activeWorkspaceSlug,

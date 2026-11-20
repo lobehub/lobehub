@@ -1,5 +1,5 @@
-import { onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
-import { type AgentPluginEntry, type AgentPluginMode } from '@lobechat/types';
+import { getLegacyDisabledBuiltinToolIds, onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
+import { type AgentPluginEntry, type AgentPluginMode, getBuiltinOverrides } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { useMemo } from 'react';
 
@@ -29,9 +29,11 @@ export const resolveActivationSets = ({
   librarySkillIds,
   discoverBuiltins = true,
   pinnedIds,
+  uninstalled = [],
   rawPlugins,
 }: {
   discoverBuiltins?: boolean;
+  uninstalled?: readonly string[];
   connectedConnectorIds: readonly string[];
   connectorIds: readonly string[];
   librarySkillIds: readonly string[];
@@ -52,6 +54,7 @@ export const resolveActivationSets = ({
     ),
     connectorIds,
     disabledIdSet: new Set([
+      ...getLegacyDisabledBuiltinToolIds(uninstalled, getBuiltinOverrides(rawPlugins)),
       ...connectorIdList.filter((id) => !connected.has(id)),
       ...resolveDisabledIds(
         rawPlugins,
@@ -77,6 +80,7 @@ export const useActivationSets = (
       connectedConnectorIds: getConnectedConnectorIds(state, agentId, connectorIds),
     };
   }, isEqual);
+  const uninstalled = useToolStore((s) => s.uninstalledBuiltinTools);
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
 
@@ -90,6 +94,7 @@ export const useActivationSets = (
           (skill) => skill.identifier,
         ),
         pinnedIds,
+        uninstalled,
         rawPlugins,
       }),
     [
@@ -99,6 +104,7 @@ export const useActivationSets = (
       marketAgentSkills,
       userAgentSkills,
       pinnedIds,
+      uninstalled,
       rawPlugins,
     ],
   );
