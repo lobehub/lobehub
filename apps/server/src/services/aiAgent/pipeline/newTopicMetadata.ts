@@ -10,6 +10,8 @@ export interface NewTopicMetadataInput {
   appContext?: InternalExecAgentParams['appContext'];
   botContext?: InternalExecAgentParams['botContext'];
   cronJobId?: string;
+  /** Created by a device-denied run; see `ChatTopicMetadata.deviceAccessDenied`. */
+  deviceAccessDenied?: boolean;
   /** The bound device was chosen explicitly for this conversation, not auto-picked. */
   deviceBindingPinned?: boolean;
   editingAgentId?: string;
@@ -51,6 +53,7 @@ export const buildNewTopicMetadata = ({
   appContext,
   botContext,
   cronJobId,
+  deviceAccessDenied,
   deviceBindingPinned,
   editingAgentId,
   openedBy,
@@ -83,6 +86,7 @@ export const buildNewTopicMetadata = ({
   const { editingGroupId } = appContext ?? {};
   if (
     !cronJobId &&
+    !deviceAccessDenied &&
     !taskId &&
     !botContext &&
     !topicBoundDeviceId &&
@@ -98,6 +102,7 @@ export const buildNewTopicMetadata = ({
     bot: botContext,
     boundDeviceId: topicBoundDeviceId,
     cronJobId: cronJobId || undefined,
+    ...(deviceAccessDenied && { deviceAccessDenied: true }),
     ...(deviceBindingPinned && { deviceBindingPinned }),
     ...(editingAgentId && { editingAgentId }),
     ...(editingGroupId && { editingGroupId }),

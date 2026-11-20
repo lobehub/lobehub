@@ -581,6 +581,43 @@ describe('ResultWakeChannel.drainIfPending', () => {
     expect(execAgent).toHaveBeenCalledTimes(1);
   });
 
+  // Regression: a receipt still pending when its parent was archived started a
+  // run in the archived conversation once the queue drained.
+  it.each(['completed', 'archived'])(
+    'settles the receipts of a %s parent without starting a run',
+    async (status) => {
+      listPendingIds.mockResolvedValue(['subtopic-cb-op1']);
+      topicFindById.mockResolvedValue({ agentId: 'agent-parent', metadata: {}, status });
+
+      await new ResultWakeChannel(db, TEST_USER, undefined, execAgent).drainIfPending(
+        'agent-parent',
+        'topic-parent',
+        'subtopic-cb-',
+      );
+
+      expect(execAgent).not.toHaveBeenCalled();
+      expect(settle).toHaveBeenCalledWith(['subtopic-cb-op1']);
+    },
+  );
+
+  // Regression: a sub-topic opened from a device-denied run woke its parent as a
+  // first-party run, regaining devices for that sender's work.
+  it("keeps a device-denied conversation's denial in the run it wakes", async () => {
+    listPendingIds.mockResolvedValue(['subtopic-cb-op1']);
+    topicFindById.mockResolvedValue({
+      agentId: 'agent-parent',
+      metadata: { deviceAccessDenied: true },
+    });
+
+    await new ResultWakeChannel(db, TEST_USER, undefined, execAgent).drainIfPending(
+      'agent-parent',
+      'topic-parent',
+      'subtopic-cb-',
+    );
+
+    expect(execAgent.mock.calls[0][0]).toMatchObject({ delegatedDeviceAccessDenied: true });
+  });
+
   it('leaves task callbacks alone: no wake when only they are pending', async () => {
     listPendingIds.mockResolvedValue(['op-task']);
 

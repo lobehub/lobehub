@@ -634,6 +634,28 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       );
     });
 
+    // A turn started with a device-denied token (an external bot sender's
+    // sandbox running `lh topic send`) gets no device, and marks the
+    // conversation so its automatic continuations keep the denial.
+    it('denies devices to a delegated-denied turn and marks its conversation', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
+      topicMock.findById.mockResolvedValue({ metadata: {} });
+      service = new AiAgentService(mockDb, userId);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-existing' },
+        delegatedDeviceAccessDenied: true,
+        prompt: 'Run a command',
+      });
+
+      expect(mockCreateOperation.mock.calls[0][0].activeDeviceId).toBeUndefined();
+      expect(topicMock.updateMetadata).toHaveBeenCalledWith('topic-existing', {
+        deviceAccessDenied: true,
+      });
+    });
+
     // Verifies topic-stored metadata.boundDeviceId is NOT silently reused as
     // the runtime bound device. Setup: `auto` mode, topic.metadata says
     // device-002, but the only online device is device-001. If the topic

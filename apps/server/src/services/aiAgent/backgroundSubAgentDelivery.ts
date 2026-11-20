@@ -147,6 +147,8 @@ export const deliverBackgroundSubAgentResults = async (
         agentId,
         appContext: { topicId },
         autoStart: true,
+        // Work a device-denied sender started here keeps that denial.
+        ...(topic.metadata?.deviceAccessDenied && { delegatedDeviceAccessDenied: true }),
         parentMessageId,
         prompt: `Process ${results.length} finished background result${results.length === 1 ? '' : 's'}`,
         suppressUserMessage: true,

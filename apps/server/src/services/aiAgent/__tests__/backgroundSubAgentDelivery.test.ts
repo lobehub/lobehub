@@ -236,4 +236,19 @@ describe('deliverBackgroundSubAgentResults', () => {
       expect(deps.execAgent).not.toHaveBeenCalled();
     },
   );
+
+  it("keeps a device-denied conversation's denial in the run it wakes", async () => {
+    const deps = createDeps({ pending: [finished('a')] });
+    deps.topicModel.findById.mockResolvedValue({
+      agentId: 'agent-1',
+      id: 'topic-1',
+      metadata: { deviceAccessDenied: true },
+    });
+
+    await deliverBackgroundSubAgentResults(deps, { topicId: 'topic-1' });
+
+    expect(deps.execAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ delegatedDeviceAccessDenied: true }),
+    );
+  });
 });

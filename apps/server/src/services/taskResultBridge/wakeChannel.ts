@@ -143,7 +143,13 @@ export class ResultWakeChannel {
     const { agentId, allTasks, callbackStore, originTopicId, receiptIds } = params;
     const topicModel = new TopicModel(this.db, this.userId, this.workspaceId);
     const topic = await topicModel.findById(originTopicId);
-    const botContext = topic?.metadata?.bot as ChatTopicBotContext | undefined;
+    // Archived (or gone) since its receipts were queued: settle them without
+    // starting a run in a conversation the user put away.
+    if (!topic || topic.status === 'completed' || topic.status === 'archived') {
+      await callbackStore?.settle(receiptIds);
+      return;
+    }
+    const botContext = topic.metadata?.bot as ChatTopicBotContext | undefined;
     // With the queue, the completion hook delivers a bot reply and settles /
     // re-drains it. Without one there is nothing to settle, but a bot
     // conversation still has to receive the reply the woken run writes.
@@ -186,6 +192,8 @@ export class ResultWakeChannel {
         appContext: { topicId: originTopicId },
         autoStart: true,
         botContext,
+        // Work a device-denied sender started here keeps that denial.
+        ...(topic.metadata?.deviceAccessDenied && { delegatedDeviceAccessDenied: true }),
         hooks,
         parentMessageId,
         prompt: `Process ${receiptIds.length} completed ${allTasks ? 'task ' : ''}result${receiptIds.length === 1 ? '' : 's'}`,
