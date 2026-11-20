@@ -19,10 +19,17 @@ import { mapStorageError, type SandboxStorageClient } from './procedures';
  * Shared by the build itself, which settles such an instance without starting
  * a sandbox, and the listing, which is how the row knows a rebuild would be a
  * no-op rather than a folder thrown away.
+ *
+ * A local-only repository never reaches a cloud build, so it is not work here.
  */
 export const isBuildable = (
-  specification: { bootstrapCommand?: string | null; sources?: unknown[] | null } | null,
-): boolean => (specification?.sources?.length ?? 0) > 0 || Boolean(specification?.bootstrapCommand);
+  specification: {
+    bootstrapCommand?: string | null;
+    sources?: { localOnly?: boolean }[] | null;
+  } | null,
+): boolean =>
+  (specification?.sources ?? []).some((source) => !source?.localOnly) ||
+  Boolean(specification?.bootstrapCommand);
 
 /**
  * A new sandbox instance of an environment the caller owns, with its directory

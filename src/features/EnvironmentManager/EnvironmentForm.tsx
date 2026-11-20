@@ -233,7 +233,14 @@ const RepositoryRow = memo<{
               <InstantSwitch
                 enabled={!!source.localOnly}
                 size={'small'}
-                onChange={(localOnly) => onChange({ localOnly })}
+                onChange={async (localOnly) => {
+                  try {
+                    await onChange({ localOnly });
+                  } catch (error) {
+                    toast.error(describeError(error, t, t('environments.saveFailed')));
+                    throw error;
+                  }
+                }}
               />
             </Flexbox>
           )}
