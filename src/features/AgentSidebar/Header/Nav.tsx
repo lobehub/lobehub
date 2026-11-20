@@ -6,8 +6,8 @@ import { DnaIcon, ListTodoIcon, MessageSquarePlusIcon, SearchIcon, TargetIcon } 
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
-import { isDesktop } from '@/const/version';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { isMacDesktop } from '@/features/NavPanel/ToggleLeftPanelButton';
 import { useSelfLearningSurface } from '@/features/SelfLearning/SurfaceGate/useSelfLearningSurface';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
@@ -76,8 +76,8 @@ const Nav = ({ onOpenProfile, showProfile }: NavProps) => {
         title={tTopic('actions.addNewTopic')}
         onClick={handleNewTopic}
       />
-      {/* The desktop app opens search from the header instead. */}
-      {!isDesktop && (
+      {/* The macOS app opens search from the header instead. */}
+      {!isMacDesktop && (
         <NavItem
           icon={SearchIcon}
           title={t('tab.search')}

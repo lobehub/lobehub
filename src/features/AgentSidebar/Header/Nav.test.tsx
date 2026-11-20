@@ -9,11 +9,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Nav from './index';
 
 vi.mock('./Agent', () => ({ default: () => null }));
-const platformMock = vi.hoisted(() => ({ isDesktop: true }));
-vi.mock('@/const/version', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  get isDesktop() {
-    return platformMock.isDesktop;
+const platformMock = vi.hoisted(() => ({ isMacDesktop: true }));
+vi.mock('@/features/NavPanel/ToggleLeftPanelButton', () => ({
+  default: () => null,
+  get isMacDesktop() {
+    return platformMock.isMacDesktop;
   },
 }));
 vi.mock('@lobehub/ui', async (importOriginal) => {
@@ -197,7 +197,7 @@ describe('Agent sidebar header nav', () => {
     labMock.enableGoals = true;
     resourceAccessMock.canEditResource = true;
     resourceAccessMock.isAccessResolved = true;
-    platformMock.isDesktop = true;
+    platformMock.isMacDesktop = true;
 
     useParamsMock.mockReturnValue({ aid: 'agt_eH4zL98zBx5u', topicId: 'tpc_2FCHvjS7d4CA' });
   });
@@ -278,7 +278,7 @@ describe('Agent sidebar header nav', () => {
     expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/profile');
   });
 
-  it('opens search from the header, not from the nav list, in the desktop app', () => {
+  it('opens search from the header, not from the nav list, in the macOS app', () => {
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
     render(<Nav />);
@@ -290,10 +290,10 @@ describe('Agent sidebar header nav', () => {
     expect(toggleCommandMenuMock).toHaveBeenCalledWith(true);
   });
 
-  // Web and mobile show the panel toggle in the header, which leaves no room
-  // for search there.
-  it('keeps search as a nav row on web and mobile', () => {
-    platformMock.isDesktop = false;
+  // Web, mobile and the Windows app show the panel toggle in the header, which
+  // leaves no room for search there.
+  it('keeps search as a nav row outside the macOS app', () => {
+    platformMock.isMacDesktop = false;
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
     render(<Nav />);
