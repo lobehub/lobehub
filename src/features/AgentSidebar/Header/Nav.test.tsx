@@ -9,6 +9,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Nav from './index';
 
 vi.mock('./Agent', () => ({ default: () => null }));
+const platformMock = vi.hoisted(() => ({ isDesktop: true }));
+vi.mock('@/const/version', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  get isDesktop() {
+    return platformMock.isDesktop;
+  },
+}));
 vi.mock('@lobehub/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof LobeUI>();
   return {
@@ -190,6 +197,7 @@ describe('Agent sidebar header nav', () => {
     labMock.enableGoals = true;
     resourceAccessMock.canEditResource = true;
     resourceAccessMock.isAccessResolved = true;
+    platformMock.isDesktop = true;
 
     useParamsMock.mockReturnValue({ aid: 'agt_eH4zL98zBx5u', topicId: 'tpc_2FCHvjS7d4CA' });
   });
@@ -270,13 +278,29 @@ describe('Agent sidebar header nav', () => {
     expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/profile');
   });
 
-  it('opens search from the header, not from the nav list', () => {
+  it('opens search from the header, not from the nav list, in the desktop app', () => {
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
     render(<Nav />);
     const searchButton = screen.getByRole('button', { name: 'tab.search' });
     expect(screen.getByRole('banner')).toContainElement(searchButton);
     expect(screen.getAllByRole('button', { name: 'tab.search' })).toHaveLength(1);
+    fireEvent.click(searchButton);
+
+    expect(toggleCommandMenuMock).toHaveBeenCalledWith(true);
+  });
+
+  // Web and mobile show the panel toggle in the header, which leaves no room
+  // for search there.
+  it('keeps search as a nav row on web and mobile', () => {
+    platformMock.isDesktop = false;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+    const searchButton = screen.getByRole('button', { name: 'tab.search' });
+    expect(screen.getByRole('banner')).not.toContainElement(searchButton);
+    expect(screen.getAllByRole('button', { name: 'tab.search' })).toHaveLength(1);
+    expect(searchButton).toHaveTextContent('tab.search');
     fireEvent.click(searchButton);
 
     expect(toggleCommandMenuMock).toHaveBeenCalledWith(true);

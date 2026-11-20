@@ -2,10 +2,11 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { BotPromptIcon } from '@lobehub/ui/icons';
-import { DnaIcon, ListTodoIcon, MessageSquarePlusIcon, TargetIcon } from 'lucide-react';
+import { DnaIcon, ListTodoIcon, MessageSquarePlusIcon, SearchIcon, TargetIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { isDesktop } from '@/const/version';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useSelfLearningSurface } from '@/features/SelfLearning/SurfaceGate/useSelfLearningSurface';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
@@ -16,6 +17,7 @@ import { useActionSWR } from '@/libs/swr';
 import { topicActionKeys } from '@/libs/swr/keys';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 import { isMobileSurface } from '@/utils/mobileSurface';
@@ -44,6 +46,7 @@ const Nav = ({ onOpenProfile, showProfile }: NavProps) => {
   const isTasksActive = pathname.endsWith('/tasks') || pathname.includes('/task/');
   const router = useQueryRoute();
   const { allowed: canCreateTopic } = usePermission('create_content');
+  const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
   const switchTopic = useChatStore((s) => s.switchTopic);
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
   const isNewTopicSendInFlight = useChatStore(topicSelectors.isNewTopicSendInFlight);
@@ -73,6 +76,14 @@ const Nav = ({ onOpenProfile, showProfile }: NavProps) => {
         title={tTopic('actions.addNewTopic')}
         onClick={handleNewTopic}
       />
+      {/* The desktop app opens search from the header instead. */}
+      {!isDesktop && (
+        <NavItem
+          icon={SearchIcon}
+          title={t('tab.search')}
+          onClick={() => toggleCommandMenu(true)}
+        />
+      )}
       {showProfile && isMobileSurface() && (
         <NavItem
           active={isProfileActive}

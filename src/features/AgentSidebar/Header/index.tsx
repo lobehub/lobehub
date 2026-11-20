@@ -6,6 +6,7 @@ import { type PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { isDesktop } from '@/const/version';
 import { useBackButtonProps } from '@/features/NavPanel/backOrigin';
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
@@ -46,15 +47,19 @@ const HeaderInfo = (_props: PropsWithChildren) => {
       <SideBarHeaderLayout
         {...back}
         left={<Agent />}
+        // Web and mobile spend the header's right side on the panel toggle,
+        // so search stays a nav row there; only the desktop app lifts it up.
         right={
           <>
-            <ActionIcon
-              aria-label={t('tab.search')}
-              icon={SearchIcon}
-              size={headerActionSmallSize}
-              title={t('tab.search')}
-              onClick={() => toggleCommandMenu(true)}
-            />
+            {isDesktop && (
+              <ActionIcon
+                aria-label={t('tab.search')}
+                icon={SearchIcon}
+                size={headerActionSmallSize}
+                title={t('tab.search')}
+                onClick={() => toggleCommandMenu(true)}
+              />
+            )}
             {showProfile && !isMobileSurface() && (
               <ActionIcon
                 aria-label={t('tab.profile')}
