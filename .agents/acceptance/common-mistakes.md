@@ -25,7 +25,7 @@ the next free number of that prefix.
 - **L-E1** A replacing check declares `supersedes`; a visible-UI check passes only on opened visual evidence asserting the full spatial outcome, overlap included.
 - **L-E2** A passing layout screenshot shows the settled real transition — never a DOM under a synthetic transform.
 - **L-E3** An authoring flow is proven end to end: entry, completed input and preview, the created item in its pre-verification state.
-- **L-E4** Verify in the requested product container at representative scale, on both sides of every behavior-changing threshold; a harness is supporting evidence only.
+- **L-E4** Verify in the requested product container at representative scale (a layout check shows several realistic items, never one or none), on both sides of every behavior-changing threshold; a harness is supporting evidence only.
 - **L-E5** Every criterion maps to its verifier, its own inspectable evidence, and a verdict — never an aggregate "all passed".
 - **L-E6** When the Task requires a durable document, create and pin the real artifact; evidence explains a verdict, it is not the deliverable.
 - **L-E9** Check the acceptance's status before ingest; new scoped work on an accepted acceptance goes to a new subject.
