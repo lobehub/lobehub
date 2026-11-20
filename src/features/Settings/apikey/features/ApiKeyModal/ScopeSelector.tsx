@@ -9,15 +9,16 @@ import { useTranslation } from 'react-i18next';
 
 import type { ApiKeyScope } from '@/const/apiKeyScope';
 import { isValidApiKeyScope } from '@/const/apiKeyScope';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   disabled: { pointerEvents: 'none', opacity: 0.45 },
   fullAccessRow: {
     display: 'flex',
-    gap: '16px',
+    gap: densityTokens['--lobe-density-section-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '12px',
+    padding: densityTokens['--lobe-density-content-gap'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
@@ -26,11 +27,11 @@ const styles = stylex.create({
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-    rowGap: '12px',
-    columnGap: '16px',
+    rowGap: densityTokens['--lobe-density-content-gap'],
+    columnGap: densityTokens['--lobe-density-section-gap'],
     // same card treatment as the full-access row so the whole Scope block
     // reads as one system
-    padding: '12px',
+    padding: densityTokens['--lobe-density-content-gap'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
@@ -41,14 +42,14 @@ const styles = stylex.create({
      separators, no card-in-card — the surrounding card is the container. */
   grantList: {
     paddingBlock: '4px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
     borderRadius: cssVar.borderRadius,
   },
   grantRow: {
-    paddingBlock: '12px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: { 'default': 'solid', ':last-child': 'none' },
     borderBlockEndColor: cssVar.colorBorderSecondary,

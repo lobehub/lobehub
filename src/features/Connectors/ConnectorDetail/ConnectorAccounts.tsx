@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import Avatar from '@/components/Avatar';
 import type { ConnectorLinkSummary, ConnectorWithTools } from '@/store/tool/slices/connector';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { InlineErrorText } from '../ConnectorActionErrorText';
 import { getAccountDetails, getAccountsSectionModel, getRowBusyAction } from './accountsModel';
@@ -32,7 +33,7 @@ const styles = stylex.create({
     fontSize: 13,
     lineHeight: 1.6,
     paddingBlock: 20,
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     textAlign: 'center',
   },
   glyph: {
@@ -53,7 +54,7 @@ const styles = stylex.create({
     borderRadius: 8,
     borderStyle: 'solid',
     borderWidth: 1,
-    paddingInline: 12,
+    paddingInline: densityTokens['--lobe-density-content-gap'],
   },
   row: {
     borderBlockEndColor: {
@@ -63,7 +64,7 @@ const styles = stylex.create({
     borderBlockEndStyle: 'solid',
     borderBlockEndWidth: 1,
     minHeight: 52,
-    paddingBlock: 12,
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
   },
 });
 

@@ -7,6 +7,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsDark } from '@/hooks/useIsDark';
+import { densityTokens } from '@/styles/density.stylex';
 
 import ChunkItem from './ChunkItem';
 
@@ -14,7 +15,7 @@ const styles = stylex.create({
   container: {
     cursor: 'pointer',
     paddingBlock: '8px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderRadius: '8px',
     color: cssVar.colorText,
   },

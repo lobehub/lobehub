@@ -1,6 +1,8 @@
 // oxlint-disable-next-line stylex-migration/no-emotion-styles -- moved verbatim from SharePopover/style.ts; the tile's nested :hover/:disabled span selectors have no StyleX form yet
 import { createStaticStyles } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   qrcode: css`
     flex: none;
@@ -30,7 +32,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     white-space: nowrap;
   `,
   socialPanel: css`
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadius};
     background: ${cssVar.colorFillQuaternary};
   `,

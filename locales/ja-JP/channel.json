@@ -91,7 +91,6 @@
   "events.youInvited": "あなたが {{names}} をチャンネルに招待しました",
   "events.youInvitedMembers": "あなたが <members/> をチャンネルに招待しました",
   "failure.locate": "メッセージを表示",
-  "failure.messageLabel": "返信失敗: {{names}}",
   "failure.title": "失敗した返信 · {{count}}",
   "followers": "返信元: {{names}}",
   "invite.directHint": "ここで招待すると、{{name}} と選択したメンバーとの新しいチャンネルが始まります。{{name}} とのこの会話はそのまま残ります。",

@@ -2,11 +2,12 @@ import { createStaticStyles, cx, Flexbox } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
 import { useFileStore } from '@/store/file';
+import { densityVars } from '@/styles/densityVars';
 import { type FileChunk } from '@/types/chunk';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 8px;
     border-block-end: 1px dashed ${cssVar.colorBorderSecondary};
     border-radius: 4px;
@@ -16,7 +17,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   text: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 24px;
   `,
   title: css`

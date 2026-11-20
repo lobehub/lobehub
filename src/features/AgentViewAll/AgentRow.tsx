@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import ItemActions from './ItemActions';
 import LabelTags from './LabelTags';
@@ -61,7 +62,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     display: flex;
     flex: 1;
-    gap: 12px;
+    gap: ${densityVars.contentGap};
     align-items: center;
 
     min-width: 0;
@@ -95,7 +96,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     container: agent-row / inline-size;
 
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadiusLG};
 
     color: inherit;

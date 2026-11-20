@@ -20,6 +20,8 @@ import {
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 import { usePermissionMode } from './usePermissionMode';
 
 const MODE_ICONS: Record<HeteroPermissionMode, LucideIcon> = {
@@ -55,7 +57,12 @@ const styles = stylex.create({
     lineHeight: 1.5,
     color: cssVar.colorWarning,
   },
-  title: { fontSize: '14px', fontWeight: 500, lineHeight: 1.4, color: cssVar.colorText },
+  title: {
+    fontSize: densityTokens['--lobe-density-font-size'],
+    fontWeight: 500,
+    lineHeight: 1.4,
+    color: cssVar.colorText,
+  },
   trigger: { overflow: 'hidden', borderRadius: cssVar.borderRadius },
   warning: { color: cssVar.colorWarning },
 });

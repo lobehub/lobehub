@@ -303,7 +303,7 @@ describe('prepareHeteroRun — overlapping reads', () => {
     expect(credsGet).not.toHaveBeenCalled();
     expect(mocks.signHeteroOperationJWT).toHaveBeenCalledWith(
       expect.objectContaining({
-        capabilities: ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read'],
+        capabilities: ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read', 'work:write'],
       }),
     );
   });

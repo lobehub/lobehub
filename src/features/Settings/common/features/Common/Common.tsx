@@ -184,15 +184,18 @@ const Common = memo(() => {
         children: (
           <Flexbox horizontal justify={'flex-end'}>
             <Select
-              allowClear
-              options={localeOptions}
-              placeholder={t('settingCommon.responseLanguage.placeholder')}
-              value={general?.responseLanguage || undefined}
+              value={general?.responseLanguage || 'auto'}
+              options={[
+                { label: t('settingCommon.responseLanguage.auto'), value: 'auto' },
+                ...localeOptions,
+              ]}
               style={{
                 width: '50%',
               }}
               onChange={(value) => {
-                save(() => setSettings({ general: { responseLanguage: value ?? '' } }));
+                save(() =>
+                  setSettings({ general: { responseLanguage: value === 'auto' ? '' : value } }),
+                );
               }}
             />
           </Flexbox>

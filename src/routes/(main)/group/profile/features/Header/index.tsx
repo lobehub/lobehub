@@ -30,7 +30,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     width: 100%;
     height: ${densityVars.headerHeight};
     padding-block: 0;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   tabsWrapper: css`

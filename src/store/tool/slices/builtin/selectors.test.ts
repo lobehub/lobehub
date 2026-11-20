@@ -39,6 +39,23 @@ const hiddenToolsState = () => ({
 });
 
 describe('builtinToolSelectors', () => {
+  it('keeps a bundled skill available to the agent picker after a legacy uninstall', () => {
+    const state = {
+      ...initialState,
+      builtinSkills: [mockBuiltinSkill],
+      uninstalledBuiltinTools: [mockBuiltinSkill.identifier],
+    };
+    expect(builtinToolSelectors.installedBuiltinSkills(state)).toEqual([mockBuiltinSkill]);
+  });
+
+  it('offers the calculator in agent tools even when legacy settings list it as uninstalled', () => {
+    const id = 'lobe-calculator';
+    const state = { ...initialState, uninstalledBuiltinTools: [id] };
+    expect(
+      builtinToolSelectors.metaListIncludingHidden(state).map((item) => item.identifier),
+    ).toContain(id);
+  });
+
   describe('metaList', () => {
     it('should return meta list with builtin tools and skills', () => {
       const state = {

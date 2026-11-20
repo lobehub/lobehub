@@ -21,6 +21,7 @@ import TopicRow, { getTopicChatUrl } from '@/features/HomeInbox/TopicRow';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useClientDataSWR } from '@/libs/swr';
 import { type DeviceRunningTopic, deviceService } from '@/services/device';
+import { densityVars } from '@/styles/densityVars';
 
 import { RunUserAvatar } from './RunningUsers';
 
@@ -46,7 +47,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   placeholder: css`
     padding-block: 14px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
   `,
 }));
 

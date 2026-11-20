@@ -25,7 +25,13 @@ import { activeMembers, appendMessage, deliver } from './delivery';
 import { ChannelError } from './error';
 import { countManifestMessages, readManifestMessages } from './manifest';
 import type { ChannelOpeningDecision } from './opening';
-import { applyOpening, findCoAddressed, findOpeningCandidate, findOpeningReply } from './opening';
+import {
+  applyOpening,
+  findCoAddressed,
+  findLastSettledReplyOnDevice,
+  findOpeningCandidate,
+  findOpeningReply,
+} from './opening';
 import type { ChannelReplyErrorDraft } from './replyError';
 import {
   findReplyError,
@@ -416,6 +422,12 @@ export class ChannelExecutionRepository {
    */
   openingCandidate = (channelId: string, jobId: string) =>
     findOpeningCandidate(this.db, channelId, jobId);
+
+  /** A member's newest finished reply on a device. See {@link findLastSettledReplyOnDevice}. */
+  lastSettledReplyOnDevice = (
+    channelId: string,
+    params: Parameters<typeof findLastSettledReplyOnDevice>[2],
+  ) => findLastSettledReplyOnDevice(this.db, channelId, params);
 
   /** Opens a queued job's reply once. See {@link applyOpening}. */
   open = (channelId: string, jobId: string, decision: ChannelOpeningDecision) =>

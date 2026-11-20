@@ -254,6 +254,18 @@ describe('shareRouter', () => {
       resolveModelSelectionMock.mockResolvedValue({ model: 'gpt-4o', provider: 'openai' });
     });
 
+    it('advertises no LobeHub tool grants for a Claude Code / Codex Agent', async () => {
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
+        ...agentShare,
+        agentAgencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+      } as any);
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+
+      const result = await caller.getSharedAgent({ slugOrId: 'shared-agent' });
+
+      expect(result.toolGrants).toEqual([]);
+    });
+
     it('returns independent demos and selected deliveries in the owner scope', async () => {
       const demoCases = [{ prompt: 'Review this migration', description: 'Find deployment risks' }];
       const work = { id: 'work-selected', title: 'Migration review', totalCost: 0.2 };

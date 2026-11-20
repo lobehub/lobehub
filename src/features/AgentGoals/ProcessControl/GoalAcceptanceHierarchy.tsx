@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { rowKeyDownHandler } from '@/features/Acceptance';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import type { AcceptanceLevelState, AcceptanceTree } from './goalAcceptanceTree';
 import { GroupLabel } from './GoalResultFollowUps';
@@ -35,7 +36,7 @@ const styles = createStaticStyles(({ css }) => ({
     width: 100%;
     min-height: 38px;
     padding-block: 8px;
-    padding-inline: 12px 6px;
+    padding-inline: ${densityVars.contentGap} 6px;
 
     /* The sign-off appears under the pointer, the way the acceptance page's own
        per-group accept does: a permanently visible button on every waiting row
@@ -112,7 +113,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-width: 0;
 
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,

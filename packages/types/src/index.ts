@@ -1,6 +1,7 @@
 export * from './agent';
 export * from './agentAccount';
 export * from './agentAvailability';
+export * from './agentDelivery';
 export * from './agentExecution';
 export * from './agentGroup';
 export * from './agentHook';
@@ -99,6 +100,9 @@ export * from './acceptanceReview';
 export * from './acceptanceReviewRound';
 export * from './agentRuntime';
 export * from './artboard';
+export * from './artboardFiles';
+export * from './artboardPublish';
+export * from './artboardReadiness';
 export * from './connector';
 export * from './connectorToolIdentifier';
 export * from './heteroPermissionMode';

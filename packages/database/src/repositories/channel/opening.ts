@@ -1,9 +1,10 @@
-import type { ChannelContextMessage } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull, lt, ne } from 'drizzle-orm';
+import type { ChannelContextMessage, ChannelSharedAgentAccess } from '@lobechat/types';
+import { and, desc, eq, gte, inArray, isNull, lt, ne } from 'drizzle-orm';
 import pMap from 'p-map';
 
 import type { ChannelJobItem, ChannelMessageItem } from '../../schemas';
 import {
+  agentOperations,
   agents,
   channelAudit,
   channelJobs,
@@ -15,6 +16,7 @@ import {
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
+import { channelReplyShare } from './agent';
 import { appendMessage } from './delivery';
 import { readManifestMessages } from './manifest';
 import type { OpeningFacts, OpeningLayout } from './openingLayout';
@@ -78,10 +80,22 @@ export interface ChannelOpeningCandidate {
   canOpenThread: boolean;
   /** The other Agents the request asked to answer; they share one Thread with this reply. */
   coAddressed: ChannelCoAddressedAgent[];
+  /**
+   * The device picked for the Agent in this Channel. Every reply of the member runs there, so
+   * it names the run's target before the claim; without one only the claim resolves it.
+   */
+  deviceId?: string;
+  /** The Agent's membership in this Channel, which its replies run as. */
+  memberId: string;
   /** Public messages just before the request, oldest first. */
   recent: ChannelContextMessage[];
   request: ChannelContextMessage;
   requesterUserId: string;
+  /**
+   * Set when the Agent is another person's, reached through its share: the reply opens only once
+   * the share admits the request, so a refused one fails where it was asked, with no acknowledgement.
+   */
+  share?: ChannelSharedAgentAccess;
   /**
    * Open Threads started before the request, nearest first, that the reply may continue in.
    * Empty when it cannot move: already in a Thread, or asked together with other Agents.
@@ -180,6 +194,7 @@ export const findOpeningCandidate = async (
       agentId: channelMembers.agentId,
       agentName: agents.name,
       agentTitle: agentTitleSql(),
+      memberConfig: channelMembers.config,
     })
     .from(channelJobs)
     .innerJoin(channelMembers, eq(channelMembers.id, channelJobs.memberId))
@@ -213,7 +228,7 @@ export const findOpeningCandidate = async (
           .where(eq(channelThreads.id, job.threadId))
       : [],
     db
-      .select({ workspaceId: channels.workspaceId })
+      .select({ agentId: channels.agentId, workspaceId: channels.workspaceId })
       .from(channels)
       .where(eq(channels.id, channelId)),
   ]);
@@ -241,9 +256,12 @@ export const findOpeningCandidate = async (
     agent: { id: row.agentId, name: row.agentName, title: row.agentTitle },
     canOpenThread: !job.threadId,
     coAddressed,
+    ...(row.memberConfig?.deviceId && { deviceId: row.memberConfig.deviceId }),
+    memberId: job.memberId,
     recent: messages.filter((message) => message.id !== job.messageId),
     request: requestMessage,
     requesterUserId: requester.userId,
+    share: await channelReplyShare(db, channel, row.agentId, requester.userId),
     // Agents asked together share one new Thread under the request instead.
     threads:
       job.threadId || coAddressed.length
@@ -644,4 +662,31 @@ export const findOpeningReply = async (
     )
     .limit(1);
   return message;
+};
+
+/**
+ * The newest reply of `memberId` on `deviceId` since `since` that finished: answered, chose
+ * silence, or failed, with its run's error. A stopped reply says nothing about the device.
+ */
+export const findLastSettledReplyOnDevice = async (
+  db: LobeChatDatabase,
+  channelId: string,
+  { deviceId, memberId, since }: { deviceId: string; memberId: string; since: Date },
+) => {
+  const [row] = await db
+    .select({ error: agentOperations.error, status: channelJobs.status })
+    .from(channelJobs)
+    .leftJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
+    .where(
+      and(
+        eq(channelJobs.channelId, channelId),
+        eq(channelJobs.memberId, memberId),
+        eq(channelJobs.deviceId, deviceId),
+        inArray(channelJobs.status, ['completed', 'failed', 'silent']),
+        gte(channelJobs.createdAt, since),
+      ),
+    )
+    .orderBy(desc(channelJobs.createdAt))
+    .limit(1);
+  return row;
 };

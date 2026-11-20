@@ -7,6 +7,6 @@ export const resolveCommunityUserAvatarTarget = ({
   isWorkspaceScope,
   profileUsername,
 }: ResolveCommunityUserAvatarTargetParams) => {
-  if (isWorkspaceScope) return '/community/workspace';
-  if (profileUsername) return `/community/user/${profileUsername}`;
+  if (isWorkspaceScope) return '/marketplace/workspace';
+  if (profileUsername) return `/marketplace/user/${profileUsername}`;
 };

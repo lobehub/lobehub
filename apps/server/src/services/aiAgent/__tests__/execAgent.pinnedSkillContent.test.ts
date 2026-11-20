@@ -251,6 +251,7 @@ const createAgentConfig = (plugins: AgentPluginEntry[]) => ({
 
 describe('AiAgentService.execAgent - pinned skill content injection', () => {
   let service: AiAgentService;
+  const findUserSettings = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -301,7 +302,11 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
         ? [{ ...planSkill, body: 'PLAN BODY', content: 'PLAN BODY + FILES' }]
         : [],
     );
-    service = new AiAgentService({} as any, 'test-user-id');
+    findUserSettings.mockResolvedValue({ tool: { uninstalledBuiltinTools: [] } });
+    service = new AiAgentService(
+      { query: { userSettings: { findFirst: findUserSettings } } } as any,
+      'test-user-id',
+    );
   });
 
   it('treats legacy pinned and auto skills as metadata-only', async () => {
@@ -373,6 +378,26 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
     },
   );
 
+  it('keeps legacy opt-ins off when the account settings read fails', async () => {
+    findUserSettings.mockRejectedValueOnce(new Error('Settings unavailable'));
+    mockGetAgentConfig.mockResolvedValue(createAgentConfig(['lobe-artifacts']));
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+    expect(skillById('lobe-artifacts')).toBeUndefined();
+  });
+
+  it.each([false, true])(
+    'honors a per-agent override (%s) after an account uninstall',
+    async (override) => {
+      findUserSettings.mockResolvedValue({ tool: { uninstalledBuiltinTools: ['lobe-artifacts'] } });
+      const plugin: AgentPluginEntry = override
+        ? { builtinOverride: true, identifier: 'lobe-artifacts', mode: 'auto' }
+        : { identifier: 'lobe-artifacts', mode: 'auto' };
+      mockGetAgentConfig.mockResolvedValue(createAgentConfig([plugin]));
+      await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+      expect(!!skillById('lobe-artifacts')).toBe(override);
+    },
+  );
+
   it.each([
     { createdAt: '2026-11-17T08:00:00Z', offered: true },
     { createdAt: '2026-11-18T15:53:51Z', offered: false },
@@ -384,12 +409,7 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
     const settings = {
       tool: { uninstalledBuiltinTools: scenario.uninstalled ? ['lobe-artifacts'] : [] },
     };
-    service = new AiAgentService(
-      {
-        query: { userSettings: { findFirst: vi.fn().mockResolvedValue(settings) } },
-      } as any,
-      'test-user-id',
-    );
+    findUserSettings.mockResolvedValue(settings);
     mockGetAgentConfig.mockResolvedValue({
       ...createAgentConfig(
         scenario.disabled ? [{ identifier: 'lobe-artifacts', mode: 'disabled' }] : ['docs-mcp'],

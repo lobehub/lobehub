@@ -1,5 +1,4 @@
 import { getConnectorCatalog, RecommendedSkillType } from '@lobechat/const';
-import type { LobeBuiltinTool } from '@lobechat/types';
 import { createInstance } from 'i18next';
 import { describe, expect, it } from 'vitest';
 
@@ -7,64 +6,28 @@ import zhSetting from '../../../../../locales/zh-CN/setting.json';
 import {
   buildIntegrationItems,
   getVisibleSectionItems,
+  isSectionExpandable,
   matchesConnectorKeyword,
   matchesIntegrationKeyword,
   partitionByInstalled,
   SECTION_PREVIEW_LIMIT,
 } from './connectorSections';
 
-const tool = (identifier: string, hidden = false) =>
-  ({ hidden, identifier, manifest: {}, title: identifier, type: 'builtin' }) as LobeBuiltinTool;
-
 const noConnectors = { composio: false, lobehub: false };
 
 describe('buildIntegrationItems', () => {
-  it('lists recommended built-ins, then other installed built-ins, connected first', () => {
-    const installed = new Set(['b', 'c']);
-    const items = buildIntegrationItems({
-      allBuiltinTools: [tool('a'), tool('b'), tool('c'), tool('hidden', true), tool('d')],
-      builtinSkills: [],
+  it('omits builtin recommendations from the connector catalog', () => {
+    const fixtures = {
       connectorAvailability: noConnectors,
-      isBuiltinToolInstalled: (id) => installed.has(id),
       isComposioActive: () => false,
       isLobehubConnected: () => false,
-      recommendedSkills: [
-        { id: 'a', type: RecommendedSkillType.Builtin },
-        { id: 'b', type: RecommendedSkillType.Builtin },
-        { id: 'hidden', type: RecommendedSkillType.Builtin },
-      ],
-    });
-
-    // `d` is neither recommended nor installed; `hidden` never shows.
-    expect(items.map((i) => (i.type === 'builtin' ? i.builtinTool.identifier : i.type))).toEqual([
-      'b',
-      'c',
-      'a',
-    ]);
-  });
-
-  it('shows every visible built-in when nothing is recommended', () => {
-    const items = buildIntegrationItems({
-      allBuiltinTools: [tool('a'), tool('hidden', true), tool('b')],
-      builtinSkills: [],
-      connectorAvailability: noConnectors,
-      isBuiltinToolInstalled: (id) => id === 'b',
-      isComposioActive: () => false,
-      isLobehubConnected: () => false,
-      recommendedSkills: [],
-    });
-
-    expect(items.map((i) => (i.type === 'builtin' ? i.builtinTool.identifier : i.type))).toEqual([
-      'b',
-      'a',
-    ]);
+      recommendedSkills: [{ id: 'lobe-calculator', type: RecommendedSkillType.Builtin }],
+    };
+    expect(buildIntegrationItems(fixtures)).toEqual([]);
   });
 
   it('adds LobeHub OAuth providers only when that system is enabled', () => {
     const base = {
-      allBuiltinTools: [],
-      builtinSkills: [],
-      isBuiltinToolInstalled: () => false,
       isComposioActive: () => false,
       isLobehubConnected: () => false,
       recommendedSkills: [],
@@ -154,5 +117,21 @@ describe('getVisibleSectionItems', () => {
   it('shows everything when expanded or short', () => {
     expect(getVisibleSectionItems(items, true)).toEqual({ hiddenCount: 0, visible: items });
     expect(getVisibleSectionItems([1, 2], false)).toEqual({ hiddenCount: 0, visible: [1, 2] });
+  });
+});
+
+describe('isSectionExpandable', () => {
+  it('turns the heading into the toggle only when rows are hidden', () => {
+    expect(isSectionExpandable({ expanded: false, hiddenCount: 3, searching: false })).toBe(true);
+    expect(isSectionExpandable({ expanded: false, hiddenCount: 0, searching: false })).toBe(false);
+  });
+
+  it('keeps the toggle on an expanded group so it can fold back', () => {
+    expect(isSectionExpandable({ expanded: true, hiddenCount: 0, searching: false })).toBe(true);
+  });
+
+  it('drops the toggle while searching, which already lists every hit', () => {
+    expect(isSectionExpandable({ expanded: false, hiddenCount: 3, searching: true })).toBe(false);
+    expect(isSectionExpandable({ expanded: true, hiddenCount: 0, searching: true })).toBe(false);
   });
 });

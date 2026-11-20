@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router';
 
+import type { AcceptanceTabKey } from '../Header/AcceptanceTabs';
+
 /**
  * A comment is addressable, the way a pull-request comment is: its id lives in
  * the URL fragment, so a link pasted into chat opens the acceptance already
@@ -12,10 +14,17 @@ const PREFIX = 'comment-';
 
 export const commentAnchorId = (commentId: string) => `${PREFIX}${commentId}`;
 
+export const FLOW_HASH = '#flow';
+
 /** The comment a fragment addresses, or undefined for any other fragment. */
 export const commentIdFromHash = (hash: string): string | undefined => {
   const value = hash.replace(/^#/, '');
   return value.startsWith(PREFIX) ? value.slice(PREFIX.length) || undefined : undefined;
+};
+
+export const tabFromHash = (hash: string): AcceptanceTabKey | undefined => {
+  if (hash === FLOW_HASH) return 'flow';
+  if (commentIdFromHash(hash)) return 'discussion';
 };
 
 /**

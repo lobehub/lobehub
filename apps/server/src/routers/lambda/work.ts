@@ -14,19 +14,23 @@ import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPer
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
-import { WorkModel } from '@/database/models/work';
+import { AgentWorkError, WorkModel } from '@/database/models/work';
 import type { LobeChatDatabase } from '@/database/type';
-import { router } from '@/libs/trpc/lambda';
+import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { unpublishArtboardWork } from '@/server/services/artboard/publish/offline';
 import { createCanvasStorageService, isOwnCanvasManifestKey } from '@/server/services/canvas';
 import { deleteCanvas } from '@/server/services/canvas/delete';
 import {
+  AgentWorkRunError,
   isBetterCodingExperienceEnabled,
   linkPushedPullRequests,
   linkTopicPullRequest,
   listTopicPullRequestsWithStatus,
   parsePullRequestUrl,
   registerShellWorksForLocalRun,
+  resolveAgentWorkFile,
+  resolveAgentWorkRun,
   resolveShellPullRequestLinking,
   setTopicPullRequestDismissed,
 } from '@/server/services/workRegistration';
@@ -89,6 +93,7 @@ const cumulativeUsageSchema = z.object({
 // registration (see registerClientWorkFromIntent), and `z.object` strips
 // undeclared keys — omitting them here silently stores cost-less versions.
 const registerTaskSchema = z.object({
+  agentEditable: z.boolean().nullable().optional(),
   agentId: z.string().nullable().optional(),
   cumulativeCost: z.number().nullable().optional(),
   cumulativeUsage: cumulativeUsageSchema.nullable().optional(),
@@ -144,6 +149,7 @@ const registerCanvasSchema = z.object({
 
 const registerDocumentSchema = z.object({
   agentDocumentId: z.string().nullable().optional(),
+  agentEditable: z.boolean().nullable().optional(),
   agentId: z.string().nullable().optional(),
   cumulativeCost: z.number().nullable().optional(),
   cumulativeUsage: cumulativeUsageSchema.nullable().optional(),
@@ -159,10 +165,151 @@ const registerDocumentSchema = z.object({
   topicId: z.string().nullable().optional(),
 }) satisfies z.ZodType<RegisterDocumentWorkParams>;
 
+// `lh work create|update`: an agent registering what it produced. The run's
+// topic, agent and share scope come from `operationId`; file size, type and URL
+// come from the uploaded file row.
+const agentWorkTextSchema = {
+  description: z.string().trim().max(2000).optional(),
+  title: z.string().trim().min(1).max(200).optional(),
+};
+const agentWorkUrlSchema = z.string().trim().min(1).max(2048);
+
+const createAgentWorkSchema = z.discriminatedUnion('type', [
+  z.object({
+    ...agentWorkTextSchema,
+    fileId: z.string().min(1),
+    filePath: z.string().trim().min(1).max(1024),
+    operationId: z.string().min(1),
+    type: z.literal('file'),
+  }),
+  z.object({
+    ...agentWorkTextSchema,
+    operationId: z.string().min(1),
+    title: agentWorkTextSchema.title.unwrap(),
+    type: z.literal('link'),
+    url: agentWorkUrlSchema,
+  }),
+]);
+
+const updateAgentWorkSchema = z.object({
+  ...agentWorkTextSchema,
+  fileId: z.string().min(1).optional(),
+  operationId: z.string().min(1),
+  workId: z.string().min(1),
+});
+
+const AGENT_WORK_ERROR_STATUS = {
+  401: 'UNAUTHORIZED',
+  403: 'FORBIDDEN',
+  404: 'NOT_FOUND',
+  409: 'CONFLICT',
+} as const;
+
+const toAgentWorkTRPCError = (error: unknown): never => {
+  if (error instanceof AgentWorkRunError) {
+    throw new TRPCError({
+      cause: error,
+      code: AGENT_WORK_ERROR_STATUS[error.status],
+      message: error.message,
+    });
+  }
+  if (error instanceof AgentWorkError) {
+    throw new TRPCError({ cause: error, code: error.code, message: error.message });
+  }
+  throw error;
+};
+
+const agentWorkProcedure = heteroAuthedProcedure.use(serverDatabase);
+
 export const workRouter = router({
+  /** Register a file or link the running agent produced (`lh work create`). */
+  createAgentWork: agentWorkProcedure
+    .input(createAgentWorkSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const { run, workModel, workspaceId } = await resolveAgentWorkRun({
+          auth: ctx,
+          db: ctx.serverDB,
+          operationId: input.operationId,
+          userId: ctx.userId,
+        });
+        const text = { description: input.description, title: input.title };
+        if (input.type === 'link') {
+          return await workModel.createAgentWork(run, {
+            ...text,
+            title: input.title,
+            type: 'link',
+            url: input.url,
+          });
+        }
+
+        const file = await resolveAgentWorkFile({
+          db: ctx.serverDB,
+          fileId: input.fileId,
+          userId: run.userId,
+          workspaceId,
+        });
+        return await workModel.createAgentWork(run, {
+          ...text,
+          file: { ...file, filePath: input.filePath },
+          type: 'file',
+        });
+      } catch (error) {
+        return toAgentWorkTRPCError(error);
+      }
+    }),
+
+  /** Add a version to a Work the agent created (`lh work update`). */
+  updateAgentWork: agentWorkProcedure
+    .input(updateAgentWorkSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const { run, workModel, workspaceId } = await resolveAgentWorkRun({
+          auth: ctx,
+          db: ctx.serverDB,
+          operationId: input.operationId,
+          userId: ctx.userId,
+        });
+        const file = input.fileId
+          ? await resolveAgentWorkFile({
+              db: ctx.serverDB,
+              fileId: input.fileId,
+              userId: run.userId,
+              workspaceId,
+            })
+          : undefined;
+        return await workModel.updateAgentWork(run, {
+          description: input.description,
+          file,
+          title: input.title,
+          workId: input.workId,
+        });
+      } catch (error) {
+        return toAgentWorkTRPCError(error);
+      }
+    }),
+
+  /** Delete a Work the agent created by mistake (`lh work delete`). */
+  deleteAgentWork: agentWorkProcedure
+    .input(z.object({ operationId: z.string().min(1), workId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const { run, workModel } = await resolveAgentWorkRun({
+          auth: ctx,
+          db: ctx.serverDB,
+          operationId: input.operationId,
+          userId: ctx.userId,
+        });
+        return await workModel.deleteAgentWork(run, input.workId);
+      } catch (error) {
+        return toAgentWorkTRPCError(error);
+      }
+    }),
+
   listByConversation: workProcedure
     .input(
       z.object({
+        includeArtboardWorks: z.boolean().optional(),
         // Opt-in for the `file` work type. Absent → the legacy (pre-`file`) set,
         // so already-deployed clients whose descriptor table lacks `file` never
         // receive it (see resolveAllowedWorkTypes in the work registry).
@@ -178,11 +325,15 @@ export const workRouter = router({
     .input(
       z.object({
         cursor: z.string().nullable().optional(),
+        includeArtboardWorks: z.boolean().optional(),
         includeFileWorks: z.boolean().optional(),
         limit: z.number().min(1).max(100).default(30),
         originAgentId: z.string().nullable().optional(),
         provider: z.enum(WORK_SKILL_PROVIDERS).optional(),
-        type: z.enum(['task', 'document', 'external', 'file', 'canvas']).nullable().optional(),
+        type: z
+          .enum(['task', 'document', 'external', 'file', 'collection', 'canvas', 'artboard'])
+          .nullable()
+          .optional(),
         visibility: z.enum(['private', 'public']).optional(),
       }),
     )
@@ -191,6 +342,7 @@ export const workRouter = router({
   listByRootOperation: workProcedure
     .input(
       z.object({
+        includeArtboardWorks: z.boolean().optional(),
         includeFileWorks: z.boolean().optional(),
         limit: z.number().min(1).max(50).default(20),
         rootOperationId: z.string().nullable().optional(),
@@ -198,6 +350,7 @@ export const workRouter = router({
     )
     .query(async ({ ctx, input }) =>
       ctx.workModel.listByRootOperation({
+        includeArtboardWorks: input.includeArtboardWorks,
         includeFileWorks: input.includeFileWorks,
         limit: input.limit,
         rootOperationId: input.rootOperationId,
@@ -207,6 +360,7 @@ export const workRouter = router({
   listByRootOperations: workProcedure
     .input(
       z.object({
+        includeArtboardWorks: z.boolean().optional(),
         includeFileWorks: z.boolean().optional(),
         limit: z.number().min(1).max(50).default(20),
         rootOperationIds: z.array(z.string()).max(100).nullable().optional(),
@@ -214,6 +368,7 @@ export const workRouter = router({
     )
     .query(async ({ ctx, input }) =>
       ctx.workModel.listByRootOperations({
+        includeArtboardWorks: input.includeArtboardWorks,
         includeFileWorks: input.includeFileWorks,
         limit: input.limit,
         rootOperationIds: input.rootOperationIds,
@@ -253,6 +408,13 @@ export const workRouter = router({
         });
         return;
       }
+
+      const artboardWork = await ctx.workModel.findArtboardWorkByWorkId(input.id);
+      if (artboardWork?.userId === ctx.userId)
+        await unpublishArtboardWork(
+          { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+          artboardWork,
+        );
 
       await ctx.workModel.deleteWork(input);
     }),

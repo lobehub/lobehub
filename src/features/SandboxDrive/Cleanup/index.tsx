@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { describeError } from '@/features/EnvironmentManager/errorMessage';
 import { useDensityTokens } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 import { formatSize } from '@/utils/format';
 
 import { STORAGE_CATEGORIES } from './analysis';
@@ -27,7 +28,7 @@ const styles = stylex.create({
     borderTopStyle: 'solid',
     borderTopWidth: 1,
     bottom: 0,
-    paddingBlock: 12,
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     position: 'sticky',
   },
   bar: {

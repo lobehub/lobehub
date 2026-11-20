@@ -38,6 +38,10 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
     text-align: start;
 
+    html[data-density='compact'] & {
+      padding-block: 4px;
+    }
+
     /* compactRow owns the hover highlight; the selector mirrors base-ui's
        variantText hover rule so it can outrank its fill */
     &:hover:not(:disabled, [aria-disabled='true']) {

@@ -14,6 +14,8 @@ import {
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 export type VisibilityConfirmVariant = 'makePrivate' | 'publish';
 
 export interface VisibilityConfirmContentProps {
@@ -121,7 +123,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 8px;
 
     margin: 0;
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-radius: 8px;
 
     list-style: none;

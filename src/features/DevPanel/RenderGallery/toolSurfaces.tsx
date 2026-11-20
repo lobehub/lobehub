@@ -5,6 +5,7 @@ import { Block, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { Component, memo, type ReactNode, useMemo } from 'react';
 
 import { type ConversationContext, ConversationProvider } from '@/features/Conversation';
+import { densityVars } from '@/styles/densityVars';
 
 import { DEVTOOLS_AGENT_ID } from './fixtures';
 import {
@@ -17,8 +18,8 @@ import type { ApiEntry } from './useDevtoolsEntries';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   missingShell: css`
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.cardPadding};
     border: 1px dashed ${cssVar.colorBorderSecondary};
     border-radius: 12px;
 

@@ -155,7 +155,7 @@ describe('active conversation coordinate', () => {
   it('ignores non-agent routes even when another segment is named agent', () => {
     const coordinate = resolveActiveConversationCoordinate({
       params: {},
-      url: '/community/agent/example',
+      url: '/marketplace/agent/example',
     });
 
     expect(coordinate.routeAgentId).toBeUndefined();

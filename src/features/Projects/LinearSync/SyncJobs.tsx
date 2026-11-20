@@ -9,6 +9,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { linearService } from '@/services/linear';
+import { densityTokens } from '@/styles/density.stylex';
 
 import {
   formatLinearSyncResult,
@@ -29,7 +30,7 @@ const styles = stylex.create({
   row: {
     minHeight: 44,
     paddingBlock: 10,
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
   rowDivider: {
     borderBlockStartColor: cssVar.colorBorderSecondary,

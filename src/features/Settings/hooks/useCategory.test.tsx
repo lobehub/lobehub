@@ -86,8 +86,10 @@ describe('settings useCategory', () => {
     expect(groupKeys(SettingsGroupKey.Connection)).toEqual([
       SettingsTabs.Messenger,
       SettingsTabs.Integrations,
-      SettingsTabs.Connector,
     ]);
+    // Skills and connectors moved to the Marketplace.
+    expect(getItemKeys()).not.toContain(SettingsTabs.Skill);
+    expect(getItemKeys()).not.toContain(SettingsTabs.Connector);
 
     // The sandbox drives moved to Docs → Sandbox Storage; settings keep only the
     // environment definitions.
@@ -188,9 +190,12 @@ describe('settings useCategory automations', () => {
     expect(connectionKeys(false)).not.toContain(SettingsTabs.Automations);
   });
 
-  it('lists Automations right after the connectors it comes from', () => {
+  it('lists Automations right after Integrations now that connectors live in the Marketplace', () => {
     const keys = connectionKeys(true) ?? [];
 
-    expect(keys.indexOf(SettingsTabs.Automations)).toBe(keys.indexOf(SettingsTabs.Connector) + 1);
+    expect(keys).not.toContain(SettingsTabs.Connector);
+    expect(keys.indexOf(SettingsTabs.Automations)).toBe(
+      keys.indexOf(SettingsTabs.Integrations) + 1,
+    );
   });
 });

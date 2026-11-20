@@ -19,6 +19,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
+import { densityVars } from '@/styles/densityVars';
 
 import {
   type Activity,
@@ -50,7 +51,7 @@ const tableStyles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 12px;
@@ -78,7 +79,7 @@ const tableStyles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     height: 30px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 12px;
@@ -93,7 +94,7 @@ const tableStyles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     height: 28px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 11px;
@@ -133,7 +134,7 @@ const tableStyles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     height: 26px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     font-family: ${cssVar.fontFamilyCode};
     font-size: 11.5px;
@@ -155,7 +156,7 @@ const tableStyles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     height: 36px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     &:hover {

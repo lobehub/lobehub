@@ -8,6 +8,7 @@ import {
   accordionStyles,
   AccordionTrigger,
   ActionIcon,
+  ContextMenuTrigger,
   cx,
   type DropdownItem,
   DropdownMenu,
@@ -113,7 +114,7 @@ const styles = stylex.create({
     fontSize: 10,
     fontWeight: 600,
     lineHeight: 1,
-    color: '#fff',
+    color: cssVar.colorTextLightSolid,
     backgroundColor: cssVar.colorError,
     cursor: 'pointer',
   },
@@ -191,6 +192,11 @@ interface ChannelSectionProps {
   /** The accordion item value; the parent `AccordionRoot` owns the expanded state. */
   itemKey?: string;
   /**
+   * Section-layout entries (move, hide, customize sidebar) for the header's "…" and
+   * right-click menus; only the home sidebar, where the section can be rearranged, passes them.
+   */
+  layoutMenuItems?: DropdownItem[];
+  /**
    * Lists only this project's Channels, and new ones join it. Without it the list holds the
    * Channels outside any project.
    */
@@ -201,7 +207,11 @@ interface ChannelSectionProps {
  * Channels beside Agents in the home sidebar or above a project's topics, with the open
  * Channel's threads nested under it.
  */
-const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSectionProps) => {
+const EnabledChannelSection = ({
+  itemKey = 'channels',
+  layoutMenuItems,
+  projectId,
+}: ChannelSectionProps) => {
   const { t } = useTranslation('channel');
   const sectionTriggerStyle = useSectionTriggerStyle();
   const { pathname } = useActiveLocation();
@@ -325,55 +335,71 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
     ? archived
     : archived.filter((channel) => channel.id === activeChannelId);
 
-  return (
-    <AccordionItem value={itemKey}>
-      <AccordionHeader>
-        <AccordionTrigger style={sectionTriggerStyle}>
-          <SectionTitle>{t('title')}</SectionTitle>
-        </AccordionTrigger>
-        <Flexbox
-          horizontal
-          align="center"
-          gap={2}
-          className={cx(
-            'accordion-action',
-            accordionStyles.action,
-            accordionStyles.actionBorderless,
-          )}
-        >
-          <DropdownMenu items={sortMenuItems} placement="bottomRight">
+  const header = (
+    <AccordionHeader>
+      <AccordionTrigger style={sectionTriggerStyle}>
+        <SectionTitle>{t('title')}</SectionTitle>
+      </AccordionTrigger>
+      <Flexbox
+        horizontal
+        align="center"
+        className={cx('accordion-action', accordionStyles.action, accordionStyles.actionBorderless)}
+        gap={2}
+      >
+        <DropdownMenu items={sortMenuItems} placement="bottomRight">
+          <ActionIcon
+            aria-label={t('sort.title')}
+            icon={ArrowDownUp}
+            size="small"
+            title={t('sort.title')}
+            onClick={(event) => event.stopPropagation()}
+          />
+        </DropdownMenu>
+        {workspaceId && (
+          <ActionIcon
+            aria-label={t('browse.title')}
+            icon={Compass}
+            size="small"
+            title={t('browse.title')}
+            onClick={(event) => {
+              event.stopPropagation();
+              browse();
+            }}
+          />
+        )}
+        <ActionIcon
+          aria-label={t('create')}
+          icon={Plus}
+          size="small"
+          title={t('create')}
+          onClick={(event) => {
+            event.stopPropagation();
+            create();
+          }}
+        />
+        {layoutMenuItems && (
+          <DropdownMenu items={layoutMenuItems}>
             <ActionIcon
-              aria-label={t('sort.title')}
-              icon={ArrowDownUp}
+              aria-label={t('more', { ns: 'common' })}
+              icon={MoreHorizontal}
               size="small"
-              title={t('sort.title')}
+              style={{ flex: 'none' }}
+              title={t('more', { ns: 'common' })}
               onClick={(event) => event.stopPropagation()}
             />
           </DropdownMenu>
-          {workspaceId && (
-            <ActionIcon
-              aria-label={t('browse.title')}
-              icon={Compass}
-              size="small"
-              title={t('browse.title')}
-              onClick={(event) => {
-                event.stopPropagation();
-                browse();
-              }}
-            />
-          )}
-          <ActionIcon
-            aria-label={t('create')}
-            icon={Plus}
-            size="small"
-            title={t('create')}
-            onClick={(event) => {
-              event.stopPropagation();
-              create();
-            }}
-          />
-        </Flexbox>
-      </AccordionHeader>
+        )}
+      </Flexbox>
+    </AccordionHeader>
+  );
+
+  return (
+    <AccordionItem value={itemKey}>
+      {layoutMenuItems ? (
+        <ContextMenuTrigger items={layoutMenuItems}>{header}</ContextMenuTrigger>
+      ) : (
+        header
+      )}
       <AccordionPanel contentStyle={{ padding: 0 }}>
         <Flexbox gap={1} paddingBlock={1}>
           {!channels && !sync.error && <SkeletonList rows={3} />}
@@ -412,10 +438,10 @@ export const ChannelSection = (props: ChannelSectionProps) =>
   useChannelsEnabled() ? <EnabledChannelSection {...props} /> : null;
 
 /** The home sidebar's standalone Channels, outside any project. */
-const ChannelList = () =>
+const ChannelList = ({ layoutMenuItems }: Pick<ChannelSectionProps, 'layoutMenuItems'>) =>
   useChannelsEnabled() ? (
     <AccordionRoot defaultValue={['channels']} indicatorPlacement="inline">
-      <EnabledChannelSection />
+      <EnabledChannelSection layoutMenuItems={layoutMenuItems} />
     </AccordionRoot>
   ) : null;
 

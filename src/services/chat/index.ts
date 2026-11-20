@@ -16,6 +16,7 @@ import {
   ChatErrorType,
   type ChatMessageError,
   getAutoPluginIds,
+  getBuiltinOverrides,
   getOptedInPluginIds,
   type RequestTrigger,
   type RuntimeAdditionalContextFragment,
@@ -246,6 +247,7 @@ class ChatService {
           chatConfig,
           // A running conversation already has a scope-filtered manifest map.
           discoveryManifests ? [] : runtimeUninstalledBuiltinTools(getToolStoreState()),
+          getBuiltinOverrides(agentConfig.plugins),
         ),
         ...resolveAgentConnectorActivation(
           { id: targetAgentId, chatConfig, plugins: agentConfig.plugins },

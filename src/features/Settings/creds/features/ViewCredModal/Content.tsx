@@ -10,6 +10,7 @@ import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ArticleSkeleton } from '@/components/Skeleton';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { type CredsApi } from '../useCredsApi';
 
@@ -17,7 +18,7 @@ const styles = stylex.create({
   kvKey: {
     minWidth: '140px',
     paddingBlock: '8px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderTopLeftRadius: cssVar.borderRadius,
     borderTopRightRadius: '0',
     borderBottomRightRadius: '0',
@@ -44,7 +45,7 @@ const styles = stylex.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingBlock: '8px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderTopLeftRadius: '0',
     borderTopRightRadius: cssVar.borderRadius,
     borderBottomRightRadius: cssVar.borderRadius,

@@ -11,15 +11,15 @@ const robots = (): MetadataRoute.Robots => {
     host: getCanonicalUrl(),
     rules: [
       {
-        allow: ['/community/*'],
+        allow: ['/marketplace/*'],
         userAgent: ['Facebot', 'facebookexternalhit'],
       },
       {
-        allow: ['/community/*'],
+        allow: ['/marketplace/*'],
         userAgent: 'LinkedInBot',
       },
       {
-        allow: ['/community/*'],
+        allow: ['/marketplace/*'],
         userAgent: 'Twitterbot',
       },
       {

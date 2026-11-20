@@ -1,7 +1,7 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
-import { sidebarRow } from '@/styles/density.stylex';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 // StyleX can only fold constants declared in this module (or in a `.stylex.ts` file), so
 // these mirror ./constants — keep the two in sync.
@@ -21,7 +21,7 @@ export const styles = stylex.create({
     // bottom row sits flush against the popup edge instead of leaving a gap.
     marginBlockEnd: { 'default': null, ':last-child': '-8px' },
     marginInline: '-12px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderStyle: 'none',
     borderRadius: sidebarRow.radius,
     fontSize: sidebarRow.textFontSize,
@@ -172,7 +172,7 @@ export const styles = stylex.create({
   // Hover / focus-within on the row (the default marker) reveals the trailing controls.
   toolRow: {
     display: 'flex',
-    gap: '16px',
+    gap: densityTokens['--lobe-density-section-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',

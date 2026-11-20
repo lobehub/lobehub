@@ -115,7 +115,7 @@
   "connector.error.stdioDesktopOnly": "يمكن لموصلات Stdio المزامنة فقط في تطبيق سطح المكتب. افتح LobeHub Desktop لمزامنة هذا الموصل.",
   "connector.kind.agent": "موصل الوكيل",
   "connector.kind.builtin": "أداة مدمجة",
-  "connector.kind.community": "أداة المجتمع",
+  "connector.kind.community": "أداة السوق",
   "connector.kind.custom": "موصل مخصص",
   "connector.kind.oauth": "موصل OAuth",
   "connector.manageOnlyCreator": "يمكن فقط للمنشئ أو مالك مساحة العمل إدارة هذا الموصل",

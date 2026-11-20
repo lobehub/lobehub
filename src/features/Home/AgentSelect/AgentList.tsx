@@ -34,7 +34,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   empty: css`
     padding-block: 24px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     font-size: ${densityVars.fontSize};
     color: ${cssVar.colorTextTertiary};
@@ -61,7 +61,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   searchBar: css`
     padding-block: 4px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorSplit};
   `,
   // Same spec as the agent-detail SwitchPanel's section header.

@@ -85,6 +85,56 @@ describe('GitHub skill collection import', () => {
     expect((await model.findAll()).total).toBe(1);
   });
 
+  it('imports only the selected skill from a private snapshot and rechecks access on each batch', async () => {
+    const hidden = new GitHubNotFoundError('Repository is inaccessible', 404);
+    vi.mocked(GitHub.prototype.resolveCommit).mockRejectedValue(hidden);
+    vi.mocked(GitHub.prototype.downloadCommitZip).mockRejectedValue(hidden);
+    const archive = vi.spyOn(GitHub.prototype, 'downloadSnapshotZip').mockResolvedValue(zip);
+    const url = 'https://codeload.github.com/owner/collection/zip/' + commit + '?token=test';
+    const githubProxy = vi.fn().mockResolvedValue({
+      data: { data: { repository: { object: { oid: commit, zipballUrl: url } } } },
+      status: 200,
+    });
+    const request = () => new SkillImporter(db, userId, undefined, { githubProxy });
+    const scan = await request().discoverGitHubSkills(repo);
+    expect(scan.candidates.map(({ path }) => path)).toContain(review);
+    expect(scan.commit).toBe(commit);
+    const batch = { ...scan, gitUrl: repo, selections: [{ path: review, revision: null }] };
+    githubProxy.mockResolvedValueOnce({ data: { error: { code: 'NOT_CONNECTED' } }, status: 403 });
+    await expect(request().importGitHubSkills(batch)).rejects.toMatchObject({
+      code: 'CONNECT_GITHUB',
+    });
+    expect((await model.findAll()).total).toBe(0);
+    expect(archive).toHaveBeenCalledTimes(1);
+
+    expect(await request().importGitHubSkills(batch)).toEqual([
+      { path: review, status: 'created' },
+    ]);
+    expect(githubProxy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          variables: { owner: 'owner', repo: 'collection', ref: commit },
+        }),
+      }),
+    );
+    expect((await model.findAll()).total).toBe(1);
+    const skill = await model.findByName('review');
+    expect(skill?.upstream?.installedCommit).toBe(commit);
+    expect(JSON.stringify({ skill, scan })).not.toContain('token=test');
+  });
+
+  it('returns a typed not-found error when GitHub cannot resolve a ref during discovery', async () => {
+    const proxy = vi.fn();
+    vi.mocked(GitHub.prototype.resolveCommit).mockRejectedValue(
+      new GitHubNotFoundError('GitHub repository or ref not found', 422),
+    );
+    const importer = new SkillImporter(db, userId, undefined, { githubProxy: proxy });
+    await expect(importer.discoverGitHubSkills(repo + '/tree/missing')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(proxy).not.toHaveBeenCalled();
+  });
+
   it('coalesces concurrent submissions of the same selection', async () => {
     const scan = await importer.discoverGitHubSkills(repo);
     const batch = { ...scan, gitUrl: repo, selections: [{ path: review, revision: null }] };

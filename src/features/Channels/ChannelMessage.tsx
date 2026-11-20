@@ -1,4 +1,4 @@
-import type { ChannelDetail, ChannelPublicMessage } from '@lobechat/types';
+import type { ChannelDetail, ChannelPublicJob, ChannelPublicMessage } from '@lobechat/types';
 import {
   ActionIcon,
   Button,
@@ -39,10 +39,13 @@ import { authorAvatar, isCurrentUserAuthor, memberName } from './memberName';
 import { CHANNEL_MENTION_TAG, remarkChannelMentions } from './mentionMarkdown';
 import { MessageAttachments } from './MessageAttachments';
 import { channelMessageTime, channelTimeFormatters } from './messagePresentation';
-import { MessageFailureMark, MessageRoutingStatus } from './MessageReceipts';
+import { MessageRoutingStatus } from './MessageReceipts';
+import { ReplyFailureCard } from './ReplyFailure';
 import { showsReplyQuote } from './replyQuote';
 import type { ReplyTopic } from './ReplyTopicPanel';
 import { ReplyWorks } from './ReplyWorks';
+import { shareRefusalOf } from './shareRefusal';
+import { ShareRefusalNotice } from './ShareRefusalNotice';
 import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
 import { ThreadPreviewCard } from './ThreadPreviewCard';
@@ -79,6 +82,7 @@ export const ChannelMessage = ({
   delivery,
   detail,
   continuation = false,
+  failures,
   message,
   isRoot,
   highlighted,
@@ -94,6 +98,8 @@ export const ChannelMessage = ({
   /** For a message the server has not confirmed: its send status, in place of routing. */
   delivery?: ReactNode;
   detail: ChannelDetail;
+  /** Replies that acknowledged with this message and then failed; their cards mount under it. */
+  failures?: ChannelPublicJob[];
   isRoot?: boolean;
   highlighted?: boolean;
   message: ChannelPublicMessage;
@@ -110,12 +116,8 @@ export const ChannelMessage = ({
   const { t, i18n } = useTranslation('channel');
   const timeFormats = useMemo(() => channelTimeFormatters(i18n.language), [i18n.language]);
   const date = new Date(message.createdAt);
-  // Failed/unassigned requests keep their identity row and recovery affordance.
-  const compact =
-    continuation &&
-    !isRoot &&
-    message.routingStatus !== 'unassigned' &&
-    !detail.jobs.some((job) => job.messageId === message.id && job.status === 'failed');
+  // Unassigned requests keep their identity row and recovery affordance.
+  const compact = continuation && !isRoot && message.routingStatus !== 'unassigned';
   // A continuation sits under its header, so its hover stamp only needs the clock.
   const timestamp = (
     <time
@@ -141,6 +143,7 @@ export const ChannelMessage = ({
       attachments: detail.attachments.filter((file) => message.fileIds.includes(file.id)),
     });
   const isRequest = message.author.type === 'user' && !isRoot;
+  const shareRefusal = isRequest && !delivery ? shareRefusalOf(detail, message.id) : undefined;
   const agentAuthorId = message.author.type === 'agent' ? message.author.id : null;
   const agentMember = agentAuthorId
     ? detail.members.find((member) => member.agentId === agentAuthorId)
@@ -226,12 +229,18 @@ export const ChannelMessage = ({
         placement="left"
         showHeader={!compact}
         style={{ paddingInlineStart: 48 }}
+        titleAddon={timestamp}
         avatar={{
           avatar: authorAvatar(message.author),
           title: message.author.name || t('deletedMember'),
         }}
         belowMessage={
-          delivery ?? (isRequest ? <MessageRoutingStatus message={message} /> : undefined)
+          delivery ??
+          (shareRefusal ? (
+            <ShareRefusalNotice {...shareRefusal} />
+          ) : isRequest ? (
+            <MessageRoutingStatus message={message} />
+          ) : undefined)
         }
         customAvatarRender={(_, avatar) => (
           <Flexbox {...stylex.props(styles.messageAvatar)}>
@@ -331,6 +340,9 @@ export const ChannelMessage = ({
                 <MessageText content={message.content} names={mentionNames} />
               ))}
             {!!message.works?.length && <ReplyWorks works={message.works} />}
+            {failures?.map((job) => (
+              <ReplyFailureCard job={job} key={job.id} />
+            ))}
             {thread && (
               <ThreadPreviewCard
                 root={message}
@@ -339,12 +351,6 @@ export const ChannelMessage = ({
               />
             )}
           </Flexbox>
-        }
-        titleAddon={
-          <>
-            {timestamp}
-            {isRequest && !delivery && <MessageFailureMark detail={detail} message={message} />}
-          </>
         }
       />
       {hasToolbar && (
@@ -386,11 +392,13 @@ export const ChannelMessage = ({
 
 export function ThreadRootMessage({
   detail,
+  failures,
   root,
   onReply,
   highlighted,
 }: {
   detail: ChannelDetail;
+  failures?: ChannelPublicJob[];
   root: ChannelPublicMessage;
   onReply?: (message: ChannelPublicMessage) => void;
   highlighted?: boolean;
@@ -401,6 +409,7 @@ export function ThreadRootMessage({
       <ChannelMessage
         isRoot
         detail={detail}
+        failures={failures}
         highlighted={highlighted}
         message={root}
         onReply={onReply}

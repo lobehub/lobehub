@@ -7,6 +7,7 @@ import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { usePermission } from '@/hooks/usePermission';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   active: { backgroundColor: cssVar.colorFillTertiary, backgroundImage: 'none' },
@@ -21,7 +22,7 @@ const styles = stylex.create({
     paddingBlock: '0',
     paddingInline: '10px',
     borderRadius: '14px',
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     lineHeight: 1,
     backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillTertiary },
     backgroundImage: { 'default': 'none', ':hover': 'none' },

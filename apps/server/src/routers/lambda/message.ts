@@ -64,7 +64,9 @@ const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
       compressionRepo: new CompressionRepository(ctx.serverDB, ctx.userId, wsId),
       fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
-      messageService: new MessageService(ctx.serverDB, ctx.userId, wsId),
+      messageService: new MessageService(ctx.serverDB, ctx.userId, wsId, {
+        workTypeOptIn: ctx.workTypeOptIn,
+      }),
       topicDoctorRepo: new TopicDoctorRepo(ctx.serverDB, ctx.userId, wsId),
     },
   });
@@ -479,6 +481,7 @@ export const messageRouter = router({
         before: z.object({ createdAt: z.date(), id: z.string() }).optional(),
         current: z.number().optional(),
         groupId: z.string().nullish(),
+        includeArtboardWorks: z.boolean().optional(),
         // Opt-in for `file` work summaries in the payload. Absent → the legacy
         // set, so already-deployed clients (no `file` descriptor) never receive
         // a `file` summary that would crash their works UI. New clients set it.

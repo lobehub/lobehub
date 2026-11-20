@@ -30,7 +30,6 @@ const DEFAULT_AGENT_SHARE_CONFIG = {
   maxFileStorage: AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
   maxMessagesPerVisitor: AGENT_SHARE_DEFAULT_MAX_MESSAGES_PER_VISITOR,
   monthlySpendLimit: AGENT_SHARE_DEFAULT_MONTHLY_SPEND_LIMIT,
-  showErrorDetails: false,
   toolGrants: [],
 } satisfies AgentShareConfig;
 
@@ -41,6 +40,8 @@ const normalizeAgentShareConfig = (
   allowCreatorViewSessions:
     config?.allowCreatorViewSessions ?? DEFAULT_AGENT_SHARE_CONFIG.allowCreatorViewSessions,
   allowReadMemory: config?.allowReadMemory ?? DEFAULT_AGENT_SHARE_CONFIG.allowReadMemory,
+  /** Left absent like `skillGrants`: absent marks a share whose Agent tools were never reviewed. */
+  declinedGrantIds: config?.declinedGrantIds,
   demoCases: config?.demoCases ?? [],
   deviceAccess: config?.deviceAccess ?? 'none',
   deviceAllowUserIds: config?.deviceAllowUserIds ?? [],
@@ -49,12 +50,12 @@ const normalizeAgentShareConfig = (
   maxMessagesPerVisitor:
     config?.maxMessagesPerVisitor ?? DEFAULT_AGENT_SHARE_CONFIG.maxMessagesPerVisitor,
   monthlySpendLimit: config?.monthlySpendLimit ?? DEFAULT_AGENT_SHARE_CONFIG.monthlySpendLimit,
-  showErrorDetails: config?.showErrorDetails ?? DEFAULT_AGENT_SHARE_CONFIG.showErrorDetails,
   /**
    * Left absent rather than defaulted to `[]`: both read as "no skill
    * granted", so a default would only write a value the creator never picked.
    */
   skillGrants: config?.skillGrants,
+  seedDefaultGrants: config?.seedDefaultGrants,
   slug: config?.slug,
   toolGrants: config?.toolGrants ?? DEFAULT_AGENT_SHARE_CONFIG.toolGrants,
 });
@@ -262,7 +263,9 @@ export class AgentShareModel {
         .insert(agentShares)
         .values({
           agentId,
-          shareConfig: DEFAULT_AGENT_SHARE_CONFIG,
+          // Only an inserted row carries the marker; the conflict path below
+          // returns an existing share untouched.
+          shareConfig: { ...DEFAULT_AGENT_SHARE_CONFIG, seedDefaultGrants: true },
           visibility,
         })
         .onConflictDoNothing({ target: agentShares.agentId })
@@ -623,6 +626,9 @@ export class AgentShareModel {
 
     const [share] = await db
       .select({
+        // Server-side only: which harness runs the Agent decides which grants
+        // apply (a Claude Code / Codex Agent has no LobeHub tools).
+        agentAgencyConfig: agents.agencyConfig,
         agentAvatar: agents.avatar,
         agentBackgroundColor: agents.backgroundColor,
         agentDescription: agents.description,

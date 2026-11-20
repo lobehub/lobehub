@@ -74,6 +74,7 @@ import type {
   usesGatewayMessagePatch,
 } from './messages';
 import type {
+  acceptsArtboardWorks,
   acceptsFileWorks,
   acceptsMemberRuntimeEnd,
   controlCompletedToolResult,
@@ -293,6 +294,7 @@ type Bound<F> = F extends (svc: any, ...args: infer A) => infer R ? (...args: A)
  * module picks the members it uses), so the members stay private on the class.
  */
 export interface AgentRuntimeServiceContext {
+  acceptsArtboardWorks: Bound<typeof acceptsArtboardWorks>;
   acceptsFileWorks: Bound<typeof acceptsFileWorks>;
   acceptsMemberRuntimeEnd: Bound<typeof acceptsMemberRuntimeEnd>;
   readonly agentFactory: ((config: GeneralAgentConfig) => Agent) | undefined;

@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
 import { useHeaderActionSize, useInterfaceDensity } from '@/styles/density';
+import { densityTokens } from '@/styles/density.stylex';
 
 export interface SettingsModalTabItem {
   icon?: LucideIcon;
@@ -32,7 +33,7 @@ const styles = stylex.create({
   header: {
     flexShrink: 0,
     paddingBlock: '10px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorBorderSecondary,
@@ -43,7 +44,7 @@ const styles = stylex.create({
   },
   tabsBar: {
     flexShrink: 0,
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorBorderSecondary,

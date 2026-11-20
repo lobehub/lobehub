@@ -17,6 +17,10 @@ import type { InterfaceDensity } from '@lobechat/types';
  * Editing a value only ever happens here.
  */
 export interface DensityScale {
+  badgeHeight: number;
+  badgeMinWidth: number;
+  cardPadding: number;
+  contentGap: number;
   controlHeight: number;
   fontSize: number;
   gap: number;
@@ -26,9 +30,14 @@ export interface DensityScale {
   headerSmallIconSize: number;
   iconBox: number;
   iconSize: number;
+  largeIconSize: number;
   lineHeight: number;
   listRowHeight: number;
+  modalPadding: number;
   paddingInline: number;
+  pagePaddingBlockEnd: number;
+  pagePaddingBlockStart: number;
+  pagePaddingInline: number;
   pageTitleFontSize: number;
   panelPaddingInline: number;
   radius: number;
@@ -39,6 +48,10 @@ export interface DensityScale {
 
 export const DENSITY_SCALE: Record<InterfaceDensity, DensityScale> = {
   compact: {
+    badgeHeight: 16,
+    badgeMinWidth: 18,
+    cardPadding: 12,
+    contentGap: 8,
     controlHeight: 28,
     fontSize: 13,
     gap: 8,
@@ -48,9 +61,14 @@ export const DENSITY_SCALE: Record<InterfaceDensity, DensityScale> = {
     headerSmallIconSize: 14,
     iconBox: 24,
     iconSize: 16,
+    largeIconSize: 20,
     lineHeight: 20,
     listRowHeight: 40,
+    modalPadding: 16,
     paddingInline: 4,
+    pagePaddingBlockEnd: 16,
+    pagePaddingBlockStart: 24,
+    pagePaddingInline: 16,
     pageTitleFontSize: 14,
     panelPaddingInline: 6,
     radius: 6,
@@ -59,6 +77,10 @@ export const DENSITY_SCALE: Record<InterfaceDensity, DensityScale> = {
     toolbarHeight: 36,
   },
   loose: {
+    badgeHeight: 18,
+    badgeMinWidth: 20,
+    cardPadding: 16,
+    contentGap: 12,
     controlHeight: 32,
     fontSize: 14,
     gap: 8,
@@ -68,9 +90,14 @@ export const DENSITY_SCALE: Record<InterfaceDensity, DensityScale> = {
     headerSmallIconSize: 16,
     iconBox: 28,
     iconSize: 18,
+    largeIconSize: 22,
     lineHeight: 22,
     listRowHeight: 48,
+    modalPadding: 20,
     paddingInline: 4,
+    pagePaddingBlockEnd: 24,
+    pagePaddingBlockStart: 32,
+    pagePaddingInline: 24,
     pageTitleFontSize: 16,
     panelPaddingInline: 4,
     radius: 8,

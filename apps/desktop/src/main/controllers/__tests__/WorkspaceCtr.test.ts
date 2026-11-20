@@ -1,3 +1,5 @@
+import type * as NodeOs from 'node:os';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type App } from '@/core/App';
@@ -13,6 +15,11 @@ vi.mock('electron', () => ({
   ipcMain: {
     handle: ipcMainHandleMock,
   },
+}));
+
+vi.mock('node:os', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeOs>()),
+  homedir: () => '/device-home',
 }));
 
 vi.mock('node:fs/promises', () => ({
@@ -72,9 +79,7 @@ describe('WorkspaceCtr', () => {
     it('merges skills from both sources and reads instruction files', async () => {
       vi.mocked(mockFsPromises.readdir).mockImplementation(async (dir: string) => {
         if (dir === '/proj/.agents/skills') return [dirent('spa-routes', 'dir')];
-        if (dir === '/proj/.agents/skills/spa-routes') return [dirent('SKILL.md', 'file')];
         if (dir === '/proj/.claude/skills') return [dirent('reviewer', 'dir')];
-        if (dir === '/proj/.claude/skills/reviewer') return [dirent('SKILL.md', 'file')];
         throw new Error('ENOENT');
       });
       vi.mocked(mockFsPromises.readFile).mockImplementation(async (file: string) => {
@@ -90,6 +95,14 @@ describe('WorkspaceCtr', () => {
       const result = await workspaceCtr.initWorkspace({ scope: '/proj' });
 
       expect(result.skills.map((s) => s.name)).toEqual(['reviewer', 'spa-routes']);
+      expect(mockFsPromises.readdir).not.toHaveBeenCalledWith(
+        '/proj/.agents/skills/spa-routes',
+        expect.anything(),
+      );
+      expect(mockFsPromises.readdir).not.toHaveBeenCalledWith(
+        '/proj/.claude/skills/reviewer',
+        expect.anything(),
+      );
       expect(result.instructions).toEqual([
         { content: '# Agents', path: '/proj/AGENTS.md', source: 'AGENTS.md' },
         { content: '# Claude', path: '/proj/CLAUDE.md', source: 'CLAUDE.md' },
@@ -102,7 +115,6 @@ describe('WorkspaceCtr', () => {
       vi.mocked(mockFsPromises.readdir).mockImplementation(async (dir: string) => {
         if (dir === '/proj/.agents/skills') return [dirent('shared', 'dir')];
         if (dir === '/proj/.claude/skills') return [dirent('shared', 'dir')];
-        if (dir.endsWith('/shared')) return [dirent('SKILL.md', 'file')];
         throw new Error('ENOENT');
       });
       vi.mocked(mockFsPromises.readFile).mockImplementation(async (file: string) => {
@@ -125,12 +137,8 @@ describe('WorkspaceCtr', () => {
     it('merges execution-device skills and keeps project skills first on duplicate names', async () => {
       vi.mocked(mockFsPromises.readdir).mockImplementation(async (dir: string) => {
         if (dir === '/proj/.agents/skills') return [dirent('shared', 'dir')];
-        if (dir === '/proj/.agents/skills/shared') return [dirent('SKILL.md', 'file')];
         if (dir === '/device-home/.agents/skills')
           return [dirent('device-writer', 'dir'), dirent('shared', 'dir')];
-        if (dir === '/device-home/.agents/skills/device-writer')
-          return [dirent('SKILL.md', 'file')];
-        if (dir === '/device-home/.agents/skills/shared') return [dirent('SKILL.md', 'file')];
         throw new Error('ENOENT');
       });
       vi.mocked(mockFsPromises.readFile).mockImplementation(async (file: string) => {
@@ -188,7 +196,6 @@ describe('WorkspaceCtr', () => {
     it('returns the first source with skills (.agents/skills wins) and ignores .claude', async () => {
       vi.mocked(mockFsPromises.readdir).mockImplementation(async (dir: string) => {
         if (dir === '/proj/.agents/skills') return [dirent('alpha', 'dir')];
-        if (dir === '/proj/.agents/skills/alpha') return [dirent('SKILL.md', 'file')];
         throw new Error('ENOENT');
       });
       vi.mocked(mockFsPromises.readFile).mockResolvedValue(frontmatter('alpha', 'A'));
@@ -202,7 +209,6 @@ describe('WorkspaceCtr', () => {
     it('parses folded block scalar descriptions', async () => {
       vi.mocked(mockFsPromises.readdir).mockImplementation(async (dir: string) => {
         if (dir === '/proj/.agents/skills') return [dirent('agent-testing', 'dir')];
-        if (dir === '/proj/.agents/skills/agent-testing') return [dirent('SKILL.md', 'file')];
         throw new Error('ENOENT');
       });
       vi.mocked(mockFsPromises.readFile).mockResolvedValue(

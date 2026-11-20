@@ -71,12 +71,16 @@ export const contactRouter = router({
     .use(requireWorkspaceRoleWhenScoped('member'))
     .input(
       z.object({
+        /** The card message the person was found through, recorded as the request's source. */
+        cardMessageId: z.uuid().optional(),
         message: z.string().max(CONTACT_REQUEST_MESSAGE_MAX_LENGTH).optional(),
         userId,
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const result = await ctx.contactModel.sendRequest(input.userId, input.message);
+      const result = await ctx.contactModel.sendRequest(input.userId, input.message, {
+        cardMessageId: input.cardMessageId,
+      });
       // Their pending request is the one answered: they asked, in the active scope.
       if (result.status === 'accepted')
         await openContactConversation({

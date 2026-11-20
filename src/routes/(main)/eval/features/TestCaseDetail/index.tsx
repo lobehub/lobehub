@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useEvalStore } from '@/store/eval';
+import { densityVars } from '@/styles/densityVars';
 
 import Transcript from './Transcript';
 import { useCaseDraft } from './useCaseDraft';
@@ -60,7 +61,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   prose: css`
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: 10px;
 
     font-size: ${cssVar.fontSize};

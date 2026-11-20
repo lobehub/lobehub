@@ -4,6 +4,7 @@ import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import Loading from '@/components/Loading/CircleLoading';
+import { densityVars } from '@/styles/densityVars';
 
 import { DOCX_RENDER_OPTIONS, sanitizeRenderedDocx } from './docxSafety';
 import { collectDocxSections, type DocxSection } from './docxSections';
@@ -21,7 +22,7 @@ const styles = createStaticStyles(({ css }) => ({
     .docx-wrapper {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: ${densityVars.contentGap};
       align-items: safe center;
 
       padding: 10px;
