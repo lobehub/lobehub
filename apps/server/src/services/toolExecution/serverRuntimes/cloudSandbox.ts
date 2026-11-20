@@ -3,7 +3,7 @@ import { CloudSandboxExecutionRuntime } from '@lobechat/builtin-tool-cloud-sandb
 import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
-import { resolveDeviceAccessPolicy } from '@/server/services/aiAgent/deviceAccessPolicy';
+import { runDeniesDevices } from '@/server/services/aiAgent/deviceAccessPolicy';
 import { FileService } from '@/server/services/file';
 import { createSandboxService, resolveSandboxSessionConfig } from '@/server/services/sandbox';
 import {
@@ -185,8 +185,7 @@ export const cloudSandboxRuntime: ServerRuntimeRegistration = {
 
     const wrapPage = pageSandboxWrapper(context, workspaceId);
     const preprocessed = withLhPreprocessing(sandboxService, {
-      deviceAccessDenied: !resolveDeviceAccessPolicy({ botContext: context.botContext })
-        .canUseDevice,
+      deviceAccessDenied: runDeniesDevices(context),
       isShareVisitor: Boolean(context.agentShareVisitor),
       operationId: context.operationId,
       userId: context.userId,
