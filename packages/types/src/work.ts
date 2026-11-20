@@ -6,7 +6,8 @@ import type { TaskStatus } from './task';
  * version per acceptance result. It is read through the goal graph, not the
  * generic Work lists.
  */
-export type WorkType = 'canvas' | 'document' | 'external' | 'file' | 'goal_report' | 'task';
+export type WorkType =
+  'artboard' | 'canvas' | 'document' | 'external' | 'file' | 'goal_report' | 'task';
 /** Work types the generic Work lists return; a `goal_report` is read through its goal. */
 export type ListedWorkType = Exclude<WorkType, 'goal_report'>;
 export type LinearWorkResourceType = 'linear_document' | 'linear_issue';
@@ -14,7 +15,7 @@ export type GithubWorkResourceType = 'github_issue' | 'github_pull_request';
 /** Every resource type backed by the unified `external` Work type. */
 export type ExternalWorkResourceType = GithubWorkResourceType | LinearWorkResourceType;
 export type WorkResourceType =
-  'canvas' | 'document' | ExternalWorkResourceType | 'file' | 'goal_report' | 'task';
+  'artboard' | 'canvas' | 'document' | ExternalWorkResourceType | 'file' | 'goal_report' | 'task';
 export type WorkVisibility = 'private' | 'public';
 /**
  * How a version changed the Work. Not derivable from `version === 1`: updating
@@ -50,8 +51,16 @@ export interface CanvasWorkPublishMetadata {
   publishedVersion: number;
 }
 
+export interface ArtboardWorkPublishMetadata {
+  deploymentId: string;
+  publishedRevision: number;
+  publisherUserId: string;
+  snapshotHash: string;
+}
+
 export interface WorkMetadata {
   agentShare?: AgentShareWorkProvenance;
+  artboardPublish?: ArtboardWorkPublishMetadata;
   canvasPublish?: CanvasWorkPublishMetadata;
 }
 
@@ -311,7 +320,13 @@ export interface CanvasWorkListItem extends WorkListBaseItem {
   type: 'canvas';
 }
 
+export interface ArtboardWorkListItem extends WorkListBaseItem {
+  resourceType: 'artboard';
+  type: 'artboard';
+}
+
 export type WorkListItem =
+  | ArtboardWorkListItem
   | CanvasWorkListItem
   | DocumentWorkListItem
   | ExternalWorkListItem
@@ -338,7 +353,12 @@ export interface CanvasWorkVersionEventItem extends CanvasWorkListItem {
   version: WorkVersionPreview;
 }
 
+export interface ArtboardWorkVersionEventItem extends ArtboardWorkListItem {
+  version: WorkVersionPreview;
+}
+
 export type WorkVersionEventItem =
+  | ArtboardWorkVersionEventItem
   | CanvasWorkVersionEventItem
   | DocumentWorkVersionEventItem
   | ExternalWorkVersionEventItem
@@ -379,7 +399,14 @@ export interface CanvasWorkSummaryItem extends CanvasWorkListItem {
   version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
 }
 
+export interface ArtboardWorkSummaryItem extends ArtboardWorkListItem {
+  event: WorkSummaryVersionPreview;
+  totalCost: number | null;
+  version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
+}
+
 export type WorkSummaryItem =
+  | ArtboardWorkSummaryItem
   | CanvasWorkSummaryItem
   | DocumentWorkSummaryItem
   | ExternalWorkSummaryItem
@@ -461,6 +488,24 @@ export interface RegisterCanvasWorkParams {
   toolName: string;
   topicId?: string | null;
   visibility?: WorkVisibility;
+}
+
+export interface RegisterArtboardWorkParams {
+  agentId?: string | null;
+  artboardId: string;
+  changeType: WorkVersionChangeType;
+  cumulativeCost?: number | null;
+  cumulativeUsage?: WorkVersionCumulativeUsage | null;
+  description?: string | null;
+  messageId?: string | null;
+  projectId?: string | null;
+  rootOperationId?: string | null;
+  threadId?: string | null;
+  title: string;
+  toolCallId?: string | null;
+  toolIdentifier: string;
+  toolName: string;
+  topicId?: string | null;
 }
 
 export interface DeleteDocumentWorkParams {
@@ -660,6 +705,18 @@ export type WorkRegistrationIntent =
         toolName: string;
       };
       type: 'canvas';
+    }
+  | {
+      action: 'register';
+      artboard: {
+        artboardId: string;
+        changeType: WorkVersionChangeType;
+        description?: string | null;
+        projectId?: string | null;
+        title: string;
+        toolName: string;
+      };
+      type: 'artboard';
     };
 
 /**

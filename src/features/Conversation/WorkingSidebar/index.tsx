@@ -79,9 +79,9 @@ import {
   BROWSER_TAB_PREFIX,
   type BrowserTabMetadata,
   isBrowserTab,
-  isCanvasTab,
   isDynamicTab,
   isMcpAppTab,
+  isWorkTab,
   type SidebarTabDescriptor,
 } from './dynamicTabs';
 import FilesPane from './Files/FilesPane';
@@ -497,7 +497,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     (tab: string) =>
       availableTabs.has(tab) ||
       (browserAvailable && isBrowserTab(tab)) ||
-      isCanvasTab(tab) ||
+      isWorkTab(tab) ||
       (mcpAppsEnabled && isMcpAppTab(tab)),
     [availableTabs, browserAvailable, mcpAppsEnabled],
   );
@@ -811,7 +811,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const reviewTwoPane = activeTab === 'review' && reviewAvailable && showReviewTree;
   const preferredMinWidth = reviewTwoPane
     ? TWO_PANE_MIN_WIDTH
-    : isCanvasTab(activeTab)
+    : isWorkTab(activeTab)
       ? CANVAS_MIN_WIDTH
       : 0;
   const displayWidth = Math.max(storedWidth, preferredMinWidth);

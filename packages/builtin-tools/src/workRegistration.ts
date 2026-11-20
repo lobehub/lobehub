@@ -6,6 +6,7 @@ import type {
   PluginApiWorkAction,
   PluginApiWorkConfig,
   PluginApiWorkResourceType,
+  RegisterArtboardWorkParams,
   RegisterCanvasWorkParams,
   RegisterDocumentWorkParams,
   RegisterSkillToolResultWorkParams,
@@ -282,6 +283,7 @@ export interface WorkRegistrationPorts {
   deleteDocumentWork?: (params: DeleteDocumentWorkParams) => Promise<unknown>;
   deleteTaskWork: (params: DeleteTaskWorkParams) => Promise<unknown>;
   handleSkillToolResult: (params: RegisterSkillToolResultWorkParams) => Promise<unknown>;
+  registerArtboard?: (params: RegisterArtboardWorkParams) => Promise<unknown>;
   registerCanvas?: (params: RegisterCanvasWorkParams) => Promise<unknown>;
   registerDocument: (params: RegisterDocumentWorkParams) => Promise<unknown>;
   registerTask: (params: RegisterTaskWorkParams) => Promise<unknown>;
@@ -431,6 +433,37 @@ const dispatchDocumentWorkIntent = async (
   });
 };
 
+const dispatchArtboardWorkIntent = async (
+  intent: WorkRegistrationIntentFor<'artboard'>,
+  ports: WorkRegistrationPorts,
+  provenance: WorkRegistrationProvenance,
+): Promise<void> => {
+  const {
+    agentId,
+    cumulativeCost,
+    cumulativeUsage,
+    messageId,
+    rootOperationId,
+    threadId,
+    toolCallId,
+    toolIdentifier,
+    topicId,
+  } = provenance;
+
+  await ports.registerArtboard?.({
+    ...intent.artboard,
+    agentId,
+    cumulativeCost,
+    cumulativeUsage,
+    messageId,
+    rootOperationId,
+    threadId,
+    toolCallId,
+    toolIdentifier,
+    topicId,
+  });
+};
+
 const dispatchCanvasWorkIntent = async (
   intent: WorkRegistrationIntentFor<'canvas'>,
   ports: WorkRegistrationPorts,
@@ -502,6 +535,9 @@ const dispatchSkillWorkIntent = async (
  * fails this exhaustive registry until its behavior is registered here.
  */
 export const WORK_REGISTRATION_ADAPTERS = {
+  artboard: {
+    dispatch: dispatchArtboardWorkIntent,
+  },
   canvas: {
     dispatch: dispatchCanvasWorkIntent,
   },

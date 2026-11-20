@@ -18,6 +18,16 @@ export interface PublishCanvasSiteResult {
   url: string;
 }
 
+export interface PublishArtboardSiteParams {
+  artboardId: string;
+  bundle: CanvasPublishBundle;
+  db: LobeChatDatabase;
+  deploymentId?: string;
+  title: string;
+  userId: string;
+  workspaceId?: string;
+}
+
 export interface UnpublishCanvasSiteParams {
   db: LobeChatDatabase;
   deploymentId: string;
@@ -41,3 +51,12 @@ export const publishCanvasSite = async (
  * public). Nothing is ever published here, so there is nothing to take down.
  */
 export const unpublishCanvasSite = async (_params: UnpublishCanvasSiteParams): Promise<void> => {};
+
+export const getArtboardViewerUrl = async (_major: number): Promise<string | undefined> =>
+  undefined;
+
+export const publishArtboardSite = async (
+  _params: PublishArtboardSiteParams,
+): Promise<PublishCanvasSiteResult> => {
+  throw new Error('Artboard publishing is not available in this deployment');
+};

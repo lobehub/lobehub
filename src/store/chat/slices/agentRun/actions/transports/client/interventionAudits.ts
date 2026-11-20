@@ -1,3 +1,4 @@
+import { ACTIVATE_TOOLS_AUDIT, activateToolsAudit } from '@lobechat/builtin-tool-activator';
 import {
   AGENT_ACCOUNT_OUTBOUND_AUDIT,
   agentAccountOutboundAudit,
@@ -21,6 +22,7 @@ export const clientInterventionAudits = {
     loadGrants: () => getUserStoreState().settings.tool?.widgetDryRunGrants,
     loadVersion: (widgetId, versionId) => dashboardService.getVersion(widgetId, versionId),
   }),
+  [ACTIVATE_TOOLS_AUDIT]: activateToolsAudit,
   [AGENT_ACCOUNT_OUTBOUND_AUDIT]: agentAccountOutboundAudit,
   // Without it a client-driven run falls back to the manifest's `never` and
   // a permanent delete would run unasked.

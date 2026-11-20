@@ -32,7 +32,11 @@ import {
   EMPTY_ARGS_TOOL_REASON,
   partitionEmptyArgumentsCalls,
 } from '../utils/emptyArgumentsCalls';
-import { selectEffectiveToolManifestMap, selectRunTools } from '../utils/operationToolSet';
+import {
+  selectEffectiveToolManifestMap,
+  selectOperationToolSet,
+  selectRunTools,
+} from '../utils/operationToolSet';
 import { selectSecurityBlacklist, selectUserInterventionConfig } from '../utils/stateSlots';
 import { shouldCompress } from '../utils/tokenCounter';
 import {
@@ -187,6 +191,10 @@ export class GeneralChatAgent implements Agent {
     // path-scope audit fences file paths to it).
     const resolverMetadata = {
       ...state.metadata,
+      enabledToolIds: [
+        ...(selectOperationToolSet(state).enabledToolIds ?? []),
+        ...(state.activatedStepTools ?? []).map((activation) => activation.id),
+      ],
       securityBlacklist,
       workingDirectory: state.plan?.workingDirectory,
     };
