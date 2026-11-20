@@ -7,6 +7,7 @@ import {
 } from '@lobechat/types';
 import pMap from 'p-map';
 
+import type { ArtboardFileModel, ArtboardStoredFile } from '@/database/models/artboardFile';
 import type { FileService } from '@/server/services/file';
 
 import { ArtboardServiceError } from './errors';
@@ -121,11 +122,23 @@ interface ArtboardFileServiceDeps {
    */
   resolveImport: (source: ArtboardImportSource) => Promise<ArtboardImportedPage | undefined>;
   store: ArtboardBlobStore;
+  usage?: ArtboardFileUsage;
 }
+
+export interface ArtboardFileUsage {
+  record: (artboardId: string, stored: ArtboardStoredFile[], deleted: string[]) => Promise<void>;
+  removeAll: (artboardId: string) => Promise<void>;
+}
+
+export const artboardFileUsage = (model: ArtboardFileModel): ArtboardFileUsage => ({
+  record: (artboardId, stored, deleted) => model.record(artboardId, stored, deleted),
+  removeAll: (artboardId) => model.deleteByArtboards([artboardId]),
+});
 
 /** What a set of changes will write and delete, checked against the limits but not yet stored. */
 export interface ArtboardFilePlan {
   deletes: string[];
+  sizes: Map<string, number>;
   /** Paths already uploaded through a signed URL. */
   uploaded: string[];
   writes: Map<string, Uint8Array>;
@@ -138,9 +151,15 @@ const invalid = (message: string): never => {
   throw new ArtboardServiceError('invalid', message);
 };
 
-const artboardPrefix = (artboardId: string) => `artboards/${artboardId}/`;
+const artboardStoragePrefix = (artboardId: string) => `artboards/${artboardId}/`;
 
-export const artboardFilesPrefix = (artboardId: string) => `${artboardPrefix(artboardId)}files/`;
+export const removeArtboardFiles = async (store: ArtboardBlobStore, artboardId: string) => {
+  const objects = await store.list(artboardStoragePrefix(artboardId));
+  if (objects.length) await store.delete(objects.map((object) => object.key));
+};
+
+export const artboardFilesPrefix = (artboardId: string) =>
+  `${artboardStoragePrefix(artboardId)}files/`;
 
 export const artboardFileKey = (artboardId: string, path: string) =>
   `${artboardFilesPrefix(artboardId)}${path}`;
@@ -303,7 +322,7 @@ export class ArtboardFileService {
         `The artboard's files would total ${total} bytes; the limit is ${ARTBOARD_FILE_LIMITS.maxTotalBytes}.`,
       );
 
-    return { deletes, uploaded, writes };
+    return { deletes, sizes, uploaded, writes };
   }
 
   /** Every path a plan changes or deletes. */
@@ -326,7 +345,18 @@ export class ArtboardFileService {
     );
     if (plan.deletes.length)
       await this.deps.store.delete(plan.deletes.map((path) => artboardFileKey(artboardId, path)));
-    return [...plan.writes.keys(), ...plan.uploaded];
+    const stored = [...plan.writes.keys(), ...plan.uploaded];
+    await this.deps.usage?.record(
+      artboardId,
+      stored.map((path) => ({
+        contentType: artboardFileContentType(path)!,
+        key: artboardFileKey(artboardId, path),
+        path,
+        size: plan.sizes.get(path) ?? 0,
+      })),
+      plan.deletes,
+    );
+    return stored;
   }
 
   async applyChanges(artboardId: string, changes: ArtboardFileChanges) {
@@ -355,7 +385,7 @@ export class ArtboardFileService {
   }
 
   async removeAll(artboardId: string) {
-    const objects = await this.deps.store.list(artboardPrefix(artboardId));
-    if (objects.length) await this.deps.store.delete(objects.map((object) => object.key));
+    await removeArtboardFiles(this.deps.store, artboardId);
+    await this.deps.usage?.removeAll(artboardId);
   }
 }
