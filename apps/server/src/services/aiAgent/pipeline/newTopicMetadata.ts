@@ -144,10 +144,19 @@ export const assertCanOpenSubTopicsFrom = (opener: { groupId?: string | null }) 
 export const resolveTopicOpenedBy = async (
   topicModel: Pick<TopicModel, 'findById'>,
   openerTopicId: string | undefined,
+  options: {
+    /**
+     * A group parent: `refuse` an open that promises a reply (a sub-topic), or
+     * leave the new topic `unlinked` when it reports another way (a task run,
+     * through its task) and the link would only nest it in a sidebar.
+     */
+    groupParent?: 'refuse' | 'unlinked';
+  } = {},
 ): Promise<TopicOpenedBy | undefined> => {
   if (!openerTopicId) return;
   const opener = await topicModel.findById(openerTopicId).catch(() => undefined);
   if (!opener) return;
+  if (opener.groupId && options.groupParent === 'unlinked') return;
   assertCanOpenSubTopicsFrom(opener);
 
   return {

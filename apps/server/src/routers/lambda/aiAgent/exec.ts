@@ -39,6 +39,10 @@ import {
 } from '@/server/services/aiAgent/topicStartReservation';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
+import {
+  assertNoDeviceForDeniedRun,
+  delegatedDeviceAccessDeniedOf,
+} from '../_helpers/delegatedDeviceAccess';
 import type { ExecAgentInput } from './execSchemas';
 import {
   ExecAgentSchema,
@@ -55,18 +59,6 @@ import { aiAgentWriteProcedure } from './procedures';
 import { acceptsFileWorksOf, acceptsMemberRuntimeEndOf } from './utils';
 
 const log = debug('lobe-server:ai-agent-router');
-
-const DELEGATED_DEVICE_DENIED_MESSAGE =
-  'This request comes from a run that may not use devices, so it cannot start a run on a device.';
-
-/**
- * Whether the caller's token was minted for a run that may not use devices
- * (`device_access: 'denied'`, see `signUserJWT`) — an external bot sender's or
- * a share visitor's sandbox. Anything such a run starts keeps that denial,
- * whatever the request itself says.
- */
-export const delegatedDeviceAccessDeniedOf = (ctx: { oidcAuth?: Record<string, any> | null }) =>
-  ctx.oidcAuth?.device_access === 'denied';
 
 const SubmitWorktreeTurnSchema = z.object({
   agentId: z.string().min(1),
@@ -270,9 +262,7 @@ export const execRouter = router({
     const delegatedDeviceAccessDenied = delegatedDeviceAccessDeniedOf(ctx);
 
     try {
-      if (delegatedDeviceAccessDenied && input.deviceId) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: DELEGATED_DEVICE_DENIED_MESSAGE });
-      }
+      assertNoDeviceForDeniedRun(delegatedDeviceAccessDenied, input.deviceId);
       await assertCanUseWorkspaceAgent({
         agentId,
         db: ctx.serverDB,
@@ -560,9 +550,7 @@ export const execRouter = router({
       } = task;
 
       try {
-        if (delegatedDeviceAccessDenied && deviceId) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: DELEGATED_DEVICE_DENIED_MESSAGE });
-        }
+        assertNoDeviceForDeniedRun(delegatedDeviceAccessDenied, deviceId);
         await assertCanUseWorkspaceAgent({
           agentId,
           db: ctx.serverDB,

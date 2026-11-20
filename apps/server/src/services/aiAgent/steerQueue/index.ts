@@ -127,6 +127,9 @@ export const mergeQueuedFollowUps = (entries: QueuedFollowUp[]): QueuedFollowUpR
     selectedSkillIds: selectedSkillIds.length ? selectedSkillIds : undefined,
     selectedToolIds: selectedToolIds.length ? selectedToolIds : undefined,
     userMessage: mergeComposerUserMessages(sorted.map((entry) => entry.request.userMessage)),
+    // Any entry queued by a device-denied run keeps the whole turn off devices.
+    delegatedDeviceAccessDenied:
+      sorted.some((entry) => entry.request.delegatedDeviceAccessDenied) || undefined,
   };
 };
 
