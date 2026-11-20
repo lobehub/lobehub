@@ -54,6 +54,13 @@ export interface ToolDiscoveryInput {
   disableSelfFeedbackIntentTool?: boolean;
   disableTools?: boolean;
   discordContext?: any;
+  /**
+   * Continuation of a prompted turn that is not persisted. The prompt is not
+   * repeated, and earlier user-row mentions still do not apply.
+   */
+  ephemeralTurn?: boolean;
+  /** A prompted turn that is not persisted. It does not inherit earlier mentions. */
+  ephemeralUserMessage?: string;
   evalConnectorSnapshots?: EvalConnectorSnapshots;
   exclusivePluginIds?: string[];
   /**

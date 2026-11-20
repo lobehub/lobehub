@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { resolveTurnSelectedToolIds } from './currentTurnSelectedTools';
 import { resolveGroupMemberApprovalContinuation } from './groupMemberApproval';
 
 const bridgeBody = {
@@ -45,6 +46,29 @@ const createDeps = (parked: unknown) => {
     },
   };
 };
+
+/**
+ * The same predicate `discoverTools` uses. A resume carries neither a new user
+ * row nor the original ephemeral prompt, so only a continuation flag keeps the
+ * shared topic's mentions out.
+ */
+const mentionsVisibleTo = (
+  params:
+    | {
+        ephemeralTurn?: boolean;
+        ephemeralUserMessage?: string;
+        selectedToolIds?: string[];
+      }
+    | undefined,
+) =>
+  resolveTurnSelectedToolIds({
+    ephemeralTurn: !!params?.ephemeralUserMessage || !!params?.ephemeralTurn,
+    loadHistoryMessages: async () => [
+      { metadata: { selectedToolIds: ['yingmi'] }, role: 'user' },
+      { role: 'assistant' },
+    ],
+    selectedToolIds: params?.selectedToolIds,
+  });
 
 // G-05 follow-through: approving a member's tool from the group conversation
 // used to continue the SUPERVISOR as a fresh op — the member never finished and
@@ -140,6 +164,35 @@ describe('resolveGroupMemberApprovalContinuation', () => {
 
     expect(deps.createThreadHooks).not.toHaveBeenCalled();
     expect(result?.hooks).toEqual([bridgeHook]);
+  });
+
+  // The in-group start prompts the member with `ephemeralUserMessage` and does
+  // not persist that prompt. Approval / askUserQuestion builds a new operation
+  // from the group conversation, which still holds the supervisor turn's
+  // @-mentions. Those must not become the member's tools.
+  it('does not give an in-group member the supervisor @-mention when its turn resumes', async () => {
+    const { deps } = createDeps(member);
+
+    const result = await resolveGroupMemberApprovalContinuation(deps as any, approveParams);
+
+    expect(result?.ephemeralUserMessage).toBeUndefined();
+    await expect(mentionsVisibleTo(result)).resolves.toEqual([]);
+  });
+
+  it('still restores a mention persisted on an isolated member thread', async () => {
+    const { deps } = createDeps({ ...member, threadId: 'thd_1' });
+
+    const result = await resolveGroupMemberApprovalContinuation(deps as any, approveParams);
+
+    expect(result?.ephemeralTurn).toBeUndefined();
+    await expect(
+      resolveTurnSelectedToolIds({
+        ephemeralTurn: !!result?.ephemeralUserMessage || !!result?.ephemeralTurn,
+        loadHistoryMessages: async () => [
+          { metadata: { selectedToolIds: ['thread-tool'] }, role: 'user' },
+        ],
+      }),
+    ).resolves.toEqual(['thread-tool']);
   });
 
   it('leaves a non-member approval untouched', async () => {

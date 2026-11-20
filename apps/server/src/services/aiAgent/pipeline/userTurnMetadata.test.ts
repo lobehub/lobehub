@@ -29,4 +29,20 @@ describe('buildUserTurnMetadata', () => {
   it('omits an empty skill selection', () => {
     expect(buildUserTurnMetadata({ selectedSkillIds: [] })).not.toHaveProperty('selectedSkillIds');
   });
+
+  it('persists the @-mentioned tools once each, so a resume of this turn can read them back', () => {
+    expect(
+      buildUserTurnMetadata({
+        selectedToolIds: ['yingmi', 'lobe-web-browsing', 'yingmi'],
+        trigger: RequestTrigger.Chat,
+      }),
+    ).toEqual({
+      selectedToolIds: ['yingmi', 'lobe-web-browsing'],
+      trigger: RequestTrigger.Chat,
+    });
+  });
+
+  it('omits an empty tool mention', () => {
+    expect(buildUserTurnMetadata({ selectedToolIds: [] })).not.toHaveProperty('selectedToolIds');
+  });
 });

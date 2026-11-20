@@ -166,6 +166,7 @@ export const execAgentTurn = async (
     mentionedAgents,
     suppressUserMessage,
     ephemeralUserMessage,
+    ephemeralTurn,
   } = params;
 
   // Agent Share visitor runs execute under the CREATOR's credentials but are
@@ -474,6 +475,7 @@ export const execAgentTurn = async (
         resume,
         runFromHistory,
         selectedSkillIds,
+        selectedToolIds,
         shareGate,
         steer,
         throwIfExecutionAborted,
@@ -700,6 +702,7 @@ export const execAgentTurn = async (
     disableLocalSystem,
     disableSelfFeedbackIntentTool: params.disableSelfFeedbackIntentTool,
     disableTools: params.disableTools,
+    ephemeralTurn,
     ephemeralUserMessage,
     evalAllowedTools: evalRuntime?.allowedTools,
     evalConnectorSnapshots: evalRuntime?.connectorSnapshots,

@@ -135,6 +135,14 @@ export const resolveGroupMemberApprovalContinuation = async (
   return {
     ...params,
     agentId: member.agentId,
+    // An in-group member is prompted by an ephemeral supervisor instruction
+    // (`execAgentMember`) that is never stored as a user row. This continuation
+    // does not repeat that prompt, and it shares the group topic, whose last
+    // user row still carries the supervisor turn's @-mentions. Keep the
+    // original boundary so those mentions are not enabled for the member.
+    // Isolated members persist their instruction in their own thread, so their
+    // resume reads that thread instead.
+    ...(!threadId ? { ephemeralTurn: true } : {}),
     appContext: {
       ...params.appContext,
       groupId: member.groupId ?? params.appContext?.groupId,

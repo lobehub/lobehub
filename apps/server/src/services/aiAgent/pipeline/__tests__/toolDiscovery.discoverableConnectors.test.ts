@@ -68,6 +68,11 @@ const connectorTools = [
   },
 ];
 
+interface HistoryMessage {
+  metadata?: Record<string, unknown> | null;
+  role: string;
+}
+
 interface RunOptions {
   agentId?: string;
   /** The agent's `auto` entries: what turns a connector on without a legacy pin. */
@@ -76,6 +81,15 @@ interface RunOptions {
   /** Override the connector's transport (`http` by default). */
   connection?: { mcpConnectionType: string; mcpServerUrl: string | null };
   disabledPluginIds?: string[];
+  /**
+   * Continuation of a turn whose prompt was never persisted. Distinct from
+   * `ephemeralUserMessage`, which is only present on the original start.
+   */
+  ephemeralTurn?: boolean;
+  /** Supervisor instruction injected for an in-group member and not persisted. */
+  ephemeralUserMessage?: string;
+  /** Topic history. A resume (no `userMessageMetadata`) reads mentions from here. */
+  history?: HistoryMessage[];
   installed?: boolean;
   metadata?: Record<string, unknown>;
   /** The agent's legacy pinned entries, which also read as on. */
@@ -85,6 +99,8 @@ interface RunOptions {
   shareGate?: unknown;
   sourceType?: 'custom' | 'marketplace';
   status?: string;
+  /** Metadata of the user row this call created. Omit on a resume. */
+  userMessageMetadata?: Record<string, unknown>;
 }
 
 const connectorModel = {
@@ -144,13 +160,16 @@ const run = (options: RunOptions = {}) => {
         userPreference: vi.fn().mockResolvedValue(undefined),
       },
       shareGate: options.shareGate,
+      userMessageMetadata: options.userMessageMetadata,
     } as never,
     {
       disabledPluginIds: options.disabledPluginIds ?? [],
+      ephemeralTurn: options.ephemeralTurn,
+      ephemeralUserMessage: options.ephemeralUserMessage,
       globalMemoryEnabled: false,
       hasMentionedAgents: false,
       isFixedDeviceTarget: false,
-      loadHistoryMessages: vi.fn().mockResolvedValue([]),
+      loadHistoryMessages: vi.fn().mockResolvedValue(options.history ?? []),
       selectedToolIds: options.selectedToolIds,
       throwIfExecutionAborted: vi.fn(),
     } as never,
@@ -419,6 +438,86 @@ describe('discoverTools — custom MCP connector discovery', () => {
         name.startsWith(`${YINGMI}____BatchGetFundNavHistory`),
       ),
     ).toBe(true);
+  });
+
+  it('does not enable the supervisor @-mention on an in-group member turn', async () => {
+    const history = [
+      { metadata: { selectedToolIds: [YINGMI] }, role: 'user' },
+      { role: 'assistant' },
+    ];
+    // The member starts from a supervisor instruction that is not persisted.
+    const started = await run({
+      ephemeralUserMessage: '<speaker name="Supervisor" />\ncheck the fund',
+      history,
+    });
+    // Approval or askUserQuestion resumes that member without repeating the
+    // prompt. The shared topic still holds the supervisor turn's mention.
+    const resumed = await run({ ephemeralTurn: true, history });
+
+    expect(started.toolsResult.enabledToolIds).not.toContain(YINGMI);
+    expect(resumed.toolsResult.enabledToolIds).not.toContain(YINGMI);
+    expect(offeredToolNames(resumed).some((name) => name.startsWith(`${YINGMI}____`))).toBe(false);
+  });
+
+  it('keeps the @-mentioned connector enabled when the same turn resumes', async () => {
+    // Approval / askUserQuestion starts a new operation without repeating
+    // selectedToolIds. The mention lives on the user row already in history.
+    const result = await run({
+      history: [{ metadata: { selectedToolIds: [YINGMI] }, role: 'user' }, { role: 'assistant' }],
+    });
+
+    expect(result.toolsResult.enabledToolIds).toContain(YINGMI);
+    expect(
+      offeredToolNames(result).some((name) =>
+        name.startsWith(`${YINGMI}____BatchGetFundNavHistory`),
+      ),
+    ).toBe(true);
+  });
+
+  it('does not carry the mention into the next user turn', async () => {
+    const freshTurn = await run({
+      history: [{ metadata: { selectedToolIds: [YINGMI] }, role: 'user' }],
+      userMessageMetadata: { trigger: 'chat' },
+    });
+    const resumedNextTurn = await run({
+      history: [
+        { metadata: { selectedToolIds: [YINGMI] }, role: 'user' },
+        { role: 'assistant' },
+        { metadata: {}, role: 'user' },
+      ],
+    });
+
+    expect(freshTurn.toolsResult.enabledToolIds).not.toContain(YINGMI);
+    expect(resumedNextTurn.toolsResult.enabledToolIds).not.toContain(YINGMI);
+  });
+
+  it.each([
+    { botSender: { id: 'bot-user', platform: 'slack' } },
+    { externalOrigin: { source: 'webhook' } },
+  ])('does not restore a mention from a non-user source: %j', async (metadata) => {
+    const result = await run({
+      history: [
+        { metadata: { selectedToolIds: [YINGMI] }, role: 'user' },
+        { metadata: { ...metadata, selectedToolIds: [YINGMI] }, role: 'user' },
+      ],
+    });
+
+    expect(result.toolsResult.enabledToolIds).not.toContain(YINGMI);
+  });
+
+  it('still share-gates a mention restored for the same turn', async () => {
+    const result = await run({
+      history: [{ metadata: { selectedToolIds: [YINGMI] }, role: 'user' }],
+      shareGate: {
+        agentId: 'agent-1',
+        shareConfig: { toolGrants: [{ identifier: 'lobe-calculator' }] },
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      },
+    });
+
+    expect(result.toolsResult.enabledToolIds).not.toContain(YINGMI);
+    expect(result.toolManifestMap[YINGMI]).toBeUndefined();
   });
 
   it('schedules the stale-tool refresh for a connector that is on but not invoked', async () => {

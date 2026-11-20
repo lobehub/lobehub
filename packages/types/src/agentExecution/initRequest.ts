@@ -56,6 +56,11 @@ export interface AgentRunInitRequest {
   disableLocalSystem?: boolean;
   disableSelfFeedbackIntentTool?: boolean;
   disableTools?: boolean;
+  /**
+   * Continuation of a turn whose prompt was never persisted. The prompt is not
+   * repeated. Tool discovery must not inherit @-mentions from earlier user rows.
+   */
+  ephemeralTurn?: boolean;
   /** A user turn that is prompted but never persisted (self-iteration runs). */
   ephemeralUserMessage?: string;
   /** The exact tool surface exposed to an isolated evaluation attempt. */
@@ -119,7 +124,10 @@ export interface AgentRunInitRequest {
   runAttachments: AgentRunAttachments;
   /** Skill identifiers the composer or CLI selected for this message. */
   selectedSkillIds?: string[];
-  /** Tool identifiers the user @-mentioned in this message. */
+  /**
+   * Tool identifiers the user @-mentioned in this message. A resume that omits
+   * them is filled from the current turn's user message.
+   */
   selectedToolIds?: string[];
   /** The Task this run executes, when it runs inside the Task system. */
   taskId?: string;
