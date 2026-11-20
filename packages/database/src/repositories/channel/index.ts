@@ -29,11 +29,11 @@ import { normalizeWorkspaceId } from '../../utils/workspace';
 import type { ChannelAddAgentInput } from './agent';
 import {
   addAgentMember,
-  isSharedAgentChannel,
   memberEnvironment,
   requireAgentMember,
   requireChannelAgent,
-  sharedAgentOwner,
+  sharedAgentFields,
+  sharedAgentView,
 } from './agent';
 import { openAgentPair } from './agentPair';
 import { channelAvatarMembers } from './avatars';
@@ -452,11 +452,11 @@ export class ChannelRepository {
         if (access.channel.isDeleted) throw new ChannelError('NOT_FOUND', 'Channel not found');
         const admin = hasRole(access.member.role, 'admin');
         const view = await readChannelView(tx, channelId, options, this.userId);
-        // Same test as `list`; the composer reads it from here to hide upload.
-        const sharedAgent = !!(await sharedAgentOwner(tx, access.channel, this.userId));
+        const shared = await sharedAgentView(tx, access.channel, this.userId);
         return {
-          channel: { ...access.channel, canDelete: admin, sharedAgent },
+          channel: { ...access.channel, canDelete: admin, ...shared.channel },
           joined: true,
+          sharedAgentOwner: shared.owner,
           ...view,
           // Mirrors `stop`: the requester or an admin.
           jobs: viewerJobs(view.jobs, this.userId, (id) => admin || id === access.member.id),
@@ -688,13 +688,10 @@ export class ChannelRepository {
         shareSlug,
         ...agent
       }) => {
-        const sharedAgent = isSharedAgentChannel(channel, agent, this.userId);
         return {
           ...channel,
           agentIds: agentIdsOf.get(channel.id) ?? [],
-          sharedAgent,
-          // Its visitor page (`/a/<handle>`) is where the caller can see this Agent; it has no other.
-          sharedAgentHandle: sharedAgent ? (shareSlug ?? shareId) : null,
+          ...sharedAgentFields(channel, agent, this.userId, shareSlug ?? shareId),
           canDelete: hasRole(role, 'admin'),
           hidden,
           joined: true,

@@ -331,7 +331,9 @@ describe('Channel concurrent startup', () => {
     executions.openingReply.mockResolvedValue('收到，我先翻一下昨天的报错日志。');
     await coordinator(1).advance('channel');
 
-    expect(openChannelReply).toHaveBeenCalledWith(expect.anything(), 'channel', 'job-0');
+    expect(openChannelReply).toHaveBeenCalledWith(expect.anything(), 'channel', 'job-0', {
+      admitShare: expect.any(Function),
+    });
     expect(order).toEqual(['open', 'claim']);
     const [{ prompt }] = execAgent.mock.calls[0];
     expect(prompt).toContain('<channel_opening');

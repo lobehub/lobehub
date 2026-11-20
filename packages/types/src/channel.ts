@@ -3,7 +3,7 @@ import {
   LocalExecutionHeterogeneousAgentTypeSchema,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './agent/heterogeneousAgent';
-import type { ContactCard, ContactCardType } from './contact';
+import type { ContactCard, ContactCardType, ContactUserProfile } from './contact';
 import { getWorkingDirEffectivePath } from './device';
 import type { BotWakeKind } from './signal';
 import type { ExternalWorkSummaryItem } from './work';
@@ -956,6 +956,11 @@ export interface ChannelDetail {
    */
   readOnly?: boolean;
   rootMessage: ChannelPublicMessage | null;
+  /**
+   * The person who owns the shared Agent of a `sharedAgent` conversation: the contact card a
+   * refused reply offers the visitor. Null or absent otherwise.
+   */
+  sharedAgentOwner?: ContactUserProfile | null;
   threads: ChannelPublicThread[];
 }
 
