@@ -84,11 +84,19 @@ interface DocumentDetailResult {
   id: string;
   knowledgeBaseId?: string | null;
   parentId?: string | null;
+  /** `file` = parsed upload, `web` = crawled page; both are derived text, not editable notes. */
+  sourceType?: string | null;
   title?: string | null;
 }
 
 /** The only document type this tool edits: notes written as text, not parsed uploads. */
 const EDITABLE_DOCUMENT_FILE_TYPE = 'custom/document';
+
+/**
+ * Parsed uploads are stored as `custom/document` too, so the file type alone
+ * cannot tell them from notes; their source type can.
+ */
+const DERIVED_DOCUMENT_SOURCE_TYPES = new Set(['file', 'web']);
 
 /** Upper bound on the ancestor walk; deeper (or already looping) trees are refused. */
 const MAX_PARENT_DEPTH = 64;
@@ -576,9 +584,12 @@ export class KnowledgeBaseExecutionRuntime {
         };
       }
 
-      if (document.fileType !== EDITABLE_DOCUMENT_FILE_TYPE) {
+      if (
+        document.fileType !== EDITABLE_DOCUMENT_FILE_TYPE ||
+        DERIVED_DOCUMENT_SOURCE_TYPES.has(document.sourceType ?? '')
+      ) {
         return {
-          content: `Document "${documentId}" is an uploaded file (${document.fileType}) and cannot be edited. Only documents created as notes (createDocument) can be edited; create a new document instead if needed.`,
+          content: `Document "${documentId}" is an uploaded file or imported web page, not a note, so it cannot be edited. Only documents created as notes (createDocument) can be edited; create a new document instead if needed.`,
           success: false,
         };
       }

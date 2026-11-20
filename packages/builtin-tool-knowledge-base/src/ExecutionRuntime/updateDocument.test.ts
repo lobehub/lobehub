@@ -130,9 +130,31 @@ describe('KnowledgeBaseExecutionRuntime.updateDocument', () => {
     const result = await runtime.updateDocument({ content: 'x', documentId: 'docs_pdf' });
 
     expect(result.success).toBe(false);
-    expect(result.content).toContain('is an uploaded file (application/pdf)');
+    expect(result.content).toContain('is an uploaded file or imported web page, not a note');
     expect(documentService.updateDocument).not.toHaveBeenCalled();
   });
+
+  // Regression: parseFile stores parsed uploads as custom/document with
+  // sourceType 'file', so a fileType-only guard let the tool overwrite them.
+  it.each(['file', 'web'])(
+    'refuses %s-sourced documents even when stored as custom/document',
+    async (sourceType) => {
+      const { documentService, runtime } = setup({
+        docs_parsed: {
+          fileType: 'custom/document',
+          id: 'docs_parsed',
+          knowledgeBaseId: 'kb_1',
+          sourceType,
+        } as any,
+      });
+
+      const result = await runtime.updateDocument({ content: 'x', documentId: 'docs_parsed' });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('is an uploaded file or imported web page, not a note');
+      expect(documentService.updateDocument).not.toHaveBeenCalled();
+    },
+  );
 
   it('refuses documents outside any knowledge base', async () => {
     const { documentService, runtime } = setup({
