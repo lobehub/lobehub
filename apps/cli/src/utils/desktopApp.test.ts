@@ -9,6 +9,7 @@ import {
   CLI_SHIM_NAME,
   installShim,
   isDesktopChannel,
+  platformExecutableNames,
   resolveShimDirectory,
   resolveShimPath,
   schemeFor,
@@ -101,5 +102,25 @@ describe('isDesktopChannel', () => {
   it('should accept the known channels and reject anything else', () => {
     expect(isDesktopChannel('nightly')).toBe(true);
     expect(isDesktopChannel('canary')).toBe(false);
+  });
+});
+
+describe('platformExecutableNames', () => {
+  it('should use one constant Windows binary for every channel', () => {
+    // electron-builder pins `win.executableName`; only the product — and with
+    // it the install directory — carries the channel suffix.
+    expect(platformExecutableNames('stable', 'win32')).toEqual(['LobeHub.exe']);
+    expect(platformExecutableNames('beta', 'win32')).toEqual(['LobeHub.exe']);
+    expect(platformExecutableNames('nightly', 'win32')).toEqual(['LobeHub.exe']);
+  });
+
+  it('should follow the product name on Linux', () => {
+    expect(platformExecutableNames('stable', 'linux')).toContain('LobeHub');
+    expect(platformExecutableNames('nightly', 'linux')).toContain('LobeHub-Nightly');
+  });
+
+  it('should not guess a binary name on macOS', () => {
+    // The bundle's Contents/MacOS is read instead.
+    expect(platformExecutableNames('stable', 'darwin')).toEqual([]);
   });
 });

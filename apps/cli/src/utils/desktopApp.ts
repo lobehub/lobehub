@@ -72,23 +72,42 @@ const macExecutablePath = (bundlePath: string): null | string => {
   }
 };
 
-const toLocation = (channel: DesktopChannel, installPath: string): DesktopAppLocation | null => {
-  if (process.platform === 'darwin') {
+/**
+ * Windows and Linux binary names are NOT derived from the channel's product
+ * name. `electron-builder.mjs` pins `win.executableName` to a single constant
+ * for every channel, while only the product (and therefore the install
+ * directory) carries the suffix — so beta and nightly both ship
+ * `LobeHub.exe` inside their own folder. Looking for `LobeHub-Beta.exe` finds
+ * nothing and reports a missing installation.
+ *
+ * Linux leaves `executableName` unset, so the binary follows the product name;
+ * the lowercase form covers a build that lowercased it.
+ */
+export const platformExecutableNames = (
+  channel: DesktopChannel,
+  platform: NodeJS.Platform = process.platform,
+): string[] => {
+  if (platform === 'win32') return ['LobeHub.exe'];
+  if (platform === 'linux') return [BUNDLE_NAMES[channel], BUNDLE_NAMES[channel].toLowerCase()];
+  return [];
+};
+
+const toLocation = (
+  channel: DesktopChannel,
+  installPath: string,
+  platform: NodeJS.Platform = process.platform,
+): DesktopAppLocation | null => {
+  if (platform === 'darwin') {
     const executablePath = macExecutablePath(installPath);
     return executablePath ? { channel, executablePath, installPath } : null;
   }
 
-  const windowsExecutable = path.join(installPath, `${BUNDLE_NAMES[channel]}.exe`);
-  if (process.platform === 'win32') {
-    return existsSync(windowsExecutable)
-      ? { channel, executablePath: windowsExecutable, installPath }
-      : null;
+  for (const name of platformExecutableNames(channel, platform)) {
+    const executablePath = path.join(installPath, name);
+    if (existsSync(executablePath)) return { channel, executablePath, installPath };
   }
 
-  const linuxExecutable = path.join(installPath, 'lobehub-desktop');
-  return existsSync(linuxExecutable)
-    ? { channel, executablePath: linuxExecutable, installPath }
-    : null;
+  return null;
 };
 
 const candidateInstallPaths = (channel: DesktopChannel): string[] => {
