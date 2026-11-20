@@ -34,7 +34,7 @@ export interface AgentShareConfig {
    * (its bound or auto-selected device):
    *
    * - `none` (default): no visitor reaches a device; device tools are dropped
-   *   and a heterogeneous (Claude Code / Codex) Agent refuses the run.
+   *   and a local CLI (Claude Code, Codex, …) Agent refuses the run.
    * - `allowlist`: only the people in {@link deviceAllowUserIds} who are
    *   still in the Agent's address book. They get the device tools and, for a
    *   heterogeneous Agent, run it on the device.
