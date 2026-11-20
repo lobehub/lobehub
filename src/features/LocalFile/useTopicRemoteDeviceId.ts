@@ -7,6 +7,13 @@ import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
+/**
+ * How often presence is re-read while a topic's files depend on another
+ * device, so a reference turns back into a link once that device reconnects.
+ * Same cadence as the topic sidebar's device presence poll.
+ */
+const PRESENCE_REFRESH_INTERVAL_MS = 30_000;
+
 export interface TopicRemoteDevice {
   /**
    * Whether this client can read the current topic's local files right now:
@@ -43,7 +50,9 @@ export const useTopicRemoteDeviceId = (): TopicRemoteDevice => {
       : undefined;
   const isLogin = useUserStore(authSelectors.isLogin);
 
-  useDeviceStore((s) => s.useFetchDevices)(!!remoteDeviceId && isLogin);
+  useDeviceStore((s) => s.useFetchDevices)(!!remoteDeviceId && isLogin, {
+    refreshInterval: PRESENCE_REFRESH_INTERVAL_MS,
+  });
   const isOnline = useDeviceStore(
     (s) => !!remoteDeviceId && !!deviceSelectors.getDeviceById(remoteDeviceId)(s)?.online,
   );

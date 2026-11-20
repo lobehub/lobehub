@@ -3,7 +3,7 @@
  */
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import type { TooltipProps } from '@lobehub/ui';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentType } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -379,6 +379,26 @@ describe('LocalFileLink Render', () => {
         expect(container.querySelector('[href]')).toBeNull();
         fireEvent.click(screen.getByText('x.pdf'));
         expect(useChatStore.getState().openLocalFiles).toEqual([]);
+      });
+
+      it('keeps polling presence and turns back into a link once the other device reconnects', () => {
+        const { useFetchDevices: fetchDevices } = useDeviceStore.getState();
+        const useFetchDevices = vi.fn(fetchDevices);
+        useDeviceStore.setState({ useFetchDevices });
+        setThisMachine('device-local');
+        setRemoteTopic({ boundDeviceId: 'device-remote' });
+        setDevices([{ deviceId: 'device-remote', online: false }]);
+
+        renderPdfLink();
+        expect(screen.queryByRole('link')).toBeNull();
+        expect(useFetchDevices.mock.lastCall?.[1]).toEqual({ refreshInterval: 30_000 });
+
+        act(() => setDevices([{ deviceId: 'device-remote', online: true }]));
+
+        fireEvent.click(screen.getByRole('link', { name: 'x.pdf' }));
+        expect(useChatStore.getState().openLocalFiles).toEqual([
+          expect.objectContaining({ deviceId: 'device-remote', topicId: 'topic-1' }),
+        ]);
       });
     });
   });
