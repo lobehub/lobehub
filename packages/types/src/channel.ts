@@ -783,12 +783,6 @@ export interface ChannelListItem {
    * page lives at `/a/<handle>`, the only page of it the caller can open. Null otherwise.
    */
   sharedAgentHandle?: string | null;
-  /**
-   * On a `sharedAgent` conversation, the user who owns the Agent: a refused reply offers the
-   * visitor to add them as a contact (`ChannelDetail.sharedAgentOwner` carries their profile). Null
-   * otherwise.
-   */
-  sharedAgentOwnerId?: string | null;
   status: ChannelStatus;
   /**
    * The newest @mention of the caller in each Thread from the last 30 days, read or not; set by

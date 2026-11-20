@@ -84,13 +84,12 @@ describe('a contact’s shared Agent in a direct conversation', () => {
       id: channel.id,
       sharedAgent: true,
       sharedAgentHandle: 'shared-helper',
-      sharedAgentOwnerId: ownerId,
     });
     expect(listed.memberAvatars).toMatchObject([{ actorType: 'agent', id: agentId }]);
     // The conversation view marks it too: its composer reads `detail`, not the list, and a refused
     // reply offers its owner's contact card.
     const detail = await visitor.detail(channel.id);
-    expect(detail.channel).toMatchObject({ sharedAgent: true, sharedAgentOwnerId: ownerId });
+    expect(detail.channel).toMatchObject({ sharedAgent: true });
     expect(detail.sharedAgentOwner).toMatchObject({ id: ownerId });
   });
 
@@ -627,12 +626,10 @@ describe('a shared Agent in the visitor’s workspace', () => {
       id: channel.id,
       sharedAgent: false,
       sharedAgentHandle: null,
-      sharedAgentOwnerId: null,
     });
-    expect((await inWorkspace.detail(channel.id)).channel).toMatchObject({
-      sharedAgent: false,
-      sharedAgentOwnerId: null,
-    });
+    const teamDetail = await inWorkspace.detail(channel.id);
+    expect(teamDetail.channel).toMatchObject({ sharedAgent: false });
+    expect(teamDetail.sharedAgentOwner).toBeNull();
 
     // Its link share does not limit a colleague, who runs it as their own: the reply opens freely.
     await db.insert(agentShares).values({ agentId: teamAgentId, visibility: 'link' });

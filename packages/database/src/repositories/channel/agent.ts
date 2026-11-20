@@ -44,8 +44,7 @@ export const isSharedAgentChannel = (
 
 /**
  * What a listed Channel tells its viewer about another person's shared Agent it is with: that it
- * is one; its visitor page (`/a/<handle>`), the only page of the Agent the viewer can open; and its
- * owner, whom a refused reply offers to add as a contact.
+ * is one, and its visitor page (`/a/<handle>`), the only page of the Agent the viewer can open.
  */
 export const sharedAgentFields = (
   channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
@@ -57,7 +56,6 @@ export const sharedAgentFields = (
   return {
     sharedAgent,
     sharedAgentHandle: sharedAgent ? handle : null,
-    sharedAgentOwnerId: sharedAgent ? agent.agentOwnerId : null,
   };
 };
 
@@ -99,7 +97,7 @@ export const sharedAgentView = async (
   viewerId: string,
 ) => {
   const owner = await sharedAgentOwner(tx, channel, viewerId);
-  return { channel: { sharedAgent: !!owner, sharedAgentOwnerId: owner?.id ?? null }, owner };
+  return { channel: { sharedAgent: !!owner }, owner };
 };
 
 /** Explicitly select environment fields so legacy or untyped copies cannot override an Agent. */

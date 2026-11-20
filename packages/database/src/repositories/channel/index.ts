@@ -548,7 +548,6 @@ export class ChannelRepository {
         replyJobs: ChannelReplyJob[];
         sectionId: string | null;
         sharedAgentHandle: string | null;
-        sharedAgentOwnerId: string | null;
         threadMentions: ChannelThreadMention[];
         unreadCount: number;
       }
@@ -717,7 +716,6 @@ export class ChannelRepository {
         agentIds: agentIdsOf.get(channel.id) ?? [],
         sharedAgent: false,
         sharedAgentHandle: null,
-        sharedAgentOwnerId: null,
         canDelete: false,
         hidden: false,
         joined: false,
