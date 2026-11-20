@@ -9616,6 +9616,13 @@ components:
           propertyNames:
             type: string
           additionalProperties: {}
+        pluginIntervention:
+          description: "Set on a `tool` message: the intervention payload the chat UI
+            exports."
+          type: object
+          propertyNames:
+            type: string
+          additionalProperties: {}
         pluginState:
           type: object
           propertyNames:
