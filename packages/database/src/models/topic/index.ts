@@ -121,6 +121,7 @@ export class TopicModel {
 
   query = this.withContext(list.query);
   queryTopics = this.withContext(list.queryTopics);
+  listChildTopicAgentIds = this.withContext(list.listChildTopicAgentIds);
 
   // **************** Read *************** //
 

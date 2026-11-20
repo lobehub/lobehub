@@ -15,6 +15,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { TaskKanbanGroupBy, TaskListItem } from '@/store/task/slices/list/initialState';
+import { densityVars } from '@/styles/densityVars';
 
 import { createTaskModal } from '../CreateTaskModal';
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
@@ -154,7 +155,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   emptyText: css`
     padding-block: 24px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
 
     font-size: 13px;
     color: ${cssVar.colorTextQuaternary};

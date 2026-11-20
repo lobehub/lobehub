@@ -20,6 +20,8 @@
   "forbidden.backHome": "Back to Home",
   "forbidden.desc": "You don't have permission to view this page. Please contact a workspace owner if you need access.",
   "forbidden.title": "Access denied",
+  "import.github.access": "Couldn’t open this repository or branch. Check the link and your GitHub account’s access.",
+  "import.github.connect": "Private repositories need a GitHub account with read access.",
   "import.importConfigFile.description": "Error reason: {{reason}}",
   "import.importConfigFile.title": "Import Failed",
   "import.incompatible.description": "This file was exported from a higher version. Please try upgrading to the latest version and then re-importing.",

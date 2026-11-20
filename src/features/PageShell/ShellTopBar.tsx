@@ -9,6 +9,7 @@ import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import { ProductLogo } from '@/components/Branding';
 import WorkspaceAvatar from '@/components/WorkspaceAvatar';
 import UserAvatar from '@/features/User/UserAvatar';
+import { densityVars } from '@/styles/densityVars';
 
 /**
  * The application bar for pages that live OUTSIDE the main left-nav shell.
@@ -83,7 +84,7 @@ const styles = createStaticStyles(({ css }) => ({
     flex: none;
 
     block-size: 48px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     background: ${cssVar.colorBgLayout};

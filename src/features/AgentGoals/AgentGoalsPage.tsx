@@ -27,6 +27,7 @@ import type { GoalListFilter } from '@/store/goal';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 import { globalGoalListScopeId, goalListKey, goalListScopeId } from '@/store/goal/projection';
 import { useDensityTokens } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import { createGoalModal } from './CreateGoalModal';
 import GoalAgentFilter from './GoalAgentFilter';
@@ -57,7 +58,7 @@ const styles = createStaticStyles(({ css }) => ({
   list: css`
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    gap: ${densityVars.contentGap};
 
     @media (width <= 900px) {
       grid-template-columns: minmax(0, 1fr);
@@ -70,7 +71,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   metric: css`
     min-width: 88px;
-    padding-inline-start: 16px;
+    padding-inline-start: ${densityVars.cardPadding};
     border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
 
     &:first-child {

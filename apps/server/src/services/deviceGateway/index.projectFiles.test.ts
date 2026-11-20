@@ -19,8 +19,6 @@ const createReadProjectFileInput = () => ({
 
 const createProjectSkillItem = () => ({
   description: 'spa',
-  fileCount: 3,
-  files: ['SKILL.md'],
   name: 'spa-routes',
   path: '/proj/.agents/skills/spa-routes/SKILL.md',
   previewRoot: '/proj',
@@ -72,8 +70,6 @@ describe('DeviceGateway', () => {
             {
               description: 'device',
               disableModelInvocation: true,
-              fileCount: 2,
-              files: ['SKILL.md', 'refs.md'],
               name: 'device-writer',
               path: '/home/.agents/skills/device-writer/SKILL.md',
               previewRoot: '/home/.agents/skills',

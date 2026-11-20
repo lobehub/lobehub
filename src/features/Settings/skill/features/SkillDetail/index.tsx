@@ -1,7 +1,7 @@
 'use client';
 
 import { getLobehubSkillProviderById } from '@lobechat/const';
-import { agentDisplayName } from '@lobechat/types';
+import { agentDisplayName, type ConnectorVisibility } from '@lobechat/types';
 import { Avatar, Button, confirmModal, Markdown, Skeleton, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -26,6 +26,7 @@ import {
 import { loadBuiltinSkill } from '@/store/tool/slices/builtin/loadBuiltinSkills';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { pluginSelectors } from '@/store/tool/slices/plugin/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { getLocalizedBuiltinSkillDetail, getNoPermissionsTitle } from './localization';
 
@@ -52,32 +53,46 @@ const styles = stylex.create({
   },
   header: {
     display: 'flex',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingBlockStart: '20px',
-    paddingBlockEnd: '16px',
+    paddingBlockEnd: densityTokens['--lobe-density-card-padding'],
     paddingInline: '24px',
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorBorderSecondary,
   },
-  name: { fontSize: '16px', fontWeight: 600, color: cssVar.colorText },
-  noPermissions: { padding: '24px', fontSize: '14px', color: cssVar.colorTextTertiary },
+  name: {
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
+    fontWeight: 600,
+    color: cssVar.colorText,
+  },
+  noPermissions: {
+    padding: '24px',
+    fontSize: densityTokens['--lobe-density-font-size'],
+    color: cssVar.colorTextTertiary,
+  },
   noPermissionsHeader: {
     display: 'flex',
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBlockEnd: '8px',
   },
-  noPermissionsTitle: { fontSize: '16px', fontWeight: 600, color: cssVar.colorText },
+  noPermissionsTitle: {
+    fontSize: densityTokens['--lobe-density-page-title-font-size'],
+    fontWeight: 600,
+    color: cssVar.colorText,
+  },
 });
 
 interface SkillDetailProps {
   identifier: string;
   onDelete?: () => void;
   type: ToolDetailType;
+  /** The workspace connector tab the row was opened from. */
+  visibility?: ConnectorVisibility;
 }
 
 /**
@@ -167,7 +182,7 @@ LobehubConnectorAction.displayName = 'LobehubConnectorAction';
  * - 'builtin-skill': renders BuiltinSkill description panel (Artifacts, Task, etc.)
  * - 'builtin'/'plugin'/'mcp-connector': syncs connector entry, renders permission editor
  */
-const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
+const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete, visibility }) => {
   const { t } = useTranslation('plugin');
   const { t: ts } = useTranslation('setting');
 
@@ -185,7 +200,7 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   const installBuiltinTool = useToolStore((s) => s.installBuiltinTool);
   const uninstallBuiltinTool = useToolStore((s) => s.uninstallBuiltinTool);
   const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
-  const connector = useToolStore(connectorSelectors.connectorByIdentifier(identifier));
+  const connector = useToolStore(connectorSelectors.connectorByIdentifier(identifier, visibility));
   // For agent connectors the `identifier` slot carries the connector id; resolve
   // the row from the agent-bound pool to show its owning-agent usage block.
   const agentBoundConnector = useToolStore((s) =>

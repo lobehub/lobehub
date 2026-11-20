@@ -267,15 +267,39 @@ export class FileActionImpl {
    * rejected before any message owned them (e.g. the server refused the turn
    * up front). Items already in the list are skipped by id so a concurrent
    * draft does not end up with duplicates.
+   *
+   * `order` is the composer's id order before the send. When given, restored and
+   * retained items (e.g. a failed upload that never left) go back to those
+   * positions; anything newer keeps its place after them.
    */
-  restoreChatUploadFileList = (contextKey: string, files: UploadFileItem[]): void => {
+  restoreChatUploadFileList = (
+    contextKey: string,
+    files: UploadFileItem[],
+    order?: string[],
+  ): void => {
     if (files.length === 0) return;
 
-    const currentIds = new Set(this.#getChatUploadFileList(contextKey).map((file) => file.id));
+    const current = this.#getChatUploadFileList(contextKey);
+    const currentIds = new Set(current.map((file) => file.id));
     const restored = files.filter((file) => !currentIds.has(file.id));
     if (restored.length === 0) return;
 
-    this.#get().dispatchChatUploadFileList(contextKey, { files: restored, type: 'addFiles' });
+    if (!order) {
+      this.#get().dispatchChatUploadFileList(contextKey, { files: restored, type: 'addFiles' });
+      return;
+    }
+
+    const rank = new Map(order.map((id, index) => [id, index]));
+    const merged = [...current, ...restored];
+    const ranked = merged
+      .filter((file) => rank.has(file.id))
+      .sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
+    const unranked = merged.filter((file) => !rank.has(file.id));
+    this.#setChatUploadFileList(
+      contextKey,
+      [...ranked, ...unranked],
+      n('restoreChatUploadFileList'),
+    );
   };
 
   dispatchChatUploadFileList = (contextKey: string, payload: UploadFileListDispatch): void => {

@@ -313,10 +313,12 @@ describe('a contact’s shared Agent in a direct conversation', () => {
       expect(job.errorType).toBe('AgentRuntimeError');
     });
 
-    it('shows the raw failure when the owner’s share opts into error details', async () => {
+    // The share option to show visitors raw errors was removed; a row written before then
+    // must not bring it back.
+    it('still redacts the failure when a stored share config predates the removed error-details option', async () => {
       await db
         .update(agentShares)
-        .set({ shareConfig: { showErrorDetails: true } })
+        .set({ shareConfig: { showErrorDetails: true } as Record<string, unknown> })
         .where(eq(agentShares.id, shareId));
       const { channel } = await visitor.create({
         agentId,
@@ -325,7 +327,8 @@ describe('a contact’s shared Agent in a direct conversation', () => {
       });
       const job = await failedView(channel.id, visitor);
 
-      expect(job.errorMessage).toBe('Upstream provider key sk-owner-secret rejected');
+      expect(job.errorMessage).toBeNull();
+      expect(job.errorType).toBe('AgentRuntimeError');
     });
 
     // The visitor saw "no reason recorded" when the owner's monthly cap refused the reply.

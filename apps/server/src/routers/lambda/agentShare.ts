@@ -70,7 +70,7 @@ export const agentShareConfigSchema = z
       )
       .max(20)
       .optional(),
-    deviceAccess: z.enum(['none', 'allowlist']).optional(),
+    deviceAccess: z.enum(['none', 'contacts', 'allowlist']).optional(),
     /** Each id must also be in the scope's address book; `updateShareConfig` checks that. */
     deviceAllowUserIds: z
       .array(z.string().trim().min(1).max(64))
@@ -86,7 +86,6 @@ export const agentShareConfigSchema = z
     maxFileStorage: z.number().int().nonnegative().optional(),
     maxMessagesPerVisitor: z.number().int().positive().optional(),
     monthlySpendLimit: z.number().nonnegative().optional(),
-    showErrorDetails: z.boolean().optional(),
     /**
      * Skill identifiers the creator opened to visitors. An empty array is
      * accepted rather than rejected: unticking the last skill is a normal
@@ -491,7 +490,11 @@ export const agentShareRouter = router({
       await assertCanManageAgentShare(ctx, input.agentId);
 
       const { deviceAccess, deviceAllowUserIds } = input.config;
-      if (deviceAccess === 'allowlist' || deviceAllowUserIds?.length) {
+      if (
+        deviceAccess === 'allowlist' ||
+        deviceAccess === 'contacts' ||
+        deviceAllowUserIds?.length
+      ) {
         const { book, enabled } = await shareAddressBook(ctx, input.agentId);
         // The runtime grants nothing while contacts are off, so refuse to store
         // a grant that would silently do nothing (or wake up when they turn on).

@@ -8,7 +8,7 @@ replies never trigger another classification.
 
 ## Enable
 
-Configure a TypeSafe API key through the deployment's \`TYPESAFE_API_KEY\` environment variable,
+Configure a TypeSafe API key through the deployment's \`TYPESAFE\_API\_KEY\` environment variable,
 or in the sender's provider settings (workspace provider settings in workspace scope).
 Routing is enabled by default. Configure its switch and decision model in Settings → Service Models → Advanced → Channels:
 

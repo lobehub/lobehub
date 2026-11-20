@@ -23,6 +23,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
+import { densityVars } from '@/styles/densityVars';
 
 import AgentList from './AgentList';
 import { useResolvedHomeAgentId, useSelectHomeAgent } from './useResolvedHomeAgentId';
@@ -34,8 +35,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     transition: opacity 0.2s ${cssVar.motionEaseOut};
   `,
   name: css`
-    font-size: 14px;
-    line-height: 20px;
+    font-size: ${densityVars.fontSize};
+    line-height: ${densityVars.lineHeight};
   `,
   popup: css`
     overflow: hidden;

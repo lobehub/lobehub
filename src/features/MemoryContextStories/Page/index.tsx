@@ -4,6 +4,7 @@ import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 
 import Section from '@/features/MemoryEntities/EntityPage/Section';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { splitDossiers } from '../derive';
 import { useStoryFormat } from '../format';
@@ -23,7 +24,11 @@ const styles = stylex.create({
     paddingBlockStart: '40px',
     paddingInline: '48px',
   },
-  header: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  header: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: densityTokens['--lobe-density-content-gap'],
+  },
   eyebrow: {
     alignItems: 'center',
     color: cssVar.colorTextTertiary,
@@ -35,7 +40,10 @@ const styles = stylex.create({
   },
   title: { fontSize: '24px', fontWeight: 600, lineHeight: '32px', margin: 0 },
   now: { color: cssVar.colorText, fontSize: '17px', lineHeight: '28px', margin: 0 },
-  placeholder: { color: cssVar.colorTextTertiary, fontSize: '14px' },
+  placeholder: {
+    color: cssVar.colorTextTertiary,
+    fontSize: densityTokens['--lobe-density-font-size'],
+  },
   pair: {
     display: 'grid',
     gap: '24px',
@@ -44,14 +52,22 @@ const styles = stylex.create({
   list: {
     display: 'flex',
     flexDirection: 'column',
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     gap: '6px',
     lineHeight: '22px',
     margin: 0,
     paddingInlineStart: '20px',
   },
-  dossiers: { display: 'flex', flexDirection: 'column', gap: '12px' },
-  scattered: { display: 'flex', flexDirection: 'column', gap: '16px' },
+  dossiers: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: densityTokens['--lobe-density-content-gap'],
+  },
+  scattered: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: densityTokens['--lobe-density-section-gap'],
+  },
   generated: { color: cssVar.colorTextQuaternary, fontSize: '12px' },
 });
 

@@ -351,13 +351,6 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     tab: SettingsTabs.Appearance,
   },
   {
-    anchor: 'appearance-context-menu',
-    descKey: 'settingAppearance.contextMenuMode.desc',
-    keywords: ['context menu', 'right click'],
-    labelKey: 'settingAppearance.contextMenuMode.title',
-    tab: SettingsTabs.Appearance,
-  },
-  {
     anchor: 'appearance-response-language',
     descKey: 'settingCommon.responseLanguage.desc',
     keywords: ['response language', 'reply'],

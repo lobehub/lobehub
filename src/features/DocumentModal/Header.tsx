@@ -27,11 +27,9 @@ import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
-import { useHeaderActionSize } from '@/styles/density';
+import { useDensityTokens, useHeaderActionSize } from '@/styles/density';
 
 import { buildDocumentModalUrl } from './url';
-
-const HEADER_HEIGHT = 44;
 
 const styles = createStaticStyles(({ css }) => ({
   shareButton: css`
@@ -42,6 +40,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const DocumentModalHeader = memo(() => {
+  const { fontSize, headerHeight } = useDensityTokens();
   const headerActionSize = useHeaderActionSize();
   const headerActionSmallSize = useHeaderActionSize(true);
   const { t } = useTranslation(['file', 'common']);
@@ -69,7 +68,7 @@ const DocumentModalHeader = memo(() => {
       align={'center'}
       flex={'none'}
       gap={4}
-      height={HEADER_HEIGHT}
+      height={headerHeight}
       justify={'space-between'}
       padding={8}
       style={{ borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}` }}
@@ -79,7 +78,7 @@ const DocumentModalHeader = memo(() => {
         {isDocumentLoading && !title ? (
           <Skeleton style={{ height: 14, minWidth: 120, width: 120 }} />
         ) : (
-          <Text ellipsis style={{ minWidth: 0 }} weight={500}>
+          <Text ellipsis fontSize={fontSize} style={{ minWidth: 0 }} weight={500}>
             {title || t('pageEditor.titlePlaceholder')}
           </Text>
         )}

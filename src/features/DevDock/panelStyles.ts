@@ -1,9 +1,11 @@
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 
+import { densityVars } from '@/styles/densityVars';
+
 export const devDockPanelStyles = createStaticStyles(({ css }) => ({
   flatSection: css`
     flex-shrink: 0;
-    padding: 12px;
+    padding: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   paneDividerEnd: css`
@@ -18,7 +20,7 @@ export const devDockPanelStyles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     height: 36px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: ${cssVar.fontSizeSM};
@@ -59,7 +61,7 @@ export const devDockPanelStyles = createStaticStyles(({ css }) => ({
     justify-content: space-between;
 
     height: 28px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     font-family: ${cssVar.fontFamilyCode};
@@ -73,7 +75,7 @@ export const devDockPanelStyles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     height: 44px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));

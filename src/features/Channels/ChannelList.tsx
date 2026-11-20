@@ -33,6 +33,7 @@ import { channelActions, channelSelectors, useChannelStore } from '@/store/chann
 import { useGlobalStore } from '@/store/global';
 import type { ChannelListSort } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import { openBrowseChannels } from './BrowseChannels';
 import { channelsInScope } from './channelScope';
@@ -45,10 +46,10 @@ import { useChannelMenu } from './useChannelMenu';
 import { useChannelsEnabled } from './useChannelsEnabled';
 import { useThreadMenu } from './useThreadMenu';
 
-// The connector runs down from the centre of the Channel's icon (4px row padding + half
-// its 28px slot) and bends into each thread row, the way Discord nests threads. A 2px line
+// The connector runs down from the centre of the Channel's icon (row paddingInline + half
+// its iconBox slot) and bends into each thread row, the way Discord nests threads. A 2px line
 // centres on that axis; Chromium floors fractional border widths, so 1.5px drew as 1px.
-const SPINE_X = 17;
+const SPINE_X = `calc(${sidebarRow.paddingInline} + ${sidebarRow.iconBox} / 2 - 1px)`;
 
 const SORT_BYS: ChannelListSort['by'][] = ['createdAt', 'updatedAt', 'title'];
 const SORT_ORDERS: ChannelListSort['order'][] = ['desc', 'asc'];
@@ -56,7 +57,7 @@ const SORT_ORDERS: ChannelListSort['order'][] = ['desc', 'asc'];
 const styles = stylex.create({
   thread: {
     position: 'relative',
-    paddingInlineStart: 32,
+    paddingInlineStart: `calc(${sidebarRow.paddingInline} + ${sidebarRow.iconBox})`,
   },
   // colorTextQuaternary is solid (unlike the fill tokens), so the elbow drawn over the spine never
   // shows a darker overlap; colorBorder vanished against the dark sidebar.
@@ -93,7 +94,7 @@ const styles = stylex.create({
   unreadPill: {
     pointerEvents: 'none',
     position: 'absolute',
-    insetBlockStart: 14,
+    insetBlockStart: `calc((${sidebarRow.height} - 8px) / 2)`,
     insetInlineStart: 0,
     width: 4,
     height: 8,

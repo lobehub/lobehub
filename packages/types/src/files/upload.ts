@@ -70,6 +70,12 @@ export interface UploadFileItem {
   errorCode?: string;
   file: File;
   /**
+   * MIME type stored with the uploaded file. Set once the upload succeeds; it can
+   * differ from `file.type` (a blank or wrong browser type corrected by byte
+   * sniffing or the file extension), and decides how the sent message shows it.
+   */
+  fileType?: string;
+  /**
    * the file url after upload,it will be s3 url
    * if enable the S3 storage, or the data is same as base64Url
    */

@@ -18,6 +18,7 @@ import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { agentEvalService } from '@/services/agentEval';
+import { densityVars } from '@/styles/densityVars';
 
 import { type CaptureDraft } from './buildCaptureDraft';
 import {
@@ -49,7 +50,7 @@ const styles = createStaticStyles(({ css }) => ({
        stays reachable by scrolling inside the block. */
     max-height: 200px;
     padding-block: 10px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: 10px;
 
     font-size: ${cssVar.fontSize};
@@ -63,7 +64,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     max-height: 96px;
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: 10px;
 
     font-size: ${cssVar.fontSizeSM};

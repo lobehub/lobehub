@@ -118,6 +118,8 @@ export default {
   'actionFailed': 'Something went wrong. Try again.',
   'send': 'Send',
   'sendFailed': 'Message was not sent. Your draft is preserved; try again.',
+  'shareVisitorReadOnlyNotice':
+    "A visitor's conversation through your share link. You can read it but can't reply.",
   'outgoing.discard': 'Delete',
   'outgoing.failed': 'Not sent',
   'outgoing.retry': 'Retry',
@@ -211,7 +213,6 @@ export default {
   'events.joined': '{{names}} joined the channel',
   'events.youInvited': 'You invited {{names}} to the channel',
   'failure.locate': 'Show message',
-  'failure.messageLabel': 'Reply failed: {{names}}',
   'failure.title': 'Failed replies · {{count}}',
   'nameOptional': 'Channel name (optional)',
   'rename': 'Rename channel',

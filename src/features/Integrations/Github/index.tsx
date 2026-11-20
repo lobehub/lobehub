@@ -20,6 +20,7 @@ import AsyncError from '@/components/AsyncError';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
 import { scmService } from '@/services/scm';
+import { densityVars } from '@/styles/densityVars';
 
 import { IntegrationConnectionsSkeleton } from '../Skeleton';
 import { useGithubIntegration } from '../useGithubIntegration';
@@ -68,7 +69,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   infoBar: css`
     padding-block: 10px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border-radius: ${cssVar.borderRadiusLG};
   `,
   infoLabel: css`

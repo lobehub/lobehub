@@ -48,6 +48,7 @@ import {
 } from '@/services/expertise';
 import { useFileStore } from '@/store/file';
 import { shinyTextStyles } from '@/styles';
+import { densityVars } from '@/styles/densityVars';
 
 import { composeStyles } from './GroupModal';
 import { useRecentPages, useTopics } from './useDistillSources';
@@ -58,7 +59,7 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 10px;
     align-items: flex-start;
 
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 4px;
 
     & + & {

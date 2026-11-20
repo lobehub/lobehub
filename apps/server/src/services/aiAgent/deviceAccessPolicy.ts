@@ -39,8 +39,8 @@ export type DeviceAccessReason =
   | 'share-visitor'
   /**
    * Shared-agent visitor the creator explicitly granted the Agent's execution
-   * environment (`shareConfig.deviceAccess` = `all`, or `allowlist` with the
-   * visitor listed). The device is still the Agent's configured one; the
+   * environment (`shareConfig.deviceAccess` = `contacts` with the visitor in the
+   * address book, or `allowlist` with the visitor also listed). The device is still the Agent's configured one; the
    * visitor never picks it.
    */
   | 'share-visitor-granted';

@@ -3,6 +3,8 @@ import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import { type ChangeEventHandler, type CompositionEventHandler, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityVars } from '@/styles/densityVars';
+
 import type { HomeMode } from '../types';
 import {
   HOME_INPUT_ACTION_BAR_HEIGHT,
@@ -51,11 +53,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     width: 100%;
     min-height: 0;
     padding-block: 8px 0;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 0;
 
     font-family: inherit;
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 1.4;
     color: ${cssVar.colorText};
 

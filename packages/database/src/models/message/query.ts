@@ -27,7 +27,6 @@ import type {
   QueryTopicByCursorParams,
   TopicMessagesByCursorResult,
   TopicTranscriptResult,
-  VisitorRedactionOptions,
 } from './types';
 import { toVisitorMessage } from './visitor';
 
@@ -292,9 +291,8 @@ export class MessageConversationQueries extends MessageScope {
    *
    * Share messages persist under the CREATOR's account (see `shareChat.ts`),
    * so `query()`'s joined `sender` and the billing/model-snapshot fields
-   * describe the creator, not the visitor reading them. `redaction` carries the
-   * share's own `showErrorDetails` switch; omitting it strips everything
-   * (fail closed). Model, provider and spend never reach a visitor.
+   * describe the creator, not the visitor reading them. Errors are projected to
+   * a classified type; model, provider and spend never reach a visitor.
    */
   queryForVisitor = async (
     params: QueryMessageParams = {},
@@ -303,7 +301,6 @@ export class MessageConversationQueries extends MessageScope {
         path: string | null,
         file: { fileType: string; id?: string | null },
       ) => Promise<string>;
-      redaction?: VisitorRedactionOptions;
       timing?: ModelTimingContext;
       /**
        * The visitor's share scope for Work summaries. Omitting it skips Work
@@ -319,7 +316,7 @@ export class MessageConversationQueries extends MessageScope {
       { ...params, skipWorks: params.skipWorks || !options.workAccessScope },
       { ...options, allowShareVisitor: true },
     );
-    return messageItems.map((message) => toVisitorMessage(message, options.redaction));
+    return messageItems.map((message) => toVisitorMessage(message));
   };
 
   /**

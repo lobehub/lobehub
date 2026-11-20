@@ -28,6 +28,7 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { createLocalFileTabId } from '@/store/chat/slices/portal/helpers';
 import { useLocalFilePreview, useLocalFilePreviewStore } from '@/store/localFilePreview';
+import { densityVars } from '@/styles/densityVars';
 import {
   parseSkillMarkdownFrontmatter,
   parseSkillMarkdownMetadata,
@@ -101,7 +102,7 @@ const frontmatterStyles = createStaticStyles(({ css }) => ({
   `,
   row: css`
     padding-block: 8px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
 
     &:not(:last-child) {
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};

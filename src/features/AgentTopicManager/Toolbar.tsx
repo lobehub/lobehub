@@ -30,6 +30,7 @@ import {
   MessageCircle,
   MoreHorizontal,
   Plus,
+  Share2,
   TestTubeIcon,
   Webhook,
   X,
@@ -43,6 +44,7 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useDensityTokens } from '@/styles/density';
 import { sidebarRow } from '@/styles/density.stylex';
+import { densityVars } from '@/styles/densityVars';
 
 import { useTopicsViewStore } from './store';
 import type {
@@ -66,7 +68,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     height: ${sidebarRow.controlHeight};
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border: 1px dashed ${cssVar.colorBorder};
     border-radius: calc(${sidebarRow.controlHeight} / 2);
 
@@ -123,7 +125,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     padding-block: 0;
-    padding-inline: 12px 6px;
+    padding-inline: ${densityVars.contentGap} 6px;
 
     font-size: 13px;
     color: ${cssVar.colorText};
@@ -147,7 +149,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     height: ${sidebarRow.controlHeight};
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
     border-radius: calc(${sidebarRow.controlHeight} / 2);
 
     font-size: 13px;
@@ -171,6 +173,7 @@ const STATUS_OPTIONS: { key: StatusFilter; labelKey: string }[] = [
 const TRIGGER_OPTIONS: TriggerFilter[] = [
   'chat',
   'channel',
+  'share',
   'bot',
   'webhook',
   'api',
@@ -184,6 +187,7 @@ const TRIGGER_ICON: Record<TriggerFilter, LucideIcon> = {
   channel: Hash,
   chat: MessageCircle,
   eval: TestTubeIcon,
+  share: Share2,
   task: ListTodoIcon,
   webhook: Webhook,
 };
@@ -268,13 +272,16 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelOptions 
   const channelsEnabled = useChannelsEnabled();
   const triggerItems: DropdownItem[] = useMemo(
     () =>
-      TRIGGER_OPTIONS.filter((tr) => tr !== 'channel' || channelsEnabled).map((tr) => ({
-        extra: <CheckMark visible={triggers.includes(tr)} />,
-        icon: <Icon icon={TRIGGER_ICON[tr]} size={14} />,
-        key: tr,
-        label: t(`management.filters.trigger.${tr}` as any) as string,
-        onClick: () => toggleTrigger(tr),
-      })),
+      // Visitor conversations are Channels too, opened on the Channel page.
+      TRIGGER_OPTIONS.filter((tr) => (tr !== 'channel' && tr !== 'share') || channelsEnabled).map(
+        (tr) => ({
+          extra: <CheckMark visible={triggers.includes(tr)} />,
+          icon: <Icon icon={TRIGGER_ICON[tr]} size={14} />,
+          key: tr,
+          label: t(`management.filters.trigger.${tr}` as any) as string,
+          onClick: () => toggleTrigger(tr),
+        }),
+      ),
     [channelsEnabled, triggers, t, toggleTrigger],
   );
 

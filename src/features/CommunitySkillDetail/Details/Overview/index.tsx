@@ -25,6 +25,7 @@ import PublishedTime from '@/components/PublishedTime';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useDiscoverStore } from '@/store/discover';
 import { skillSelectors } from '@/store/discover/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 import { sx } from '@/styles/sx';
 
 import { useDetailActionContext, useDetailContext } from '../../DetailProvider';
@@ -34,7 +35,7 @@ const styles = stylex.create({
   relatedGrid: {
     display: 'grid',
     gridTemplateColumns: { default: 'repeat(2, minmax(0, 1fr))', [media.sm]: '1fr' },
-    gap: '12px',
+    gap: densityTokens['--lobe-density-content-gap'],
   },
   sectionLabel: {
     margin: '0',

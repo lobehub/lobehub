@@ -1,5 +1,7 @@
 import { mergeIslandDismissals } from '@lobechat/const/goal';
 import type {
+  HeteroPermissionMode,
+  HeteroPermissionModeDir,
   NotificationSettings,
   SSOProvider,
   SystemAgentItem,
@@ -10,7 +12,7 @@ import type {
   UserSettings,
   WidgetDryRunGrant,
 } from '@lobechat/types';
-import { applyWorktreeModeDir } from '@lobechat/types';
+import { applyHeteroPermissionModeDir, applyWorktreeModeDir } from '@lobechat/types';
 import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { TRPCError } from '@trpc/server';
 import dayjs from 'dayjs';
@@ -586,6 +588,23 @@ export class UserModel {
     (await this.mutatePreference((prev) => {
       const worktreeModeDirs = applyWorktreeModeDir(prev.worktreeModeDirs, key, enabled);
       return { next: { ...prev, worktreeModeDirs }, result: worktreeModeDirs };
+    })) ?? [];
+
+  /**
+   * Personal-mode Claude Code permission mode remembered for one directory;
+   * returns the stored list. The cap is applied here (`applyHeteroPermissionModeDir`).
+   */
+  setHeteroPermissionModeDir = async (
+    key: string,
+    mode: HeteroPermissionMode,
+  ): Promise<HeteroPermissionModeDir[]> =>
+    (await this.mutatePreference((prev) => {
+      const heteroPermissionModeDirs = applyHeteroPermissionModeDir(
+        prev.heteroPermissionModeDirs,
+        key,
+        mode,
+      );
+      return { next: { ...prev, heteroPermissionModeDirs }, result: heteroPermissionModeDirs };
     })) ?? [];
 
   /**

@@ -1,9 +1,10 @@
 import type { ChannelContextMessage } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull, lt, ne } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, lt, ne } from 'drizzle-orm';
 import pMap from 'p-map';
 
 import type { ChannelJobItem } from '../../schemas';
 import {
+  agentOperations,
   agents,
   channelAudit,
   channelJobs,
@@ -13,6 +14,7 @@ import {
   channelThreads,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
 import { appendMessage } from './delivery';
 import { readManifestMessages } from './manifest';
@@ -77,6 +79,13 @@ export interface ChannelOpeningCandidate {
   canOpenThread: boolean;
   /** The other Agents the request asked to answer; they share one Thread with this reply. */
   coAddressed: ChannelCoAddressedAgent[];
+  /**
+   * The device picked for the Agent in this Channel. Every reply of the member runs there, so
+   * it names the run's target before the claim; without one only the claim resolves it.
+   */
+  deviceId?: string;
+  /** The Agent's membership in this Channel, which its replies run as. */
+  memberId: string;
   /** Public messages just before the request, oldest first. */
   recent: ChannelContextMessage[];
   request: ChannelContextMessage;
@@ -134,7 +143,7 @@ const coAddressedJobs = async (
 ) => {
   if (!opensReply(job)) return [];
   const rows = await db
-    .select({ name: agents.name, title: agents.title, wake: channelJobs.wake })
+    .select({ name: agents.name, title: agentTitleSql(), wake: channelJobs.wake })
     .from(channelJobs)
     .innerJoin(channelMembers, eq(channelMembers.id, channelJobs.memberId))
     .innerJoin(agents, eq(agents.id, channelMembers.agentId))
@@ -178,7 +187,8 @@ export const findOpeningCandidate = async (
       job: channelJobs,
       agentId: channelMembers.agentId,
       agentName: agents.name,
-      agentTitle: agents.title,
+      agentTitle: agentTitleSql(),
+      memberConfig: channelMembers.config,
     })
     .from(channelJobs)
     .innerJoin(channelMembers, eq(channelMembers.id, channelJobs.memberId))
@@ -240,6 +250,8 @@ export const findOpeningCandidate = async (
     agent: { id: row.agentId, name: row.agentName, title: row.agentTitle },
     canOpenThread: !job.threadId,
     coAddressed,
+    ...(row.memberConfig?.deviceId && { deviceId: row.memberConfig.deviceId }),
+    memberId: job.memberId,
     recent: messages.filter((message) => message.id !== job.messageId),
     request: requestMessage,
     requesterUserId: requester.userId,
@@ -639,4 +651,31 @@ export const findOpeningReply = async (
     )
     .limit(1);
   return message;
+};
+
+/**
+ * The newest reply of `memberId` on `deviceId` since `since` that finished: answered, chose
+ * silence, or failed, with its run's error. A stopped reply says nothing about the device.
+ */
+export const findLastSettledReplyOnDevice = async (
+  db: LobeChatDatabase,
+  channelId: string,
+  { deviceId, memberId, since }: { deviceId: string; memberId: string; since: Date },
+) => {
+  const [row] = await db
+    .select({ error: agentOperations.error, status: channelJobs.status })
+    .from(channelJobs)
+    .leftJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
+    .where(
+      and(
+        eq(channelJobs.channelId, channelId),
+        eq(channelJobs.memberId, memberId),
+        eq(channelJobs.deviceId, deviceId),
+        inArray(channelJobs.status, ['completed', 'failed', 'silent']),
+        gte(channelJobs.createdAt, since),
+      ),
+    )
+    .orderBy(desc(channelJobs.createdAt))
+    .limit(1);
+  return row;
 };

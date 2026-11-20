@@ -1,6 +1,7 @@
 import type { SandboxStorageClaim } from '@lobechat/builtin-tool-cloud-sandbox';
 import { isOnDemandBuiltinTool } from '@lobechat/builtin-tools';
 import type { LobeChatDatabase } from '@lobechat/database';
+import { getImplicitBuiltinSkillIds } from '@lobechat/mecha/builtinSkillGate';
 import type { AgentSenderMetadata, ExecAgentResult, UserInterventionConfig } from '@lobechat/types';
 import {
   agentShareFileAccessScope,
@@ -138,6 +139,7 @@ export const execAgentTurn = async (
     trigger,
     cronJobId,
     webhookThread,
+    openedByTopicId,
     taskId,
     evalContext,
     evalRuntime,
@@ -452,6 +454,7 @@ export const execAgentTurn = async (
         externalOrigin,
         cronJobId,
         webhookThread,
+        openedByTopicId,
         files,
         modelOverride,
         operationTaskId,
@@ -631,7 +634,15 @@ export const execAgentTurn = async (
       resolveRunSettings({ agentConfig, runFacts, shareGate, workspaceId: deps.workspaceId }),
     );
   if (!shareGate && !exclusivePluginIds && resolveToolMode(agentConfig.chatConfig) === 'agent') {
-    disabledPluginIds.push(...uninstalledBuiltinIds.filter(isOnDemandBuiltinTool));
+    const implicitSkills = getImplicitBuiltinSkillIds(
+      agentConfig.createdAt,
+      agentConfig.chatConfig,
+    );
+    disabledPluginIds.push(
+      ...uninstalledBuiltinIds.filter(
+        (id) => isOnDemandBuiltinTool(id) || implicitSkills.includes(id),
+      ),
+    );
   }
   log(
     'execAgent: globalMemoryEnabled=%s, timezone=%s',

@@ -3,16 +3,18 @@
 import { createStaticStyles, Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     display: flex;
     gap: 6px;
     align-items: center;
 
-    height: 32px;
+    height: ${densityVars.rowHeight};
     padding-block: 4px;
     padding-inline: 8px;
-    border-radius: ${cssVar.borderRadiusSM};
+    border-radius: ${densityVars.radius};
   `,
 }));
 

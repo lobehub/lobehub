@@ -360,16 +360,15 @@ export default {
   'agentSkillModal.github.clearSearch': 'Clear search',
   'agentSkillModal.github.complete_one': '{{count}} skill is ready to use',
   'agentSkillModal.github.complete_other': '{{count}} skills are ready to use',
-  'agentSkillModal.github.desc':
-    'Paste the URL of a skill directory from a public GitHub repository. The directory must contain a SKILL.md file.',
+  'agentSkillModal.github.connectionSettings': 'Open GitHub connection settings',
+  'agentSkillModal.github.desc': 'Choose a GitHub repository or folder containing a SKILL.md file.',
   'agentSkillModal.github.empty':
     'No SKILL.md found at this URL. Try another repository or directory.',
   'agentSkillModal.github.example': 'https://github.com/owner/repository',
-  'agentSkillModal.github.find': 'Find skills',
+  'agentSkillModal.github.find': 'Parse skills',
   'agentSkillModal.github.findFailed':
     'Couldn’t read this GitHub link. Check the URL and try again.',
-  'agentSkillModal.github.finding': 'Finding skills…',
-  'agentSkillModal.github.hint': 'Find skills in a public repository, then choose which to import.',
+  'agentSkillModal.github.finding': 'Parsing skills…',
   'agentSkillModal.github.importFailed':
     'Couldn’t import the selected skills. Find skills again, then retry.',
   'agentSkillModal.github.importSelected_one': 'Import {{count}} skill',
@@ -1287,6 +1286,7 @@ export default {
   'notification.item.topic_comment_mentioned': 'Mentioned in a comment',
   'notification.item.video_generation_completed': 'Video generation completed',
   'notification.item.workspace_credit_balance_low': 'Workspace balance running low',
+  'notification.item.workspace_member_budget_exceeded': 'Member budget used up',
   'notification.item.workspace_member_invited': 'Workspace invitation',
   'notification.item.workspace_member_joined': 'New member joined',
   'notification.item.workspace_member_removed': 'Removed from workspace',
@@ -1595,10 +1595,6 @@ export default {
   'settingAppearance.animationMode.disabled': 'Off',
   'settingAppearance.animationMode.elegant': 'Elegant',
   'settingAppearance.animationMode.title': 'Response Animation',
-  'settingAppearance.contextMenuMode.default': 'Default',
-  'settingAppearance.contextMenuMode.desc': 'Enable the right-click menu for some list items.',
-  'settingAppearance.contextMenuMode.disabled': 'Disabled',
-  'settingAppearance.contextMenuMode.title': 'Right-Click Menu Mode',
   'settingAppearance.density.compact': 'Compact',
   'settingAppearance.density.desc':
     'Row height and spacing in the sidebars. Compact fits more on screen; Loose gives each row more room.',
@@ -2042,6 +2038,7 @@ export default {
   'skillStore.button': 'Skill Store',
   'skillStore.empty': 'Browse the Skill Store. Install one to get started, add more later.',
   'skillStore.emptySearch': 'No matching Skills',
+  'skillStore.marketEmpty': 'No skills are available in the store yet.',
   'skillStore.networkError': 'Network error, please try again',
   'skillStore.rateLimited': 'Too many requests just now. Please wait a moment and try again.',
   'skillStore.search': 'Search skills by name or keyword, press Enter to search…',
@@ -2071,16 +2068,26 @@ When I am ___, I need ___
   'skillStore.wantMore.feedback.title':
     '[Skill Request] Summarize the skill you need in one sentence',
   'skillStore.wantMore.reachedEnd': "You've reached the end. Can't find what you need?",
+  'skillView.browseStoreDesc': 'Find and install skills for your agents',
+  'skillView.connectorTabs.private': 'Private',
+  'skillView.connectorTabs.workspace': 'Workspace',
   'skillView.connectors': 'Connectors',
   'skillView.connectorsDesc':
     'Connect the apps and tools your agents can use. Open one to see its account and tools.',
   'skillView.empty.description': 'Browse the Skill Store or import a skill from the Add menu.',
   'skillView.empty.search': 'No skills match “{{keyword}}”',
   'skillView.empty.title': 'No skills yet',
+  'skillView.privateConnectorsDesc':
+    'Only you can see these connectors, and only your private agents use them. Workspace agents never load them.',
+  'skillView.privateConnectorsEmpty.desc':
+    'Add a custom connector here to keep it to yourself and your private agents.',
+  'skillView.privateConnectorsEmpty.title': 'No private connectors yet',
   'skillView.search.placeholder': 'Search skills',
   'skillView.skills': 'Skills',
   'skillView.skillsDesc':
     'Give your agents task-specific skills. Open a skill to see its instructions and resources.',
+  'skillView.workspaceConnectorsDesc':
+    'Shared with every member, and every agent in this workspace can use them. Open one to see its account and tools.',
   'startConversation': 'Start Conversation',
   'storage.actions.transfer.button': 'Move to…',
   'storage.actions.transfer.desc':
@@ -2317,7 +2324,7 @@ When I am ___, I need ___
   'tab.hotkey': 'Hotkeys',
   'tab.image': 'Image Generation',
   'tab.importFromGithub': 'Import from GitHub',
-  'tab.importFromGithub.desc': 'Import from a public GitHub repository',
+  'tab.importFromGithub.desc': 'Import from a GitHub repository',
   'tab.importFromUrl': 'Import from URL',
   'tab.importFromUrl.desc': 'Import via a direct link to SKILL.md',
   'tab.labels': 'Labels',
@@ -4776,6 +4783,9 @@ When I am ___, I need ___
   'tools.plugins.management': 'Skill Management',
   'tools.plugins.noEnabled': 'No skills enabled',
   'tools.plugins.store': 'Add skill',
+  'tools.privateConnector.tag': 'Private',
+  'tools.privateConnector.tooltip':
+    'Your private connector: only you can see it, and only your private agents load it.',
   'tools.search': 'Search skills...',
   'tools.loading.onDemand': 'Load on demand',
   'tools.activation.action.auto': 'Auto',

@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useConnectorManagePolicy } from '@/hooks/useConnectorManagePolicy';
 import { updateConnectorManagePolicy } from '@/services/connectorManagePolicy';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   root: {
@@ -17,7 +18,7 @@ const styles = stylex.create({
     borderBlockEndWidth: 1,
     flexShrink: 0,
     paddingBlock: 10,
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
   },
 });
 

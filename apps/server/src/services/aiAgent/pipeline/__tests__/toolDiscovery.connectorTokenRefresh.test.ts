@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { refreshExpiredLinkTokens } from '@/server/services/connector/tokens';
 
+import { toolSetsFrom } from '../../__tests__/helpers/connectorToolSets';
 import { discoverTools } from '../toolDiscovery';
 
 vi.mock('@/business/client/model-bank/loadModels', () => ({
@@ -99,6 +100,10 @@ interface RunOptions {
 const connectorModel = {
   resolveAll: vi.fn(),
   resolveByIdentifiers: vi.fn(),
+  resolveToolSets: toolSetsFrom(
+    (ids: string[], target: unknown) => connectorModel.resolveByIdentifiers(ids, target),
+    (target: unknown) => connectorModel.resolveAll(target),
+  ),
 };
 
 const run = (options: RunOptions = {}) => {
@@ -180,8 +185,9 @@ describe('discoverTools — connector OAuth token refresh', () => {
     const result = await run({ disabledPluginIds: [XMIND] });
 
     expect(result.toolManifestMap[XMIND]).toBeUndefined();
-    expect(connectorModel.resolveAll).toHaveBeenCalledWith(
+    expect(connectorModel.resolveToolSets).toHaveBeenCalledWith(
       expect.anything(),
+      undefined,
       expect.anything(),
       expect.arrayContaining([XMIND]),
     );

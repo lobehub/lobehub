@@ -33,6 +33,7 @@ import {
 } from '@/features/LobeBench/useLobeBench';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   container: {
@@ -49,10 +50,10 @@ const styles = stylex.create({
   sectionTitle: { margin: 0, fontSize: 18, fontWeight: 600 },
   datasetRow: {
     display: 'flex',
-    gap: 12,
+    gap: densityTokens['--lobe-density-content-gap'],
     alignItems: 'center',
     paddingBlock: 14,
-    paddingInline: 16,
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     borderWidth: 1,
     borderStyle: 'solid',
     borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },

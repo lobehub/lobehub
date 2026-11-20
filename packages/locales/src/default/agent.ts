@@ -952,27 +952,38 @@ export default {
   'share.settings.notice.workspaceDesc':
     'Visitors don’t just read this Agent — they run it. Every reply is generated in the Workspace and charged to its shared budget, without consuming the creator’s or another member’s quota. The Agent only acts with the visitor access you grant below.',
   'share.settings.notice.workspaceTitle': 'Visitors run this Agent on the Workspace budget',
-  'share.settings.permissions.allowCreatorViewSessions': 'Let me read visitor topics',
+  'share.settings.permissions.allowCreatorViewSessions': 'Let me read visitor conversations',
   'share.settings.permissions.allowCreatorViewSessionsHint':
-    'Off by default: visitor topics stay private to the visitor.',
+    "Off by default: visitor conversations stay private to the visitor. When on, they appear under Share on this agent's Topics page.",
   'share.settings.permissions.allowReadMemory': 'Allow reading my memory',
   'share.settings.permissions.allowReadMemoryHint':
     'The Agent may draw on your long-term memory while answering a visitor.',
   'share.settings.permissions.deviceAccessConfirm.messageLimit':
     'The monthly spend cap does not limit that usage. Only the message limit per visitor does.',
-  'share.settings.permissions.deviceAccessOption.allowlist': 'People from contacts',
+  'share.settings.permissions.deviceAccessOption.allowlist': 'Specific people from contacts',
+  'share.settings.permissions.deviceAccessConfirm.okContacts': 'Allow everyone in contacts',
+  'share.settings.permissions.deviceAccessOption.contacts': 'Everyone in contacts',
   'share.settings.permissions.deviceAccessOption.none': 'No visitors',
+  'share.settings.permissions.deviceAccessOption.noneDesc':
+    'Visitors can chat with this Agent but never run it on your execution environment.',
+  'share.settings.permissions.deviceAccessOption.contactsDesc':
+    'Everyone in this Agent’s contacts can use it, including people added later. Removing someone from contacts also removes their access.',
+  'share.settings.permissions.deviceAccessOption.allowlistDesc':
+    'Only the people you pick below from this Agent’s contacts can use it.',
+  'share.settings.limits.saved': 'Limits saved',
   'share.settings.permissions.deviceAccessConfirm.commands':
     'They can run any command and read or write any file on the machine this Agent runs on, including through Claude Code or Codex.',
+  'share.settings.permissions.deviceAccessConfirm.contactsScope':
+    'Anyone added to this Agent’s contacts later gets this access too, not only the people there now.',
   'share.settings.permissions.deviceAccessConfirm.intro':
-    'People you add will run this Agent on your execution environment:',
+    'People you grant access will run this Agent on your execution environment:',
   'share.settings.permissions.deviceAccessConfirm.ok': 'Allow listed people',
   'share.settings.permissions.deviceAccessConfirm.subscription':
     'Claude Code and Codex runs use the model subscription signed in on that machine.',
   'share.settings.permissions.deviceAccessConfirm.title':
     'Let people use your execution environment?',
   'share.settings.permissions.deviceAllowContactsUnavailable':
-    'Only people in your contacts can be added, and contacts aren’t available for your account yet.',
+    'Device access works through contacts, and contacts aren’t available for your account yet.',
   'share.settings.permissions.deviceAllowHint':
     'Only people in this Agent’s contacts can be added. Removing someone from contacts also removes their access.',
   'share.settings.permissions.deviceAllowLimitReached': 'You can add up to {{limit}} people.',
@@ -984,10 +995,7 @@ export default {
   'share.settings.permissions.deviceAllowUnlisted':
     'No longer in contacts, so they can’t use it: {{names}}. They’re removed the next time you edit this list.',
   'share.settings.permissions.desc':
-    'What a visitor’s run may read, and what the visitor gets to see back.',
-  'share.settings.permissions.showErrorDetails': 'Show error details to visitors',
-  'share.settings.permissions.showErrorDetailsHint':
-    'Off by default: visitors see a generic failure notice instead of raw error text.',
+    'What a visitor’s run may read, and whether you can read visitor conversations.',
   'share.settings.permissions.title': 'Permissions',
   'share.settings.tabs.access': 'Access',
   'share.settings.tabs.profile': 'Public profile',
@@ -1095,7 +1103,7 @@ export default {
     'This topic runs in the owner Workspace. The Agent creator has turned on topic access and may read its messages, so avoid sharing sensitive information.',
   'share.visitor.profile.about': 'About',
   'share.visitor.profile.createdBy': 'Created by {{creator}}',
-  'share.visitor.profile.cta': 'Start a topic',
+  'share.visitor.profile.cta': 'Start a conversation',
   'share.visitor.profile.ctaSignIn': 'Sign in to start',
   'share.visitor.profile.freeNote': 'Free · paid for by the creator',
   'share.visitor.profile.freeNoteWorkspace': 'Free · paid for by the Workspace',

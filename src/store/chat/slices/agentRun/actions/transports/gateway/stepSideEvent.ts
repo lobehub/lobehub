@@ -4,8 +4,10 @@ import type {
   SubAgentProgressData,
 } from '@lobechat/agent-gateway-client';
 import type { BackgroundTaskEventData } from '@lobechat/heterogeneous-agents';
+import { isPermissionModeReport } from '@lobechat/heterogeneous-agents/claudeCodePermission/shared';
 import type { ConversationContext } from '@lobechat/types';
 
+import { applyPermissionModeReport } from '@/store/chat/heteroPermissionMode';
 import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -108,6 +110,13 @@ export const resolveStepSideEvent = (
           },
           dispatchContext,
         ),
+    };
+  }
+
+  // The server already wrote Claude Code's mode onto the topic; the chip follows.
+  if (isPermissionModeReport(data)) {
+    return {
+      apply: () => void applyPermissionModeReport(get, context.topicId, data, { persist: false }),
     };
   }
 

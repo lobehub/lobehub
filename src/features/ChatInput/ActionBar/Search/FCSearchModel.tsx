@@ -7,13 +7,18 @@ import { useTranslation } from 'react-i18next';
 import InfoTooltip from '@/components/InfoTooltip';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { densityTokens } from '@/styles/density.stylex';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import FunctionCallingModelSelect from './FunctionCallingModelSelect';
 
 const styles = stylex.create({
-  title: { fontSize: '14px', fontWeight: 500, color: cssVar.colorText },
+  title: {
+    fontSize: densityTokens['--lobe-density-font-size'],
+    fontWeight: 500,
+    color: cssVar.colorText,
+  },
 });
 
 interface FCSearchModelProps {

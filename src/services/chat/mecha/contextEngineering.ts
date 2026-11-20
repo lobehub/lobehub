@@ -15,6 +15,7 @@ import { type ContextSnapshot, gatherContextFacts, runContextEngineering } from 
 import { historySummaryPrompt } from '@lobechat/prompts';
 import {
   agentIdentityLabel,
+  manifestBaseIdentifier,
   type OpenAIChatMessage,
   type RuntimeAdditionalContextFragment,
   type RuntimeInitialContext,
@@ -36,6 +37,8 @@ import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { getChatStoreState } from '@/store/chat';
 import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
+import { getToolStoreState } from '@/store/tool';
+import { installedImplicitBuiltinSkillIds } from '@/store/tool/slices/builtin/projection';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
@@ -248,8 +251,15 @@ export const contextEngineering = async ({
     // engine dropped their manifests, so listing them would only invite an
     // activation that cannot succeed.
     const disabledIdSet = new Set(disabledPluginIds ?? []);
+    // The run's discovery pool is scoped to the conversation already; a
+    // connector row's tool set is disabled with its connector
     const availableTools = Object.values(discoveryManifests ?? {})
-      .filter(({ identifier }) => !enabledToolSet.has(identifier) && !disabledIdSet.has(identifier))
+      .filter(
+        (manifest) =>
+          !enabledToolSet.has(manifest.identifier) &&
+          !disabledIdSet.has(manifest.identifier) &&
+          !disabledIdSet.has(manifestBaseIdentifier(manifest)),
+      )
       .map(({ identifier, meta }) => ({
         description: meta?.description ?? '',
         identifier,
@@ -316,11 +326,18 @@ export const contextEngineering = async ({
       await resolveClientSkills(
         plugins,
         disabledPluginIds,
-        agentChatConfigSelectors.skillActivateMode(agentStoreState),
+        respondingChatConfig.skillActivateMode,
         // Reading another topic (`<refer_topic>` or a raw `tpc_` id) goes through `lh topic view`,
         // which the lobehub skill teaches.
         mentionsTopic(messages) ? [LobeHubIdentifier] : undefined,
         autoSkillIds,
+        !shareVisitor && enableAgentMode !== false
+          ? installedImplicitBuiltinSkillIds(
+              getToolStoreState(),
+              agentItem?.createdAt,
+              respondingChatConfig,
+            )
+          : [],
       )
     ).skills;
   }

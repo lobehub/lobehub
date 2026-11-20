@@ -54,6 +54,7 @@ const touchesShareModel = (value: PartialDeep<AgentItem>): boolean =>
  * Used when returning agent config from database (id is always present).
  */
 export type AgentConfigWithId = LobeAgentConfig &
+  Partial<Pick<AgentItem, 'createdAt'>> &
   Pick<AgentItem, 'id' | 'slug' | 'userId' | 'visibility' | 'workspaceId'> & {
     /**
      * Raw callSubAgent chatConfig override, stamped by execAgent alongside the
