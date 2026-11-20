@@ -26,7 +26,19 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
   getTrpcClient: vi.fn(),
 }));
 
+const { mockSdk } = vi.hoisted(() => ({
+  mockSdk: {
+    knowledgeBases: {
+      create: vi.fn(),
+    },
+  },
+}));
+
+/** The success envelope every REST answer arrives in, as the SDK returns it. */
+const envelope = (data: unknown) => ({ data: { data, success: true } });
+
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
+vi.mock('../api/sdk', () => ({ getSdkClient: vi.fn(async () => mockSdk) }));
 describe('kb command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;
@@ -43,6 +55,7 @@ describe('kb command', () => {
         }
       }
     }
+    for (const fn of Object.values(mockSdk.knowledgeBases)) fn.mockReset();
     // Default: file queries return empty
     mockTrpcClient.file.getFiles.query.mockResolvedValue([]);
     mockTrpcClient.file.getKnowledgeItems.query.mockResolvedValue({ hasMore: false, items: [] });
@@ -132,7 +145,9 @@ describe('kb command', () => {
 
   describe('create', () => {
     it('should create a knowledge base', async () => {
-      mockTrpcClient.knowledgeBase.createKnowledgeBase.mutate.mockResolvedValue('kb-new');
+      mockSdk.knowledgeBases.create.mockResolvedValue(
+        envelope({ knowledgeBase: { id: 'kb-new', name: 'New KB' } }),
+      );
 
       const program = createProgram();
       await program.parseAsync([
@@ -146,10 +161,12 @@ describe('kb command', () => {
         'Test desc',
       ]);
 
-      expect(mockTrpcClient.knowledgeBase.createKnowledgeBase.mutate).toHaveBeenCalledWith(
-        expect.objectContaining({ description: 'Test desc', name: 'New KB' }),
-      );
+      expect(mockSdk.knowledgeBases.create).toHaveBeenCalledWith({
+        body: { description: 'Test desc', name: 'New KB' },
+      });
+      expect(mockTrpcClient.knowledgeBase.createKnowledgeBase.mutate).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('kb-new'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('/resource/library/kb-new'));
     });
   });
 

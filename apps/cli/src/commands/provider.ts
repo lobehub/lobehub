@@ -1,12 +1,22 @@
+import { LobeHubAPIError } from '@lobehub/sdk';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { getSdkClient } from '../api/sdk';
 import { CLI_PRODUCT_NAME } from '../constants/identity';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
 
+const isNotFound = (error: unknown) => error instanceof LobeHubAPIError && error.status === 404;
+
+/**
+ * `list`, `view`, `config`, `test` and `toggle` stay on tRPC: they merge or
+ * upsert the builtin providers that have no database row yet, which the REST
+ * API (`/api/v1/providers`, rows only) does not. `create` stays too: REST
+ * answers a duplicate id with a Chinese `400`, not tRPC's `CONFLICT`.
+ */
 export function registerProviderCommand(program: Command) {
   const provider = program.command('provider').description('Manage AI providers');
 
@@ -135,15 +145,21 @@ export function registerProviderCommand(program: Command) {
           process.exit(1);
         }
 
-        const client = await getTrpcClient();
+        const sdk = await getSdkClient();
 
-        const value: Record<string, any> = {};
-        if (options.name) value.name = options.name;
-        if (options.description !== undefined) value.description = options.description;
-        if (options.logo !== undefined) value.logo = options.logo;
-        if (options.sdkType) value.sdkType = options.sdkType;
+        const body: { description?: string; logo?: string; name?: string } = {};
+        if (options.name) body.name = options.name;
+        if (options.description !== undefined) body.description = options.description;
+        if (options.logo !== undefined) body.logo = options.logo;
 
-        await client.aiProvider.updateAiProvider.mutate({ id, value: value as any });
+        try {
+          await sdk.providers.update({ body, path: { id } });
+        } catch (error) {
+          if (!isNotFound(error)) throw error;
+          log.error(`Provider not found: ${id}`);
+          process.exit(1);
+          return;
+        }
         console.log(`${pc.green('✓')} Updated provider ${pc.bold(id)}`);
       },
     );
@@ -318,8 +334,15 @@ export function registerProviderCommand(program: Command) {
         }
       }
 
-      const client = await getTrpcClient();
-      await client.aiProvider.removeAiProvider.mutate({ id });
+      const sdk = await getSdkClient();
+      try {
+        await sdk.providers.delete({ path: { id } });
+      } catch (error) {
+        if (!isNotFound(error)) throw error;
+        log.error(`Provider not found: ${id}`);
+        process.exit(1);
+        return;
+      }
       console.log(`${pc.green('✓')} Deleted provider ${pc.bold(id)}`);
     });
 }

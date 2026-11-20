@@ -14,7 +14,7 @@ import { type Command, Option } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../../api/client';
-import { confirm, outputJson, printTable, truncate } from '../../utils/format';
+import { outputJson, printTable, truncate } from '../../utils/format';
 import { log } from '../../utils/logger';
 import { resolveAppUrlBuilder } from '../task/url';
 import { registerGoalAccessCommands } from './access';
@@ -25,6 +25,14 @@ import {
   registerGoalAssignmentCommands,
 } from './assignment';
 import { registerGoalConfigurationCommands } from './configuration';
+import {
+  deleteGoalAction,
+  goalUrlBuilder,
+  listGoalsAction,
+  pauseGoalAction,
+  restartGoalAction,
+  resumeGoalAction,
+} from './crud';
 import { registerGoalGraphEditCommands } from './graphEdit';
 import { inverseEdgeLabel, nodeIcon } from './graphGlyphs';
 import { registerGoalMarkCommands } from './mark';
@@ -402,19 +410,6 @@ async function explainPlanRefusal(
     return undefined;
   }
 }
-
-/**
- * Builds goal page links. Best-effort: a read must not fail over a link, and an
- * operation-token run may be refused the workspace lookup behind it.
- */
-const goalUrlBuilder = async () => {
-  try {
-    const buildUrl = await resolveAppUrlBuilder(await getTrpcClient());
-    return (id: string) => buildUrl(`/goal/${encodeURIComponent(id)}`);
-  } catch {
-    return () => undefined;
-  }
-};
 
 export function registerGoalCommand(program: Command) {
   const goal = program.command('goal').description('Run long-horizon Goal Graphs');
@@ -842,38 +837,7 @@ export function registerGoalCommand(program: Command) {
     .option('--archived', 'List only archived goals (hidden otherwise)')
     .option('--limit <n>', 'Maximum rows', '50')
     .option('--json [fields]', 'Output JSON')
-    .action(async (options) => {
-      const result = await (
-        await getTrpcClient()
-      ).goal.list.query({
-        agentId: options.agent,
-        archived: options.archived || undefined,
-        limit: Number.parseInt(options.limit, 10),
-        projectId: options.project,
-        statuses: options.status,
-      });
-      if (options.json !== undefined) {
-        const goalUrl = await goalUrlBuilder();
-        const goals = result.goals.map((item: { goal: { id: string } }) => ({
-          ...item,
-          url: goalUrl(item.goal.id),
-        }));
-        return outputJson(goals, options.json);
-      }
-      if (result.goals.length === 0) return log.info('No goals yet.');
-      printTable(
-        result.goals.map((item) => [
-          item.goal.status,
-          truncate(item.goal.title, 44),
-          `${item.taskDone}/${item.taskTotal}`,
-          String(item.findingCount),
-          item.pendingDecisions > 0 ? pc.yellow(String(item.pendingDecisions)) : '-',
-          `$${item.totalRunCost.toFixed(2)}`,
-          item.goal.id,
-        ]),
-        ['STATUS', 'TITLE', 'TASKS', 'FINDINGS', 'NEEDS YOU', 'COST', 'GOAL ID'],
-      );
-    });
+    .action(listGoalsAction);
 
   const show = async (id: string, options: { json?: boolean | string }) => {
     const reads = await goalReads();
@@ -1063,14 +1027,7 @@ export function registerGoalCommand(program: Command) {
       },
     );
 
-  goal
-    .command('pause <id>')
-    .description('Pause goal coordination')
-    .action(async (id: string) => {
-      const client = await getTrpcClient();
-      const result = await client.goal.pause.mutate({ id });
-      log.info(result.message);
-    });
+  goal.command('pause <id>').description('Pause goal coordination').action(pauseGoalAction);
 
   goal
     .command('resume <id>')
@@ -1079,28 +1036,13 @@ export function registerGoalCommand(program: Command) {
       '--confirm-exit',
       'Confirm the main Agent planning turn the goal paused on has ended, and settle it before resuming',
     )
-    .action(async (id: string, options: { confirmExit?: boolean }) => {
-      const client = await getTrpcClient();
-      const result = await client.goal.resume.mutate({
-        id,
-        ...(options.confirmExit ? { confirmExit: true } : {}),
-      });
-      log.info(result.message);
-    });
+    .action(resumeGoalAction);
 
   goal
     .command('delete <id>')
     .description('Delete a goal and its graph')
     .option('--yes', 'Skip confirmation prompt')
-    .action(async (id: string, options: { yes?: boolean }) => {
-      if (!options.yes && !(await confirm(`Delete goal ${id}? This cannot be undone.`))) {
-        console.log('Cancelled.');
-        return;
-      }
-      const client = await getTrpcClient();
-      const result = await client.goal.delete.mutate({ id });
-      log.info(result.message);
-    });
+    .action(deleteGoalAction);
 
   registerGoalAccessCommands(goal);
   registerGoalArchiveCommands(goal);
@@ -1169,12 +1111,7 @@ export function registerGoalCommand(program: Command) {
       '--agent <id>',
       "Also hand the restarted tasks (and the goal's executor slot) to this agent",
     )
-    .action(async (id: string, options: { agent?: string }) => {
-      const result = await (
-        await getTrpcClient()
-      ).goal.restart.mutate({ agentId: options.agent, id });
-      log.info(`${result.message}. Resume ticking with: lh goal run ${id}`);
-    });
+    .action(restartGoalAction);
 
   goal
     .command('decisions <id>')

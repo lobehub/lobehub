@@ -1,3 +1,4 @@
+import { LobeHubAPIError } from '@lobehub/sdk';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,19 +12,28 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       createAiProvider: { mutate: vi.fn() },
       getAiProviderById: { query: vi.fn() },
       getAiProviderList: { query: vi.fn() },
-      removeAiProvider: { mutate: vi.fn() },
       toggleProviderEnabled: { mutate: vi.fn() },
-      updateAiProvider: { mutate: vi.fn() },
       updateAiProviderConfig: { mutate: vi.fn() },
     },
   },
 }));
+
+const { mockSdk } = vi.hoisted(() => ({
+  mockSdk: {
+    providers: { delete: vi.fn(), update: vi.fn() },
+  },
+}));
+
+const envelope = (data: unknown) => ({ data: { data, success: true } });
+const notFound = () =>
+  new LobeHubAPIError(404, { code: 'not_found', message: 'Provider not found' });
 
 const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
   getTrpcClient: vi.fn(),
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
+vi.mock('../api/sdk', () => ({ getSdkClient: vi.fn(async () => mockSdk) }));
 describe('provider command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;
@@ -37,6 +47,7 @@ describe('provider command', () => {
         (fn as ReturnType<typeof vi.fn>).mockReset();
       }
     }
+    for (const fn of Object.values(mockSdk.providers)) fn.mockReset();
   });
 
   afterEach(() => {
@@ -151,16 +162,38 @@ describe('provider command', () => {
 
   describe('edit', () => {
     it('should update provider name', async () => {
-      mockTrpcClient.aiProvider.updateAiProvider.mutate.mockResolvedValue({});
+      mockSdk.providers.update.mockResolvedValue(envelope({ id: 'openai' }));
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'provider', 'edit', 'openai', '-n', 'New Name']);
 
-      expect(mockTrpcClient.aiProvider.updateAiProvider.mutate).toHaveBeenCalledWith({
-        id: 'openai',
-        value: expect.objectContaining({ name: 'New Name' }),
+      expect(mockSdk.providers.update).toHaveBeenCalledWith({
+        body: { name: 'New Name' },
+        path: { id: 'openai' },
       });
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Updated provider'));
+    });
+
+    it('should report a provider without a row as not found', async () => {
+      mockSdk.providers.update.mockRejectedValue(notFound());
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'provider', 'edit', 'ghost', '-d', 'x']);
+
+      expect(log.error).toHaveBeenCalledWith('Provider not found: ghost');
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(consoleSpy).not.toHaveBeenCalledWith(expect.stringContaining('Updated provider'));
+    });
+
+    it('should rethrow other API errors', async () => {
+      mockSdk.providers.update.mockRejectedValue(
+        new LobeHubAPIError(403, { code: 'forbidden', message: 'Insufficient permission' }),
+      );
+
+      const program = createProgram();
+      await expect(
+        program.parseAsync(['node', 'test', 'provider', 'edit', 'openai', '-n', 'X']),
+      ).rejects.toThrow('Insufficient permission');
     });
 
     it('should error when no changes specified', async () => {
@@ -320,14 +353,23 @@ describe('provider command', () => {
 
   describe('delete', () => {
     it('should delete provider', async () => {
-      mockTrpcClient.aiProvider.removeAiProvider.mutate.mockResolvedValue({});
+      mockSdk.providers.delete.mockResolvedValue(envelope({ deleted: true, id: 'openai' }));
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'provider', 'delete', 'openai', '--yes']);
 
-      expect(mockTrpcClient.aiProvider.removeAiProvider.mutate).toHaveBeenCalledWith({
-        id: 'openai',
-      });
+      expect(mockSdk.providers.delete).toHaveBeenCalledWith({ path: { id: 'openai' } });
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Deleted provider'));
+    });
+
+    it('should report a missing provider', async () => {
+      mockSdk.providers.delete.mockRejectedValue(notFound());
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'provider', 'delete', 'ghost', '--yes']);
+
+      expect(log.error).toHaveBeenCalledWith('Provider not found: ghost');
+      expect(exitSpy).toHaveBeenCalledWith(1);
     });
   });
 });

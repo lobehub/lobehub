@@ -4,7 +4,6 @@ import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as FormatModule from '../../utils/format';
-import { confirm } from '../../utils/format';
 import { log } from '../../utils/logger';
 import { registerGoalCommand } from '.';
 
@@ -15,7 +14,6 @@ const { mockClient } = vi.hoisted(() => ({
       bindTopic: { mutate: vi.fn() },
       bindOperationTopic: { mutate: vi.fn() },
       create: { mutate: vi.fn() },
-      delete: { mutate: vi.fn() },
       events: { query: vi.fn() },
       eventsOperation: { query: vi.fn() },
       graphOperation: { query: vi.fn() },
@@ -26,7 +24,6 @@ const { mockClient } = vi.hoisted(() => ({
       submitOperationReport: { mutate: vi.fn() },
       submitReport: { mutate: vi.fn() },
       graph: { query: vi.fn() },
-      resume: { mutate: vi.fn() },
       retireNodes: { mutate: vi.fn() },
       supervision: { query: vi.fn() },
       tick: { mutate: vi.fn() },
@@ -120,28 +117,6 @@ describe('goal plan authentication', () => {
       expect(other.mutate).not.toHaveBeenCalled();
     },
   );
-});
-
-describe('goal resume', () => {
-  it('asks the server to settle the stuck planning turn only with --confirm-exit', async () => {
-    vi.clearAllMocks();
-    mockClient.goal.resume.mutate.mockResolvedValue({ message: 'Goal resumed' });
-    await createProgram().parseAsync(['node', 'test', 'goal', 'resume', 'goal-1']);
-    expect(mockClient.goal.resume.mutate).toHaveBeenLastCalledWith({ id: 'goal-1' });
-
-    await createProgram().parseAsync([
-      'node',
-      'test',
-      'goal',
-      'resume',
-      'goal-1',
-      '--confirm-exit',
-    ]);
-    expect(mockClient.goal.resume.mutate).toHaveBeenLastCalledWith({
-      confirmExit: true,
-      id: 'goal-1',
-    });
-  });
 });
 
 describe('goal run command', () => {
@@ -699,36 +674,6 @@ describe('goal supervision command', () => {
     expect(mockClient.goal.supervision.query).toHaveBeenCalledWith({ id: 'goal-1' });
     expect(JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0]))).toEqual(data);
     expect(mockClient.goal.tick.mutate).not.toHaveBeenCalled();
-  });
-});
-
-describe('goal delete', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.spyOn(console, 'log').mockImplementation(() => {});
-    vi.spyOn(log, 'info').mockImplementation(() => {});
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('deletes the goal without prompting when --yes is passed', async () => {
-    mockClient.goal.delete.mutate.mockResolvedValue({ message: 'Goal deleted', success: true });
-
-    await createProgram().parseAsync(['node', 'test', 'goal', 'delete', 'goal-1', '--yes']);
-
-    expect(mockClient.goal.delete.mutate).toHaveBeenCalledWith({ id: 'goal-1' });
-    expect(log.info).toHaveBeenCalledWith('Goal deleted');
-  });
-
-  it('keeps the goal when the confirmation is declined', async () => {
-    vi.mocked(confirm).mockResolvedValue(false);
-
-    await createProgram().parseAsync(['node', 'test', 'goal', 'delete', 'goal-1']);
-
-    expect(confirm).toHaveBeenCalledOnce();
-    expect(mockClient.goal.delete.mutate).not.toHaveBeenCalled();
   });
 });
 

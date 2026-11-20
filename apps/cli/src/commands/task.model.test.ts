@@ -8,10 +8,18 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   detail: vi.fn(),
   getTrpcClient: vi.fn(),
+  sdkCreate: vi.fn(),
+  sdkGet: vi.fn(),
   update: vi.fn(),
 }));
 
+// REST envelopes: the SDK answers `{ data: { data, success } }`.
+const envelope = (data: unknown) => ({ data: { data, success: true } });
+
 vi.mock('../api/client', () => ({ getTrpcClient: mocks.getTrpcClient }));
+vi.mock('../api/sdk', () => ({
+  getSdkClient: async () => ({ tasks: { create: mocks.sdkCreate, get: mocks.sdkGet } }),
+}));
 vi.mock('../api/workspace', () => ({ resolveWorkspaceId: vi.fn() }));
 vi.mock('../settings', () => ({ resolveServerUrl: () => 'https://app.example.com' }));
 vi.mock('../utils/logger', () => ({
@@ -34,6 +42,8 @@ describe('task model flags', () => {
     mocks.create.mockReset().mockResolvedValue({ data: task, success: true });
     mocks.update.mockReset().mockResolvedValue({ data: task, success: true });
     mocks.detail.mockReset();
+    mocks.sdkCreate.mockReset().mockResolvedValue(envelope(task));
+    mocks.sdkGet.mockReset().mockImplementation(async () => envelope((await mocks.detail()).data));
     mocks.agentConfig.mockReset();
     mocks.getTrpcClient.mockResolvedValue({
       agent: { getAgentConfigById: { query: mocks.agentConfig } },
@@ -62,15 +72,16 @@ describe('task model flags', () => {
       'lobehub',
     );
 
-    expect(mocks.create).toHaveBeenCalledWith(
-      expect.objectContaining({ config: { model: 'deepseek-flash', provider: 'lobehub' } }),
-    );
+    expect(mocks.sdkCreate).toHaveBeenCalledWith({
+      body: expect.objectContaining({ config: { model: 'deepseek-flash', provider: 'lobehub' } }),
+    });
+    expect(mocks.create).not.toHaveBeenCalled();
   });
 
   it('creates without config when no model flag is passed', async () => {
     await run('create', '-i', 'Run', '--agent', 'agt_1');
 
-    expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('config');
+    expect(mocks.sdkCreate.mock.calls[0][0].body).not.toHaveProperty('config');
   });
 
   it('edits the model through a merged config patch', async () => {
@@ -106,6 +117,7 @@ describe('task model flags', () => {
 
     await run('view', 'T-1');
 
+    expect(mocks.sdkGet).toHaveBeenCalledWith({ path: { id: 'T-1' } });
     expect(mocks.agentConfig).not.toHaveBeenCalled();
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining('lobehub/deepseek-flash (pinned)'),

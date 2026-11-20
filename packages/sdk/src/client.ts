@@ -9,7 +9,7 @@ import type {
   PostApiV1FilesResponses,
   PostApiV1ResponsesData,
 } from './generated/types.gen';
-import type { PageItem, PageOf, PaginateOptions } from './pagination';
+import type { PageItem, PageOf, PaginateLimits, PaginateOptions } from './pagination';
 import { paginate } from './pagination';
 import { ResponseStream } from './streaming';
 import {
@@ -189,8 +189,9 @@ export class LobeHubClient extends LobeHub {
   paginate<M extends (options: any) => Promise<any>>(
     method: M,
     options?: PaginateOptions<M>,
+    limits?: PaginateLimits,
   ): AsyncGenerator<PageItem<PageOf<M>>> {
-    return paginate(this.#client, method, options);
+    return paginate(this.#client, method, options, limits);
   }
 }
 

@@ -25,6 +25,7 @@ apps/cli/src/
 ├── api/
 │   ├── acceptance/           # `lh acceptance`: review loop, rounds (run/), plans, criteria, rubrics; `lh verify` aliases
 │   ├── client.ts             # tRPC client (type-safe backend API)
+│   ├── sdk.ts                # @lobehub/sdk client for the public REST API (same login + workspace)
 │   └── http.ts               # Raw HTTP utilities
 ├── auth/
 │   ├── credentials.ts        # Encrypted credential storage (AES-256-GCM)
@@ -241,6 +242,12 @@ const client = await getTrpcClient();
 // client.router.procedure.query/mutate(...)
 ```
 
+### Public REST API (`@lobehub/sdk`)
+
+`getSdkClient()` (`api/sdk.ts`) returns a `@lobehub/sdk` client. It uses the same credentials as `getTrpcClient()` (stored OIDC login, `LOBEHUB_CLI_API_KEY`, `LOBEHUB_JWT`) and the same `X-Workspace-Id` scope. Methods throw `LobeHubAPIError` (branch on `.status` / `.code`). Lists are cursor-paginated: use `sdk.paginate(method, options, { maxItems })`.
+
+Use it for a command only when the REST endpoint behaves exactly like the tRPC procedure. Check the permission and visibility rules, filters, ordering, built-in rows, side effects and `--json` fields, not just whether an endpoint exists. If any part differs, keep that part (a flag, or the whole command) on tRPC and record the reason in `packages/sdk/COVERAGE.md`, the CLI command → REST endpoint table and gap list. Update that row whenever you move a command.
+
 ### Confirmation Prompts
 
 ```typescript
@@ -268,6 +275,7 @@ The base directory (`~/.lobehub/`) can be overridden with the `LOBEHUB_CLI_HOME`
 
 - `commander` - CLI framework
 - `@trpc/client` + `superjson` - Type-safe API client
+- `@lobehub/sdk` - Public REST API client (`api/sdk.ts`)
 - `@lobechat/device-gateway-client` - WebSocket gateway connection
 - `@lobechat/local-file-shell` - Local shell/file tool execution
 - `picocolors` - Terminal colors

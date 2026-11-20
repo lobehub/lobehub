@@ -4,6 +4,7 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { getSdkClient } from '../api/sdk';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import { uploadLocalFile } from '../utils/uploadLocalFile';
@@ -160,16 +161,17 @@ export function registerKbCommand(program: Command) {
     .option('-d, --description <desc>', 'Description')
     .option('--avatar <url>', 'Avatar URL')
     .action(async (options: { avatar?: string; description?: string; name: string }) => {
-      const client = await getTrpcClient();
-      const buildUrl = await resolveAppUrlBuilder(client);
+      const sdk = await getSdkClient();
+      const buildUrl = await resolveAppUrlBuilder(await getTrpcClient());
 
-      const input: { avatar?: string; description?: string; name: string } = {
+      const body: { avatar?: string; description?: string; name: string } = {
         name: options.name,
       };
-      if (options.description) input.description = options.description;
-      if (options.avatar) input.avatar = options.avatar;
+      if (options.description) body.description = options.description;
+      if (options.avatar) body.avatar = options.avatar;
 
-      const id = await client.knowledgeBase.createKnowledgeBase.mutate(input);
+      const { data } = await sdk.knowledgeBases.create({ body });
+      const id = data.data.knowledgeBase.id;
       const url = buildUrl(`/resource/library/${encodeURIComponent(String(id))}`);
       console.log(`${pc.green('✓')} Created knowledge base ${pc.bold(String(id))}`);
       console.log(`${pc.bold('knowledge base')}: ${url}`);
