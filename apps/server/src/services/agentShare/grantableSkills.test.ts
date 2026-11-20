@@ -9,17 +9,24 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@lobechat/builtin-skills', () => ({ builtinSkills: [] }));
+// Constructor mocks must be `function`s: `new` on an arrow-function mock throws.
 vi.mock('@/database/models/agentSkill', () => ({
-  AgentSkillModel: vi.fn(() => ({ findAll: async () => ({ data: [] }) })),
+  AgentSkillModel: vi.fn(function () {
+    return { findAll: async () => ({ data: [] }) };
+  }),
 }));
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn(() => ({ getAgentVisibility: mocks.getAgentVisibility })),
+  AgentModel: vi.fn(function () {
+    return { getAgentVisibility: mocks.getAgentVisibility };
+  }),
 }));
 vi.mock('@/server/services/agentDocuments', () => ({
-  AgentDocumentsService: vi.fn(() => ({ getAgentSkills: async () => [] })),
+  AgentDocumentsService: vi.fn(function () {
+    return { getAgentSkills: async () => [] };
+  }),
 }));
 vi.mock('@/server/services/userSkill', () => ({
-  UserSkillService: vi.fn((...args: unknown[]) => {
+  UserSkillService: vi.fn(function (...args: unknown[]) {
     mocks.userSkillScope(...args);
     return { listCatalog: mocks.listCatalog };
   }),
