@@ -1,0 +1,68 @@
+---
+title: Hubris 提供商配置
+description: 学习如何在 LobeHub 中配置和使用 Hubris 提供商
+tags:
+  - Hubris
+  - 提供商配置
+  - 配置指南
+---
+
+# Hubris 提供商配置
+
+[Hubris](https://hubris.pw) 是一个兼容 OpenAI 接口的模型网关，通过单个 API 密钥提供 Anthropic、OpenAI、Google、DeepSeek、Moonshot、xAI、Z.ai、Qwen 等厂商的模型。该服务面向俄罗斯用户，以俄罗斯卢布计费。
+
+## 前置条件
+
+1. **创建 Hubris 账户**
+   - 前往 [hubris.pw](https://hubris.pw/sign-in) 注册。
+   - 账户余额以卢布充值，按 token 用量实时扣费，无需订阅。
+
+2. **获取 API 密钥**
+   - 打开 [hubris.pw/keys](https://hubris.pw/keys) 创建密钥。
+   - 完整密钥（`sk-gw-…`）只在创建时显示一次，请当场复制保存。
+
+## 配置
+
+### 在 LobeHub 界面中配置
+
+1. 打开 **设置 → 语言模型**，选择 **Hubris**。
+2. 填入你的 `sk-gw-…` 密钥。
+3. 点击 **获取模型列表** 拉取线上模型目录，再点击 **检查** 验证连通性。连通性检查使用 `google/gemini-3.7-flash`，属于价格较低的模型。
+
+### 环境变量（自部署）
+
+```bash
+# Hubris API 密钥
+HUBRIS_API_KEY=sk-gw-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+设置 `HUBRIS_API_KEY` 即可在服务端启用该提供商。`HUBRIS_MODEL_LIST` 与 `HUBRIS_PROXY_URL` 为可选项，详见 [模型服务商环境变量](/zh/docs/self-hosting/environment-variables/model-provider)。
+
+## 模型
+
+模型 ID 采用 `厂商/模型` 的形式，例如 `anthropic/claude-sonnet-5`、`openai/gpt-6-astra`、`google/gemini-3.8-flash`、`deepseek/deepseek-v4-pro`。内置模型卡片收录了十余个常用模型；完整目录（500 多个条目）通过模型列表拉取功能获得，数据来自 `GET https://api.hubris.pw/v1/models`。
+
+该接口无需密钥即可访问，可以直接浏览模型目录、上下文长度与支持的参数。
+
+### 已接入的能力
+
+- **对话补全**，支持流式与非流式。
+- **函数调用** 与 **结构化输出**：目录中标注了 `tools`、`structured_outputs` 的模型可用。
+- **视觉**：支持图片输入的模型可用。
+- **推理**：LobeHub 的思考控件会转换为 `reasoning.effort`、`reasoning.max_tokens` 或 `reasoning.enabled: false`，与 OpenRouter 使用的字段形式一致。
+
+### 价格
+
+Hubris 的所有价格以俄罗斯卢布标注，而 LobeHub 的模型卡片只支持美元与人民币。与其写入一个会随汇率漂移的换算值，内置卡片索性不带价格，因此该提供商的费用一栏为空。当前价格请查看 [模型目录](https://hubris.pw/models)，或 `GET /v1/models` 返回中的 `pricing` 字段。
+
+## 常见问题
+
+- **401** — 密钥错误或已被吊销，请在 [hubris.pw/keys](https://hubris.pw/keys) 重新创建。
+- **402** — 账户余额不足，请在 [hubris.pw/billing](https://hubris.pw/billing) 充值。
+- **模型 ID 返回 404** — Hubris 按完整 ID 精确匹配，不做别名解析。请从 `GET /v1/models` 或模型目录页复制 ID，不要自行简写。
+
+## 支持
+
+- [文档](https://hubris.pw/docs)
+- [模型目录](https://hubris.pw/models)
+- [服务状态](https://hubris.pw/status)
