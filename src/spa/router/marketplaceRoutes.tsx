@@ -305,7 +305,11 @@ const legacyCommunityRedirect = (path: string): RouteObject => ({
 });
 
 export const legacyCommunityRoutes: RouteObject[] = [
-  legacyCommunityRedirect(LEGACY_COMMUNITY_SEGMENT),
+  {
+    element: marketplaceIndexRoute.element,
+    handle: LEGACY_REDIRECT_HANDLE,
+    path: LEGACY_COMMUNITY_SEGMENT,
+  },
   ...LEGACY_COMMUNITY_SECTIONS.flatMap((section) => [
     legacyCommunityRedirect(`${LEGACY_COMMUNITY_SEGMENT}/${section}`),
     legacyCommunityRedirect(`${LEGACY_COMMUNITY_SEGMENT}/${section}/:slug`),

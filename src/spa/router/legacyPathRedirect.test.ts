@@ -1,12 +1,13 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { createElement } from 'react';
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   MARKETPLACE_INSTALLED_CONNECTORS_PATH,
   MARKETPLACE_INSTALLED_SKILLS_PATH,
 } from '@/features/Marketplace/paths';
+import { initServerConfigStore, Provider } from '@/store/serverConfig/store';
 
 import {
   buildLegacyCommunityRedirectPath,
@@ -14,15 +15,6 @@ import {
   LegacyPathRedirect,
 } from './legacyPathRedirect';
 import { legacyCommunityRoutes, marketplaceIndexRoute } from './marketplaceRoutes';
-
-const config = vi.hoisted(() => ({ featureFlags: { showMarket: true }, serverConfigInit: true }));
-vi.mock('@/store/serverConfig', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  useServerConfigStore: (selector: (state: typeof config) => unknown) => selector(config),
-}));
-afterEach(() => {
-  config.featureFlags.showMarket = true;
-});
 
 const CurrentUrl = () => {
   const { hash, pathname, search } = useLocation();
@@ -34,7 +26,8 @@ const agentPage = createElement('div', { 'data-testid': 'url' }, 'agent page');
 const redirectTo = (to: string) => createElement(LegacyPathRedirect, { to });
 
 /** A route table shaped like the real one: personal and `/:workspaceSlug` mirrors. */
-const renderAt = (url: string) => {
+const renderAt = (url: string, serverConfigInit = true) => {
+  const store = initServerConfigStore({ serverConfigInit });
   const legacy = [
     { element: redirectTo(MARKETPLACE_INSTALLED_SKILLS_PATH), path: 'skill' },
     { element: redirectTo(MARKETPLACE_INSTALLED_SKILLS_PATH), path: 'skill/:sub' },
@@ -73,8 +66,13 @@ const renderAt = (url: string) => {
     { initialEntries: [url] },
   );
 
-  render(createElement(RouterProvider, { router }));
-  return screen.getByTestId('url').textContent;
+  render(
+    createElement(Provider, {
+      children: createElement(RouterProvider, { router }),
+      createStore: () => store,
+    }),
+  );
+  return { router, store };
 };
 
 describe('buildLegacyRedirectPath', () => {
@@ -102,10 +100,23 @@ describe('buildLegacyRedirectPath', () => {
 });
 
 describe('legacy URL redirects', () => {
-  it('lands on installed skills when the market is disabled', () => {
-    config.featureFlags.showMarket = false;
-    expect(renderAt('/acme/community')).toBe('/acme/marketplace/skill/installed');
-  });
+  it.each([
+    [true, '/acme/marketplace/agent?q=developer#results'],
+    [false, '/acme/marketplace/skill/installed?q=developer#results'],
+  ] as const)(
+    'opens the original bookmark directly after loading showMarket=%s',
+    async (showMarket, destination) => {
+      const { router, store } = renderAt('/acme/community?q=developer#results', false);
+      expect(router.state.location.pathname).toBe('/acme/community');
+      await act(() => {
+        store.setState({
+          featureFlags: { ...store.getState().featureFlags, showMarket },
+          serverConfigInit: true,
+        });
+      });
+      expect(screen.getByTestId('url').textContent).toBe(destination);
+    },
+  );
 
   it.each([
     // Settings skill / connector moved to the Marketplace (personal scope).
@@ -137,6 +148,7 @@ describe('legacy URL redirects', () => {
     ['/community/workspace/settings', '/marketplace/workspace/settings'],
     ['/community/whatever/deep/path', '/marketplace/whatever/deep/path'],
   ])('%s → %s', (from, to) => {
-    expect(renderAt(from)).toBe(to);
+    renderAt(from);
+    expect(screen.getByTestId('url').textContent).toBe(to);
   });
 });
