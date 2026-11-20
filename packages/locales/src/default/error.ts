@@ -21,6 +21,9 @@ export default {
   'error.title': 'Oops, something went wrong..',
   'fetchError.detail': 'Error details',
   'fetchError.title': 'Request failed',
+  'import.github.access':
+    'Couldn’t open this repository or branch. Check the link and your GitHub account’s access.',
+  'import.github.connect': 'Private repositories need a GitHub account with read access.',
   'import.importConfigFile.description': 'Error reason: {{reason}}',
   'import.importConfigFile.title': 'Import Failed',
   'import.incompatible.description':

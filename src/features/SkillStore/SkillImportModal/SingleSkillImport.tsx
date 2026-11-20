@@ -43,7 +43,7 @@ export const SingleSkillImport = ({
 }: SingleSkillImportProps) => {
   const { t } = useTranslation('setting');
   const { close } = useModalContext();
-  const inputId = useId();
+  const hintId = useId();
   const [url, setUrl] = useState('');
   const [file, setFile] = useState<File>();
   const [fileId, setFileId] = useState<string>();
@@ -103,16 +103,11 @@ export const SingleSkillImport = ({
     <Flexbox gap={20}>
       {isLink ? (
         <Flexbox gap={8}>
-          <label htmlFor={inputId}>
-            <Text strong as="span">
-              {t('agentSkillModal.url.label')}
-            </Text>
-          </label>
           <Input
-            aria-describedby={inputId + '-hint'}
+            aria-describedby={hintId}
             aria-invalid={invalidUrl}
+            aria-label={t('agentSkillModal.url.label')}
             disabled={loading || !canCreate}
-            id={inputId}
             placeholder={t('agentSkillModal.url.urlPlaceholder')}
             prefix={<Icon icon={Link} />}
             value={url}
@@ -125,7 +120,7 @@ export const SingleSkillImport = ({
           />
           <Text
             fontSize={13}
-            id={inputId + '-hint'}
+            id={hintId}
             role={invalidUrl ? 'alert' : undefined}
             type={invalidUrl ? 'danger' : 'secondary'}
           >
@@ -134,10 +129,10 @@ export const SingleSkillImport = ({
         </Flexbox>
       ) : (
         <Flexbox gap={8}>
-          <Text strong>{t('agentSkillModal.upload.label')}</Text>
           <Upload
             dragger
             accept=".zip,.skill"
+            aria-describedby={hintId}
             disabled={loading || !canCreate}
             maxCount={1}
             onDropCapture={(event) => checkFileTypes(event.dataTransfer.files)}
@@ -165,6 +160,7 @@ export const SingleSkillImport = ({
           </Upload>
           <Text
             fontSize={13}
+            id={hintId}
             role={invalidFile ? 'alert' : undefined}
             type={invalidFile ? 'danger' : 'secondary'}
           >

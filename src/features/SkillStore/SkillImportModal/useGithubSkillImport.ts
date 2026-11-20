@@ -2,16 +2,31 @@ import type { GitHubSkillDiscovery, GitHubSkillOutcome } from '@lobechat/types';
 import { useState } from 'react';
 
 import { usePermission } from '@/hooks/usePermission';
+import { normalizeAsyncError } from '@/libs/swr/normalizeError';
 import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
 
 export interface GithubSkillImportFailure {
   /** Raw message from the server, folded behind "Show details". */
-  details: string;
+  details?: string;
+  recovery?: 'access' | 'connect';
   stage: 'find' | 'import' | 'refresh';
 }
 
 const detailsOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+const importFailure = (error: unknown, stage: 'find' | 'import'): GithubSkillImportFailure => {
+  const { code } = normalizeAsyncError(error);
+  if (code === 'PRECONDITION_FAILED') return { recovery: 'connect', stage };
+  const details = detailsOf(error);
+  // Older discovery endpoints return this GitHub error as an internal error.
+  if (
+    code === 'NOT_FOUND' ||
+    (stage === 'find' && details === 'GitHub repository or ref not found')
+  )
+    return { recovery: 'access', stage };
+  return { details, stage };
+};
 
 /**
  * The scan → select → import state of the GitHub import modal: one request at
@@ -52,10 +67,16 @@ export const useGithubSkillImport = () => {
       setResults([]);
       setSelected(found.length === 1 && found[0].status === 'new' ? [found[0].path] : []);
     } catch (err) {
-      setFailure({ details: detailsOf(err), stage: 'find' });
+      setFailure(importFailure(err, 'find'));
     } finally {
       setPending(undefined);
     }
+  };
+
+  const resumeAfterConnect = () => {
+    if (failure?.stage === 'find') return discover();
+    // A batch still needs an explicit import. Keep its pinned commit and selection.
+    setFailure(undefined);
   };
 
   const refreshLibrary = async () => {
@@ -86,7 +107,7 @@ export const useGithubSkillImport = () => {
       setResults((prev) => [...prev.filter((item) => !paths.includes(item.path)), ...batch]);
       setQuery('');
     } catch (err) {
-      setFailure({ details: detailsOf(err), stage: 'import' });
+      setFailure(importFailure(err, 'import'));
       setPending(undefined);
       return;
     }
@@ -104,6 +125,7 @@ export const useGithubSkillImport = () => {
     query,
     refreshLibrary,
     results,
+    resumeAfterConnect,
     scan,
     selected,
     setQuery,
