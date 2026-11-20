@@ -96,6 +96,35 @@ describe('defineConfig', () => {
     });
   });
 
+  describe('compiler', () => {
+    it('keeps emotion when a deployment adds server defines', () => {
+      const config = defineConfig({
+        compiler: { defineServer: { 'process.env.LOBE_SERVERLESS_BUILD': '1' } },
+      });
+
+      expect(config.compiler).toEqual({
+        defineServer: { 'process.env.LOBE_SERVERLESS_BUILD': '1' },
+        emotion: true,
+      });
+    });
+
+    // `src/instrumentation.ts` only imports the built-in scheduler when this is
+    // not '1'. Anything instrumentation imports is traced into every Vercel
+    // function, and the scheduler's task runtime pushes them past 250 MB.
+    it.each([
+      ['a Vercel build', 'preview', { 'process.env.LOBE_SERVERLESS_BUILD': '1' }],
+      ['a self-hosted build', undefined, undefined],
+    ])('next.config.ts marks %s for the scheduler import', async (_, vercelEnv, defineServer) => {
+      vi.resetModules();
+      if (vercelEnv) vi.stubEnv('VERCEL_ENV', vercelEnv);
+      else vi.stubEnv('VERCEL_ENV', '');
+
+      const { default: config } = await import('../../../../next.config');
+
+      expect(config.compiler?.defineServer).toEqual(defineServer);
+    });
+  });
+
   it('disables Next.js agent rule injection', () => {
     expect(defineConfig({}).agentRules).toBe(false);
   });

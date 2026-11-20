@@ -5,6 +5,7 @@ import { type Header, type Redirect } from 'next/dist/lib/load-custom-routes';
 const LANDING_SITEMAP_URL = 'https://lobehub.com/sitemap.xml';
 
 interface CustomNextConfig {
+  compiler?: NextConfig['compiler'];
   experimental?: NextConfig['experimental'];
   headers?: Header[];
   outputFileTracingExcludes?: NextConfig['outputFileTracingExcludes'];
@@ -82,6 +83,7 @@ export function defineConfig(config: CustomNextConfig) {
 
     compiler: {
       emotion: true,
+      ...config.compiler,
     },
     compress: isProd,
     experimental: {

@@ -53,8 +53,14 @@ export async function register() {
       await import('@/server/services/builtinScheduler/deployment');
     const dispatch = getScheduledTaskDispatch();
     if (dispatch === 'builtin') {
-      const { startBuiltinScheduler } = await import('@/server/services/builtinScheduler');
-      startBuiltinScheduler();
+      // `LOBE_SERVERLESS_BUILD` is replaced at compile time on serverless builds
+      // (`next.config.ts`), where the scheduler never runs. The bundler then drops
+      // this import, which pulls in the whole task runtime and would otherwise be
+      // traced into every serverless function.
+      if (process.env.LOBE_SERVERLESS_BUILD !== '1') {
+        const { startBuiltinScheduler } = await import('@/server/services/builtinScheduler');
+        startBuiltinScheduler();
+      }
     } else if (dispatch === 'unconfigured') {
       if (isDev) {
         console.warn(
