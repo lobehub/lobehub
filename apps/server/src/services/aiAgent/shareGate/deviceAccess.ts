@@ -41,8 +41,9 @@ export interface ShareDeviceAccessSubject {
  * The only place `shareConfig.deviceAccess` is interpreted; every share-gate
  * builder calls it so a fresh turn and a deferred init decide alike.
  *
- * `allowlist` grants a listed visitor only while they are still in the
- * address book of the Agent's scope (`ContactModel.filterAddressBookPeople`):
+ * `contacts` grants every visitor currently in the address book of the
+ * Agent's scope. `allowlist` grants a listed visitor only while they are still
+ * in that address book (`ContactModel.filterAddressBookPeople`):
  * the owner's personal contacts, or the workspace's members and external
  * contacts. The list was checked against the same book when written; checking
  * again here makes removing a contact, or leaving the workspace, revoke the
@@ -55,9 +56,10 @@ export const resolveShareVisitorDeviceAccess = async (
   visitorUserId: string,
 ): Promise<boolean> => {
   const { deviceAccess, deviceAllowUserIds } = share.shareConfig;
-  if (deviceAccess !== 'allowlist') return false;
+  if (deviceAccess !== 'allowlist' && deviceAccess !== 'contacts') return false;
 
-  if (!deviceAllowUserIds?.includes(visitorUserId)) {
+  // `contacts` skips the list: being in the address book is the whole grant.
+  if (deviceAccess === 'allowlist' && !deviceAllowUserIds?.includes(visitorUserId)) {
     log('allowlist denied visitor %s: not listed', visitorUserId);
     return false;
   }

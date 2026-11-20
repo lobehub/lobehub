@@ -31,6 +31,7 @@ export type ComposerRunRequest = Pick<
   | 'llmExecutor'
   | 'localDeviceId'
   | 'mentionedAgents'
+  | 'openedByTopicId'
   | 'parentMessageId'
   | 'prompt'
   | 'queuedSuccessor'
@@ -160,6 +161,7 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     }),
     fileIds: input.fileIds,
     mentionedAgents: input.mentionedAgents,
+    openedByTopicId: input.openedByTopicId,
     parentMessageId,
     prompt: input.prompt,
     queuedSuccessor: input.queuedSuccessor,

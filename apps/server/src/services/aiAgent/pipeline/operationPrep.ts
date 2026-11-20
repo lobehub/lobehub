@@ -856,6 +856,7 @@ export const prepareOperation = async (
     agentConfig,
     agentPlugins,
     autoSkillIds: ctx.autoSkillIds,
+    implicitBuiltinSkillIds: discovery.implicitBuiltinSkillIds,
     disabledPluginIds,
     executionPlan,
     prompt,

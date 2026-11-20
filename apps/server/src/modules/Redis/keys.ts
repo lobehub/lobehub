@@ -16,6 +16,11 @@
  */
 export const RedisKeyNamespace = {
   /**
+   * Whether Agents can take work: device presence per principal pool and each agent's quota
+   * verdict per caller, read by the dispatch layer and the contact card's status.
+   */
+  AGENT_AVAILABILITY: 'agent-availability',
+  /**
    * Agent Signal keys — the same `agent-signal` keyspace the Agent Signal runtime
    * stores (receipts, dedupe, policy state) already use.
    */
@@ -61,7 +66,8 @@ export const RedisKeyNamespace = {
    */
   AI_GENERATION: 'aiGeneration',
   /**
-   * Third-party integrations (Linear, …): OAuth hand-off state.
+   * Third-party integrations (Linear, GitHub, …): OAuth hand-off state and
+   * short-lived answers from their APIs.
    */
   INTEGRATIONS: 'integrations',
   /**
@@ -96,6 +102,20 @@ export const RedisKeyNamespace = {
  * ```
  */
 export const RedisKeys = {
+  /** Agent availability scope — see {@link RedisKeyNamespace.AGENT_AVAILABILITY}. */
+  agentAvailability: {
+    /**
+     * One device's presence (connected, managed phase) as one principal pool sees it.
+     * Full key: agent-availability:device:v1:{pool}:{deviceId}
+     */
+    device: (pool: string, deviceId: string): string => `device:v1:${pool}:${deviceId}`,
+    /**
+     * Whether one agent's quota is spent where it runs, as one caller sees its accounts.
+     * Full key: agent-availability:quota:v1:{userId}:{pool}:{agentId}:{deviceId|none}
+     */
+    quota: (userId: string, pool: string, agentId: string, deviceId?: string): string =>
+      `quota:v1:${userId}:${pool}:${agentId}:${deviceId ?? 'none'}`,
+  },
   inboundWebhook: {
     wake: (id: string) => `wake:v1:${id}`,
     check: (id: string) => `check:v1:${id}`,
@@ -228,6 +248,11 @@ export const RedisKeys = {
     followUps: (userId: string, topicId: string, threadId?: string | null): string =>
       `follow_ups:v1:${userId}:${topicId}:${threadId || 'main'}`,
     /**
+     * Set when a Channel Thread watch (`lobe-channel.watchThreads`) is stopped, so its next
+     * scheduled report is dropped. Full key: agentSteer:channel_watch_stopped:v1:{watchId}
+     */
+    channelWatchStopped: (watchId: string): string => `channel_watch_stopped:v1:${watchId}`,
+    /**
      * Ids of follow-ups a drain already took from that queue, so a retried
      * append of the same id is recognized instead of queued again.
      * Full key: agentSteer:follow_ups_taken:v1:{userId}:{topicId}:{threadId|main}
@@ -310,6 +335,12 @@ export const RedisKeys = {
      * Full key: integrations:connector_oauth_completion:v1:{flowId}
      */
     connectorOAuthCompletion: (flowId: string): string => `connector_oauth_completion:v1:${flowId}`,
+    /**
+     * The commit a public GitHub ref pointed at when it was last resolved.
+     * Full key: integrations:github_ref_commit:v1:{owner}/{repo}:{ref}
+     */
+    gitHubRefCommit: (owner: string, repo: string, ref: string): string =>
+      `github_ref_commit:v1:${owner}/${repo}:${ref}`,
     /**
      * Single-use state of one "Connect Linear" OAuth hand-off.
      * Full key: integrations:linear_oauth_state:v1:{state}
@@ -398,6 +429,7 @@ export const RedisKeys = {
  * land under another scope's prefix. Every scope must be mapped.
  */
 export const RedisKeyScopeNamespace = {
+  agentAvailability: RedisKeyNamespace.AGENT_AVAILABILITY,
   inboundWebhook: RedisKeyNamespace.INBOUND_WEBHOOK,
   agentIdentity: RedisKeyNamespace.AGENT_IDENTITY,
   agentRun: RedisKeyNamespace.AGENT_RUN,

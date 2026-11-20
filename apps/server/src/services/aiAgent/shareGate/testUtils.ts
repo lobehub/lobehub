@@ -6,8 +6,7 @@ export const buildGate = (config: Partial<AgentShareGate['shareConfig']> = {}): 
   agentId: 'agent-1',
   canUseDevice: false,
   shareConfig: {
-    maxTopicsPerVisitor: 5,
-    maxTurnsPerTopic: 20,
+    maxMessagesPerVisitor: 100,
     ...config,
   },
   shareId: 'share-1',

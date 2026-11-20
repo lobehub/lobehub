@@ -1,16 +1,16 @@
 import { useLocation, useParams } from 'react-router';
 
+import { MARKETPLACE_SEGMENT } from '@/features/Marketplace/paths';
 import { SidebarTabKey } from '@/store/global/initialState';
 
 const MOBILE_NAV_ROUTES = new Set([
   '/',
-  '/community',
-  '/community/agent',
-  '/community/mcp',
-  '/community/plugin',
-  '/community/model',
-  '/community/provider',
-  '/community/skill',
+  '/marketplace',
+  '/marketplace/agent',
+  '/marketplace/connector',
+  '/marketplace/model',
+  '/marketplace/provider',
+  '/marketplace/skill',
   '/me',
 ]);
 
@@ -20,8 +20,12 @@ export const useMobileNavigation = () => {
   const { workspaceSlug } = useParams<{ workspaceSlug: string }>();
   const pagePathname = workspaceSlug ? pathname.slice(workspaceSlug.length + 1) || '/' : pathname;
   const normalizedPathname = pagePathname.replace(/\/+$/, '') || '/';
+  const firstSegment = normalizedPathname.split('/').find(Boolean);
+  // The Marketplace kept its `community` tab key when its URL moved to `/marketplace`.
   const activeKey =
-    (normalizedPathname.split('/').find(Boolean) as SidebarTabKey) || SidebarTabKey.Chat;
+    firstSegment === MARKETPLACE_SEGMENT
+      ? SidebarTabKey.Community
+      : (firstSegment as SidebarTabKey) || SidebarTabKey.Chat;
 
   return { activeKey, showNav: MOBILE_NAV_ROUTES.has(normalizedPathname) };
 };

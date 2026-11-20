@@ -10,14 +10,14 @@ export default {
   'authorize.scenes.connector.description':
     'Market is only used to start this service authorization. Your {{appName}} account stays separate.',
   'authorize.scenes.connector.subtitle':
-    'Sign in to Market to connect and authorize this community service.',
-  'authorize.scenes.connector.title': 'Connect Community Service',
+    'Sign in to Market to connect and authorize this Marketplace service.',
+  'authorize.scenes.connector.title': 'Connect Marketplace Service',
   'authorize.scenes.mcp.subtitle':
-    'Create a community profile to install and run this skill from the community.',
-  'authorize.scenes.mcp.title': 'Install Community Skill',
+    'Create a community profile to install and run this skill from the Marketplace.',
+  'authorize.scenes.mcp.title': 'Install Marketplace Skill',
   'authorize.scenes.sandbox.subtitle':
-    'Create a community profile to run this tool in the community sandbox.',
-  'authorize.scenes.sandbox.title': 'Try the Community Sandbox',
+    'Create a community profile to run this tool in the Marketplace sandbox.',
+  'authorize.scenes.sandbox.title': 'Try the Marketplace Sandbox',
   'authorize.subtitle': 'Create a community profile to use community features.',
   'authorize.title': 'Create Community Profile',
   'callback.buttons.close': 'Close Window',

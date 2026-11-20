@@ -29,7 +29,7 @@ const AgentForkTag = memo(() => {
 
   const handleClick = () => {
     if (source?.identifier) {
-      navigate(urlJoin('/community/agent', source.identifier));
+      navigate(urlJoin('/marketplace/agent', source.identifier));
     }
   };
 

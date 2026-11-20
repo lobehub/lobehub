@@ -129,4 +129,18 @@ describe('buildBotContext', () => {
       expect(ctx.isDeviceTrusted).toBeUndefined();
     });
   });
+
+  describe('device channel scope', () => {
+    it('marks a restricted channel on the context', () => {
+      const ctx = buildBotContext({ ...baseParams, deviceChannelRestricted: true });
+      expect(ctx.isDeviceChannelRestricted).toBe(true);
+    });
+
+    it('omits the flag when the channel is allowed or no scope is configured', () => {
+      expect(buildBotContext({ ...baseParams, deviceChannelRestricted: false })).not.toHaveProperty(
+        'isDeviceChannelRestricted',
+      );
+      expect(buildBotContext(baseParams)).not.toHaveProperty('isDeviceChannelRestricted');
+    });
+  });
 });

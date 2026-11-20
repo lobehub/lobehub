@@ -3,6 +3,7 @@ import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
+import { toolSetsFrom } from './helpers/connectorToolSets';
 
 const {
   mockConnectorQueryByIdentifiers,
@@ -90,6 +91,7 @@ vi.mock('@/database/models/connector', () => ({
     return {
       queryByIdentifiers: mockConnectorQueryByIdentifiers,
       resolveByIdentifiers: mockConnectorQueryByIdentifiers,
+      resolveToolSets: toolSetsFrom(mockConnectorQueryByIdentifiers),
     };
   }),
 }));
@@ -203,9 +205,11 @@ const toolManifestMapArg = () =>
 
 describe('AiAgentService.execAgent - agent plugin entries (on / off / disabled)', () => {
   let service: AiAgentService;
+  const readUserSettings = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    readUserSettings.mockResolvedValue(undefined);
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
     mockCreateOperation.mockResolvedValue({
       autoStarted: true,
@@ -219,16 +223,32 @@ describe('AiAgentService.execAgent - agent plugin entries (on / off / disabled)'
       pluginManifest('plugin-c'),
       pluginManifest('plugin-d'),
     ]);
-    service = new AiAgentService({} as any, 'test-user-id');
+    service = new AiAgentService(
+      { query: { userSettings: { findFirst: readUserSettings } } } as never,
+      'test-user-id',
+    );
   });
 
-  it('keeps only the installed plugins that are on, in a mixed-shape array: a disabled entry and a missing entry are both left out', async () => {
+  it('withholds all on-demand builtins when the settings read fails', async () => {
+    readUserSettings.mockRejectedValue(new Error('settings unavailable'));
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: [],
+      provider: 'openai',
+    });
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+    expect(disabledPluginIdsArg()).toEqual(expect.arrayContaining(onDemandBuiltinToolIds));
+  });
+
+  it('offers installed plugins except explicit opt-outs in mixed-shape configurations', async () => {
     mockGetAgentConfig.mockResolvedValue({
       chatConfig: {},
       id: 'agent-1',
       model: 'gpt-4',
       // legacy string (implicit pinned) + explicit disabled object + explicit
-      // auto object; plugin-d has no entry, which is off
+      // auto object; plugin-d inherits on-demand discovery
       plugins: [
         'plugin-a',
         { identifier: 'plugin-b', mode: 'disabled' },
@@ -241,15 +261,15 @@ describe('AiAgentService.execAgent - agent plugin entries (on / off / disabled)'
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
     const installed = installedPluginsArg().map((p) => p.identifier);
-    expect(installed).toEqual(['plugin-a', 'plugin-c']);
+    expect(installed).toEqual(['plugin-a', 'plugin-c', 'plugin-d']);
     expect(installed).not.toContain('plugin-b');
-    expect(installed).not.toContain('plugin-d');
+    expect(installed).toContain('plugin-d');
     // The activator's map follows the same cut.
     expect(Object.keys(toolManifestMapArg())).toEqual(
-      expect.arrayContaining(['plugin-a', 'plugin-c']),
+      expect.arrayContaining(['plugin-a', 'plugin-c', 'plugin-d']),
     );
     expect(toolManifestMapArg()).not.toHaveProperty('plugin-b');
-    expect(toolManifestMapArg()).not.toHaveProperty('plugin-d');
+    expect(toolManifestMapArg()).toHaveProperty('plugin-d');
   });
 
   it('keeps pinned plugins and pinned on-demand builtins out of the engine agentConfig.plugins in Agent mode', async () => {
@@ -270,12 +290,16 @@ describe('AiAgentService.execAgent - agent plugin entries (on / off / disabled)'
 
     // A pinned entry is on: found through the activator, not invoked up front.
     expect(agentConfigPluginsArg()).toEqual([]);
-    expect(installedPluginsArg().map((p) => p.identifier)).toEqual(['plugin-a']);
+    expect(installedPluginsArg().map((p) => p.identifier)).toEqual([
+      'plugin-a',
+      'plugin-c',
+      'plugin-d',
+    ]);
     expect(toolManifestMapArg()).toHaveProperty('plugin-a');
     expect(disabledPluginIdsArg()).toContain('plugin-b');
-    // The pinned builtin stays discoverable; only builtins the agent never chose are cut.
+    // Both the legacy pin and the implicit default remain discoverable.
     expect(disabledPluginIdsArg()).not.toContain('lobe-image-generation');
-    expect(disabledPluginIdsArg()).toContain('lobe-video-generation');
+    expect(disabledPluginIdsArg()).not.toContain('lobe-video-generation');
   });
 
   it('offers a pinned media tool up front in Chat mode, which has no activator', async () => {
@@ -312,13 +336,17 @@ describe('AiAgentService.execAgent - agent plugin entries (on / off / disabled)'
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
     expect(agentConfigPluginsArg()).toEqual([]);
-    expect(installedPluginsArg().map((p) => p.identifier)).toEqual(['plugin-a', 'plugin-c']);
+    expect(installedPluginsArg().map((p) => p.identifier)).toEqual([
+      'plugin-a',
+      'plugin-c',
+      'plugin-d',
+    ]);
     expect(disabledPluginIdsArg()).toContain('plugin-b');
     expect(disabledPluginIdsArg()).not.toContain('plugin-a');
     expect(disabledPluginIdsArg()).not.toContain('plugin-c');
   });
 
-  it('reads a pure string array as the plugins that are on, leaving every other installed plugin off', async () => {
+  it('keeps unlisted installed plugins discoverable alongside legacy string entries', async () => {
     mockGetAgentConfig.mockResolvedValue({
       chatConfig: {},
       id: 'agent-1',
@@ -331,14 +359,14 @@ describe('AiAgentService.execAgent - agent plugin entries (on / off / disabled)'
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
     const installed = installedPluginsArg().map((p) => p.identifier);
-    expect(installed).toEqual(['plugin-a']);
+    expect(installed).toEqual(['plugin-a', 'plugin-b', 'plugin-c', 'plugin-d']);
     expect(agentConfigPluginsArg()).toEqual([]);
-    // Only builtins the agent never opted into are cut; the string entry is on.
+
     expect(disabledPluginIdsArg()).not.toContain('plugin-a');
-    expect(disabledPluginIdsArg().every((id) => onDemandBuiltinToolIds.includes(id))).toBe(true);
+    expect(disabledPluginIdsArg()).not.toContain('lobe-creds');
   });
 
-  it('brings in a plugin the agent has off on the turn that @-mentions it', async () => {
+  it('injects the mentioned plugin while other inherited plugins stay discoverable', async () => {
     mockGetAgentConfig.mockResolvedValue({
       chatConfig: {},
       id: 'agent-1',
@@ -354,7 +382,12 @@ describe('AiAgentService.execAgent - agent plugin entries (on / off / disabled)'
       selectedToolIds: ['plugin-d'],
     } as any);
 
-    expect(installedPluginsArg().map((p) => p.identifier)).toEqual(['plugin-d']);
+    expect(installedPluginsArg().map((p) => p.identifier)).toEqual([
+      'plugin-a',
+      'plugin-b',
+      'plugin-c',
+      'plugin-d',
+    ]);
     expect(agentConfigPluginsArg()).toEqual(['plugin-d']);
   });
 
@@ -398,12 +431,12 @@ describe('AiAgentService.execAgent - agent plugin entries (on / off / disabled)'
     mockGetComposioManifests.mockResolvedValue([
       toolManifest('composio-disabled'),
       toolManifest('composio-on'),
-      toolManifest('composio-off'),
+      toolManifest('composio-inherited'),
     ]);
     mockGetLobehubSkillManifests.mockResolvedValue([
       toolManifest('skill-disabled'),
       toolManifest('skill-on'),
-      toolManifest('skill-off'),
+      toolManifest('skill-inherited'),
     ]);
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
@@ -412,9 +445,9 @@ describe('AiAgentService.execAgent - agent plugin entries (on / off / disabled)'
     // the disabled entry's doing rather than an empty source.
     expect(toolManifestMapArg()).toHaveProperty('composio-on');
     expect(toolManifestMapArg()).toHaveProperty('skill-on');
-    // No entry is off, the same as disabled for a connector.
-    expect(toolManifestMapArg()).not.toHaveProperty('composio-off');
-    expect(toolManifestMapArg()).not.toHaveProperty('skill-off');
+    // Connections without an entry are available on demand.
+    expect(toolManifestMapArg()).toHaveProperty('composio-inherited');
+    expect(toolManifestMapArg()).toHaveProperty('skill-inherited');
 
     // The disabled entries must not resurface in the map the activator uses
     // to build <available_tools> — even though they're excluded from the

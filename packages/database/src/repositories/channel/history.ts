@@ -1,13 +1,19 @@
 import type {
   ChannelAgentExchange,
   ChannelContextMessage,
+  ChannelExecutionConfig,
   ChannelHistoryMessage,
   ChannelHistoryMessageDetail,
   ChannelHistoryPage,
   ChannelInputManifest,
+  ChannelJobStatus,
+  ChannelListThreadsParams,
   ChannelMessageVia,
   ChannelReadMessageParams,
   ChannelReadMessagesParams,
+  ChannelThreadPage,
+  ChannelThreadRunActivity,
+  ChannelThreadSummary,
 } from '@lobechat/types';
 import {
   agentDisplayName,
@@ -15,23 +21,75 @@ import {
   channelMessageVia,
   RequestTrigger,
 } from '@lobechat/types';
-import { and, eq, isNull } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 
 import {
   agentOperations,
   agents,
   channelJobs,
+  channelMembers,
   channelMessages,
+  channelThreads,
+  messages,
+  users,
   workspaceMembers,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { agentTitleSql } from '../../utils/inboxAgent';
+import { notTrashed } from '../../utils/softDelete';
 import { normalizeWorkspaceId } from '../../utils/workspace';
 import { activeMembers, findThread } from './delivery';
 import { ChannelError } from './error';
 import { readManifestMessages } from './manifest';
 import { withChannelLock } from './transaction';
+import { OPEN_JOB_STATUSES } from './writer';
 
 const EXCERPT_LENGTH = 2000;
+/** A Thread summary is an overview; the Thread itself is read with `readMessages`. */
+const SUMMARY_LENGTH = 300;
+/** Latest steps of a running reply shown in a Thread summary. */
+const ACTIVITY_STEPS = 3;
+
+const clip = (text: string | null | undefined, length = SUMMARY_LENGTH) => {
+  const value = (text ?? '').trim();
+  return value.length > length ? `${value.slice(0, length)}…` : value;
+};
+
+/** `identifier.apiName` of each tool call a stored assistant step made. */
+const toolNames = (tools: unknown): string[] | undefined => {
+  if (!Array.isArray(tools) || !tools.length) return;
+  return tools.map((tool) =>
+    tool && typeof tool === 'object'
+      ? [(tool as Record<string, unknown>).identifier, (tool as Record<string, unknown>).apiName]
+          .filter((part) => typeof part === 'string' && part)
+          .join('.')
+      : 'tool',
+  );
+};
+
+/** One of the calling Agent's replies in a Thread, with what acting on it needs. */
+export interface ChannelThreadJob {
+  executionConfig: ChannelExecutionConfig | null;
+  id: string;
+  operationId: string | null;
+  operationStatus: string | null;
+  /** The run's owner; only the requester's own run can be steered. */
+  operationUserId: string | null;
+  status: ChannelJobStatus;
+  topicId: string | null;
+}
+
+/** Another Thread of the run's Channel, as the run sees it before acting on it. */
+export interface ChannelThreadTarget {
+  channelId: string;
+  /** The calling Agent's queued or running replies there, newest first. */
+  openJobs: ChannelThreadJob[];
+  /** The request the run answers was itself relayed by an Agent (a Thread an Agent opened). */
+  relayed: boolean;
+  self: ChannelInputManifest['self'];
+  threadId: string;
+}
 const DETAIL_LENGTH = 12_000;
 
 const excerpt = (
@@ -247,7 +305,7 @@ export class ChannelHistoryRepository {
       .select({
         agentId: agentOperations.agentId,
         agentName: agents.name,
-        agentTitle: agents.title,
+        agentTitle: agentTitleSql(),
         status: agentOperations.status,
         trigger: agentOperations.trigger,
         userId: agentOperations.userId,
@@ -274,6 +332,260 @@ export class ChannelHistoryRepository {
     };
   };
 
+  /**
+   * Threads of the run's Channel, newest first, with the calling Agent's latest reply in each.
+   * A running reply the requester owns also shows its latest steps, read from its conversation.
+   */
+  listThreads = async (
+    operationId: string,
+    params: ChannelListThreadsParams = {},
+  ): Promise<ChannelThreadPage> => {
+    const limit = integer(params.limit, 10, 1, 20);
+    return this.read(operationId, async (tx, channelId, manifest) => {
+      // The cursor is a threadId, so a caller pages by `nextBefore` without holding a snapshot.
+      // The comparison stays in SQL against the stored row: Postgres keeps microseconds while a
+      // JS `Date` stops at milliseconds, so reading the timestamp out and binding it back would
+      // round the cursor down and skip the Threads that share its millisecond. `createdAt` alone
+      // is not unique either (a bulk open writes several Threads at once), hence the id tie-break.
+      let cursorScope: SQL | undefined;
+      if (params.before) {
+        const [row] = await tx
+          .select({ id: channelThreads.id })
+          .from(channelThreads)
+          .where(and(eq(channelThreads.channelId, channelId), eq(channelThreads.id, params.before)))
+          .limit(1);
+        if (!row) throw new ChannelError('BAD_REQUEST', 'before must be a Thread of this Channel');
+        cursorScope = sql`(
+          SELECT ${channelThreads.createdAt}, ${channelThreads.id}
+          FROM ${channelThreads}
+          WHERE ${channelThreads.id} = ${row.id}
+        )`;
+      }
+
+      const selfJobs = params.activeOnly
+        ? await tx
+            .selectDistinct({ threadId: channelJobs.threadId })
+            .from(channelJobs)
+            .where(
+              and(
+                eq(channelJobs.channelId, channelId),
+                eq(channelJobs.memberId, manifest.self.memberId),
+                inArray(channelJobs.status, OPEN_JOB_STATUSES),
+              ),
+            )
+        : undefined;
+      const activeIds = selfJobs?.map((job) => job.threadId).filter((id): id is string => !!id);
+      if (activeIds && !activeIds.length) return { hasMore: false, nextBefore: null, threads: [] };
+
+      const rows = await tx
+        .select({ root: channelMessages.content, thread: channelThreads })
+        .from(channelThreads)
+        .innerJoin(
+          channelMessages,
+          and(
+            eq(channelMessages.channelId, channelThreads.channelId),
+            eq(channelMessages.id, channelThreads.rootMessageId),
+          ),
+        )
+        .where(
+          and(
+            eq(channelThreads.channelId, channelId),
+            notTrashed(channelThreads.isDeleted),
+            activeIds ? inArray(channelThreads.id, activeIds) : undefined,
+            cursorScope
+              ? sql`(${channelThreads.createdAt}, ${channelThreads.id}) < ${cursorScope}`
+              : undefined,
+          ),
+        )
+        .orderBy(desc(channelThreads.createdAt), desc(channelThreads.id))
+        .limit(limit + 1);
+      const page = rows.slice(0, limit);
+      const nextBefore = rows.length > limit ? (page.at(-1)?.thread.id ?? null) : null;
+
+      const threads: ChannelThreadSummary[] = [];
+      for (const { root, thread } of page) {
+        const [counted] = await tx
+          .select({ value: count() })
+          .from(channelMessages)
+          .where(
+            and(eq(channelMessages.channelId, channelId), eq(channelMessages.threadId, thread.id)),
+          );
+        const [last] = await readManifestMessages(
+          tx,
+          channelId,
+          liveThreadManifest(manifest, thread),
+          { limit: 1 },
+        );
+        threads.push({
+          current: manifest.threadId === thread.id,
+          lastMessage:
+            last && last.threadId === thread.id
+              ? { author: last.author.name, content: clip(last.content) }
+              : null,
+          messageCount: counted?.value ?? 0,
+          root: clip(root),
+          run: await this.latestRun(tx, channelId, manifest, thread.id),
+          status: thread.status,
+          threadId: thread.id,
+        });
+      }
+      return { hasMore: rows.length > limit, nextBefore, threads };
+    });
+  };
+
+  private latestRun = async (
+    tx: Transaction,
+    channelId: string,
+    manifest: ChannelInputManifest,
+    threadId: string,
+  ): Promise<ChannelThreadSummary['run']> => {
+    const [row] = await tx
+      .select({
+        createdAt: channelJobs.createdAt,
+        operation: {
+          createdAt: agentOperations.createdAt,
+          status: agentOperations.status,
+          stepCount: agentOperations.stepCount,
+          topicId: agentOperations.topicId,
+          userId: agentOperations.userId,
+        },
+        request: channelMessages.content,
+        requesterName: channelMembers.name,
+        requesterFullName: users.fullName,
+        requesterMemberId: channelJobs.requesterMemberId,
+        status: channelJobs.status,
+      })
+      .from(channelJobs)
+      .leftJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
+      .leftJoin(
+        channelMessages,
+        and(
+          eq(channelMessages.channelId, channelJobs.channelId),
+          eq(channelMessages.id, channelJobs.messageId),
+        ),
+      )
+      .leftJoin(channelMembers, eq(channelMembers.id, channelJobs.requesterMemberId))
+      .leftJoin(users, eq(users.id, channelMembers.userId))
+      .where(
+        and(
+          eq(channelJobs.channelId, channelId),
+          eq(channelJobs.memberId, manifest.self.memberId),
+          eq(channelJobs.threadId, threadId),
+        ),
+      )
+      .orderBy(desc(channelJobs.createdAt))
+      .limit(1);
+    if (!row) return null;
+
+    const operation = row.operation?.createdAt ? row.operation : null;
+    // Only the requester's own run: another person's conversation is theirs to read.
+    const activity =
+      row.status === 'running' && operation?.topicId && operation.userId === this.userId
+        ? await this.runActivity(tx, operation.topicId, operation.createdAt)
+        : undefined;
+    return {
+      ...(activity?.length && { activity }),
+      createdAt: row.createdAt.toISOString(),
+      request: clip(row.request),
+      requester:
+        row.requesterMemberId === manifest.requesterMemberId
+          ? 'your requester'
+          : row.requesterFullName || row.requesterName || 'a member',
+      status: row.status,
+      stepCount: operation?.stepCount ?? null,
+    };
+  };
+
+  private runActivity = async (
+    tx: Transaction,
+    topicId: string,
+    since: Date,
+  ): Promise<ChannelThreadRunActivity[]> => {
+    const steps = await tx
+      .select({
+        content: messages.content,
+        createdAt: messages.createdAt,
+        role: messages.role,
+        tools: messages.tools,
+      })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.topicId, topicId),
+          eq(messages.userId, this.userId),
+          gte(messages.createdAt, since),
+        ),
+      )
+      .orderBy(desc(messages.createdAt))
+      .limit(ACTIVITY_STEPS);
+    return steps.reverse().map((step) => {
+      const text = clip(step.content, 200);
+      const tools = step.role === 'assistant' ? toolNames(step.tools) : undefined;
+      return {
+        at: step.createdAt.toISOString(),
+        role: step.role,
+        ...(text && { text }),
+        ...(tools && { tools }),
+      };
+    });
+  };
+
+  /**
+   * Another Thread of the run's Channel, with the calling Agent's open replies there: what
+   * stopping or steering it acts on. The run's own conversation is not a target.
+   */
+  threadTarget = async (operationId: string, threadId: string): Promise<ChannelThreadTarget> => {
+    if (!threadId?.trim()) throw new ChannelError('BAD_REQUEST', 'threadId is required');
+    return this.read(operationId, async (tx, channelId, manifest) => {
+      const thread = await findThread(tx, channelId, threadId);
+      if (!thread) throw new ChannelError('NOT_FOUND', 'Thread not found');
+      if (manifest.threadId === thread.id)
+        throw new ChannelError(
+          'BAD_REQUEST',
+          'That is the conversation you are answering in; act on it in your answer',
+        );
+      const request = await tx
+        .select({ metadata: channelMessages.metadata })
+        .from(channelMessages)
+        .where(
+          and(
+            eq(channelMessages.channelId, channelId),
+            eq(channelMessages.id, manifest.requestMessageId),
+          ),
+        )
+        .limit(1)
+        .then(([row]) => row);
+      const openJobs = await tx
+        .select({
+          executionConfig: channelJobs.executionConfig,
+          id: channelJobs.id,
+          operationId: channelJobs.operationId,
+          operationStatus: agentOperations.status,
+          operationUserId: agentOperations.userId,
+          status: channelJobs.status,
+          topicId: channelJobs.topicId,
+        })
+        .from(channelJobs)
+        .leftJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
+        .where(
+          and(
+            eq(channelJobs.channelId, channelId),
+            eq(channelJobs.memberId, manifest.self.memberId),
+            eq(channelJobs.threadId, thread.id),
+            inArray(channelJobs.status, OPEN_JOB_STATUSES),
+          ),
+        )
+        .orderBy(desc(channelJobs.createdAt));
+      return {
+        channelId,
+        openJobs,
+        relayed: !!channelMessageVia(request?.metadata),
+        self: manifest.self,
+        threadId: thread.id,
+      };
+    });
+  };
+
   readMessages = async (
     operationId: string,
     params: ChannelReadMessagesParams = {},
@@ -285,7 +597,13 @@ export class ChannelHistoryRepository {
         : integer(params.beforeSequence, 1, 1, Number.MAX_SAFE_INTEGER);
     return this.read(
       operationId,
-      async (tx, channelId, manifest) => {
+      async (tx, channelId, runManifest) => {
+        // Another Thread is read as it is now; the run's own conversation keeps its cutoff.
+        const other =
+          params.threadId && params.threadId !== runManifest.threadId
+            ? await findThread(tx, channelId, params.threadId)
+            : null;
+        const manifest = other ? liveThreadManifest(runManifest, other) : runManifest;
         const rows = await readManifestMessages(tx, channelId, manifest, {
           beforeSequence,
           limit: limit + 1,
@@ -293,7 +611,7 @@ export class ChannelHistoryRepository {
         const hasMore = rows.length > limit;
         const page = rows.slice(-limit);
         return {
-          cutoffSequence: manifest.cutoffSequence,
+          cutoffSequence: other ? (page.at(-1)?.sequence ?? 0) : manifest.cutoffSequence,
           messages: page.map((message) => excerpt(message, 0, EXCERPT_LENGTH)),
           nextBeforeSequence: hasMore ? page[0].sequence : null,
         };
@@ -310,7 +628,13 @@ export class ChannelHistoryRepository {
     const offset = integer(params.offset, 0, 0, Number.MAX_SAFE_INTEGER);
     return this.read(
       operationId,
-      async (tx, channelId, manifest) => {
+      async (tx, channelId, runManifest) => {
+        // A message `readMessages({ threadId })` returned is read in that same live scope.
+        const other =
+          params.threadId && params.threadId !== runManifest.threadId
+            ? await findThread(tx, channelId, params.threadId)
+            : null;
+        const manifest = other ? liveThreadManifest(runManifest, other) : runManifest;
         const [message] = await readManifestMessages(tx, channelId, manifest, {
           messageId: params.messageId,
         });
@@ -328,3 +652,22 @@ export class ChannelHistoryRepository {
     );
   };
 }
+
+/** Largest `channel_messages.sequence` (int4): no cutoff. */
+const LATEST_SEQUENCE = 2_147_483_647;
+
+/**
+ * A Thread's whole branch up to its latest message, for reading it from another conversation.
+ * The run's own request belongs to the run's conversation, not this Thread, so the Thread's root
+ * stands in for it: the scope then adds only the requests continued in this Thread.
+ */
+const liveThreadManifest = (
+  manifest: ChannelInputManifest,
+  thread: { id: string; rootMessageId: string; rootSequence: number },
+): ChannelInputManifest => ({
+  ...manifest,
+  cutoffSequence: LATEST_SEQUENCE,
+  requestMessageId: thread.rootMessageId,
+  threadId: thread.id,
+  threadRootSequence: thread.rootSequence,
+});

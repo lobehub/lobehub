@@ -14,11 +14,13 @@ const SCROLL_CONTAINER_ID = 'lobe-mobile-scroll-container';
 interface PaginationProps {
   currentPage: number;
   pageSize: number;
-  tab: DiscoverTab;
+  /** The list's own path when it is not `/marketplace/<tab>` (e.g. Connectors lists MCP). */
+  path?: string;
+  tab?: DiscoverTab;
   total: number;
 }
 
-const Pagination = memo<PaginationProps>(({ tab, currentPage, total, pageSize }) => {
+const Pagination = memo<PaginationProps>(({ path, tab, currentPage, total, pageSize }) => {
   const { page } = useQuery();
   const navigate = useWorkspaceAwareNavigate();
   const location = useLocation();
@@ -27,7 +29,7 @@ const Pagination = memo<PaginationProps>(({ tab, currentPage, total, pageSize })
   const handlePageChange = (newPage: number) => {
     const searchParams = new URLSearchParams(location.search);
     searchParams.set('page', String(newPage));
-    navigate(`/community/${tab}?${searchParams.toString()}`);
+    navigate(`${path ?? `/marketplace/${tab}`}?${searchParams.toString()}`);
 
     const scrollContainerId = mobile ? SCROLL_CONTAINER_ID : SCROLL_PARENT_ID;
     const scrollableElement = document?.querySelector(`#${scrollContainerId}`);

@@ -1,23 +1,25 @@
 import { createStaticStyles, Markdown } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { densityVars } from '@/styles/densityVars';
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   markdown: css`
     h2 {
       margin-block: 24px 12px;
-      font-size: 16px;
+      font-size: ${densityVars.pageTitleFontSize};
       font-weight: 600;
     }
 
     h3 {
       margin-block: 16px 8px;
-      font-size: 14px;
+      font-size: ${densityVars.fontSize};
       font-weight: 500;
     }
 
     p {
       margin-block-end: 8px;
-      font-size: 14px;
+      font-size: ${densityVars.fontSize};
       line-height: 1.6;
       color: ${cssVar.colorTextSecondary};
     }
@@ -29,7 +31,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
       li {
         margin-block-end: 4px;
-        font-size: 14px;
+        font-size: ${densityVars.fontSize};
         line-height: 1.6;
         color: ${cssVar.colorTextSecondary};
       }

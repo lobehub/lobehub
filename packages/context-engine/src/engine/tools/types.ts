@@ -28,6 +28,8 @@ export interface LobeChatPluginApi {
 
 export interface LobeToolManifest {
   api: LobeChatPluginApi[];
+  /** A connector row's tool set: its row and the base identifier it serves. */
+  connector?: { id: string; identifier: string };
   connectorLinks?: { connectorId: string; param: string };
   identifier: string;
   meta: any;

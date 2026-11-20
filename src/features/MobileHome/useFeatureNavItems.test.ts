@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/hooks/useNavLayout', () => ({
   useNavLayout: () => ({
     bottomMenuItems: [
-      { icon: FileText, key: 'community', title: 'Community', url: '/community' },
+      { icon: FileText, key: 'community', title: 'Community', url: '/marketplace' },
       { icon: FileText, key: 'pages', title: 'Pages', url: '/page' },
     ],
     topNavItems: [

@@ -47,7 +47,7 @@ describe('Community detail Header', () => {
     mocks.userProfileMap = { 'org:sad': { user: { avatarUrl: 'sad-avatar' } } };
 
     render(
-      <MemoryRouter initialEntries={['/011/community/org/sad']}>
+      <MemoryRouter initialEntries={['/011/marketplace/org/sad']}>
         <Header />
       </MemoryRouter>,
     );

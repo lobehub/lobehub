@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import PublishedTime from '@/components/PublishedTime';
 import { useSkillCategoryItem } from '@/hooks/useSkillCategory';
+import { densityTokens } from '@/styles/density.stylex';
 import { formatNumber } from '@/utils/format';
 
 import { useDetailContext } from '../../DetailProvider';
@@ -54,7 +55,7 @@ const styles = stylex.create({
   },
   value: {
     minWidth: 0,
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 600,
     fontVariantNumeric: 'tabular-nums',
     lineHeight: 1.35,

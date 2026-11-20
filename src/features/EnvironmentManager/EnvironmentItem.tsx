@@ -22,6 +22,8 @@ import { useTranslation } from 'react-i18next';
 
 import UserAvatar from '@/components/UserAvatar';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
+import { useDensity } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
 
 import { describeError } from './errorMessage';
 import { repositoryPath } from './repository';
@@ -60,6 +62,12 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorFillTertiary};
   `,
+  /** Compact density: 36px tile in a 52px row (6px padding, 20px + 2 + 18px text). */
+  iconTileCompact: css`
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  `,
   metaDivider: css`
     flex: none;
     width: 1px;
@@ -79,8 +87,8 @@ const styles = createStaticStyles(({ css }) => ({
   row: css`
     cursor: pointer;
 
-    padding-block: 12px;
-    padding-inline: 12px;
+    padding-block: ${densityVars.contentGap};
+    padding-inline: ${densityVars.contentGap};
     border-radius: ${cssVar.borderRadius};
 
     transition: background 0.15s ease;
@@ -104,6 +112,9 @@ const styles = createStaticStyles(({ css }) => ({
     &:hover {
       background: ${cssVar.colorFillSecondary};
     }
+  `,
+  rowCompact: css`
+    padding-block: 6px;
   `,
 }));
 
@@ -139,6 +150,7 @@ const EnvironmentItem = memo<EnvironmentItemProps>((props) => {
   const { t: tCommon } = useTranslation('common');
   const actions = useEnvironmentActions();
   const canEdit = useCanEditEnvironment()(environment);
+  const { compact, tokens } = useDensity();
 
   // A row restored from storage carries only its plain `owner/name`.
   const repository = environment.configuration
@@ -226,8 +238,8 @@ const EnvironmentItem = memo<EnvironmentItemProps>((props) => {
     <Flexbox
       horizontal
       align={'center'}
-      className={cx(styles.row, selected && styles.rowActive)}
-      gap={16}
+      className={cx(styles.row, compact && styles.rowCompact, selected && styles.rowActive)}
+      gap={tokens.sectionGap}
       role={'button'}
       tabIndex={0}
       onClick={onSelect}
@@ -241,7 +253,7 @@ const EnvironmentItem = memo<EnvironmentItemProps>((props) => {
         }
       }}
     >
-      <div className={styles.iconTile}>
+      <div className={cx(styles.iconTile, compact && styles.iconTileCompact)}>
         <Github size={20} />
       </div>
 
@@ -254,8 +266,18 @@ const EnvironmentItem = memo<EnvironmentItemProps>((props) => {
               own: it is a gloss on the name, not a second fact, and a third
               line made every row taller for the rows that have one. It gives
               way first, since the name is what the row is found by. */}
-        <Flexbox horizontal align={'baseline'} gap={8} style={{ minWidth: 0 }}>
-          <Text ellipsis fontSize={15} style={{ flex: '0 1 auto', minWidth: 0 }} weight={500}>
+        <Flexbox
+          horizontal
+          align={'baseline'}
+          gap={8}
+          style={{ lineHeight: compact ? '20px' : undefined, minWidth: 0 }}
+        >
+          <Text
+            ellipsis
+            fontSize={compact ? 14 : 15}
+            style={{ flex: '0 1 auto', minWidth: 0 }}
+            weight={500}
+          >
             {environment.name}
           </Text>
           {environment.description && (
@@ -271,7 +293,12 @@ const EnvironmentItem = memo<EnvironmentItemProps>((props) => {
             </Text>
           )}
         </Flexbox>
-        <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={8}
+          style={{ lineHeight: compact ? '18px' : undefined, minWidth: 0 }}
+        >
           {/* The repository leads because it is what the name is usually taken
                 from, and it truncates because it is the only part of this line
                 that can afford to. */}

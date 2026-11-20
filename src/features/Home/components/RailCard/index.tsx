@@ -2,6 +2,9 @@ import { createStaticStyles, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 
+import { useDensityTokens } from '@/styles/density';
+import { densityVars } from '@/styles/densityVars';
+
 import CountBadge from '../CountBadge';
 import { homeType } from '../homeType';
 
@@ -10,7 +13,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   // the pane as a soft silhouette instead of being clipped away.
   card: css`
     padding-block: 14px;
-    padding-inline: 16px;
+    padding-inline: ${densityVars.cardPadding};
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 16px;
 
@@ -56,6 +59,8 @@ interface RailCardProps {
 
 const RailCard = memo<RailCardProps>(
   ({ action, children, collapsed = false, count, loading, onCollapsedChange, title }) => {
+    const { contentGap } = useDensityTokens();
+
     const heading = (
       <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
         <Text ellipsis className={homeType.sectionLabel}>
@@ -75,7 +80,7 @@ const RailCard = memo<RailCardProps>(
     );
 
     return (
-      <Flexbox className={styles.card} data-testid={'home-rail-card'} gap={12}>
+      <Flexbox className={styles.card} data-testid={'home-rail-card'} gap={contentGap}>
         {title && (
           <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
             {onCollapsedChange ? (

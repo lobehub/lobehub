@@ -170,6 +170,7 @@ vi.mock('@/store/user', () => ({
 }));
 vi.mock('@/store/user/selectors', () => ({
   preferenceSelectors: { topicSortBy: () => 'updatedAt' },
+  userGeneralSettingsSelectors: { interfaceDensity: () => 'loose' },
   userProfileSelectors: { userId: () => 'user-1' },
 }));
 

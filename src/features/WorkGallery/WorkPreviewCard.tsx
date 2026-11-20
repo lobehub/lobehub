@@ -20,6 +20,7 @@ import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskIte
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { useCanvasCardMenu } from '@/features/CanvasStorage/useCanvasCardMenu';
 import { getWorkTypeDescriptor } from '@/features/Work/descriptors';
+import { densityVars } from '@/styles/densityVars';
 import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
@@ -58,7 +59,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   cardInfo: css`
     padding-block: 8px 12px;
-    padding-inline: 12px;
+    padding-inline: ${densityVars.contentGap};
   `,
   clickable: css`
     cursor: pointer;

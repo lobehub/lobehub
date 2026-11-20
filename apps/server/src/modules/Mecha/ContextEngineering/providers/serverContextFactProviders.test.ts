@@ -1,4 +1,4 @@
-import { defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
+import { defaultUninstalledBuiltinTools, onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createServerContextFactProviders } from './index';
@@ -133,7 +133,7 @@ describe('createServerContextFactProviders', () => {
   });
 
   it('reads user info for the user the rules name, defaulting to the run owner', async () => {
-    getInfoForAIGeneration.mockResolvedValue({ responseLanguage: 'ja-JP', userName: 'v' });
+    getInfoForAIGeneration.mockResolvedValue({ preferredReplyLanguage: 'ja-JP', userName: 'v' });
     const providers = createServerContextFactProviders(source());
 
     await expect(providers.getUserInfo!('visitor-1')).resolves.toEqual({
@@ -247,7 +247,9 @@ describe('createServerContextFactProviders', () => {
         state: {} as never,
       }).listUninstalledBuiltinIds!(),
     ).resolves.toEqual(defaultUninstalledBuiltinTools);
-    expect(defaultUninstalledBuiltinTools.length).toBeGreaterThan(0);
+    expect(
+      defaultUninstalledBuiltinTools.filter((id) => onDemandBuiltinToolIds.includes(id)),
+    ).toEqual([]);
   });
 
   it('returns the app origin and the workspace slug when it resolves', async () => {

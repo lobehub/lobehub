@@ -164,7 +164,7 @@ const loadUserLocale = async (
 ): Promise<string | undefined> => {
   try {
     const userInfo = await UserModel.getInfoForAIGeneration(deps.db, userId);
-    return userInfo.responseLanguage;
+    return userInfo.preferredReplyLanguage;
   } catch (error) {
     log('execAgent: failed to load user locale for agent config resolution: %O', error);
     return undefined;

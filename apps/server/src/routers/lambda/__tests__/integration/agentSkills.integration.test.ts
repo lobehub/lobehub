@@ -59,7 +59,8 @@ const normalizeIdentifierPart = (part: string) =>
     .replaceAll(/^-|-$/g, '');
 
 const mockGitHubInstance = {
-  downloadRepoZip: vi.fn(),
+  downloadCommitZip: vi.fn(),
+  resolveCommit: vi.fn().mockResolvedValue('a'.repeat(40)),
   generateIdentifier: vi.fn().mockImplementation(function (info: {
     owner: string;
     path?: string;
@@ -901,7 +902,7 @@ Body`,
         path: 'skills/skill-creator',
         repo: 'openclaw',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip-content'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip-content'));
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Skill Creator\n\nCreate skills easily.',
         manifest: { name: 'skill-creator', description: 'Create skills' },
@@ -946,7 +947,7 @@ Body`,
         path: 'skills/demo',
         repo: 'skills',
       });
-      mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
+      mockGitHubInstance.downloadCommitZip.mockResolvedValue(Buffer.from('mock-zip'));
 
       let callCount = 0;
       mockParserInstance.parseZipPackage.mockImplementation(function () {

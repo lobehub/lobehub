@@ -12,9 +12,15 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { useTopicId } from '../hooks/useTopicId';
 import { rememberSandboxSelection } from './rememberedSandboxDirectory';
 import SandboxDrivePicker from './SandboxDrivePicker';
+import { projectStartEnvironmentId } from './sandboxEnvironmentOptions';
 import { usePrefersTemporarySandbox } from './temporarySandboxPreference';
 import { useFollowSandboxModePreference } from './useFollowSandboxModePreference';
-import { type SandboxSelection, useSandboxPlacement } from './useSandboxPlacement';
+import { useIsSharedAgent, useProjectSandboxEnvironments } from './useSandboxEnvironmentList';
+import {
+  isPersistentSelection,
+  type SandboxSelection,
+  useSandboxPlacement,
+} from './useSandboxPlacement';
 import { useSandboxStorageAccess } from './useSandboxStorageAccess';
 import { useSeedDefaultSelection, useSeedTemporaryRepository } from './useSeedDefaultSelection';
 
@@ -43,7 +49,19 @@ interface SandboxStorageSectionProps {
 const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }) => {
   const { eligible, status } = useSandboxStorageAccess(agentId);
   const scopeTopicId = useTopicId();
-  const { selection, setSelection, topicId } = useSandboxPlacement(agentId, scopeTopicId);
+  // A project conversation runs in its project's environment.
+  const { projectId, selection, setSelection, topicId } = useSandboxPlacement(
+    agentId,
+    scopeTopicId,
+  );
+  const workspaceId = useActiveWorkspaceId();
+  const sharedAgent = useIsSharedAgent(agentId);
+  // Only a run in the sandbox needs the project's environment.
+  const { environments: projectEnvironments } = useProjectSandboxEnvironments(
+    projectId,
+    sharedAgent,
+    eligible,
+  );
   // The temporary and persistent sandboxes are picked in the execution
   // environment menu — when this member can use it. A target the author fixed
   // leaves that menu read-only, so the choice stays in this one.
@@ -55,7 +73,6 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
   const modeInEnvironmentMenu =
     canUseResource && canDisplayExecutionTarget && canSelectExecutionTarget;
   const userId = useUserStore(userProfileSelectors.userId);
-  const workspaceId = useActiveWorkspaceId();
   const prefersTemporary = usePrefersTemporarySandbox({ userId, workspaceId }, agentId);
   // Only a pick made in that menu counts; a member who cannot make it is not
   // held to one made before the target was fixed.
@@ -68,13 +85,16 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
   });
   // Every pick that lands is remembered for the next conversation: the folder
   // for the persistent sandbox, the repository (or none) for the temporary
-  // one. A failed save is not.
+  // one. A failed save is not, and neither is an environment picked inside a
+  // project: it belongs to that project, and the agent's next conversation
+  // elsewhere could not use it. A drive folder is usable anywhere.
   const pick = useCallback(
     async (next: SandboxSelection) => {
       await setSelection(next);
-      rememberSandboxSelection({ userId, workspaceId }, agentId, next);
+      if (!projectId || isPersistentSelection(next))
+        rememberSandboxSelection({ userId, workspaceId }, agentId, next);
     },
-    [agentId, setSelection, userId, workspaceId],
+    [agentId, projectId, setSelection, userId, workspaceId],
   );
   useSeedDefaultSelection(agentId, {
     eligible: eligible && !temporary,
@@ -87,6 +107,9 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
   useSeedTemporaryRepository(agentId, {
     eligible,
     hasTopic: !!topicId,
+    project: projectId
+      ? { environmentId: projectStartEnvironmentId(projectEnvironments) }
+      : undefined,
     temporary: eligible && (temporary || status === 'upgrade'),
   });
 
@@ -96,6 +119,8 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
     <SandboxDrivePicker
       entitled={status === 'ready'}
       modeInEnvironmentMenu={modeInEnvironmentMenu}
+      projectId={projectId}
+      sharedAgent={sharedAgent}
       topicId={topicId}
       value={selection}
       onChange={pick}

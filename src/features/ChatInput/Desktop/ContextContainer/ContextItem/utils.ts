@@ -38,9 +38,10 @@ export const getHarmoniousSize = (
 
 /** Keep upload feedback and available actions consistent throughout the chip lifecycle. */
 export const getUploadChipState = ({
+  retryable,
   status,
   uploadState,
-}: Pick<UploadFileItem, 'status' | 'uploadState'>) => {
+}: Pick<UploadFileItem, 'retryable' | 'status' | 'uploadState'>) => {
   const busy = status === 'pending' || status === 'uploading' || status === 'processing';
   const rawProgress = uploadState?.progress;
   const progress =
@@ -53,7 +54,8 @@ export const getUploadChipState = ({
   return {
     busy,
     canPreview: status === 'success',
-    canRetry: status === 'error' || status === 'cancelled',
+    /** A failure that would only repeat (e.g. over the size limit) offers removal, not retry. */
+    canRetry: (status === 'error' || status === 'cancelled') && retryable !== false,
     /** Every busy step shares one `busy` indicator, so users see a single spinner throughout. */
     indicator,
     progress,

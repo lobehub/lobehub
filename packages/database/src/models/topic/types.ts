@@ -99,11 +99,11 @@ export interface CreateTopicParams {
    * attribution) plus the visitor's id here, so creator-facing listings
    * exclude them (`notShareVisitorTopic`, applied by `query`, `count`,
    * `queryTopics`, `queryRecent` and `rank`) while the share surface scopes
-   * reads per visitor (`queryBySender` / `countBySender`).
+   * reads per visitor (`queryBySender` / `countMessagesBySender`).
    *
-   * A future opt-in surface (`allowCreatorViewSessions`) may let a creator
-   * explicitly browse visitor sessions; that is not wired up yet — every
-   * creator-facing read today unconditionally excludes senderId rows.
+   * Topic reads always exclude senderId rows. When a share enables
+   * `allowCreatorViewSessions`, the creator reads the visitor's Channel instead
+   * (`repositories/channel/shareVisitors.ts`), never these run topics.
    */
   senderId?: string | null;
   sessionId?: string | null;
@@ -168,6 +168,18 @@ export interface QueryTopicParams {
    * workspace, where the list otherwise shows every member's topics.
    */
   onlyMine?: boolean;
+  /**
+   * With `openedByTopicId`: only children of these agents (plus agent-less
+   * ones) — the agents the caller may view, applied before paging and counting.
+   */
+  openedByAgentIds?: string[];
+  /**
+   * Only the topics opened from this one (its child topics:
+   * `metadata.openedBy.topicId`, not unlinked), whatever their agent. Takes
+   * precedence over the agent / group / container scopes; `agentId` still
+   * narrows it when given.
+   */
+  openedByTopicId?: string | null;
   pageSize?: number;
   /**
    * Server-side ordering. Defaults to `updatedAt`. `status` orders by status
@@ -183,9 +195,8 @@ export interface QueryTopicParams {
   /**
    * When true, the SELECT also returns the heavier card-detail columns used
    * by the per-agent Topics management page: `firstUserMessage` (subquery),
-   * `messageCount` (subquery), `description`, `trigger`. `cost` and
-   * `tokenUsage` are intentionally omitted until a dedicated schema migration
-   * adds real columns to back them. Defaults to false so sidebar paths stay
+   * `messageCount` (subquery), `description`, `trigger`, and the topic's
+   * `cost` / `tokenUsage` totals. Defaults to false so sidebar paths stay
    * cheap.
    */
   withDetails?: boolean;

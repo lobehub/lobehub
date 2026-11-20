@@ -1,8 +1,14 @@
 import {
+  type AgentDeviceOverride,
   channelMessageDeletedAt,
   channelMessageEditedAt,
   channelMessageReceipt,
   channelMessageVia,
+  type ChatMessageError,
+  contactCardOf,
+  defaultChannelAgentDirectory,
+  type LobeAgentAgencyConfig,
+  resolveAgentAgencyConfig,
 } from '@lobechat/types';
 import {
   and,
@@ -21,6 +27,7 @@ import {
   sql,
 } from 'drizzle-orm';
 
+import { sanitizeVisitorError } from '../../models/message/visitor';
 import {
   agentOperations,
   agents,
@@ -33,8 +40,10 @@ import {
   files as fileTable,
   topics,
   users,
+  workspaceUserSettings,
 } from '../../schemas';
 import type { Transaction } from '../../type';
+import { agentAvatarSql, agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
 import { fileIdsByMessage } from './attachments';
 import { isAgentAuthored } from './author';
@@ -44,9 +53,9 @@ import { externalWorksByMessage } from './works';
 
 export const publicMessageColumns = {
   ...getTableColumns(channelMessages),
-  senderAgentAvatar: agents.avatar,
+  senderAgentAvatar: agentAvatarSql(),
   senderAgentName: agents.name,
-  senderAgentTitle: agents.title,
+  senderAgentTitle: agentTitleSql(),
   senderUserAvatar: users.avatar,
   senderUserName: users.fullName,
   senderUsername: users.username,
@@ -81,6 +90,7 @@ export const publicMessage = (row: MessageRow, fileIds: string[]) => {
       name: isAgent ? senderAgentName || senderAgentTitle : senderUserName || senderUsername,
       type: isAgent ? ('agent' as const) : ('user' as const),
     },
+    card: contactCardOf(message.metadata) ?? null,
     deletedAt: channelMessageDeletedAt(message.metadata),
     editedAt: channelMessageEditedAt(message.metadata),
     // On an Agent's message, the exchange between Agents it reports from.
@@ -116,7 +126,7 @@ const relayAgentAvatars = async (tx: Transaction, rows: MessageRow[]) => {
   ];
   if (!ids.length) return new Map<string, string | null>();
   const found = await tx
-    .select({ avatar: agents.avatar, id: agents.id })
+    .select({ avatar: agentAvatarSql(), id: agents.id })
     .from(agents)
     .where(inArray(agents.id, ids));
   return new Map(found.map(({ avatar, id }) => [id, avatar] as const));
@@ -268,6 +278,10 @@ const publicJobColumns = {
       ${channelJobs.executionConfig}->'agencyConfig'->>'boundDeviceId'
     )`,
   writerHeld: channelJobs.writerHeld,
+  // The acknowledgement posted before the run (`openingRequestKey`), so a failure shows under it.
+  openingMessageId: sql<string | null>`(SELECT ${channelMessages.id} FROM ${channelMessages}
+      WHERE ${channelMessages.channelId} = ${channelJobs.channelId}
+        AND ${channelMessages.requestKey} = 'opening:' || ${channelJobs.id}::text)`,
   topicId: channelJobs.topicId,
   // A trashed topic has no owner here, so its link goes with it.
   topicOwnerId: sql<string | null>`CASE WHEN ${notTrashed(topics.isDeleted)}
@@ -276,13 +290,41 @@ const publicJobColumns = {
   operationStatus: agentOperations.status,
   createdAt: channelJobs.createdAt,
   publicationRevoked: channelJobs.publicationRevoked,
+  // Read only to redact the error of a shared Agent's run, then dropped by `readJobs`.
+  sharedRun: sql<boolean>`COALESCE(jsonb_exists(${channelJobs.executionConfig}, 'share'), false)`,
 };
 
 /** At most this many of a main view's threads' jobs still at work ride along with its own. */
 const THREAD_ACTIVE_JOB_LIMIT = 50;
 
-const readJobs = (tx: Transaction, where: SQL | undefined, limit: number) =>
-  tx
+/**
+ * A shared Agent runs under its owner's credentials, so its failure text can carry the owner's
+ * provider or infrastructure diagnostics. The viewer of such a run is the visitor, who gets the
+ * share page's projection (`sanitizeVisitorError`): a classified type, and the message only for
+ * the few visitor-safe codes.
+ */
+const redactSharedRunError = <
+  Job extends {
+    errorMessage: string | null;
+    errorType: string | null;
+    sharedRun: boolean;
+  },
+>({
+  sharedRun,
+  ...job
+}: Job) => {
+  // A failure that records only its type is redacted too: the type alone can name the owner's
+  // provider or budget (`InsufficientBudgetForModel`), which a visitor must not learn.
+  if (!sharedRun || (job.errorMessage === null && job.errorType === null)) return job;
+  const safe = sanitizeVisitorError({
+    message: job.errorMessage,
+    type: job.errorType ?? undefined,
+  } as ChatMessageError);
+  return { ...job, errorMessage: safe?.message ?? null, errorType: safe?.type?.toString() ?? null };
+};
+
+const readJobs = async (tx: Transaction, where: SQL | undefined, limit: number) => {
+  const rows = await tx
     .select(publicJobColumns)
     .from(channelJobs)
     .leftJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
@@ -290,6 +332,8 @@ const readJobs = (tx: Transaction, where: SQL | undefined, limit: number) =>
     .where(where)
     .orderBy(desc(channelJobs.createdAt))
     .limit(limit);
+  return rows.map(redactSharedRunError);
+};
 
 interface MemberDevice {
   agentId: string | null;
@@ -297,36 +341,42 @@ interface MemberDevice {
   deviceOwnerId: string | null;
 }
 
+interface MemberDeviceInfo {
+  defaultCwd: string | null;
+  name: string | null;
+}
+
 /**
- * Display names for the devices Agent members run on, keyed by member id. A device id is unique
- * only within its principal, so each one resolves the way execution does: the Channel's workspace
- * device first, else the personal device of the member who owns it.
+ * The devices Agent members run on, keyed by member: display name and default directory. A device
+ * id is unique only within its principal, so each one resolves the way execution does: the
+ * Channel's workspace device first, else the personal device of the member who owns it.
  */
-const memberDeviceNames = async (tx: Transaction, channelId: string, members: MemberDevice[]) => {
+const memberDevices = async (
+  tx: Transaction,
+  workspaceId: string | null,
+  members: MemberDevice[],
+) => {
   const configured = members.filter(
     (member): member is MemberDevice & { deviceId: string } =>
       !!member.agentId && !!member.deviceId,
   );
-  const names = new Map<MemberDevice, string>();
-  if (!configured.length) return names;
+  const infos = new Map<MemberDevice, MemberDeviceInfo>();
+  if (!configured.length) return infos;
 
-  const [channel] = await tx
-    .select({ workspaceId: channels.workspaceId })
-    .from(channels)
-    .where(eq(channels.id, channelId));
   const owners = [
     ...new Set(
       configured.flatMap((member) => (member.deviceOwnerId ? [member.deviceOwnerId] : [])),
     ),
   ];
   const scopes = [
-    channel?.workspaceId ? eq(devices.workspaceId, channel.workspaceId) : undefined,
+    workspaceId ? eq(devices.workspaceId, workspaceId) : undefined,
     owners.length ? and(isNull(devices.workspaceId), inArray(devices.userId, owners)) : undefined,
   ].filter((scope): scope is SQL => !!scope);
-  if (!scopes.length) return names;
+  if (!scopes.length) return infos;
 
   const rows = await tx
     .select({
+      defaultCwd: devices.defaultCwd,
       deviceId: devices.deviceId,
       friendlyName: devices.friendlyName,
       hostname: devices.hostname,
@@ -352,11 +402,111 @@ const memberDeviceNames = async (tx: Transaction, channelId: string, members: Me
           !entry.workspaceId &&
           entry.userId === member.deviceOwnerId,
       );
-    const name = row?.friendlyName || row?.hostname;
-    if (name) names.set(member, name);
+    if (row)
+      infos.set(member, {
+        defaultCwd: row.defaultCwd,
+        name: row.friendlyName || row.hostname || null,
+      });
   }
-  return names;
+  return infos;
 };
+
+interface EnvironmentViewer {
+  /** The viewer's own device picks per Agent in the Channel's workspace. */
+  deviceOverrides: Record<string, AgentDeviceOverride>;
+  userId: string | undefined;
+  workspaceId: string | null;
+}
+
+/**
+ * Where an Agent member runs: the device and directory the Channel picked for it, else the device
+ * a request from the viewer routes to, the Agent's own binding with the viewer's device override
+ * on top, as the run resolves it. Shown only when that is one fixed device the viewer may see: a
+ * workspace Agent in its own workspace's Channel, or a personal Agent to its owner, so a share
+ * link visitor never learns the owner's device. Any other target (auto, local, sandbox) picks its
+ * device per run, so there is none to show ahead of it.
+ */
+const memberEnvironmentSource = <
+  T extends {
+    agencyConfig: LobeAgentAgencyConfig | null;
+    agentId: string | null;
+    agentUserId: string | null;
+    agentVisibility: 'private' | 'public' | null;
+    agentWorkspaceId: string | null;
+    deviceId: string | null;
+    deviceOwnerId: string | null;
+    workingDirectory: string | null;
+  },
+>(
+  row: T,
+  viewer: EnvironmentViewer,
+): T & { inheritedConfig: LobeAgentAgencyConfig | null } => {
+  const none = { ...row, inheritedConfig: null };
+  if (!row.agentId || row.deviceId || row.workingDirectory) return none;
+  const visible = row.agentWorkspaceId
+    ? row.agentWorkspaceId === viewer.workspaceId
+    : !!viewer.userId && row.agentUserId === viewer.userId;
+  if (!visible) return none;
+  const override = row.agentWorkspaceId ? viewer.deviceOverrides[row.agentId] : undefined;
+  const config = resolveAgentAgencyConfig(row.agencyConfig, override, {
+    canManage: !!viewer.userId && row.agentUserId === viewer.userId,
+    visibility: row.agentVisibility ?? undefined,
+    workspaceId: row.agentWorkspaceId,
+  });
+  if (config?.executionTarget !== 'device' || !config.boundDeviceId) return none;
+  return {
+    ...row,
+    deviceId: config.boundDeviceId,
+    // A device the viewer picked may be their own personal one.
+    deviceOwnerId:
+      override?.boundDeviceId === config.boundDeviceId ? viewer.userId! : row.agentUserId,
+    inheritedConfig: config,
+  };
+};
+
+const environmentViewer = async (
+  tx: Transaction,
+  channelId: string,
+  userId: string | undefined,
+): Promise<EnvironmentViewer> => {
+  const [channel] = await tx
+    .select({ workspaceId: channels.workspaceId })
+    .from(channels)
+    .where(eq(channels.id, channelId));
+  const workspaceId = channel?.workspaceId ?? null;
+  const [settings] =
+    workspaceId && userId
+      ? await tx
+          .select({ preference: workspaceUserSettings.preference })
+          .from(workspaceUserSettings)
+          .where(
+            and(
+              eq(workspaceUserSettings.workspaceId, workspaceId),
+              eq(workspaceUserSettings.userId, userId),
+            ),
+          )
+      : [];
+  return {
+    deviceOverrides: settings?.preference.agentDeviceOverrides ?? {},
+    userId,
+    workspaceId,
+  };
+};
+
+/**
+ * A view's jobs as one viewer sees them: who may stop each, and the run's topic only for the
+ * viewer who runs the reply; for anyone else the job carries no topic at all.
+ */
+export const viewerJobs = (
+  jobs: Awaited<ReturnType<typeof readChannelView>>['jobs'],
+  viewerUserId: string,
+  canStop: (requesterMemberId: string | null) => boolean,
+) =>
+  jobs.map(({ requesterMemberId, topicId, topicOwnerId, ...job }) => ({
+    ...job,
+    canStop: canStop(requesterMemberId),
+    ...(topicId && topicOwnerId === viewerUserId ? { topicId } : {}),
+  }));
 
 export const readChannelView = async (
   tx: Transaction,
@@ -370,7 +520,7 @@ export const readChannelView = async (
       .select({
         actorType: channelMembers.actorType,
         agentId: channelMembers.agentId,
-        avatar: agents.avatar,
+        avatar: agentAvatarSql(),
         // The same fallback routing uses: a Channel-specific description, else the Agent's own.
         description: sql<
           string | null
@@ -390,6 +540,10 @@ export const readChannelView = async (
         deviceId: sql<string | null>`${channelMembers.config}->>'deviceId'`,
         deviceOwnerId: sql<string | null>`${channelMembers.config}->>'deviceOwnerId'`,
         workingDirectory: sql<string | null>`${channelMembers.config}->>'workingDirectory'`,
+        agencyConfig: agents.agencyConfig,
+        agentUserId: agents.userId,
+        agentVisibility: agents.visibility,
+        agentWorkspaceId: agents.workspaceId,
       })
       .from(channelMembers)
       .leftJoin(users, eq(users.id, channelMembers.userId))
@@ -445,7 +599,9 @@ export const readChannelView = async (
           THREAD_ACTIVE_JOB_LIMIT,
         ),
   ]);
-  const deviceNames = await memberDeviceNames(tx, channelId, members);
+  const viewer = await environmentViewer(tx, channelId, viewerUserId);
+  const environments = members.map((row) => memberEnvironmentSource(row, viewer));
+  const deviceInfos = await memberDevices(tx, viewer.workspaceId, environments);
   const jobs = [...ownJobs, ...threadJobs].sort(
     (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
   );
@@ -525,13 +681,29 @@ export const readChannelView = async (
     attachments,
     hasMore: reversed.length > limit,
     jobs,
-    members: members.map((row) => {
-      const { deviceId, deviceOwnerId: _deviceOwnerId, workingDirectory, ...member } = row;
+    members: environments.map((row) => {
+      const {
+        agencyConfig: _agencyConfig,
+        agentUserId: _agentUserId,
+        agentVisibility: _agentVisibility,
+        agentWorkspaceId: _agentWorkspaceId,
+        deviceId,
+        deviceOwnerId: _deviceOwnerId,
+        inheritedConfig,
+        workingDirectory: channelDirectory,
+        ...member
+      } = row;
+      const device = deviceInfos.get(row);
+      // An inherited device works in the Agent's own folder there, else the device's default.
+      const workingDirectory =
+        inheritedConfig && deviceId
+          ? (defaultChannelAgentDirectory(inheritedConfig, deviceId, device?.defaultCwd) ?? null)
+          : channelDirectory;
       return {
         ...member,
         environment:
           member.agentId && (deviceId || workingDirectory)
-            ? { deviceId, deviceName: deviceNames.get(row) ?? null, workingDirectory }
+            ? { deviceId, deviceName: device?.name ?? null, workingDirectory }
             : null,
       };
     }),

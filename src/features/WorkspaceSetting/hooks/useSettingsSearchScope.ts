@@ -15,7 +15,6 @@ import type { WorkspaceSettingCategoryGroup } from './useCategory';
 const ITEM_TABS: ReadonlySet<SettingsSearchTab> = new Set<SettingsSearchTab>([
   SettingsTabs.Advanced,
   SettingsTabs.Appearance,
-  SettingsTabs.Connector,
   SettingsTabs.Hotkey,
   SettingsTabs.Labs,
   SettingsTabs.Profile,

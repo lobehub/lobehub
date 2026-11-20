@@ -14,10 +14,11 @@ export const InlineMcpAppView = (
   const canSendMessage = useConversationStore((s) => s.composerTarget.writable);
   const sendMessage = useConversationStore((s) => s.sendMessage);
   const scope = useConversationStore((s) => messageMapKey(s.context));
+  const topicId = useConversationStore((s) => s.context.topicId ?? undefined);
   return (
     <ManagedMcpAppView
       {...props}
-      host={{ agentId, canSendMessage, sendMessage }}
+      host={{ agentId, canSendMessage, sendMessage, topicId }}
       icon={icon}
       location={'inline'}
       scope={scope}

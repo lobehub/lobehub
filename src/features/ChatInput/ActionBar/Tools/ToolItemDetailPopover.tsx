@@ -3,8 +3,10 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode } from 'react';
 
+import { densityTokens } from '@/styles/density.stylex';
+
 const styles = stylex.create({
-  container: { width: '320px', padding: '12px' },
+  container: { width: '320px', padding: densityTokens['--lobe-density-content-gap'] },
   description: {
     overflow: 'hidden',
     display: '-webkit-box',
@@ -22,7 +24,11 @@ const styles = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  title: { fontSize: '14px', fontWeight: 600, color: cssVar.colorText },
+  title: {
+    fontSize: densityTokens['--lobe-density-font-size'],
+    fontWeight: 600,
+    color: cssVar.colorText,
+  },
 });
 
 interface ToolItemDetailPopoverProps {

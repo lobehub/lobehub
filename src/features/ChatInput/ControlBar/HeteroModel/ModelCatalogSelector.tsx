@@ -41,6 +41,8 @@ import {
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
+
 import { useMenuContentLifecycle } from '../useMenuContentLifecycle';
 import { getModelLabel, getModelOptionDescription } from './labels';
 import { useModelCatalogView } from './useModelCatalogView';
@@ -52,13 +54,13 @@ const styles = stylex.create({
   check: { flex: 'none', color: cssVar.colorPrimary },
   empty: {
     paddingBlock: '24px',
-    paddingInline: '16px',
+    paddingInline: densityTokens['--lobe-density-card-padding'],
     fontSize: '12px',
     color: cssVar.colorTextTertiary,
     textAlign: 'center',
   },
   groupLabel: { textTransform: 'none', letterSpacing: 'normal' },
-  item: { minHeight: '42px' },
+  item: { minHeight: sidebarRow.listRowHeight },
   popup: {
     overflow: 'hidden',
     display: 'flex',
@@ -66,7 +68,7 @@ const styles = stylex.create({
     width: '340px',
     maxHeight: '430px',
   },
-  search: { display: 'flex', gap: '8px', alignItems: 'center', paddingBlock: '10px' },
+  search: { display: 'flex', gap: '8px', alignItems: 'center', paddingBlock: '6px' },
   spinning: {
     animationName: spin,
     animationDuration: '0.8s',

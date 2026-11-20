@@ -147,6 +147,7 @@ describe('startEvidenceSubmission', () => {
         appContext: { taskId: 'task-1', topicId: 'topic-1' },
         parentOperationId: 'work-op',
         suppressUserMessage: true,
+        trigger: 'verify',
       }),
     );
     const call = execAgent.mock.calls[0][0];

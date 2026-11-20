@@ -72,11 +72,12 @@ tool does not ship):
   device(s). A visitor executing arbitrary commands or driving a live
   browser session on the CREATOR's own machine is a far larger blast radius
   than any single data store, so they are never offered through the tool
-  picker. They are granted only by `shareConfig.deviceAccess: 'allowlist'`
-  naming the visitor in `deviceAllowUserIds`, and only while the visitor is
-  still in the address book of the Agent's scope (personal contacts, or the
-  workspace's members and external contacts). There is no "every visitor"
-  value. The explicit creator choice is resolved once per gate by `resolveShareVisitorDeviceAccess` into
+  picker. They are granted only by `shareConfig.deviceAccess`: `contacts`
+  admits everyone currently in the address book of the Agent's scope
+  (personal contacts, or the workspace's members and external contacts),
+  including people added later; `allowlist` admits only visitors named in
+  `deviceAllowUserIds`, and only while they are still in that address book.
+  There is no "every visitor" value. The explicit creator choice is resolved once per gate by `resolveShareVisitorDeviceAccess` into
   `canUseDevice` and re-applied at dispatch. The same grant admits
   device-only MCP servers (which still need their own tool grant). The device
   is always the Agent's configured execution environment; a visitor never
@@ -85,7 +86,7 @@ tool does not ship):
   except the `lobe-remote-device` picker: with it the visitor's model could
   list and activate the creator's other machines, so it stays default-denied
   even under the grant. The same grant lets the visitor run a heterogeneous
-  Agent (Claude Code / Codex) on that device; without it the run is refused,
+  Agent that runs locally (Claude Code, Codex and the other local CLIs) on that device; without it the run is refused,
   and a share run never falls back to the cloud sandbox.
 
 - `lobe-web-onboarding`: reads and WRITES the creator's own onboarding
@@ -146,9 +147,9 @@ absence of a known exploit.
   historical activations as already enabled (`shareGate/toolSet.ts:166`). A
   kept activator gets the share-visitor `systemRole`
   (`getSystemPromptForShareVisitor`), which omits the default prompt's push
-  to activate `lobe-skill-store` / `lobe-creds` first (both stay denied
-  above) and keeps its `activateSkill` lines only when `lobe-skills` itself
-  survived the gate.
+  to activate `lobe-skill-store` first and keeps its `activateSkill` lines
+  only when `lobe-skills` itself survived the gate. Credential discovery
+  lives in the `lobe-creds` manifest, which the gate excludes.
 
   1. What it can see. `<available_tools>` is the operation's `manifestMap`
      minus enabled tools (`apps/server/src/modules/AgentRuntime/executorHelpers.ts:644`), and

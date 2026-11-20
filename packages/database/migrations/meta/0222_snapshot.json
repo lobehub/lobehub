@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "f294c337-4d8a-47be-a8ed-7fe5bcbff964",
+  "id": "367a1cd7-ebf2-48db-9e9c-ec804563b475",
   "policies": {},
   "prevId": "4caccfb8-4b95-4149-b512-2d72e1ba77de",
   "roles": {},
@@ -10047,6 +10047,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "upstream": {
+          "name": "upstream",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "manifest": {
           "name": "manifest",
           "type": "jsonb",
@@ -11016,8 +11022,20 @@
           "primaryKey": false,
           "notNull": true
         },
+        "source_work_version_id": {
+          "name": "source_work_version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "source_path": {
           "name": "source_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_file_id": {
+          "name": "source_file_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -11145,6 +11163,22 @@
           "method": "btree",
           "with": {}
         },
+        "artboard_boards_source_work_version_id_idx": {
+          "name": "artboard_boards_source_work_version_id_idx",
+          "columns": [
+            {
+              "expression": "source_work_version_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"artboard_boards\".\"source_work_version_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "artboard_boards_user_id_idx": {
           "name": "artboard_boards_user_id_idx",
           "columns": [
@@ -11240,15 +11274,37 @@
           "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
+        },
+        "artboard_boards_source_work_version_id_work_versions_id_fk": {
+          "name": "artboard_boards_source_work_version_id_work_versions_id_fk",
+          "tableFrom": "artboard_boards",
+          "tableTo": "work_versions",
+          "columnsFrom": ["source_work_version_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "artboard_boards_source_file_id_files_id_fk": {
+          "name": "artboard_boards_source_file_id_files_id_fk",
+          "tableFrom": "artboard_boards",
+          "tableTo": "files",
+          "columnsFrom": ["source_file_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
+        "artboard_boards_single_source_check": {
+          "name": "artboard_boards_single_source_check",
+          "value": "num_nonnulls(\"artboard_boards\".\"source_work_version_id\", \"artboard_boards\".\"source_file_id\") <= 1"
+        },
         "artboard_boards_decision_no_source_check": {
           "name": "artboard_boards_decision_no_source_check",
-          "value": "\"artboard_boards\".\"type\" <> 'decision' OR \"artboard_boards\".\"source_path\" IS NULL"
+          "value": "\"artboard_boards\".\"type\" <> 'decision' OR num_nonnulls(\"artboard_boards\".\"source_work_version_id\", \"artboard_boards\".\"source_file_id\", \"artboard_boards\".\"source_path\") = 0"
         }
       },
       "isRLSEnabled": false

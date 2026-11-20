@@ -1,30 +1,18 @@
 import type { AgentShareToolGrant } from '@lobechat/types';
+import { LocalExecutionHeterogeneousAgentTypeSchema } from '@lobechat/types';
 
 /**
- * Default `AgentShareConfig.maxTopicsPerVisitor` applied when a share is
- * first created and whenever a legacy/partial config is normalized. Kept
+ * Default `AgentShareConfig.maxMessagesPerVisitor` applied when a share is
+ * first created and whenever a partial config is normalized. Kept
  * conservative — the creator can raise it explicitly via `updateShareConfig`.
  */
-export const AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR = 5;
+export const AGENT_SHARE_DEFAULT_MAX_MESSAGES_PER_VISITOR = 100;
 
 /**
- * Page size of a visitor's own topic list on a shared agent.
- *
- * Deliberately NOT tied to the share's live `maxTopicsPerVisitor`: that cap
- * only gates the ADMISSION of new topics (a COUNT check at creation time).
- * Using it as the read-side LIMIT would hide a visitor's older conversations
- * the moment the creator lowers the cap below what the visitor had already
- * created — and the visitor surface has no pagination or deep links to reach
- * them. A fixed, generous bound keeps every topic a visitor was ever allowed
- * to create reachable.
+ * Page size of a visitor's own topic list on a shared agent. A fixed, generous
+ * bound: no share setting caps how many topics a visitor has.
  */
 export const AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT = 200;
-
-/**
- * Default `AgentShareConfig.maxTurnsPerTopic` applied when a share is first
- * created and whenever a legacy/partial config is normalized.
- */
-export const AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC = 20;
 
 /**
  * Default `AgentShareConfig.monthlySpendLimit` (in USD credits) applied when a
@@ -244,23 +232,28 @@ export const isShareToolApiGranted = (
 export const AGENT_SHARE_DEVICE_ALLOW_USERS_LIMIT = 100;
 
 /**
- * Heterogeneous runtimes a share visitor may run, on a device the share grants
- * them. Both run as a local CLI on that device; platform agents (OpenClaw /
- * Hermes) and the other CLIs have no visitor-scoped dispatch.
+ * Whether a share visitor may run this heterogeneous runtime type, on a device
+ * the share grants them: every runtime that executes on the creator's machine
+ * (descriptor-backed CLIs such as Claude Code / Codex / OpenCode, plus
+ * protocol-driven ones such as DeepSeek Harness). They share one device
+ * dispatch, so the device grant covers them alike. Platform agents (OpenClaw /
+ * Hermes) run as remote tasks with no visitor-scoped dispatch and stay excluded.
+ *
+ * The schema is read on call, not at module load: `@lobechat/const` is imported
+ * almost everywhere, and a module-level read would crash every test that
+ * replaces `@lobechat/types` with a partial `vi.mock` factory.
  */
-export const AGENT_SHARE_VISITOR_HETERO_TYPES: readonly string[] = ['claude-code', 'codex'];
-
-/** Whether a share visitor may run this heterogeneous runtime type. */
 export const isAgentShareVisitorHeteroType = (type?: string | null): boolean =>
-  !!type && AGENT_SHARE_VISITOR_HETERO_TYPES.includes(type);
+  !!type &&
+  (LocalExecutionHeterogeneousAgentTypeSchema.options as readonly string[]).includes(type);
 
 /**
  * Whether an agent's effective config is exempt from the shared-agent model
  * provider restriction (`AGENT_SHARE_ALLOWED_PROVIDERS`).
  *
  * The restriction keeps visitors from spending the creator's third-party model
- * quota. A Claude Code / Codex agent runs its own CLI on the creator's device and
- * calls none of `provider`'s models — `provider` only stamps the runtime type — so
+ * quota. An agent on a locally executed runtime (Claude Code, Codex, OpenCode, …)
+ * runs its own CLI on the creator's device and calls none of `provider`'s models — `provider` only stamps the runtime type — so
  * it is exempt. Every other driver, including heterogeneous runtimes a visitor
  * cannot run, stays restricted. Server save/publish checks and every client hint
  * must use this one predicate so they never disagree.

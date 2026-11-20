@@ -20,6 +20,7 @@ import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatIn
 import { useEffectiveAgentMode } from '@/features/ChatInput/hooks/useEffectiveAgentMode';
 import { useToggleAgentMode } from '@/features/ChatInput/hooks/useToggleAgentMode';
 import { usePermission } from '@/hooks/usePermission';
+import { densityTokens } from '@/styles/density.stylex';
 
 const styles = stylex.create({
   activeOption: { backgroundColor: cssVar.colorFillSecondary, backgroundImage: 'none' },
@@ -93,7 +94,7 @@ const styles = stylex.create({
     backgroundImage: 'none',
   },
   optionTitle: {
-    fontSize: '14px',
+    fontSize: densityTokens['--lobe-density-font-size'],
     fontWeight: 500,
     lineHeight: 1.4,
     color: cssVar.colorText,

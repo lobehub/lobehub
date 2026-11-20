@@ -1,11 +1,12 @@
 import { createStaticStyles, cx, Flexbox, Tag } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
+import { densityVars } from '@/styles/densityVars';
 import { type SemanticSearchChunk } from '@/types/chunk';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    padding-block: 12px;
+    padding-block: ${densityVars.contentGap};
     padding-inline: 8px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 4px;
@@ -19,7 +20,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextDescription};
   `,
   text: css`
-    font-size: 14px;
+    font-size: ${densityVars.fontSize};
     line-height: 24px;
   `,
   title: css`

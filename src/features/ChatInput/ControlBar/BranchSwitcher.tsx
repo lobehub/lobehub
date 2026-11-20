@@ -44,6 +44,8 @@ import { useTranslation } from 'react-i18next';
 
 import { gitService } from '@/services/git';
 import { useFetchGitWorkingTreeStatus } from '@/store/device';
+import { useDensityTokens } from '@/styles/density';
+import { densityTokens, sidebarRow } from '@/styles/density.stylex';
 
 import { openCreateBranchModal } from './CreateBranchModal';
 import { gitMenuTriggerStyles } from './gitMenuTrigger';
@@ -67,7 +69,7 @@ const styles = stylex.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: '0',
-    paddingBlock: '12px',
+    paddingBlock: densityTokens['--lobe-density-content-gap'],
     fontSize: '12px',
     color: cssVar.colorTextTertiary,
     textAlign: 'center',
@@ -83,11 +85,11 @@ const styles = stylex.create({
     gap: '8px',
     alignItems: 'center',
     height: 'auto',
-    minHeight: '32px',
+    minHeight: sidebarRow.controlHeight,
     paddingBlock: '4px',
     paddingInline: '8px',
-    borderRadius: '4px',
-    fontSize: '14px',
+    borderRadius: sidebarRow.radius,
+    fontSize: sidebarRow.textFontSize,
     lineHeight: '20px',
     color: cssVar.colorText,
   },
@@ -153,7 +155,7 @@ const styles = stylex.create({
   },
   searchBar: {
     paddingBlock: '4px',
-    paddingInline: '12px',
+    paddingInline: densityTokens['--lobe-density-content-gap'],
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorSplit,
@@ -235,6 +237,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
   }) => {
     const { t } = useTranslation('device');
     const { t: tCommon } = useTranslation('common');
+    const { controlHeight } = useDensityTokens();
     const [search, setSearch] = useState('');
     const [busyBranch, setBusyBranch] = useState<string | null>(null);
     const currentRowRef = useRef<HTMLDivElement>(null);
@@ -525,11 +528,13 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                   // refresh that adds branches while the dropdown is open
                   // would otherwise leave the extra rows (often the current
                   // branch, last) undrawn. Remount when the count changes.
-                  key={filtered.length}
-                  listItemHeight={32}
+                  key={`${filtered.length}:${controlHeight}`}
+                  listItemHeight={controlHeight}
                   style={
                     selection
-                      ? { height: Math.min(filtered.length, PICK_LIST_MAX_ROWS) * 32 + 8 }
+                      ? {
+                          height: Math.min(filtered.length, PICK_LIST_MAX_ROWS) * controlHeight + 8,
+                        }
                       : undefined
                   }
                 >

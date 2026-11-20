@@ -99,6 +99,8 @@ interface DynamicTabPanesProps {
   onBrowserMetadataChange: (tab: string, metadata: BrowserTabMetadata) => void;
   onCloseTab: (tab: string) => void;
   openedTabs: string[];
+  /** The conversation an entrypoint app runs in. */
+  topicId?: string;
   visible: boolean;
 }
 
@@ -112,6 +114,7 @@ const DynamicTabPanes = memo<DynamicTabPanesProps>(
     onBrowserMetadataChange,
     openedTabs,
     onCloseTab,
+    topicId,
     visible,
   }) => {
     const enabled = useServerConfigStore(serverConfigSelectors.enableMcpApps);
@@ -165,6 +168,7 @@ const DynamicTabPanes = memo<DynamicTabPanesProps>(
                   agentId={agentId}
                   scope={composerTarget.contextKey}
                   tab={tab}
+                  topicId={topicId}
                   onClose={onCloseTab}
                 />
               </Flexbox>

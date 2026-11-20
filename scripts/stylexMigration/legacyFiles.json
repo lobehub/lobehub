@@ -378,7 +378,6 @@
   "src/features/Integrations/Overview.tsx",
   "src/features/LibraryModal/AssignKnowledgeBase/Item/MasonryItem.tsx",
   "src/features/LibraryModal/AssignKnowledgeBase/Item/index.tsx",
-  "src/features/LibraryModal/AssignKnowledgeBase/MasonrySkeleton.tsx",
   "src/features/LibraryModal/AssignKnowledgeBase/ViewSwitcher.tsx",
   "src/features/LibraryModal/AssignKnowledgeBase/VisibilityTabs.tsx",
   "src/features/LibraryModal/FilePicker/index.tsx",

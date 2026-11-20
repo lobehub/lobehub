@@ -53,7 +53,6 @@ export interface IAgentStateManager {
       /** See {@link AgentOperationMetadata.acceptsMemberRuntimeEnd}. */
       acceptsMemberRuntimeEnd?: boolean;
       agentConfig?: any;
-      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
       /**
